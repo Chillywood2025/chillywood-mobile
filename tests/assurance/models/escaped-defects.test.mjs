@@ -4,13 +4,22 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { runCommands } from "../../../_lib/assurance/state-models/models.mjs";
+import { modelDefinitions, runCommands } from "../../../_lib/assurance/state-models/models.mjs";
 import { runEscapedDefectChecks } from "../../../_lib/assurance/state-models/properties.mjs";
 
 test("historical variants reproduce escaped defects while the fixed contract model rejects them", () => {
   const report = runEscapedDefectChecks();
   assert.equal(report.ok, true, JSON.stringify(report));
-  assert.equal(report.fixtureCount, 13);
+  assert.deepEqual([report.fixtureCount, report.canonicalFixtureCount, report.supplementalFixtureCount], [22, 17, 5]);
+  const catalogIds = new Set(JSON.parse(fs.readFileSync("config/assurance/escaped-defect-catalog-v1.json", "utf8")).defects.map(({ id }) => id));
+  for (const result of report.results) assert.equal(result.classification, catalogIds.has(result.defectId) ? "canonical" : "supplemental", result.defectId);
+  for (const required of [
+    "EAS_ENVIRONMENT_OVERRIDE", "MISSING_NATIVE_MODULE_IN_RUNTIME", "DOUBLE_SERIALIZED_JSONB",
+    "PLATFORM_SCOPE_MISMATCH", "PUSHKIT_DELIVERY_SUPPRESSED",
+    "LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION", "MIGRATION_VERSION_NAME_MISMATCH"
+  ]) {
+    assert.equal(report.results.find(({ defectId }) => defectId === required)?.classification, "canonical", required);
+  }
   for (const result of report.results) {
     assert.equal(result.historicalDetected, true, `${result.defectId} historical variant was not detected`);
     assert.equal(result.currentModelPass, true, `${result.defectId} escaped the fixed contract model`);
@@ -22,6 +31,10 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
   const chatAction = runCommands("chat-call", [{ type: "invite", generation: 1, provider: "livekit" }, { type: "native_action", actionId: 1, generation: 1, expiresAt: 2 }, { type: "native_action", actionId: 1, generation: 1, expiresAt: 9 }, { type: "tick", amount: 3 }, { type: "native_action", actionId: 1, generation: 1, expiresAt: 9 }, { type: "auth_ready" }, { type: "react_ready" }, { type: "consume_native" }]).state;
   assert.deepEqual([chatAction.expiredNativeActions, chatAction.consumedNativeActions], [["action-1-1"], []]);
   assert.deepEqual(runCommands("chat-call", [{ type: "invite", generation: 1, provider: "livekit" }, { type: "native_action", actionId: 1, generation: 1, expiresAt: 9 }, { type: "timeout" }, { type: "invite", generation: 2, provider: "livekit" }, { type: "auth_ready" }, { type: "react_ready" }, { type: "consume_native" }]).state.consumedNativeActions, []);
+  const expiredNativeAccept = runCommands("chat-call", [{ type: "invite", generation: 1, provider: "livekit" }, { type: "native_action", actionId: 1, generation: 1, expiresAt: 2 }, { type: "tick", amount: 2 }, { type: "accept_native", actionId: 1, generation: 1 }]);
+  assert.deepEqual([expiredNativeAccept.state.inviteStatus, expiredNativeAccept.state.acceptanceAuthority, expiredNativeAccept.violations], ["ringing", null, []]);
+  const inAppAccept = runCommands("chat-call", [{ type: "invite", generation: 1, provider: "livekit" }, { type: "accept_in_app" }]);
+  assert.deepEqual([inAppAccept.state.inviteStatus, inAppAccept.state.acceptanceAuthority, inAppAccept.violations], ["accepted", "in_app", []]);
   const native = runCommands("notification-native-action", [{ type: "native_answer", id: "1", expiresAt: 2 }, { type: "native_answer", id: "1", expiresAt: 9 }, { type: "tick", amount: 3 }, { type: "native_answer", id: "1", expiresAt: 9 }, { type: "auth_ready" }, { type: "react_ready" }, { type: "consume_action", id: "1" }, { type: "server_accept", id: "1" }]).state;
   assert.deepEqual([native.expiredActions, native.serverAccepted, native.serverStatus], [["1"], [], "ringing"]);
   for (const [command, status] of [["server_cancel", "cancelled"], ["server_timeout", "timed_out"]]) {
@@ -34,6 +47,10 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
   assert.deepEqual([runCommands("notification-native-action", mustReport).state.serverStatus, runCommands("notification-native-action", mustReport, "terminal-without-report").violations], ["ringing", ["PUSHKIT_MUST_REPORT_BREACH"]]);
   assert.equal(runCommands("notification-native-action", [{ type: "receive_push", id: "push", mustReport: true }, { type: "report_callkit", id: "push", mustReport: true }, { type: "server_timeout" }]).state.serverStatus, "ringing");
   assert.equal(runCommands("notification-native-action", [{ type: "receive_push", id: "push", mustReport: true }, { type: "report_callkit", id: "push", mustReport: true }, { type: "complete_push", id: "push", mustReport: true }, { type: "server_timeout" }]).state.serverStatus, "timed_out");
+  const answer = [{ type: "native_answer", id: "answer", expiresAt: 5 }, { type: "auth_ready" }, { type: "react_ready" }, { type: "consume_action", id: "answer" }, { type: "server_accept", id: "answer" }];
+  assert.equal(runCommands("notification-native-action", [{ type: "receive_push", id: "push", mustReport: true }, ...answer]).state.serverStatus, "ringing");
+  assert.equal(runCommands("notification-native-action", [{ type: "receive_push", id: "push", mustReport: true }, { type: "report_callkit", id: "push", mustReport: true }, { type: "complete_push", id: "push", mustReport: true }, ...answer]).state.serverStatus, "accepted");
+  assert.equal(modelDefinitions["notification-native-action"].featureId, "pushkit-callkit");
   const event = (eventId, eventTime, authority) => ({ type: "event", eventId, eventType: authority === "provider" ? "purchase" : "manual", eventTime, store: "apple", environment: "production", authority, appUser: "user-a", target: "user-b", product: "premium.monthly", expiresAt: 20 });
   assert.equal(runCommands("revenuecat", [event("shared", 100, "manual"), event("shared", 1, "provider")]).state.productionAccess, true);
   const equalEvent = (eventId, eventType) => ({ ...event(eventId, 5, "provider"), eventType });
@@ -50,10 +67,47 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
   const malformed = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=chat-call", "--path=bad:path"], { encoding: "utf8" });
   const emptyReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=chat-call", "--path=999:999"], { encoding: "utf8" });
   const concurrencyReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency", "--domain=chat-call", "--path=0"], { encoding: "utf8" });
+  const concurrencyDomain = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency", "--domain=chat-call"], { encoding: "utf8" });
+  const seedWithoutDomain = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=property", "--seed=173501"], { encoding: "utf8" });
+  const seedWithConcurrency = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency", "--domain=chat-call", "--seed=173501"], { encoding: "utf8" });
+  const invalidIdentityOptions = [
+    ["domain", ["--suite=property", "--domain="]],
+    ["domain", ["--suite=property", "--domain"]],
+    ["seed", ["--suite=property", "--domain=chat-call", "--seed="]],
+    ["seed", ["--suite=property", "--domain=chat-call", "--seed"]],
+    ["path", ["--suite=property", "--domain=chat-call", "--path="]],
+    ["path", ["--suite=property", "--domain=chat-call", "--path"]]
+  ].map(([key, arguments_]) => [key, spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", ...arguments_], { encoding: "utf8" })]);
+  const deferredRouting = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency"], { encoding: "utf8" });
   const clobber = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=missing", `--replay-output=${output}`], { encoding: "utf8" });
+  const syntheticSecret = ["g", "h", "p", "_"].join("") + ["synthetic", "review", "marker", "0001"].join("");
+  const privateOutput = path.join(directory, "redacted-replay.json");
+  const redactedReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", `--domain=${syntheticSecret}`, `--replay-output=${privateOutput}`], { encoding: "utf8" });
   assert.deepEqual([malformed.status, JSON.parse(malformed.stdout).findings[0].id], [1, "ASSURANCE_MODEL_REPLAY_PATH_INVALID"]);
+  assert.equal(JSON.parse(malformed.stdout).requestIdentity.path, "bad:path");
   assert.deepEqual([emptyReplay.status, JSON.parse(emptyReplay.stdout).property.status], [1, "BLOCKED_INTERNAL"]);
+  assert.equal(JSON.parse(emptyReplay.stdout).requestIdentity.path, "999:999");
   assert.deepEqual([concurrencyReplay.status, JSON.parse(concurrencyReplay.stdout).findings[0].id], [1, "ASSURANCE_MODEL_REPLAY_SUITE_UNSUPPORTED"]);
+  assert.deepEqual([concurrencyDomain.status, JSON.parse(concurrencyDomain.stdout).findings[0].id], [1, "ASSURANCE_MODEL_DOMAIN_SUITE_UNSUPPORTED"]);
+  assert.deepEqual([seedWithoutDomain.status, JSON.parse(seedWithoutDomain.stdout).findings[0].id], [1, "ASSURANCE_MODEL_SEED_DOMAIN_REQUIRED"]);
+  assert.deepEqual([seedWithConcurrency.status, JSON.parse(seedWithConcurrency.stdout).findings[0].id], [1, "ASSURANCE_MODEL_SEED_SUITE_UNSUPPORTED"]);
+  for (const [key, result] of invalidIdentityOptions) {
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual([result.status, parsed.findings[0].id, parsed.findings[0].detail], [1, "ASSURANCE_MODEL_OPTION_VALUE_INVALID", key]);
+  }
+  assert.deepEqual([deferredRouting.status, JSON.parse(deferredRouting.stdout).deferredFindings[0].id], [0, "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E"]);
   assert.deepEqual([clobber.status, JSON.parse(clobber.stdout).replayPersistence.finding, fs.readFileSync(output, "utf8")], [1, "ASSURANCE_MODEL_REPLAY_OUTPUT_EXISTS", "preserve"]);
+  const privateStdout = redactedReplay.stdout;
+  const privateReplay = fs.readFileSync(privateOutput, "utf8");
+  assert.equal(redactedReplay.status, 1);
+  assert.equal(privateStdout.includes(syntheticSecret), false);
+  assert.equal(privateReplay.includes(syntheticSecret), false);
+  assert.equal(privateStdout.includes("[REDACTED]"), true);
+  assert.equal(privateReplay.includes("[REDACTED]"), true);
+  assert.equal(JSON.parse(privateStdout).requestIdentity.domain, "[REDACTED]");
+  assert.equal(JSON.parse(privateReplay).requestIdentity.domain, "[REDACTED]");
+  assert.equal(JSON.parse(privateStdout).property.results[0].finding, "UNKNOWN_MODEL_DOMAIN:[REDACTED]");
+  assert.equal(JSON.parse(privateReplay).property.results[0].finding, "UNKNOWN_MODEL_DOMAIN:[REDACTED]");
+  assert.equal(fs.statSync(privateOutput).mode & 0o777, 0o600);
   fs.rmSync(directory, { recursive: true });
 });

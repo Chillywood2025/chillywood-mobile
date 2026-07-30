@@ -24,6 +24,19 @@ function finishCall(state, status) {
   return state;
 }
 
+function acceptCall(state, authority, nativeAction = null) {
+  state.inviteStatus = "accepted";
+  state.roomStatus = "active";
+  state.callerMembership = "active";
+  state.calleeMembership = "active";
+  state.participants = ["caller", "callee"];
+  state.nativeCallState = "accepted";
+  state.timeoutWorker = "stopped";
+  state.acceptanceAuthority = authority;
+  state.nativeAcceptanceAction = nativeAction;
+  return state;
+}
+
 const chatCall = {
   id: "chat-call",
   featureId: "chilly-chat-call-lifecycle",
@@ -56,18 +69,21 @@ const chatCall = {
     terminalHistory: 0,
     timeoutWorker: "idle",
     callGeneration: 0,
-    cleanupGeneration: 0
+    cleanupGeneration: 0,
+    acceptanceAuthority: null,
+    nativeAcceptanceAction: null
   }),
   commandArbitrary: (fc) => fc.oneof(
     fc.record({ type: fc.constant("invite"), generation: fc.integer({ min: 1, max: 4 }), provider: fc.constantFrom("livekit", "legacy") }),
     fc.record({ type: fc.constant("native_action"), actionId: fc.integer({ min: 1, max: 5 }), generation: fc.integer({ min: 1, max: 4 }), expiresAt: fc.integer({ min: 1, max: 8 }) }),
+    fc.record({ type: fc.constant("accept_native"), actionId: fc.integer({ min: 1, max: 5 }), generation: fc.integer({ min: 1, max: 4 }) }),
     fc.record({ type: fc.constant("cleanup"), generation: fc.integer({ min: 1, max: 4 }) }),
     fc.record({ type: fc.constant("membership_write"), generation: fc.integer({ min: 1, max: 4 }), role: fc.constantFrom("caller", "callee", "intruder") }),
     fc.record({ type: fc.constant("change_provider"), provider: fc.constantFrom("livekit", "legacy") }),
     fc.record({ type: fc.constant("tick"), amount: fc.integer({ min: 1, max: 3 }) }),
     fc.constantFrom(
       { type: "auth_ready" }, { type: "react_ready" }, { type: "consume_native" },
-      { type: "accept" }, { type: "issue_token" }, { type: "connect_room" },
+      { type: "accept_in_app" }, { type: "issue_token" }, { type: "connect_room" },
       { type: "publish_local" }, { type: "remote_participant" }, { type: "subscribe_remote" },
       { type: "first_media" }, { type: "timeout" }, { type: "cancel" }, { type: "decline" },
       { type: "end" }
@@ -98,6 +114,8 @@ const chatCall = {
           state.nativeCallState = "ringing";
           state.terminalHistory = 0;
           state.timeoutWorker = "scheduled";
+          state.acceptanceAuthority = null;
+          state.nativeAcceptanceAction = null;
         }
         break;
       case "change_provider":
@@ -115,7 +133,7 @@ const chatCall = {
       case "native_action": {
         const key = `action-${command.generation}-${command.actionId}`;
         state.receivedNativeActions = uniq([...state.receivedNativeActions, key]);
-        if (command.generation !== state.callGeneration || terminalInvite.has(state.inviteStatus)) {
+        if (command.generation !== state.callGeneration || state.inviteStatus !== "ringing") {
           state.deniedNativeActions = uniq([...state.deniedNativeActions, key]);
           break;
         }
@@ -149,17 +167,23 @@ const chatCall = {
           state.nativeAction = null;
         }
         break;
-      case "accept":
+      case "accept_in_app":
         if (state.inviteStatus === "ringing" || (variant === "accept-timeout-nonatomic" && state.inviteStatus === "timed_out")) {
-          state.inviteStatus = "accepted";
-          if (variant !== "accept-timeout-nonatomic") state.roomStatus = "active";
-          state.callerMembership = "active";
-          state.calleeMembership = "active";
-          state.participants = ["caller", "callee"];
-          state.nativeCallState = "accepted";
-          state.timeoutWorker = "stopped";
+          acceptCall(state, "in_app");
+          if (variant === "accept-timeout-nonatomic") state.roomStatus = "ended";
         }
         break;
+      case "accept_native": {
+        const key = `action-${command.generation}-${command.actionId}`;
+        const authorized = command.generation === state.callGeneration
+          && state.consumedNativeActions.includes(key)
+          && !state.expiredNativeActions.includes(key)
+          && !state.deniedNativeActions.includes(key);
+        const historicalBypass = variant === "native-action-accepts-unconsumed"
+          && state.receivedNativeActions.includes(key);
+        if (state.inviteStatus === "ringing" && (authorized || historicalBypass)) acceptCall(state, "native_action", key);
+        break;
+      }
       case "issue_token":
         if (state.inviteStatus === "accepted") state.tokenStatus = "valid";
         break;
@@ -218,6 +242,8 @@ const chatCall = {
     if (state.inviteStatus === "accepted" && state.participants.join(",") !== "caller,callee") failures.push("CHAT_PARTICIPANT_SET_INVALID");
     if (state.consumedNativeActions.length !== uniq(state.consumedNativeActions).length) failures.push("CHAT_NATIVE_ACTION_CONSUMED_TWICE");
     if (state.consumedNativeActions.some((id) => state.expiredNativeActions.includes(id))) failures.push("CHAT_EXPIRED_ACTION_CONSUMED");
+    if (state.inviteStatus === "accepted" && !["in_app", "native_action"].includes(state.acceptanceAuthority)) failures.push("CHAT_ACCEPTANCE_AUTHORITY_MISSING");
+    if (state.acceptanceAuthority === "native_action" && (!state.nativeAcceptanceAction || !state.consumedNativeActions.includes(state.nativeAcceptanceAction) || state.expiredNativeActions.includes(state.nativeAcceptanceAction) || state.deniedNativeActions.includes(state.nativeAcceptanceAction))) failures.push("CHAT_NATIVE_ACCEPTANCE_UNAUTHORIZED");
     if (state.inviteStatus === "accepted" && state.roomStatus === "ended") failures.push("ACCEPT_TIMEOUT_RACE");
     const retained = new Set([state.nativeAction?.id, ...state.consumedNativeActions, ...state.expiredNativeActions, ...state.deniedNativeActions].filter(Boolean));
     if (state.receivedNativeActions.some((id) => !retained.has(id))) failures.push("NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT");
@@ -397,7 +423,7 @@ const otaBuild = {
       return state;
     }
     if (command.type === "activate_update") {
-      if (compatible(state.build, candidate) || variant === "incompatible-update-allowed") state.currentUpdate = candidate;
+      if (compatible(state.build, candidate) || ["incompatible-update-allowed", "environment-override-allowed", "missing-native-module-allowed"].includes(variant)) state.currentUpdate = candidate;
       else state.activationRejected += 1;
       return state;
     }
@@ -409,6 +435,8 @@ const otaBuild = {
   violations(state) {
     const failures = [];
     if (state.build && !state.build.embeddedSafe) failures.push("OTA_EMBEDDED_BUNDLE_UNSAFE");
+    if (state.currentUpdate && state.build?.environment !== state.currentUpdate.environment) failures.push("EAS_ENVIRONMENT_OVERRIDE");
+    if (state.currentUpdate && state.currentUpdate.requiredCapabilities.some((entry) => !state.build?.providedCapabilities.includes(entry))) failures.push("MISSING_NATIVE_MODULE_IN_RUNTIME");
     if (state.currentUpdate && !compatible(state.build, state.currentUpdate)) failures.push("OTA_NATIVE_CAPABILITY_MISMATCH");
     if (state.rollbackTarget && !compatible(state.build, state.rollbackTarget)) failures.push("OTA_ROLLBACK_INCOMPATIBLE");
     return failures;
@@ -417,7 +445,7 @@ const otaBuild = {
 
 const notificationAction = {
   id: "notification-native-action",
-  featureId: "notifications-fcm",
+  featureId: "pushkit-callkit",
   seed: 173504,
   initial: () => ({
     now: 0,
@@ -426,6 +454,7 @@ const notificationAction = {
     completedPushes: [],
     callKitReported: [],
     deliveryProof: [],
+    suppressedPushes: [],
     authenticationReady: false,
     reactReady: false,
     receivedActions: [],
@@ -451,7 +480,8 @@ const notificationAction = {
       state.apnsAccepted = uniq([...state.apnsAccepted, command.id]);
       if (variant === "apns-200-is-delivery") state.deliveryProof = uniq([...state.deliveryProof, command.id]);
     } else if (command.type === "receive_push") {
-      if (state.serverStatus === "ringing" && !state.receivedPushes.some((entry) => entry.id === command.id)) state.receivedPushes.push({ id: command.id, mustReport: command.mustReport });
+      if (variant === "pushkit-delivery-suppressed") state.suppressedPushes = uniq([...state.suppressedPushes, command.id]);
+      else if (state.serverStatus === "ringing" && !state.receivedPushes.some((entry) => entry.id === command.id)) state.receivedPushes.push({ id: command.id, mustReport: command.mustReport });
     } else if (command.type === "report_callkit") {
       if (state.receivedPushes.some((entry) => entry.id === command.id)) state.callKitReported = uniq([...state.callKitReported, command.id]);
     } else if (command.type === "complete_push") {
@@ -481,7 +511,7 @@ const notificationAction = {
         state.pendingActions = state.pendingActions.filter((entry) => entry.id !== command.id);
       }
     } else if (command.type === "server_accept") {
-      if (state.serverStatus === "ringing" && state.consumedActionKinds[command.id] === "answer") {
+      if (state.serverStatus === "ringing" && (obligationsClear() || variant === "accept-without-report") && state.consumedActionKinds[command.id] === "answer") {
         state.serverAccepted = uniq([...state.serverAccepted, command.id]);
         state.serverStatus = "accepted";
       }
@@ -506,9 +536,11 @@ const notificationAction = {
   violations(state) {
     const failures = [];
     for (const push of state.receivedPushes) {
-      const due = state.completedPushes.includes(push.id) || ["declined", "cancelled", "timed_out"].includes(state.serverStatus);
+      const due = state.completedPushes.includes(push.id) || ["accepted", "declined", "cancelled", "timed_out"].includes(state.serverStatus);
       if (push.mustReport && due && (!state.callKitReported.includes(push.id) || !state.completedPushes.includes(push.id))) failures.push("PUSHKIT_MUST_REPORT_BREACH");
+      if (push.mustReport && state.serverStatus === "accepted" && (!state.callKitReported.includes(push.id) || !state.completedPushes.includes(push.id))) failures.push("PUSHKIT_ACCEPTED_WITHOUT_REPORT");
     }
+    if (state.suppressedPushes.length) failures.push("PUSHKIT_DELIVERY_SUPPRESSED");
     if (state.deliveryProof.some((id) => !state.receivedPushes.some((push) => push.id === id))) failures.push("CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200");
     const retained = new Set([...state.pendingActions.map(({ id }) => id), ...state.consumedActions, ...state.expiredActions, ...state.retiredActions]);
     if (state.receivedActions.some((id) => !retained.has(id))) failures.push("NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT");
@@ -533,7 +565,7 @@ const liveKit = {
     if (command.type === "advance" && !state.terminal) {
       const expected = liveKitStages[liveKitStages.indexOf(state.stage) + 1];
       if (command.stage === expected || variant === "stage-skip") {
-        if (state.platform && state.platform !== command.platform) return state;
+        if (state.platform && state.platform !== command.platform && variant !== "platform-scope-crossed") return state;
         state.platform = command.platform;
         state.evidencePlatforms = uniq([...state.evidencePlatforms, command.platform]);
         state.fixture ||= command.fixture;
@@ -547,7 +579,7 @@ const liveKit = {
       state.tracks = Math.min(1, state.tracks);
     } else if (command.type === "declare_pass") {
       const fullChain = state.visitedStages.join(",") === liveKitStages.join(",");
-      if ((state.stage === "ui" && fullChain && !state.fixture) || variant === "connected-is-pass") state.pass = true;
+      if ((state.stage === "ui" && fullChain && !state.fixture) || variant === "connected-is-pass" || (variant === "media-without-ui-is-pass" && state.stage === "first_media")) state.pass = true;
     } else if (command.type === "cleanup") {
       state.terminal = true;
       state.rooms = 0;
@@ -590,13 +622,14 @@ const migrations = {
     forceRls: true,
     broadGrant: false,
     remoteImmutableHash: "hash-2",
-    forwardSuccessors: []
+    forwardSuccessors: [],
+    jsonbEncodingDepth: 1
   }),
   commandArbitrary: (fc) => fc.oneof(
     fc.constantFrom(
       { type: "align_exact" }, { type: "source_wrong_version" }, { type: "source_wrong_body" },
       { type: "request_merge" }, { type: "broad_grant" }, { type: "drop_force_rls" },
-      { type: "rewrite_remote" }
+      { type: "rewrite_remote" }, { type: "serialize_jsonb" }
     ),
     fc.record({ type: fc.constant("forward_correction"), version: fc.constantFrom("3", "4"), name: fc.constantFrom("deployed_successor", ""), hash: fc.constantFrom("hash-3", "") })
   ),
@@ -606,24 +639,27 @@ const migrations = {
     else if (command.type === "source_wrong_version") state.source = { ...state.remote, version: "1" };
     else if (command.type === "source_wrong_body") state.source = { ...state.remote, hash: "other" };
     else if (command.type === "request_merge") {
-      state.mergeAllowed = classifyMigration(state) === "REMOTE_AND_SOURCE_MATCH" || variant === "remote-ahead-merge";
+      state.mergeAllowed = classifyMigration(state) === "REMOTE_AND_SOURCE_MATCH" || ["remote-ahead-merge", "version-name-mismatch-merge"].includes(variant);
     } else if (command.type === "broad_grant" && variant === "broad-grant") state.broadGrant = true;
     else if (command.type === "drop_force_rls" && variant === "rls-lost") state.forceRls = false;
     else if (command.type === "rewrite_remote" && variant === "rewrite-deployed") state.remote.hash = "rewritten";
+    else if (command.type === "serialize_jsonb" && variant === "double-serialized-jsonb") state.jsonbEncodingDepth += 1;
     else if (command.type === "forward_correction") {
       const identified = Number(command.version) > Number(state.remote.version) && command.name && command.hash && command.hash !== state.remote.hash;
       if ((identified && !state.forwardSuccessors.some(({ version }) => version === command.version)) || variant === "anonymous-forward-counter") state.forwardSuccessors.push({ version: command.version, name: command.name, hash: command.hash });
     }
     state.classification = classifyMigration(state);
-    if (state.classification !== "REMOTE_AND_SOURCE_MATCH" && variant !== "remote-ahead-merge") state.mergeAllowed = false;
+    if (state.classification !== "REMOTE_AND_SOURCE_MATCH" && !["remote-ahead-merge", "version-name-mismatch-merge"].includes(variant)) state.mergeAllowed = false;
     return state;
   },
   violations(state) {
     const failures = [];
     if (state.mergeAllowed && state.classification !== "REMOTE_AND_SOURCE_MATCH") failures.push("REMOTE_MIGRATION_AHEAD_OF_GIT");
+    if (state.mergeAllowed && state.classification === "VERSION_MISMATCH") failures.push("MIGRATION_VERSION_NAME_MISMATCH");
     if (state.remote.hash !== state.remoteImmutableHash) failures.push("MIGRATION_DEPLOYED_BODY_REWRITTEN");
     if (!state.rls || !state.forceRls) failures.push("MIGRATION_RLS_NOT_MAINTAINED");
     if (state.broadGrant) failures.push("MIGRATION_BROAD_GRANT");
+    if (state.jsonbEncodingDepth !== 1) failures.push("DOUBLE_SERIALIZED_JSONB");
     if (state.forwardSuccessors.some(({ version, name, hash }) => Number(version) <= Number(state.remote.version) || !name || !hash || hash === state.remote.hash)) failures.push("MIGRATION_FORWARD_CORRECTION_UNIDENTIFIED");
     return failures;
   }
@@ -645,8 +681,17 @@ export const higherTierBlockers = Object.freeze([{
   detail: "Physical PushKit delivery remains outside Lane C; APNs acceptance is not delivery, CallKit presentation, or Answer/Decline proof."
 }]);
 
-export const escapedDefectFixtures = Object.freeze([
-  { id: "ACCEPT_TIMEOUT_RACE", domain: "chat-call", variant: "accept-timeout-nonatomic", commands: [{ type: "invite", generation: 1, provider: "livekit" }, { type: "timeout" }, { type: "accept" }] },
+const canonicalEscapedDefectIds = new Set([
+  "NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT", "ACCEPT_TIMEOUT_RACE", "STALE_CLEANUP_CLEARS_NEW_CALL", "TERMINAL_ROOM_ORPHAN",
+  "EAS_ENVIRONMENT_OVERRIDE", "OTA_NATIVE_CAPABILITY_MISMATCH", "MISSING_NATIVE_MODULE_IN_RUNTIME", "DOUBLE_SERIALIZED_JSONB",
+  "PLATFORM_SCOPE_MISMATCH", "PUSHKIT_DELIVERY_SUPPRESSED", "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200",
+  "LIVEKIT_CONNECTED_WITHOUT_MEDIA", "LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION", "REVENUECAT_TRANSFER_TARGET_MISMATCH",
+  "REVENUECAT_OUT_OF_ORDER_EVENT", "REMOTE_MIGRATION_AHEAD_OF_GIT", "MIGRATION_VERSION_NAME_MISMATCH"
+]);
+
+const escapedDefectFixtureDefinitions = [
+  { id: "ACCEPT_TIMEOUT_RACE", domain: "chat-call", variant: "accept-timeout-nonatomic", commands: [{ type: "invite", generation: 1, provider: "livekit" }, { type: "timeout" }, { type: "accept_in_app" }] },
+  { id: "CHAT_NATIVE_ACCEPTANCE_UNAUTHORIZED", domain: "chat-call", variant: "native-action-accepts-unconsumed", commands: [{ type: "invite", generation: 1, provider: "livekit" }, { type: "native_action", actionId: 1, generation: 1, expiresAt: 2 }, { type: "tick", amount: 2 }, { type: "accept_native", actionId: 1, generation: 1 }] },
   { id: "STALE_CLEANUP_CLEARS_NEW_CALL", domain: "chat-call", variant: "stale-cleanup", commands: [{ type: "invite", generation: 1, provider: "livekit" }, { type: "timeout" }, { type: "invite", generation: 2, provider: "livekit" }, { type: "cleanup", generation: 1 }] },
   { id: "TERMINAL_ROOM_ORPHAN", domain: "chat-call", variant: "old-membership-reactivates", commands: [{ type: "invite", generation: 1, provider: "livekit" }, { type: "timeout" }, { type: "membership_write", generation: 1, role: "caller" }] },
   { id: "NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT", domain: "notification-native-action", variant: "native-action-lost", commands: [{ type: "native_answer", id: "1", expiresAt: 5 }, { type: "react_ready" }] },
@@ -662,18 +707,37 @@ export const escapedDefectFixtures = Object.freeze([
     { type: "install_build", platform: "android", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", embeddedSafe: true, providedCapabilities: ["camera"] },
     { type: "activate_update", platform: "ios", environment: "internal", runtime: "runtime-2", channel: "internal", nativeDigest: "native-b", sourceCommit: "source-a", requiredCapabilities: ["callkit"] }
   ] },
+  { id: "EAS_ENVIRONMENT_OVERRIDE", domain: "ota-build", variant: "environment-override-allowed", commands: [
+    { type: "install_build", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] },
+    { type: "activate_update", platform: "ios", environment: "production", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", requiredCapabilities: ["camera"] }
+  ] },
+  { id: "MISSING_NATIVE_MODULE_IN_RUNTIME", domain: "ota-build", variant: "missing-native-module-allowed", commands: [
+    { type: "install_build", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] },
+    { type: "activate_update", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", requiredCapabilities: ["callkit"] }
+  ] },
   { id: "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200", domain: "notification-native-action", variant: "apns-200-is-delivery", commands: [{ type: "apns_accept", id: "1", mustReport: true }] },
+  { id: "PUSHKIT_DELIVERY_SUPPRESSED", domain: "notification-native-action", variant: "pushkit-delivery-suppressed", commands: [{ type: "receive_push", id: "1", mustReport: true }] },
   { id: "PUSHKIT_MUST_REPORT_BREACH", domain: "notification-native-action", variant: "complete-without-report", commands: [{ type: "receive_push", id: "1", mustReport: true }, { type: "complete_push", id: "1", mustReport: true }] },
+  { id: "PUSHKIT_ACCEPTED_WITHOUT_REPORT", domain: "notification-native-action", variant: "accept-without-report", commands: [{ type: "receive_push", id: "push", mustReport: true }, { type: "native_answer", id: "answer", expiresAt: 5 }, { type: "auth_ready" }, { type: "react_ready" }, { type: "consume_action", id: "answer" }, { type: "server_accept", id: "answer" }] },
   { id: "LIVEKIT_CONNECTED_WITHOUT_MEDIA", domain: "livekit", variant: "connected-is-pass", commands: [
     { type: "advance", stage: "token", platform: "android", fixture: false },
     { type: "advance", stage: "claims", platform: "android", fixture: false },
     { type: "advance", stage: "room", platform: "android", fixture: false },
     { type: "declare_pass" }
   ] },
+  { id: "LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION", domain: "livekit", variant: "media-without-ui-is-pass", commands: ["token", "claims", "room", "publication", "remote_participant", "subscription", "first_media"].map((stage) => ({ type: "advance", stage, platform: "android", fixture: false })).concat({ type: "declare_pass" }) },
+  { id: "PLATFORM_SCOPE_MISMATCH", domain: "livekit", variant: "platform-scope-crossed", commands: [{ type: "advance", stage: "token", platform: "android", fixture: false }, { type: "advance", stage: "claims", platform: "ios", fixture: false }] },
   { id: "LIVEKIT_STAGE_SKIPPED", domain: "livekit", variant: "stage-skip", commands: [{ type: "advance", stage: "ui", platform: "ios", fixture: false }, { type: "declare_pass" }] },
+  { id: "DOUBLE_SERIALIZED_JSONB", domain: "migrations", variant: "double-serialized-jsonb", commands: [{ type: "serialize_jsonb" }] },
   { id: "MIGRATION_FORWARD_CORRECTION_UNIDENTIFIED", domain: "migrations", variant: "anonymous-forward-counter", commands: [{ type: "forward_correction", version: "2", name: "", hash: "" }] },
-  { id: "REMOTE_MIGRATION_AHEAD_OF_GIT", domain: "migrations", variant: "remote-ahead-merge", commands: [{ type: "source_wrong_body" }, { type: "request_merge" }] }
-]);
+  { id: "REMOTE_MIGRATION_AHEAD_OF_GIT", domain: "migrations", variant: "remote-ahead-merge", commands: [{ type: "source_wrong_body" }, { type: "request_merge" }] },
+  { id: "MIGRATION_VERSION_NAME_MISMATCH", domain: "migrations", variant: "version-name-mismatch-merge", commands: [{ type: "source_wrong_version" }, { type: "request_merge" }] }
+];
+
+export const escapedDefectFixtures = Object.freeze(escapedDefectFixtureDefinitions.map((fixture) => Object.freeze({
+  ...fixture,
+  classification: canonicalEscapedDefectIds.has(fixture.id) ? "canonical" : "supplemental"
+})));
 
 export function runCommands(domainId, commands, variant = "fixed") {
   const definition = modelDefinitions[domainId];
