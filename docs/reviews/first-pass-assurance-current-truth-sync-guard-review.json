@@ -38,8 +38,8 @@
   },
   "testResultHash": "e1a2b38f4a38a072aa3eb5700279da8e3f490050e774601cdbc5442619f643cb",
   "reviewLevel": "A",
-  "reviewHead": "61f41b7605a1722dc6eadb14e8f8a865ab0b1478",
-  "reviewTimestamp": "2026-07-30T17:34:58Z",
+  "reviewHead": "de87a22eb53978d909621a1b57b2c71c6e062ad0",
+  "reviewTimestamp": "2026-07-30T17:35:26Z",
   "reviewerLanes": ["independent", "separate-clean-worktree", "current-truth-fail-closed"],
   "findings": [
     {
