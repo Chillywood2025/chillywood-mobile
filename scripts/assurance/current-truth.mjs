@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import { args, emit, git, providerMode, readJson, readText, rel, renderCurrentState, renderNextTask } from "./lib.mjs";
+
+const options = args();
+if (options.dogfood) {
+  const dogfood = readJson("config/assurance/dogfood-pr-a-v1.json");
+  const subjects = dogfood.subjects.filter(({ type }) => type === "hot_path_document");
+  const findings = [];
+  for (const subject of subjects) {
+    const facts = subject.facts;
+    if (facts.recordedMainSha !== undefined && facts.recordedMainSha !== facts.actualMainSha) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL" });
+    if (facts.recordedAndroidBuild !== undefined && facts.recordedAndroidBuild !== facts.actualAndroidBuild) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE", status: "BLOCKED_INTERNAL", platform: "android" });
+    if (facts.recordedIosUpdate !== undefined && facts.recordedIosUpdate !== facts.actualIosUpdate) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE", status: "BLOCKED_INTERNAL", platform: "ios" });
+    if (facts.resolvedProviderBlockerStillActive) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_STALE", status: "BLOCKED_INTERNAL" });
+    if (facts.roleStateClaimStale) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_ROLE_STALE", status: "BLOCKED_INTERNAL" });
+    if (facts.recordedEnabledVisualSwitches !== undefined && facts.recordedEnabledVisualSwitches !== facts.actualEnabledVisualSwitches) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_SWITCH_STALE", status: "BLOCKED_INTERNAL" });
+    if (facts.nextTaskMismatch) findings.push({ subject: subject.id, id: "ASSURANCE_NEXT_TASK_STALE", status: "BLOCKED_INTERNAL" });
+    findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL" });
+  }
+  emit("assurance:current-truth", false, { mode: "dogfood", detectorPassed: findings.length >= 8, findings }, [`current-truth dogfood: expected FAIL — ${findings.length} stale-truth findings`]);
+}
+let mode;
+if (!options.dogfood) try {
+  mode = providerMode(options);
+} catch (error) {
+  emit("assurance:current-truth", false, { findings: [{ id: error.message, status: "BLOCKED_INTERNAL" }] }, [`current truth: FAIL — ${error.message}`]);
+}
+
+if (mode) {
+  const record = readJson("config/assurance/current-truth-v1.json");
+  const expectedDocs = { "CURRENT_STATE.md": renderCurrentState(record), "NEXT_TASK.md": renderNextTask(record) };
+  if (options.writeDocs) for (const [file, body] of Object.entries(expectedDocs)) fs.writeFileSync(rel(file), body);
+  const branch = git(["branch", "--show-current"]);
+  const remoteMain = git(["rev-parse", "origin/main"]);
+  const head = git(["rev-parse", "HEAD"]);
+  const mergeBase = git(["merge-base", "HEAD", "origin/main"]);
+  const mainParents = branch === "main" ? git(["show", "-s", "--format=%P", remoteMain]).split(/\s+/u) : [];
+  const mainMatches = branch === "main"
+    ? record.mainSha === remoteMain || mainParents.includes(record.mainSha)
+    : record.mainSha === remoteMain && mergeBase === remoteMain;
+  const now = options.now ? new Date(options.now) : new Date();
+  const freshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
+  const findings = [];
+  if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
+  if (!freshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
+  for (const [file, expected] of Object.entries(expectedDocs)) {
+    if (readText(file) !== expected) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_DOC_DRIFT", status: "BLOCKED_INTERNAL", file });
+  }
+  if (record.latestMergedImplementationPr.state !== "merged") findings.push({ id: "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE", status: "BLOCKED_INTERNAL" });
+  if (mode === "read-only") {
+    const snapshot = readJson(options.providerSnapshot ?? options.snapshot);
+    for (const key of ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
+      if (snapshot[key] !== undefined && JSON.stringify(snapshot[key]) !== JSON.stringify(record[key])) findings.push({ id: `ASSURANCE_CURRENT_TRUTH_${key.toUpperCase()}_STALE`, status: "BLOCKED_INTERNAL" });
+    }
+  }
+  emit("assurance:current-truth", findings.length === 0, {
+    mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
+    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), findings
+  }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — main ${record.mainSha.slice(0, 8)}, remote migration ${record.remoteMigrationHead}, deadline ${record.freshnessDeadline}`]);
+}

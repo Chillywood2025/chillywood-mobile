@@ -1,0 +1,71 @@
+#!/usr/bin/env node
+import { args, emit, featureRequired, readJson, requiredKeys, tierIds } from "./lib.mjs";
+
+const options = args();
+const schemas = readJson("config/assurance/schemas-v1.json");
+const contracts = [
+  ["config/assurance/gate-catalog-v1.json", "gateCatalog"],
+  ["config/assurance/proof-strength-v1.json", "proofStrength"],
+  ["config/assurance/proof-substitution-denylist-v1.json", "proofSubstitutionDenylist"],
+  ["config/assurance/pr-scope-policy-v1.json", "prScopePolicy"],
+  ["config/assurance/review-contract-v1.json", "reviewContract"],
+  ["config/assurance/test-impact-map-v1.json", "testImpactMap"],
+  ["config/assurance/current-truth-contract-v1.json", "currentTruthContract"],
+  ["config/assurance/current-truth-v1.json", "currentTruthRecord"],
+  ["config/assurance/physical-golden-matrix-v1.json", "physicalGoldenMatrix"],
+  ["config/assurance/escaped-defect-catalog-v1.json", "escapedDefectCatalog"],
+  ["config/assurance/feature-registry-v1.json", "featureRegistry"],
+  ["config/assurance/pr-a-scope-waiver-v1.json", "scopeWaiver"],
+  ["config/assurance/dogfood-pr-a-v1.json", "dogfood"]
+];
+
+function validate(value, schema, at, errors) {
+  if (schema.$ref) return validate(value, schemas.$defs[schema.$ref.split("/").at(-1)], at, errors);
+  for (const member of schema.allOf ?? []) validate(value, member, at, errors);
+  if (schema.const !== undefined && value !== schema.const) errors.push(`${at} must equal ${JSON.stringify(schema.const)}`);
+  if (schema.enum && !schema.enum.includes(value)) errors.push(`${at} must be one of ${schema.enum.join(",")}`);
+  if (schema.type === "object" && (!value || typeof value !== "object" || Array.isArray(value))) errors.push(`${at} must be object`);
+  if (schema.type === "array" && !Array.isArray(value)) errors.push(`${at} must be array`);
+  if (schema.type === "string" && typeof value !== "string") errors.push(`${at} must be string`);
+  if (schema.type === "boolean" && typeof value !== "boolean") errors.push(`${at} must be boolean`);
+  if (schema.type === "number" && typeof value !== "number") errors.push(`${at} must be number`);
+  if (schema.pattern && typeof value === "string" && !(new RegExp(schema.pattern, "u")).test(value)) errors.push(`${at} pattern mismatch`);
+  if (schema.maximum !== undefined && value > schema.maximum) errors.push(`${at} exceeds ${schema.maximum}`);
+  if (schema.required && value && typeof value === "object") errors.push(...requiredKeys(value, schema.required, at));
+  if (schema.properties && value && typeof value === "object") {
+    for (const [key, child] of Object.entries(schema.properties)) if (Object.hasOwn(value, key)) validate(value[key], child, `${at}.${key}`, errors);
+  }
+  if (Array.isArray(value)) {
+    if (schema.minItems !== undefined && value.length < schema.minItems) errors.push(`${at} needs at least ${schema.minItems} items`);
+    if (schema.uniqueItems && new Set(value.map(JSON.stringify)).size !== value.length) errors.push(`${at} items must be unique`);
+    if (schema.items) value.forEach((entry, index) => validate(entry, schema.items, `${at}[${index}]`, errors));
+  }
+}
+
+const errors = [];
+for (const [file, definition] of contracts) {
+  const value = readJson(file);
+  validate(value, schemas.$defs[definition], file, errors);
+  const expectedRef = `config/assurance/schemas-v1.json#/$defs/${definition}`;
+  if (value.schemaRef !== expectedRef) errors.push(`${file} schemaRef must be ${expectedRef}`);
+}
+
+const gates = readJson("config/assurance/gate-catalog-v1.json");
+const proof = readJson("config/assurance/proof-strength-v1.json");
+const defects = readJson("config/assurance/escaped-defect-catalog-v1.json").defects;
+const registry = readJson("config/assurance/feature-registry-v1.json").features;
+if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
+if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");
+const defectFields = ["id", "tags", "affectedDomains", "preImplementationQuestions", "requiredProofTier", "detectionRule", "testTemplate", "runtimeSignature", "rollback", "prevention", "blocks"];
+defects.forEach((defect, index) => errors.push(...requiredKeys(defect, defectFields, `defects[${index}]`)));
+registry.forEach((feature, index) => {
+  errors.push(...requiredKeys(feature, featureRequired, `features[${index}]`));
+  errors.push(...tierIds.flatMap((tier) => Object.hasOwn(feature.proofTierApplicability ?? {}, tier) ? [] : [`features[${index}] missing ${tier}`]));
+});
+for (const [label, values] of [["defect", defects.map(({ id }) => id)], ["feature", registry.map(({ featureId }) => featureId)]]) {
+  if (new Set(values).size !== values.length) errors.push(`${label} IDs must be unique`);
+}
+
+emit("assurance:validate-contracts", errors.length === 0, { contractsValidated: contracts.length, featureCount: registry.length, escapedDefectCount: defects.length, errors }, [
+  `assurance contracts: ${errors.length ? "FAIL" : "PASS"} (${contracts.length} contracts, ${registry.length} features, ${defects.length} escaped defects)`
+]);
