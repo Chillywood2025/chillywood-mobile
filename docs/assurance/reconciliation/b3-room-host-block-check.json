@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "reconciliationId": "first-pass-assurance-b3-room-host-block-check",
+  "objective": "Represent the already-deployed room-host participant block-check under its exact remote migration identity without reapplying or changing it.",
+  "risk": "C",
+  "domains": [
+    "database/RLS",
+    "Watch-Party Live moderation authority"
+  ],
+  "features": [
+    "supabase-migrations-rls",
+    "watch-party-live"
+  ],
+  "nonGoals": [
+    "database deployment",
+    "provider mutation",
+    "LiveKit activation",
+    "RevenueCat behavior",
+    "room-host product behavior change",
+    "auth, RLS, role, right, or grant expansion"
+  ],
+  "remoteEvidence": {
+    "mode": "preserved-read-only",
+    "version": "20260730161737",
+    "name": "allow_room_host_participant_block_check",
+    "statementCount": 1,
+    "statementArraySha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+    "normalizedStatementSha256": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d",
+    "providerMutation": false
+  },
+  "migrations": [
+    {
+      "version": "20260730161737",
+      "name": "allow_room_host_participant_block_check",
+      "hash": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "normalizedHash": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d"
+    }
+  ],
+  "sourceAlignment": {
+    "targetFile": "supabase/migrations/20260730161737_allow_room_host_participant_block_check.sql",
+    "classificationBefore": "VERSION_MISMATCH",
+    "classificationAfter": "REMOTE_AND_SOURCE_MATCH",
+    "matchingBodyPreviouslyPresentAt": "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql",
+    "matchingBodyVersion": "20260725224000",
+    "matchingBodyDisposition": "PRESERVED_UNCHANGED",
+    "olderVersionClassificationAgainstTarget": "VERSION_MISMATCH",
+    "olderVersionClassificationInTargetOnlySnapshot": "SOURCE_ONLY",
+    "olderVersionFullRemoteLedgerComparison": {
+      "status": "NOT_APPLICABLE",
+      "reason": "This lane was prohibited from querying the remote ledger. The older source was already on main, is not a B3 delta, and remains unchanged."
+    },
+    "olderVersionBlocksB3Merge": false,
+    "remoteStatementBodyRewritten": false,
+    "remoteMigrationReapplied": false
+  },
+  "hashRequirements": {
+    "targetFileSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+    "targetNormalizedSha256": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d",
+    "exactVersionRequired": true,
+    "exactNameRequired": true,
+    "exactBodyRequired": true
+  },
+  "focusedTest": {
+    "file": "supabase/tests/room_host_participant_block_check_test.sql",
+    "assertions": [
+      "function exists",
+      "security-definer and fixed search_path remain present",
+      "anonymous execution remains denied",
+      "authenticated and service-role execution remain exact",
+      "participant self-check remains permitted",
+      "exact room-host check remains permitted",
+      "unblocked and blocked results remain authoritative",
+      "unrelated authenticated inspection remains forbidden"
+    ],
+    "result": {
+      "status": "INTEGRATION_CLEAR",
+      "files": 1,
+      "tests": 10,
+      "failures": 0
+    }
+  },
+  "localDatabaseValidation": {
+    "cli": "supabase@2.109.1",
+    "resetRuns": 1,
+    "resetStatus": "INTEGRATION_CLEAR",
+    "migrationApplicationOrder": [
+      "20260725224000_allow_room_host_participant_block_check.sql",
+      "20260730161737_allow_room_host_participant_block_check.sql"
+    ],
+    "duplicateObjectError": false,
+    "semanticDriftObserved": false,
+    "remoteDatabaseAccess": false
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "rollback": "Block merge if identity or behavior differs. After merge, never delete or rewrite the deployed migration record; use a separately reviewed forward-only correction if runtime behavior ever requires correction.",
+  "emergencyStop": "Stop the database merge lane on any version, name, body, hash, grant, RLS, or authority mismatch.",
+  "permittedNextAction": "Run exact-head review, the authorized linked dry-run parity check, and the coordinator-owned frozen-head CI.",
+  "safety": {
+    "liveDatabaseChanged": false,
+    "providerStateChanged": false,
+    "migrationDeployed": false,
+    "existingMigrationChanged": false,
+    "packageOrCiChanged": false
+  }
+}
