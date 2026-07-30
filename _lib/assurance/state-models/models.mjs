@@ -368,14 +368,28 @@ const revenueCat = {
   }
 };
 
+const hasIdentity = (value) => typeof value === "string" && value.length > 0;
+const validBuild = (build) => Boolean(
+  build
+  && build.embeddedSafe
+  && [build.buildId, build.packageId, build.signedArtifactId, build.sourceCommit].every(hasIdentity)
+  && Array.isArray(build.providedCapabilities)
+);
+const validUpdate = (update) => Boolean(
+  update
+  && [update.targetBuildId, update.packageId, update.updateId, update.group, update.sourceCommit].every(hasIdentity)
+  && Array.isArray(update.requiredCapabilities)
+);
 const compatible = (build, update) => Boolean(
-  build && update
+  validBuild(build)
+  && validUpdate(update)
+  && build.buildId === update.targetBuildId
+  && build.packageId === update.packageId
   && build.platform === update.platform
   && build.environment === update.environment
   && build.runtime === update.runtime
   && build.channel === update.channel
   && build.nativeDigest === update.nativeDigest
-  && build.sourceCommit === update.sourceCommit
   && update.requiredCapabilities.every((entry) => build.providedCapabilities.includes(entry))
 );
 
@@ -383,10 +397,13 @@ const otaBuild = {
   id: "ota-build",
   featureId: "eas-build-update-release",
   seed: 173503,
-  initial: () => ({ build: null, currentUpdate: null, rollbackTarget: null, activationRejected: 0 }),
+  initial: () => ({ build: null, currentUpdate: null, rollbackTarget: null, activationRejected: 0, rollbackTargetRejected: 0, rollbackRejected: 0 }),
   commandArbitrary: (fc) => fc.oneof(
     fc.record({
       type: fc.constant("install_build"),
+      buildId: fc.constantFrom("", "build-a", "build-b"),
+      packageId: fc.constantFrom("", "com.chillywood.mobile", "com.chillywood.other"),
+      signedArtifactId: fc.constantFrom("", "artifact-a", "artifact-b"),
       platform: fc.constantFrom("android", "ios"),
       environment: fc.constantFrom("internal", "production"),
       runtime: fc.constantFrom("runtime-1", "runtime-2"),
@@ -397,7 +414,11 @@ const otaBuild = {
       providedCapabilities: fc.uniqueArray(fc.constantFrom("camera", "microphone", "callkit", "livekit"), { maxLength: 4 })
     }),
     fc.record({
-      type: fc.constantFrom("activate_update", "set_rollback", "rollback"),
+      type: fc.constantFrom("activate_update", "set_rollback"),
+      targetBuildId: fc.constantFrom("", "build-a", "build-b"),
+      packageId: fc.constantFrom("", "com.chillywood.mobile", "com.chillywood.other"),
+      updateId: fc.constantFrom("", "update-a", "update-b"),
+      group: fc.constantFrom("", "group-a", "group-b"),
       platform: fc.constantFrom("android", "ios"),
       environment: fc.constantFrom("internal", "production"),
       runtime: fc.constantFrom("runtime-1", "runtime-2"),
@@ -405,38 +426,46 @@ const otaBuild = {
       nativeDigest: fc.constantFrom("native-a", "native-b"),
       sourceCommit: fc.constantFrom("", "source-a", "source-b"),
       requiredCapabilities: fc.uniqueArray(fc.constantFrom("camera", "microphone", "callkit", "livekit"), { maxLength: 4 })
-    })
+    }),
+    fc.record({ type: fc.constant("rollback"), rollbackId: fc.constantFrom("", "update-a", "update-b", "missing") })
   ),
   apply(current, command, variant = "fixed") {
     const state = copy(current);
     if (command.type === "install_build") {
-      if (command.embeddedSafe) {
+      if (validBuild(command)) {
         state.build = copy(command);
         state.currentUpdate = null;
         state.rollbackTarget = null;
       }
       return state;
     }
-    const candidate = { ...command, type: "update" };
     if (command.type === "set_rollback") {
+      const candidate = { ...command, type: "update" };
       if (compatible(state.build, candidate)) state.rollbackTarget = candidate;
+      else state.rollbackTargetRejected += 1;
       return state;
     }
     if (command.type === "activate_update") {
+      const candidate = { ...command, type: "update" };
       if (compatible(state.build, candidate) || ["incompatible-update-allowed", "environment-override-allowed", "missing-native-module-allowed"].includes(variant)) state.currentUpdate = candidate;
       else state.activationRejected += 1;
       return state;
     }
-    if (command.type === "rollback" && state.rollbackTarget && compatible(state.build, state.rollbackTarget)) {
-      state.currentUpdate = state.rollbackTarget;
+    if (command.type === "rollback") {
+      if (state.rollbackTarget && hasIdentity(command.rollbackId) && command.rollbackId === state.rollbackTarget.updateId && compatible(state.build, state.rollbackTarget)) {
+        state.currentUpdate = state.rollbackTarget;
+      } else {
+        state.rollbackRejected += 1;
+      }
     }
     return state;
   },
   violations(state) {
     const failures = [];
-    if (state.build && !state.build.embeddedSafe) failures.push("OTA_EMBEDDED_BUNDLE_UNSAFE");
+    if (state.build && !validBuild(state.build)) failures.push("OTA_EMBEDDED_BUNDLE_UNSAFE");
     if (state.currentUpdate && state.build?.environment !== state.currentUpdate.environment) failures.push("EAS_ENVIRONMENT_OVERRIDE");
     if (state.currentUpdate && state.currentUpdate.requiredCapabilities.some((entry) => !state.build?.providedCapabilities.includes(entry))) failures.push("MISSING_NATIVE_MODULE_IN_RUNTIME");
+    if (state.currentUpdate && !validUpdate(state.currentUpdate)) failures.push("OTA_UPDATE_IDENTITY_INVALID");
     if (state.currentUpdate && !compatible(state.build, state.currentUpdate)) failures.push("OTA_NATIVE_CAPABILITY_MISMATCH");
     if (state.rollbackTarget && !compatible(state.build, state.rollbackTarget)) failures.push("OTA_ROLLBACK_INCOMPATIBLE");
     return failures;
@@ -704,16 +733,16 @@ const escapedDefectFixtureDefinitions = [
     { type: "event", eventId: "move", eventType: "transfer", eventTime: 2, store: "google", environment: "production", authority: "provider", appUser: "user-a", target: "user-b", product: "premium.monthly", expiresAt: 10 }
   ] },
   { id: "OTA_NATIVE_CAPABILITY_MISMATCH", domain: "ota-build", variant: "incompatible-update-allowed", commands: [
-    { type: "install_build", platform: "android", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", embeddedSafe: true, providedCapabilities: ["camera"] },
-    { type: "activate_update", platform: "ios", environment: "internal", runtime: "runtime-2", channel: "internal", nativeDigest: "native-b", sourceCommit: "source-a", requiredCapabilities: ["callkit"] }
+    { type: "install_build", buildId: "build-a", packageId: "com.chillywood.mobile", signedArtifactId: "artifact-a", platform: "android", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] },
+    { type: "activate_update", targetBuildId: "build-a", packageId: "com.chillywood.mobile", updateId: "update-b", group: "group-b", platform: "ios", environment: "internal", runtime: "runtime-2", channel: "internal", nativeDigest: "native-b", sourceCommit: "source-b", requiredCapabilities: ["callkit"] }
   ] },
   { id: "EAS_ENVIRONMENT_OVERRIDE", domain: "ota-build", variant: "environment-override-allowed", commands: [
-    { type: "install_build", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] },
-    { type: "activate_update", platform: "ios", environment: "production", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", requiredCapabilities: ["camera"] }
+    { type: "install_build", buildId: "build-a", packageId: "com.chillywood.mobile", signedArtifactId: "artifact-a", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] },
+    { type: "activate_update", targetBuildId: "build-a", packageId: "com.chillywood.mobile", updateId: "update-b", group: "group-b", platform: "ios", environment: "production", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-b", requiredCapabilities: ["camera"] }
   ] },
   { id: "MISSING_NATIVE_MODULE_IN_RUNTIME", domain: "ota-build", variant: "missing-native-module-allowed", commands: [
-    { type: "install_build", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] },
-    { type: "activate_update", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", requiredCapabilities: ["callkit"] }
+    { type: "install_build", buildId: "build-a", packageId: "com.chillywood.mobile", signedArtifactId: "artifact-a", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] },
+    { type: "activate_update", targetBuildId: "build-a", packageId: "com.chillywood.mobile", updateId: "update-b", group: "group-b", platform: "ios", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-b", requiredCapabilities: ["callkit"] }
   ] },
   { id: "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200", domain: "notification-native-action", variant: "apns-200-is-delivery", commands: [{ type: "apns_accept", id: "1", mustReport: true }] },
   { id: "PUSHKIT_DELIVERY_SUPPRESSED", domain: "notification-native-action", variant: "pushkit-delivery-suppressed", commands: [{ type: "receive_push", id: "1", mustReport: true }] },
