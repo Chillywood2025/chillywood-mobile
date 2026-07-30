@@ -1,8 +1,9 @@
 # LiveKit Experience Sentinel
 
 Status: protected Level 0/1 source surface registered; Android and iOS
-authorization/finalization source boundary implemented; live installed-product
-canaries not yet run.
+authorization/finalization source boundary implemented; the deployed platform
+source-identity binding is now represented exactly in Git; zero formal
+installed-product sentinel runs have occurred.
 
 Registered switch:
 
@@ -40,6 +41,22 @@ Platform activation is a three-step Owner path:
 
 The Android and iOS visual switches are outside this path. The shared visual and
 shared LiveKit switches remain off, and recurring schedules remain off.
+
+## Git-only source reconciliation
+
+Migration
+`20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql`
+records the exact immutable version and statement body already present in the
+remote migration ledger. This reconciliation does not apply or rerun the
+migration, change a switch or schedule, resume activation, create a build or
+OTA, call LiveKit, or create installed/physical evidence.
+
+The migration binds the existing platform preflight and successful-finalization
+guards to the recorded internal source, runtime, update, artifact, and rollback
+identities. Its focused pgTAP contract also verifies that the migration creates
+no preflight receipt, opens no platform authorization, and enables no schedule.
+Those source and integration checks remain T1/T3 evidence only: they cannot
+substitute for signed-artifact, installed, physical, or public-canary proof.
 
 Initial authority:
 
