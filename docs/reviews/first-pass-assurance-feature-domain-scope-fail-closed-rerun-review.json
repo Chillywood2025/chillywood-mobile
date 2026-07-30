@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-feature-domain-scope-fail-closed-rerun-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 62,
+  "implementationBranch": "codex/first-pass-assurance-feature-domain-scope",
+  "implementationHead": "08ca9b11b28677268f7db932086256645d29c794",
+  "implementationTree": "0ddc0091d84cdd3c8f8e3bbbc7f85d356f063690",
+  "baseHead": "84c9ffdcea7de1b73163c60348267875f5d99ed3",
+  "changedFileHash": "645dc10383c3100ba2a3838b0aef4e5671882962af5fa6178dbb9d46813299f3",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "82f8286aa0a6d97af19741ef75564f65559f79135f97aff33701f7be3db402f8",
+  "testResults": {
+    "focusedFeatureBundleTests": {
+      "status": "pass",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "hostilePrerequisiteBlockerProbes": {
+      "status": "pass",
+      "blockedCases": 8,
+      "validCases": 2,
+      "allPrerequisiteBlockersUnauthorized": true,
+      "cases": {
+        "missingFeature": {
+          "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+          "relatedHighRiskScopeAuthorized": false
+        },
+        "unknownFeature": {
+          "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+          "relatedHighRiskScopeAuthorized": false
+        },
+        "registeredFeatureMissingBundle": {
+          "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+          "relatedHighRiskScopeAuthorized": false
+        },
+        "universalBundle": {
+          "finding": "ASSURANCE_SCOPE_POLICY_INVALID",
+          "relatedHighRiskScopeAuthorized": false
+        },
+        "partialBundleOutsideDomain": {
+          "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+          "relatedHighRiskScopeAuthorized": false
+        },
+        "objectiveOmission": {
+          "finding": "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+          "relatedHighRiskScopeAuthorized": false
+        },
+        "scopeWaiverAttempt": {
+          "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+          "relatedHighRiskScopeAuthorized": false,
+          "scopeWaiverAuthorizesMixedRisk": false
+        },
+        "pr52MixedDomains": {
+          "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+          "relatedHighRiskScopeAuthorized": false
+        }
+      }
+    },
+    "contracts": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "findings": 0
+    },
+    "scopeSelfCheck": {
+      "status": "pass",
+      "files": 4,
+      "additions": 258,
+      "deletions": 3,
+      "netChangedLines": 255,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "highRiskDomains": []
+    },
+    "phase1Ci": {
+      "status": "not_run_due_coordinator_policy",
+      "implementationHead": "08ca9b11b28677268f7db932086256645d29c794",
+      "eligibleAsProof": false,
+      "resumptionAction": "Coordinator runs one fresh full Phase 1 CI execution only after both exact-head Level B review lanes freeze."
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "buildOrOta": false,
+      "productSourceChanged": false,
+      "migrationChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "ac25da5f8af94d54c417a39483d0e814c7343b0a10bc00686cad0f7d808f3803",
+  "reviewLevel": "B",
+  "reviewHead": "08ca9b11b28677268f7db932086256645d29c794",
+  "reviewTimestamp": "2026-07-30T18:04:59Z",
+  "reviewerLanes": [
+    "architecture",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "fail-closed-scope-policy"
+  ],
+  "findings": [
+    {
+      "id": "PR_SCOPE_OBJECTIVE_OMISSION_AUTHORIZATION_CONTRADICTION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The authorization decision now derives from an empty findings set. The exact hostile objective-omission case emits ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN and returns relatedHighRiskScopeAuthorized=false; every independently probed prerequisite blocker also returns false."
+    },
+    {
+      "id": "PR_SCOPE_PHASE1_CI_COORDINATED_NOT_RUN",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "No full CI execution was started by this isolated review lane at fixed head 08ca9b11b28677268f7db932086256645d29c794.",
+      "requiredResolution": "The coordinator must run one fresh full Phase 1 CI execution at this exact implementation head after both Level B review lanes freeze."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPending": true,
+    "otherLevelBReviewLanePending": true,
+    "reviewDisposition": "fail-closed-lane-clear-ci-and-other-lane-pending",
+    "humanApproval": false
+  }
+}
