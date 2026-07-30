@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "current-truth-head-binding-cli-rerun-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture",
+  "focus": "CLI, schema, Git context, provider inventory, deterministic output, privacy, and non-interference",
+  "humanApproval": false,
+  "implementationPrNumber": 90,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-head-binding",
+  "implementationHead": "ac8393d2b99d8f1145adfd2d39757cb78ae4d10e",
+  "implementationTree": "0166188c2d989bd82f258193103923f680cdf4ef",
+  "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+  "changedFileHash": "62e2b04b781159c50df3d6317dbf3f9fccc5c66f8aec16709f695def21c59972",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "85ce84ee2f38053d3dda56b86596ffa814e661e04e5e51b701153120d1fd0b83",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_finding",
+      "lane": "architecture",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationPrNumber": 90,
+      "implementationHead": "ac8393d2b99d8f1145adfd2d39757cb78ae4d10e",
+      "implementationTree": "0166188c2d989bd82f258193103923f680cdf4ef",
+      "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+      "mergeBaseMatched": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 5,
+      "additions": 606,
+      "deletions": 6,
+      "netChangedLines": 600,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "scopeWaiver": null,
+      "classifiedDomains": [
+        "CI-test-infrastructure"
+      ],
+      "unclassifiedChangedFiles": 0,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "formerP1Verification": {
+      "status": "pass",
+      "literalHeadRejectedByRuntime": true,
+      "literalHeadRejectedBySchema": true,
+      "literalHeadRemoteRef": null,
+      "namedMainBehindRejected": true,
+      "namedMainAheadRejected": true,
+      "namedMainFinding": "ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE"
+    },
+    "headBindingMatrix": {
+      "status": "pass_with_uncovered_blocking_counterexample",
+      "command": "node tests/assurance/current-truth-head-binding.test.mjs",
+      "declaredCases": 21,
+      "providerCliFailClosed": true,
+      "deterministicRuns": "3/3",
+      "matrixHash": "2f776e3d2887bb0e98c513909f182dc5b66de3e64e5a85a8a29ad0fe8a60135a"
+    },
+    "branchSchemaRuntimeParity": {
+      "status": "pass",
+      "adversarialCases": 631,
+      "schemaRuntimeMismatches": 0,
+      "runtimeAcceptedGitRejected": 0,
+      "controlCodeRangeChecked": "U+0000-U+0020 and U+007F",
+      "literalHeadRejected": true
+    },
+    "positiveIntegerPrNumber": {
+      "status": "pass_with_contract_validator_gap",
+      "runtimeRejectedValues": [
+        0,
+        -1,
+        1.5,
+        "1",
+        null
+      ],
+      "headBindingRejectedAll": true,
+      "providerInventoryRejectedAll": true,
+      "schemaDeclaration": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "repositoryContractValidatorEnforcesInteger": false,
+      "repositoryContractValidatorEnforcesMinimum": false
+    },
+    "explicitAndDetachedContext": {
+      "status": "fail",
+      "detachedExactMain": {
+        "status": "pass",
+        "context": "detached-main"
+      },
+      "detachedListedImplementationExact": {
+        "status": "pass",
+        "context": "listed-implementation-branch"
+      },
+      "detachedUnresolved": {
+        "status": "rejected",
+        "finding": "ASSURANCE_CURRENT_TRUTH_DETACHED_CONTEXT_UNRESOLVED"
+      },
+      "explicitPseudoHead": {
+        "status": "rejected",
+        "finding": "ASSURANCE_CURRENT_TRUTH_EXPLICIT_CONTEXT_MALFORMED"
+      },
+      "detachedExplicitMainAtFeatureHead": {
+        "status": "incorrectly_accepted",
+        "headBindingOk": true,
+        "context": "unlisted-control-branch",
+        "findings": []
+      }
+    },
+    "providerInventoryFunction": {
+      "status": "pass",
+      "exactReorderedInventory": "pass",
+      "missingInventory": "rejected",
+      "mismatchedBranchHeadOrState": "rejected",
+      "extraImplementation": "rejected",
+      "malformedEntry": "rejected",
+      "duplicateNumber": "rejected",
+      "duplicateBranch": "rejected"
+    },
+    "providerInventoryCli": {
+      "status": "pass_with_malformed_json_output_gap",
+      "exact": {
+        "exit": 0,
+        "machineJson": true,
+        "providerInventoryOk": true
+      },
+      "empty": {
+        "exit": 1,
+        "machineJson": true,
+        "finding": "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"
+      },
+      "malformedShape": {
+        "exit": 1,
+        "machineJson": true,
+        "findings": [
+          "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_LIST_MALFORMED",
+          "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"
+        ]
+      },
+      "extra": {
+        "exit": 1,
+        "machineJson": true,
+        "finding": "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_EXTRA"
+      },
+      "invalidJson": {
+        "exit": 1,
+        "machineJson": false,
+        "stderrStack": true
+      },
+      "syntheticSecretMarkerRedacted": true,
+      "exactDeterminism": {
+        "runs": "3/3",
+        "uniqueHashes": 1,
+        "outputHash": "2fe770e9eb17214e0cf749958b89be726d57e130bddeb8bfce74bd96aeb4c8f7"
+      }
+    },
+    "currentTruthCompatibility": {
+      "status": "pass",
+      "mode": "offline",
+      "recordedMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "remoteMainAtReview": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+      "synchronizationMode": "synchronization-merge",
+      "recordedOpenImplementationBindings": 5,
+      "findings": 0
+    },
+    "offlineOutputDeterminism": {
+      "status": "pass",
+      "runs": "3/3",
+      "uniqueHashes": 1,
+      "outputHash": "ec911d0e363600cd4203b7904edd3cdae40110c716847969aae79649e652269d",
+      "untrustedGithubEnvironmentIgnored": true
+    },
+    "offlineAndSecretSafety": {
+      "status": "pass",
+      "networkCallsAdded": 0,
+      "providerMutationCallsAdded": 0,
+      "providerDefault": "offline",
+      "machineJsonEmittedForValidAndShapeInvalidSnapshots": true,
+      "redactionAppliedAtEmit": true,
+      "syntheticSecretMarkerRedacted": true,
+      "rawSecretOrPrivateEvidenceFound": false
+    },
+    "scopeAndNonInterference": {
+      "status": "pass",
+      "prScope": "pass",
+      "changedFiles": 5,
+      "netChangedLines": 600,
+      "highRiskDomains": [],
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "privateEvidenceCommitted": false
+    },
+    "focusedChecks": {
+      "status": "pass",
+      "nodeSyntaxFiles": 3,
+      "contractValidation": "pass",
+      "headBindingTest": "pass",
+      "currentTruthCli": "pass",
+      "branchParityFuzz": "pass",
+      "providerInventoryCliProbes": "pass_with_qualified_invalid_json_gap",
+      "prScope": "pass",
+      "gitDiffCheck": "pass",
+      "networkAndMutationStaticScan": "pass"
+    },
+    "phase1Ci": {
+      "status": "not-run-by-review-lane",
+      "implementationHead": "ac8393d2b99d8f1145adfd2d39757cb78ae4d10e",
+      "reason": "Full CI is coordinator-owned and this isolated review lane was instructed to run focused tests only.",
+      "eligibleAsProof": false
+    }
+  },
+  "testResultHash": "dd831e08ad6e1e2478a5b940b9442ae098e8d2d9a0c88d29869e483da67abddb",
+  "reviewLevel": "B",
+  "reviewHead": "ac8393d2b99d8f1145adfd2d39757cb78ae4d10e",
+  "reviewTimestamp": "2026-07-30T19:48:12Z",
+  "reviewerLanes": [
+    "architecture",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "cli-schema-git-context-rerun"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_DETACHED_EXPLICIT_MAIN_HEAD_BYPASS",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/lib.mjs:288",
+        "scripts/assurance/lib.mjs:318",
+        "scripts/assurance/lib.mjs:320",
+        "scripts/assurance/current-truth.mjs:87",
+        "tests/assurance/current-truth-head-binding.test.mjs:115"
+      ],
+      "evidence": "A detached context with head set to a feature commit, remoteMain set to a different SHA, explicitBranch=main, and explicitHead equal to the feature commit returned ok=true, context=unlisted-control-branch, and no findings. The named-main comparison checks namedBranch only. In the CLI, an ordinary feature commit based on origin/main also satisfies the non-main merge-base branch of mainMatches.",
+      "impact": "Detached CI can label a feature checkout as main and receive a top-level current-truth pass without the checkout equaling origin/main, bypassing the exact main-head invariant the correction intends to enforce.",
+      "requiredResolution": "Apply origin/main exactness to the effective context branch after explicit-context validation, not only to namedBranch. Reject explicit main whenever head differs from remoteMain, and add unit plus detached-CLI regression cases for exact, ahead, and behind explicit-main heads."
+    },
+    {
+      "id": "CURRENT_TRUTH_CONTRACT_VALIDATOR_IGNORES_INTEGER_MINIMUM",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "config/assurance/schemas-v1.json:103",
+        "scripts/assurance/validate-contracts.mjs:31",
+        "scripts/assurance/validate-contracts.mjs:33",
+        "tests/assurance/current-truth-head-binding.test.mjs:195"
+      ],
+      "evidence": "The schema now declares number as type integer with minimum 1, and both runtime paths reject 0, negative, fractional, string, and null values. The repository's schema validator implements type number and maximum only; it has no integer type or minimum handling. The committed test asserts the schema object shape rather than exercising contract rejection.",
+      "impact": "Runtime gates fail closed, but assurance:validate-contracts can still approve a malformed PR number, so the machine-readable schema contract is not independently enforced.",
+      "requiredResolution": "Teach the local validator to enforce integer and minimum, then add hostile contract fixtures proving zero, negative, fractional, string, and null PR numbers are rejected."
+    },
+    {
+      "id": "CURRENT_TRUTH_PROVIDER_SNAPSHOT_PARSE_FAILURE_NOT_MACHINE_JSON",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/current-truth.mjs:99"
+      ],
+      "evidence": "A read-only provider snapshot containing invalid JSON exited nonzero but emitted no machine JSON and exposed a JSON.parse stack on stderr. Shape-invalid but parseable inventory correctly emitted structured findings.",
+      "impact": "The gate is fail-closed, but malformed evidence breaks the assurance command's machine-readable output contract and makes CI aggregation depend on parsing an exception.",
+      "requiredResolution": "Catch snapshot file/read/parse failures and emit one redacted BLOCKED_INTERNAL finding such as ASSURANCE_PROVIDER_SNAPSHOT_MALFORMED without a stack trace."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "p2Open": 2,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPending": true,
+    "reviewDisposition": "blocked-internal-fix-detached-explicit-main-bypass-and-rerun-exact-head-reviews",
+    "humanApproval": false
+  }
+}
