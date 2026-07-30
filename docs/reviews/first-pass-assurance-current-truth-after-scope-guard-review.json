@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-current-truth-after-scope-guard-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 67,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-scope-guard",
+  "implementationHead": "9f88725268dbbbf4780570e71c2c6d640b443173",
+  "implementationTree": "374ce34ee2653145775e423a7a1d61d494fc36c9",
+  "baseHead": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "fb28650ad9129c22086f30604e740a1edcb5896a028328502fcb04c571ad4e97",
+  "testResults": {
+    "githubState": {
+      "status": "pass",
+      "recordTimestamp": "2026-07-30T18:13:30Z",
+      "remoteMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "openAtRecordTimestamp": [
+        52,
+        53,
+        55,
+        57,
+        59,
+        61,
+        64,
+        65,
+        66
+      ],
+      "recordedOpenPullRequestsExact": true,
+      "staleRecordedPullRequests": [],
+      "omittedOpenPullRequests": [],
+      "postTimestampSelfPr": {
+        "number": 67,
+        "createdAt": "2026-07-30T18:15:30Z",
+        "head": "9f88725268dbbbf4780570e71c2c6d640b443173"
+      },
+      "latestMergedImplementationPr": {
+        "number": 62,
+        "head": "08ca9b11b28677268f7db932086256645d29c794",
+        "mergeSha": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+        "mergedAt": "2026-07-30T18:11:43Z"
+      },
+      "sanitizedComparisonHash": "4b589471cc7dc5b2fadd5d70506ea96ec06f115170a56506b5491ae6699f5385"
+    },
+    "currentTruth": {
+      "status": "pass",
+      "offlineFindings": 0,
+      "readOnlyProviderFindings": 0,
+      "recordedMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "remoteMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "readOnlyOutputHash": "886c229c04c17e6b6f4f92dc9883806b716cbd2d41c76b3ce9d2934f80db8d5e"
+    },
+    "generatedDocuments": {
+      "status": "pass",
+      "currentStateExact": true,
+      "nextTaskExact": true,
+      "comparisonHash": "3452e5c393229f57d74cb35ee6e7b6d31052f9fc8a7fb90914c265423f8a56bb"
+    },
+    "freshness": {
+      "status": "pass",
+      "timestamp": "2026-07-30T18:13:30Z",
+      "deadline": "2026-07-31T18:13:30Z",
+      "providerCriticalWindowCurrentAtReview": true
+    },
+    "synchronizationMergeCompatibility": {
+      "status": "pass",
+      "recordedMainIsRequiredFirstParent": true,
+      "implementationIsSecondParent": true,
+      "parentCount": 2,
+      "requiredPathsPresent": true,
+      "changedPathsAllowed": true,
+      "simulatedMode": "synchronization-merge"
+    },
+    "contracts": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "determinism": {
+      "status": "pass",
+      "currentTruth": {
+        "runs": "3/3",
+        "outputHash": "701b1e7e6850a2912695a9ebdee05fa1c705bca0c97481bd7b96524e460370b3"
+      },
+      "contracts": {
+        "runs": "3/3",
+        "outputHash": "e7a231d1567de0080b227784a473c4aa37cfdc0a804182a62b5583f5d31dd575"
+      }
+    },
+    "scope": {
+      "status": "pass",
+      "files": 3,
+      "additions": 29,
+      "deletions": 19,
+      "netChangedLines": 10,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "highRiskDomains": [],
+      "outputHash": "f6367ffe8fc077ddc69a657846b6f1f196f94fc89f4e347e8afbe1ca8c4f3fef"
+    },
+    "retainedClaimComparison": {
+      "status": "pass",
+      "claimGroupsCompared": 13,
+      "unexpectedChangedClaims": [],
+      "comparisonHash": "10b1805d6da20a8f9e29d392039c61274b01f954d048a87d69aea58ff2504c35"
+    },
+    "implementationAncestry": {
+      "status": "pass",
+      "mergeBase": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "implementationParent": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "implementationTree": "374ce34ee2653145775e423a7a1d61d494fc36c9"
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending",
+      "implementationHead": "9f88725268dbbbf4780570e71c2c6d640b443173",
+      "eligibleAsReviewLaneProof": false,
+      "levelARequirement": false,
+      "resumptionAction": "Coordinator runs the single frozen-head Phase 1 CI execution under the shared full-CI resource lock."
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "buildOrOta": false,
+      "productSourceChanged": false,
+      "migrationChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "4318a976954224e962f74057981f0b55ed969317708aafa3db0b007f9a83db84",
+  "reviewLevel": "A",
+  "reviewHead": "9f88725268dbbbf4780570e71c2c6d640b443173",
+  "reviewTimestamp": "2026-07-30T18:18:45Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "current-truth-generated-doc-consistency"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_MAIN_AND_MERGED_PR_BINDING",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The record binds the exact GitHub main SHA and latest merged implementation PR #62 head, merge SHA, title, and merge time."
+    },
+    {
+      "id": "CURRENT_TRUTH_OPEN_PR_INVENTORY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Every pull request open at the record timestamp is represented with its exact branch and head. PR #67 is the sole later-created open PR and is this synchronization itself."
+    },
+    {
+      "id": "CURRENT_TRUTH_GENERATED_DOCUMENT_AND_SYNC_DRIFT",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Both generated documents are byte-exact, freshness passes, and the three-file delta satisfies the merge-aware synchronization contract."
+    },
+    {
+      "id": "CURRENT_TRUTH_SCOPE_AND_NON_INTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The implementation changes only the machine-readable current-truth record and its two generated documents; retained artifact, provider, migration, switch, schedule, safety, and blocker claims are unchanged."
+    },
+    {
+      "id": "CURRENT_TRUTH_FROZEN_HEAD_CI_COORDINATED",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "Full CI is intentionally left to the coordinator's single locked frozen-head execution and is not a Level A focused-review requirement."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "exact-head-level-a-review-clear-coordinator-ci-pending",
+    "humanApproval": false
+  }
+}
