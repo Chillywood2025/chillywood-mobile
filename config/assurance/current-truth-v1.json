@@ -32,6 +32,13 @@
       "evidenceSource": "merged Money Operator closure evidence retained from pre-PR-A current-truth documents"
     }
   },
+  "operatingPolicy": {
+    "modelDocument": "docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md",
+    "modelStatus": "documented-and-guarded",
+    "level01OwnerApprovalRequired": false,
+    "level34OwnerApprovalRequired": true,
+    "evidenceSource": "merged autonomous operating-model contract and source guard"
+  },
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
   "openImplementationPrs": [{"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "open-draft", "disposition": "reconcile-then-supersede-unmerged"}],
   "openReviewOnlyPrs": [{"number": 53, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review", "head": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b", "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "state": "open-draft-stale", "disposition": "never-merge"}],

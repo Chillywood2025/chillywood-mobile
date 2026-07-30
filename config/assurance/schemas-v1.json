@@ -46,7 +46,7 @@
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
       "properties": {
         "mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
@@ -70,6 +70,17 @@
                 "moneyMoved": {"type": "boolean"}
               }
             }
+          }
+        },
+        "operatingPolicy": {
+          "type": "object",
+          "required": ["modelDocument", "modelStatus", "level01OwnerApprovalRequired", "level34OwnerApprovalRequired", "evidenceSource"],
+          "properties": {
+            "modelDocument": {"type": "string"},
+            "modelStatus": {"const": "documented-and-guarded"},
+            "level01OwnerApprovalRequired": {"const": false},
+            "level34OwnerApprovalRequired": {"const": true},
+            "evidenceSource": {"type": "string"}
           }
         }
       }

@@ -11,6 +11,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Cognitive schedules: 0/5 enabled. Effective baseline count: 1.
 - Cognitive LiveKit: 0 formal runs, 0 findings, 0 enabled switches.
 - PUBLIC schema `net` USAGE: denied. User-derived memory: off. Level 2 repair: off.
+- Chi'llywood autonomous app operating model is now documented and guarded at `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.
 - Installed Product QA closure retained: chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped; proof rows `ff81956d-94e3-49e9-8c80-fae2c12b0dd8`, `1dc00369-b5ca-4289-92bc-daf5bae00222`, `282fb154-101c-402b-9539-d3fb8080de51`; current matrix state `POLL_HTTP_FAILED`; the daily timer is enabled.
 - RevenueCat provider readback is closed: dashboard TEST returned HTTP `200` / `test_received` with `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`.
 - Open implementation: PR #52 at `2b7f9fa491180cb1f2b9a883c07b317eb39ae43a`, draft, reconciliation then supersede unmerged.
