@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr113-migration-readback-metadata-scope-security-review",
+  "implementationPrNumber": 113,
+  "implementationBranch": "codex/assurance-migration-readback-metadata",
+  "implementationHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+  "implementationTree": "a8c27824afa14e5f2fd684e5e02e9955637dcee1",
+  "baseBranch": "main",
+  "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "baseTree": "f7193a67717c2877dad104f22fab513fac32b28c",
+  "mergeBase": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "implementationParents": [
+    "83800a68b426e94aaabca17b5d1f1d62a7783754"
+  ],
+  "reviewBranch": "codex/assurance-migration-readback-metadata-review-scope-security",
+  "reviewBranchBaseHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+  "reviewBranchBaseTree": "a8c27824afa14e5f2fd684e5e02e9955637dcee1",
+  "reviewType": "isolated automated review lane",
+  "reviewLevel": "B",
+  "reviewLane": "scope-security",
+  "humanApproval": false,
+  "reviewTimestamp": "2026-07-30T23:46:00Z",
+  "reviewHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+  "reviewerLanes": [
+    "architecture",
+    "product-UX",
+    "isolated-automated-review",
+    "scope-security"
+  ],
+  "changedFileHash": "2be68b8ad58c312309810acb2d8c80c353ef77e4364218c35cc907dd9ad9ffd5",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a5ab0d0526e77ad0d7ddaba53adda8b53907bead2ca984709d23590bd9020d1e",
+  "testResults": {
+    "focusedGuard": {
+      "status": "pass",
+      "output": "Chi'lly Chat linked migration readback guard passed."
+    },
+    "contractValidation": {
+      "status": "pass",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25,
+      "errors": 0
+    },
+    "prScope": {
+      "status": "pass",
+      "changedFiles": 2,
+      "additions": 1,
+      "deletions": 1,
+      "netChangedLines": 0,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "highRiskDomains": [],
+      "findings": []
+    },
+    "impact": {
+      "status": "pass",
+      "changedFiles": 2,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "requiredGateCount": 7,
+      "findings": []
+    },
+    "gitDiffCheck": {
+      "status": "pass"
+    },
+    "phase1Ci": {
+      "status": "not-run-by-review-lane",
+      "implementationHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+      "owner": "coordinator",
+      "requiredBeforeMerge": true
+    }
+  },
+  "testResultHash": "6f82b24ad99d191a4bbbac4a6ef147cc9041ddeea798f50ea266afc3886bfc22",
+  "hashes": {
+    "changedFileHash": "2be68b8ad58c312309810acb2d8c80c353ef77e4364218c35cc907dd9ad9ffd5",
+    "changedFileHashMethod": "sha256 of git diff --name-status -z 83800a68b426e94aaabca17b5d1f1d62a7783754 f1e5c46b2099845c59f32eedc20e347204400e36",
+    "changedNameStatusHash": "c30f78bac5cefe1a838b91bb0dae221b0d6e50ec8228c98e95931715c36d806f",
+    "changedNameStatusHashMethod": "sha256 of trimmed git diff --name-status 83800a68b426e94aaabca17b5d1f1d62a7783754 f1e5c46b2099845c59f32eedc20e347204400e36",
+    "patchHash": "410ccea5eadb219ecfca34e689ed5083c2cc3879e73f6e2d29373e4bf3b99fb6",
+    "patchHashMethod": "sha256 of git diff --binary 83800a68b426e94aaabca17b5d1f1d62a7783754 f1e5c46b2099845c59f32eedc20e347204400e36",
+    "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "configHash": "a5ab0d0526e77ad0d7ddaba53adda8b53907bead2ca984709d23590bd9020d1e",
+    "movedManifestSha256": "5faeff2bc3aeed2229e3701406bc6a31634a0e95172da7260dea3bd8ac687b6d",
+    "guardSourceSha256": "f734f0f18e9a0f51c324d7a5f2a3214c64c60b8c94b71435e12c6d8fe670f080",
+    "scopePolicySha256": "09d4463494fb1eae1d0686aab974f0a88e59c5e2b71cb1328bde142c8b0ed49f",
+    "currentTruthRecordSha256": "267a98a603289d001c77e13b8c8307655eaf48b9b4df848217c6b32612bbbaee",
+    "packageJsonSha256": "3cd1f2049b72a89bb5630659b76d24f6add21d7e670ca0003ecb0a5f122ea744",
+    "packageLockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28"
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "scope-security-clear-pending-separate-review-and-frozen-head-ci",
+    "exactHeadBound": true,
+    "exactTreeBound": true,
+    "changedFiles": 2,
+    "netChangedLines": 0,
+    "scopeStatus": "pass-supporting-ci-test-metadata-only",
+    "generalReleasePolicyStatus": "pass-still-high-risk",
+    "policyWeakeningDetected": false,
+    "privateEvidenceDetected": false,
+    "implementationMutationByReviewLane": false,
+    "fullCiRunByReviewLane": false,
+    "humanApproval": false,
+    "mergeAuthorizedByThisLane": false
+  },
+  "findings": [],
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "disposition": "LANE_CLEAR_P0_P1_ZERO_PENDING_OTHER_LEVEL_B_LANE_AND_FROZEN_HEAD_CI",
+  "scopeEvidence": {
+    "status": "pass",
+    "objective": "Move the existing linked-migration readback manifest into assurance metadata and update only its guard path.",
+    "changedFiles": [
+      {
+        "status": "R100",
+        "from": "config/release/chilly-chat-livekit-migration-readback.json",
+        "to": "config/assurance/chilly-chat-livekit-migration-readback.json",
+        "contentChanged": false
+      },
+      {
+        "status": "M",
+        "file": "scripts/guard-chilly-chat-livekit-migration-readback.mjs",
+        "change": "manifest path only"
+      }
+    ],
+    "changedFileCount": 2,
+    "additions": 1,
+    "deletions": 1,
+    "netChangedLines": 0,
+    "fileBudget": 15,
+    "lineBudget": 1200,
+    "domains": [
+      "CI-test-infrastructure"
+    ],
+    "highRiskDomains": [],
+    "waiverRequired": false,
+    "unexpectedFiles": []
+  },
+  "releaseRiskBoundary": {
+    "status": "pass",
+    "generalReleaseDomainId": "release-OTA",
+    "generalReleaseDomainRisk": "high",
+    "generalReleasePathsStillInclude": [
+      "eas.json",
+      "app.config.ts",
+      "config/release/",
+      "ops/release-",
+      "docs/release/"
+    ],
+    "prScopePolicyChanged": false,
+    "scopeWaiverAdded": false,
+    "releaseOrOtaSourceChanged": false,
+    "releaseRiskReclassifiedGlobally": false,
+    "reviewConclusion": "Only this byte-identical readback metadata file moved to the supporting assurance namespace. General config/release remains high-risk."
+  },
+  "policyIntegrity": {
+    "status": "pass",
+    "manifestByteIdenticalBeforeAndAfterMove": true,
+    "guardBehaviorApartFromManifestPathIdentical": true,
+    "guardAssertionsRemoved": 0,
+    "guardAssertionsWeakened": 0,
+    "assuranceContractsStatus": "pass",
+    "assuranceContractFilesChanged": [],
+    "agEntsInstructionsChanged": [],
+    "currentTruthFilesChanged": [],
+    "workflowFilesChanged": [],
+    "packageFilesChanged": [],
+    "migrationFilesChanged": [],
+    "productFilesChanged": [],
+    "providerFilesChanged": [],
+    "nativeFilesChanged": []
+  },
+  "securityAndPrivacyEvidence": {
+    "status": "pass",
+    "addedPatchLinesScanned": 1,
+    "secretTokenMatches": 0,
+    "emailMatches": 0,
+    "privateKeyMatches": 0,
+    "signedUrlMatches": 0,
+    "deviceIdentifierMatches": 0,
+    "manifestWasAlreadyTracked": true,
+    "manifestContentChanged": false,
+    "rawProviderResponseAdded": false,
+    "privateScreenshotAdded": false,
+    "privateLogAdded": false,
+    "userOrDeviceIdentifierAdded": false
+  },
+  "nonInterference": {
+    "providerContactByReviewLane": false,
+    "providerMutation": false,
+    "databaseContactByReviewLane": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "migrationSourceChanged": false,
+    "productSourceChanged": false,
+    "nativeSourceChanged": false,
+    "generatedAndroidOrIosCommitted": false,
+    "currentTruthChanged": false,
+    "packageOrLockChanged": false,
+    "workflowChanged": false,
+    "buildOrOta": false,
+    "publicRelease": false,
+    "moneyEntitlementRightsRolesAuthRlsChanged": false,
+    "switchOrScheduleChanged": false
+  },
+  "reviewBranchIntegrity": {
+    "statusBeforeReviewCommit": "exact-implementation-head",
+    "implementationAncestor": true,
+    "implementationDirectParentIsBase": true,
+    "reviewBranchBaseHeadMatchesImplementationHead": true,
+    "reviewBranchBaseTreeMatchesImplementationTree": true,
+    "permittedReviewDelta": [
+      "docs/reviews/pr113-migration-readback-metadata-scope-security-review.json"
+    ],
+    "implementationFilesPermittedOnReviewBranch": false,
+    "neverMergeReviewBranch": true
+  },
+  "exactCommands": [
+    "git rev-parse 83800a68",
+    "git diff --find-renames --binary 83800a68b426e94aaabca17b5d1f1d62a7783754..f1e5c46b2099845c59f32eedc20e347204400e36",
+    "node scripts/guard-chilly-chat-livekit-migration-readback.mjs",
+    "node scripts/assurance/validate-contracts.mjs",
+    "node scripts/assurance/pr-scope.mjs --base=83800a68b426e94aaabca17b5d1f1d62a7783754 --objective-domains=CI-test-infrastructure --json",
+    "node scripts/assurance/impact.mjs --base=83800a68b426e94aaabca17b5d1f1d62a7783754 --head=f1e5c46b2099845c59f32eedc20e347204400e36 --json",
+    "git diff --check 83800a68b426e94aaabca17b5d1f1d62a7783754..f1e5c46b2099845c59f32eedc20e347204400e36",
+    "programmatic exact-path, byte-identity, normalized-guard, prohibited-path, policy-risk, and added-line secret scans"
+  ],
+  "remainingRequiredAction": "The coordinator must combine this lane with the independent Level B integrity review, run the required one full Phase 1 CI at exact implementation head f1e5c46b2099845c59f32eedc20e347204400e36, and apply expected-head protection before merging PR #113. This isolated automated review lane is not human approval and authorizes no provider, database, migration, product, native, build, OTA, or release action."
+}
