@@ -1,4 +1,5 @@
 const normalizeText = (value) => String(value ?? "").trim();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const REVENUECAT_STORES = Object.freeze({
   APP_STORE: "APP_STORE",
@@ -90,6 +91,27 @@ export function shouldProcessRevenueCatAppStoreEvent(
 ) {
   return appStoreSwitchAllowsEnvironment(switchStateValue, environmentValue)
     || isTerminalRevenueCatLifecycleEvent(eventTypeValue);
+}
+
+export function resolveRevenueCatTransferUsers(event) {
+  if (!event || typeof event !== "object") return null;
+  if (normalizeText(event.type).toUpperCase() !== "TRANSFER") return null;
+
+  const sourceCandidates = Array.isArray(event.transferred_from) ? event.transferred_from : [];
+  const targetCandidates = Array.isArray(event.transferred_to) ? event.transferred_to : [];
+  const sourceUserIds = Array.from(new Set(
+    sourceCandidates.map(normalizeText).filter((value) => UUID_PATTERN.test(value)).map((value) => value.toLowerCase()),
+  ));
+  const targetUserIds = Array.from(new Set(
+    targetCandidates.map(normalizeText).filter((value) => UUID_PATTERN.test(value)).map((value) => value.toLowerCase()),
+  ));
+
+  if (sourceUserIds.length !== 1 || targetUserIds.length !== 1) return null;
+  if (sourceUserIds[0] === targetUserIds[0]) return null;
+  return Object.freeze({
+    sourceUserId: sourceUserIds[0],
+    targetUserId: targetUserIds[0],
+  });
 }
 
 export function canReconcileExistingProviderEventIntent(

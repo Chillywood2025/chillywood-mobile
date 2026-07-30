@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "revenuecat-transfer-fixtures-v1",
+  "provider": "RevenueCat",
+  "sanitized": true,
+  "syntheticOnly": true,
+  "liveProviderReadback": false,
+  "providerBehaviorProved": false,
+  "baseEvent": {
+    "type": "TRANSFER",
+    "id": "fixture-transfer-001",
+    "store": "APP_STORE",
+    "environment": "SANDBOX",
+    "event_timestamp_ms": 1785430800000,
+    "transferred_at_ms": 1785430800000,
+    "transferred_from": [
+      "$RCAnonymousID:fixture-source",
+      "11111111-1111-4111-8111-111111111111"
+    ],
+    "transferred_to": [
+      "$RCAnonymousID:fixture-target",
+      "22222222-2222-4222-8222-222222222222"
+    ]
+  },
+  "cases": [
+    {
+      "id": "success",
+      "category": "success",
+      "expectedStage": "atomic-rpc",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "invalid-signature",
+      "category": "invalid_signature",
+      "harnessAuthorization": "invalid-placeholder",
+      "expectedStage": "signature-rejection",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "duplicate",
+      "category": "duplicate",
+      "delivery": 2,
+      "expectedStage": "atomic-rpc-idempotency",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "delayed",
+      "category": "delayed",
+      "eventPatch": {
+        "event_timestamp_ms": 1785427200000,
+        "transferred_at_ms": 1785427200000
+      },
+      "expectedStage": "atomic-rpc-ordering",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "out-of-order",
+      "category": "out_of_order",
+      "delivery": 3,
+      "eventPatch": {
+        "event_timestamp_ms": 1785423600000,
+        "transferred_at_ms": 1785423600000
+      },
+      "expectedStage": "atomic-rpc-ordering",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "missing-field",
+      "category": "missing_field",
+      "removeFields": [
+        "transferred_to"
+      ],
+      "expectedStage": "identity-rejection",
+      "resolverExpectation": "identities_rejected"
+    },
+    {
+      "id": "unknown-type",
+      "category": "unknown_type",
+      "eventPatch": {
+        "type": "FUTURE_UNKNOWN_EVENT"
+      },
+      "expectedStage": "non-transfer-routing",
+      "resolverExpectation": "identities_rejected"
+    },
+    {
+      "id": "retry",
+      "category": "retry",
+      "harnessFault": "atomic-rpc-transient-error-then-retry",
+      "delivery": 2,
+      "expectedStage": "retryable-error-then-atomic-rpc-idempotency",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "partial-failure",
+      "category": "partial_failure",
+      "harnessFault": "internal-rpc-failpoint-after-source",
+      "expectedStage": "transaction-rollback",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "timeout",
+      "category": "provider_timeout",
+      "harnessFault": "atomic-rpc-timeout",
+      "expectedStage": "retryable-error",
+      "resolverExpectation": "identities_resolved"
+    },
+    {
+      "id": "environment-mismatch",
+      "category": "environment_mismatch",
+      "eventPatch": {
+        "environment": "PRODUCTION"
+      },
+      "expectedStage": "environment-rejection",
+      "resolverExpectation": "identities_resolved"
+    }
+  ]
+}

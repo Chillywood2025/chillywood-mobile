@@ -23,6 +23,7 @@ import {
   isSafeStoreMapping,
   isValidPremiumStoreProductResolution,
   providerProductIdCandidatesForStore,
+  resolveRevenueCatTransferUsers,
   resolveRevenueCatStorePolicy,
   shouldProcessRevenueCatAppStoreEvent,
 } from "./store-policy.mjs";
@@ -63,6 +64,13 @@ type EntitlementWriteResult = {
   expiresAt: string | null;
   duplicateEvent: boolean;
   moneyAccess: MoneyAccessMirrorResult;
+};
+type PremiumTransferWriteResult = {
+  status: "processed" | "duplicate_ignored";
+  duplicateEvent: boolean;
+  sourceRevoked: boolean;
+  targetActive: boolean;
+  environment: "sandbox";
 };
 
 type MoneyAccessMirrorResult = {
@@ -2211,6 +2219,42 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
   };
 };
 
+const writePremiumTransferFromRevenueCatEvent = async (
+  adminClient: SupabaseClientLike,
+  event: RevenueCatEvent,
+  rawBody: string,
+): Promise<PremiumTransferWriteResult> => {
+  const eventType = normalizeEventType(event.type);
+  const environment = normalizeMoneyAccessEnvironment(event.environment);
+  const storePolicy = revenueCatStorePolicy(event);
+  const transferUsers = resolveRevenueCatTransferUsers(event);
+  if (eventType !== "TRANSFER") throw new Error("RevenueCat transfer event type is invalid.");
+  if (storePolicy.provider !== "revenuecat_app_store" || environment !== "sandbox") {
+    throw new Error("RevenueCat transfer is limited to verified sandbox App Store events.");
+  }
+  if (!transferUsers) throw new Error("RevenueCat transfer identities are invalid.");
+
+  const { data, error } = await adminClient.rpc("process_revenuecat_premium_transfer_atomic", {
+    p_environment: environment,
+    p_occurred_at: toIsoFromMs(event.event_timestamp_ms || event.transferred_at_ms),
+    p_provider_event_id: await resolveEventId(event, rawBody),
+    p_raw_payload_hash: await hashText(rawBody),
+    p_source_user_id: transferUsers.sourceUserId,
+    p_target_user_id: transferUsers.targetUserId,
+  });
+  if (error) throw new Error(`RevenueCat atomic Premium transfer failed: ${error.message}`);
+
+  const result = safeObject(data);
+  const duplicateEvent = result.duplicateEvent === true;
+  return {
+    status: duplicateEvent ? "duplicate_ignored" : "processed",
+    duplicateEvent,
+    sourceRevoked: result.sourceRevoked === true,
+    targetActive: result.targetActive === true,
+    environment: "sandbox",
+  };
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
@@ -2374,6 +2418,48 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (normalizeEventType(event.type) === "TRANSFER") {
+      const transferWrite = await writePremiumTransferFromRevenueCatEvent(adminConfig.client, event, rawBody);
+      await writeProviderReadinessAudit(adminConfig.client, {
+        provider: "revenuecat",
+        capability: "premium_entitlement",
+        action: transferWrite.duplicateEvent
+          ? "revenuecat_webhook_transfer_duplicate_ignored"
+          : "revenuecat_webhook_entitlement_transferred",
+        statusAfter: transferWrite.targetActive ? "sandbox_ready" : "blocked",
+        reason: "RevenueCat verified a sandbox App Store entitlement transfer; the backend atomically revoked the source grant and activated the destination grant.",
+        proofSource: FUNCTION_NAME,
+        metadata: {
+          revenuecat_event_hash: await hashText(rawBody),
+          revenuecat_event_id_hash: await hashText(await resolveEventId(event, rawBody)),
+          revenuecat_event_type: "TRANSFER",
+          environment: transferWrite.environment,
+          source_revoked: transferWrite.sourceRevoked,
+          target_active: transferWrite.targetActive,
+          duplicate_event: transferWrite.duplicateEvent,
+          raw_provider_payload_stored: false,
+          premium_granted: transferWrite.targetActive,
+          live_money_action: false,
+        },
+      });
+
+      return jsonResponse(200, {
+        status: transferWrite.status,
+        provider: "revenuecat_app_store",
+        capability: "premium_entitlement",
+        signatureVerified: true,
+        webhookProcessed: true,
+        premiumGranted: transferWrite.targetActive,
+        sourceRevoked: transferWrite.sourceRevoked,
+        duplicateEvent: transferWrite.duplicateEvent,
+        moneyAccessEnvironment: transferWrite.environment,
+        liveMoneyAction: false,
+        message: transferWrite.duplicateEvent
+          ? "RevenueCat Premium transfer was already reconciled."
+          : "RevenueCat Premium transfer was reconciled atomically.",
+      });
+    }
+
     if (!hasPremiumSignal(event)) {
       const eventType = normalizeEventType(event.type);
       const eventId = await resolveEventId(event, rawBody);
@@ -2497,7 +2583,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const safeMessage = sanitizeErrorMessage(error);
-    const nonRetriablePayloadError = /invalid revenuecat webhook payload|event type is missing|app user id is missing or anonymous|event is not mapped to premium/i.test(safeMessage);
+    const nonRetriablePayloadError = /invalid revenuecat webhook payload|event type is missing|app user id is missing or anonymous|event is not mapped to premium|transfer event type is invalid|transfer identities are invalid|transfer is limited to verified sandbox app store events/i.test(safeMessage);
     const responseStatus = nonRetriablePayloadError ? 200 : 500;
     return jsonResponse(responseStatus, {
       status: nonRetriablePayloadError ? "ignored" : "error",

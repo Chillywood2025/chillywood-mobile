@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "reportId": "b2-revenuecat-transfer-reconciliation",
+  "featureId": "revenuecat-premium",
+  "objective": "Align Git with the exact already-deployed RevenueCat transfer migrations and preserve the bounded stopped webhook transfer source.",
+  "nonGoals": [
+    "deploy or reapply a migration",
+    "call or mutate RevenueCat",
+    "change an entitlement, money, rights, roles, auth, or RLS",
+    "resume LiveKit activation",
+    "claim provider-backed purchase, installed, physical, or release proof"
+  ],
+  "risk": "C",
+  "baseHead": "84c9ffdcea7de1b73163c60348267875f5d99ed3",
+  "stoppedImplementation": {
+    "pr": 52,
+    "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+    "reviewStatus": "REVIEW_MISSING"
+  },
+  "remoteSnapshot": {
+    "mode": "read-only-coordinator-supplied",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationHead": "20260730161737"
+  },
+  "migrations": [
+    {
+      "version": "20260730153724",
+      "name": "revenuecat_verified_transfer_reconciliation",
+      "file": "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql",
+      "remoteRawSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "remoteNormalizedSha256": "4c21b9fe436e9ac2078e630165059e8258e26c2156eadff9757bf27644443795",
+      "sourceRawSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "classification": "REMOTE_AND_SOURCE_MATCH",
+      "stoppedSourceVersion": "20260730152710",
+      "stoppedClassification": "VERSION_MISMATCH"
+    },
+    {
+      "version": "20260730154416",
+      "name": "allow_expired_revenuecat_transfer_target_reconciliation",
+      "file": "supabase/migrations/20260730154416_allow_expired_revenuecat_transfer_target_reconciliation.sql",
+      "remoteRawSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "remoteNormalizedSha256": "b3f010a409f4bf4cc73e6271d280cb8222f779a525bdb88bd4f9784b0f1347c5",
+      "sourceRawSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "classification": "REMOTE_AND_SOURCE_MATCH",
+      "stoppedSourceVersion": "20260730160000",
+      "stoppedClassification": "VERSION_MISMATCH"
+    }
+  ],
+  "sourceClassifications": [
+    {"path": "supabase/functions/revenuecat-webhook/index.ts", "classification": "FUNCTION_SOURCE_PENDING", "resolution": "INCLUDED_IN_B2"},
+    {"path": "supabase/functions/revenuecat-webhook/store-policy.mjs", "classification": "FUNCTION_SOURCE_PENDING", "resolution": "INCLUDED_IN_B2"},
+    {"path": "supabase/functions/revenuecat-webhook/store-policy.test.mjs", "classification": "SOURCE_ONLY", "resolution": "INCLUDED_IN_B2"},
+    {"path": "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql", "classification": "SOURCE_ONLY", "resolution": "INCLUDED_IN_B2"}
+  ],
+  "focusedValidation": {
+    "nodeTests": {"passed": 17, "failed": 0},
+    "denoCheck": "SOURCE_CLEAR",
+    "migrationRawHashes": "SOURCE_CLEAR",
+    "databasePgTap": "BLOCKED_INTERNAL"
+  },
+  "fixtureCoverage": [
+    "success",
+    "invalid_signature",
+    "duplicate",
+    "delayed",
+    "out_of_order",
+    "missing_field",
+    "unknown_type",
+    "retry",
+    "partial_failure",
+    "provider_timeout",
+    "environment_mismatch"
+  ],
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "proofLimits": [
+    "The fixture corpus proves only deterministic sanitized source contracts.",
+    "The pending database test is not substituted by JavaScript fixtures.",
+    "No provider, installed, physical, signed-artifact, or release behavior is claimed."
+  ],
+  "rollback": "Retain immutable deployed migration source. If the undeployed webhook source is defective, stop its delivery and revert only that source in an exact-head reviewed successor.",
+  "emergencyStop": "Do not deploy the webhook or mutate provider state; route any future provider action to Money Flow Control under separate authorization.",
+  "finalPermittedNextAction": "Run focused local database proof under the coordinator lock, pass exact-head review and scope enforcement, then merge this Git-only reconciliation.",
+  "claimedFeatureCompletion": false
+}

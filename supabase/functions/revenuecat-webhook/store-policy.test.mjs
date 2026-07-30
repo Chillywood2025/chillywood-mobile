@@ -6,6 +6,7 @@ import {
   canReconcileExistingProviderEventIntent,
   isTerminalRevenueCatLifecycleEvent,
   isValidPremiumStoreProductResolution,
+  resolveRevenueCatTransferUsers,
   shouldProcessRevenueCatAppStoreEvent,
 } from "./store-policy.mjs";
 
@@ -153,13 +154,76 @@ test("unknown stores cannot use a Premium entitlement signal to bypass provider 
   }, "premium_subscription", "sandbox", "INITIAL_PURCHASE"), false);
 });
 
+test("TRANSFER resolves one exact UUID on each side while ignoring RevenueCat anonymous aliases", () => {
+  assert.deepEqual(resolveRevenueCatTransferUsers({
+    type: "TRANSFER",
+    transferred_from: [
+      "$RCAnonymousID:source",
+      "11111111-1111-4111-8111-111111111111",
+    ],
+    transferred_to: [
+      "$RCAnonymousID:target",
+      "22222222-2222-4222-8222-222222222222",
+    ],
+  }), {
+    sourceUserId: "11111111-1111-4111-8111-111111111111",
+    targetUserId: "22222222-2222-4222-8222-222222222222",
+  });
+});
+
+test("TRANSFER fails closed for missing, ambiguous, malformed, or replay-to-self identities", () => {
+  assert.equal(resolveRevenueCatTransferUsers({
+    type: "TRANSFER",
+    transferred_from: ["$RCAnonymousID:source"],
+    transferred_to: ["22222222-2222-4222-8222-222222222222"],
+  }), null);
+  assert.equal(resolveRevenueCatTransferUsers({
+    type: "TRANSFER",
+    transferred_from: [
+      "11111111-1111-4111-8111-111111111111",
+      "33333333-3333-4333-8333-333333333333",
+    ],
+    transferred_to: ["22222222-2222-4222-8222-222222222222"],
+  }), null);
+  assert.equal(resolveRevenueCatTransferUsers({
+    type: "TRANSFER",
+    transferred_from: ["not-a-uuid"],
+    transferred_to: ["22222222-2222-4222-8222-222222222222"],
+  }), null);
+  assert.equal(resolveRevenueCatTransferUsers({
+    type: "TRANSFER",
+    transferred_from: ["11111111-1111-4111-8111-111111111111"],
+    transferred_to: ["11111111-1111-4111-8111-111111111111"],
+  }), null);
+  assert.equal(resolveRevenueCatTransferUsers({
+    type: "RENEWAL",
+    transferred_from: ["11111111-1111-4111-8111-111111111111"],
+    transferred_to: ["22222222-2222-4222-8222-222222222222"],
+  }), null);
+});
+
+test("verified TRANSFER handling runs before the generic non-Premium path and uses the atomic RPC", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const transferWriter = source.indexOf("const writePremiumTransferFromRevenueCatEvent");
+  const transferRpc = source.indexOf('.rpc("process_revenuecat_premium_transfer_atomic"', transferWriter);
+  const server = source.indexOf("Deno.serve", transferRpc);
+  const transferBranch = source.indexOf('normalizeEventType(event.type) === "TRANSFER"', server);
+  const genericNonPremiumBranch = source.indexOf("if (!hasPremiumSignal(event))", transferBranch);
+
+  assert.ok(transferWriter >= 0);
+  assert.ok(transferRpc > transferWriter);
+  assert.ok(server > transferRpc);
+  assert.ok(transferBranch > server);
+  assert.ok(genericNonPremiumBranch > transferBranch);
+});
+
 test("Premium store mapping validation runs before the entitlement mutation", () => {
   const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
   const functionStart = source.indexOf("const writePremiumEntitlementFromRevenueCatEvent");
   const functionEnd = source.indexOf("Deno.serve", functionStart);
   const premiumWrite = source.slice(functionStart, functionEnd);
   const validationIndex = premiumWrite.indexOf("isValidPremiumStoreProductResolution(");
-  const entitlementMutationIndex = premiumWrite.indexOf('.from("user_entitlements")');
+  const entitlementMutationIndex = premiumWrite.indexOf('.rpc("process_revenuecat_premium_event_atomic"');
 
   assert.ok(functionStart >= 0);
   assert.ok(validationIndex >= 0);
