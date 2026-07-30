@@ -75,7 +75,8 @@ export function verifyCurrentTruthSynchronization({
   parents,
   changedPaths,
   requiredChangedPaths,
-  allowedChangedPaths
+  allowedChangedPaths,
+  bootstrapMerge
 }) {
   if (recordedMain === remoteMain) return { ok: true, mode: "exact-main" };
   const required = new Set(requiredChangedPaths);
@@ -84,12 +85,21 @@ export function verifyCurrentTruthSynchronization({
   const parentShapeMatches = parents.length === 2 && parents[0] === recordedMain;
   const requiredPathsPresent = [...required].every((file) => changed.has(file));
   const changedPathsAllowed = [...changed].every((file) => allowed.has(file));
+  const normalSynchronization = parentShapeMatches && requiredPathsPresent && changedPathsAllowed;
+  const bootstrapSynchronization = Boolean(
+    bootstrapMerge
+    && remoteMain === bootstrapMerge.mergeSha
+    && recordedMain === bootstrapMerge.firstParent
+    && parentShapeMatches
+    && JSON.stringify([...changed].sort()) === JSON.stringify([...bootstrapMerge.changedPaths].sort())
+  );
   return {
-    ok: parentShapeMatches && requiredPathsPresent && changedPathsAllowed,
-    mode: "synchronization-merge",
+    ok: normalSynchronization || bootstrapSynchronization,
+    mode: bootstrapSynchronization ? "bootstrap-synchronization-merge" : "synchronization-merge",
     parentShapeMatches,
     requiredPathsPresent,
-    changedPathsAllowed
+    changedPathsAllowed,
+    bootstrapSynchronization
   };
 }
 

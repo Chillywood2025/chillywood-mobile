@@ -46,7 +46,8 @@ if (mode) {
     parents: mainParents,
     changedPaths: mainChangedPaths,
     requiredChangedPaths: currentTruthContract.synchronizationMerge.requiredChangedPaths,
-    allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths
+    allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
+    bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge
   });
   const mainMatches = synchronization.ok && (branch === "main" || mergeBase === remoteMain);
   const now = options.now ? new Date(options.now) : new Date();
