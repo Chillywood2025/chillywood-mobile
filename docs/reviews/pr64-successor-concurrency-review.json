@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-successor-concurrency-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "successor-concurrency-property-replay",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+  "implementationTree": "1666e884bb7786b62979df0b784f8c1722a63732",
+  "baseHead": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+  "baseTree": "9415d5311f9db1e970a59fac1943e7d119652ed7",
+  "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 2,
+    "implementationOnlyCommits": 10
+  },
+  "changedFileHash": "24006b0bed5548df4d53108b77c9e7ca096a4d7c1fde188c74cd095e6c1d5479",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base...implementation)",
+  "changedNameHash": "140824304f89fccb5cef1ca286ce63fe7f71996a7dadb081e5a132f00569c48f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "1275a01e647677891dd7db7a0c76c17f2d3a5af95534e23bc7d36a4093eded76",
+  "implementationDiffHash": "3d97cba83c1009af8f9660b2e80389ce24e1f3543d7b9771f129ae460c0ffc72",
+  "modelSourceSetHash": "7480637d03bb2b29d59a12887470f242c928371d0774b256b4c797e40aa75a4d",
+  "packageLockHash": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "successor-concurrency-property-replay",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false,
+      "reviewWorktreeCleanBeforeEvidence": true,
+      "implementationParentForReviewEvidence": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187"
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationPrNumber": 64,
+      "implementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+      "implementationTree": "1666e884bb7786b62979df0b784f8c1722a63732",
+      "currentMain": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+      "currentMainTree": "9415d5311f9db1e970a59fac1943e7d119652ed7",
+      "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+      "currentMainOnlyCommits": 2,
+      "implementationOnlyCommits": 10,
+      "currentMainRecordsExactPr64Head": true
+    },
+    "currentTruthControlPlane": {
+      "status": "pass_on_current_main",
+      "authoritativeMain": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+      "recordedPr64Head": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+      "recordedPr64State": "open-draft-frozen",
+      "implementationBranchEmbeddedSnapshot": "historical",
+      "interpretation": "Current main binds the exact successor head. The implementation branch's older embedded current-truth snapshot is not treated as current evidence and was not edited by this review lane."
+    },
+    "exactDelta": {
+      "status": "pass_under_machine_readable_waiver",
+      "files": 11,
+      "additions": 1394,
+      "deletions": 1,
+      "netChangedLines": 1393,
+      "waivedFileBudget": 12,
+      "waivedLineBudget": 1600,
+      "migrationFiles": 0,
+      "productImplementationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "dependencyExecution": {
+      "status": "pass",
+      "reviewWorktreeInstallPerformed": false,
+      "packageOrLockfileChangedByReview": false,
+      "sourceUnderTest": "review worktree exact implementation head",
+      "dependencySource": "frozen implementation worktree at the same exact head",
+      "dependencySourceHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+      "dependencySourceClean": true,
+      "fastCheck": "4.9.0",
+      "pureRand": "8.4.2",
+      "resolutionMechanism": "process-local ESM loader mapping for the pinned fast-check package; inherited by hostile child-process probes"
+    },
+    "focusedModelTests": {
+      "status": "pass",
+      "command": "node --test tests/assurance/concurrency/interleavings.test.mjs tests/assurance/property/state-models.test.mjs tests/assurance/models/escaped-defects.test.mjs",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyDomains": 6,
+      "propertyCases": 1200,
+      "maxCommands": 24,
+      "transitionWitnesses": 8,
+      "positiveTransitionWitnesses": 7,
+      "negativeTransitionWitnesses": 1,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20,
+      "exactScheduleContracts": 8,
+      "escapedDefectFixtures": 22,
+      "canonicalEscapedDefectFixtures": 17,
+      "supplementalEscapedDefectFixtures": 5
+    },
+    "deterministicOutputs": {
+      "status": "pass",
+      "runsPerSuite": 3,
+      "outputsIdenticalWithinEachSuite": true,
+      "allSuiteSha256": "2ca86d1032a75dfd346bc02694c5b0ddce808f7a9f465919fdddc9cbc03a5c57",
+      "propertySha256": "a7f133567b8350f206d5d0ab9ae3b0fe90589ad54eb66270f2e7f423a44ed436",
+      "concurrencySha256": "2a24c626fa157c322dcf1049b60be48343b40db8674f7abaef21ff09257ba3a4",
+      "escapedDefectSha256": "3eaa185b9729dd55da59da451a1cc9192eafdf662f9836675ee386e7e1a06554"
+    },
+    "propertyAntiVacuity": {
+      "status": "pass",
+      "propertyCases": 1200,
+      "runsPerDomain": 200,
+      "domains": 6,
+      "transitionWitnesses": 8,
+      "allDomainsHaveWitnesses": true,
+      "allWitnessesReached": true,
+      "allWitnessesViolationFree": true,
+      "witnessHash": "42f816008deb873f60d344bb1f6139d18e1e441d3ca4826129145ee04d5ec57a",
+      "seeds": {
+        "chat-call": 173501,
+        "revenuecat": 173502,
+        "ota-build": 173503,
+        "notification-native-action": 173504,
+        "livekit": 173505,
+        "migrations": 173506
+      },
+      "witnesses": [
+        {"domain": "chat-call", "id": "chat-in-app-remote-media", "kind": "positive", "commands": 8},
+        {"domain": "chat-call", "id": "chat-native-accept", "kind": "positive", "commands": 6},
+        {"domain": "chat-call", "id": "chat-expired-native-denied", "kind": "negative", "commands": 4},
+        {"domain": "revenuecat", "id": "revenuecat-provider-authority", "kind": "positive", "commands": 1},
+        {"domain": "ota-build", "id": "ota-source-binding", "kind": "positive", "commands": 2},
+        {"domain": "notification-native-action", "id": "pushkit-report-complete-native-acceptance", "kind": "positive", "commands": 8},
+        {"domain": "livekit", "id": "livekit-room-to-ui", "kind": "positive", "commands": 9},
+        {"domain": "migrations", "id": "migration-successor", "kind": "positive", "commands": 3}
+      ]
+    },
+    "requiredInterleavings": {
+      "status": "pass",
+      "scenarioCount": 10,
+      "scheduleCount": 20,
+      "exactScheduleContracts": 8,
+      "exactContractFinalStatesMatched": 8,
+      "allSchedulesModelClear": true,
+      "mechanisms": [
+        "controlled barriers",
+        "promises",
+        "transaction lock",
+        "explicit schedules"
+      ],
+      "scenarioResultHash": "8143256a903a371b6ede8bc3130c61395928fdeba0f72a121a0f73e1a03ed89b",
+      "exactContractHash": "d68233b2534f0ed73f681b44047e93150e56c56b763607443e48dcc5a33e17fb",
+      "deletionAndGuardMutationProbes": {
+        "count": 8,
+        "killed": 8,
+        "survived": 0,
+        "hash": "bd802c29f3f5989a12e048d137785bebf98499c9bf31e1bd717b455e211f9d47",
+        "mutants": [
+          "accept-timeout accept no-op",
+          "accept-timeout timeout no-op",
+          "accept-cancel accept no-op",
+          "accept-cancel cancel no-op",
+          "OTA activate no-op",
+          "OTA rollback no-op",
+          "emergency mutation no-op",
+          "emergency mutation ignores stopped guard"
+        ]
+      }
+    },
+    "notificationMustReportProbe": {
+      "status": "pass",
+      "resultHash": "0ec06d9fd28870c11158bdae57365635b0773077816dd7e4cb87328081e14724",
+      "withoutReportAndCompletion": {
+        "serverStatus": "ringing",
+        "serverAccepted": [],
+        "violations": []
+      },
+      "withReportAndCompletion": {
+        "serverStatus": "accepted",
+        "serverAccepted": ["answer"],
+        "callKitReported": ["push"],
+        "completedPushes": ["push"],
+        "violations": []
+      }
+    },
+    "escapedDefectRegression": {
+      "status": "pass",
+      "fixtureCount": 22,
+      "canonicalFixtureCount": 17,
+      "supplementalFixtureCount": 5,
+      "allHistoricalVariantsDetected": true,
+      "allCurrentVariantsClear": true,
+      "resultHash": "fbfff87147fb6df4d3d5d7bbdebd4ccc101d26af8d595e32e0ecef5b8d41c1d8",
+      "canonicalDefects": [
+        "ACCEPT_TIMEOUT_RACE",
+        "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200",
+        "DOUBLE_SERIALIZED_JSONB",
+        "EAS_ENVIRONMENT_OVERRIDE",
+        "LIVEKIT_CONNECTED_WITHOUT_MEDIA",
+        "LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION",
+        "MIGRATION_VERSION_NAME_MISMATCH",
+        "MISSING_NATIVE_MODULE_IN_RUNTIME",
+        "NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT",
+        "OTA_NATIVE_CAPABILITY_MISMATCH",
+        "PLATFORM_SCOPE_MISMATCH",
+        "PUSHKIT_DELIVERY_SUPPRESSED",
+        "REMOTE_MIGRATION_AHEAD_OF_GIT",
+        "REVENUECAT_OUT_OF_ORDER_EVENT",
+        "REVENUECAT_TRANSFER_TARGET_MISMATCH",
+        "STALE_CLEANUP_CLEARS_NEW_CALL",
+        "TERMINAL_ROOM_ORPHAN"
+      ],
+      "supplementalDefects": [
+        "CHAT_NATIVE_ACCEPTANCE_UNAUTHORIZED",
+        "LIVEKIT_STAGE_SKIPPED",
+        "MIGRATION_FORWARD_CORRECTION_UNIDENTIFIED",
+        "PUSHKIT_ACCEPTED_WITHOUT_REPORT",
+        "PUSHKIT_MUST_REPORT_BREACH"
+      ]
+    },
+    "documentedCliReplayIdentity": {
+      "status": "pass",
+      "probeCount": 7,
+      "resultHash": "3a0106cf5e98a4c99f9ac8587b1759b4ce953c642803408b939c967e6ade8f37",
+      "seedWithoutDomainRejected": "ASSURANCE_MODEL_SEED_DOMAIN_REQUIRED",
+      "domainWithConcurrencyRejected": "ASSURANCE_MODEL_DOMAIN_SUITE_UNSUPPORTED",
+      "seedWithConcurrencyRejected": "ASSURANCE_MODEL_SEED_SUITE_UNSUPPORTED",
+      "pathWithConcurrencyRejected": "ASSURANCE_MODEL_REPLAY_SUITE_UNSUPPORTED",
+      "malformedPathRejected": "ASSURANCE_MODEL_REPLAY_PATH_INVALID",
+      "unknownDomainWithSeedBlocked": "UNKNOWN_MODEL_DOMAIN:missing",
+      "validDomainSeedPreserved": {
+        "requestIdentity": {"domain": "chat-call", "path": null, "seed": "173501", "suite": "property"},
+        "actualSeed": 173501,
+        "propertyCases": 200
+      }
+    },
+    "hostileCliBoundaryProbe": {
+      "status": "p2_finding",
+      "probeCount": 7,
+      "resultHash": "65c480e174bb218754077e99833c3661563f2bc720632e1a61375ed5bc5d1758",
+      "failedClosed": [
+        "bare --path",
+        "empty --seed=",
+        "fractional seed",
+        "zero seed"
+      ],
+      "silentlyAccepted": [
+        {
+          "input": "--suite=property --domain=",
+          "exitCode": 0,
+          "reportedStatus": "MODEL_CLEAR",
+          "observedBehavior": "ran all six domains with default seeds",
+          "requestIdentity": {"domain": null, "path": null, "seed": null, "suite": "property"}
+        },
+        {
+          "input": "--suite=property --domain=chat-call --seed",
+          "exitCode": 0,
+          "reportedStatus": "MODEL_CLEAR",
+          "observedBehavior": "coerced the boolean option sentinel to numeric seed 1",
+          "requestIdentity": {"domain": "chat-call", "path": null, "seed": "true", "suite": "property"}
+        },
+        {
+          "input": "--suite=property --domain=chat-call --path=",
+          "exitCode": 0,
+          "reportedStatus": "MODEL_CLEAR",
+          "observedBehavior": "ignored the explicitly empty replay path",
+          "requestIdentity": {"domain": "chat-call", "path": null, "seed": null, "suite": "property"}
+        }
+      ]
+    },
+    "resolvedPriorReviewFindings": {
+      "status": "pass_except_for_narrow_p2_cli_boundary",
+      "requiredInterleavingAssertionsMutationVacuous": "resolved",
+      "mustReportPushAcceptedWithoutCallKitOrCompletion": "resolved",
+      "canonicalEscapedDefectVariantsIncomplete": "resolved",
+      "documentedSeedAndConcurrencyDomainOptionsSilentlyIgnored": "resolved",
+      "emptyAndBareCliOptionValidation": "open_p2"
+    },
+    "staticChecks": {
+      "status": "pass",
+      "nodeSyntaxFiles": 4,
+      "gitDiffCheck": "pass"
+    },
+    "proofBoundaries": {
+      "status": "pass",
+      "provedTier": "T2_MODEL",
+      "forbiddenClaimsPreserved": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "pushkitPhysicalBlockerStillExternal": true,
+      "proofSubstitutionAccepted": false
+    },
+    "deferredPrEJobRouting": {
+      "status": "recorded_nonblocking_for_pr_c",
+      "finding": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "owner": "PR E",
+      "blocksCurrentLane": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_exact_head_run",
+      "runByThisReviewLane": false,
+      "findingOpenedByThisLane": false,
+      "resumptionAction": "After all four successor reviews freeze, the coordinator runs the single full Phase 1 CI execution at implementation head 6fbb96f9502932bf4c0a83c32e71b0e621ca4187."
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeOrDeviceTest": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "productImplementationChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "4aaf6d036ff87049dc49dda8108f026b5bae99a6cc78daaef37117a3faf016aa",
+  "reviewLevel": "C",
+  "reviewHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+  "reviewHeadSemantics": "implementation tip immediately preceding the review-evidence-only commit",
+  "reviewTimestamp": "2026-07-30T21:02:14Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "successor-concurrency-property-replay"
+  ],
+  "findings": [
+    {
+      "id": "PR64_SUCCESSOR_EMPTY_OR_BARE_MODEL_OPTIONS_DO_NOT_FAIL_CLOSED",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/models/run.mjs:9",
+        "scripts/assurance/models/run.mjs:17",
+        "scripts/assurance/models/run.mjs:23",
+        "scripts/assurance/models/run.mjs:31",
+        "scripts/assurance/models/run.mjs:53"
+      ],
+      "evidence": "Three explicit malformed invocations exit 0 with MODEL_CLEAR: --domain= is treated as no domain and runs all six models; a bare --seed is represented as boolean true and coerced to numeric seed 1; --path= is treated as no replay path. The output requestIdentity is null for the empty domain/path cases and reports seed \"true\" while executing seed 1 for the bare seed case.",
+      "impact": "A caller-supplied filter or replay identity can still be silently discarded or changed while the command reports MODEL_CLEAR. This is a narrow continuation of the prior fail-closed CLI finding at option-presence boundaries.",
+      "requiredResolution": "Validate option presence separately from truthiness. Reject an empty domain or replay path, reject non-string or missing-value numeric options before Number conversion, and add nonzero child-process regressions for --domain=, --path=, and bare --seed."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "modelSuiteDeclaredAssertions": "MODEL_CLEAR",
+    "independentT2Disposition": "BLOCKED_INTERNAL",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "changes-required-for-cli-fail-closed-contract",
+    "humanApproval": false
+  }
+}
