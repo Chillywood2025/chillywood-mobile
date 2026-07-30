@@ -29,12 +29,37 @@ const noopUseLocalParticipant = (() => ({
 const noopUseTracks = ((..._args: unknown[]) => []) as unknown as LiveKitReactNativeModule["useTracks"];
 
 export const LiveKitAudioSession = liveKitReactNativeModule?.AudioSession ?? {
+  configureAudio: async (_configuration: unknown) => {},
   startAudioSession: async () => {},
   stopAudioSession: async () => {},
+  setAppleAudioConfiguration: async (_configuration: unknown) => {},
   getAudioOutputs: async () => [] as string[],
   selectAudioOutput: async (_deviceId: string) => {},
   showAudioRoutePicker: async () => {},
 };
+
+export async function configureLiveKitIosAudioSession(preferSpeakerOutput: boolean) {
+  if (Platform.OS !== "ios") return;
+  await LiveKitAudioSession.configureAudio({
+    ios: {
+      defaultOutput: preferSpeakerOutput ? "speaker" : "earpiece",
+    },
+  });
+  await LiveKitAudioSession.setAppleAudioConfiguration({
+    audioCategory: "playAndRecord",
+    audioCategoryOptions: ["allowBluetooth", "mixWithOthers"],
+    audioMode: preferSpeakerOutput ? "videoChat" : "voiceChat",
+  });
+}
+
+export async function resetLiveKitIosAudioSession() {
+  if (Platform.OS !== "ios") return;
+  await LiveKitAudioSession.setAppleAudioConfiguration({
+    audioCategory: "soloAmbient",
+    audioCategoryOptions: [],
+    audioMode: "default",
+  });
+}
 
 export const LiveKitRoom = liveKitReactNativeModule?.LiveKitRoom ?? NoopLiveKitRoom;
 export const LiveKitVideoTrack = liveKitReactNativeModule?.VideoTrack ?? NoopLiveKitVideoTrack;

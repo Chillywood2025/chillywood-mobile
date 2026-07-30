@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 
 type JsonObject = Record<string, unknown>;
+type SupabaseClientLike = any;
 type TransitionStatus = "accepted" | "declined" | "missed" | "canceled" | "ended" | "busy";
 
 type TransitionPayload = {
@@ -114,6 +115,27 @@ const sanitizeDispatchResponse = (value: unknown) => {
   };
 };
 
+const hydrateInviteMediaProvider = async (
+  adminClient: SupabaseClientLike,
+  invite: JsonObject | null | undefined,
+) => {
+  const inviteId = toText(invite?.id);
+  if (!inviteId) return invite ?? null;
+  const { data, error } = await adminClient
+    .from("chat_call_invites")
+    .select("chat_call_media_provider")
+    .eq("id", inviteId)
+    .maybeSingle();
+  if (error || !data) return invite ?? null;
+  const providerRow = data as JsonObject;
+  return {
+    ...(invite ?? {}),
+    chatCallMediaProvider: toText(providerRow.chat_call_media_provider) === "livekit"
+      ? "livekit"
+      : "legacy_webrtc",
+  };
+};
+
 Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
@@ -166,6 +188,7 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     const transition = transitionData as TransitionResult;
+    const hydratedInvite = await hydrateInviteMediaProvider(adminClient, transition.invite);
     const delivery = transition.delivery ?? {};
     const deliveryId = toText(delivery.id);
     const action = toText(delivery.action);
@@ -173,7 +196,7 @@ Deno.serve(async (req): Promise<Response> => {
     if (!deliveryId || !action || FINAL_DELIVERY_STATUSES.has(currentDeliveryStatus)) {
       return jsonResponse(200, {
         idempotent: transition.idempotent === true,
-        invite: transition.invite ?? null,
+        invite: hydratedInvite,
         delivery,
       });
     }
@@ -191,7 +214,7 @@ Deno.serve(async (req): Promise<Response> => {
         .maybeSingle();
       return jsonResponse(200, {
         idempotent: true,
-        invite: transition.invite ?? null,
+        invite: hydratedInvite,
         delivery: latestDelivery ?? delivery,
       });
     }
@@ -227,7 +250,7 @@ Deno.serve(async (req): Promise<Response> => {
 
     return jsonResponse(dispatchResponse.ok ? 200 : 502, {
       idempotent: transition.idempotent === true,
-      invite: transition.invite ?? null,
+      invite: hydratedInvite,
       delivery: {
         id: deliveryId,
         action,

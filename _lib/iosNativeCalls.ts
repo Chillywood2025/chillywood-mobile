@@ -36,6 +36,8 @@ const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 let nativeSubscription: { remove(): void } | null = null;
 let eventListener: IosNativeCallEventListener | null = null;
 const nativeEventSubscribers = new Set<IosNativeCallEventListener>();
+const nativePresentationSubscribers = new Set<() => void>();
+const nativePresentedInviteIds = new Set<string>();
 let voipLifecycleGeneration = 0;
 let voipRegistrationActive = false;
 let voipTokenLifecycleQueue: Promise<void> = Promise.resolve();
@@ -92,10 +94,12 @@ export const isIosNativeCallsRuntimeEnabled = () => {
   const communication = runtime.communication && typeof runtime.communication === "object" && !Array.isArray(runtime.communication)
     ? runtime.communication as Record<string, unknown>
     : {};
+  const configuredRuntimeValue = communication.iosNativeCallsEnabled
+    ?? runtime.iosNativeCallsEnabled;
   return isExplicitlyEnabled(
-    process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED
-      || communication.iosNativeCallsEnabled
-      || runtime.iosNativeCallsEnabled,
+    configuredRuntimeValue === undefined
+      ? process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED
+      : configuredRuntimeValue,
   );
 };
 
@@ -205,6 +209,51 @@ const enqueueVoipTokenInvalidation = (generation: number) => {
   });
 };
 
+const notifyNativePresentationSubscribers = () => {
+  nativePresentationSubscribers.forEach((subscriber) => {
+    try {
+      subscriber();
+    } catch {
+      // Presentation diagnostics cannot interrupt native call handling.
+    }
+  });
+};
+
+const clearNativePresentedInvites = () => {
+  if (nativePresentedInviteIds.size === 0) return;
+  nativePresentedInviteIds.clear();
+  notifyNativePresentationSubscribers();
+};
+
+const updateNativePresentationOwnership = (event: SanitizedNativeCallEvent) => {
+  const inviteId = toText(event.callInviteId);
+  if (!inviteId) {
+    if (event.type === "providerReset") clearNativePresentedInvites();
+    return;
+  }
+
+  if (event.type === "incoming" || event.type === "recovered") {
+    if (nativePresentedInviteIds.has(inviteId)) return;
+    nativePresentedInviteIds.add(inviteId);
+    notifyNativePresentationSubscribers();
+    return;
+  }
+
+  if ([
+    "answerFailed",
+    "audioSessionFailed",
+    "declined",
+    "ended",
+    "invalidIncomingPayload",
+    "providerReset",
+    "remoteEnded",
+    "reportFailed",
+    "timeout",
+  ].includes(event.type) && nativePresentedInviteIds.delete(inviteId)) {
+    notifyNativePresentationSubscribers();
+  }
+};
+
 const handleNativeEvent = (event: NativeCallEvent, generation: number) => {
   if (!voipRegistrationActive || generation !== voipLifecycleGeneration) return;
 
@@ -218,6 +267,7 @@ const handleNativeEvent = (event: NativeCallEvent, generation: number) => {
   }
 
   const sanitizedEvent = sanitizeNativeEvent(event);
+  updateNativePresentationOwnership(sanitizedEvent);
   eventListener?.(sanitizedEvent);
   nativeEventSubscribers.forEach((subscriber) => {
     try {
@@ -235,6 +285,18 @@ export function subscribeToIosNativeCallEvents(listener: IosNativeCallEventListe
   };
 }
 
+export function hasIosNativeCallPresentation(inviteId: string | null | undefined) {
+  const normalizedInviteId = toText(inviteId);
+  return !!normalizedInviteId && nativePresentedInviteIds.has(normalizedInviteId);
+}
+
+export function subscribeToIosNativeCallPresentation(listener: () => void) {
+  nativePresentationSubscribers.add(listener);
+  return () => {
+    nativePresentationSubscribers.delete(listener);
+  };
+}
+
 export async function startIosNativeCallsReadiness(
   listener?: IosNativeCallEventListener,
 ): Promise<IosVoipRegistrationState> {
@@ -246,6 +308,7 @@ export async function startIosNativeCallsReadiness(
     nativeSubscription?.remove();
     nativeSubscription = null;
     eventListener = null;
+    clearNativePresentedInvites();
 
     // Let any request from the previous lifecycle finish before a new native
     // listener can enqueue work under the next authenticated account state.
@@ -307,6 +370,7 @@ export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationSt
     nativeSubscription?.remove();
     nativeSubscription = null;
     eventListener = null;
+    clearNativePresentedInvites();
     await NativeCallsModule?.stopVoipRegistrationAsync().catch(() => false);
 
     // An already-issued request cannot be aborted reliably. Waiting before the
@@ -323,7 +387,7 @@ export async function dispatchIosVoipIncomingCall(inviteId: string) {
   const normalizedInviteId = toText(inviteId);
   if (!normalizedInviteId) return { eligible: false, reason: "missing_invite_id", status: "error" } as const;
   const { data, error } = await supabase.functions.invoke("ios-voip-call-dispatch", {
-    body: { inviteId: normalizedInviteId },
+    body: { action: "incoming", inviteId: normalizedInviteId },
   });
   return error
     ? { eligible: false, reason: "dispatch_failed", status: "error" } as const

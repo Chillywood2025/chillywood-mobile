@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-07-30",
+  "scope": "chilly_chat_livekit_part_a",
+  "policy": {
+    "deployedMigrationRewritten": false,
+    "deployedMigrationRenamed": false,
+    "deployedMigrationDeleted": false,
+    "deployedMigrationReappliedByReconciliation": false
+  },
+  "bindings": [
+    {
+      "remoteVersion": "20260728141417",
+      "remoteName": "chilly_chat_livekit_media_rollout",
+      "localSource": "supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql",
+      "localSourceSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0"
+    },
+    {
+      "remoteVersion": "20260728172910",
+      "remoteName": "chilly_chat_terminal_product_state_cleanup",
+      "localSource": "supabase/migrations/20260728172910_chilly_chat_terminal_product_state_cleanup.sql",
+      "localSourceSha256": "9cbfb311560cdeafde3cd640eb607965eed83d83ab8a2dec69b0733ff2364e67"
+    },
+    {
+      "remoteVersion": "20260729020612",
+      "remoteName": "chilly_chat_terminal_membership_race_guard",
+      "localSource": "supabase/migrations/20260729020612_chilly_chat_terminal_membership_race_guard.sql",
+      "localSourceSha256": "fcc31d81c1805b0bfdf9b4155976b5ee25ba1b8cd5a11b68175319e66b927799"
+    },
+    {
+      "remoteVersion": "20260729175447",
+      "remoteName": "chilly_chat_active_thread_clear_race_guard",
+      "localSource": "supabase/migrations/20260729185000_chilly_chat_active_thread_clear_race_guard.sql",
+      "localSourceSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "remoteDeploymentSequence": 1
+    },
+    {
+      "remoteVersion": "20260729204336",
+      "remoteName": "chilly_chat_active_thread_clear_race_guard",
+      "localSource": "supabase/migrations/20260729185000_chilly_chat_active_thread_clear_race_guard.sql",
+      "localSourceSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "remoteDeploymentSequence": 2
+    },
+    {
+      "remoteVersion": "20260730034533",
+      "remoteName": "chilly_chat_authoritative_busy_begin",
+      "localSource": "supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+      "localSourceSha256": "07a192dcce590748f4abe06d8bf494a4baf666ce917387bfdfe8bbc54e2156a0"
+    },
+    {
+      "remoteVersion": "20260730040727",
+      "remoteName": "chilly_chat_busy_active_thread_guard",
+      "localSource": "supabase/migrations/20260730040000_chilly_chat_busy_active_thread_guard.sql",
+      "localSourceSha256": "79fcdb34fe5575dcc461900c9b146fb60d6b825162742c39d7ac172338bdd948"
+    }
+  ]
+}

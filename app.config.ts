@@ -22,6 +22,12 @@ const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 const IOS_ASSOCIATED_DOMAIN = "applinks:chillywoodstream.com";
 const IOS_PRIVACY_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "ios", "privacy-manifest.json");
 const ANDROID_RELEASE_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "release", "android-production.json");
+const ANDROID_CHAT_QA_RELEASE_MANIFEST_PATH = path.join(
+  CONFIG_DIR,
+  "config",
+  "release",
+  "android-chat-livekit-qa.json",
+);
 const IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION = "Chi'llywood accesses photos you choose for your profile and social images.";
 const IOS_RNFIREBASE_STATIC_PODS = [
   "RNFBAnalytics",
@@ -194,12 +200,34 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const androidReleaseManifest = JSON.parse(
     fs.readFileSync(ANDROID_RELEASE_MANIFEST_PATH, "utf8"),
   ) as { packageIdentifier?: unknown; runtimeVersion?: unknown };
+  const androidChatQaReleaseManifest = JSON.parse(
+    fs.readFileSync(ANDROID_CHAT_QA_RELEASE_MANIFEST_PATH, "utf8"),
+  ) as { packageIdentifier?: unknown; runtimeVersion?: unknown };
   const androidRuntimeVersion = normalizeText(androidReleaseManifest.runtimeVersion);
+  const androidChatQaRuntimeVersion = normalizeText(
+    process.env.ANDROID_CHAT_LIVEKIT_QA_RUNTIME_VERSION,
+  );
   if (normalizeText(androidReleaseManifest.packageIdentifier) !== normalizeText(existingAndroid.package)) {
     throw new Error("Android release manifest packageIdentifier does not match app.json.");
   }
   if (!androidRuntimeVersion || androidRuntimeVersion === normalizeText(base.runtimeVersion)) {
     throw new Error("Android release manifest must define a dedicated native runtime different from the shared legacy runtime.");
+  }
+  if (
+    normalizeText(androidChatQaReleaseManifest.packageIdentifier)
+    !== normalizeText(existingAndroid.package)
+  ) {
+    throw new Error("Android Chat QA release manifest packageIdentifier does not match app.json.");
+  }
+  if (
+    androidChatQaRuntimeVersion
+    && (
+      androidChatQaRuntimeVersion !== normalizeText(androidChatQaReleaseManifest.runtimeVersion)
+      || androidChatQaRuntimeVersion === androidRuntimeVersion
+      || androidChatQaRuntimeVersion === normalizeText(base.runtimeVersion)
+    )
+  ) {
+    throw new Error("Android Chat QA runtime must match its isolated release manifest and native boundary.");
   }
   const iosAssociatedDomains = [
     ...(Array.isArray(existingIos.associatedDomains) ? existingIos.associatedDomains : []),
@@ -223,7 +251,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: {
       ...base.android,
-      runtimeVersion: androidRuntimeVersion,
+      runtimeVersion: androidChatQaRuntimeVersion || androidRuntimeVersion,
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
       intentFilters: [
         ...(Array.isArray(existingAndroid.intentFilters) ? existingAndroid.intentFilters : []),
@@ -320,9 +348,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
         communication: {
           ...existingCommunication,
-          iosNativeCallsEnabled: normalizeBoolean(
-            process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || existingCommunication.iosNativeCallsEnabled,
-          ),
+          // `eas update --environment production` can supply the public
+          // production value after command-local values are evaluated. The
+          // isolated ios-qa runtime is itself an explicit native-call
+          // boundary, so keep its manifest aligned with the build profile.
+          iosNativeCallsEnabled: iosQaRuntimeVersion
+            ? true
+            : normalizeBoolean(
+              process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || existingCommunication.iosNativeCallsEnabled,
+            ),
           iosOrdinaryPushEnabled: normalizeBoolean(
             process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED || existingCommunication.iosOrdinaryPushEnabled,
           ),

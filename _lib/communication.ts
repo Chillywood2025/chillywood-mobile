@@ -108,6 +108,8 @@ export type CommunicationParticipantPresence = {
 export type CommunicationParticipantView = CommunicationParticipantPresence & {
   isSelf: boolean;
   streamURL?: string;
+  liveKitVideoTrackReference?: unknown;
+  mediaProvider?: "legacy_webrtc" | "livekit";
   connectionState: "waiting" | "connecting" | "connected" | "disconnected" | "failed";
 };
 

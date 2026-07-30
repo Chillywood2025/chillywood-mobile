@@ -83,7 +83,11 @@ export const resolveChillyChatCallPreferencePolicy = (input) => {
     actionAllowed,
     callEnabled,
     inAppNotification: callEnabled && presentationAction && input.inAppEnabled !== false,
-    iosVoip: terminalAction || (callEnabled && action === "incoming"),
+    // PushKit is reserved for the initial incoming-call invitation. Terminal
+    // state is already server-authoritative and reaches active clients through
+    // Realtime/subscriptions; sending non-incoming VoIP pushes causes iOS to
+    // penalize the app for not reporting a new CallKit call.
+    iosVoip: callEnabled && action === "incoming",
     ordinaryPush,
   };
 };

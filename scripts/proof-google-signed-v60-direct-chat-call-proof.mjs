@@ -251,8 +251,8 @@ requireText("owner readback migration", ownerReadbackMigration, "explicit member
 requireText("direct member readback migration", directMemberReadbackMigration, "create or replace function public.can_access_chat_thread");
 requireText("direct member readback migration", directMemberReadbackMigration, "Direct threads that contain a platform owner remain member-only");
 requireText("direct member readback migration", directMemberReadbackMigration, "public.\"has_channel_audience_block_between\"(actor.user_id, other_member.\"user_id\")");
-requireText("call invite stale missed guard", callLib, "query = query.eq(\"status\", \"ringing\");");
-requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
+requireText("call invite transition authority", callLib, 'supabase.functions.invoke("chilly-chat-call-transition"');
+requireText("call invite transition authority", callLib, "if (error || !data || typeof data !== \"object\") return null;");
 requireText("banner auto accept source", threadScreen, "Incoming call could not be accepted. Ask the caller to start a new call.");
 requireText("banner auto accept source", threadScreen, "status: \"accepted\"");
 requireText("direct thread messaging UX source", threadScreen, "chat-thread-messages-scroll");

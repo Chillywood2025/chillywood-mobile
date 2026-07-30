@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import {
@@ -42,7 +42,14 @@ import {
   stopChillyChatCallSound,
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
+import {
+  consumePendingAndroidNativeCallRoute,
+  subscribeToEarlyAndroidNativeCallRoutes,
+} from "../_lib/chillyChatNativeCallRouteBuffer";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
+import {
+  resolveChillyChatNativeCallRoute,
+} from "../_lib/chillyChatNativeCallRoutes.mjs";
 import { resolveIncomingCallPresentation } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
   clearApplicationNotificationBadge,
@@ -62,9 +69,12 @@ import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
 import {
+  hasIosNativeCallPresentation,
+  isIosNativeCallsRuntimeEnabled,
   reportIosNativeCallRemoteEnd,
   revokeIosVoipRegistration,
   startIosNativeCallsReadiness,
+  subscribeToIosNativeCallPresentation,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
@@ -74,6 +84,7 @@ import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailab
 import InterstitialAdController from "../components/ads/InterstitialController";
 
 const PUBLIC_LEGAL_PATHS = new Set<string>(APPLICATION_LEGAL_PATHS);
+const IOS_NATIVE_PRESENTATION_GRACE_MS = 1_500;
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
@@ -156,6 +167,124 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => (
 const getAuthCallbackRouteFromUrl = (url: string | null) => (
   resolveApplicationRouteByKind(url, "auth_callback")
 );
+
+function AndroidNativeCallRouteBridge() {
+  const router = useRouter();
+  const { isLoading, isSignedIn } = useSession();
+  const handledNativeCallRouteKeysRef = useRef(new Set<string>());
+  const nativeCallActionAuthReadyRef = useRef(false);
+  const [pendingNativeCallRoute, setPendingNativeCallRoute] =
+    useState<ReturnType<typeof resolveChillyChatNativeCallRoute>>(null);
+  const captureResolvedNativeCallRoute = useCallback((
+    nativeCallRoute: NonNullable<ReturnType<typeof resolveChillyChatNativeCallRoute>>,
+  ) => {
+    if (
+      !nativeCallActionAuthReadyRef.current
+      || handledNativeCallRouteKeysRef.current.has(nativeCallRoute.requestKey)
+    ) {
+      return;
+    }
+    setPendingNativeCallRoute((current) => (
+      current?.requestKey === nativeCallRoute.requestKey
+        ? current
+        : nativeCallRoute
+    ));
+  }, []);
+
+  useEffect(() => {
+    nativeCallActionAuthReadyRef.current = !isLoading && isSignedIn;
+  }, [isLoading, isSignedIn]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return () => {};
+    let active = true;
+    const captureNativeCallRoute = (url: string | null) => {
+      if (!active) return;
+      const nativeCallRoute = resolveChillyChatNativeCallRoute(url);
+      if (
+        !nativeCallRoute
+        || handledNativeCallRouteKeysRef.current.has(nativeCallRoute.requestKey)
+      ) {
+        return;
+      }
+      captureResolvedNativeCallRoute(nativeCallRoute);
+    };
+    const unsubscribeEarlyNativeCallRoutes =
+      subscribeToEarlyAndroidNativeCallRoutes((nativeCallRoute) => {
+        if (active) captureResolvedNativeCallRoute(nativeCallRoute);
+      });
+
+    void Linking.getInitialURL()
+      .then(captureNativeCallRoute)
+      .catch((error) => {
+        reportRuntimeError("android-native-call-initial-route", error, {
+          source: "root-layout",
+        });
+      });
+
+    return () => {
+      active = false;
+      unsubscribeEarlyNativeCallRoutes();
+    };
+  }, [captureResolvedNativeCallRoute]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || isLoading || !isSignedIn) return () => {};
+    let active = true;
+    const consumePendingNativeCallAction = () => {
+      void consumePendingAndroidNativeCallRoute()
+        .then((nativeCallRoute) => {
+          if (active && nativeCallRoute) {
+            captureResolvedNativeCallRoute(nativeCallRoute);
+          }
+        })
+        .catch((error) => {
+          reportRuntimeError("android-native-call-pending-action", error, {
+            source: "root-layout",
+          });
+        });
+    };
+    consumePendingNativeCallAction();
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") consumePendingNativeCallAction();
+    });
+    return () => {
+      active = false;
+      appStateSubscription.remove();
+    };
+  }, [captureResolvedNativeCallRoute, isLoading, isSignedIn]);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== "android"
+      || isLoading
+      || !isSignedIn
+      || !pendingNativeCallRoute
+    ) {
+      return;
+    }
+    if (handledNativeCallRouteKeysRef.current.has(pendingNativeCallRoute.requestKey)) {
+      setPendingNativeCallRoute(null);
+      return;
+    }
+    handledNativeCallRouteKeysRef.current.add(pendingNativeCallRoute.requestKey);
+    if (handledNativeCallRouteKeysRef.current.size > 40) {
+      const oldestRequestKey = handledNativeCallRouteKeysRef.current.values().next().value;
+      if (oldestRequestKey) handledNativeCallRouteKeysRef.current.delete(oldestRequestKey);
+    }
+    setPendingNativeCallRoute(null);
+    void consumePendingAndroidNativeCallRoute().catch((error) => {
+      reportRuntimeError("android-native-call-pending-action-clear", error, {
+        source: "root-layout",
+      });
+    });
+    router.replace(
+      pendingNativeCallRoute.destination as Parameters<typeof router.replace>[0],
+    );
+  }, [isLoading, isSignedIn, pendingNativeCallRoute, router]);
+
+  return null;
+}
 
 function RouteAnalyticsBridge() {
   const pathname = usePathname();
@@ -335,9 +464,35 @@ function IncomingCallNotificationBridge() {
   const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
   const [appState, setAppState] = useState(AppState.currentState);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
+  const [iosNativePresentationRevision, bumpIosNativePresentationRevision] = useState(0);
+  const [iosNativePresentationGraceReadyInviteId, setIosNativePresentationGraceReadyInviteId] = useState("");
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const latestInviteAlertIdRef = useRef("");
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return () => {};
+    return subscribeToIosNativeCallPresentation(() => {
+      bumpIosNativePresentationRevision((revision) => revision + 1);
+    });
+  }, []);
+
+  useEffect(() => {
+    const inviteId = String(alert?.inviteId ?? "").trim();
+    if (
+      Platform.OS !== "ios"
+      || !isIosNativeCallsRuntimeEnabled()
+      || !inviteId
+    ) {
+      setIosNativePresentationGraceReadyInviteId(inviteId);
+      return () => {};
+    }
+    setIosNativePresentationGraceReadyInviteId("");
+    const timeout = setTimeout(() => {
+      setIosNativePresentationGraceReadyInviteId(inviteId);
+    }, IOS_NATIVE_PRESENTATION_GRACE_MS);
+    return () => clearTimeout(timeout);
+  }, [alert?.inviteId]);
 
   const stopIncomingCallAttention = () => {
     Vibration.cancel();
@@ -441,9 +596,19 @@ function IncomingCallNotificationBridge() {
     const currentPath = normalizeRoutePathOnly(pathname);
     const alertPath = normalizeRoutePathOnly(alert.path);
     const alreadyOnSameThread = currentPath.startsWith("/chat/") && alertPath && currentPath === alertPath;
+    const alertInviteId = String(alert.inviteId ?? "").trim();
+    const iosNativeCallPresentationOwned = hasIosNativeCallPresentation(alertInviteId);
+    const waitingForIosNativePresentation =
+      Platform.OS === "ios"
+      && isIosNativeCallsRuntimeEnabled()
+      && !!alertInviteId
+      && !iosNativeCallPresentationOwned
+      && iosNativePresentationGraceReadyInviteId !== alertInviteId;
     if (
       appState !== "active"
       || alreadyOnSameThread
+      || iosNativeCallPresentationOwned
+      || waitingForIosNativePresentation
       || callPreferences?.chillyChatCallsEnabled === false
       || callPreferences?.inAppEnabled === false
     ) {
@@ -471,15 +636,38 @@ function IncomingCallNotificationBridge() {
       soundActive = false;
       stopIncomingCallAttention();
     };
-  }, [alert, appState, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, callPreferences?.inAppEnabled, pathname]);
+  }, [
+    alert,
+    appState,
+    callPreferences?.chillyChatCallSoundKey,
+    callPreferences?.chillyChatCallVibrateEnabled,
+    callPreferences?.chillyChatCallsEnabled,
+    callPreferences?.inAppEnabled,
+    iosNativePresentationGraceReadyInviteId,
+    iosNativePresentationRevision,
+    pathname,
+  ]);
 
   if (!alert) return null;
 
   const currentPath = normalizeRoutePathOnly(pathname);
   const alertPath = normalizeRoutePathOnly(alert.path);
   const alreadyOnSameThread = currentPath.startsWith("/chat/") && !!alertPath && currentPath === alertPath;
-  const presentation = resolveIncomingCallPresentation({ appState, alreadyOnSameThread });
-  if (presentation === "native_background" || presentation === "thread_banner") return null;
+  const alertInviteId = String(alert.inviteId ?? "").trim();
+  const iosNativeCallPresentationOwned = hasIosNativeCallPresentation(alertInviteId);
+  const waitingForIosNativePresentation =
+    Platform.OS === "ios"
+    && isIosNativeCallsRuntimeEnabled()
+    && !!alertInviteId
+    && !iosNativeCallPresentationOwned
+    && iosNativePresentationGraceReadyInviteId !== alertInviteId;
+  if (waitingForIosNativePresentation) return null;
+  const presentation = resolveIncomingCallPresentation({
+    appState,
+    alreadyOnSameThread,
+    nativeCallPresentationOwned: iosNativeCallPresentationOwned,
+  });
+  if (presentation === "native_ios" || presentation === "native_background" || presentation === "thread_banner") return null;
 
   const roomSafeCall = isRoomSafeIncomingCallPath(pathname);
   const callKind = getIncomingCallKind(alert);
@@ -900,22 +1088,88 @@ function IosNativeCallsBridge() {
       void reconcileInvite();
     };
 
-    const routeNativeAction = (
-      event: SanitizedNativeCallEvent,
-      action: "answer" | "decline" | "end",
-    ) => {
+    const routeNativeAnswer = (event: SanitizedNativeCallEvent) => {
       const threadId = String(event.threadId ?? "").trim();
       const callInviteId = String(event.callInviteId ?? "").trim();
       if (!threadId || !callInviteId) return;
       const callUuid = String(event.callUuid ?? "").trim();
-      const params = new URLSearchParams({ callInviteId, nativeCallAction: action });
+      const params = new URLSearchParams({ callInviteId, nativeCallAction: "answer" });
       if (callUuid) params.set("nativeCallUuid", callUuid);
       const destination = `/chat/${encodeURIComponent(threadId)}?${params.toString()}`;
-      if (action === "answer") {
-        router.replace(destination as Parameters<typeof router.replace>[0]);
-        return;
+      router.replace(destination as Parameters<typeof router.replace>[0]);
+    };
+
+    const pendingNativeTerminalActions = new Map<string, {
+      event: SanitizedNativeCallEvent;
+      status: "declined" | "ended" | "missed";
+    }>();
+    const nativeTerminalActionsInFlight = new Set<string>();
+    const settleNativeTerminalAction = async (
+      event: SanitizedNativeCallEvent,
+      status: "declined" | "ended" | "missed",
+    ) => {
+      const inviteId = String(event.callInviteId ?? "").trim();
+      const threadId = String(event.threadId ?? "").trim();
+      if (!inviteId || !threadId) return false;
+      const actionKey = `${inviteId}:${status}`;
+      pendingNativeTerminalActions.set(actionKey, { event, status });
+      if (nativeTerminalActionsInFlight.has(actionKey)) return false;
+      nativeTerminalActionsInFlight.add(actionKey);
+
+      let settled = false;
+      try {
+        for (let attempt = 0; active && attempt < 3; attempt += 1) {
+          const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
+          if (!active) return false;
+          if (!invite || invite.threadId !== threadId) break;
+
+          const actorIsParticipant =
+            invite.callerUserId === currentUserId
+            || invite.calleeUserId === currentUserId;
+          const transitionAllowed = status === "declined"
+            ? invite.status === "ringing"
+              && invite.calleeUserId === currentUserId
+              && invite.callerUserId !== currentUserId
+            : status === "missed"
+              ? invite.status === "ringing" && actorIsParticipant
+              : invite.status === "accepted" && actorIsParticipant;
+          if (!transitionAllowed) {
+            settled = invite.status !== "ringing" && invite.status !== "accepted";
+            break;
+          }
+
+          const updated = await updateChillyChatCallInviteStatus({
+            actorUserId: currentUserId,
+            invite,
+            status,
+          }).catch(() => null);
+          if (updated?.status === status) {
+            settled = true;
+            break;
+          }
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)));
+          }
+        }
+
+        if (!settled) return false;
+        pendingNativeTerminalActions.delete(actionKey);
+        clearInviteSubscription(inviteId);
+        await clearEndedChatThreadCall(threadId).catch(() => null);
+        await dismissPresentedChillyChatCallNotifications({
+          callInviteId: inviteId,
+          dismissAllPresentedNotificationsFallback: true,
+          dismissIncomingCallFallback: true,
+          threadId,
+        }).catch(() => 0);
+        await dismissChillyChatCallNotificationRows({
+          callInviteId: inviteId,
+          threadId,
+        }).catch(() => 0);
+        return true;
+      } finally {
+        nativeTerminalActionsInFlight.delete(actionKey);
       }
-      router.push(destination as Parameters<typeof router.push>[0]);
     };
 
     const handleNativeCallEvent = async (event: SanitizedNativeCallEvent) => {
@@ -925,11 +1179,11 @@ function IosNativeCallsBridge() {
         return;
       }
       if (event.type === "answerRequested") {
-        routeNativeAction(event, "answer");
+        routeNativeAnswer(event);
         return;
       }
       if (event.type === "declined") {
-        routeNativeAction(event, "decline");
+        await settleNativeTerminalAction(event, "declined");
         return;
       }
       if (event.type === "muted" || event.type === "unmuted") {
@@ -944,17 +1198,7 @@ function IosNativeCallsBridge() {
         return;
       }
       if (event.type === "timeout") {
-        const inviteId = String(event.callInviteId ?? "").trim();
-        if (!inviteId) return;
-        const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
-        if (invite && invite.calleeUserId === currentUserId && invite.status === "ringing") {
-          await updateChillyChatCallInviteStatus({
-            actorUserId: currentUserId,
-            invite,
-            status: "missed",
-          }).catch(() => null);
-        }
-        clearInviteSubscription(inviteId);
+        await settleNativeTerminalAction(event, "missed");
         return;
       }
       if (
@@ -963,8 +1207,7 @@ function IosNativeCallsBridge() {
         || event.type === "audioSessionFailed"
         || event.type === "providerReset"
       ) {
-        routeNativeAction(event, "end");
-        clearInviteSubscription(String(event.callInviteId ?? "").trim());
+        await settleNativeTerminalAction(event, "ended");
         return;
       }
       if (event.type === "remoteEnded" || event.type === "reportFailed") {
@@ -975,6 +1218,9 @@ function IosNativeCallsBridge() {
     void startIosNativeCallsReadiness(handleNativeCallEvent);
     const activationSubscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
+      pendingNativeTerminalActions.forEach(({ event, status }) => {
+        void settleNativeTerminalAction(event, status);
+      });
       nativeCallDescriptorsRef.current.forEach((descriptor, inviteId) => {
         void readChillyChatCallInvite(inviteId)
           .then((invite) => {
@@ -1244,6 +1490,7 @@ export default function RootLayout() {
   return (
     <SessionProvider>
       <DefaultOrientationLock />
+      <AndroidNativeCallRouteBridge />
       <RuntimeUpdateGate />
       <FirebaseRuntimeBridge />
       <RevenueCatBootstrap />

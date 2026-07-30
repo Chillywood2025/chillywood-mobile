@@ -15,6 +15,10 @@ import {
   resolveChillyChatCallPreferencePolicy,
   summarizeChillyChatCallDispatch,
 } from "../_shared/chilly-chat-call-dispatch-policy.mjs";
+import {
+  isPermanentFcmTokenError,
+  readFcmProviderErrorCode,
+} from "../_shared/fcm-error-policy.mjs";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -119,7 +123,7 @@ const isIosOrdinaryPushRolloutEnabled = () => (
 const isTerminalAction = (action: DispatchAction) => (
   action === "cancel" || action === "declined" || action === "end" || action === "timeout"
 );
-const shouldInvokeIosVoip = (action: DispatchAction) => action === "incoming" || isTerminalAction(action);
+const shouldInvokeIosVoip = (action: DispatchAction) => action === "incoming";
 
 const isIncomingOrMissedAction = (action: DispatchAction) => (
   action === "incoming" || action === "missed"
@@ -508,12 +512,11 @@ async function sendFcmDataMessage(input: {
   });
   const body = await response.json().catch(() => ({}));
   const providerMessageId = toText((body as { name?: unknown }).name) || null;
-  const errorPayload = body && typeof body === "object" && "error" in body
-    ? (body as { error?: JsonObject }).error ?? {}
-    : {};
-  const errorCode = toText(errorPayload.status)
-    || toText(errorPayload.message)
-    || (response.ok ? null : `fcm_http_${response.status}`);
+  const errorCode = readFcmProviderErrorCode({
+    body,
+    httpStatus: response.status,
+    responseOk: response.ok,
+  });
 
   return {
     body,
@@ -532,7 +535,10 @@ async function invokeIosVoipDispatch(input: {
   retryToken?: string;
 }): Promise<ChillyCallChannelResult> {
   if (!shouldInvokeIosVoip(input.action)) {
-    return channelResult();
+    return channelResult({
+      reason: "non_incoming_uses_authoritative_state",
+      status: "skipped",
+    });
   }
   try {
     const response = await fetch(`${readRequiredEnv("SUPABASE_URL")}/functions/v1/ios-voip-call-dispatch`, {
@@ -643,7 +649,9 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   }
 
   // PushKit is deliberately started before notification or ordinary-token
-  // work. A valid VoIP token is an independent incoming-call channel.
+  // work for the initial invitation only. Terminal transitions use the
+  // authoritative invite/Realtime lifecycle and never synthesize another
+  // VoIP call.
   const iosVoipPromise = invokeIosVoipDispatch({
     action: input.action,
     authHeader: input.authHeader,
@@ -795,7 +803,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         recipientUserId: input.recipientUserId,
         status: sent ? "sent" : "failed",
       });
-      if (androidReason === "UNREGISTERED" || androidReason === "SENDER_ID_MISMATCH") {
+      if (isPermanentFcmTokenError(androidReason)) {
         await revokePushToken(adminClient, token.id);
       }
     }

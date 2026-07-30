@@ -1,5 +1,29 @@
+import { sanitizeChatCallTelemetryBinding } from "../chatCallTelemetryBindingPolicy";
 import type { LiveKitOperatorSurface } from "../livekitAutonomousOperator";
+import { readReleaseDiagnostics } from "../releaseDiagnostics";
 import { supabase } from "../supabase";
+
+export type ChatCallLiveKitTelemetryStage =
+  | "token_requested"
+  | "token_returned"
+  | "token_claims_validated"
+  | "websocket_connected"
+  | "ice_state"
+  | "room_connected"
+  | "local_audio_published"
+  | "local_video_published"
+  | "remote_participant_joined"
+  | "remote_audio_subscribed"
+  | "remote_video_subscribed"
+  | "first_audio"
+  | "first_video"
+  | "installed_ui_connected"
+  | "backgrounded"
+  | "foregrounded"
+  | "reconnecting"
+  | "recovered"
+  | "disconnected"
+  | "cleanup_complete";
 
 export type LiveKitRenderTelemetryEventName =
   | "livekit_bubble_grid_rendered"
@@ -24,7 +48,8 @@ export type LiveKitRenderTelemetryEventName =
   | "livekit_token_expired_rejected"
   | "livekit_token_nbf_future_grace_used"
   | "livekit_token_nbf_rejected"
-  | "livekit_token_received";
+  | "livekit_token_received"
+  | "livekit_chat_call_stage";
 
 export type LiveKitRenderTelemetryInput = {
   activeContractPresent?: boolean | null;
@@ -32,16 +57,22 @@ export type LiveKitRenderTelemetryInput = {
   bubbleGridTrackCount?: number | null;
   canPublish?: boolean | null;
   connectionState?: string | null;
+  callInviteId?: string | null;
+  communicationRoomId?: string | null;
   durationMs?: number | null;
   fallbackReason?: string | null;
   hasRenderableContract?: boolean | null;
   nbfGraceUsed?: boolean | null;
+  liveKitSdkEvent?: boolean | null;
+  mediaProvider?: "legacy_webrtc" | "livekit" | null;
   participantRole?: "host" | "speaker" | "viewer" | null;
   renderableContractPresent?: boolean | null;
   route?: string | null;
   roomType?: "chat_call" | "live" | "watch_party" | null;
   shouldRenderSurface?: boolean | null;
+  stage?: ChatCallLiveKitTelemetryStage | null;
   surface: LiveKitOperatorSurface;
+  threadId?: string | null;
   tokenExpDeltaSeconds?: number | null;
   tokenNbfDeltaSeconds?: number | null;
 };
@@ -73,21 +104,33 @@ export const buildLiveKitRenderTelemetryEvent = (
   input: LiveKitRenderTelemetryInput,
 ) => ({
   activeContractPresent: input.activeContractPresent === true,
+  callInviteId: input.surface === "chat_call"
+    ? sanitizeChatCallTelemetryBinding(input.callInviteId, "uuid")
+    : "",
   bubbleGridItemCount: safeNumber(input.bubbleGridItemCount),
   bubbleGridTrackCount: safeNumber(input.bubbleGridTrackCount),
   canPublish: input.canPublish === true,
   connectionState: safeText(input.connectionState),
+  communicationRoomId: input.surface === "chat_call"
+    ? sanitizeChatCallTelemetryBinding(input.communicationRoomId, "room_code")
+    : "",
   durationMs: safeNumber(input.durationMs),
   eventName,
   fallbackReason: safeText(input.fallbackReason),
   hasRenderableContract: input.hasRenderableContract === true || input.renderableContractPresent === true,
+  liveKitSdkEvent: input.liveKitSdkEvent === true,
+  mediaProvider: input.mediaProvider ?? null,
   nbfGraceUsed: input.nbfGraceUsed === true,
   participantRole: input.participantRole ?? null,
   renderableContractPresent: input.renderableContractPresent === true || input.hasRenderableContract === true,
   route: safeText(input.route),
   roomType: input.roomType ?? null,
   shouldRenderSurface: input.shouldRenderSurface === true,
+  stage: input.stage ?? null,
   surface: input.surface,
+  threadId: input.surface === "chat_call"
+    ? sanitizeChatCallTelemetryBinding(input.threadId, "uuid")
+    : "",
   expDeltaSecondsBucket: bucketSeconds(input.tokenExpDeltaSeconds),
   nbfDeltaSecondsBucket: bucketSeconds(input.tokenNbfDeltaSeconds),
   tokenExpDeltaSecondsBucket: bucketSeconds(input.tokenExpDeltaSeconds),
@@ -96,8 +139,10 @@ export const buildLiveKitRenderTelemetryEvent = (
 
 export const sanitizeLiveKitRenderTelemetryPayload = (
   payload: Record<string, unknown>,
-) => Object.fromEntries(
-  Object.entries(payload)
+) => {
+  const isChatCall = payload.surface === "chat_call";
+  return Object.fromEntries(
+    Object.entries(payload)
     .filter(([key]) => {
       const normalized = key.toLowerCase();
       return !normalized.includes("token")
@@ -106,14 +151,38 @@ export const sanitizeLiveKitRenderTelemetryPayload = (
         && !normalized.includes("authorization")
         && !normalized.includes("key");
     })
-    .map(([key, value]) => [key, typeof value === "string" ? safeText(value) : value]),
-);
+    .map(([key, value]) => {
+      if (key === "callInviteId" || key === "threadId") {
+        return [key, isChatCall ? sanitizeChatCallTelemetryBinding(value, "uuid") : ""];
+      }
+      if (key === "communicationRoomId") {
+        return [key, isChatCall ? sanitizeChatCallTelemetryBinding(value, "room_code") : ""];
+      }
+      return [key, typeof value === "string" ? safeText(value) : value];
+    }),
+  );
+};
 
 export const emitLiveKitRenderTelemetryEvent = (
   eventName: LiveKitRenderTelemetryEventName,
   input: LiveKitRenderTelemetryInput,
 ) => {
-  const event = buildLiveKitRenderTelemetryEvent(eventName, input);
+  const diagnostics = readReleaseDiagnostics();
+  const event = {
+    ...buildLiveKitRenderTelemetryEvent(eventName, input),
+    appVersion: diagnostics.appVersion,
+    bundleIdentifier: diagnostics.applicationId,
+    channel: diagnostics.channel,
+    distributionSource: diagnostics.isEmbeddedLaunch === true
+      ? "embedded"
+      : diagnostics.updateId
+        ? "ota"
+        : "unknown",
+    nativeBuild: diagnostics.nativeBuildVersion,
+    platform: diagnostics.platform,
+    runtimeVersion: diagnostics.runtimeVersion,
+    updateId: diagnostics.updateId,
+  };
   const throttleKey = [
     event.eventName,
     event.surface,
@@ -121,6 +190,7 @@ export const emitLiveKitRenderTelemetryEvent = (
     event.connectionState ?? "none",
     event.fallbackReason ?? "none",
     event.shouldRenderSurface ? "render" : "no-render",
+    event.stage ?? "no-stage",
     event.bubbleGridItemCount ?? "no-items",
     event.bubbleGridTrackCount ?? "no-tracks",
   ].join("|");

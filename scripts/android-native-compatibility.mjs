@@ -149,6 +149,13 @@ export function computeAndroidNativeCompatibility() {
       environment: easJson.build?.production?.environment ?? null,
       android: easJson.build?.production?.android ?? null,
     },
+    chatQaBuildProfile: {
+      channel: easJson.build?.["android-chat-livekit-qa"]?.channel ?? null,
+      distribution: easJson.build?.["android-chat-livekit-qa"]?.distribution ?? null,
+      environment: easJson.build?.["android-chat-livekit-qa"]?.environment ?? null,
+      env: easJson.build?.["android-chat-livekit-qa"]?.env ?? null,
+      android: easJson.build?.["android-chat-livekit-qa"]?.android ?? null,
+    },
     androidPlugins,
     localPluginEvidence,
     androidAssets,

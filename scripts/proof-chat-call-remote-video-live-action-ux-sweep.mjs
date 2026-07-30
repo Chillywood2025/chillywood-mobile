@@ -61,7 +61,8 @@ const packageJson = read("package.json");
 requireText("communication room session hook", sessionHook, "delayedAudioFirstBind");
 
 [
-  "const hasVideoStream = isVideoCall && !!participant.streamURL && (!participant.isSelf || cameraRequested);",
+  "const hasLiveKitVideo = isVideoCall",
+  "&& (!!participant.streamURL || hasLiveKitVideo)",
   'const videoObjectFit = "cover";',
   "objectFit={videoObjectFit}",
   "responsiveLayout.videoTileGap",

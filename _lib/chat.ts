@@ -1054,6 +1054,9 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
 
   const created = await createCommunicationRoom({
     hostUserId: currentUserId,
+    // Direct-thread calls retain their existing member-only thread authority;
+    // creator Premium defaults must never become a separate Chat Call gate.
+    contentAccessRule: "open",
   });
 
   if ("error" in created) {
@@ -1112,6 +1115,14 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       pushSent: delivery.pushSent,
       reason: delivery.reason,
       status: delivery.status,
+    });
+  } else if (begunCall.invite.status === "busy") {
+    await endCommunicationRoom(roomId).catch(() => null);
+    logChatCall("thread_call_receiver_busy", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId: begunCall.invite.communicationRoomId ?? roomId,
+      mode: begunCall.invite.callType,
     });
   } else {
     await endCommunicationRoom(roomId).catch(() => null);

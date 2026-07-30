@@ -1,11 +1,19 @@
 begin;
-select plan(15);
+select plan(33);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
   ('41111111-1111-4111-8111-111111111111', false, false),
   ('42222222-2222-4222-8222-222222222222', false, false),
-  ('43333333-3333-4333-8333-333333333333', false, false)
+  ('43333333-3333-4333-8333-333333333333', false, false),
+  ('44444444-4444-4444-8444-444444444444', false, false),
+  ('45555555-5555-4555-8555-555555555555', false, false),
+  ('46666666-6666-4666-8666-666666666666', false, false),
+  ('47777777-7777-4777-8777-777777777777', false, false),
+  ('48888888-8888-4888-8888-888888888888', false, false),
+  ('49999999-9999-4999-8999-999999999999', false, false),
+  ('4aaaaaaa-1111-4aaa-8aaa-111111111111', false, false),
+  ('4bbbbbbb-2222-4bbb-8bbb-222222222222', false, false)
 on conflict (id) do nothing;
 
 select set_config('request.jwt.claim.sub', '41111111-1111-4111-8111-111111111111', true);
@@ -56,6 +64,182 @@ select is((select count(*)::integer from public.chat_call_invites where thread_i
 select is((select active_communication_room_id from public.chat_threads where id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), 'ATOMIC1', 'losing start cannot overwrite the winning room');
 select is((select status from public.communication_rooms where room_id = 'ATOMIC2'), 'ended', 'losing candidate room is closed');
 select is((select status from public.communication_rooms where room_id = 'ATOMIC1'), 'active', 'winning room remains active');
+
+insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by)
+values
+  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'direct', 'busy-established-pair', '45555555-5555-4555-8555-555555555555'),
+  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', 'direct', 'busy-overlap-pair', '44444444-4444-4444-8444-444444444444');
+
+insert into public.chat_thread_members (thread_id, user_id)
+values
+  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '45555555-5555-4555-8555-555555555555'),
+  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '46666666-6666-4666-8666-666666666666'),
+  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', '44444444-4444-4444-8444-444444444444'),
+  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', '45555555-5555-4555-8555-555555555555');
+
+insert into public.communication_rooms (room_id, room_code, host_user_id, status)
+values
+  ('BUSYACTIVE', 'BUSYACTIVE', '45555555-5555-4555-8555-555555555555', 'active'),
+  ('BUSYCANDIDATE', 'BUSYCANDIDATE', '44444444-4444-4444-8444-444444444444', 'active');
+
+insert into public.communication_room_memberships (
+  room_id, user_id, role, membership_state, camera_enabled, mic_enabled
+)
+values
+  ('BUSYACTIVE', '45555555-5555-4555-8555-555555555555', 'host', 'active', true, true),
+  ('BUSYACTIVE', '46666666-6666-4666-8666-666666666666', 'participant', 'active', true, true),
+  ('BUSYCANDIDATE', '44444444-4444-4444-8444-444444444444', 'host', 'active', true, true);
+
+alter table public.chat_call_invites disable trigger enforce_chat_call_invites_abuse_guard;
+insert into public.chat_call_invites (
+  id, thread_id, communication_room_id, caller_user_id, callee_user_id,
+  call_type, status, expires_at, accepted_at
+)
+values (
+  '47777777-7777-4777-8777-777777777777',
+  '4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  'BUSYACTIVE',
+  '45555555-5555-4555-8555-555555555555',
+  '46666666-6666-4666-8666-666666666666',
+  'voice',
+  'accepted',
+  now() + interval '5 minutes',
+  now()
+);
+alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
+
+update public.chat_threads
+set
+  active_communication_room_id = 'BUSYACTIVE',
+  active_call_type = 'voice'
+where id = '4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+select set_config('request.jwt.claim.sub', '44444444-4444-4444-8444-444444444444', true);
+insert into call_begin_results
+values (
+  'busy',
+  public.begin_chilly_chat_call('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', 'BUSYCANDIDATE', 'video')
+);
+
+select ok(not (select (payload ->> 'created')::boolean from call_begin_results where label = 'busy'), 'callee overlap is rejected before incoming delivery');
+select is((select payload #>> '{invite,status}' from call_begin_results where label = 'busy'), 'busy', 'overlap returns an authoritative busy invite');
+select is(
+  (select count(*)::integer
+   from public.chat_call_events
+   where call_invite_id = ((select payload #>> '{invite,id}' from call_begin_results where label = 'busy'))::uuid
+     and event_type = 'busy'),
+  1,
+  'overlap records one durable busy event'
+);
+select is(
+  (select delivery_status
+   from public.chat_call_transition_deliveries
+   where call_invite_id = ((select payload #>> '{invite,id}' from call_begin_results where label = 'busy'))::uuid
+     and target_status = 'busy'),
+  'skipped',
+  'busy terminal delivery is explicitly skipped without a second push'
+);
+select is((select status from public.communication_rooms where room_id = 'BUSYCANDIDATE'), 'ended', 'busy overlap closes its candidate room');
+select is(
+  (select membership_state from public.communication_room_memberships where room_id = 'BUSYCANDIDATE'),
+  'left',
+  'busy overlap leaves its only candidate membership'
+);
+select is(
+  (select active_communication_room_id from public.chat_threads where id = '4ccccccc-cccc-4ccc-8ccc-cccccccccccc'),
+  null,
+  'busy overlap never attaches a room to its thread'
+);
+select is((select status from public.communication_rooms where room_id = 'BUSYACTIVE'), 'active', 'busy overlap preserves the established room');
+select is(
+  (select count(*)::integer from public.communication_room_memberships where room_id = 'BUSYACTIVE' and membership_state = 'active'),
+  2,
+  'busy overlap preserves both established memberships'
+);
+select is(
+  (select count(*)::integer
+   from public.chat_call_invites
+   where thread_id = '4ccccccc-cccc-4ccc-8ccc-cccccccccccc'
+     and status in ('ringing', 'accepted')),
+  0,
+  'busy overlap leaves no second ringing or accepted invite'
+);
+
+insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by)
+values
+  ('4ddddddd-dddd-4ddd-8ddd-dddddddddddd', 'direct', 'stale-established-pair', '48888888-8888-4888-8888-888888888888'),
+  ('4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'direct', 'stale-overlap-pair', '47777777-7777-4777-8777-777777777777'),
+  ('4fffffff-ffff-4fff-8fff-ffffffffffff', 'direct', 'same-thread-stale-pair', '4aaaaaaa-1111-4aaa-8aaa-111111111111');
+
+insert into public.chat_thread_members (thread_id, user_id)
+values
+  ('4ddddddd-dddd-4ddd-8ddd-dddddddddddd', '48888888-8888-4888-8888-888888888888'),
+  ('4ddddddd-dddd-4ddd-8ddd-dddddddddddd', '49999999-9999-4999-8999-999999999999'),
+  ('4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '47777777-7777-4777-8777-777777777777'),
+  ('4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '48888888-8888-4888-8888-888888888888'),
+  ('4fffffff-ffff-4fff-8fff-ffffffffffff', '4aaaaaaa-1111-4aaa-8aaa-111111111111'),
+  ('4fffffff-ffff-4fff-8fff-ffffffffffff', '4bbbbbbb-2222-4bbb-8bbb-222222222222');
+
+insert into public.communication_rooms (room_id, room_code, host_user_id, status)
+values
+  ('STALEACTIVE', 'STALEACTIVE', '48888888-8888-4888-8888-888888888888', 'active'),
+  ('STALECANDIDATE', 'STALECANDIDATE', '47777777-7777-4777-8777-777777777777', 'active'),
+  ('SAMESTALEACTIVE', 'SAMESTALEACTIVE', '4aaaaaaa-1111-4aaa-8aaa-111111111111', 'active'),
+  ('SAMESTALECANDIDATE', 'SAMESTALECANDIDATE', '4aaaaaaa-1111-4aaa-8aaa-111111111111', 'active');
+
+alter table public.chat_call_invites disable trigger enforce_chat_call_invites_abuse_guard;
+insert into public.chat_call_invites (
+  id, thread_id, communication_room_id, caller_user_id, callee_user_id,
+  call_type, status, expires_at, accepted_at
+)
+values
+  (
+    '4c111111-1111-4c11-8c11-111111111111',
+    '4ddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    'STALEACTIVE',
+    '48888888-8888-4888-8888-888888888888',
+    '49999999-9999-4999-8999-999999999999',
+    'voice',
+    'accepted',
+    now() - interval '30 days',
+    now() - interval '30 days'
+  ),
+  (
+    '4c222222-2222-4c22-8c22-222222222222',
+    '4fffffff-ffff-4fff-8fff-ffffffffffff',
+    'SAMESTALEACTIVE',
+    '4aaaaaaa-1111-4aaa-8aaa-111111111111',
+    '4bbbbbbb-2222-4bbb-8bbb-222222222222',
+    'video',
+    'accepted',
+    now() - interval '30 days',
+    now() - interval '30 days'
+  );
+alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
+
+select set_config('request.jwt.claim.sub', '47777777-7777-4777-8777-777777777777', true);
+insert into call_begin_results
+values (
+  'stale-cross-thread',
+  public.begin_chilly_chat_call('4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'STALECANDIDATE', 'voice')
+);
+
+select ok((select (payload ->> 'created')::boolean from call_begin_results where label = 'stale-cross-thread'), 'unlinked historical accepted room cannot create a false cross-thread busy result');
+select is((select payload #>> '{invite,status}' from call_begin_results where label = 'stale-cross-thread'), 'ringing', 'cross-thread attempt remains a normal ringing invite');
+select is((select status from public.communication_rooms where room_id = 'STALEACTIVE'), 'active', 'false-busy guard does not mutate historical room state');
+select is((select active_communication_room_id from public.chat_threads where id = '4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'), 'STALECANDIDATE', 'cross-thread candidate becomes the authoritative room');
+
+select set_config('request.jwt.claim.sub', '4aaaaaaa-1111-4aaa-8aaa-111111111111', true);
+insert into call_begin_results
+values (
+  'stale-same-thread',
+  public.begin_chilly_chat_call('4fffffff-ffff-4fff-8fff-ffffffffffff', 'SAMESTALECANDIDATE', 'video')
+);
+
+select ok((select (payload ->> 'created')::boolean from call_begin_results where label = 'stale-same-thread'), 'unlinked historical accepted room cannot be reused as the same-thread winner');
+select is((select payload #>> '{invite,status}' from call_begin_results where label = 'stale-same-thread'), 'ringing', 'same-thread stale-room replacement is a normal ringing invite');
+select is((select status from public.communication_rooms where room_id = 'SAMESTALEACTIVE'), 'active', 'same-thread guard leaves historical room state unchanged');
+select is((select active_communication_room_id from public.chat_threads where id = '4fffffff-ffff-4fff-8fff-ffffffffffff'), 'SAMESTALECANDIDATE', 'same-thread candidate replaces stale linkage authority');
 
 select throws_ok(
   $$insert into public.chat_call_invites (
