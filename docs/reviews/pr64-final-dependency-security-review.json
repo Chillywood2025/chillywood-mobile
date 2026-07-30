@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-final-dependency-security-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "security-authority",
+  "focus": "Exact dependency provenance, lock integrity, advisory evidence, scope, runtime-bundle isolation, replay evidence safety, secrets, and non-interference",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationPrState": "open-draft-frozen",
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "00355bd94d5a7e401d424bc7a8298017c46357d8",
+  "implementationTree": "27178ecfb126734dd5803137565c6df92bab3f07",
+  "baseHead": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "changedFileHash": "9b3c3be48ff94818963b5bb0738791885cb029db57b5ad31dc1bbb20a36a9f80",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "da079d87b2d597b73cc654b3e39ce099037b97b221d8fe08e4ff499be9a502df",
+  "implementationDiffHash": "3d18f88d2655b927c46f0aa26b30024d0d87f22203fa1b58abc5262aa14708c1",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_finding",
+      "lane": "security-authority",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "blocked_internal_stale_base_ancestry",
+      "implementationPrNumber": 64,
+      "implementationHead": "00355bd94d5a7e401d424bc7a8298017c46357d8",
+      "implementationTree": "27178ecfb126734dd5803137565c6df92bab3f07",
+      "assignedBaseHead": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+      "actualMergeBase": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "baseIsAncestor": false
+    },
+    "exactCurrentMainDelta": {
+      "status": "blocked_internal",
+      "baseHead": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+      "files": 18,
+      "additions": 1215,
+      "deletions": 778,
+      "netChangedLines": 437,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "scopeFinding": "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+      "mergedCurrentTruthFilesRegressed": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-contract-v1.json",
+        "config/assurance/current-truth-v1.json",
+        "config/assurance/schemas-v1.json",
+        "scripts/assurance/current-truth.mjs",
+        "scripts/assurance/lib.mjs",
+        "tests/assurance/current-truth-head-binding.test.mjs"
+      ],
+      "currentHeadBindingTestDeletedRelativeToMain": true
+    },
+    "boundedImplementationDelta": {
+      "status": "pass_before_required_main_merge",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "files": 10,
+      "additions": 1178,
+      "deletions": 1,
+      "netChangedLines": 1177,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "scopeWaiver": null,
+      "classifiedDomains": [
+        "CI-test-infrastructure"
+      ],
+      "unclassifiedChangedFiles": 0,
+      "highRiskDomains": [],
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "currentTruth": {
+      "status": "blocked_internal",
+      "command": "node scripts/assurance/current-truth.mjs",
+      "finding": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
+      "recordedMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "observedCurrentMain": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+      "implementationHeadRecordedOnCurrentMain": "00355bd94d5a7e401d424bc7a8298017c46357d8",
+      "currentMainRecordIsCurrentForPr64": true,
+      "implementationBranchContainsCurrentMainRecord": false
+    },
+    "dependencyLock": {
+      "status": "pass",
+      "lockfileVersion": 3,
+      "packageLockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28",
+      "packageLockDryRun": {
+        "command": "npm install --package-lock-only --ignore-scripts --dry-run --no-audit --no-fund",
+        "status": "pass",
+        "hashUnchanged": true
+      },
+      "fastCheck": {
+        "requestedVersion": "4.9.0",
+        "lockedVersion": "4.9.0",
+        "exact": true,
+        "devOnly": true,
+        "license": "MIT",
+        "integrity": "sha512-7ms6T7SybUev/PQITciI0yLM2pOSFy5zpG8Ty7tQofcVaQUvrMXp6CBwqF6fThLCLOrfBtuHAtwq6Yu4XPCllg==",
+        "integrityMatchesRegistry": true,
+        "nodeEngine": ">=12.17.0"
+      },
+      "pureRand": {
+        "lockedVersion": "8.4.2",
+        "devOnly": true,
+        "license": "MIT",
+        "integrity": "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==",
+        "integrityMatchesRegistry": true
+      },
+      "fullNpmCiRunByReviewLane": false,
+      "assignedWorktreeNodeModulesCreated": false,
+      "focusedExecutionDependencySetup": "fast-check and pure-rand only, installed without scripts in a disposable local shared clone and removed after execution"
+    },
+    "advisoryReview": {
+      "status": "pass_for_added_dependency_with_preexisting_repository_baseline",
+      "command": "npm audit --package-lock-only --json",
+      "readOnly": true,
+      "exit": 1,
+      "info": 0,
+      "low": 0,
+      "moderate": 24,
+      "high": 0,
+      "critical": 0,
+      "fastCheckImplicated": false,
+      "pureRandImplicated": false,
+      "globalCleanAuditClaimed": false
+    },
+    "runtimeBundleBoundary": {
+      "status": "pass",
+      "runtimeDependenciesUnchanged": true,
+      "packageScriptsUnchanged": true,
+      "fastCheckAbsentFromRuntimeDependencies": true,
+      "fastCheckImportPaths": [
+        "_lib/assurance/state-models/properties.mjs"
+      ],
+      "runtimeProductImportFound": false,
+      "productSourceChanged": false
+    },
+    "scopeClassification": {
+      "status": "pass_for_exact_implementation_paths_with_pr_e_follow_up",
+      "assuranceModelPathClassified": true,
+      "classifiedPathPrefix": "_lib/assurance/",
+      "exactImplementationUnclassifiedFiles": 0,
+      "genericUnclassifiedPathBlockImplemented": false,
+      "genericFailClosedEnforcement": "open-routed-pr-e"
+    },
+    "focusedModelTests": {
+      "status": "pass",
+      "commands": [
+        "node --test tests/assurance/property/state-models.test.mjs",
+        "node --test tests/assurance/concurrency/interleavings.test.mjs",
+        "node --test tests/assurance/models/escaped-defects.test.mjs"
+      ],
+      "testFiles": 3,
+      "subtests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyDomains": 6,
+      "propertyCases": 1200,
+      "transitionWitnesses": 6,
+      "escapedDefectFixtures": 13,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20
+    },
+    "deterministicCli": {
+      "status": "pass",
+      "command": "node scripts/assurance/models/run.mjs --suite=all",
+      "runs": "3/3",
+      "uniqueHashes": 1,
+      "outputHash": "5893a77cbe0982405ded73006086769f99c7b347acc1c2969f64d8da395b97dd",
+      "propertyCases": 1200,
+      "transitionWitnesses": 6,
+      "escapedDefectFixtures": 13,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20,
+      "claimedTier": "T2_MODEL",
+      "higherTierClaimsForbidden": true
+    },
+    "replayEvidence": {
+      "status": "pass_with_malformed_request_diagnostic_follow_up",
+      "genuineSyntheticCounterexample": {
+        "status": "BLOCKED_INTERNAL",
+        "seed": 1101,
+        "pathPresent": true,
+        "replayPathBound": true,
+        "minimizedCommandCount": 1
+      },
+      "persistedMalformedReplayRequest": {
+        "requestedPath": "999:999",
+        "processExit": 1,
+        "overallStatus": "BLOCKED_INTERNAL",
+        "fileMode": "0600",
+        "noClobber": true,
+        "reportedSeed": 1101,
+        "reportedPath": null,
+        "reportedReplayPath": "--domain=chat-call --seed=1101",
+        "requestedPathPersisted": false
+      },
+      "nonOfflineProviderModeRejected": true,
+      "syntheticSecretRedacted": true
+    },
+    "contractAndStaticChecks": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25,
+      "nodeSyntaxFiles": 7,
+      "gitDiffCheck": "pass",
+      "packageStaticContract": "pass",
+      "lockDryRun": "pass",
+      "secretPatternScan": "pass",
+      "forbiddenPathDiffCheck": "pass"
+    },
+    "modelDataAndSecretSafety": {
+      "status": "pass",
+      "privateKeyMatches": 0,
+      "jwtMatches": 0,
+      "credentialValueMatches": 0,
+      "deviceIdentifierValueMatches": 0,
+      "networkCallMatches": 0,
+      "fixturesSynthetic": true,
+      "providerPayloadCommitted": false,
+      "privateEvidenceCommitted": false,
+      "syntheticSecretProbeRedacted": true
+    },
+    "nonInterference": {
+      "status": "pass",
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "denoLockChanged": false
+    },
+    "phase1Ci": {
+      "status": "not-run-by-review-lane",
+      "implementationHead": "00355bd94d5a7e401d424bc7a8298017c46357d8",
+      "reason": "Full CI is coordinator-owned and should not start while the exact current-main ancestry blocker is open.",
+      "eligibleAsProof": false,
+      "resumptionAction": "Merge current origin/main normally into the implementation branch, preserve the merged current-truth guards, freeze the successor head, rerun exact review lanes, then let the coordinator run one full Phase 1 CI."
+    }
+  },
+  "testResultHash": "ea6e77719479273505946d6f56c2b3d568445876770c49da0f2433fb3ff9e75b",
+  "reviewLevel": "C",
+  "reviewHead": "00355bd94d5a7e401d424bc7a8298017c46357d8",
+  "reviewHeadSemantics": "implementation tip immediately preceding the review-evidence-only commit",
+  "reviewTimestamp": "2026-07-30T20:29:38Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-final-dependency-scope-security",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR64_CURRENT_MAIN_ANCESTRY_AND_CURRENT_TRUTH_REGRESSION",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "config/assurance/current-truth-v1.json",
+        "scripts/assurance/current-truth.mjs",
+        "scripts/assurance/lib.mjs",
+        "tests/assurance/current-truth-head-binding.test.mjs"
+      ],
+      "evidence": "Implementation head 00355bd94d5a7e401d424bc7a8298017c46357d8 has merge base fc3d750158770a6f33ab10acc68e79a288b6ffa3 with assigned current main 268b15f3f23c444e083c1587f83f1a7ec9a9c802. The exact current-main comparison is 18 files, above the 15-file budget, and the scope command emits ASSURANCE_PR_FILE_BUDGET_EXCEEDED. The implementation checkout's current-truth command emits ASSURANCE_CURRENT_TRUTH_MAIN_STALE, and the exact current-main comparison reverts seven merged current-truth guard files and deletes tests/assurance/current-truth-head-binding.test.mjs.",
+      "impact": "Merging or reviewing this exact tree as current would discard the merged stale-head protection, fail the mandatory current-truth and scope gates, and bind final review evidence to a branch that does not contain its declared base. A green model suite cannot substitute for those repository-control gates.",
+      "requiredResolution": "Fetch and merge current origin/main normally into codex/first-pass-assurance-models, preserve all merged current-truth head-binding behavior and tests, resolve only understood conflicts, rerun focused model and current-truth/scope checks, freeze a new implementation head and tree, then rerun all four exact Level C review lanes and one coordinator-owned full Phase 1 CI."
+    },
+    {
+      "id": "UNCLASSIFIED_ASSURANCE_MODEL_SOURCE",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The exact _lib/assurance/state-models path is now classified as CI-test-infrastructure. Against the implementation merge base, all 10 changed files are classified and the bounded scope is 10/15 files and 1177/1200 net lines."
+    },
+    {
+      "id": "PR_SCOPE_GENERIC_UNCLASSIFIED_PATH_FAIL_CLOSED_DEFERRED",
+      "severity": "P2",
+      "status": "open-routed-pr-e",
+      "locations": [
+        "scripts/assurance/pr-scope.mjs:17",
+        "scripts/assurance/pr-scope.mjs:26"
+      ],
+      "evidence": "The exact PR #64 paths are classified, but pr-scope.mjs does not add a finding when a classified record has an empty domains array. A future unregistered path can therefore remain invisible to objective-domain enforcement.",
+      "impact": "This does not leave current PR #64 source unclassified, but generic fail-closed path coverage remains incomplete until the PR E enforcement lane.",
+      "requiredResolution": "In PR E, reject every unclassified changed path unless a machine-readable policy explicitly classifies it, and add hostile regressions proving package or CI files cannot conceal an unclassified source path."
+    },
+    {
+      "id": "REPLAY_OUTPUT_CAN_CLOBBER_EXISTING_PATH",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Replay evidence now uses mode 0600 and write flag wx; the focused hostile test proves an existing file remains unchanged and receives ASSURANCE_MODEL_REPLAY_OUTPUT_EXISTS."
+    },
+    {
+      "id": "MALFORMED_REPLAY_REQUEST_PATH_NOT_RETAINED",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/properties.mjs:45",
+        "scripts/assurance/models/run.mjs:51"
+      ],
+      "evidence": "A syntactically valid but nonexistent replay path 999:999 fails closed and writes a mode-0600 BLOCKED_INTERNAL artifact. The artifact retains seed 1101 but reports path null, replayPath '--domain=chat-call --seed=1101', and does not retain the requested path. A forced genuine counterexample separately proves seed, counterexample path, replay command, and minimized command sequence are present.",
+      "impact": "Real model counterexamples remain replayable, but malformed or stale replay requests lose the exact requested path needed to diagnose why zero runs occurred.",
+      "requiredResolution": "In a bounded successor, retain a redacted requestedReplayPath separately from the counterexample path or reject a zero-run replay before writing evidence; preserve current secret redaction and no-clobber behavior."
+    },
+    {
+      "id": "FAST_CHECK_DEV_ONLY_DEPENDENCY_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "fast-check is exact at 4.9.0 in devDependencies and the lockfile; pure-rand is locked at 8.4.2. Both are dev-only, MIT-licensed, integrity-matched to registry metadata, absent from the audit vulnerability graph, and unreachable from product runtime imports."
+    },
+    {
+      "id": "MODEL_EVIDENCE_SECRET_AND_PROVIDER_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The changed model, script, and test corpus contains synthetic data only and adds no credential values, device identifiers, private evidence, network calls, provider or database mutation, native/product source, migrations, workflows, generated native directories, or deno.lock."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "p2Open": 2,
+    "implementationFilesOnReviewBranch": 0,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "blocked-internal-merge-current-main-preserve-current-truth-guards-freeze-successor-head-and-rerun",
+    "humanApproval": false
+  }
+}
