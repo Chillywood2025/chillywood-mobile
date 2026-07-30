@@ -61,7 +61,10 @@ if (mode) {
   if (record.latestMergedImplementationPr.state !== "merged") findings.push({ id: "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE", status: "BLOCKED_INTERNAL" });
   if (mode === "read-only") {
     const snapshot = readJson(options.providerSnapshot ?? options.snapshot);
-    for (const key of ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
+    if (snapshot.mainSha !== undefined && snapshot.mainSha !== remoteMain) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAINSHA_STALE", status: "BLOCKED_INTERNAL" });
+    }
+    for (const key of ["latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
       if (snapshot[key] !== undefined && JSON.stringify(snapshot[key]) !== JSON.stringify(record[key])) findings.push({ id: `ASSURANCE_CURRENT_TRUTH_${key.toUpperCase()}_STALE`, status: "BLOCKED_INTERNAL" });
     }
   }
