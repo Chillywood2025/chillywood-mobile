@@ -1,0 +1,306 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "room-host-block-check-scope-report-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state",
+  "humanApproval": false,
+  "implementationPrNumber": 75,
+  "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
+  "implementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+  "implementationTree": "978ef2db8d8a3998d6da98b6503b2d9b023e2f15",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "d19193b441986f4fde4bc5ac20817fd6291698ee78fbb97f04ce46c4943e0a75",
+  "migrationSetHash": "ab3218127348848cecdb6808da6681ad20fa489c345ce4474fb7e12f22809e7a",
+  "configHash": "9a22dedca08b6e9f566ae93e55034cd4350ca3389d150e49e8642a26a2d32807",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_findings",
+      "lane": "architecture-state",
+      "focus": "database-only scope, report honesty, exact identity, proof-tier applicability, residual source-only classification, dry-run, rollback, and proof substitution",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "pullRequestIdentity": {
+      "status": "pass",
+      "number": 75,
+      "state": "open",
+      "draft": true,
+      "implementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+      "implementationTree": "978ef2db8d8a3998d6da98b6503b2d9b023e2f15",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "files": 3,
+      "additions": 332,
+      "deletions": 0
+    },
+    "contractValidation": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "findings": 0
+    },
+    "featurePlans": {
+      "status": "pass",
+      "features": [
+        {
+          "featureId": "supabase-migrations-rls",
+          "requirements": "REQUIREMENTS_CLEAR",
+          "architecture": "ARCHITECTURE_CLEAR"
+        },
+        {
+          "featureId": "watch-party-live",
+          "requirements": "REQUIREMENTS_CLEAR",
+          "architecture": "ARCHITECTURE_CLEAR"
+        }
+      ]
+    },
+    "scope": {
+      "status": "pass",
+      "featureId": "supabase-migrations-rls",
+      "files": 3,
+      "additions": 332,
+      "deletions": 0,
+      "netChangedLines": 332,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "objectiveDomains": [
+        "database-RLS"
+      ],
+      "scopeWaiverUsed": false,
+      "watchPartyListedAsAffectedFeatureOnly": true,
+      "productImplementationPaths": [],
+      "liveKitPaths": [],
+      "revenueCatPaths": [],
+      "packageOrWorkflowPaths": [],
+      "generatedNativePaths": []
+    },
+    "exactDelta": {
+      "status": "pass",
+      "addedPaths": [
+        "docs/assurance/reconciliation/b3-room-host-block-check.json",
+        "supabase/migrations/20260730161737_allow_room_host_participant_block_check.sql",
+        "supabase/tests/room_host_participant_block_check_test.sql"
+      ],
+      "existingMigrationPathsModified": [],
+      "productBehaviorChanged": false,
+      "liveKitOrRevenueCatChanged": false,
+      "packageOrCiChanged": false
+    },
+    "migrationIdentity": {
+      "status": "target_exact_residual_source_only",
+      "remoteEvidenceMode": "preserved-read-only-coordinator-supplied",
+      "reviewQueriedRemote": false,
+      "target": {
+        "version": "20260730161737",
+        "name": "allow_room_host_participant_block_check",
+        "statementCount": 1,
+        "sourceRawSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+        "remoteRawSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+        "lowerWhitespaceNormalizedSourceSha256": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d",
+        "lowerWhitespaceNormalizedRemoteSha256": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d",
+        "classification": "REMOTE_AND_SOURCE_MATCH"
+      },
+      "olderSource": {
+        "version": "20260725224000",
+        "name": "allow_room_host_participant_block_check",
+        "sourceRawSha256": "8c0509254110ebb045a1e7c24c0a5dc593d5d4baa14b01f16079dc6e44aada9f",
+        "targetRawByteIdentity": false,
+        "differenceFromTarget": "one trailing newline only",
+        "repositoryNormalizedSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+        "lowerWhitespaceNormalizedSha256": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d",
+        "coordinatorReadOnlyLedgerFoundVersion": false,
+        "classification": "SOURCE_ONLY",
+        "mergeDisposition": "BLOCKED_INTERNAL_PENDING_LINKED_DRY_RUN"
+      }
+    },
+    "reconciliationReport": {
+      "status": "fail",
+      "targetIdentityClaim": "accurate",
+      "residualSourceOnlyClassificationRecorded": true,
+      "residualSourceOnlyMarkedNonBlockingBeforeDryRun": true,
+      "remoteLedgerEvidenceMarkedNotApplicable": true,
+      "implementationPrRecorded": false,
+      "implementationHeadRecorded": false,
+      "implementationTreeRecorded": false,
+      "baseHeadRecorded": false,
+      "changedFileHashRecorded": false,
+      "migrationSetHashRecorded": false,
+      "testResultHashRecorded": false,
+      "gateApplicabilityRecorded": false,
+      "permittedNextActionIncludesDryRun": true,
+      "mergePermittedByThisReview": false
+    },
+    "proofTierStatus": {
+      "status": "qualified",
+      "statusVocabularyValid": true,
+      "sourceReconciliationScopeExplicitInObjective": true,
+      "featureLevelApplicabilityDistinguishedFromPrLevelApplicability": false,
+      "supabaseRegistryT2RequiredButReportT2NotApplicable": true,
+      "watchPartyRegistryT2ThroughT6RequiredButReportMarksThoseTiersNotApplicable": true,
+      "topLevelCompleteClaimPresent": false
+    },
+    "proofSubstitutions": {
+      "status": "fail_one_substitution_open",
+      "correctlyRejected": [
+        "source migration filename match != statement-body match",
+        "local reset and pgTAP != remote no-apply dry-run",
+        "source reconciliation != installed or physical product proof",
+        "source reconciliation != provider activation"
+      ],
+      "openSubstitution": "exact target remote/source identity is being used to mark the residual older SOURCE_ONLY entry non-blocking before assembled-ledger dry-run proof"
+    },
+    "rollbackAndEmergency": {
+      "status": "pass_with_dry_run_precondition",
+      "mergeStopsOnIdentityOrAuthorityMismatch": true,
+      "deployedTargetRewritePermitted": false,
+      "deployedTargetReapplyPermitted": false,
+      "newMigrationDeploymentPermitted": false,
+      "providerMutationPermitted": false,
+      "futureRuntimeCorrectionShape": "separately reviewed forward-only migration; never rewrite 20260730161737",
+      "residualSourceHistoryAction": "resolve from linked dry-run evidence without changing production"
+    },
+    "remoteDryRun": {
+      "status": "BLOCKED_INTERNAL",
+      "executedByThisLane": false,
+      "implementationEvidencePresent": false,
+      "mergeGateSatisfied": false,
+      "requiredCommand": "supabase db push --dry-run",
+      "requiredResumptionAction": "Coordinator runs one explicitly linked read-only dry-run at the unchanged implementation head and preserves sanitized no-apply output covering both migration versions."
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_owned",
+      "implementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+      "eligibleAsReviewLaneProof": false,
+      "resumptionAction": "Coordinator evaluates one frozen-head Phase 1 CI run after four isolated review lanes freeze; this lane does not poll."
+    },
+    "staticChecks": {
+      "status": "pass",
+      "jsonFilesParsed": 2,
+      "rawAndNormalizedHashesReproduced": true,
+      "duplicateBodyDifferenceInspected": true,
+      "gitDiffCheck": "pass",
+      "databaseTestsRunByReview": false,
+      "remoteReadbackRunByReview": false,
+      "providerContact": false,
+      "fullCiRunByReview": false
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "databaseResetByReview": false,
+      "remoteReadbackByReview": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "unrelatedProductSourceChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockCreated": false
+    }
+  },
+  "testResultHash": "49bf21deed22fe28c46c87bfd6d9bd67465df314fd67d7d3aa1fb625805ca8f4",
+  "reviewLevel": "C",
+  "reviewHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+  "reviewTimestamp": "2026-07-30T18:48:58Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-3-architecture-scope-report-honesty",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b3-room-host-block-check.json"
+      ],
+      "evidence": "Lines 42-52 correctly classify the exact target as REMOTE_AND_SOURCE_MATCH and the older 20260725224000 file as SOURCE_ONLY in the target-only snapshot, but then mark the older full-ledger comparison NOT_APPLICABLE and olderVersionBlocksB3Merge false. Line 106 still names the linked dry-run as the next action, and no `supabase db push --dry-run` result is bound to exact head bded4793b26e8e2e8bd2331df7f5b3fcc55f141b.",
+      "impact": "Exact target identity does not prove assembled source-ledger parity. Until the linked CLI evaluates both versions without applying anything, the older source entry can be silently treated as harmless even though its remote disposition is SOURCE_ONLY.",
+      "requiredResolution": "Run one coordinator-controlled, explicitly linked read-only `supabase db push --dry-run` at the unchanged head and preserve sanitized no-apply output covering both versions. If the older entry is planned or rejected, keep the lane BLOCKED_INTERNAL and make a separately reviewed Git-only source-history decision; never deploy, rename, delete, or rewrite deployed version 20260730161737."
+    },
+    {
+      "id": "B3_RECONCILIATION_REPORT_NOT_EXACT_HEAD_BOUND",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b3-room-host-block-check.json"
+      ],
+      "evidence": "The committed reconciliation report contains no PR number, implementation branch/head/tree, base head, changed-file hash, migration-set hash, or test-result hash. Those values appear only in the mutable PR body and separate review records.",
+      "impact": "The parity facts can be accurate while the report's local reset and 10/10 pgTAP claims cannot independently be tied to the exact reviewed PR #75 tree.",
+      "requiredResolution": "Bind a successor reconciliation report to the exact implementation PR/head/tree/base and evidence hashes, then invalidate and refresh all exact-head review manifests after the implementation head changes."
+    },
+    {
+      "id": "B3_REMOTE_EVIDENCE_AND_NORMALIZER_LINEAGE_AMBIGUOUS",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b3-room-host-block-check.json"
+      ],
+      "evidence": "Lines 48-52 call the older full-ledger comparison NOT_APPLICABLE even though preserved coordinator read-only evidence records that 20260725224000 was not found remotely. Lines 28, 36, and 58 call 69416771... the normalized hash without naming lower-case-plus-whitespace normalization; the repository normalizeSql helper instead returns 6cb22f97... for the exact target.",
+      "impact": "Reviewers cannot reproduce the named normalized value with the repository helper or trace the older SOURCE_ONLY fact from the committed report alone.",
+      "requiredResolution": "Bind the report to the sanitized coordinator evidence, record 20260725224000 as confirmed SOURCE_ONLY, and name/version both normalization algorithms and their hashes."
+    },
+    {
+      "id": "B3_FEATURE_TIER_APPLICABILITY_UNSCOPED",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b3-room-host-block-check.json"
+      ],
+      "evidence": "The report lists both `supabase-migrations-rls` and `watch-party-live`, but has no gate-applicability section and marks T2 plus T4-T7 NOT_APPLICABLE. The feature registry requires T2 for Supabase migrations and T2-T6 for Watch-Party; the narrow source-reconciliation objective, not those full features, is what makes those tiers inapplicable to this PR.",
+      "impact": "A reader can mistake PR-scoped N/A statuses for feature-level proof applicability, weakening the requirement that every feature tier remain explicit and non-substitutable.",
+      "requiredResolution": "Add explicit PR-level gate applicability and label the proof-tier statuses as scoped only to B3 source reconciliation. Preserve the broader feature tiers as pending or owned by their designated lanes rather than declaring them globally inapplicable."
+    },
+    {
+      "id": "B3_DATABASE_ONLY_SCOPE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact base-to-head delta is three files and 332 net lines in database reconciliation evidence, one migration source, and one focused pgTAP. Scope classification is database-RLS only; there are no LiveKit, RevenueCat, product implementation, package, workflow, or generated-native deltas."
+    },
+    {
+      "id": "B3_EXACT_DEPLOYED_TARGET_IDENTITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Version 20260730161737, name allow_room_host_participant_block_check, source raw SHA-256, and lower-whitespace normalized SHA-256 match preserved read-only remote evidence exactly. The PR does not edit the older source file or any deployed body."
+    },
+    {
+      "id": "B3_FORWARD_ONLY_AND_NON_INTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The report blocks on identity or authority mismatch and requires a separately reviewed forward-only runtime correction. This review performed no database reset, remote query, provider call, deployment, build, OTA, or product mutation."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "p2Open": 3,
+    "scopeDisposition": "bounded-database-only",
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "databaseResetByReview": false,
+    "remoteReadbackByReview": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "remoteDryRunBlocked": true,
+    "fullCiAwaitedByReview": false,
+    "reviewDisposition": "merge-blocked-open-p1",
+    "humanApproval": false
+  }
+}
