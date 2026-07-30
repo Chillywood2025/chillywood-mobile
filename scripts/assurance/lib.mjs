@@ -69,6 +69,176 @@ export function requiredKeys(value, keys, label) {
   return keys.flatMap((key) => Object.hasOwn(value, key) ? [] : [`${label} missing ${key}`]);
 }
 
+const gitShaPattern = /^[0-9a-f]{40}$/u;
+const forbiddenGitBranchCharacters = /[\u0000-\u0020~^:?*[\]\\\u007f]/u;
+
+export function isValidGitBranchName(value) {
+  return typeof value === "string"
+    && value.length > 0
+    && value !== "@"
+    && !value.startsWith("-")
+    && !value.startsWith("/")
+    && !value.endsWith("/")
+    && !value.endsWith(".")
+    && !value.includes("..")
+    && !value.includes("//")
+    && !value.includes("@{")
+    && value.split("/").every((component) => !component.startsWith(".") && !component.endsWith(".lock"))
+    && !forbiddenGitBranchCharacters.test(value);
+}
+
+export function implementationRemoteRef(branch) {
+  return isValidGitBranchName(branch) ? `refs/remotes/origin/${branch}` : null;
+}
+
+function sortStable(values) {
+  return [...values].sort((left, right) => {
+    const leftJson = stableJson(left);
+    const rightJson = stableJson(right);
+    return leftJson < rightJson ? -1 : leftJson > rightJson ? 1 : 0;
+  });
+}
+
+export function verifyCurrentTruthHeadBindings({
+  openImplementationPrs,
+  observedRefs,
+  branch,
+  head,
+  remoteMain,
+  explicitBranch = "",
+  explicitHead = ""
+}) {
+  const findings = [];
+  const bindings = [];
+  const entries = Array.isArray(openImplementationPrs) ? openImplementationPrs : [];
+  const observations = observedRefs && typeof observedRefs === "object" ? observedRefs : {};
+  const seenNumbers = new Set();
+  const seenBranches = new Set();
+
+  if (!Array.isArray(openImplementationPrs)) {
+    findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_LIST_MALFORMED", status: "BLOCKED_INTERNAL" });
+  }
+
+  for (const entry of entries) {
+    const numberValid = Number.isInteger(entry?.number) && entry.number > 0;
+    const branchValid = isValidGitBranchName(entry?.branch);
+    const headValid = typeof entry?.head === "string" && gitShaPattern.test(entry.head);
+
+    if (!numberValid) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_PR_MALFORMED", status: "BLOCKED_INTERNAL", number: entry?.number ?? null });
+    } else if (seenNumbers.has(entry.number)) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_DUPLICATE", status: "BLOCKED_INTERNAL", field: "number", value: entry.number });
+    } else {
+      seenNumbers.add(entry.number);
+    }
+
+    if (!branchValid) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_BRANCH_MALFORMED", status: "BLOCKED_INTERNAL", branch: entry?.branch ?? null, number: numberValid ? entry.number : null });
+    } else if (seenBranches.has(entry.branch)) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_DUPLICATE", status: "BLOCKED_INTERNAL", field: "branch", value: entry.branch });
+    } else {
+      seenBranches.add(entry.branch);
+    }
+
+    if (!headValid) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_MALFORMED", status: "BLOCKED_INTERNAL", head: entry?.head ?? null, number: numberValid ? entry.number : null });
+    }
+
+    if (!branchValid) continue;
+    const ref = implementationRemoteRef(entry.branch);
+    const observed = Object.hasOwn(observations, ref) ? observations[ref] : null;
+    const observedValid = typeof observed === "string" && gitShaPattern.test(observed);
+    bindings.push({
+      branch: entry.branch,
+      number: numberValid ? entry.number : null,
+      observedHead: observed,
+      recordedHead: entry?.head ?? null,
+      ref
+    });
+
+    if (observed === null || observed === undefined || observed === "") {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_REF_MISSING", status: "BLOCKED_INTERNAL", branch: entry.branch, number: numberValid ? entry.number : null, ref });
+    } else if (!observedValid) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_OBSERVED_HEAD_MALFORMED", status: "BLOCKED_INTERNAL", branch: entry.branch, number: numberValid ? entry.number : null, observed });
+    } else if (headValid && observed !== entry.head) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE",
+        status: "BLOCKED_INTERNAL",
+        branch: entry.branch,
+        number: numberValid ? entry.number : null,
+        observed,
+        recorded: entry.head
+      });
+    }
+  }
+
+  const namedBranch = typeof branch === "string" ? branch : "";
+  const checkoutHeadValid = typeof head === "string" && gitShaPattern.test(head);
+  const remoteMainValid = typeof remoteMain === "string" && gitShaPattern.test(remoteMain);
+  const hasExplicitContext = explicitBranch !== "" || explicitHead !== "";
+
+  if (!checkoutHeadValid) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_CHECKOUT_HEAD_MALFORMED", status: "BLOCKED_INTERNAL", head: head ?? null });
+  if (!remoteMainValid) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_HEAD_MALFORMED", status: "BLOCKED_INTERNAL", remoteMain: remoteMain ?? null });
+
+  if (hasExplicitContext) {
+    if (!isValidGitBranchName(explicitBranch) || !gitShaPattern.test(explicitHead)) {
+      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_EXPLICIT_CONTEXT_MALFORMED", status: "BLOCKED_INTERNAL" });
+    }
+    if (namedBranch && explicitBranch && namedBranch !== explicitBranch) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_EXPLICIT_CONTEXT_MISMATCH",
+        status: "BLOCKED_INTERNAL",
+        branch: namedBranch,
+        explicitBranch
+      });
+    }
+    if (checkoutHeadValid && gitShaPattern.test(explicitHead) && head !== explicitHead) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_CHECKOUT_HEAD_STALE",
+        status: "BLOCKED_INTERNAL",
+        actual: head,
+        expected: explicitHead
+      });
+    }
+  }
+
+  const contextBranch = explicitBranch || namedBranch;
+  const detachedMain = !namedBranch && checkoutHeadValid && remoteMainValid && head === remoteMain;
+  if (!namedBranch && !detachedMain && !hasExplicitContext) {
+    findings.push({ id: "ASSURANCE_CURRENT_TRUTH_DETACHED_CONTEXT_UNRESOLVED", status: "BLOCKED_INTERNAL", head: checkoutHeadValid ? head : null });
+  }
+
+  const currentEntry = entries.find((entry) => entry?.branch === contextBranch);
+  if (currentEntry && checkoutHeadValid && gitShaPattern.test(currentEntry.head) && head !== currentEntry.head) {
+    findings.push({
+      id: "ASSURANCE_CURRENT_TRUTH_CHECKOUT_HEAD_STALE",
+      status: "BLOCKED_INTERNAL",
+      actual: head,
+      branch: contextBranch,
+      expected: currentEntry.head,
+      number: Number.isInteger(currentEntry.number) ? currentEntry.number : null
+    });
+  }
+
+  const sortedFindings = sortStable(findings);
+  const mainContext = namedBranch === "main" || detachedMain;
+  return {
+    ok: sortedFindings.length === 0,
+    bindings: sortStable(bindings),
+    context: detachedMain
+      ? "detached-main"
+      : mainContext
+        ? "main"
+        : currentEntry
+          ? "listed-implementation-branch"
+          : contextBranch
+            ? "unlisted-control-branch"
+            : "detached-unresolved",
+    findings: sortedFindings,
+    unlistedBranchPolicy: "deferred-to-pr-e"
+  };
+}
+
 export function verifyCurrentTruthSynchronization({
   recordedMain,
   remoteMain,

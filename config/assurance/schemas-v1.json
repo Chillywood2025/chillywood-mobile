@@ -4,6 +4,8 @@
   "$defs": {
     "id": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9_.:-]*$"},
     "lowerId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]*$"},
+    "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "gitBranch": {"type": "string", "pattern": "^(?!-)(?!/)(?!@$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:\\.\\.|//|@\\{|[ ~^:?*\\[\\\\]))(?!.*[/.]$).+$"},
     "stringArray": {"type": "array", "items": {"type": "string"}},
     "status": {"enum": ["REQUIREMENTS_CLEAR", "ARCHITECTURE_CLEAR", "SOURCE_CLEAR", "MODEL_CLEAR", "INTEGRATION_CLEAR", "NATIVE_CLEAR", "PROVIDER_CLEAR", "ARTIFACT_CLEAR", "INSTALLED_CLEAR", "PHYSICAL_CLEAR", "RELEASE_CLEAR", "BLOCKED_INTERNAL", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
     "baseContract": {
@@ -42,7 +44,7 @@
     },
     "currentTruthContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["recordPath", "generatedDocuments", "requiredFields", "synchronizationMerge", "freshness", "staleFindingIds"],
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "synchronizationMerge", "implementationHeadBinding", "freshness", "staleFindingIds"],
       "properties": {
         "synchronizationMerge": {
           "type": "object",
@@ -63,6 +65,22 @@
               }
             }
           }
+        },
+        "implementationHeadBinding": {
+          "type": "object",
+          "required": ["required", "networkAccess", "refNamespace", "missingRef", "malformedSha", "duplicatePrOrBranch", "recordedObservedMismatch", "listedCurrentBranchCheckoutMustMatch", "detachedCi", "unlistedBranchPolicy"],
+          "properties": {
+            "required": {"const": true},
+            "networkAccess": {"const": "forbidden"},
+            "refNamespace": {"const": "refs/remotes/origin/"},
+            "missingRef": {"const": "BLOCKED_INTERNAL"},
+            "malformedSha": {"const": "BLOCKED_INTERNAL"},
+            "duplicatePrOrBranch": {"const": "BLOCKED_INTERNAL"},
+            "recordedObservedMismatch": {"const": "BLOCKED_INTERNAL"},
+            "listedCurrentBranchCheckoutMustMatch": {"const": true},
+            "detachedCi": {"const": "explicit-branch-and-head-required-unless-head-is-origin-main"},
+            "unlistedBranchPolicy": {"const": "deferred-to-pr-e"}
+          }
         }
       }
     },
@@ -70,9 +88,23 @@
       "allOf": [{"$ref": "#/$defs/baseContract"}],
       "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
       "properties": {
-        "mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "mainSha": {"$ref": "#/$defs/gitSha"},
         "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
         "liveProviderReadback": {"type": "boolean"},
+        "openImplementationPrs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["number", "branch", "head", "state", "disposition"],
+            "properties": {
+              "number": {"type": "number"},
+              "branch": {"$ref": "#/$defs/gitBranch"},
+              "head": {"$ref": "#/$defs/gitSha"},
+              "state": {"type": "string"},
+              "disposition": {"type": "string"}
+            }
+          }
+        },
         "operationalClosures": {
           "type": "object",
           "required": ["installedProductQa", "revenueCat"],
