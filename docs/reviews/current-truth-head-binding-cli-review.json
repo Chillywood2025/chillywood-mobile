@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "current-truth-head-binding-cli-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture",
+  "focus": "CLI, schema, Git context, offline output, deterministic coverage, scope, and non-interference",
+  "humanApproval": false,
+  "implementationPrNumber": null,
+  "implementationPrState": "not-opened-at-review",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-head-binding",
+  "implementationHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+  "implementationTree": "0c4e9ac3e57a528498e66b7392d0f6d48a63a23a",
+  "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+  "changedFileHash": "62e2b04b781159c50df3d6317dbf3f9fccc5c66f8aec16709f695def21c59972",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "e10f0f8ec184ebaf08c1bbd987e8473aafafa250f84d81069ec183ad50800f30",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_findings",
+      "lane": "architecture",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+      "implementationTree": "0c4e9ac3e57a528498e66b7392d0f6d48a63a23a",
+      "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+      "mergeBaseMatched": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 5,
+      "additions": 375,
+      "deletions": 5,
+      "netChangedLines": 370,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "scopeWaiver": null,
+      "classifiedDomains": [
+        "CI-test-infrastructure"
+      ],
+      "unclassifiedChangedFiles": 0,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "nominalHeadBindingMatrix": {
+      "status": "pass",
+      "command": "node tests/assurance/current-truth-head-binding.test.mjs",
+      "cases": 10,
+      "deterministicRuns": "3/3",
+      "matrixHash": "5983961b04e28b46610ca9ad88b269760b6d15b82eef038d1037388341202eed"
+    },
+    "cliArgumentProbes": {
+      "status": "pass",
+      "cases": 4,
+      "exactNamedContext": {
+        "exit": 0,
+        "ok": true,
+        "context": "unlisted-control-branch"
+      },
+      "wrongExplicitHead": {
+        "exit": 1,
+        "finding": "ASSURANCE_CURRENT_TRUTH_CHECKOUT_HEAD_STALE"
+      },
+      "partialExplicitContext": {
+        "exit": 1,
+        "finding": "ASSURANCE_CURRENT_TRUTH_EXPLICIT_CONTEXT_MALFORMED"
+      },
+      "forbiddenProviderMode": {
+        "exit": 1,
+        "finding": "ASSURANCE_PROVIDER_MODE_FORBIDDEN:write"
+      },
+      "untrustedGithubEnvironmentIgnored": true
+    },
+    "adversarialGitContext": {
+      "status": "fail",
+      "namedMainWrongHead": {
+        "namedBranch": "main",
+        "checkoutDiffersFromOriginMain": true,
+        "ok": true,
+        "findings": []
+      },
+      "symbolicHeadEntry": {
+        "recordedBranch": "HEAD",
+        "runtimeBranchValidator": true,
+        "schemaBranchValidator": true,
+        "gitCheckRefFormatBranch": false,
+        "observedRef": "refs/remotes/origin/HEAD",
+        "ok": true,
+        "findings": []
+      },
+      "malformedObservedHead": {
+        "ok": false,
+        "finding": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_OBSERVED_HEAD_MALFORMED"
+      },
+      "detachedMainExact": {
+        "ok": true,
+        "context": "detached-main"
+      },
+      "probeHash": "6925a377b28c91574e7285478535d8f89e828107685d92bf81ba4c1f878986c6"
+    },
+    "schemaContract": {
+      "status": "pass_with_blocking_and_nonblocking_gaps",
+      "currentRecordCompatible": true,
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25,
+      "openImplementationPrRequiredFields": true,
+      "branchHeadPseudoRefAccepted": true,
+      "tabControlCharacterAcceptedBySchema": true,
+      "prNumberSchema": {
+        "type": "number",
+        "integerAndPositiveNotEncoded": true
+      }
+    },
+    "currentTruthCompatibility": {
+      "status": "pass",
+      "mode": "offline",
+      "recordedMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "remoteMainAtReview": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+      "synchronizationMode": "synchronization-merge",
+      "recordedOpenImplementationBindings": 5,
+      "findings": 0
+    },
+    "outputDeterminism": {
+      "status": "pass",
+      "runs": "3/3",
+      "uniqueHashes": 1,
+      "outputHash": "0f8a0efb1f532ae213552e6dc0ca8e276c0c6a31f75b25d5acfc912dbe3dac77"
+    },
+    "offlineAndSecretSafety": {
+      "status": "pass",
+      "networkCallsAdded": 0,
+      "providerMutationCallsAdded": 0,
+      "providerDefault": "offline",
+      "forbiddenProviderModeRejected": true,
+      "machineJsonEmitted": true,
+      "redactionAppliedAtEmit": true,
+      "rawSecretOrPrivateEvidenceFound": false
+    },
+    "scopeAndNonInterference": {
+      "status": "pass",
+      "prScope": "pass",
+      "changedFiles": 5,
+      "netChangedLines": 370,
+      "highRiskDomains": [],
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "privateEvidenceCommitted": false
+    },
+    "focusedChecks": {
+      "status": "pass",
+      "nodeSyntaxFiles": 3,
+      "contractValidation": "pass",
+      "headBindingTest": "pass",
+      "currentTruthCli": "pass",
+      "prScope": "pass",
+      "gitDiffCheck": "pass",
+      "networkAndMutationStaticScan": "pass"
+    },
+    "phase1Ci": {
+      "status": "not-run",
+      "implementationHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+      "reason": "No exact-head Phase 1 CI existed at review freeze; full CI is coordinator-owned and this isolated review lane was instructed to run focused tests only.",
+      "eligibleAsProof": false
+    }
+  },
+  "testResultHash": "2fad780175363c9ce6a595e7f5cb41295b2696363f4ab02d91053f3730352a12",
+  "reviewLevel": "B",
+  "reviewHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+  "reviewTimestamp": "2026-07-30T19:37:28Z",
+  "reviewerLanes": [
+    "architecture",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "cli-schema-git-context"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_SYMBOLIC_ORIGIN_HEAD_SUBSTITUTION",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/lib.mjs:75",
+        "scripts/assurance/lib.mjs:90",
+        "config/assurance/schemas-v1.json:8",
+        "tests/assurance/current-truth-head-binding.test.mjs:38"
+      ],
+      "evidence": "The runtime and JSON-schema branch validators accept the literal branch HEAD. implementationRemoteRef then constructs refs/remotes/origin/HEAD, whose symbolic target is origin/main. A synthetic open implementation record using branch HEAD and the origin/main hash returned ok=true with no findings, while git check-ref-format --branch HEAD returned nonzero.",
+      "impact": "A malformed current-truth entry can substitute the default-branch symbolic ref for an implementation branch and falsely report exact implementation-head alignment.",
+      "requiredResolution": "Reject HEAD and any other Git pseudo-ref that cannot be an unambiguous branch in both the schema and runtime validator, and add a regression case proving it emits ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_BRANCH_MALFORMED without dereferencing origin/HEAD."
+    },
+    {
+      "id": "CURRENT_TRUTH_NAMED_MAIN_CHECKOUT_HEAD_UNBOUND",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/lib.mjs:175",
+        "scripts/assurance/lib.mjs:224",
+        "scripts/assurance/current-truth.mjs:86",
+        "tests/assurance/current-truth-head-binding.test.mjs:38"
+      ],
+      "evidence": "verifyCurrentTruthHeadBindings returned ok=true and context=main for branch=main when checkout head and remoteMain were distinct valid SHAs. The CLI's mainMatches expression also short-circuits on branch === main, so the stale named-main checkout is not rejected.",
+      "impact": "The guard can return a top-level pass while running code from a stale or foreign local main checkout, despite having the exact origin/main hash available.",
+      "requiredResolution": "Require a named main checkout head to equal remoteMain and emit ASSURANCE_CURRENT_TRUTH_CHECKOUT_HEAD_STALE when it does not. Retain merge-base behavior only for non-main control or implementation branches, and cover both behind and ahead named-main cases."
+    },
+    {
+      "id": "CURRENT_TRUTH_SCHEMA_RUNTIME_SHAPE_DRIFT",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "config/assurance/schemas-v1.json:8",
+        "config/assurance/schemas-v1.json:100",
+        "scripts/assurance/lib.mjs:72",
+        "scripts/assurance/lib.mjs:123"
+      ],
+      "evidence": "The schema branch pattern accepts ASCII tab even though the runtime rejects it, and the PR number schema accepts any JavaScript number while runtime requires a positive integer.",
+      "impact": "Contract validation can approve records that the CLI later rejects, weakening schema-first diagnostics and making behavior depend on which assurance command runs first.",
+      "requiredResolution": "Align schema and runtime branch constraints, encode a positive integer PR number, and extend the local schema validator to enforce integer/minimum if those JSON Schema keywords are introduced."
+    },
+    {
+      "id": "CURRENT_TRUTH_UNLISTED_IMPLEMENTATION_DISCOVERY_DEFERRED",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "config/assurance/current-truth-contract-v1.json:43",
+        "scripts/assurance/current-truth.mjs:101",
+        "scripts/assurance/lib.mjs:238"
+      ],
+      "evidence": "The guard deliberately validates only entries already present in openImplementationPrs, reports unlistedBranchPolicy=deferred-to-pr-e, and read-only snapshot comparison does not include openImplementationPrs or openReviewOnlyPrs.",
+      "impact": "A listed PR advancing is detected, but omission of an open implementation or review PR is not yet detectable by this bounded offline guard.",
+      "requiredResolution": "Complete the declared PR E discovery policy by comparing sanitized read-only GitHub snapshot inventories and explicit CI PR context to the record; keep network access outside this offline command."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 2,
+    "p2Open": 2,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPending": true,
+    "reviewDisposition": "blocked-internal-remediate-both-p1-findings-and-rerun-exact-head-reviews",
+    "humanApproval": false
+  }
+}
