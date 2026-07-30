@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "reportId": "b0-chat-call-remote-history",
+  "featureId": "chilly-chat-call-lifecycle",
+  "objective": "Represent five exact deployed Chat Call migration versions in Git and retire only four confirmed undeployed version-mismatch candidates.",
+  "nonGoals": [
+    "change Chat Call, LiveKit, native, provider, or database behavior",
+    "deploy, reapply, repair, link, or pull migration history",
+    "change current truth, packages, workflows, builds, OTA, switches, schedules, rights, roles, auth, RLS, money, or entitlements"
+  ],
+  "risk": "C",
+  "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "remoteSnapshot": {
+    "migrationHead": "20260730161737",
+    "mode": "coordinator-supplied-prior-read-only-list-and-statement-hashes",
+    "newProviderReadback": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "candidateAbsenceConfirmed": true
+  },
+  "retiredCandidates": [
+    {
+      "version": "20260728143000",
+      "name": "chilly_chat_livekit_media_rollout",
+      "path": "supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql",
+      "remotePresent": false,
+      "rawSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0",
+      "classification": "VERSION_MISMATCH"
+    },
+    {
+      "version": "20260729185000",
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "path": "supabase/migrations/20260729185000_chilly_chat_active_thread_clear_race_guard.sql",
+      "remotePresent": false,
+      "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "classification": "VERSION_MISMATCH_DUPLICATE_REMOTE_BODY"
+    },
+    {
+      "version": "20260730032500",
+      "name": "chilly_chat_authoritative_busy_begin",
+      "path": "supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+      "remotePresent": false,
+      "rawSha256": "07a192dcce590748f4abe06d8bf494a4baf666ce917387bfdfe8bbc54e2156a0",
+      "classification": "VERSION_MISMATCH_AND_BODY_MISMATCH"
+    },
+    {
+      "version": "20260730040000",
+      "name": "chilly_chat_busy_active_thread_guard",
+      "path": "supabase/migrations/20260730040000_chilly_chat_busy_active_thread_guard.sql",
+      "remotePresent": false,
+      "rawSha256": "79fcdb34fe5575dcc461900c9b146fb60d6b825162742c39d7ac172338bdd948",
+      "classification": "VERSION_MISMATCH"
+    }
+  ],
+  "deployedMigrations": [
+    {
+      "version": "20260728141417",
+      "name": "chilly_chat_livekit_media_rollout",
+      "path": "supabase/migrations/20260728141417_chilly_chat_livekit_media_rollout.sql",
+      "rawSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0",
+      "byteCount": 8550,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260729175447",
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "path": "supabase/migrations/20260729175447_chilly_chat_active_thread_clear_race_guard.sql",
+      "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "byteCount": 1770,
+      "remoteDeploymentSequence": 1,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260729204336",
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "path": "supabase/migrations/20260729204336_chilly_chat_active_thread_clear_race_guard.sql",
+      "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "byteCount": 1770,
+      "remoteDeploymentSequence": 2,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260730034533",
+      "name": "chilly_chat_authoritative_busy_begin",
+      "path": "supabase/migrations/20260730034533_chilly_chat_authoritative_busy_begin.sql",
+      "rawSha256": "018ebe4cbb7f0346fce34aa2d47ca9b675004dcbfd9b677c945b0c0a08f4a429",
+      "byteCount": 8243,
+      "sourceProvenance": "git:e4589c1bd3d80e84cff96794e9895f3683d37696:supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260730040727",
+      "name": "chilly_chat_busy_active_thread_guard",
+      "path": "supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql",
+      "rawSha256": "79fcdb34fe5575dcc461900c9b146fb60d6b825162742c39d7ac172338bdd948",
+      "byteCount": 8555,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    }
+  ],
+  "duplicateDeployment": {
+    "versions": [
+      "20260729175447",
+      "20260729204336"
+    ],
+    "name": "chilly_chat_active_thread_clear_race_guard",
+    "identicalRawBody": true,
+    "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e"
+  },
+  "focusedValidation": {
+    "staticTests": {
+      "passed": 5,
+      "failed": 0
+    },
+    "existingReadbackGuard": "SOURCE_CLEAR",
+    "contracts": "SOURCE_CLEAR",
+    "scope": "BLOCKED_INTERNAL",
+    "deterministicOutput": {
+      "runs": 3,
+      "normalizedSha256": "a9ea72b61f9f02d92ff732a4089cd33ef209751c08273f0abef4c8fba581b876"
+    },
+    "assembledLinkedDryRun": "BLOCKED_INTERNAL"
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "proofLimits": [
+    "The static hash gate proves only exact Git source parity with the prior read-only migration snapshot.",
+    "It does not prove execution, installed behavior, native behavior, provider behavior, or release readiness.",
+    "The current scope guard classifies the required migration-readback manifest as release implementation rather than supporting evidence.",
+    "A separate bounded scope-policy metadata prerequisite, one assembled linked no-apply dry-run, and fresh exact-head review remain required."
+  ],
+  "unresolvedInternalBlockers": [
+    {
+      "id": "ASSURANCE_B0_READBACK_MANIFEST_SCOPE_CLASSIFICATION",
+      "status": "BLOCKED_INTERNAL",
+      "reason": "The exact required config/release migration-readback rebind is classified as a second high-risk release-OTA domain even though this lane changes only static migration-history evidence.",
+      "resumptionAction": "Create and merge a separate bounded scope-policy metadata prerequisite that classifies only this migration-readback manifest as supporting evidence without weakening general config/release classification; merge current main normally into B0, then rerun scope, the static parity test, and the existing readback guard."
+    }
+  ],
+  "rollback": "Before merge, abandon this Git-only branch. After merge, correct any new source-history finding with another bounded Git-only change; never rewrite or reapply a deployed remote migration.",
+  "emergencyStop": "Do not deploy, repair migration history, or contact a provider from this lane.",
+  "finalPermittedNextAction": "First merge the bounded exact-path scope-policy metadata prerequisite, merge current main normally into B0, and rerun scope and static parity. Only then run one coordinator-controlled assembled linked no-apply dry-run and require fresh exact-head review before merging this Git-only history reconciliation.",
+  "claimedFeatureCompletion": false
+}
