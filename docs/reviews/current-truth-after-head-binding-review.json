@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "current-truth-after-head-binding-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": null,
+  "implementationPrState": "not-opened-at-review",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-head-binding",
+  "implementationHead": "867af2a2c446c4cea5b38cc990bd0143dac446c3",
+  "implementationTree": "a6c507de2e09664681c913daba5b6b82f4cc7af0",
+  "baseHead": "016eb44be9856afbe16dc38a53d88721b1f2a38f",
+  "changedFileHash": "cf0ec400e5b1418792707fffe37a921cb3288d81647bde7ef62e1722496d648c",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "479a1be39b36482bc236c567fbbb6123fe18617bd5fb72dc2b452ae58188f3d5",
+  "implementationDiffHash": "7acbcca5425c46ae7b06efe19f8d7baa22c5c451863689559ed557c844ebe572",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "independent-current-truth-after-head-binding",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "867af2a2c446c4cea5b38cc990bd0143dac446c3",
+      "implementationTree": "a6c507de2e09664681c913daba5b6b82f4cc7af0",
+      "baseHead": "016eb44be9856afbe16dc38a53d88721b1f2a38f",
+      "implementationParentMatchedBase": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 3,
+      "additions": 36,
+      "deletions": 18,
+      "netChangedLines": 18,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "changedPaths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "packageFiles": 0,
+      "nativeSourceFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "capturedGithubReadback": {
+      "status": "pass",
+      "source": "github-pr-readback-20260730-2008",
+      "readOnlySnapshotReused": true,
+      "providerRequeriedByReviewLane": false,
+      "openImplementationEntries": 5,
+      "openReviewOnlyEntries": 31,
+      "allRecordedHeadsMatchAvailableLocalRemoteRefs": true,
+      "comparedRefs": 36,
+      "comparisonHash": "cb0fc79b9e24396cc70803b10a6ba2301b03c66c76e0c0da1415993ed406aa65",
+      "pr52RemainsFrozen": true,
+      "pr53RemainsStaleReviewOnly": true,
+      "pr95AndPr96ReviewExactPr90Head": true,
+      "staleReviewEntriesRemainExplicitlyStale": true,
+      "allReviewOnlyDispositionsRemainNeverMerge": true
+    },
+    "pr90MergeIdentity": {
+      "status": "pass",
+      "number": 90,
+      "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+      "implementationTree": "2e2535fd55679670b15b3900ccb63caea3432810",
+      "mergeSha": "016eb44be9856afbe16dc38a53d88721b1f2a38f",
+      "mergeTree": "2e2535fd55679670b15b3900ccb63caea3432810",
+      "parents": [
+        "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+        "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d"
+      ],
+      "treeMatchesImplementationTree": true,
+      "recordState": "merged"
+    },
+    "generatedDocuments": {
+      "status": "pass",
+      "currentStateExact": true,
+      "nextTaskExact": true,
+      "currentStateHash": "f47cac903c4dc9a7208f9ea88ee6f59eb358be8f46cb69c4e050f200fc178c9f",
+      "nextTaskHash": "4f9a2f18bc690db4532ea3c7d2190332ee4f01f107f401d2d40e85d5743941ba",
+      "comparisonHash": "dfa1b08fd012331ca34c73da38d4978eb17df4f11b8007aac1ea83a46e7443be",
+      "contractCases": 9,
+      "deterministicRuns": 3,
+      "stdoutHash": "a63a49cf1c515ff2f857f2040d2a7f6d8f7e6bebb6ad3ecdce9f75335b5870d1"
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "offline",
+      "recordedMain": "016eb44be9856afbe16dc38a53d88721b1f2a38f",
+      "remoteMain": "016eb44be9856afbe16dc38a53d88721b1f2a38f",
+      "synchronizationMode": "exact-main",
+      "headBindingContext": "unlisted-control-branch",
+      "implementationHeadBindings": 5,
+      "findings": 0,
+      "deterministicRuns": 3,
+      "stdoutHash": "dda822f9995fefbc4032fd6f647248661921f2f2c90e8426850dc1b6f2702af2"
+    },
+    "freshness": {
+      "status": "pass",
+      "timestamp": "2026-07-30T20:08:00Z",
+      "freshnessDeadline": "2026-07-31T20:08:00Z",
+      "windowMilliseconds": 86400000,
+      "withinDeadlineAtReview": true,
+      "liveProviderReadback": false,
+      "githubReadbackRecorded": true,
+      "supabaseReadbackFlagRetained": true,
+      "providerReadbackPerformedByReviewLane": false,
+      "freshnessClaimedAsLiveProviderReadback": false
+    },
+    "retainedFactsAndProhibitions": {
+      "status": "pass",
+      "changedTopLevelKeys": [
+        "assuranceProgram",
+        "evidenceSources",
+        "freshnessDeadline",
+        "latestMergedImplementationPr",
+        "mainSha",
+        "openImplementationPrs",
+        "openReviewOnlyPrs",
+        "timestamp"
+      ],
+      "allOtherTopLevelFieldsUnchanged": true,
+      "retainedFieldHash": "a0aff72bfbac544a763caa50108474ce3524d6853771bd2f167ab01e493c5ff1",
+      "androidIdentityUnchanged": true,
+      "iosIdentityUnchanged": true,
+      "remoteMigrationHeadUnchanged": true,
+      "providerAndSafetyFactsUnchanged": true,
+      "blockedProviderUnchanged": true,
+      "nonInterferenceProhibitionsUnchanged": true,
+      "pr69Pr70Pr75RemainBlockedInternal": true,
+      "prDPrEPrFRemainDependencyBlocked": true
+    },
+    "scope": {
+      "status": "pass",
+      "command": "node scripts/assurance/pr-scope.mjs --base=016eb44be9856afbe16dc38a53d88721b1f2a38f --objective='Synchronize current truth after head binding' --objective-domains=CI-test-infrastructure",
+      "domains": [
+        "CI-test-infrastructure",
+        "documentation-metadata"
+      ],
+      "highRiskDomains": [],
+      "findings": 0,
+      "waiverRequired": false
+    },
+    "contracts": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "focusedChecks": {
+      "status": "pass",
+      "currentTruth": "pass",
+      "generatedDocumentContract": "pass",
+      "contractSchemas": "pass",
+      "prScope": "pass",
+      "javascriptSyntax": "pass",
+      "gitDiffCheck": "pass",
+      "privateEvidenceScan": "pass"
+    },
+    "requiredMergeTopology": {
+      "status": "pending_coordinator",
+      "requiredMergeMethod": "normal-two-parent-merge",
+      "requiredFirstParent": "016eb44be9856afbe16dc38a53d88721b1f2a38f",
+      "requiredSecondParent": "867af2a2c446c4cea5b38cc990bd0143dac446c3",
+      "expectedTree": "a6c507de2e09664681c913daba5b6b82f4cc7af0",
+      "fastForwardPermitted": false,
+      "squashPermitted": false,
+      "rebasePermitted": false,
+      "reason": "The current-truth synchronization guard accepts the new main only when its first parent is the recorded main and its changed paths are exactly the three synchronization paths."
+    },
+    "privacyAndNonInterference": {
+      "status": "pass",
+      "providerContactByReviewLane": false,
+      "providerMutation": false,
+      "databaseContactByReviewLane": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "generatedNativeDirectoryCommitted": false,
+      "rawSecretCommitted": false,
+      "privateScreenshotCommitted": false,
+      "deviceIdentifierCommitted": false,
+      "privateLogCommitted": false,
+      "denoLockChanged": false
+    },
+    "phase1Ci": {
+      "status": "not_required_for_level_a_review",
+      "implementationHead": "867af2a2c446c4cea5b38cc990bd0143dac446c3",
+      "runByReviewLane": false,
+      "focusedReviewComplete": true
+    }
+  },
+  "testResultHash": "8ff169cde1be91b7de5dd451651600b51e4b2e3fb58d6751f1e34acd67f9bd90",
+  "reviewLevel": "A",
+  "reviewHead": "867af2a2c446c4cea5b38cc990bd0143dac446c3",
+  "reviewHeadSemantics": "implementation tip immediately preceding the review-evidence-only commit",
+  "reviewTimestamp": "2026-07-30T20:13:53Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-automated-review",
+    "current-truth-generated-doc-and-readback-consistency"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_CAPTURED_GITHUB_HEAD_INVENTORY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The already-captured read-only GitHub snapshot records 5 open implementation PRs and 31 review-only PRs; all 36 recorded heads match the available local origin refs, stale reviews remain stale, and every review-only PR remains never-merge."
+    },
+    {
+      "id": "CURRENT_TRUTH_PR90_MERGE_IDENTITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "PR #90 is recorded merged at 016eb44be9856afbe16dc38a53d88721b1f2a38f; its merge tree exactly matches implementation tree 2e2535fd55679670b15b3900ccb63caea3432810 and its second parent is the reviewed implementation head."
+    },
+    {
+      "id": "CURRENT_TRUTH_GENERATED_DOCUMENT_EQUIVALENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "CURRENT_STATE.md and NEXT_TASK.md are byte-exact renderings of the authoritative machine-readable record, and the nine-case synchronization contract is deterministic 3/3."
+    },
+    {
+      "id": "CURRENT_TRUTH_RETAINED_FACTS_AND_PROHIBITIONS",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Build identities, remote migration head, provider/safety facts, blocked-provider state, reconciliation blockers, and all non-interference prohibitions are unchanged. This review performed no new provider or Supabase readback and does not represent the GitHub-only refresh as live provider proof."
+    },
+    {
+      "id": "CURRENT_TRUTH_NORMAL_SYNCHRONIZATION_MERGE_REQUIRED",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "Merge only as a normal two-parent merge with 016eb44be9856afbe16dc38a53d88721b1f2a38f as first parent and 867af2a2c446c4cea5b38cc990bd0143dac446c3 as second parent. Fast-forward, squash, or rebase would fail the synchronization contract."
+    },
+    {
+      "id": "CURRENT_TRUTH_SCOPE_PRIVACY_AND_NONINTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact implementation delta contains only the authoritative record and two generated documents and introduces no product, migration, workflow, package, native, private-evidence, provider, database, build, OTA, release, money, entitlement, rights, role, auth/RLS, switch, or schedule change."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": false,
+    "reviewDisposition": "exact-head-level-a-review-clear-normal-synchronization-merge-required",
+    "humanApproval": false
+  }
+}
