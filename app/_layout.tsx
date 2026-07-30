@@ -43,7 +43,10 @@ import {
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
-import { resolveChillyChatNativeCallRoute } from "../_lib/chillyChatNativeCallRoutes.mjs";
+import {
+  CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS,
+  resolveChillyChatNativeCallRoute,
+} from "../_lib/chillyChatNativeCallRoutes.mjs";
 import { resolveIncomingCallPresentation } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
   clearApplicationNotificationBadge,
@@ -172,6 +175,12 @@ function AndroidNativeCallRouteBridge() {
   useEffect(() => {
     if (Platform.OS !== "android") return () => {};
     let active = true;
+    let initialRouteReadErrorReported = false;
+    const initialRouteRetryTimers = new Set<ReturnType<typeof setTimeout>>();
+    const clearInitialRouteRetryTimers = () => {
+      initialRouteRetryTimers.forEach((timer) => clearTimeout(timer));
+      initialRouteRetryTimers.clear();
+    };
     const captureNativeCallRoute = (url: string | null) => {
       if (!active) return;
       const nativeCallRoute = resolveChillyChatNativeCallRoute(url);
@@ -181,27 +190,48 @@ function AndroidNativeCallRouteBridge() {
       ) {
         return;
       }
+      clearInitialRouteRetryTimers();
       setPendingNativeCallRoute((current) => (
         current?.requestKey === nativeCallRoute.requestKey
           ? current
           : nativeCallRoute
       ));
     };
-
-    void Linking.getInitialURL()
-      .then(captureNativeCallRoute)
-      .catch((error) => {
-        reportRuntimeError("android-native-call-initial-route", error, {
-          source: "root-layout",
+    const readInitialNativeCallRoute = () => {
+      void Linking.getInitialURL()
+        .then(captureNativeCallRoute)
+        .catch((error) => {
+          if (initialRouteReadErrorReported) return;
+          initialRouteReadErrorReported = true;
+          reportRuntimeError("android-native-call-initial-route", error, {
+            source: "root-layout",
+          });
         });
+    };
+    const scheduleInitialNativeCallRouteReads = () => {
+      clearInitialRouteRetryTimers();
+      CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS.forEach((delayMs) => {
+        const timer = setTimeout(() => {
+          initialRouteRetryTimers.delete(timer);
+          readInitialNativeCallRoute();
+        }, delayMs);
+        initialRouteRetryTimers.add(timer);
       });
+    };
+
     const subscription = Linking.addEventListener("url", ({ url }) => {
       captureNativeCallRoute(url);
     });
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") scheduleInitialNativeCallRouteReads();
+    });
+    scheduleInitialNativeCallRouteReads();
 
     return () => {
       active = false;
+      clearInitialRouteRetryTimers();
       subscription.remove();
+      appStateSubscription.remove();
     };
   }, []);
 

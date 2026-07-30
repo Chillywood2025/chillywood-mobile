@@ -29,7 +29,10 @@ import {
   shouldPreserveNativeCallBackgroundAudio,
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
-import { resolveChillyChatNativeCallRoute } from "../_lib/chillyChatNativeCallRoutes.mjs";
+import {
+  CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS,
+  resolveChillyChatNativeCallRoute,
+} from "../_lib/chillyChatNativeCallRoutes.mjs";
 import {
   isPermanentFcmTokenError,
   readFcmProviderErrorCode,
@@ -37,6 +40,22 @@ import {
 
 const nativeRouteThreadId = "11111111-1111-4111-8111-111111111111";
 const nativeRouteInviteId = "22222222-2222-4222-8222-222222222222";
+assert.deepEqual(
+  CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS,
+  [0, 120, 350, 800, 1_600, 2_800],
+  "terminated Android native action initial-URL retries stay bounded to early cold boot",
+);
+assert.equal(
+  CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS.every(
+    (delayMs, index, delays) => (
+      Number.isSafeInteger(delayMs)
+      && delayMs >= 0
+      && (index === 0 || delayMs > delays[index - 1])
+    ),
+  ),
+  true,
+  "terminated Android native action initial-URL retries must be finite, non-negative, and increasing",
+);
 assert.deepEqual(
   resolveChillyChatNativeCallRoute(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,

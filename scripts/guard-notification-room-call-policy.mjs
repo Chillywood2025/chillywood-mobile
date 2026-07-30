@@ -179,6 +179,11 @@ assertIncludes(authoritativeBusyBegin, '"delivery_status" = \'skipped\'', "busy 
 assertIncludes(layout, "resolveChillyChatNativeCallRoute", "terminated Android native actions must replay their exact initial URL after authenticated boot");
 assertIncludes(layout, "setPendingNativeCallRoute((current)", "cold-start native actions must remain pending until session hydration finishes");
 assertIncludes(layout, "Linking.getInitialURL()", "terminated Android native actions must read the Activity initial URL");
+assertIncludes(layout, "CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS", "terminated Android native actions must retry the initial Activity URL during bounded cold boot");
+assertIncludes(layout, "scheduleInitialNativeCallRouteReads", "cold-start native action capture must close the Activity-to-JS listener timing gap");
+assertIncludes(layout, 'AppState.addEventListener("change"', "terminated Android native actions must re-read the Activity URL when the app becomes active");
+assertIncludes(layout, "clearInitialRouteRetryTimers", "cold-start native action retries must be cancelled after capture and unmount");
+assertNotIncludes(layout, "setInterval(readInitialNativeCallRoute", "cold-start native action replay must not create an unbounded polling loop");
 assertIncludes(layout, "function AndroidNativeCallRouteBridge()", "terminated Android native actions must use a dedicated always-mounted capture bridge");
 assertIncludes(layout, "<AndroidNativeCallRouteBridge />", "the Android native action capture bridge must mount at the session shell");
 assert(
