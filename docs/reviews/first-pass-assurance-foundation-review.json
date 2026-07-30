@@ -9,10 +9,10 @@
   "changedFileHash": "d435597445aa615c7e7bf09d2629d24d8f6c182e658a3b9ccf1971077a41c22c",
   "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "configHash": "546fe27ba256093e299572e26053e24660e48ce6cf417a44c040853132b41d83",
-  "testResultHash": "f3b3216b2275daffc8340feedc59b8afd96e9b16d1e2ff60b89b08617de1bedc",
+  "testResultHash": "8e47fcf83920aebbae0f4c8fc384843173e3d1315b2a08a8883590cd7ce35fa0",
   "reviewLevel": "B",
-  "reviewHead": "414a5ad146994638fd0850c801b374415e6cafd6",
-  "reviewTimestamp": "2026-07-30T17:15:32Z",
+  "reviewHead": "2b583ba7a8067c649d6624a89256261c0cea0caf",
+  "reviewTimestamp": "2026-07-30T17:20:18Z",
   "reviewerLanes": [
     "separate-clean-worktree",
     "architecture",
@@ -23,7 +23,11 @@
     "phase1Ci": {
       "runId": 30565124156,
       "implementationHead": "cc4d4582743cc7201785cdb784134663b4fd0e1b",
-      "status": "in_progress"
+      "status": "pass",
+      "workflow": "Phase 1 CI",
+      "runNumber": 1897,
+      "jobsPassed": 13,
+      "jobsFailed": 0
     },
     "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
     "determinism": {"contracts": "3/3", "architecturePlan": "3/3", "dogfood": "3/3", "currentTruth": "3/3"},
@@ -82,6 +86,6 @@
     "providerMutation": false,
     "productSourceChanged": false,
     "privateEvidenceCommitted": false,
-    "mergeApproval": "pending_frozen_head_ci"
+    "mergeApproval": "approved_exact_head"
   }
 }
