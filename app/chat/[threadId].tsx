@@ -1370,6 +1370,16 @@ export default function ChillyChatThreadScreen() {
         setCallDeliveryStatus("You both called at the same time. The other call won; answer or decline it here.");
         return;
       }
+      if (result.invite?.status === "busy") {
+        stopOutgoingRingback();
+        activeCallInviteRef.current = null;
+        setActiveCallInvite(null);
+        setOutgoingCallInvite(null);
+        setIncomingCallInvite(null);
+        setCallPanelOpen(false);
+        setCallDeliveryStatus("The other person is already in a Chi'lly Chat call. No media was started.");
+        return;
+      }
       activeCallInviteRef.current = result.invite;
       setActiveCallInvite(result.invite);
       setOutgoingCallInvite(result.invite);

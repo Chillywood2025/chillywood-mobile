@@ -43,6 +43,7 @@ import {
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
+import { resolveChillyChatNativeCallRoute } from "../_lib/chillyChatNativeCallRoutes.mjs";
 import { resolveIncomingCallPresentation } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
   clearApplicationNotificationBadge,
@@ -167,6 +168,9 @@ function RouteAnalyticsBridge() {
   const router = useRouter();
   const { isSignedIn, user } = useSession();
   const handledInitialUrlRef = useRef(false);
+  const handledNativeCallRouteKeysRef = useRef(new Set<string>());
+  const [pendingNativeCallRoute, setPendingNativeCallRoute] =
+    useState<ReturnType<typeof resolveChillyChatNativeCallRoute>>(null);
 
   useEffect(() => {
     trackScreen(pathname, sanitizeRouteAnalyticsParams(pathname, params as Record<string, unknown>));
@@ -217,11 +221,19 @@ function RouteAnalyticsBridge() {
       if (!callbackRoute || pathname === "/auth-callback") return;
       router.replace(callbackRoute as Parameters<typeof router.replace>[0]);
     };
+    const routeNativeCallUrl = (url: string | null) => {
+      if (Platform.OS !== "android") return false;
+      const nativeCallRoute = resolveChillyChatNativeCallRoute(url);
+      if (!nativeCallRoute) return false;
+      setPendingNativeCallRoute(nativeCallRoute);
+      return true;
+    };
 
     if (!handledInitialUrlRef.current) {
       handledInitialUrlRef.current = true;
       Linking.getInitialURL()
         .then((url) => {
+          if (routeNativeCallUrl(url)) return;
           if (!active) return;
           if (routePublicLegalUrl(url)) return;
 
@@ -241,6 +253,7 @@ function RouteAnalyticsBridge() {
     }
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
+      if (routeNativeCallUrl(url)) return;
       if (routePublicLegalUrl(url)) return;
 
       const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
@@ -257,6 +270,23 @@ function RouteAnalyticsBridge() {
       subscription.remove();
     };
   }, [pathname, router]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !isSignedIn || !pendingNativeCallRoute) return;
+    if (handledNativeCallRouteKeysRef.current.has(pendingNativeCallRoute.requestKey)) {
+      setPendingNativeCallRoute(null);
+      return;
+    }
+    handledNativeCallRouteKeysRef.current.add(pendingNativeCallRoute.requestKey);
+    if (handledNativeCallRouteKeysRef.current.size > 40) {
+      const oldestRequestKey = handledNativeCallRouteKeysRef.current.values().next().value;
+      if (oldestRequestKey) handledNativeCallRouteKeysRef.current.delete(oldestRequestKey);
+    }
+    setPendingNativeCallRoute(null);
+    router.replace(
+      pendingNativeCallRoute.destination as Parameters<typeof router.replace>[0],
+    );
+  }, [isSignedIn, pendingNativeCallRoute, router]);
 
   return null;
 }

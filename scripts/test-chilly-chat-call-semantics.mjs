@@ -29,6 +29,67 @@ import {
   shouldPreserveNativeCallBackgroundAudio,
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
+import { resolveChillyChatNativeCallRoute } from "../_lib/chillyChatNativeCallRoutes.mjs";
+
+const nativeRouteThreadId = "11111111-1111-4111-8111-111111111111";
+const nativeRouteInviteId = "22222222-2222-4222-8222-222222222222";
+assert.deepEqual(
+  resolveChillyChatNativeCallRoute(
+    `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
+  ),
+  {
+    destination:
+      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
+    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:answer`,
+  },
+  "a terminated Android native Answer is replayed into the exact authenticated call route",
+);
+assert.deepEqual(
+  resolveChillyChatNativeCallRoute(
+    `chillywoodmobile:///chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
+  ),
+  {
+    destination:
+      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
+    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:decline`,
+  },
+  "a cold-start native Decline is replayed without acquiring call media",
+);
+assert.equal(
+  resolveChillyChatNativeCallRoute(
+    `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=incoming`,
+  ),
+  null,
+  "ordinary notification opens cannot be upgraded into authoritative native actions",
+);
+assert.equal(
+  resolveChillyChatNativeCallRoute(
+    `https://example.invalid/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer`,
+  ),
+  null,
+  "untrusted schemes cannot claim native call transitions",
+);
+assert.equal(
+  resolveChillyChatNativeCallRoute(
+    "chillywoodmobile://chat/not-a-thread?callInviteId=not-an-invite&nativeCallAction=answer",
+  ),
+  null,
+  "malformed call identities cannot be replayed",
+);
+assert.equal(
+  resolveChillyChatNativeCallRoute(
+    `chillywoodmobile://chat/${nativeRouteThreadId}/extra?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer`,
+  ),
+  null,
+  "native call replay rejects paths outside the exact direct-thread route",
+);
+assert.equal(
+  resolveChillyChatNativeCallRoute(
+    `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer#unexpected`,
+  ),
+  null,
+  "native call replay rejects fragment-bearing action URLs",
+);
 
 const root = new URL("../", import.meta.url);
 const importTranspiledTypeScript = async (relativePath) => {
@@ -435,6 +496,11 @@ const nativeCoordinatorSource = await readFile(
 );
 const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
+const chatLibSource = await readFile(new URL("_lib/chat.ts", root), "utf8");
+const authoritativeBusyBeginSource = await readFile(
+  new URL("supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql", root),
+  "utf8",
+);
 const iosNativeCallsSource = await readFile(new URL("_lib/iosNativeCalls.ts", root), "utf8");
 const liveKitBootstrapSource = await readFile(new URL("_lib/livekit/bootstrap.ts", root), "utf8");
 const communicationSessionSource = await readFile(new URL("hooks/use-communication-room-session.ts", root), "utf8");
@@ -595,6 +661,36 @@ assert.match(
 assert.doesNotMatch(chatThreadSource, /styles\.incomingCallSheet/u, "same-thread foreground calls cannot use the large blocking modal");
 assert.match(rootLayoutSource, /testID="app-wide-incoming-call-banner"/u, "foreground calls outside the thread use the compact top banner");
 assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foreground calls cannot use the large app-wide modal");
+assert.match(
+  rootLayoutSource,
+  /Linking\.getInitialURL\(\)[\s\S]{0,260}routeNativeCallUrl\(url\)/u,
+  "terminated Android native actions must be replayed from the Activity initial URL",
+);
+assert.match(
+  rootLayoutSource,
+  /setPendingNativeCallRoute\(nativeCallRoute\)[\s\S]{0,1800}!isSignedIn \|\| !pendingNativeCallRoute[\s\S]{0,700}router\.replace/u,
+  "cold-start native actions must wait for the authenticated session before deterministic routing",
+);
+assert.match(
+  chatThreadSource,
+  /result\.invite\?\.status === "busy"[\s\S]{0,420}setCallPanelOpen\(false\)[\s\S]{0,240}No media was started/u,
+  "an authoritative busy result must keep the second call's media panel closed",
+);
+assert.match(
+  chatLibSource,
+  /begunCall\.invite\.status === "busy"[\s\S]{0,420}thread_call_receiver_busy/u,
+  "the caller must treat a server-owned busy result as terminal rather than a same-thread collision",
+);
+assert.match(
+  authoritativeBusyBeginSource,
+  /invite\."thread_id" <> p_thread_id[\s\S]{0,240}invite\."status" = 'accepted'[\s\S]{0,420}active_room\."status" = 'active'/u,
+  "busy authority must require a different-thread accepted call backed by an active room",
+);
+assert.match(
+  authoritativeBusyBeginSource,
+  /transition_chilly_chat_call_invite[\s\S]{0,180}v_callee_user_id::uuid[\s\S]{0,100}'busy'[\s\S]{0,500}"delivery_status" = 'skipped'/u,
+  "busy authority must atomically transition the overlap and suppress terminal push delivery",
+);
 for (const nativePresentationOwnerSource of [rootLayoutSource, chatThreadSource]) {
   assert.match(
     nativePresentationOwnerSource,

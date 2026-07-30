@@ -1,11 +1,14 @@
 begin;
-select plan(15);
+select plan(25);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
   ('41111111-1111-4111-8111-111111111111', false, false),
   ('42222222-2222-4222-8222-222222222222', false, false),
-  ('43333333-3333-4333-8333-333333333333', false, false)
+  ('43333333-3333-4333-8333-333333333333', false, false),
+  ('44444444-4444-4444-8444-444444444444', false, false),
+  ('45555555-5555-4555-8555-555555555555', false, false),
+  ('46666666-6666-4666-8666-666666666666', false, false)
 on conflict (id) do nothing;
 
 select set_config('request.jwt.claim.sub', '41111111-1111-4111-8111-111111111111', true);
@@ -56,6 +59,100 @@ select is((select count(*)::integer from public.chat_call_invites where thread_i
 select is((select active_communication_room_id from public.chat_threads where id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), 'ATOMIC1', 'losing start cannot overwrite the winning room');
 select is((select status from public.communication_rooms where room_id = 'ATOMIC2'), 'ended', 'losing candidate room is closed');
 select is((select status from public.communication_rooms where room_id = 'ATOMIC1'), 'active', 'winning room remains active');
+
+insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by)
+values
+  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'direct', 'busy-established-pair', '45555555-5555-4555-8555-555555555555'),
+  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', 'direct', 'busy-overlap-pair', '44444444-4444-4444-8444-444444444444');
+
+insert into public.chat_thread_members (thread_id, user_id)
+values
+  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '45555555-5555-4555-8555-555555555555'),
+  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '46666666-6666-4666-8666-666666666666'),
+  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', '44444444-4444-4444-8444-444444444444'),
+  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', '45555555-5555-4555-8555-555555555555');
+
+insert into public.communication_rooms (room_id, room_code, host_user_id, status)
+values
+  ('BUSYACTIVE', 'BUSYACTIVE', '45555555-5555-4555-8555-555555555555', 'active'),
+  ('BUSYCANDIDATE', 'BUSYCANDIDATE', '44444444-4444-4444-8444-444444444444', 'active');
+
+insert into public.communication_room_memberships (
+  room_id, user_id, role, membership_state, camera_enabled, mic_enabled
+)
+values
+  ('BUSYACTIVE', '45555555-5555-4555-8555-555555555555', 'host', 'active', true, true),
+  ('BUSYACTIVE', '46666666-6666-4666-8666-666666666666', 'participant', 'active', true, true),
+  ('BUSYCANDIDATE', '44444444-4444-4444-8444-444444444444', 'host', 'active', true, true);
+
+alter table public.chat_call_invites disable trigger enforce_chat_call_invites_abuse_guard;
+insert into public.chat_call_invites (
+  id, thread_id, communication_room_id, caller_user_id, callee_user_id,
+  call_type, status, expires_at, accepted_at
+)
+values (
+  '47777777-7777-4777-8777-777777777777',
+  '4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  'BUSYACTIVE',
+  '45555555-5555-4555-8555-555555555555',
+  '46666666-6666-4666-8666-666666666666',
+  'voice',
+  'accepted',
+  now() + interval '5 minutes',
+  now()
+);
+alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
+
+select set_config('request.jwt.claim.sub', '44444444-4444-4444-8444-444444444444', true);
+insert into call_begin_results
+values (
+  'busy',
+  public.begin_chilly_chat_call('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', 'BUSYCANDIDATE', 'video')
+);
+
+select ok(not (select (payload ->> 'created')::boolean from call_begin_results where label = 'busy'), 'callee overlap is rejected before incoming delivery');
+select is((select payload #>> '{invite,status}' from call_begin_results where label = 'busy'), 'busy', 'overlap returns an authoritative busy invite');
+select is(
+  (select count(*)::integer
+   from public.chat_call_events
+   where call_invite_id = ((select payload #>> '{invite,id}' from call_begin_results where label = 'busy'))::uuid
+     and event_type = 'busy'),
+  1,
+  'overlap records one durable busy event'
+);
+select is(
+  (select delivery_status
+   from public.chat_call_transition_deliveries
+   where call_invite_id = ((select payload #>> '{invite,id}' from call_begin_results where label = 'busy'))::uuid
+     and target_status = 'busy'),
+  'skipped',
+  'busy terminal delivery is explicitly skipped without a second push'
+);
+select is((select status from public.communication_rooms where room_id = 'BUSYCANDIDATE'), 'ended', 'busy overlap closes its candidate room');
+select is(
+  (select membership_state from public.communication_room_memberships where room_id = 'BUSYCANDIDATE'),
+  'left',
+  'busy overlap leaves its only candidate membership'
+);
+select is(
+  (select active_communication_room_id from public.chat_threads where id = '4ccccccc-cccc-4ccc-8ccc-cccccccccccc'),
+  null,
+  'busy overlap never attaches a room to its thread'
+);
+select is((select status from public.communication_rooms where room_id = 'BUSYACTIVE'), 'active', 'busy overlap preserves the established room');
+select is(
+  (select count(*)::integer from public.communication_room_memberships where room_id = 'BUSYACTIVE' and membership_state = 'active'),
+  2,
+  'busy overlap preserves both established memberships'
+);
+select is(
+  (select count(*)::integer
+   from public.chat_call_invites
+   where thread_id = '4ccccccc-cccc-4ccc-8ccc-cccccccccccc'
+     and status in ('ringing', 'accepted')),
+  0,
+  'busy overlap leaves no second ringing or accepted invite'
+);
 
 select throws_ok(
   $$insert into public.chat_call_invites (
