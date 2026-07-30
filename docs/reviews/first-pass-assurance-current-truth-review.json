@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-current-truth-review-v1",
+  "implementationPrNumber": 56,
+  "implementationBranch": "codex/first-pass-assurance-current-truth",
+  "implementationHead": "8308e0b34050735fd75efe6ff3415cde1f39144a",
+  "implementationTree": "f7a6575ee726272a2169ef977ec8c4a839bcec14",
+  "baseHead": "2f3b0d1cc4765c4196cd831ab782417a0f000c23",
+  "changedFileHash": "6d1f6170cf206ecb3caabefcf978c8807b0e231ec1e0fcb76ef26f30cfc6cbee",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "516a9ae806577274e9bf6ebde8e8c5e4fc90da5f839261e1229b19ab42647382",
+  "testResults": {
+    "currentTruth": {"status": "pass", "determinism": "3/3", "mainSha": "2f3b0d1cc4765c4196cd831ab782417a0f000c23"},
+    "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
+    "livekitPlan": {"requirements": "REQUIREMENTS_CLEAR", "architecture": "ARCHITECTURE_CLEAR"},
+    "autonomousContracts": "pass",
+    "operatingModel": "pass",
+    "scope": {"status": "pass", "files": 6, "fileBudget": 15, "netChangedLines": 45, "lineBudget": 1200},
+    "gitDiffCheck": "pass"
+  },
+  "testResultHash": "e78f477d5b16e4c5c754234c7c423a44fb4145a609783058e86ca326e9b56f13",
+  "reviewLevel": "A",
+  "reviewHead": "8308e0b34050735fd75efe6ff3415cde1f39144a",
+  "reviewTimestamp": "2026-07-30T17:23:42Z",
+  "reviewerLanes": ["independent", "separate-clean-worktree", "current-truth-consistency"],
+  "findings": [],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "mergeApproval": "approved_exact_head"
+  }
+}
