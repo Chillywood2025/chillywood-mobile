@@ -8,8 +8,9 @@ const evidence = options.dogfood
   ? { claims: readJson("config/assurance/dogfood-pr-a-v1.json").subjects.flatMap((subject) => subject.facts.sourceProofSubstitutions ?? []) }
   : options.evidence ? readJson(options.evidence) : { claims: [] };
 const rejected = [];
+const canonical = (value) => String(value ?? "").trim().toLowerCase().replace(/\s+/gu, " ");
 for (const [index, claim] of (evidence.claims ?? []).entries()) {
-  const denied = denylist.substitutions.find(({ offered, required }) => offered === claim.offered && required === claim.required);
+  const denied = denylist.substitutions.find(({ id, offered, required }) => id === claim.substitutionId || (canonical(offered) === canonical(claim.offered) && canonical(required) === canonical(claim.required)));
   if (denied) rejected.push({ claimIndex: index, substitutionId: denied.id, offered: claim.offered, required: claim.required, status: "BLOCKED_INTERNAL" });
 }
 const missingEvidence = !options.catalog && !options.dogfood && !options.evidence;

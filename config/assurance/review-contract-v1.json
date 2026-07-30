@@ -4,6 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/reviewContract",
   "manifestRequiredFields": ["implementationPrNumber", "implementationBranch", "implementationHead", "implementationTree", "baseHead", "changedFileHash", "migrationSetHash", "configHash", "testResultHash", "reviewHead", "reviewTimestamp", "reviewerLanes", "findings"],
   "reviewOnlyRules": ["base-is-implementation-branch", "review-files-only", "no-implementation-deltas", "records-current-implementation-head", "draft", "never-merge"],
+  "reviewHeadBinding": "A committed manifest may bind the immediately preceding review-evidence commit only when the current tip changes review files exclusively and the implementation ancestry remains exact.",
   "invalidations": ["implementation-head-changed", "implementation-tree-changed", "migration-set-changed", "review-branch-diverged", "implementation-source-on-review-branch", "review-body-old-head", "review-older-than-critical-change"],
   "criticalChangeFreshnessHours": 24,
   "levels": {

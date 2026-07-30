@@ -70,13 +70,20 @@ if (options.dogfood) {
     emit("assurance:report", false, { findings: [{ id: "ASSURANCE_FEATURE_NOT_REGISTERED", status: "BLOCKED_INTERNAL" }] }, ["assurance report: FAIL — use --feature=<registered feature id>"]);
   } else {
     const supplied = options.evidence ? readJson(options.evidence) : {};
+    const allowedStatuses = new Set(readJson("config/assurance/gate-catalog-v1.json").statuses);
+    const evidenceFindings = [];
     const statuses = Object.fromEntries(tierIds.map((tier) => {
       const applicability = feature.proofTierApplicability[tier];
-      const status = supplied.statuses?.[tier] ?? (String(applicability).startsWith("not-applicable") ? "NOT_APPLICABLE" : tier === "T0_REQUIREMENT" ? "REQUIREMENTS_CLEAR" : "BLOCKED_INTERNAL");
+      const evidence = supplied.tiers?.[tier];
+      const status = evidence?.status ?? (String(applicability).startsWith("not-applicable") ? "NOT_APPLICABLE" : tier === "T0_REQUIREMENT" ? "REQUIREMENTS_CLEAR" : "BLOCKED_INTERNAL");
+      if (!allowedStatuses.has(status)) evidenceFindings.push({ id: "ASSURANCE_STATUS_INVALID", status: "BLOCKED_INTERNAL", tier, value: status });
+      if (!["BLOCKED_INTERNAL", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"].includes(status) && tier !== "T0_REQUIREMENT" && !(evidence?.evidenceRefs?.length > 0)) {
+        evidenceFindings.push({ id: "ASSURANCE_TIER_EVIDENCE_MISSING", status: "BLOCKED_INTERNAL", tier });
+      }
       return [tier, status];
     }));
     const passStatuses = new Set(["REQUIREMENTS_CLEAR", "SOURCE_CLEAR", "MODEL_CLEAR", "INTEGRATION_CLEAR", "NATIVE_CLEAR", "PROVIDER_CLEAR", "ARTIFACT_CLEAR", "INSTALLED_CLEAR", "PHYSICAL_CLEAR", "RELEASE_CLEAR", "NOT_APPLICABLE"]);
-    const requiredGatesClear = Object.values(statuses).every((status) => passStatuses.has(status));
+    const requiredGatesClear = evidenceFindings.length === 0 && Object.values(statuses).every((status) => passStatuses.has(status));
     emit("assurance:report", requiredGatesClear, {
       featureId: feature.featureId,
       objective: feature.requirements,
@@ -94,6 +101,7 @@ if (options.dogfood) {
       mutationScore: supplied.mutationScore ?? null,
       pairwiseCoverage: supplied.pairwiseCoverage ?? null,
       proofSubstitutionsRejected: supplied.proofSubstitutionsRejected ?? [],
+      findings: evidenceFindings,
       unresolvedInternalBlockers: supplied.unresolvedInternalBlockers ?? feature.unresolvedBlockers,
       unresolvedExternalBlockers: supplied.unresolvedExternalBlockers ?? [],
       rollback: feature.rollback,
