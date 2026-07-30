@@ -43,11 +43,28 @@ assert.equal(chatQaReleaseManifest.channel, profile.channel);
 assert.equal(chatQaReleaseManifest.buildProfile, "android-chat-livekit-qa");
 assert.equal(chatQaReleaseManifest.distributionSource, "google_play_internal");
 assert.equal(chatQaReleaseManifest.expectedNativeBuild, "86");
+assert.equal(chatQaReleaseManifest.status, "installed_verified");
 assert.ok(
   Number(chatQaReleaseManifest.expectedNativeBuild)
     > Number(chatQaReleaseManifest.rollback?.nativeBuild),
 );
 assert.equal(chatQaReleaseManifest.authorizationScope, "one_replacement_internal_android_binary");
+assert.deepEqual(chatQaReleaseManifest.deliveryReadback, {
+  builtSourceCommit: "0cd2d981c79640199a02236abff6c79cbe0790ea",
+  easBuildId: "f3220259-1209-411b-85fe-28891931bfa4",
+  easSubmissionId: "69ced363-a94e-41fc-b3d6-7fb0c8a0ca93",
+  embeddedUpdateId: "e3379ac9-61f0-40db-a014-81975be123e5",
+  aabSha256: "fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44",
+  playTrack: "internal",
+  playReleaseStatus: "COMPLETED",
+  playReleaseIdentity: "internal/versionCode/86",
+  installer: "com.android.vending",
+  inPlaceUpgrade: true,
+  authenticatedSessionPreserved: true,
+  embeddedBundleMatchedReviewedAab: true,
+  embeddedManifestMatchedReviewedAab: true,
+  newRuntimePublishedOtaCount: 0,
+});
 assert.equal(chatQaReleaseManifest.deliveryConstraints?.androidUninstallOrReset, false);
 assert.equal(chatQaReleaseManifest.deliveryConstraints?.iosBinary, false);
 assert.equal(chatQaReleaseManifest.deliveryConstraints?.publicRelease, false);
