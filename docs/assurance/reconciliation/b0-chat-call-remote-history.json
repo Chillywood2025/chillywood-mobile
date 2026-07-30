@@ -9,7 +9,9 @@
     "change current truth, packages, workflows, builds, OTA, switches, schedules, rights, roles, auth, RLS, money, or entitlements"
   ],
   "risk": "C",
-  "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "initialBaseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "mainSynchronizationMerge": "91d3736af8a96d4830992ec8110938aa1ed36779",
   "remoteSnapshot": {
     "migrationHead": "20260730161737",
     "mode": "coordinator-supplied-prior-read-only-list-and-statement-hashes",
@@ -113,10 +115,10 @@
     },
     "existingReadbackGuard": "SOURCE_CLEAR",
     "contracts": "SOURCE_CLEAR",
-    "scope": "BLOCKED_INTERNAL",
+    "scope": "SOURCE_CLEAR",
     "deterministicOutput": {
       "runs": 3,
-      "normalizedSha256": "a9ea72b61f9f02d92ff732a4089cd33ef209751c08273f0abef4c8fba581b876"
+      "normalizedSha256": "5ba38136fbe8d6f75b6cd53ab87a9fbc0a9626fb1df921cd435eabca970e3af1"
     },
     "assembledLinkedDryRun": "BLOCKED_INTERNAL"
   },
@@ -133,19 +135,19 @@
   "proofLimits": [
     "The static hash gate proves only exact Git source parity with the prior read-only migration snapshot.",
     "It does not prove execution, installed behavior, native behavior, provider behavior, or release readiness.",
-    "The current scope guard classifies the required migration-readback manifest as release implementation rather than supporting evidence.",
-    "A separate bounded scope-policy metadata prerequisite, one assembled linked no-apply dry-run, and fresh exact-head review remain required."
+    "The merged metadata prerequisite classifies the migration-readback manifest as CI/test supporting evidence without weakening general release-path classification.",
+    "One coordinator-controlled assembled linked no-apply dry-run and fresh exact-head review remain required."
   ],
-  "unresolvedInternalBlockers": [
+  "resolvedPrerequisites": [
     {
       "id": "ASSURANCE_B0_READBACK_MANIFEST_SCOPE_CLASSIFICATION",
-      "status": "BLOCKED_INTERNAL",
-      "reason": "The exact required config/release migration-readback rebind is classified as a second high-risk release-OTA domain even though this lane changes only static migration-history evidence.",
-      "resumptionAction": "Create and merge a separate bounded scope-policy metadata prerequisite that classifies only this migration-readback manifest as supporting evidence without weakening general config/release classification; merge current main normally into B0, then rerun scope, the static parity test, and the existing readback guard."
+      "status": "SOURCE_CLEAR",
+      "resolution": "PR #113 moved the manifest to config/assurance with history preserved; current main was merged normally and the scope guard now reports only database-RLS as high risk."
     }
   ],
+  "unresolvedInternalBlockers": [],
   "rollback": "Before merge, abandon this Git-only branch. After merge, correct any new source-history finding with another bounded Git-only change; never rewrite or reapply a deployed remote migration.",
   "emergencyStop": "Do not deploy, repair migration history, or contact a provider from this lane.",
-  "finalPermittedNextAction": "First merge the bounded exact-path scope-policy metadata prerequisite, merge current main normally into B0, and rerun scope and static parity. Only then run one coordinator-controlled assembled linked no-apply dry-run and require fresh exact-head review before merging this Git-only history reconciliation.",
+  "finalPermittedNextAction": "Run one coordinator-controlled assembled linked no-apply dry-run and require fresh exact-head review before merging this Git-only history reconciliation.",
   "claimedFeatureCompletion": false
 }
