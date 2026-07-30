@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "livekit-source-binding-db-security-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "implementationHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+  "implementationTree": "e8f0a97d66f73ecbe712db40c2d9743f0ea40582",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "01a89b94c7206ae9fdc2048dc71b727e810f45c2d9f7665293d4878d01ee18e3",
+  "migrationSetHash": "664b1487d40cdd8389af7af3bd8e9eedb9c43b2eab1222e9d5deed2f30aee303",
+  "configHash": "9a22dedca08b6e9f566ae93e55034cd4350ca3389d150e49e8642a26a2d32807",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_findings",
+      "lane": "security-authority",
+      "focus": "database security, deployed migration parity, and source-identity enforcement",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 5,
+      "additions": 892,
+      "deletions": 7,
+      "netChangedLines": 885,
+      "implementationHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+      "implementationTree": "e8f0a97d66f73ecbe712db40c2d9743f0ea40582",
+      "mergeBase": "fc3d750158770a6f33ab10acc68e79a288b6ffa3"
+    },
+    "contractValidation": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "findings": 0
+    },
+    "featurePlan": {
+      "status": "pass",
+      "featureId": "livekit-media-transport",
+      "requirements": "REQUIREMENTS_CLEAR",
+      "architecture": "ARCHITECTURE_CLEAR"
+    },
+    "scope": {
+      "status": "pass",
+      "featureId": "livekit-media-transport",
+      "objectiveDomains": [
+        "Cognitive",
+        "LiveKit",
+        "database-RLS"
+      ],
+      "registeredFeatureBundle": true,
+      "fileBudget": 15,
+      "lineBudget": 1200
+    },
+    "sourceGuard": {
+      "status": "pass",
+      "command": "npm run proof:chilly-chat-livekit-media-migration",
+      "sourceAssertions": 130,
+      "providerContact": false,
+      "databaseContact": false
+    },
+    "migrationParity": {
+      "status": "pass_against_coordinator_supplied_read_only_evidence",
+      "reviewQueriedRemote": false,
+      "remoteMigrationHead": "20260730161737",
+      "version": "20260730142519",
+      "name": "cognitive_livekit_final_chat_source_identity_binding",
+      "statementCount": 1,
+      "sourceRawSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "remoteRawSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "stoppedPr52RawSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "stoppedBodyByteIdentity": true,
+      "exactVersionAbsentFromBase": true,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    "immutabilityAndForwardOnlySafety": {
+      "status": "pass",
+      "deployedFileAddedUnderExactRemoteVersionAndName": true,
+      "deployedBodyRewritten": false,
+      "deployedMigrationReapplied": false,
+      "migrationDeploymentAttempted": false,
+      "futureCorrectionMustBeForwardOnly": true
+    },
+    "sqlSecurity": {
+      "status": "pass",
+      "securityDefinerSearchPathClosed": true,
+      "internalHelpersExecuteRevokedFromPublicAnonAuthenticatedServiceRole": true,
+      "ownerReadbackExecuteGrantedOnlyToAuthenticated": true,
+      "ownerReadbackCallsExactOwnerAssertion": true,
+      "rlsDisabled": false,
+      "forceRlsRemoved": false,
+      "rlsPolicyChanges": 0,
+      "tableGrantChanges": 0,
+      "serviceRoleAuthorityAdded": false,
+      "rightsRolesOrAuthChanged": false
+    },
+    "sourceIdentityEnforcement": {
+      "status": "source_contract_clear_runtime_regression_open",
+      "exactSourceCommitConstraint": true,
+      "exactSourceTreeConstraint": true,
+      "exactDeploymentHashConstraint": true,
+      "platformSpecificArtifactConstraints": true,
+      "platformSpecificRollbackConstraints": true,
+      "sandboxProviderProofTrigger": true,
+      "finalRunSourceBuildHashGuard": true,
+      "finalRunRuntimeIdentityHashGuard": true,
+      "nineRouteScenarioPairsRequired": true
+    },
+    "focusedPgTap": {
+      "status": "implementation_reported_23_of_23_but_behavioral_coverage_missing",
+      "reviewReranDatabase": false,
+      "implementationReportedRuntime": "supabase-cli-2.109.1-local",
+      "implementationReportedPassed": 23,
+      "implementationReportedFailed": 0,
+      "testFileSha256": "9c9be6004ff5c3e0c9d0b6e51e2b52adb88ef429f96490fff0e1ba313fe14e52",
+      "staticPlan": 23,
+      "staticTopLevelAssertions": 23,
+      "behavioralDmlOrThrowsAssertions": 0,
+      "sourceDefinitionSubstringAssertionsPresent": true,
+      "sourceTextAcceptedAsRuntimeProof": false
+    },
+    "concurrencyCompatibility": {
+      "status": "fail_static",
+      "phase1Command": "npm run test:cognitive-db-concurrency",
+      "fixture": "scripts/test-cognitive-livekit-platform-authorization-concurrency.mjs",
+      "expectedFailingStage": "prepareReceipt(\"android\")",
+      "expectedFirstFailingAssertionLine": 414,
+      "arbitrarySourceCommit": true,
+      "arbitrarySourceTree": true,
+      "arbitrarySandboxPremiumProofHash": true,
+      "providerBackedSandboxProofFixturePresent": false,
+      "databaseExecutionByReview": false
+    },
+    "remoteDryRun": {
+      "status": "BLOCKED_INTERNAL",
+      "runByReview": false,
+      "implementationEvidencePresent": false,
+      "mergeGateSatisfied": false,
+      "requiredResumptionAction": "From an explicitly linked read-only context, run supabase db push --dry-run once and retain the exact no-apply result before merge."
+    },
+    "phase1Ci": {
+      "status": "coordinator_in_progress_not_awaited_by_review",
+      "implementationHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+      "eligibleAsReviewLaneProof": false,
+      "resumptionAction": "Coordinator evaluates the single frozen-head run independently; this lane freezes without polling or waiting."
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "databaseResetByReview": false,
+      "remoteReadbackByReview": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockCreated": false
+    }
+  },
+  "testResultHash": "88ec90c1eb4600b0c6a01a93801583913b9045a759d1a0800dffdae8a1c3f06c",
+  "reviewLevel": "C",
+  "reviewHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+  "reviewTimestamp": "2026-07-30T18:39:17Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-database-security-migration-parity",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "B1_CONCURRENCY_FIXTURE_REJECTED_BY_SOURCE_BINDING",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "scripts/test-cognitive-livekit-platform-authorization-concurrency.mjs",
+        "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql"
+      ],
+      "evidence": "The Phase 1 database command runs this fixture. The fixture sets sourceCommit to forty `a` characters at line 39 and passes arbitrary source tree, artifact, sandbox-proof, deployment, and rollback hashes at lines 403-409. It creates no provider-backed RevenueCat sandbox proof rows. The exact deployed migration requires source commit fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6 at lines 80-89 and rejects an ineligible or mismatched sandbox proof at lines 281-291.",
+      "impact": "After the reconciled migration materializes, the first prepareReceipt(\"android\") call is expected to fail before the intended 7/7 concurrency schedule, so the required Level C concurrency proof and Phase 1 database job are not current.",
+      "requiredResolution": "Keep the deployed migration byte-identical. In a bounded same-domain test-only correction, update the local fixture to construct the exact non-payable provider-backed sandbox proof and frozen source/artifact identities, preserve cleanup, then rerun the deterministic 7/7 command and the single frozen-head Phase 1 CI."
+    },
+    {
+      "id": "B1_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b1-livekit-source-binding.json"
+      ],
+      "evidence": "The reconciliation report records read-only ledger hashes and one local reset at lines 9-32 and 72-97, but contains no `supabase db push --dry-run` result or explicit no-apply outcome.",
+      "impact": "The program's mandatory read-only migration reconciliation gate is not evidenced, even though exact version/name/raw-body parity is otherwise clear.",
+      "requiredResolution": "Before merge, run the mandated dry-run once in an explicitly linked read-only context, retain the sanitized exact no-apply result, and bind it to this implementation head without deploying or rewriting the migration."
+    },
+    {
+      "id": "B1_T3_SOURCE_INTROSPECTION_SUBSTITUTION",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b1-livekit-source-binding.json",
+        "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql"
+      ],
+      "evidence": "The report marks T3_INTEGRATION and the focused pgTAP INTEGRATION_CLEAR at lines 54-58 and 83-93. Static review counted all 23 planned assertions but zero behavioral DML or throws/lives assertions; the identity, proof, and finalization checks primarily inspect pg_get_functiondef and constraint text, while the separate runtime concurrency fixture is incompatible with the new binding.",
+      "impact": "Catalog/source presence and local migration materialization do not prove that the source-identity, sandbox proof, grant, RLS, and finalization rejection paths execute correctly. This is a forbidden source-text-for-runtime proof substitution.",
+      "requiredResolution": "Do not claim T3 clear yet. Add deterministic database behavior cases for accepted exact input and rejected wrong source/artifact/proof/platform/final-run identity, test application-role denial through real role/RLS context, repair and run the concurrency fixture, then update the report from the new exact head."
+    },
+    {
+      "id": "B1_RECONCILIATION_REPORT_NOT_EXACT_HEAD_BOUND",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b1-livekit-source-binding.json"
+      ],
+      "evidence": "The report binds the frozen stopped PR #52 head but does not record PR #70, its implementation head/tree, exact base, changed-file hash, test-result hash, or current review head.",
+      "impact": "The parity facts are valid, but the reconciliation report alone cannot prove that its validation belongs to the exact reviewed PR #70 tree.",
+      "requiredResolution": "Update the reconciliation report on the successor exact implementation head with the current PR/head/tree/base and evidence hashes; keep the separate review manifest review-only."
+    },
+    {
+      "id": "B1_EXACT_DEPLOYED_MIGRATION_IDENTITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Git uses exact deployed version 20260730142519 and name cognitive_livekit_final_chat_source_identity_binding. Source raw SHA-256 equals the coordinator-supplied read-only remote statement hash and the frozen PR #52 body byte-for-byte."
+    },
+    {
+      "id": "B1_SECURITY_DEFINER_AND_GRANT_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "All four new SECURITY DEFINER functions use an empty search_path. Internal helpers deny PUBLIC, anon, authenticated, and service_role execution; the authenticated readback rechecks exact Owner identity; no service-role execution authority is added."
+    },
+    {
+      "id": "B1_RLS_AND_IMMUTABILITY_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact deployed source changes no table grants or RLS policies and removes neither RLS nor FORCE RLS. The three evidence tables retain forced owner-scoped RLS and immutable update/delete triggers from their foundation migration."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 3,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "databaseResetByReview": false,
+    "remoteReadbackByReview": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "remoteDryRunBlocked": true,
+    "fullCiAwaitedByReview": false,
+    "reviewDisposition": "merge-blocked-open-p1s",
+    "humanApproval": false
+  }
+}
