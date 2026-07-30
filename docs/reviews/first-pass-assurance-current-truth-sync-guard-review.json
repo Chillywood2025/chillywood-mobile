@@ -3,8 +3,8 @@
   "reviewId": "first-pass-assurance-current-truth-sync-guard-review-v1",
   "implementationPrNumber": 58,
   "implementationBranch": "codex/first-pass-assurance-current-truth-sync-guard",
-  "implementationHead": "3ce1f6e3a8681d6df9866300f2e772facaf570fd",
-  "implementationTree": "9d2895a13f621206d08d336041cba007a5ead6b3",
+  "implementationHead": "b170c4ed99a9e2cc2b33b19fdf5e78b33f126157",
+  "implementationTree": "dbc57e041b87a7a75d91963e0ecbbf1a0469063d",
   "baseHead": "ebefdd26a278533b51a5a2e5b981640b6518a777",
   "changedFileHash": "b4f335fa384269f0adfed3a701702c36ff28cfaec3485dd131ec405c6a7d12ca",
   "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -26,15 +26,20 @@
       "remoteMain": "ebefdd26a278533b51a5a2e5b981640b6518a777",
       "recordedMain": "2f3b0d1cc4765c4196cd831ab782417a0f000c23"
     },
+    "providerMainReadback": {
+      "matchingRemoteMain": "pass",
+      "mismatchedRemoteMain": "rejected",
+      "recordCheckpointUsedAsProviderSha": false
+    },
     "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
     "determinism": "3/3",
-    "scope": {"status": "pass", "files": 5, "fileBudget": 15, "netChangedLines": 136, "lineBudget": 1200},
+    "scope": {"status": "pass", "files": 5, "fileBudget": 15, "netChangedLines": 139, "lineBudget": 1200},
     "gitDiffCheck": "pass"
   },
-  "testResultHash": "5f50620a18a5f0d3d831806e504a15220d1d1862e3b1e7d9b0789a2cf37d824f",
+  "testResultHash": "e1a2b38f4a38a072aa3eb5700279da8e3f490050e774601cdbc5442619f643cb",
   "reviewLevel": "A",
-  "reviewHead": "3ce1f6e3a8681d6df9866300f2e772facaf570fd",
-  "reviewTimestamp": "2026-07-30T17:31:27Z",
+  "reviewHead": "61f41b7605a1722dc6eadb14e8f8a865ab0b1478",
+  "reviewTimestamp": "2026-07-30T17:34:58Z",
   "reviewerLanes": ["independent", "separate-clean-worktree", "current-truth-fail-closed"],
   "findings": [
     {
