@@ -1,0 +1,393 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-final-architecture-scope-review-v2",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewPrNumber": 102,
+  "assignedLane": "architecture-domain-proof-scope-final-v2",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+  "implementationTree": "99ff062923ca128c017a7d050eb34d62be4d7037",
+  "reviewMergeHead": "3b63a908c690c67cbc1e1bae8a36f0b6b7617763",
+  "reviewMergeTree": "bdc5b89d7d2c1993cd873ecc549458a4d28a9b01",
+  "reviewMergeParents": [
+    "332f1d5fbd757ab2c1412abea1a0fc6f13ddc67d",
+    "8829ca3d59453155c29370495f32f432bfece5c8"
+  ],
+  "baseHead": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+  "baseTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+  "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 4,
+    "implementationOnlyCommits": 11
+  },
+  "changedFileHash": "8f8a3345e8eb53b3a8214d5f3af66c738b036b1550f8a5c353101992a8d11f45",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base...implementation)",
+  "changedNameHash": "140824304f89fccb5cef1ca286ce63fe7f71996a7dadb081e5a132f00569c48f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "1275a01e647677891dd7db7a0c76c17f2d3a5af95534e23bc7d36a4093eded76",
+  "implementationDiffHash": "031eb82f139a93d812755cdbbb75def3489839b69d52b7a010a03f3e5b7075b5",
+  "modelSourceSetHash": "344f91251fd3e1003e432f7bf5bd6c16f5a600dd852f4c186703b61f96ce0476",
+  "reviewMergeDeltaHash": "51b96495ff4ff20116c8cff76153bf85a76472e11de1444f5f1c061cfb3c0738",
+  "reviewMergeDeltaNameHash": "4a406dfa71d8d17cd59eddc2720f207a6c04ea7c8c80ef28fb2543eea6138025",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "architecture-domain-proof-scope-final-v2",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "reviewMergeIntegrity": {
+      "status": "pass",
+      "reviewMergeHead": "3b63a908c690c67cbc1e1bae8a36f0b6b7617763",
+      "reviewMergeTree": "bdc5b89d7d2c1993cd873ecc549458a4d28a9b01",
+      "firstParent": "332f1d5fbd757ab2c1412abea1a0fc6f13ddc67d",
+      "secondParentExactImplementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "exactImplementationTree": "99ff062923ca128c017a7d050eb34d62be4d7037",
+      "nonReviewSourceEquivalentToImplementation": true,
+      "implementationFilesOnReviewBranch": 0,
+      "reviewFilesBeforeV2": [
+        "docs/reviews/pr64-final-architecture-scope-review.json"
+      ]
+    },
+    "v1EvidencePreservation": {
+      "status": "pass",
+      "path": "docs/reviews/pr64-final-architecture-scope-review.json",
+      "sha256BeforeV2": "36bfdff20e3e9ef9f05ee6c53d6f82945079d200640f6d735dc600b4ecf3e83d",
+      "editedByV2Lane": false
+    },
+    "currentMainAndTruth": {
+      "status": "pass",
+      "currentMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "currentMainTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+      "currentMainParents": [
+        "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+        "502f9e2659d96389ae418b11f83171b171b5a708"
+      ],
+      "recordedMainSha": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+      "recordedMainExplanation": "The current-truth synchronization contract requires a two-parent merge and requires mainSha to equal the synchronization merge's first parent. The record is therefore bound to 10145b029708fd99ae9036b4c52eb018d4f36c3f by contract rather than stale relative to merge commit ac5575baf823b9189316b02ec5fa5e352d15b457.",
+      "recordedPr64Head": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "recordedPr64State": "open-draft-frozen",
+      "recordedPr64Disposition": "redaction-remediation-frozen-run-four-fresh-exact-reviews-and-one-full-ci-after-this-sync",
+      "recordTimestamp": "2026-07-30T21:10:00Z",
+      "freshnessDeadline": "2026-07-31T21:10:00Z",
+      "implementationCurrentTruthPathsChanged": 0,
+      "implementationBranchEmbeddedSnapshot": "historical",
+      "liveProviderReadback": false
+    },
+    "contractValidation": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contractsValidated": 13,
+      "features": 20,
+      "escapedDefects": 25,
+      "errors": 0
+    },
+    "architectureCoverage": {
+      "status": "pass",
+      "modelCount": 6,
+      "registeredFeatureCount": 6,
+      "allFeaturesRequireT2": true,
+      "allModelResultsClear": true,
+      "modelMappings": [
+        {
+          "modelId": "chat-call",
+          "featureId": "chilly-chat-call-lifecycle",
+          "mappingStatus": "pass"
+        },
+        {
+          "modelId": "revenuecat",
+          "featureId": "revenuecat-premium",
+          "mappingStatus": "pass"
+        },
+        {
+          "modelId": "ota-build",
+          "featureId": "eas-build-update-release",
+          "mappingStatus": "pass"
+        },
+        {
+          "modelId": "notification-native-action",
+          "featureId": "pushkit-callkit",
+          "mappingStatus": "pass"
+        },
+        {
+          "modelId": "livekit",
+          "featureId": "livekit-media-transport",
+          "mappingStatus": "pass"
+        },
+        {
+          "modelId": "migrations",
+          "featureId": "supabase-migrations-rls",
+          "mappingStatus": "pass"
+        }
+      ]
+    },
+    "pushKitCallKitOwnership": {
+      "status": "pass",
+      "modelId": "notification-native-action",
+      "featureId": "pushkit-callkit",
+      "incorrectFcmAttribution": false,
+      "fcmFeatureClearClaimedByThisModel": false,
+      "modeledResponsibilities": [
+        "PushKit must-report obligation",
+        "CallKit reporting",
+        "push completion",
+        "native Answer and Decline retention",
+        "consume-once bridge",
+        "server acceptance and terminal cleanup"
+      ],
+      "higherTierBoundary": {
+        "tier": "T6_INSTALLED_PHYSICAL",
+        "status": "BLOCKED_EXTERNAL",
+        "detail": "Physical PushKit delivery remains outside Lane C; APNs acceptance is not delivery, CallKit presentation, or Answer/Decline proof."
+      }
+    },
+    "canonicalDefectAttribution": {
+      "status": "pass",
+      "canonicalFixtures": 17,
+      "supplementalFixtures": 5,
+      "canonicalFixturesPresentInCatalog": 17,
+      "uncatalogedCanonicalFixtures": 0,
+      "countsByModelDomain": {
+        "chat-call": 3,
+        "revenuecat": 2,
+        "ota-build": 3,
+        "notification-native-action": 3,
+        "livekit": 3,
+        "migrations": 3
+      },
+      "canonicalIds": [
+        "ACCEPT_TIMEOUT_RACE",
+        "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200",
+        "DOUBLE_SERIALIZED_JSONB",
+        "EAS_ENVIRONMENT_OVERRIDE",
+        "LIVEKIT_CONNECTED_WITHOUT_MEDIA",
+        "LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION",
+        "MIGRATION_VERSION_NAME_MISMATCH",
+        "MISSING_NATIVE_MODULE_IN_RUNTIME",
+        "NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT",
+        "OTA_NATIVE_CAPABILITY_MISMATCH",
+        "PLATFORM_SCOPE_MISMATCH",
+        "PUSHKIT_DELIVERY_SUPPRESSED",
+        "REMOTE_MIGRATION_AHEAD_OF_GIT",
+        "REVENUECAT_OUT_OF_ORDER_EVENT",
+        "REVENUECAT_TRANSFER_TARGET_MISMATCH",
+        "STALE_CLEANUP_CLEARS_NEW_CALL",
+        "TERMINAL_ROOM_ORPHAN"
+      ]
+    },
+    "proofStrength": {
+      "status": "pass",
+      "catalogCommand": "node scripts/assurance/proof-strength.mjs --catalog",
+      "catalogOk": true,
+      "modelRunnerStatus": "MODEL_CLEAR",
+      "modelClaim": "T2_MODEL",
+      "modelRunnerForbiddenClaims": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "physicalPushKitBlockerPreserved": true,
+      "javascriptPresentedAsNativeProof": false,
+      "providerFixturePresentedAsProviderBehavior": false,
+      "apnsAcceptancePresentedAsPushKitDelivery": false,
+      "sharedPlatformEvidenceAccepted": false
+    },
+    "scope": {
+      "status": "pass",
+      "command": "node scripts/assurance/pr-scope.mjs --base=268b15f3f23c444e083c1587f83f1a7ec9a9c802 --waiver=config/assurance/pr-c-model-integrity-scope-waiver-v1.json --objective-domains=CI-test-infrastructure",
+      "changedFiles": 11,
+      "additions": 1424,
+      "deletions": 1,
+      "netChangedLines": 1423,
+      "waivedFileBudget": 12,
+      "waivedLineBudget": 1600,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "highRiskDomains": [],
+      "secondHighRiskDomain": false,
+      "featureDomainDecision": "single-or-no-high-risk-domain",
+      "scopeWaiver": "pr-c-model-integrity-scope-waiver-v1",
+      "mixedHighRiskScope": false,
+      "productImplementationFiles": 0,
+      "providerFiles": 0,
+      "databaseOrMigrationFiles": 0,
+      "nativeFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativeDirectories": 0
+    },
+    "boundedFinalRemediation": {
+      "status": "pass",
+      "baseHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+      "head": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "files": 2,
+      "additions": 37,
+      "deletions": 7,
+      "paths": [
+        "scripts/assurance/models/run.mjs",
+        "tests/assurance/models/escaped-defects.test.mjs"
+      ],
+      "waiverProhibitedPathsTouched": false,
+      "packageOrLockfileTouched": false,
+      "currentTruthTouched": false,
+      "impactPlannerTouched": false
+    },
+    "prCSelfDescription": {
+      "status": "pass_with_nonblocking_p2",
+      "runnerFinding": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "runnerFindingSeverity": "P2",
+      "runnerFindingOwner": "PR E",
+      "runnerFindingBlocksCurrentLane": false,
+      "impactCommand": "node scripts/assurance/impact.mjs --base=268b15f3f23c444e083c1587f83f1a7ec9a9c802 --head=8829ca3d59453155c29370495f32f432bfece5c8",
+      "genericImpactReportedOk": true,
+      "genericImpactDomains": [
+        "CI-test-infrastructure"
+      ],
+      "genericImpactRequiredGates": [
+        "assurance-contracts",
+        "assurance-current-truth",
+        "assurance-final-summary",
+        "assurance-pr-scope",
+        "assurance-review-head",
+        "git-diff",
+        "links",
+        "supply-chain"
+      ],
+      "genericImpactModelGatesDeferred": [
+        "assurance-state-model",
+        "assurance-property",
+        "assurance-concurrency"
+      ],
+      "dependencyExplanation": "PR E owns the test-impact planner and final CI enforcement and cannot begin until PR C and PR D freeze or merge. PR C therefore self-describes the deferral and proves its T2 source directly without modifying PR E-owned impact files.",
+      "waiverProhibitsImpactPlannerChanges": true,
+      "blocksPrC": false,
+      "blocksPrECompletion": true
+    },
+    "focusedExactHeadEvidenceReused": {
+      "status": "pass",
+      "reason": "Current trustworthy exact-tree concurrency/property review evidence was produced in the parallel exact-head lane and was not needlessly repeated here.",
+      "implementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "implementationTree": "99ff062923ca128c017a7d050eb34d62be4d7037",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyCases": 1200,
+      "deterministicSeeds": [
+        173501,
+        173502,
+        173503,
+        173504,
+        173505,
+        173506
+      ],
+      "transitionWitnesses": 8,
+      "escapedDefectFixtures": 22,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20,
+      "deterministicRuns": 3,
+      "deterministicOutputHash": "2ca86d1032a75dfd346bc02694c5b0ddce808f7a9f465919fdddc9cbc03a5c57"
+    },
+    "testOnlyAndAuthorityBoundary": {
+      "status": "pass",
+      "fastCheckVersion": "4.9.0",
+      "fastCheckDependencyType": "devDependency",
+      "productRuntimeImportsOfStateModels": 0,
+      "productRuntimeImportsOfFastCheck": 0,
+      "productSourceFilesChanged": 0,
+      "providerSourceFilesChanged": 0,
+      "databaseOrMigrationFilesChanged": 0,
+      "nativeFilesChanged": 0,
+      "workflowFilesChanged": 0,
+      "productionAuthorityMutations": 0,
+      "rightsRolesAuthRlsChanges": 0,
+      "moneyOrEntitlementChanges": 0
+    },
+    "staticChecks": {
+      "status": "pass",
+      "reviewMergeSourceEquivalence": "pass",
+      "gitDiffCheck": "pass",
+      "v1Sha256Rechecked": "36bfdff20e3e9ef9f05ee6c53d6f82945079d200640f6d735dc600b4ecf3e83d"
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_exact_head_run",
+      "runByThisReviewLane": false,
+      "findingOpenedByThisLane": false,
+      "resumptionAction": "After all four exact-head v2 review lanes freeze, the coordinator runs the single full Phase 1 CI execution for implementation head 8829ca3d59453155c29370495f32f432bfece5c8."
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeTestOrBuild": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "productImplementationChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "currentTruthChangedByReview": false,
+      "v1ReviewChangedByV2": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "514f1dfbc77eeb6a22f26ee25fe90aec629a39b66a5f025e360a7ecd1e28d9aa",
+  "reviewLevel": "C",
+  "reviewHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+  "reviewHeadSemantics": "exact implementation second parent of the normal review merge; v2 evidence commit immediately follows that merge",
+  "reviewTimestamp": "2026-07-30T21:30:00Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "architecture-domain-proof-scope-final-v2"
+  ],
+  "findings": [
+    {
+      "id": "PR64_GENERIC_MODEL_IMPACT_ROUTING_DEFERRED_TO_PR_E",
+      "severity": "P2",
+      "status": "deferred",
+      "blocksCurrentLane": false,
+      "owner": "PR E",
+      "locations": [
+        "config/assurance/test-impact-map-v1.json",
+        "scripts/assurance/impact.mjs",
+        "scripts/assurance/models/run.mjs:74"
+      ],
+      "evidence": "The exact PR C diff is correctly self-described by ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E and directly runs its T2 checks, but the generic impact command reports only eight supporting-infrastructure gates and does not yet add assurance-state-model, assurance-property, or assurance-concurrency for model source paths.",
+      "impact": "PR E must add fail-closed generic routing before the final CI planner can enforce applicable model jobs for future changes. This does not block PR C because PR E owns those shared impact and CI files, begins only after PR C and PR D, and PR C's machine-readable waiver explicitly prohibits changing the impact planner.",
+      "requiredResolution": "In PR E, add exact test-impact rules for model source, runner, property, concurrency, and escaped-defect paths; require the three model gates; add focused planner regressions; and make the final required job fail when an applicable routed gate did not run."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 1,
+    "p2BlockingCurrentLane": 0,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "contractSchemaStatus": "pass",
+    "architectureCoverageStatus": "pass",
+    "proofTierBoundaryStatus": "pass",
+    "scopeStatus": "pass",
+    "impactPlannerStatus": "deferred-to-pr-e",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "lane-clear-with-nonblocking-p2-await-other-reviews-and-coordinator-full-ci",
+    "humanApproval": false
+  }
+}
