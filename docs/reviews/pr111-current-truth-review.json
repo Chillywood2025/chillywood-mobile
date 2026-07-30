@@ -1,0 +1,342 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr111-current-truth-review",
+  "implementationPrNumber": 111,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-models",
+  "implementationHead": "d727b3024199935c33d8dc9e702818fdbf01d0ba",
+  "implementationTree": "f7193a67717c2877dad104f22fab513fac32b28c",
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-models-review",
+  "reviewBranchBaseHead": "d727b3024199935c33d8dc9e702818fdbf01d0ba",
+  "reviewBranchBaseTree": "f7193a67717c2877dad104f22fab513fac32b28c",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLevel": "A",
+  "humanApproval": false,
+  "reviewTimestamp": "2026-07-30T22:40:59Z",
+  "baseBranch": "main",
+  "baseHead": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+  "baseTree": "4afaa24b1da6355162503b222c59962edea60875",
+  "mergeBase": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+  "implementationParents": [
+    "a24956a19a50182db9c0d0e727ed38e61b2f3f90"
+  ],
+  "hashes": {
+    "changedFileHash": "2fa54b6ab00ac992768fb337cbf637892887a8d710e55938e1d1a815193589de",
+    "changedFileHashMethod": "sha256 of git diff --raw a24956a19a50182db9c0d0e727ed38e61b2f3f90..d727b3024199935c33d8dc9e702818fdbf01d0ba",
+    "patchHash": "58988e4bead6211b177e7e8035f9f339fc75a6f0e15d54da06d31a87cd2c3fcd",
+    "patchHashMethod": "sha256 of git diff --binary a24956a19a50182db9c0d0e727ed38e61b2f3f90..d727b3024199935c33d8dc9e702818fdbf01d0ba",
+    "changedNameStatusHash": "9cd6494af24c08dfc41c50f1f344edff716381a56bf7d322d21da5b0c9e7d893",
+    "changedNameStatusHashMethod": "sha256 of git diff --name-status a24956a19a50182db9c0d0e727ed38e61b2f3f90..d727b3024199935c33d8dc9e702818fdbf01d0ba",
+    "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "currentTruthRecordHash": "267a98a603289d001c77e13b8c8307655eaf48b9b4df848217c6b32612bbbaee",
+    "currentStateHash": "5932cdbf4fe08596bca097190ccae7186eeccb2e6a5e05b2d86f4cf1b35bdef2",
+    "nextTaskHash": "694302449fdd4aff11d7e8948193ff1e12402b6005302ea289353526abed83a6",
+    "generatedDocumentSetHash": "bf8a409a17c4634510b2df8d36a66685202facedc4a4c9f7193efb9b42fefd8b",
+    "deterministicJsonOutputHash": "b673a0df26c932f34380c10ccc55e66880d772d4ec07a18d0e519967f7c6094f",
+    "deterministicJsonOutputHashMethod": "sha256 of concatenated JSON stdout from validate-contracts.mjs and current-truth.mjs in the exact implementation worktree"
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "level-a-automated-review-clear",
+    "exactHeadBound": true,
+    "exactTreeBound": true,
+    "changedFiles": 3,
+    "netChangedLines": -6,
+    "currentTruthStatus": "pass",
+    "generatedDocumentsStatus": "pass-byte-exact",
+    "scopeStatus": "pass",
+    "determinismStatus": "pass-3-of-3",
+    "syncMergeTopologyStatus": "pass",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "productSourceChanged": false,
+    "nativeSourceChanged": false,
+    "buildOrOta": false,
+    "privateEvidenceAdded": false,
+    "fullCiRunByReviewLane": false,
+    "humanApproval": false
+  },
+  "findings": [],
+  "scopeEvidence": {
+    "status": "pass",
+    "changedFiles": [
+      "CURRENT_STATE.md",
+      "NEXT_TASK.md",
+      "config/assurance/current-truth-v1.json"
+    ],
+    "changedFileCount": 3,
+    "additions": 30,
+    "deletions": 36,
+    "netChangedLines": -6,
+    "fileBudget": 15,
+    "lineBudget": 1200,
+    "domains": [
+      "CI-test-infrastructure",
+      "documentation-metadata"
+    ],
+    "highRiskDomains": [],
+    "waiverRequired": false,
+    "unexpectedFiles": [],
+    "addedFiles": [],
+    "productFiles": [],
+    "providerFiles": [],
+    "databaseOrMigrationFiles": [],
+    "nativeFiles": [],
+    "workflowFiles": [],
+    "packageFiles": [],
+    "generatedNativeDirectories": []
+  },
+  "currentTruthBinding": {
+    "status": "pass",
+    "recordedMain": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+    "latestMergedImplementationPr": {
+      "number": 64,
+      "state": "merged",
+      "head": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "mergeSha": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+      "title": "Add executable state and concurrency assurance"
+    },
+    "githubReadback": {
+      "number": 64,
+      "state": "closed",
+      "merged": true,
+      "head": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "mergeSha": "a24956a19a50182db9c0d0e727ed38e61b2f3f90"
+    },
+    "pr64PresentInOpenImplementationPrs": false,
+    "statusVocabularyAccurate": true
+  },
+  "closedReviewOnlyPrDispositions": {
+    "status": "pass",
+    "removedFromOpenReviewOnlyPrs": [
+      99,
+      100,
+      101,
+      102,
+      105,
+      106,
+      107,
+      108
+    ],
+    "persistentExactHeadReviews": [
+      {
+        "number": 99,
+        "head": "f907f43f631083890166fd57c8e4a7d08b7ad6b9",
+        "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+        "state": "closed-unmerged",
+        "currentEvidenceVersion": "v5",
+        "githubClosedUnmerged": true,
+        "localV5ExactHeadVerified": true
+      },
+      {
+        "number": 100,
+        "head": "ad53ffd92bdbe555579d026fd1f538c38a858cd6",
+        "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+        "state": "closed-unmerged",
+        "currentEvidenceVersion": "v5",
+        "githubClosedUnmerged": true,
+        "localV5ExactHeadVerified": true
+      },
+      {
+        "number": 101,
+        "head": "72b6468e1f9ae02b00ce22dca61487ed38169b0b",
+        "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+        "state": "closed-unmerged",
+        "currentEvidenceVersion": "v5",
+        "githubClosedUnmerged": true,
+        "localV5ExactHeadVerified": true
+      },
+      {
+        "number": 102,
+        "head": "4e2d2c5aecc6c55e722a6457b8f2a9c1af8a0604",
+        "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+        "state": "closed-unmerged",
+        "currentEvidenceVersion": "v5",
+        "githubClosedUnmerged": true,
+        "localV5ExactHeadVerified": true
+      }
+    ],
+    "preAddendumHistoricalReviews": [
+      {
+        "number": 105,
+        "head": "ee52f2d43eaf08b2d05586cb99cf9723a08360e4",
+        "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+        "state": "closed-unmerged-historical-stale",
+        "disposition": "pre-addendum-duplicate-branch-retained-never-merge",
+        "githubClosedUnmerged": true
+      },
+      {
+        "number": 106,
+        "head": "2cd410bd9be9c07cc1f1007c9fffe70725a328dd",
+        "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+        "state": "closed-unmerged-historical-stale",
+        "disposition": "pre-addendum-duplicate-branch-retained-never-merge",
+        "githubClosedUnmerged": true
+      },
+      {
+        "number": 107,
+        "head": "8e1e873cb56aaa508dc3fb938c8f224b5193a94a",
+        "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+        "state": "closed-unmerged-historical-stale",
+        "disposition": "pre-addendum-duplicate-branch-retained-never-merge",
+        "githubClosedUnmerged": true
+      },
+      {
+        "number": 108,
+        "head": "2304de9e223b82fcb35cb1ac28b27babc4fd6264",
+        "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+        "state": "closed-unmerged-historical-stale",
+        "disposition": "pre-addendum-duplicate-branch-retained-never-merge",
+        "githubClosedUnmerged": true
+      }
+    ],
+    "machineReadableInAuthoritativeRecord": true
+  },
+  "openReviewPr110": {
+    "status": "pass",
+    "number": 110,
+    "branch": "codex/first-pass-assurance-current-truth-before-model-final-review-review",
+    "head": "d43b460cc2f82cb296668117a0bf73648dacd701",
+    "reviewedImplementationHead": "502f9e2659d96389ae418b11f83171b171b5a708",
+    "state": "open-draft-current",
+    "disposition": "never-merge",
+    "githubState": "open",
+    "githubDraft": true,
+    "githubMerged": false,
+    "githubBaseBranch": "codex/first-pass-assurance-current-truth-before-model-final-review",
+    "githubBaseHead": "502f9e2659d96389ae418b11f83171b171b5a708",
+    "reviewOnlyBody": true
+  },
+  "reconciliationAndDependencyState": {
+    "status": "pass",
+    "lanes": [
+      {
+        "lane": "B2",
+        "pr": 69,
+        "head": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+        "state": "BLOCKED_INTERNAL",
+        "githubState": "open-draft",
+        "bodyDeclaresDoNotMerge": true
+      },
+      {
+        "lane": "B1",
+        "pr": 70,
+        "head": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+        "state": "BLOCKED_INTERNAL",
+        "githubState": "open-draft",
+        "bodyDeclaresDoNotMerge": true
+      },
+      {
+        "lane": "B3",
+        "pr": 75,
+        "head": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+        "state": "BLOCKED_INTERNAL",
+        "githubState": "open-draft",
+        "bodyDeclaresDoNotMerge": true
+      }
+    ],
+    "prDState": "NOT_STARTED_DEPENDENCY_BLOCKED",
+    "prDPrerequisite": "B1, B2, and B3 reconciled and merged",
+    "productionMigrationAuthorized": false
+  },
+  "generatedDocumentEvidence": {
+    "status": "pass-byte-exact",
+    "generator": "renderCurrentState/renderNextTask from scripts/assurance/lib.mjs",
+    "currentStateMatchesGeneratedBytes": true,
+    "nextTaskMatchesGeneratedBytes": true,
+    "currentStateHandEdited": false,
+    "nextTaskHandEdited": false
+  },
+  "validation": {
+    "contracts": {
+      "status": "pass",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25,
+      "errors": 0
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "offline",
+      "findings": 0,
+      "recordedMain": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+      "remoteMain": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+      "synchronizationMode": "exact-main",
+      "headBindingsPass": true
+    },
+    "scope": {
+      "status": "pass",
+      "changedFiles": 3,
+      "fileBudget": 15,
+      "netChangedLines": -6,
+      "lineBudget": 1200,
+      "findings": 0
+    },
+    "determinism": {
+      "status": "pass",
+      "runs": 3,
+      "identicalRuns": 3,
+      "executionContext": "/Users/loverslane/chillywood-assurance-worktrees/post-pr64-current-truth at exact implementation head",
+      "hash": "b673a0df26c932f34380c10ccc55e66880d772d4ec07a18d0e519967f7c6094f"
+    },
+    "gitDiffCheck": "pass"
+  },
+  "syncMergeTopology": {
+    "status": "pass",
+    "currentMain": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+    "implementationParent": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+    "baseOnlyCommits": 0,
+    "implementationOnlyCommits": 1,
+    "mergeConflicts": 0,
+    "localMergeTreeResult": "f7193a67717c2877dad104f22fab513fac32b28c",
+    "githubTestMerge": {
+      "sha": "7011495cd36a824c5793c99701c0ac3a2b6020a3",
+      "parents": [
+        "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+        "d727b3024199935c33d8dc9e702818fdbf01d0ba"
+      ],
+      "tree": "f7193a67717c2877dad104f22fab513fac32b28c"
+    },
+    "requiredMergeMethod": "normal-two-parent",
+    "fastForwardOrSquashAccepted": false
+  },
+  "nonInterference": {
+    "githubMode": "read-only",
+    "supabaseContactByReviewLane": false,
+    "providerContactOtherThanReadOnlyGithub": false,
+    "providerMutation": false,
+    "databaseContact": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "productSourceChanged": false,
+    "nativeSourceChanged": false,
+    "generatedNativeDirectoryCommitted": false,
+    "buildOrOta": false,
+    "publicRelease": false,
+    "moneyOrEntitlementChange": false,
+    "rightsRolesAuthRlsChange": false,
+    "moderationOrRankingChange": false,
+    "switchOrScheduleChange": false,
+    "liveKitActivationResumed": false,
+    "newSecretOrCredentialAdded": false,
+    "newDeviceOrAccountIdentifierAdded": false,
+    "privateScreenshotOrLogAdded": false,
+    "implementationFilesEditedByReviewLane": false,
+    "fullCiRunByReviewLane": false
+  },
+  "exactCommands": [
+    "node scripts/assurance/validate-contracts.mjs",
+    "node scripts/assurance/current-truth.mjs",
+    "node scripts/assurance/pr-scope.mjs --base=origin/main --json",
+    "git diff --check origin/main...HEAD",
+    "three deterministic runs of concatenated JSON stdout from validate-contracts.mjs and current-truth.mjs in the exact implementation worktree",
+    "Node machine-readable disposition and generated-document byte-equivalence check",
+    "git merge-tree --write-tree --no-messages a24956a19a50182db9c0d0e727ed38e61b2f3f90 d727b3024199935c33d8dc9e702818fdbf01d0ba",
+    "read-only GitHub metadata for PR #64, #69, #70, #75, #99-#111",
+    "read-only GitHub test-merge commit parent/tree inspection"
+  ],
+  "remainingRequiredAction": "The coordinator runs the required exact-head CI for PR #111, then merges it with a normal two-parent merge whose first parent is current main a24956a19a50182db9c0d0e727ed38e61b2f3f90 and second parent is implementation head d727b3024199935c33d8dc9e702818fdbf01d0ba. This isolated automated review is not human approval and authorizes no provider, database, build, OTA, product, native, or release action."
+}
