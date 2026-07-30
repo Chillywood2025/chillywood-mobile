@@ -42,7 +42,20 @@
     },
     "currentTruthContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["recordPath", "generatedDocuments", "requiredFields", "freshness", "staleFindingIds"]
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "synchronizationMerge", "freshness", "staleFindingIds"],
+      "properties": {
+        "synchronizationMerge": {
+          "type": "object",
+          "required": ["required", "parentCount", "recordedMainMustBeFirstParent", "requiredChangedPaths", "allowedChangedPaths"],
+          "properties": {
+            "required": {"const": true},
+            "parentCount": {"const": 2},
+            "recordedMainMustBeFirstParent": {"const": true},
+            "requiredChangedPaths": {"type": "array", "minItems": 3, "uniqueItems": true},
+            "allowedChangedPaths": {"type": "array", "minItems": 3, "uniqueItems": true}
+          }
+        }
+      }
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
