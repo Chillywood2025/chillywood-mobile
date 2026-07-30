@@ -1,6 +1,21 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-import { args, emit, git, providerMode, readJson, readText, rel, renderCurrentState, renderNextTask, verifyCurrentTruthSynchronization } from "./lib.mjs";
+import {
+  args,
+  emit,
+  git,
+  implementationRemoteRef,
+  isValidGitBranchName,
+  providerMode,
+  readJson,
+  readText,
+  rel,
+  renderCurrentState,
+  renderNextTask,
+  verifyCurrentTruthHeadBindings,
+  verifyProviderImplementationSnapshot,
+  verifyCurrentTruthSynchronization
+} from "./lib.mjs";
 
 const options = args();
 if (options.dogfood) {
@@ -36,6 +51,28 @@ if (mode) {
   const head = git(["rev-parse", "HEAD"]);
   const mergeBase = git(["merge-base", "HEAD", "origin/main"]);
   const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
+  const observedImplementationRefs = {};
+  const implementationEntries = Array.isArray(record.openImplementationPrs) ? record.openImplementationPrs : [];
+  for (const entry of implementationEntries) {
+    if (!isValidGitBranchName(entry?.branch)) continue;
+    const ref = implementationRemoteRef(entry.branch);
+    try {
+      observedImplementationRefs[ref] = git(["show-ref", "--verify", "--hash", ref]);
+    } catch {
+      observedImplementationRefs[ref] = null;
+    }
+  }
+  const explicitImplementationBranch = typeof options.implementationBranch === "string" ? options.implementationBranch : "";
+  const explicitImplementationHead = typeof options.implementationHead === "string" ? options.implementationHead : "";
+  const headBindings = verifyCurrentTruthHeadBindings({
+    openImplementationPrs: record.openImplementationPrs,
+    observedRefs: observedImplementationRefs,
+    branch,
+    head,
+    remoteMain,
+    explicitBranch: explicitImplementationBranch,
+    explicitHead: explicitImplementationHead
+  });
   const mainParents = git(["show", "-s", "--format=%P", remoteMain]).split(/\s+/u).filter(Boolean);
   const mainChangedPaths = mainParents.length
     ? git(["diff", "--name-only", mainParents[0], remoteMain]).split(/\r?\n/gu).filter(Boolean)
@@ -49,10 +86,13 @@ if (mode) {
     allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
     bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge
   });
-  const mainMatches = synchronization.ok && (branch === "main" || mergeBase === remoteMain);
+  const claimsMain = (branch || explicitImplementationBranch) === "main";
+  const explicitMainMatches = explicitImplementationBranch !== "main" || explicitImplementationHead === remoteMain;
+  const mainMatches = synchronization.ok && (claimsMain ? head === remoteMain && explicitMainMatches : mergeBase === remoteMain);
   const now = options.now ? new Date(options.now) : new Date();
   const freshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
-  const findings = [];
+  const findings = [...headBindings.findings];
+  let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!freshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
   for (const [file, expected] of Object.entries(expectedDocs)) {
@@ -60,16 +100,30 @@ if (mode) {
   }
   if (record.latestMergedImplementationPr.state !== "merged") findings.push({ id: "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE", status: "BLOCKED_INTERNAL" });
   if (mode === "read-only") {
-    const snapshot = readJson(options.providerSnapshot ?? options.snapshot);
-    if (snapshot.mainSha !== undefined && snapshot.mainSha !== remoteMain) {
-      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAINSHA_STALE", status: "BLOCKED_INTERNAL" });
-    }
-    for (const key of ["latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
-      if (snapshot[key] !== undefined && JSON.stringify(snapshot[key]) !== JSON.stringify(record[key])) findings.push({ id: `ASSURANCE_CURRENT_TRUTH_${key.toUpperCase()}_STALE`, status: "BLOCKED_INTERNAL" });
+    try {
+      const snapshot = readJson(options.providerSnapshot ?? options.snapshot);
+      if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+        const finding = { id: "ASSURANCE_PROVIDER_SNAPSHOT_ROOT_MALFORMED", status: "BLOCKED_INTERNAL" };
+        providerImplementationSnapshot = { ok: false, findings: [finding], record: [], snapshot: [] };
+        findings.push(finding);
+      } else {
+        providerImplementationSnapshot = verifyProviderImplementationSnapshot(record.openImplementationPrs, snapshot.openImplementationPrs);
+        findings.push(...providerImplementationSnapshot.findings);
+        if (snapshot.mainSha !== undefined && snapshot.mainSha !== remoteMain) {
+          findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAINSHA_STALE", status: "BLOCKED_INTERNAL" });
+        }
+        for (const key of ["latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
+          if (snapshot[key] !== undefined && JSON.stringify(snapshot[key]) !== JSON.stringify(record[key])) findings.push({ id: `ASSURANCE_CURRENT_TRUTH_${key.toUpperCase()}_STALE`, status: "BLOCKED_INTERNAL" });
+        }
+      }
+    } catch {
+      const finding = { id: "ASSURANCE_PROVIDER_SNAPSHOT_READ_FAILED", status: "BLOCKED_INTERNAL" };
+      providerImplementationSnapshot = { ok: false, findings: [finding], record: [], snapshot: [] };
+      findings.push(finding);
     }
   }
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
-    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), synchronization, findings
+    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
   }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — main ${record.mainSha.slice(0, 8)}, remote migration ${record.remoteMigrationHead}, deadline ${record.freshnessDeadline}`]);
 }
