@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-70-livekit-source-proof-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "implementationHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+  "implementationTree": "e8f0a97d66f73ecbe712db40c2d9743f0ea40582",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "01a89b94c7206ae9fdc2048dc71b727e810f45c2d9f7665293d4878d01ee18e3",
+  "migrationSetHash": "664b1487d40cdd8389af7af3bd8e9eedb9c43b2eab1222e9d5deed2f30aee303",
+  "configHash": "9a22dedca08b6e9f566ae93e55034cd4350ca3389d150e49e8642a26a2d32807",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_findings",
+      "lane": "security-authority",
+      "focus": "LiveKit authorization, source identity, and proof honesty",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 5,
+      "additions": 892,
+      "deletions": 7,
+      "netChangedLines": 885,
+      "implementationHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+      "implementationTree": "e8f0a97d66f73ecbe712db40c2d9743f0ea40582",
+      "mergeBase": "fc3d750158770a6f33ab10acc68e79a288b6ffa3"
+    },
+    "currentTruthAndPlan": {
+      "status": "pass",
+      "currentTruthMode": "offline",
+      "currentTruthMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "feature": "livekit-media-transport",
+      "requirements": "REQUIREMENTS_CLEAR",
+      "architecture": "ARCHITECTURE_CLEAR",
+      "providerContact": false
+    },
+    "contractValidation": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "prScope": {
+      "status": "pass",
+      "command": "node scripts/assurance/pr-scope.mjs --base=fc3d750158770a6f33ab10acc68e79a288b6ffa3 --feature=livekit-media-transport --objective-domains=LiveKit,database-RLS,Cognitive",
+      "highRiskDomains": [
+        "Cognitive",
+        "database-RLS"
+      ],
+      "scopeWaiverUsed": false
+    },
+    "migrationSourceParity": {
+      "status": "pass_against_coordinator_supplied_read_only_evidence",
+      "directRemoteReadbackByThisLane": false,
+      "version": "20260730142519",
+      "name": "cognitive_livekit_final_chat_source_identity_binding",
+      "sourceSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "testSha256": "9c9be6004ff5c3e0c9d0b6e51e2b52adb88ef429f96490fff0e1ba313fe14e52",
+      "deployedMigrationEditedByThisLane": false
+    },
+    "finalChatSourceBinding": {
+      "status": "fail",
+      "preflightSourceCommit": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
+      "preflightSourceTree": "1abcd5e765a0dcac4ef0b40a2a90efb06f508fec",
+      "preflightSourceTreeVerified": true,
+      "preflightSourceCommitSha256": "e4747cfda3efd18f344c5cef9f58084637356adc70eda2e6851cc79f8613beab",
+      "androidAcceptedSourceBuildHash": "d890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050",
+      "androidAcceptedSourceCommit": "0cd2d981c79640199a02236abff6c79cbe0790ea",
+      "androidAcceptedSourceHashDerivation": "sha256(source_commit)",
+      "iosAcceptedSourceBuildHash": "73792a29b2de5445bc7fc718abd6463d812ffec6b566b00ab930045a32d266cb",
+      "iosAcceptedSourceCommit": "36c5d34e5db508112241651ff2a80056d594a797",
+      "iosAcceptedSourceHashDerivation": "sha256(source_commit)",
+      "androidAcceptedSourceToFinalDiff": "2 files, 34 insertions, 1 deletion",
+      "iosAcceptedSourceToFinalDiff": "28 files, 2315 insertions, 26 deletions",
+      "receiptToRunSourceBindingPresent": false,
+      "installedSourceMatchesRecordedFinalSourceProved": false
+    },
+    "callerCalleeTokenAuthority": {
+      "status": "pass_source_only",
+      "command": "deno test --no-lock supabase/functions/_shared/chat-call-livekit-authority_test.ts",
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "acceptedInviteRequired": true,
+      "unendedInviteRequired": true,
+      "callerOrCalleeIdentityRequired": true,
+      "exactDirectThreadMembershipRequired": true,
+      "thirdActiveParticipantRejected": true,
+      "activeRoomAndCallTypeBound": true,
+      "livekitProviderRequired": true,
+      "authenticatedUserIsMintedIdentity": true,
+      "runtimeTokenIssuanceProved": false
+    },
+    "immutableProvider": {
+      "status": "pass_source_only",
+      "insertProviderServerStamped": true,
+      "updateProviderPreserved": true,
+      "publicDefaultConstrainedToLegacy": true,
+      "twoEnabledCanaryParticipantsRequiredForNewLiveKitInvite": true,
+      "midCallFallbackPresent": false
+    },
+    "canaryGuard": {
+      "status": "pass_except_source_cross_binding",
+      "zeroStateRequiredBeforeMigration": true,
+      "platformSeparated": true,
+      "wrongRunIdentityRejectedBySource": true,
+      "nineRouteScenarioPairsRequiredBySource": true,
+      "existingFinalizationStillRequiresInstalledUiObserved": true,
+      "preflightToRunSourceIdentityConsistent": false
+    },
+    "focusedPgTap": {
+      "status": "reported_pass_but_static_contract_only",
+      "implementationReportedTests": 23,
+      "implementationReportedPassed": 23,
+      "rerunByThisLane": false,
+      "databaseContactByThisLane": false,
+      "preparePreflightInvoked": false,
+      "openAuthorizationInvoked": false,
+      "finalizationInvoked": false,
+      "identityTriggerBehaviorExecuted": false,
+      "wrongIdentityBehaviorExecuted": false,
+      "exactIdentitySuccessBehaviorExecuted": false,
+      "qualifiesForT3IntegrationClear": false
+    },
+    "proofTierHonesty": {
+      "status": "fail",
+      "t1Source": "SOURCE_CLEAR",
+      "t3IntegrationClaimedByImplementation": "INTEGRATION_CLEAR",
+      "t3IntegrationSupportedByFocusedTest": false,
+      "formalInstalledLiveKitRuns": 0,
+      "t4NativeProviderClaimed": false,
+      "t5SignedArtifactClaimed": false,
+      "t6InstalledPhysicalClaimed": false,
+      "t7PublicCanaryClaimed": false,
+      "proofSubstitutionDetected": "source_or_schema_introspection_present_does_not_equal_runtime_execution"
+    },
+    "nonInterference": {
+      "status": "pass",
+      "providerMutation": false,
+      "databaseMutationByReviewLane": false,
+      "migrationDeployment": false,
+      "livekitCallOrTokenRequest": false,
+      "sentinelRunCreated": false,
+      "switchOrScheduleChanged": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "privateEvidenceCommitted": false,
+      "generatedNativeDirectoryCommitted": false,
+      "denoLockCreated": false
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending",
+      "implementationHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "Correct the P1 proof claims and add a forward-only source cross-binding correction before treating frozen-head CI as merge evidence."
+    },
+    "gitDiffCheck": "pass"
+  },
+  "testResultHash": "b4ea0f6669338f5631a414b9a20359e1ec20b4fe8e28e7bbfe86742b65c0b88a",
+  "reviewLevel": "C",
+  "reviewHead": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+  "reviewTimestamp": "2026-07-30T18:41:43Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-livekit-source-proof",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "LIVEKIT_FINAL_SOURCE_IDENTITY_CROSS_BINDING_MISSING",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
+        "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+        "docs/assurance/reconciliation/b1-livekit-source-binding.json",
+        "docs/intelligence/LIVEKIT_EXPERIENCE_SENTINEL.md"
+      ],
+      "evidence": "The preflight constraint records PR #50 merge fcf45ab8 and tree 1abcd5e7, but the finalization trigger accepts source_build_hash values equal to SHA-256 of earlier platform commits 0cd2d981 (Android) and 36c5d34e (iOS), not SHA-256 of fcf45ab8. The trigger does not join the preflight receipt or derive the accepted run hash from receipt.source_commit, source_tree_hash, update, runtime, or artifact. The iOS accepted source differs from the recorded final merge by 28 files and includes none of the later busy-call corrections.",
+      "impact": "A successful platform finalization can advertise the final reviewed PR #50 source while accepting installed evidence from a different source. That defeats exact source/artifact binding and can permit a stale installed implementation to satisfy the canary guard.",
+      "requiredResolution": "Preserve the already-deployed migration byte-for-byte. Keep activation blocked and add a separately authorized forward-only corrective migration plus a versioned platform identity manifest that binds each accepted run source hash to the exact receipt source, update, runtime, and artifact. Add behavioral tests that accept the exact mapping and reject the two cross-bound stale-source cases."
+    },
+    {
+      "id": "LIVEKIT_T3_MATERIALIZATION_PROOF_SUBSTITUTION",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+        "docs/assurance/reconciliation/b1-livekit-source-binding.json",
+        "docs/intelligence/LIVEKIT_EXPERIENCE_SENTINEL.md"
+      ],
+      "evidence": "The 23-test focused pgTAP contains no fixture insert and never invokes governance_prepare_livekit_platform_preflight, governance_open_livekit_platform_canary, governance_finalize_livekit_platform_canary, or the identity trigger through a behavioral write. It checks object existence, privileges, function text, constraint text, and zero row counts. The report and PR body nevertheless mark T3_INTEGRATION as INTEGRATION_CLEAR.",
+      "impact": "Schema materialization and source introspection are being substituted for runtime execution. The current evidence cannot prove that exact identities succeed, stale identities fail, the Premium proof executes correctly, or finalization enforces the intended cross-object contract.",
+      "requiredResolution": "Either mark T3_INTEGRATION BLOCKED_INTERNAL and describe the local reset/pgTAP as T1/schema-materialization evidence, or add local-only behavioral pgTAP fixtures that execute the premium proof, preflight trigger, wrong-identity denial, exact-identity acceptance, and finalization guard. Do not contact the remote database or resume activation."
+    },
+    {
+      "id": "LIVEKIT_CALLER_CALLEE_TOKEN_AUTHORITY_SOURCE_CONTRACT",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The bound source and 17 passing deterministic unit cases require accepted/unended exact-call state, caller-or-callee identity, exact two-person direct-thread membership, active room/call-type linkage, fresh membership, immutable LiveKit provider, and no third active participant before publish-capable grants."
+    },
+    {
+      "id": "LIVEKIT_PROVIDER_IMMUTABILITY_SOURCE_CONTRACT",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The server stamps provider selection on insert, preserves it on update, constrains the public default to legacy WebRTC, requires both canary participants for new LiveKit invites, and contains no mid-call provider fallback."
+    },
+    {
+      "id": "LIVEKIT_RECONCILIATION_REMOTE_SOURCE_BYTES",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact deployed version/name source file hashes to af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204, matching the coordinator-supplied read-only statement evidence. This lane did not query or mutate the remote database."
+    },
+    {
+      "id": "LIVEKIT_RECONCILIATION_NONINTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact patch contains Git source, tests, and documentation only. This automated review performed no database/provider mutation, migration deployment, token/room/media call, activation, switch/schedule change, build, OTA, or release."
+    },
+    {
+      "id": "LIVEKIT_HIGHER_TIER_PROOF_NOT_CLAIMED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The documentation and PR body explicitly retain zero formal installed runs and reject T1/T3 evidence as a substitute for T4 native/provider, T5 signed artifact, T6 installed/physical, or T7 public-canary proof."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 2,
+    "p2Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "livekitActivation": false,
+    "sentinelRunsCreated": 0,
+    "buildOrOta": false,
+    "publicRelease": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "blocked-open-p1-source-cross-binding-and-proof-substitution",
+    "humanApproval": false
+  }
+}
