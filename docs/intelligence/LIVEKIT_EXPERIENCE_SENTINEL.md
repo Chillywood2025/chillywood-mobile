@@ -57,9 +57,9 @@ unapplied forward successor
 adds an immutable two-platform manifest and requires an enabled final outcome to
 join its authorization and receipt to the exact final source/tree/deployment,
 delivered source hash, update, runtime, channel, and artifact. Static source
-proof passes; T3 remains `BLOCKED_INTERNAL` until the behavioral pgTAP executes
-under a coordinator-owned local database lock. Neither T1 nor pending T3 can
-substitute for signed-artifact, installed, physical, or public-canary proof.
+proof passes; the coordinator-authorized disposable local reset and focused
+behavioral pgTAP pass 14/14 at T3. Neither T1 nor T3 can substitute for
+signed-artifact, installed, physical, or public-canary proof.
 
 Initial authority:
 

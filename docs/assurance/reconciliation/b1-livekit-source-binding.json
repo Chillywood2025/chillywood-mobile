@@ -57,7 +57,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
-    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -95,11 +95,11 @@
     },
     "successorBehavioralPgTap": {
       "file": "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql",
-      "status": "BLOCKED_INTERNAL",
+      "status": "INTEGRATION_CLEAR",
       "plannedTests": 14,
-      "executedTests": 0,
-      "detail": "The corrected transaction parsed the full migration, then rolled back before the plan because pgTAP was unavailable in the approved local stack; no relation or function persisted.",
-      "attempts": 2,
+      "executedTests": 14,
+      "detail": "After two rolled-back transaction-only diagnostics, one coordinator-authorized disposable local reset materialized the successor and the exact focused pgTAP passed 14/14.",
+      "attempts": 3,
       "migrationParsedCompletely": true,
       "sourceOrSchemaSubstitutionAccepted": false
     }
@@ -107,13 +107,12 @@
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
-    "T3 integration remains BLOCKED_INTERNAL until the successor behavioral pgTAP runs against an authorized local-only materialization.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {
     "remoteMigrationApplied": false,
     "deployedSourceMaterializedLocallyHistorical": true,
-    "successorMaterializedLocally": false,
+    "successorMaterializedLocally": true,
     "providerStateChanged": false,
     "switchChanged": false,
     "scheduleChanged": false,
