@@ -5,6 +5,33 @@
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
   "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "synchronizationMerge": {
+    "required": true,
+    "parentCount": 2,
+    "recordedMainMustBeFirstParent": true,
+    "requiredChangedPaths": [
+      "config/assurance/current-truth-v1.json",
+      "CURRENT_STATE.md",
+      "NEXT_TASK.md"
+    ],
+    "allowedChangedPaths": [
+      "config/assurance/current-truth-v1.json",
+      "CURRENT_STATE.md",
+      "NEXT_TASK.md"
+    ],
+    "bootstrapMerge": {
+      "mergeSha": "ebefdd26a278533b51a5a2e5b981640b6518a777",
+      "firstParent": "2f3b0d1cc4765c4196cd831ab782417a0f000c23",
+      "changedPaths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-contract-v1.json",
+        "config/assurance/current-truth-v1.json",
+        "config/assurance/schemas-v1.json",
+        "scripts/assurance/lib.mjs"
+      ]
+    }
+  },
   "freshness": {"defaultHours": 24, "providerCriticalHours": 8, "clock": "UTC", "failClosed": true},
   "staleFindingIds": {
     "mainSha": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
