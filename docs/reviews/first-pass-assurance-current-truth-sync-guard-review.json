@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-current-truth-sync-guard-review-v1",
+  "implementationPrNumber": 58,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-sync-guard",
+  "implementationHead": "3ce1f6e3a8681d6df9866300f2e772facaf570fd",
+  "implementationTree": "9d2895a13f621206d08d336041cba007a5ead6b3",
+  "baseHead": "ebefdd26a278533b51a5a2e5b981640b6518a777",
+  "changedFileHash": "b4f335fa384269f0adfed3a701702c36ff28cfaec3485dd131ec405c6a7d12ca",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "02cc89f3a9449104793bec3a696fa8fdbbe34b314762e81684c27aec73770664",
+  "testResults": {
+    "currentTruthSynchronization": {
+      "status": "pass",
+      "cases": 9,
+      "bootstrapMerge": "exact-sha-first-parent-and-path-set",
+      "futureMergeAllowlist": [
+        "config/assurance/current-truth-v1.json",
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md"
+      ]
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "bootstrap-synchronization-merge",
+      "remoteMain": "ebefdd26a278533b51a5a2e5b981640b6518a777",
+      "recordedMain": "2f3b0d1cc4765c4196cd831ab782417a0f000c23"
+    },
+    "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
+    "determinism": "3/3",
+    "scope": {"status": "pass", "files": 5, "fileBudget": 15, "netChangedLines": 136, "lineBudget": 1200},
+    "gitDiffCheck": "pass"
+  },
+  "testResultHash": "5f50620a18a5f0d3d831806e504a15220d1d1862e3b1e7d9b0789a2cf37d824f",
+  "reviewLevel": "A",
+  "reviewHead": "3ce1f6e3a8681d6df9866300f2e772facaf570fd",
+  "reviewTimestamp": "2026-07-30T17:31:27Z",
+  "reviewerLanes": ["independent", "separate-clean-worktree", "current-truth-fail-closed"],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_SYNC_ALLOWLIST_TOO_BROAD",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Grandfathered only PR #56's exact merge SHA, first parent, and changed-path set; future synchronization merges allow only the record and generated hot-path documents."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "mergeApproval": "approved_exact_head"
+  }
+}
