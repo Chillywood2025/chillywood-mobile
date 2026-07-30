@@ -32,6 +32,21 @@ if (options.dogfood) {
   for (const key of ["changedFileHash", "migrationSetHash", "configHash", "testResultHash"]) {
     if (!/^[0-9a-f]{64}$/u.test(manifest[key] ?? "")) findings.push({ id: "ASSURANCE_REVIEW_HASH_INVALID", status: "BLOCKED_INTERNAL", field: key });
   }
+  const level = contract.levels[manifest.reviewLevel];
+  if (!level) {
+    findings.push({ id: "ASSURANCE_REVIEW_LEVEL_INVALID", status: "BLOCKED_INTERNAL", reviewLevel: manifest.reviewLevel ?? null });
+  } else {
+    const lanes = Array.isArray(manifest.reviewerLanes) ? manifest.reviewerLanes : [];
+    for (const lane of level.lanes) {
+      if (!lanes.includes(lane)) findings.push({ id: "ASSURANCE_REVIEW_LANE_MISSING", status: "BLOCKED_INTERNAL", lane, reviewLevel: manifest.reviewLevel });
+    }
+    if (level.requires.includes("full-CI-frozen-head") || level.requires.includes("full-CI")) {
+      const phase1 = manifest.testResults?.phase1Ci;
+      if (phase1?.status !== "pass") findings.push({ id: "ASSURANCE_REVIEW_FROZEN_HEAD_CI_MISSING", status: "BLOCKED_INTERNAL", actual: phase1?.status ?? null });
+      if (phase1?.implementationHead !== manifest.implementationHead) findings.push({ id: "ASSURANCE_REVIEW_CI_HEAD_STALE", status: "BLOCKED_INTERNAL", ciHead: phase1?.implementationHead ?? null, implementationHead: manifest.implementationHead });
+    }
+  }
+  if (!Number.isFinite(new Date(manifest.reviewTimestamp).valueOf())) findings.push({ id: "ASSURANCE_REVIEW_TIMESTAMP_INVALID", status: "BLOCKED_INTERNAL" });
   if (currentHead) {
     const changedFileHash = sha256(git(["diff", "--name-status", "-z", manifest.baseHead, manifest.implementationHead]));
     const migrationSetHash = sha256(git(["diff", "--name-only", manifest.baseHead, manifest.implementationHead, "--", "supabase/migrations"]));
