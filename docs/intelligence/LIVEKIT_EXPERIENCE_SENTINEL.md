@@ -51,11 +51,14 @@ remote migration ledger. This reconciliation does not apply or rerun the
 migration, change a switch or schedule, resume activation, create a build or
 OTA, call LiveKit, or create installed/physical evidence.
 
-The migration binds the existing platform preflight and successful-finalization
-guards to the recorded internal source, runtime, update, artifact, and rollback
-identities. Its focused pgTAP contract also verifies that the migration creates
-no preflight receipt, opens no platform authorization, and enables no schedule.
-Those source and integration checks remain T1/T3 evidence only: they cannot
+The deployed migration binds preflight to recorded internal identities. The
+unapplied forward successor
+`20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql`
+adds an immutable two-platform manifest and requires an enabled final outcome to
+join its authorization and receipt to the exact final source/tree/deployment,
+delivered source hash, update, runtime, channel, and artifact. Static source
+proof passes; T3 remains `BLOCKED_INTERNAL` until the behavioral pgTAP executes
+under a coordinator-owned local database lock. Neither T1 nor pending T3 can
 substitute for signed-artifact, installed, physical, or public-canary proof.
 
 Initial authority:

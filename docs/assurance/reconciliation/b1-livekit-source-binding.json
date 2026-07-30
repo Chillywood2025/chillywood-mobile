@@ -3,7 +3,7 @@
   "recordId": "b1-livekit-source-binding-reconciliation",
   "lane": "B1",
   "branch": "codex/assurance-reconcile-livekit-source-binding",
-  "objective": "Represent the already-deployed LiveKit platform source-identity binding exactly in Git without applying it again.",
+  "objective": "Preserve the exact deployed LiveKit source binding and add a forward-only final receipt/artifact cross-binding correction without applying either migration.",
   "riskLevel": "C",
   "classification": "REMOTE_AND_SOURCE_MATCH",
   "remoteReadback": {
@@ -31,6 +31,7 @@
     "versionPreservedExactly": true,
     "namePreservedExactly": true
   },
+  "successor": {"version": "20260730230022", "name": "cognitive_livekit_final_source_identity_cross_binding", "deploymentStatus": "GIT_SOURCE_ONLY_NOT_APPLIED", "deployedPredecessorRewritten": false},
   "scope": {
     "domains": [
       "LiveKit",
@@ -38,8 +39,9 @@
     ],
     "included": [
       "deployed migration source parity",
-      "focused binding pgTAP",
-      "existing authorization source guard",
+      "forward-only final receipt/artifact identity cross-binding",
+      "behavioral predicate pgTAP and deterministic source contract",
+      "provider-backed local concurrency fixture repair",
       "Git-only reconciliation documentation"
     ],
     "excluded": [
@@ -55,7 +57,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
-    "T3_INTEGRATION": "INTEGRATION_CLEAR",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -70,40 +72,48 @@
     "sourceSubstitutionAccepted": false
   },
   "validation": {
-    "localDatabaseReset": {
+    "historicalDeployedSourceMaterialization": {
       "cliVersion": "2.109.1",
       "target": "local stack only",
       "attempts": 1,
-      "status": "INTEGRATION_CLEAR",
+      "status": "SOURCE_CLEAR",
       "exitCode": 0,
       "materializedThrough": "20260730142519",
       "remoteConnectionUsed": false,
       "retryPerformed": false
     },
-    "focusedPgTap": {
-      "cliVersion": "2.109.1",
-      "target": "reset local stack",
-      "file": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+    "successorSourceContract": {
+      "file": "tests/assurance/reconciliation/livekit-final-source-identity-cross-binding.test.mjs",
       "attempts": 1,
-      "status": "INTEGRATION_CLEAR",
-      "plannedTests": 23,
-      "executedTests": 23,
+      "status": "SOURCE_CLEAR",
+      "plannedTests": 4,
+      "executedTests": 4,
       "exitCode": 0,
       "result": "PASS",
-      "detail": "The focused source-identity contract passed after the one authorized local-only reset materialized the exact reconciled migration.",
-      "resetPerformed": true,
-      "remoteConnectionUsed": false,
-      "retryPerformed": false
+      "detail": "Deterministic source proof preserves deployed bytes and rejects source/update/runtime/artifact tuple mutations.",
+      "databaseContact": false
+    },
+    "successorBehavioralPgTap": {
+      "file": "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql",
+      "status": "BLOCKED_INTERNAL",
+      "plannedTests": 14,
+      "executedTests": 0,
+      "detail": "The corrected transaction parsed the full migration, then rolled back before the plan because pgTAP was unavailable in the approved local stack; no relation or function persisted.",
+      "attempts": 2,
+      "migrationParsedCompletely": true,
+      "sourceOrSchemaSubstitutionAccepted": false
     }
   },
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
+    "T3 integration remains BLOCKED_INTERNAL until the successor behavioral pgTAP runs against an authorized local-only materialization.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {
     "remoteMigrationApplied": false,
-    "localMigrationMaterializedForTest": true,
+    "deployedSourceMaterializedLocallyHistorical": true,
+    "successorMaterializedLocally": false,
     "providerStateChanged": false,
     "switchChanged": false,
     "scheduleChanged": false,

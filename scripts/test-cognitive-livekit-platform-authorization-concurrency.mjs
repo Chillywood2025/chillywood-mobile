@@ -19,6 +19,10 @@ const ids = {
   androidTask: uuid(),
   iosTask: uuid(),
   baseline: uuid(),
+  canaryA: uuid(),
+  canaryB: uuid(),
+  providerEventA: uuid(),
+  providerEventB: uuid(),
   androidCollect: uuid(),
   androidIssue: uuid(),
   androidConsume: uuid(),
@@ -36,8 +40,24 @@ const ids = {
 const collectorAssertion = hash();
 const triageAssertion = hash();
 const evaluatorAssertion = hash();
-const sourceCommit = "a".repeat(40);
-const sourceTree = "b".repeat(40);
+const sourceCommit = "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6";
+const sourceTree = "1abcd5e765a0dcac4ef0b40a2a90efb06f508fec";
+const deploymentHash =
+  "7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0";
+const platformIdentity = {
+  android: {
+    artifactHash:
+      "fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44",
+    rollbackHash:
+      "0fbe0c0d5bf2fe593b23f8970fe03e85c2e32e9195ec93ac9533d254b9014759",
+  },
+  ios: {
+    artifactHash:
+      "24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8",
+    rollbackHash:
+      "37d14e930e6787973866b0a5f38c28e1484dac0cb187f4ecb5de363147528e48",
+  },
+};
 const h = Array.from({ length: 12 }, hash);
 let stage = "setup";
 
@@ -152,8 +172,31 @@ end
 $cleanup$;
 delete from public.cognitive_projects
 where id=${literal(ids.project)}::uuid;
+delete from public.access_grants
+where provider_event_id in (
+  ${literal(ids.providerEventA)}::uuid,
+  ${literal(ids.providerEventB)}::uuid
+);
+delete from public.user_entitlements
+where user_id in (${literal(ids.canaryA)},${literal(ids.canaryB)});
+delete from public.provider_events
+where id in (
+  ${literal(ids.providerEventA)}::uuid,
+  ${literal(ids.providerEventB)}::uuid
+);
+delete from public.chat_call_livekit_canary_users
+where user_id in (
+  ${literal(ids.canaryA)}::uuid,
+  ${literal(ids.canaryB)}::uuid
+);
 delete from public.platform_role_memberships
 where user_id=${literal(ids.owner)};
+delete from auth.users
+where id in (
+  ${literal(ids.owner)}::uuid,
+  ${literal(ids.canaryA)}::uuid,
+  ${literal(ids.canaryB)}::uuid
+);
 ${restoreEvaluator}
 ${restoreEmergency}
 commit;
@@ -240,8 +283,69 @@ const capabilityRows = (task, platform, collect, issue, consume, triage) => `
 const setup = admin(`
 begin;
 set local session_replication_role=replica;
+insert into auth.users(id,is_sso_user,is_anonymous)
+values
+  (${literal(ids.owner)}::uuid,false,false),
+  (${literal(ids.canaryA)}::uuid,false,false),
+  (${literal(ids.canaryB)}::uuid,false,false);
 insert into public.platform_role_memberships(user_id,email,role,status)
 values (${literal(ids.owner)}::uuid,null,'owner','active');
+insert into public.chat_call_livekit_canary_users(
+  user_id,enabled,enrolled_by
+) values
+  (
+    ${literal(ids.canaryA)}::uuid,true,
+    ${literal(ids.owner)}::uuid
+  ),
+  (
+    ${literal(ids.canaryB)}::uuid,true,
+    ${literal(ids.owner)}::uuid
+  );
+insert into public.provider_events(
+  id,provider_event_id,provider,user_id,app_user_id,environment,
+  event_type,status,idempotency_key,raw_payload_hash
+) values
+  (
+    ${literal(ids.providerEventA)}::uuid,'b1-livekit-canary-a',
+    'revenuecat',${literal(ids.canaryA)}::uuid,
+    ${literal(ids.canaryA)},'sandbox','INITIAL_PURCHASE','processed',
+    'b1-livekit-canary-a',${literal(h[3])}
+  ),
+  (
+    ${literal(ids.providerEventB)}::uuid,'b1-livekit-canary-b',
+    'revenuecat',${literal(ids.canaryB)}::uuid,
+    ${literal(ids.canaryB)},'sandbox','INITIAL_PURCHASE','processed',
+    'b1-livekit-canary-b',${literal(h[4])}
+  );
+insert into public.user_entitlements(
+  user_id,entitlement_key,status,source,starts_at,expires_at,metadata
+) values
+  (
+    ${literal(ids.canaryA)},'premium','active','revenuecat',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+    '{"environment":"sandbox","sandbox":true}'::jsonb
+  ),
+  (
+    ${literal(ids.canaryB)},'premium','active','revenuecat',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+    '{"environment":"sandbox","sandbox":true}'::jsonb
+  );
+insert into public.access_grants(
+  user_id,grant_type,source_type,source_id,provider,provider_event_id,
+  environment,status,starts_at,expires_at
+) values
+  (
+    ${literal(ids.canaryA)}::uuid,'premium','provider_event',
+    ${literal(ids.providerEventA)}::uuid,'revenuecat',
+    ${literal(ids.providerEventA)}::uuid,'sandbox','sandbox_only',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour'
+  ),
+  (
+    ${literal(ids.canaryB)}::uuid,'premium','provider_event',
+    ${literal(ids.providerEventB)}::uuid,'revenuecat',
+    ${literal(ids.providerEventB)}::uuid,'sandbox','sandbox_only',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour'
+  );
 insert into public.cognitive_projects(
   id,repository_full_name,source_state,activation_state,
   scheduler_state,production_authority
@@ -397,15 +501,23 @@ assert.equal(
   0,
   `platform authorization fixture setup failed: ${setupDiagnostic}`,
 );
+const sandboxPremiumProof = readJson(`
+select public.cognitive_livekit_sandbox_premium_proof_v1()::text;
+`);
+assert.equal(sandboxPremiumProof.eligible, true);
+assert.match(sandboxPremiumProof.proofHash, /^[a-f0-9]{64}$/u);
 const prepareReceipt = (platform) => {
+  const identity = platformIdentity[platform];
   const result = admin(ownerSql(`
 select (
   public.governance_prepare_livekit_platform_preflight(
     ${literal(platform)}::public.cognitive_platform,
-    ${literal(hash())},${literal(hash())},${literal(hash())},
+    ${literal(identity.artifactHash)},
+    ${literal(sandboxPremiumProof.proofHash)},${literal(hash())},
     ${literal(collectorAssertion)},${literal(evaluatorAssertion)},
     ${literal(sourceCommit)},${literal(sourceTree)},${literal(hash())},
-    ${literal(hash())},${literal(hash())},${literal(hash())},
+    ${literal(hash())},${literal(deploymentHash)},
+    ${literal(identity.rollbackHash)},
     interval '10 minutes'
   )
 )->>'preflightReceiptId';
