@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-foundation-review-v1",
+  "implementationPrNumber": 54,
+  "implementationBranch": "codex/first-pass-assurance-foundation",
+  "implementationHead": "cc4d4582743cc7201785cdb784134663b4fd0e1b",
+  "implementationTree": "8bde3881e744f49689b72e1edccba2942ac17845",
+  "baseHead": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
+  "changedFileHash": "d435597445aa615c7e7bf09d2629d24d8f6c182e658a3b9ccf1971077a41c22c",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "546fe27ba256093e299572e26053e24660e48ce6cf417a44c040853132b41d83",
+  "testResultHash": "8e47fcf83920aebbae0f4c8fc384843173e3d1315b2a08a8883590cd7ce35fa0",
+  "reviewLevel": "B",
+  "reviewHead": "2b583ba7a8067c649d6624a89256261c0cea0caf",
+  "reviewTimestamp": "2026-07-30T17:20:18Z",
+  "reviewerLanes": [
+    "separate-clean-worktree",
+    "architecture",
+    "product-UX",
+    "privacy-scope"
+  ],
+  "testResults": {
+    "phase1Ci": {
+      "runId": 30565124156,
+      "implementationHead": "cc4d4582743cc7201785cdb784134663b4fd0e1b",
+      "status": "pass",
+      "workflow": "Phase 1 CI",
+      "runNumber": 1897,
+      "jobsPassed": 13,
+      "jobsFailed": 0
+    },
+    "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
+    "determinism": {"contracts": "3/3", "architecturePlan": "3/3", "dogfood": "3/3", "currentTruth": "3/3"},
+    "dogfood": {"status": "pass", "unwaivedFindings": 31, "requiredDetectorGaps": 0},
+    "negativeFixtures": {"proofSubstitutionsRejected": "2/2", "staleCurrentTruthRejected": true, "missingEvidenceRejected": true},
+    "scope": {"status": "pass", "files": 32, "fileBudget": 36, "netChangedLines": -3477, "lineBudget": 6000},
+    "localContractSequences": {"allPlatform": "pass", "ios": "pass", "cognitive": "pass"},
+    "lint": {"status": "pass", "errors": 0, "inheritedWarnings": 85},
+    "typescript": "pass",
+    "gitDiffCheck": "pass",
+    "secretAndDeviceIdentifierScan": "pass",
+    "generatedNativeDirectoryCheck": "pass",
+    "dependencies": {"newDependencies": 0, "lockfilesChanged": false, "inheritedModerateAdvisories": 24}
+  },
+  "findings": [
+    {
+      "id": "PR-A-REVIEW-001",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "A scope waiver could suppress an unrelated mixed-high-risk-domain finding.",
+      "resolution": "Mixed high-risk scope now fails independently of waivers and the objective must enumerate affected domains."
+    },
+    {
+      "id": "PR-A-REVIEW-002",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Review manifest mode trusted supplied hashes and branch shape without recomputing them.",
+      "resolution": "The review guard now recomputes changed-file, migration, config, and test hashes and checks implementation ancestry and review-only paths."
+    },
+    {
+      "id": "PR-A-REVIEW-003",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "A report could mark a non-requirement tier clear without binding evidence.",
+      "resolution": "Non-T0 passing tiers now require evidenceRefs and all status values are validated."
+    },
+    {
+      "id": "PR-A-REVIEW-004",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Generated hot-path documents dropped active closure and operating-policy facts required by existing Phase 1 guards.",
+      "resolution": "Operational closures and autonomous approval policy are structured fields in current truth and are rendered deterministically."
+    },
+    {
+      "id": "PR-A-REVIEW-005",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "The review guard verified the test-result hash but did not reject an in-progress frozen-head CI result.",
+      "resolution": "Review manifests now bind a review level, required lanes, and a passing Phase 1 result at the exact implementation head."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "mergeApproval": "approved_exact_head"
+  }
+}
