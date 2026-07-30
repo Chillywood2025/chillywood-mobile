@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  git,
   implementationRemoteRef,
   isValidGitBranchName,
   readJson,
@@ -23,6 +24,9 @@ const pr64Observed = "d".repeat(40);
 const advancedCheckout = "e".repeat(40);
 const pr52Branch = "codex/cognitive-level01-livekit-sentinel-live-activation";
 const pr64Branch = "codex/first-pass-assurance-models";
+const headBindingBranch = git(["branch", "--show-current"]) || "codex/first-pass-assurance-current-truth-head-binding";
+const headBindingHead = git(["rev-parse", "HEAD"]);
+assert.equal(isValidGitBranchName(headBindingBranch), true);
 const entries = [
   { number: 52, branch: pr52Branch, head: pr52Head, state: "open-draft", disposition: "reconcile" },
   { number: 64, branch: pr64Branch, head: pr64Recorded, state: "open-draft", disposition: "exact-review" }
@@ -242,6 +246,8 @@ try {
       rel("scripts/assurance/current-truth.mjs"),
       "--provider-mode=read-only",
       `--snapshot=${snapshotPath}`,
+      `--implementation-branch=${headBindingBranch}`,
+      `--implementation-head=${headBindingHead}`,
       "--now=2026-07-30T20:00:00Z"
     ], { cwd: rel(), encoding: "utf8" });
     assert.notEqual(cli.status, 0);
@@ -250,6 +256,7 @@ try {
 
   const payload = runSnapshotCli("empty-open-implementation-inventory.json", `${JSON.stringify({ openImplementationPrs: [] })}\n`);
   assert.equal(payload.headBindings.ok, true);
+  assert.notEqual(payload.headBindings.context, "detached-unresolved");
   assert.equal(payload.providerImplementationSnapshot.ok, false);
   assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"));
 
