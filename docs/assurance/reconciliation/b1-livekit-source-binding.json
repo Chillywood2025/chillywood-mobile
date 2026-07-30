@@ -55,7 +55,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
-    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -70,31 +70,40 @@
     "sourceSubstitutionAccepted": false
   },
   "validation": {
+    "localDatabaseReset": {
+      "cliVersion": "2.109.1",
+      "target": "local stack only",
+      "attempts": 1,
+      "status": "INTEGRATION_CLEAR",
+      "exitCode": 0,
+      "materializedThrough": "20260730142519",
+      "remoteConnectionUsed": false,
+      "retryPerformed": false
+    },
     "focusedPgTap": {
       "cliVersion": "2.109.1",
-      "target": "already-running local stack",
+      "target": "reset local stack",
       "file": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
       "attempts": 1,
-      "status": "BLOCKED_INTERNAL",
+      "status": "INTEGRATION_CLEAR",
       "plannedTests": 23,
-      "executedTests": 1,
-      "exitCode": 1,
-      "failureClass": "LOCAL_STACK_BEHIND_SOURCE",
-      "detail": "The local stack does not contain cognitive_livekit_sandbox_premium_proof_v1, so the focused contract cannot execute without materializing the reconciled migration.",
-      "resetPerformed": false,
+      "executedTests": 23,
+      "exitCode": 0,
+      "result": "PASS",
+      "detail": "The focused source-identity contract passed after the one authorized local-only reset materialized the exact reconciled migration.",
+      "resetPerformed": true,
       "remoteConnectionUsed": false,
-      "retryPerformed": false,
-      "resumptionAction": "On a separately authorized local stack already materialized through migration 20260730142519, run this focused pgTAP file once."
+      "retryPerformed": false
     }
   },
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
-    "Focused pgTAP is blocked because the already-running local stack is behind migration 20260730142519; no reset or retry was authorized.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {
-    "migrationApplied": false,
+    "remoteMigrationApplied": false,
+    "localMigrationMaterializedForTest": true,
     "providerStateChanged": false,
     "switchChanged": false,
     "scheduleChanged": false,
