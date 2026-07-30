@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "room-host-block-check-function-security-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 75,
+  "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
+  "implementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+  "implementationTree": "978ef2db8d8a3998d6da98b6503b2d9b023e2f15",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "d19193b441986f4fde4bc5ac20817fd6291698ee78fbb97f04ce46c4943e0a75",
+  "migrationSetHash": "ab3218127348848cecdb6808da6681ad20fa489c345ce4474fb7e12f22809e7a",
+  "configHash": "9a22dedca08b6e9f566ae93e55034cd4350ca3389d150e49e8642a26a2d32807",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_finding",
+      "lane": "security-authority",
+      "focus": "room-host block-check function authority, fail-closed behavior, grants, RLS, duplicate migration safety, and pgTAP sufficiency",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 3,
+      "additions": 332,
+      "deletions": 0,
+      "netChangedLines": 332,
+      "implementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+      "implementationTree": "978ef2db8d8a3998d6da98b6503b2d9b023e2f15",
+      "mergeBase": "fc3d750158770a6f33ab10acc68e79a288b6ffa3"
+    },
+    "contractValidation": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "findings": 0
+    },
+    "featurePlans": {
+      "status": "pass",
+      "features": [
+        {
+          "featureId": "watch-party-live",
+          "requirements": "REQUIREMENTS_CLEAR",
+          "architecture": "ARCHITECTURE_CLEAR"
+        },
+        {
+          "featureId": "supabase-migrations-rls",
+          "requirements": "REQUIREMENTS_CLEAR",
+          "architecture": "ARCHITECTURE_CLEAR"
+        }
+      ]
+    },
+    "scope": {
+      "status": "pass",
+      "featureId": "watch-party-live",
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "fileBudget": 15,
+      "lineBudget": 1200
+    },
+    "migrationIdentity": {
+      "status": "pass_against_preserved_read_only_evidence",
+      "reviewQueriedRemote": false,
+      "version": "20260730161737",
+      "name": "allow_room_host_participant_block_check",
+      "statementCount": 1,
+      "targetFileSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "remoteStatementArraySha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "normalizedSha256": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d",
+      "exactRemoteVersionAndName": true,
+      "exactRemoteBodyHash": true,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    "duplicateMigrationSafety": {
+      "status": "pass_static_and_implementation_reported_runtime",
+      "olderSourceVersion": "20260725224000",
+      "olderSourceSha256": "8c0509254110ebb045a1e7c24c0a5dc593d5d4baa14b01f16079dc6e44aada9f",
+      "targetSourceVersion": "20260730161737",
+      "targetSourceSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "statementDifference": "end-of-file newline only",
+      "createOrReplace": true,
+      "revokeAndGrantReapplied": true,
+      "implementationReportedApplicationOrder": [
+        "20260725224000",
+        "20260730161737"
+      ],
+      "implementationReportedDuplicateObjectError": false,
+      "implementationReportedSemanticDrift": false,
+      "databaseExecutionByReview": false
+    },
+    "functionBehavior": {
+      "status": "blocked_null_authority_path",
+      "partyIdCanonicalized": true,
+      "actorIdTrimmed": true,
+      "invalidPartyOrActorReturnsFalse": true,
+      "participantSelfCheckAllowed": true,
+      "exactRoomHostCheckAllowed": true,
+      "unrelatedNonHostCheckRejected": true,
+      "blockedResultAuthoritative": true,
+      "unblockedResultAuthoritative": true,
+      "hostAuthorityUsesExactPartyId": true,
+      "nullAuthIdentityRejected": false,
+      "nullAuthIdentitySkipsSelfOrHostAuthorization": true,
+      "serviceRoleNullIdentityPathExplicitlyDistinguished": false
+    },
+    "securityDefiner": {
+      "status": "needs_forward_only_hardening",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "searchPathEmpty": false,
+      "relationsSchemaQualified": true,
+      "authUidSchemaQualified": true,
+      "publicSchemaCreatePrivilegeProvedAbsentByThisPr": false,
+      "deployedBodyRewritePermitted": false
+    },
+    "grantsAndRls": {
+      "status": "source_and_catalog_contract_clear_null_authority_open",
+      "publicExecuteRevokedBySource": true,
+      "anonExecuteDeniedByReportedPgTap": true,
+      "authenticatedExecuteGranted": true,
+      "serviceRoleExecuteGranted": true,
+      "tableGrantChanges": 0,
+      "rlsPolicyChanges": 0,
+      "rlsDisabled": false,
+      "forceRlsRemoved": false,
+      "securityDefinerBypassesUnderlyingRls": true,
+      "authorizationMustThereforeBeCompleteInsideFunction": true
+    },
+    "focusedPgTap": {
+      "status": "implementation_reported_10_of_10_but_authority_matrix_incomplete",
+      "reviewReranDatabase": false,
+      "testFileSha256": "53340f6970b6fb1fa55b0c76e58abac4dd7ae0093fe6c01421e987b5308e8f4c",
+      "staticPlan": 10,
+      "staticTopLevelAssertions": 10,
+      "assertionKinds": {
+        "hasFunction": 1,
+        "ok": 3,
+        "livesOk": 2,
+        "is": 3,
+        "throwsOk": 1
+      },
+      "implementationReportedPassed": 10,
+      "implementationReportedFailed": 0,
+      "setsApplicationRole": false,
+      "testsNullAuthIdentity": false,
+      "testsNullOrEmptyArguments": false,
+      "testsHostOfDifferentRoom": false,
+      "testsAnonymousRuntimeInvocation": false,
+      "testsServiceRoleRuntimeInvocation": false,
+      "catalogGrantAssertionsPresent": true
+    },
+    "phase1Ci": {
+      "status": "not_run_by_review_lane",
+      "implementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+      "coordinatorOwned": true,
+      "eligibleAsReviewLaneProof": false
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "databaseResetByReview": false,
+      "remoteReadbackByReview": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockCreated": false
+    }
+  },
+  "testResultHash": "0733d252eea482452201a6e00185c3ca62557270a8a786c7529a75036d0dbdc6",
+  "reviewLevel": "C",
+  "reviewHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+  "reviewTimestamp": "2026-07-30T18:47:58Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-function-security",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "supabase/migrations/20260730161737_allow_room_host_participant_block_check.sql",
+        "supabase/tests/room_host_participant_block_check_test.sql",
+        "docs/assurance/reconciliation/b3-room-host-block-check.json"
+      ],
+      "evidence": "The function authorizes only inside `if v_auth_user_id is not null and v_auth_user_id <> v_actor_user_id` at migration lines 26-37. A null auth.uid() skips both the self check and exact-room-host check, then the SECURITY DEFINER query at lines 39-47 evaluates any supplied actor. EXECUTE is granted to authenticated and service_role at lines 53-55. The pgTAP file sets three non-null subject claims but never exercises a null subject or distinguishes authenticated from the deliberate service-role path.",
+      "impact": "The database authority boundary relies on every authenticated execution having a non-null JWT subject. If that assumption is violated, an authenticated execution can inspect block state for an arbitrary actor through an RLS-bypassing function. The reported T3 security result therefore is not fail-closed proof.",
+      "requiredResolution": "Do not rewrite the deployed migration. Add a separately reviewed forward-only correction that rejects null identity for authenticated execution while preserving only an explicitly justified service-role path. Add real role-context pgTAP cases for authenticated null-sub rejection and the intended service-role null-sub behavior, then update the reconciliation report at the new exact head."
+    },
+    {
+      "id": "B3_SECURITY_DEFINER_SEARCH_PATH_HARDENING_UNPROVED",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "supabase/migrations/20260730161737_allow_room_host_participant_block_check.sql",
+        "supabase/tests/room_host_participant_block_check_test.sql"
+      ],
+      "evidence": "The function is SECURITY DEFINER with `set search_path = public`, and the test asserts that value. Relations and auth.uid() are schema-qualified, which reduces exposure, but this PR contains no assertion that untrusted roles cannot CREATE in public and does not use an empty search_path.",
+      "impact": "No name-shadowing exploit is demonstrated, but the privileged function's search-path safety depends on an unproved schema privilege outside this three-file delta.",
+      "requiredResolution": "Preserve the deployed file byte-for-byte. In the forward-only security correction, prefer an empty search_path with every object schema-qualified, or add authoritative schema-CREATE denial evidence and a regression assertion."
+    },
+    {
+      "id": "B3_PGTAP_AUTHORITY_MATRIX_INCOMPLETE",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "supabase/tests/room_host_participant_block_check_test.sql"
+      ],
+      "evidence": "The 10 assertions cover function metadata, catalog grants, participant self, exact host, blocked/unblocked, and one unrelated non-host. They do not SET ROLE, test null/empty arguments, test a host against another host's room, or execute the service-role and anonymous boundaries.",
+      "impact": "The suite demonstrates the principal happy and denial paths but does not cover every authority branch named by the function contract.",
+      "requiredResolution": "Extend the focused pgTAP matrix with application-role calls, authenticated null-sub denial, deliberate service-role behavior, invalid argument behavior, and an exact-room cross-host denial. Keep provider and remote access out of the test."
+    },
+    {
+      "id": "B3_EXACT_DEPLOYED_MIGRATION_IDENTITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The added file uses deployed version 20260730161737 and name allow_room_host_participant_block_check. Its raw SHA-256 equals the preserved read-only remote statement-array hash."
+    },
+    {
+      "id": "B3_DUPLICATE_MIGRATION_APPLICATION",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The earlier source copy and exact remote file differ only by the final newline. CREATE OR REPLACE plus repeated revoke/grant is statement-idempotent, and the implementation report records both versions applying in order with no duplicate-object error or semantic drift."
+    },
+    {
+      "id": "B3_GRANT_AND_RLS_NET_CHANGE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The delta changes no table grant, policy, RLS, or FORCE RLS setting. It revokes PUBLIC function execution and restores the pre-existing authenticated/service_role function grants; reported pgTAP confirms anon denial."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "p2Open": 2,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "databaseResetByReview": false,
+    "remoteReadbackByReview": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "fullCiRunByReview": false,
+    "reviewDisposition": "merge-blocked-open-p1",
+    "humanApproval": false
+  }
+}
