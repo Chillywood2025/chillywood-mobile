@@ -3,7 +3,7 @@
   "contractId": "pr-b2-revenuecat-reconciliation-scope-waiver-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
   "objective": "Preserve exact deployed RevenueCat transfer source and add the forward-only authority-ordering correction required by exact-head review.",
-  "exactReason": "The existing exact-source reconciliation is already 1,178 net lines. Clearing REVENUECAT_TRANSFER_OUT_OF_ORDER_AUTHORITY_OVERRIDE requires a forward-only migration, deterministic ordering and concurrency proof, fixture execution, and corrected evidence; deployed migrations remain immutable and no second high-risk domain is added.",
+  "exactReason": "The exact deployed-source reconciliation predecessor was 1,178 net lines. Clearing REVENUECAT_TRANSFER_OUT_OF_ORDER_AUTHORITY_OVERRIDE also requires bidirectional post-lock chronological enforcement for transfer and ordinary lifecycle events, deterministic two-order/two-participant concurrency proof, fixture execution, and corrected evidence; deployed migrations remain immutable and no second high-risk domain is added.",
   "reviewer": "persistent-four-lane-exact-head-review-set",
   "mandatingReviewEvidence": [
     "PR #71",
@@ -25,7 +25,7 @@
   },
   "lineBudget": {
     "default": 1200,
-    "waivedMaximum": 1800
+    "waivedMaximum": 2600
   },
   "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
   "prohibitedScope": [

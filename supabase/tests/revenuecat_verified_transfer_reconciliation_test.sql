@@ -1,5 +1,5 @@
 begin;
-select plan(52);
+select plan(69);
 
 insert into auth.users (id)
 values
@@ -18,7 +18,9 @@ values
   ('c4000000-0000-4000-8000-000000000001'),
   ('c4000000-0000-4000-8000-000000000002'),
   ('c5000000-0000-4000-8000-000000000001'),
-  ('c5000000-0000-4000-8000-000000000002')
+  ('c5000000-0000-4000-8000-000000000002'),
+  ('c6000000-0000-4000-8000-000000000001'),
+  ('c6000000-0000-4000-8000-000000000002')
 on conflict (id) do nothing;
 
 insert into public.user_entitlements (
@@ -49,7 +51,7 @@ returns jsonb
 language sql
 volatile
 as $$
-  select public.process_revenuecat_premium_event_atomic_internal(
+  select public.process_revenuecat_premium_event_atomic(
     'revenuecat_app_store',
     p_event_id,
     'INITIAL_PURCHASE',
@@ -68,8 +70,7 @@ as $$
     'app_store',
     'ios',
     mapping.id,
-    mapping.product_id,
-    null
+    mapping.product_id
   )
   from public.monetization_product_store_mappings mapping
   where mapping.provider = 'revenuecat_app_store'
@@ -132,7 +133,7 @@ returns jsonb
 language sql
 volatile
 as $$
-  select public.process_revenuecat_premium_event_atomic_internal(
+  select public.process_revenuecat_premium_event_atomic(
     'revenuecat_app_store',
     p_event_id,
     p_event_type,
@@ -151,8 +152,7 @@ as $$
     'app_store',
     'ios',
     mapping.id,
-    mapping.product_id,
-    null
+    mapping.product_id
   )
   from public.monetization_product_store_mappings mapping
   where mapping.provider = 'revenuecat_app_store'
@@ -172,7 +172,7 @@ select lives_ok(
     'c0000000-0000-4000-8000-000000000001',
     'd0000000-0000-4000-8000-000000000002',
     'sandbox',
-    now(),
+    date_trunc('hour', now()),
     'sha256-transfer-event'
   )$$,
   'verified sandbox App Store transfer atomically supersedes expired test residue'
@@ -244,10 +244,22 @@ select lives_ok(
     'c0000000-0000-4000-8000-000000000001',
     'd0000000-0000-4000-8000-000000000002',
     'sandbox',
-    now(),
+    date_trunc('hour', now()),
     'sha256-transfer-event'
   )$$,
   'duplicate transfer delivery is retry safe'
+);
+select throws_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'transfer-event-1',
+    'c0000000-0000-4000-8000-000000000001',
+    'd0000000-0000-4000-8000-000000000002',
+    'sandbox',
+    date_trunc('hour', now()),
+    'sha256-transfer-event-mismatch'
+  )$$,
+  'transfer_duplicate_identity_mismatch',
+  'transfer duplicate requires the exact immutable payload identity'
 );
 select is(
   (select count(*)::integer from public.provider_events where provider_event_id like 'transfer:transfer-event-1:%'),
@@ -379,7 +391,7 @@ select throws_ok(
     'c1000000-0000-4000-8000-000000000001',
     'c1000000-0000-4000-8000-000000000002',
     'sandbox',
-    now() - interval '2 hours',
+    date_trunc('hour', now()) - interval '2 hours',
     'sha256-ordering-delayed-transfer-1'
   )$$,
   'transfer_event_stale',
@@ -458,7 +470,7 @@ select throws_ok(
     'c3000000-0000-4000-8000-000000000001',
     'c3000000-0000-4000-8000-000000000002',
     'sandbox',
-    now() - interval '2 hours',
+    date_trunc('hour', now()) - interval '2 hours',
     'sha256-ordering-delayed-transfer-3'
   )$$,
   'transfer_event_stale',
@@ -508,7 +520,7 @@ select lives_ok(
     'c5000000-0000-4000-8000-000000000001',
     'c5000000-0000-4000-8000-000000000002',
     'sandbox',
-    now() - interval '2 hours',
+    date_trunc('hour', now()) - interval '2 hours',
     'sha256-ordering-transfer-5'
   )$$,
   'initial ordered transfer succeeds'
@@ -527,7 +539,7 @@ select lives_ok(
     'c5000000-0000-4000-8000-000000000001',
     'c5000000-0000-4000-8000-000000000002',
     'sandbox',
-    now() - interval '2 hours',
+    date_trunc('hour', now()) - interval '2 hours',
     'sha256-ordering-transfer-5'
   )$$,
   'duplicate replay remains idempotent after a newer renewal'
@@ -548,6 +560,82 @@ select is(
   'duplicate ordered transfer retains exactly two normalized events'
 );
 
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'reverse-source-6', 'INITIAL_PURCHASE',
+    'c6000000-0000-4000-8000-000000000001',
+    'active', timestamptz '2026-07-30 12:00:00+00', timestamptz '2099-08-30 12:00:00+00'
+  )$$,
+  'reverse-order source begins with older ordinary authority'
+);
+select lives_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'reverse-transfer-6',
+    'c6000000-0000-4000-8000-000000000001',
+    'c6000000-0000-4000-8000-000000000002',
+    'sandbox',
+    timestamptz '2026-07-30 15:00:00+00',
+    'sha256-reverse-transfer-6'
+  )$$,
+  'newer transfer commits before waiting older ordinary events'
+);
+select throws_ok(
+  $$select pg_temp.apply_premium_event(
+    'reverse-renewal-6', 'RENEWAL',
+    'c6000000-0000-4000-8000-000000000001',
+    'active', timestamptz '2026-07-30 13:00:00+00', timestamptz '2099-09-30 12:00:00+00'
+  )$$,
+  'revenuecat_event_stale',
+  'older source renewal cannot overwrite a newer committed transfer'
+);
+select throws_ok(
+  $$select pg_temp.apply_premium_event(
+    'reverse-refund-6', 'REFUND',
+    'c6000000-0000-4000-8000-000000000002',
+    'revoked', timestamptz '2026-07-30 13:00:00+00', timestamptz '2099-08-30 12:00:00+00'
+  )$$,
+  'revenuecat_event_stale',
+  'older target refund cannot overwrite a newer committed transfer'
+);
+select is(
+  (select status from public.user_entitlements
+   where user_id = 'c6000000-0000-4000-8000-000000000001'
+     and entitlement_key = 'premium'),
+  'revoked',
+  'rejected older ordinary events preserve the transferred source state'
+);
+select is(
+  (select status from public.user_entitlements
+   where user_id = 'c6000000-0000-4000-8000-000000000002'
+     and entitlement_key = 'premium'),
+  'active',
+  'rejected older ordinary events preserve the transferred target state'
+);
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'reverse-source-6', 'INITIAL_PURCHASE',
+    'c6000000-0000-4000-8000-000000000001',
+    'active', timestamptz '2026-07-30 12:00:00+00', timestamptz '2099-08-30 12:00:00+00'
+  )$$,
+  'exact ordinary duplicate after a newer transfer is a no-mutation acknowledgement'
+);
+select is(
+  (select status from public.user_entitlements
+   where user_id = 'c6000000-0000-4000-8000-000000000001'
+     and entitlement_key = 'premium'),
+  'revoked',
+  'exact stale duplicate cannot replay its old active state'
+);
+select throws_ok(
+  $$select pg_temp.apply_premium_event(
+    'reverse-source-6', 'INITIAL_PURCHASE',
+    'c6000000-0000-4000-8000-000000000002',
+    'active', timestamptz '2026-07-30 12:00:00+00', timestamptz '2099-08-30 12:00:00+00'
+  )$$,
+  'revenuecat_event_duplicate_identity_mismatch',
+  'duplicate event identity cannot move between transfer participants'
+);
+
 select ok(
   pg_get_functiondef(
     'public.process_revenuecat_premium_transfer_ordered_internal(text,uuid,uuid,text,timestamptz,text,text)'::regprocedure
@@ -561,12 +649,70 @@ select ok(
   'ordered transfer rechecks authoritative event time after serialization'
 );
 select ok(
+  pg_get_functiondef(
+    'public.process_revenuecat_premium_event_ordered_internal(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)'::regprocedure
+  ) like '%lock table public."monetization_products" in share mode%',
+  'ordinary Premium ordering protects its product-catalog snapshot'
+);
+select ok(
+  strpos(
+    pg_get_functiondef(
+      'public.process_revenuecat_premium_event_ordered_internal(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)'::regprocedure
+    ),
+    'revenuecat-premium:'
+  ) < strpos(
+    pg_get_functiondef(
+      'public.process_revenuecat_premium_event_ordered_internal(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)'::regprocedure
+    ),
+    'revenuecat-event:'
+  ),
+  'ordinary Premium product authority lock precedes its event lock'
+);
+select ok(
+  pg_get_functiondef(
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)'::regprocedure
+  ) like '%process_revenuecat_premium_event_ordered_internal%',
+  'service-accessible ordinary Premium RPC uses the ordered wrapper'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.process_revenuecat_premium_event_ordered_internal(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)',
+    'EXECUTE'
+  ),
+  'service role cannot bypass ordinary Premium ordering'
+);
+select ok(
   not has_function_privilege(
     'service_role',
     'public.process_revenuecat_premium_transfer_ordered_internal(text,uuid,uuid,text,timestamptz,text,text)',
     'EXECUTE'
   ),
   'service role cannot bypass the ordered public transfer wrapper'
+);
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'anon cannot execute ordinary Premium reconciliation'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'authenticated clients cannot execute ordinary Premium reconciliation'
+);
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'service role reaches ordinary Premium only through the ordered public wrapper'
 );
 
 select ok(

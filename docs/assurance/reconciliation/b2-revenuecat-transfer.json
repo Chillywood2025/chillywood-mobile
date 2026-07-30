@@ -55,12 +55,13 @@
     {"path": "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql", "classification": "SOURCE_ONLY", "resolution": "INCLUDED_IN_B2"}
   ],
   "focusedValidation": {
-    "nodeTests": {"passed": 19, "failed": 0},
+    "nodeTests": {"passed": 20, "failed": 0},
+    "deterministicNodeOutput": {"runs": 3, "normalizedSha256": "bceb38a2ee1b7b788ffda0788b36ab180e500fffdb17e60320fd6a12f39de21a"},
     "denoCheck": "SOURCE_CLEAR",
     "migrationRawHashes": "SOURCE_CLEAR",
     "databasePgTap": {"status": "HISTORICAL_BASELINE_CLEAR", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
-    "successorPgTap": {"status": "BLOCKED_INTERNAL", "planned": 52, "reason": "successor schema applied once locally, but the shared stack lacked its immutable deployed-function prerequisite; test data rolled back"},
-    "orderingSchedules": {"status": "MODEL_CLEAR", "passed": 4, "failed": 0, "deterministic": true},
+    "successorPgTap": {"status": "BLOCKED_EXTERNAL", "planned": 69, "reason": "assembled local reset was interrupted after about 70 seconds by an uncached Docker image; no retry, remote link, or provider call occurred"},
+    "orderingSchedules": {"status": "MODEL_CLEAR", "passed": 8, "failed": 0, "antiVacuityControls": 1, "deterministic": true},
     "remoteDryRun": {"status": "BLOCKED_INTERNAL", "reason": "coordinator-controlled read-only assembled-source dry-run remains required; no remote connection or mutation attempted"}
   },
   "fixtureCoverage": [
@@ -80,7 +81,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "MODEL_CLEAR",
-    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "BLOCKED_EXTERNAL",
     "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -88,11 +89,11 @@
   },
   "proofLimits": [
     "The fixture corpus proves only deterministic sanitized source contracts.",
-    "The prior 27/27 local pgTAP baseline does not substitute for the unexecuted 52-case successor suite.",
+    "The prior 27/27 local pgTAP baseline does not substitute for the unexecuted 69-case successor suite.",
     "No provider, installed, physical, signed-artifact, or release behavior is claimed."
   ],
   "rollback": "Retain immutable deployed migration source. The forward correction remains undeployed; any future deployed correction requires another forward-only successor rather than rewriting migration history.",
   "emergencyStop": "Do not deploy the webhook or mutate provider state; route any future provider action to Money Flow Control under separate authorization.",
-  "finalPermittedNextAction": "Run the 52-case focused local database proof under the coordinator lock, pass the linked read-only assembled-source dry-run, then require fresh exact-head review and scope enforcement before this Git-only reconciliation may merge.",
+  "finalPermittedNextAction": "Run the 69-case focused local database proof on an assembled disposable stack under the coordinator lock, pass the linked read-only assembled-source dry-run, then require fresh exact-head review and scope enforcement before this Git-only reconciliation may merge.",
   "claimedFeatureCompletion": false
 }
