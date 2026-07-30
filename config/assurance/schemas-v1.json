@@ -46,8 +46,33 @@
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
-      "properties": {"mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"}, "liveProviderReadback": {"type": "boolean"}}
+      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "properties": {
+        "mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
+        "liveProviderReadback": {"type": "boolean"},
+        "operationalClosures": {
+          "type": "object",
+          "required": ["installedProductQa", "revenueCat"],
+          "properties": {
+            "installedProductQa": {
+              "type": "object",
+              "required": ["schedulerStatus", "dailyTimerEnabled", "currentMatrixState", "proofRowIds", "evidenceSource"],
+              "properties": {"dailyTimerEnabled": {"type": "boolean"}, "proofRowIds": {"type": "array", "minItems": 3}}
+            },
+            "revenueCat": {
+              "type": "object",
+              "required": ["providerReadbackClosed", "dashboardTest", "premiumGranted", "liveMoneyAction", "moneyMoved", "evidenceSource"],
+              "properties": {
+                "providerReadbackClosed": {"type": "boolean"},
+                "premiumGranted": {"type": "boolean"},
+                "liveMoneyAction": {"type": "boolean"},
+                "moneyMoved": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      }
     },
     "physicalGoldenMatrix": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],

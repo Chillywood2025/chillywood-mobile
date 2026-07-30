@@ -11,6 +11,27 @@
   "enabledSchedules": [],
   "scheduleState": {"enabled": 0, "total": 5},
   "effectiveBaselineCount": 1,
+  "operationalClosures": {
+    "installedProductQa": {
+      "schedulerStatus": "chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped",
+      "dailyTimerEnabled": true,
+      "currentMatrixState": "POLL_HTTP_FAILED",
+      "proofRowIds": [
+        "ff81956d-94e3-49e9-8c80-fae2c12b0dd8",
+        "1dc00369-b5ca-4289-92bc-daf5bae00222",
+        "282fb154-101c-402b-9539-d3fb8080de51"
+      ],
+      "evidenceSource": "merged autonomous-system closure evidence retained from pre-PR-A current-truth documents"
+    },
+    "revenueCat": {
+      "providerReadbackClosed": true,
+      "dashboardTest": {"httpStatus": 200, "result": "test_received"},
+      "premiumGranted": false,
+      "liveMoneyAction": false,
+      "moneyMoved": false,
+      "evidenceSource": "merged Money Operator closure evidence retained from pre-PR-A current-truth documents"
+    }
+  },
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
   "openImplementationPrs": [{"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "open-draft", "disposition": "reconcile-then-supersede-unmerged"}],
   "openReviewOnlyPrs": [{"number": 53, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review", "head": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b", "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "state": "open-draft-stale", "disposition": "never-merge"}],
