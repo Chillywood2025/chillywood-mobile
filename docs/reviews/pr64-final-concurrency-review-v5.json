@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-final-concurrency-review-v5",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewPrNumber": 100,
+  "assignedLane": "concurrency-property-replay-final-v5",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+  "implementationTree": "4afaa24b1da6355162503b222c59962edea60875",
+  "reviewMergeHead": "aa361c80a38dde36fd979ab6b19ceb513b7f709d",
+  "reviewMergeTree": "b2446ee2736b62f6a0ad005988d21e9ed6b53aec",
+  "reviewMergeParents": [
+    "b2606049d7de7cb70526572dfa705be53279d4d6",
+    "46ab717c1a463d435b64bb044bc63f590fa52913"
+  ],
+  "baseHead": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+  "baseTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+  "mergeBase": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 0,
+    "implementationOnlyCommits": 14
+  },
+  "changedFileHash": "51140b352a6c72653277135677128b883eaa222ca8a6c14efc6261f2b6ba0c5f",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames current-main...implementation)",
+  "changedNameHash": "2c617761c696bf69ffb6a66281119e723f5c8b9d680800753d0fb4f87b04bda1",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "d5884c6ee1a448cfe121128f104ed9524b75c9f15c48a5844d574f11ad62313f",
+  "implementationDiffHash": "89cdae044d9ddacd015896777b341a1d33f9926047209fb4c7b5d4cfb443513a",
+  "modelSourceSetHash": "656765fdf75f2fda334068066629edcdf56c70f557d6eefb797fcdeb8a036569",
+  "reviewMergeDeltaHash": "59cf5f5faa5d53ce8858ec7fbe11e772d34725dd04d9bfd548aba19d2409469e",
+  "reviewMergeDeltaNameHash": "aaffc72350124b66e90ecc45df9ee1e032744b0ab1179373482eeba054977bbf",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "concurrency-property-replay-final-v5",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "reviewMergeIntegrity": {
+      "status": "pass",
+      "reviewMergeHead": "aa361c80a38dde36fd979ab6b19ceb513b7f709d",
+      "reviewMergeTree": "b2446ee2736b62f6a0ad005988d21e9ed6b53aec",
+      "firstParent": "b2606049d7de7cb70526572dfa705be53279d4d6",
+      "secondParentExactImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "exactImplementationTree": "4afaa24b1da6355162503b222c59962edea60875",
+      "nonReviewSourceEquivalentToImplementation": true,
+      "implementationFilesOnReviewBranch": 0,
+      "reviewFilesBeforeV5": [
+        "docs/reviews/pr64-final-concurrency-review.json",
+        "docs/reviews/pr64-final-concurrency-review-v2.json",
+        "docs/reviews/pr64-final-concurrency-review-v3.json",
+        "docs/reviews/pr64-final-concurrency-review-v4.json"
+      ]
+    },
+    "priorEvidencePreservation": {
+      "status": "pass",
+      "v1": {
+        "sha256": "a457581d5389e49b4c3951acaf0d352c9252cffd9e077b7eb8ad8043f0a12f2c",
+        "editedByV5Lane": false
+      },
+      "v2": {
+        "sha256": "f6dbd8a06425c08c3c175edc5b55486cca1bdbd1f5dc87b79fda46fc5c0bc957",
+        "editedByV5Lane": false
+      },
+      "v3": {
+        "sha256": "b0bd2030773c81b8e347408124329d910bbda3032af75eb7cdb498558a5dcc83",
+        "editedByV5Lane": false
+      },
+      "v4": {
+        "sha256": "1edc5baf20f2d1885bcdf187759330c0e2d220c81219c2b1674b8c3a9a1292e3",
+        "editedByV5Lane": false
+      }
+    },
+    "currentMainAncestry": {
+      "status": "pass",
+      "currentMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "currentMainTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+      "currentMainIsImplementationAncestor": true,
+      "implementationParents": [
+        "bfc761947f8c437663df4e416fb1b189c7817397",
+        "ac5575baf823b9189316b02ec5fa5e352d15b457"
+      ],
+      "baseOnlyCommits": 0,
+      "modelSourceChangedByCurrentMainMerge": false
+    },
+    "currentTruthControlPlane": {
+      "status": "pending_coordinator_final_head_sync",
+      "recordedImplementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "implementationHeadBindingFresh": false,
+      "blocksMergeUntilCoordinatorSync": true,
+      "reviewLaneModifiedCurrentTruth": false
+    },
+    "exactDelta": {
+      "status": "pass_under_machine_readable_waiver",
+      "scopeBase": "origin/main",
+      "files": 11,
+      "additions": 1511,
+      "deletions": 1,
+      "netChangedLines": 1510,
+      "waivedFileBudget": 12,
+      "waivedLineBudget": 1600,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "migrationFiles": 0,
+      "productImplementationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "dependencyExecution": {
+      "status": "pass",
+      "reviewWorktreeInstallPerformed": false,
+      "packageOrLockfileChangedByReview": false,
+      "dependencySourceHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "fastCheck": "4.9.0",
+      "pureRand": "8.4.2",
+      "resolutionMechanism": "process-local ESM loader mapping for the pinned fast-check package"
+    },
+    "focusedModelTests": {
+      "status": "pass",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyDomains": 6,
+      "propertyCases": 1200,
+      "maxCommands": 24,
+      "transitionWitnesses": 8,
+      "positiveTransitionWitnesses": 7,
+      "negativeTransitionWitnesses": 1,
+      "escapedDefectFixtures": 22,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20
+    },
+    "propertyAntiVacuity": {
+      "status": "pass",
+      "propertyCases": 1200,
+      "runsPerDomain": 200,
+      "domains": 6,
+      "transitionWitnesses": 8,
+      "allDomainsHaveWitnesses": true,
+      "allWitnessesReached": true,
+      "allWitnessesViolationFree": true,
+      "propertyResultHash": "db9a887430a0b2debe9d9aa87487c20dbce369b36bfa6b45c6c4bd19ac441999",
+      "witnessHash": "b54f4f91b478c57b211f5c64298a467429112464a3d678f23379a3c83573b11d",
+      "seeds": {
+        "chat-call": 173501,
+        "revenuecat": 173502,
+        "ota-build": 173503,
+        "notification-native-action": 173504,
+        "livekit": 173505,
+        "migrations": 173506
+      }
+    },
+    "requiredInterleavings": {
+      "status": "pass",
+      "scenarioCount": 10,
+      "scheduleCount": 20,
+      "exactScheduleContracts": 8,
+      "exactContractFinalStatesMatched": 8,
+      "allSchedulesModelClear": true,
+      "mechanisms": [
+        "controlled barriers",
+        "promises",
+        "transaction lock",
+        "explicit schedules"
+      ],
+      "concurrencyResultHash": "515eb4df191eff6b15f0e90bd906b7947402239017d6b3c1b20a0df7fe18c2e0",
+      "scenarioResultHash": "ed934ff36d550f19e68f86a6e4a0c132ee99bd2214ff65b8c3885a221ba8b0b7",
+      "exactContractHash": "b5560864844fb0d84947a9e31e65a7d7fd2222d167d442562b34f04e7341c704",
+      "antiVacuityMutationProbes": {
+        "count": 8,
+        "killed": 8,
+        "survived": 0,
+        "scorePercent": 100,
+        "hash": "f5c935bf0e73a5aca2600dc003c1d626cd4eba973bd60f9ced34729d3f680e9c"
+      }
+    },
+    "escapedDefectRegression": {
+      "status": "pass",
+      "fixtureCount": 22,
+      "canonicalFixtureCount": 17,
+      "supplementalFixtureCount": 5,
+      "allHistoricalVariantsDetected": true,
+      "allCurrentVariantsClear": true,
+      "resultHash": "0c06962ea58fe93ca8884c21eff6d4b1f60fdb9cc1e3dd65754ae64748c0b9cf"
+    },
+    "replayCliAndPrivacy": {
+      "status": "pass",
+      "resultHash": "1856cc6deb1ff0d232140b94adc357d18bfd881a6c5c5bc8cf9cbb204bbc2cb6",
+      "documentedFilterCasesPassed": 7,
+      "emptyAndBareCasesRejected": 6,
+      "unknownIdentifierShapesRejected": 3,
+      "unknownRawIdentityAbsent": true,
+      "unknownReplayFilesAbsent": true,
+      "persistedFailureRedacted": true,
+      "persistedFailureMode": "0600",
+      "existingFileNoClobber": true
+    },
+    "idempotencyAndGeneration": {
+      "status": "pass",
+      "cases": 8,
+      "passed": 8,
+      "resultHash": "53ac0f9539d5efec58e32c26c7cf1c14b49d1597dea29b0ce843def253566b1e"
+    },
+    "otaModelRegression": {
+      "status": "pass",
+      "resultHash": "1b6e28fa15a6a85ab1845d0db5246a70dfa1bb21a2ec35dbb54e14459fdedfaa",
+      "compatibleNewSourceAccepted": true,
+      "missingCoreActivationCasesRejected": 15,
+      "missingCoreRollbackCasesRejected": 15,
+      "allRejectedStatesViolationFree": true
+    },
+    "deterministicOutputs": {
+      "status": "pass",
+      "runsPerSuite": 3,
+      "outputsIdenticalWithinEachSuite": true,
+      "allSuiteSha256": "c11a12dd7641a8c544fee3d90ffcdde00b25a9010f7bd6d45feb927ddb460169",
+      "propertySha256": "6347a567a8e03b3ca8041a58941defb7b9f415e04c653189f7fe7210c0ed5e50",
+      "concurrencySha256": "2a24c626fa157c322dcf1049b60be48343b40db8674f7abaef21ff09257ba3a4",
+      "escapedDefectSha256": "3eaa185b9729dd55da59da451a1cc9192eafdf662f9836675ee386e7e1a06554"
+    },
+    "proofBoundaries": {
+      "status": "pass",
+      "provedTier": "T2_MODEL",
+      "forbiddenClaimsPreserved": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "higherTierClaimsRejected": 5,
+      "proofSubstitutionAccepted": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_exact_head_run",
+      "runByThisReviewLane": false
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeOrDeviceTest": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "priorReviewEvidenceChangedByV5": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "3fb624621ad9ece4187a15d98bb59a996fcf17d256d4d2e8ae01d005ce42cb53",
+  "reviewLevel": "C",
+  "reviewHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+  "reviewHeadSemantics": "exact implementation second parent of the normal review merge; v5 evidence commit immediately follows that merge",
+  "reviewTimestamp": "2026-07-30T22:12:29Z",
+  "reviewerLanes": [
+    "isolated-automated-review",
+    "concurrency-property-replay-final-v5"
+  ],
+  "findings": [],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "independentT2Disposition": "MODEL_CLEAR",
+    "currentMainAncestryExact": true,
+    "currentTruthFinalHeadSyncPending": true,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "lane-clear-await-current-truth-sync-other-reviews-and-coordinator-full-ci",
+    "humanApproval": false
+  }
+}
