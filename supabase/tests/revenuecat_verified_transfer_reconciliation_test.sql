@@ -1,13 +1,35 @@
 begin;
-select plan(25);
+select plan(27);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
   ('c0000000-0000-4000-8000-000000000001', false, false),
   ('d0000000-0000-4000-8000-000000000002', false, false),
   ('e0000000-0000-4000-8000-000000000003', false, false),
-  ('f0000000-0000-4000-8000-000000000004', false, false)
+  ('f0000000-0000-4000-8000-000000000004', false, false),
+  ('a1111111-1111-4111-8111-111111111111', false, false),
+  ('b1111111-1111-4111-8111-111111111111', false, false)
 on conflict (id) do nothing;
+
+insert into public.user_entitlements (
+  user_id,
+  entitlement_key,
+  status,
+  source,
+  starts_at,
+  expires_at,
+  updated_at,
+  metadata
+) values (
+  'd0000000-0000-4000-8000-000000000002',
+  'premium',
+  'active',
+  'test_grant',
+  timezone('utc'::text, now()) - interval '2 days',
+  timezone('utc'::text, now()) - interval '1 day',
+  timezone('utc'::text, now()) - interval '1 day',
+  jsonb_build_object('expired_test_residue', true)
+);
 
 create function pg_temp.seed_transfer_source(
   p_event_id text,
@@ -102,7 +124,7 @@ select lives_ok(
     now(),
     'sha256-transfer-event'
   )$$,
-  'verified sandbox App Store transfer is atomic'
+  'verified sandbox App Store transfer atomically supersedes expired test residue'
 );
 
 select is(
@@ -224,6 +246,42 @@ select throws_ok(
   )$$,
   'transfer_auth_user_missing',
   'transfer requires both exact auth users'
+);
+
+select lives_ok(
+  $$select pg_temp.seed_transfer_source('transfer-source-conflict', 'a1111111-1111-4111-8111-111111111111')$$,
+  'effective non-provider conflict source is provider-backed and active'
+);
+insert into public.user_entitlements (
+  user_id,
+  entitlement_key,
+  status,
+  source,
+  starts_at,
+  expires_at,
+  updated_at,
+  metadata
+) values (
+  'b1111111-1111-4111-8111-111111111111',
+  'premium',
+  'active',
+  'test_grant',
+  timezone('utc'::text, now()) - interval '1 day',
+  timezone('utc'::text, now()) + interval '1 day',
+  timezone('utc'::text, now()),
+  jsonb_build_object('effective_test_grant', true)
+);
+select throws_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'transfer-effective-conflict',
+    'a1111111-1111-4111-8111-111111111111',
+    'b1111111-1111-4111-8111-111111111111',
+    'sandbox',
+    now(),
+    'sha256-transfer-effective-conflict'
+  )$$,
+  'transfer_target_entitlement_conflict',
+  'effective non-provider destination entitlement remains a hard conflict'
 );
 
 select lives_ok(
