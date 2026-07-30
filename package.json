@@ -559,6 +559,7 @@
     "test:cognitive-android-visual-canary-manifest": "node ./scripts/test-cognitive-android-visual-canary-manifest.mjs",
     "test:cognitive-product-baseline-v1": "node ./scripts/test-chillywood-product-experience-baseline-v1.mjs",
     "test:cognitive-livekit-experience-collector": "node ./scripts/test-cognitive-livekit-experience-collector.mjs",
+    "test:cognitive-livekit-platform-activation-contract": "node ./scripts/test-cognitive-livekit-platform-activation-contract.mjs",
     "test:cognitive-isolated-runtime": "npm ci --ignore-scripts --prefix ./isolated-runtime/cloudflare && npm run verify --prefix ./isolated-runtime/cloudflare",
     "test:cognitive-github-draft-pr-broker": "deno test --node-modules-dir=auto --no-lock --allow-env --allow-net --allow-read supabase/functions/cognitive-github-draft-pr-broker/index_test.ts",
     "test:cognitive-level01-scheduler": "deno test --node-modules-dir=auto --no-lock --allow-env --allow-net --allow-read supabase/functions/cognitive-level01-scheduler/index_test.ts",

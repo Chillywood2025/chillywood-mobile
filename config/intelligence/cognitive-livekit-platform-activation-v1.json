@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "contractId": "cognitive-livekit-platform-activation-v1",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "environment": "production",
+  "applicationIdentifier": "com.chillywood.mobile",
+  "chatCallSource": {
+    "mergedMainCommit": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
+    "implementationHead": "934b6ae2ef07d79295e21a77d2b033f3be778c32",
+    "sourceTreeHash": "1abcd5e765a0dcac4ef0b40a2a90efb06f508fec"
+  },
+  "platforms": {
+    "android": {
+      "appVersion": "1.0.0",
+      "buildNumber": "86",
+      "runtimeVersion": "1.0.0-android-chat-call-action-v1",
+      "channel": "android-chat-livekit-qa",
+      "distribution": "google_play_internal_testing",
+      "installedSourceCommit": "0cd2d981c79640199a02236abff6c79cbe0790ea",
+      "internalUpdateId": "e3379ac9-61f0-40db-a014-81975be123e5",
+      "installedArtifactSha256": "fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44",
+      "evidenceBinding": {
+        "sourceBuildHash": "d890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050",
+        "runtimeIdentityHash": "5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0"
+      },
+      "rollback": {
+        "buildNumber": "85",
+        "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+        "updateId": "019fb1a9-e08d-72d2-a103-a092cc59564a",
+        "updateGroup": "44173a3d-93b8-429e-bb27-658846afa6ed",
+        "sourceCommit": "268f5d7e93e2cc5044286a956f870fe35dbf2638"
+      }
+    },
+    "ios": {
+      "appVersion": "1.0.0",
+      "buildNumber": "8",
+      "runtimeVersion": "1.0.0-iosqa1",
+      "channel": "ios-qa",
+      "distribution": "internal_testflight",
+      "installedSourceCommit": "36c5d34e5db508112241651ff2a80056d594a797",
+      "internalUpdateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f",
+      "internalUpdateGroup": "207c5055-d8d0-4c3e-a022-421f77117ac3",
+      "installedArtifactSha256": "24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8",
+      "evidenceBinding": {
+        "sourceBuildHash": "73792a29b2de5445bc7fc718abd6463d812ffec6b566b00ab930045a32d266cb",
+        "runtimeIdentityHash": "17d0bf8d12eed354ab5784cc94a3373620c4a9dc09b9aeda81bdb13103351bcf"
+      },
+      "rollback": {
+        "buildNumber": "8",
+        "runtimeVersion": "1.0.0-iosqa1",
+        "updateId": "019fb017-9821-77ed-9e68-d3b136ce4b57",
+        "updateGroup": "d2645d74-3875-4177-8138-e1a3863e0765",
+        "sourceCommit": "c94c8a70e02e4d8e417c1939517596df8ec2783a"
+      }
+    }
+  },
+  "canary": {
+    "accountCount": 2,
+    "roleFree": true,
+    "routes": [
+      "live-stage",
+      "watch-party-live",
+      "chat-call"
+    ],
+    "scenarios": [
+      "success_baseline",
+      "bounded_failure_fixture",
+      "background_foreground_recovery"
+    ],
+    "physicalProofStatus": "installed_ui_observed",
+    "formalPlatformPassRequiredBeforeLiveSwitch": true,
+    "premiumProof": {
+      "source": "revenuecat",
+      "environment": "sandbox",
+      "accessGrantStatus": "sandbox_only",
+      "requiredUserCount": 2,
+      "activeManualGrantCount": 0,
+      "appliesToRoutes": [
+        "live-stage",
+        "watch-party-live"
+      ],
+      "chatCallRemainsRoleFree": true
+    }
+  },
+  "finalPolicies": {
+    "android": "provider-independent-android-livekit-live-v1",
+    "ios": "provider-independent-ios-livekit-live-v1",
+    "sharedLiveKitEnabled": false,
+    "recurringSchedulesEnabled": 0
+  }
+}

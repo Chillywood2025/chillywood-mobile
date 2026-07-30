@@ -14,6 +14,13 @@ const literal = (value) =>
   `'${String(value).replaceAll("'", "''")}'`;
 const ids = {
   owner: uuid(),
+  canaryA: uuid(),
+  canaryB: uuid(),
+  premiumProduct: uuid(),
+  providerEventA: uuid(),
+  providerEventB: uuid(),
+  accessGrantA: uuid(),
+  accessGrantB: uuid(),
   project: uuid(),
   sharedTask: uuid(),
   androidTask: uuid(),
@@ -36,10 +43,27 @@ const ids = {
 const collectorAssertion = hash();
 const triageAssertion = hash();
 const evaluatorAssertion = hash();
-const sourceCommit = "a".repeat(40);
-const sourceTree = "b".repeat(40);
+const sourceCommit = "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6";
+const sourceTree = "1abcd5e765a0dcac4ef0b40a2a90efb06f508fec";
+const deploymentHash =
+  "7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0";
+const platformIdentity = Object.freeze({
+  android: Object.freeze({
+    artifactHash:
+      "fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44",
+    rollbackHash:
+      "0fbe0c0d5bf2fe593b23f8970fe03e85c2e32e9195ec93ac9533d254b9014759",
+  }),
+  ios: Object.freeze({
+    artifactHash:
+      "24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8",
+    rollbackHash:
+      "37d14e930e6787973866b0a5f38c28e1484dac0cb187f4ecb5de363147528e48",
+  }),
+});
 const h = Array.from({ length: 12 }, hash);
 let stage = "setup";
+let sandboxPremiumProofHash = null;
 
 const psqlArgs = [
   "exec", "-i", container, "psql", "-X", "-q", "-A", "-t",
@@ -154,6 +178,34 @@ delete from public.cognitive_projects
 where id=${literal(ids.project)}::uuid;
 delete from public.platform_role_memberships
 where user_id=${literal(ids.owner)};
+delete from public.access_grants
+where user_id in (
+  ${literal(ids.canaryA)}::uuid,
+  ${literal(ids.canaryB)}::uuid
+);
+delete from public.provider_events
+where id in (
+  ${literal(ids.providerEventA)}::uuid,
+  ${literal(ids.providerEventB)}::uuid
+);
+delete from public.monetization_products
+where id=${literal(ids.premiumProduct)}::uuid;
+delete from public.user_entitlements
+where user_id in (
+  ${literal(ids.canaryA)},
+  ${literal(ids.canaryB)}
+);
+delete from public.chat_call_livekit_canary_users
+where user_id in (
+  ${literal(ids.canaryA)}::uuid,
+  ${literal(ids.canaryB)}::uuid
+);
+delete from auth.users
+where id in (
+  ${literal(ids.owner)}::uuid,
+  ${literal(ids.canaryA)}::uuid,
+  ${literal(ids.canaryB)}::uuid
+);
 ${restoreEvaluator}
 ${restoreEmergency}
 commit;
@@ -240,6 +292,91 @@ const capabilityRows = (task, platform, collect, issue, consume, triage) => `
 const setup = admin(`
 begin;
 set local session_replication_role=replica;
+insert into auth.users(id,is_sso_user,is_anonymous)
+values
+  (${literal(ids.owner)}::uuid,false,false),
+  (${literal(ids.canaryA)}::uuid,false,false),
+  (${literal(ids.canaryB)}::uuid,false,false);
+insert into public.chat_call_livekit_canary_users(
+  user_id,enabled,enrolled_by
+) values
+  (
+    ${literal(ids.canaryA)}::uuid,true,
+    ${literal(ids.owner)}::uuid
+  ),
+  (
+    ${literal(ids.canaryB)}::uuid,true,
+    ${literal(ids.owner)}::uuid
+  );
+insert into public.monetization_products(
+  id,product_key,product_type,display_name,provider,
+  provider_product_id,environment,status,is_android_digital,metadata
+) values (
+  ${literal(ids.premiumProduct)}::uuid,
+  ${literal(`livekit-platform-premium-${ids.project}`)},
+  'premium_subscription','Fixture Premium','revenuecat',
+  ${literal(`fixture-premium-${ids.project}`)},
+  'sandbox','sandbox',true,'{"fixture":true}'::jsonb
+);
+insert into public.provider_events(
+  id,provider_event_id,provider,product_id,product_key,user_id,
+  app_user_id,environment,event_type,status,idempotency_key,
+  raw_payload_hash,metadata
+) values
+(
+  ${literal(ids.providerEventA)}::uuid,
+  ${literal(`fixture-${ids.providerEventA}`)},'revenuecat',
+  ${literal(ids.premiumProduct)}::uuid,
+  ${literal(`livekit-platform-premium-${ids.project}`)},
+  ${literal(ids.canaryA)}::uuid,${literal(ids.canaryA)},
+  'sandbox','INITIAL_PURCHASE','processed',${literal(hash())},
+  ${literal(hash())},'{"fixture":true,"sandbox_only":true}'::jsonb
+),
+(
+  ${literal(ids.providerEventB)}::uuid,
+  ${literal(`fixture-${ids.providerEventB}`)},'revenuecat',
+  ${literal(ids.premiumProduct)}::uuid,
+  ${literal(`livekit-platform-premium-${ids.project}`)},
+  ${literal(ids.canaryB)}::uuid,${literal(ids.canaryB)},
+  'sandbox','INITIAL_PURCHASE','processed',${literal(hash())},
+  ${literal(hash())},'{"fixture":true,"sandbox_only":true}'::jsonb
+);
+insert into public.user_entitlements(
+  user_id,entitlement_key,status,source,starts_at,expires_at,
+  revoked_at,metadata
+) values
+(
+  ${literal(ids.canaryA)},'premium','active','revenuecat',
+  transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+  null,'{"environment":"sandbox","sandbox":true,"fixture":true}'::jsonb
+),
+(
+  ${literal(ids.canaryB)},'premium','active','revenuecat',
+  transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+  null,'{"environment":"sandbox","sandbox":true,"fixture":true}'::jsonb
+);
+insert into public.access_grants(
+  id,user_id,grant_type,source_type,source_id,product_id,provider,
+  provider_event_id,environment,status,starts_at,expires_at,metadata
+) values
+(
+  ${literal(ids.accessGrantA)}::uuid,
+  ${literal(ids.canaryA)}::uuid,'premium','provider_event',
+  ${literal(ids.providerEventA)}::uuid,
+  ${literal(ids.premiumProduct)}::uuid,'revenuecat',
+  ${literal(ids.providerEventA)}::uuid,'sandbox','sandbox_only',
+  transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+  '{"fixture":true}'::jsonb
+),
+(
+  ${literal(ids.accessGrantB)}::uuid,
+  ${literal(ids.canaryB)}::uuid,'premium','provider_event',
+  ${literal(ids.providerEventB)}::uuid,
+  ${literal(ids.premiumProduct)}::uuid,'revenuecat',
+  ${literal(ids.providerEventB)}::uuid,'sandbox','sandbox_only',
+  transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+  '{"fixture":true}'::jsonb
+);
 insert into public.platform_role_memberships(user_id,email,role,status)
 values (${literal(ids.owner)}::uuid,null,'owner','active');
 insert into public.cognitive_projects(
@@ -397,15 +534,29 @@ assert.equal(
   0,
   `platform authorization fixture setup failed: ${setupDiagnostic}`,
 );
+const sandboxPremiumProof = readJson(`
+select public.cognitive_livekit_sandbox_premium_proof_v1()::text;
+`);
+assert.equal(sandboxPremiumProof.eligible, true);
+assert.equal(sandboxPremiumProof.canaryCount, 2);
+assert.equal(sandboxPremiumProof.qualifiedPremiumUserCount, 2);
+assert.equal(sandboxPremiumProof.activeRoleMembershipCount, 0);
+assert.equal(sandboxPremiumProof.activeManualGrantCount, 0);
+sandboxPremiumProofHash = sandboxPremiumProof.proofHash;
+assert.match(sandboxPremiumProofHash, /^[a-f0-9]{64}$/u);
+
 const prepareReceipt = (platform) => {
+  const identity = platformIdentity[platform];
   const result = admin(ownerSql(`
 select (
   public.governance_prepare_livekit_platform_preflight(
     ${literal(platform)}::public.cognitive_platform,
-    ${literal(hash())},${literal(hash())},${literal(hash())},
+    ${literal(identity.artifactHash)},
+    ${literal(sandboxPremiumProofHash)},${literal(hash())},
     ${literal(collectorAssertion)},${literal(evaluatorAssertion)},
     ${literal(sourceCommit)},${literal(sourceTree)},${literal(hash())},
-    ${literal(hash())},${literal(hash())},${literal(hash())},
+    ${literal(hash())},${literal(deploymentHash)},
+    ${literal(identity.rollbackHash)},
     interval '10 minutes'
   )
 )->>'preflightReceiptId';
@@ -415,6 +566,20 @@ select (
   assert.match(receiptId, /^[a-f0-9-]{36}$/u);
   return receiptId;
 };
+const rejectedPremiumProof = admin(ownerSql(`
+select public.governance_prepare_livekit_platform_preflight(
+  'android'::public.cognitive_platform,
+  ${literal(platformIdentity.android.artifactHash)},
+  ${literal(hash())},${literal(hash())},
+  ${literal(collectorAssertion)},${literal(evaluatorAssertion)},
+  ${literal(sourceCommit)},${literal(sourceTree)},${literal(hash())},
+  ${literal(hash())},${literal(deploymentHash)},
+  ${literal(platformIdentity.android.rollbackHash)},
+  interval '10 minutes'
+);
+`));
+assert.notEqual(rejectedPremiumProof.status, 0);
+
 ids.androidReceiptA = prepareReceipt("android");
 ids.androidReceiptB = prepareReceipt("android");
 ids.iosReceipt = prepareReceipt("ios");
@@ -527,7 +692,7 @@ select case when
   assert.equal(finalReadback.stdout.trim(), "MATCH");
 
   process.stdout.write(
-    "cognitive LiveKit platform authorization concurrency: 7/7\n",
+    "cognitive LiveKit platform authorization concurrency: 8/8\n",
   );
   cleanup();
 } catch (error) {
