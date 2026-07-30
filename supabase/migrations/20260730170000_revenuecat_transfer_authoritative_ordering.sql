@@ -28,8 +28,8 @@ declare
   v_target_event_id text;
   v_source_transfer_event public."provider_events"%rowtype;
   v_target_transfer_event public."provider_events"%rowtype;
-  v_prelock_product_id uuid;
   v_locked_product_id uuid;
+  v_lock_product_id uuid;
   v_first_user_id uuid;
   v_second_user_id uuid;
 begin
@@ -76,43 +76,25 @@ begin
     );
   end if;
 
-  -- Resolve only the lock key before locking. Every authority-bearing row is
-  -- re-read by the deployed reconciler after the shared locks are held.
-  select grant_row."product_id" into v_prelock_product_id
-  from public."access_grants" grant_row
-  where grant_row."user_id" = p_source_user_id
-    and grant_row."grant_type" = 'premium'
-    and grant_row."provider" = 'revenuecat_app_store'
-    and grant_row."environment" = 'sandbox'
-    and grant_row."product_id" is not null
-  order by grant_row."updated_at" desc
-  limit 1;
-
-  -- Preserve the deployed function's exact validation and error behavior when
-  -- there is no provider-backed product from which to derive a shared lock.
-  if v_prelock_product_id is null then
-    return public."process_revenuecat_premium_transfer_atomic_internal"(
-      p_provider_event_id,
-      p_source_user_id,
-      p_target_user_id,
-      p_environment,
-      p_occurred_at,
-      p_raw_payload_hash,
-      p_failpoint
-    );
-  end if;
-
   v_first_user_id := least(p_source_user_id::text, p_target_user_id::text)::uuid;
   v_second_user_id := greatest(p_source_user_id::text, p_target_user_id::text)::uuid;
 
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
-    'revenuecat-premium:' || v_first_user_id::text || ':' || v_prelock_product_id::text,
-    0
-  ));
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
-    'revenuecat-premium:' || v_second_user_id::text || ':' || v_prelock_product_id::text,
-    0
-  ));
+  -- Lock every registered Premium product in stable product/user order. This
+  -- closes the empty/pre-lock lookup race and prevents a concurrent lifecycle
+  -- event from changing which Premium product the deployed reconciler reads.
+  for v_lock_product_id in
+    select product."id"
+    from public."monetization_products" product
+    where product."product_type" = 'premium_subscription'
+    order by product."id"
+  loop
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+      'revenuecat-premium:' || v_first_user_id::text || ':' || v_lock_product_id::text, 0
+    ));
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+      'revenuecat-premium:' || v_second_user_id::text || ':' || v_lock_product_id::text, 0
+    ));
+  end loop;
 
   select grant_row."product_id" into v_locked_product_id
   from public."access_grants" grant_row
@@ -124,8 +106,8 @@ begin
   order by grant_row."updated_at" desc
   limit 1;
 
-  if v_locked_product_id is distinct from v_prelock_product_id then
-    raise exception 'transfer_source_product_changed';
+  if v_locked_product_id is null then
+    raise exception 'transfer_source_provider_grant_not_active';
   end if;
 
   if exists (
