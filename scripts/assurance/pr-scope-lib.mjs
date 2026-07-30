@@ -93,13 +93,7 @@ export function evaluateHighRiskScope({
       : null,
     highRiskDomains: highRisk,
     objectiveDomains: uniqueSorted(objectiveDomains),
-    relatedHighRiskScopeAuthorized: policyFindings.length === 0 && (
-      highRisk.length <= 1 || (
-        registered.has(featureId)
-        && selectedBundle !== null
-        && outsideBundle.length === 0
-      )
-    ),
+    relatedHighRiskScopeAuthorized: findings.length === 0,
     decisionSource: highRisk.length > 1 ? "registered-feature-domain-bundle" : "single-or-no-high-risk-domain",
     scopeWaiverAuthorizesMixedRisk: false,
     waiverPresent: waiver !== null,

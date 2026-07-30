@@ -103,13 +103,14 @@ test("a registered feature without a compact bundle cannot authorize multiple hi
   assert.equal(finding(result, "ASSURANCE_MIXED_HIGH_RISK_SCOPE").reason, "feature-bundle-not-declared");
 });
 
-test("registered bundle does not excuse an objective omission", () => {
+test("hostile objective omission keeps an otherwise matching bundle unauthorized", () => {
   const result = evaluate({
     highRiskDomains: ["RevenueCat-Premium", "database-RLS"],
     objectiveDomains: ["RevenueCat-Premium"],
     featureId: "revenuecat-premium"
   });
-  assert.equal(result.relatedHighRiskScopeAuthorized, true);
+  assert.equal(result.relatedHighRiskScopeAuthorized, false);
+  assert.equal(finding(result, "ASSURANCE_MIXED_HIGH_RISK_SCOPE"), undefined);
   assert.deepEqual(finding(result, "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN").domains, ["database-RLS"]);
 });
 
