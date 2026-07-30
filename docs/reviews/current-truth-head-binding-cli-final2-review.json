@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "current-truth-head-binding-cli-final2-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture",
+  "focus": "Exact-head CLI machine output, schema and runtime parity, named and detached Git checkout contexts, provider inventory failure handling, determinism, secret safety, and bounded scope",
+  "humanApproval": false,
+  "implementationPrNumber": 90,
+  "implementationPrState": "open-draft",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-head-binding",
+  "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+  "implementationTree": "2e2535fd55679670b15b3900ccb63caea3432810",
+  "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+  "changedFileHash": "62e2b04b781159c50df3d6317dbf3f9fccc5c66f8aec16709f695def21c59972",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "b4fff16c67ccee58008c128add5008c7db8315f45d10f9fce52062b1d5fa2bb9",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_deferred_p2",
+      "lane": "architecture",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationPrNumber": 90,
+      "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+      "implementationTree": "2e2535fd55679670b15b3900ccb63caea3432810",
+      "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+      "mergeBaseMatched": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 5,
+      "additions": 698,
+      "deletions": 12,
+      "netChangedLines": 686,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "scopeWaiver": null,
+      "classifiedDomains": [
+        "CI-test-infrastructure"
+      ],
+      "unclassifiedChangedFiles": 0,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "successorDelta": {
+      "status": "pass",
+      "parentImplementationHead": "66d024103a2791160214f4d03e7db5c67b7073fa",
+      "changedFiles": [
+        "tests/assurance/current-truth-head-binding.test.mjs"
+      ],
+      "additions": 7,
+      "deletions": 0,
+      "productionGuardLogicChanged": false,
+      "contractOrSchemaChanged": false,
+      "purpose": "Bind the provider CLI subprocess to a valid explicit branch and exact checkout head so the focused gate is checkout-independent."
+    },
+    "runtimeHeadBinding": {
+      "status": "pass",
+      "namedMainExact": "pass",
+      "namedMainStale": {
+        "status": "rejected",
+        "context": "invalid-main-context",
+        "finding": "ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE"
+      },
+      "detachedMainExact": "pass",
+      "detachedExplicitMainExact": "pass",
+      "detachedExplicitMainFeature": {
+        "status": "rejected",
+        "context": "invalid-main-context",
+        "finding": "ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE"
+      },
+      "detachedListedImplementationExact": "pass",
+      "detachedUnresolved": {
+        "status": "rejected",
+        "finding": "ASSURANCE_CURRENT_TRUTH_DETACHED_CONTEXT_UNRESOLVED"
+      },
+      "literalHeadRejected": true
+    },
+    "branchSchemaRuntimeParity": {
+      "status": "pass",
+      "adversarialCases": 631,
+      "schemaRuntimeMismatches": 0,
+      "runtimeAcceptedGitRejected": 0,
+      "controlCodeRangeChecked": "U+0000-U+0020 and U+007F",
+      "literalHeadRejected": true
+    },
+    "providerInventoryRuntime": {
+      "status": "pass",
+      "exactReorderedInventory": "pass",
+      "missingInventory": "rejected",
+      "mismatchedBranchHeadOrState": "rejected",
+      "extraImplementation": "rejected",
+      "malformedEntry": "rejected",
+      "duplicateNumber": "rejected",
+      "duplicateBranch": "rejected",
+      "malformedNumberValues": [
+        0,
+        -1,
+        1.5,
+        "1",
+        null
+      ],
+      "blankOrUntrimmedState": "rejected"
+    },
+    "providerInventoryCli": {
+      "status": "pass",
+      "explicitExactReviewContext": true,
+      "exact": {
+        "exit": 0,
+        "machineJson": true,
+        "providerInventoryOk": true
+      },
+      "missingKey": {
+        "exit": 1,
+        "machineJson": true,
+        "findings": [
+          "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_LIST_MALFORMED",
+          "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"
+        ]
+      },
+      "emptyInventory": {
+        "exit": 1,
+        "machineJson": true,
+        "finding": "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"
+      },
+      "invalidArrayRoot": {
+        "exit": 1,
+        "machineJson": true,
+        "finding": "ASSURANCE_PROVIDER_SNAPSHOT_ROOT_MALFORMED",
+        "stackTrace": false
+      },
+      "invalidNullRoot": {
+        "exit": 1,
+        "machineJson": true,
+        "finding": "ASSURANCE_PROVIDER_SNAPSHOT_ROOT_MALFORMED",
+        "stackTrace": false
+      },
+      "invalidJson": {
+        "exit": 1,
+        "machineJson": true,
+        "finding": "ASSURANCE_PROVIDER_SNAPSHOT_READ_FAILED",
+        "stackTrace": false
+      },
+      "blankState": {
+        "exit": 1,
+        "machineJson": true,
+        "finding": "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_ENTRY_MALFORMED"
+      },
+      "syntheticSecretMarkerRedacted": true,
+      "determinism": {
+        "runs": "3/3",
+        "uniqueHashes": 1,
+        "outputHash": "5bd72565f1910eac2359676a501861cabc2f2f8b49331dc5a5ca7886378cde35"
+      }
+    },
+    "focusedHeadBindingTestNamedCheckout": {
+      "status": "pass",
+      "command": "node tests/assurance/current-truth-head-binding.test.mjs",
+      "declaredCases": 29,
+      "providerCliFailClosed": true,
+      "deterministicRuns": "3/3",
+      "matrixHash": "e21a45ab500d7ceaf5808aa5de0f92cba72918b3a9e225137f2b7e7c74e77d24"
+    },
+    "focusedHeadBindingTestDetachedCheckout": {
+      "status": "pass",
+      "setup": "local shared clone with exact implementation head checked out detached",
+      "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+      "command": "node tests/assurance/current-truth-head-binding.test.mjs",
+      "exit": 0,
+      "declaredCases": 29,
+      "providerCliFailClosed": true,
+      "deterministicRuns": "3/3",
+      "matrixHash": "e21a45ab500d7ceaf5808aa5de0f92cba72918b3a9e225137f2b7e7c74e77d24",
+      "stderr": false
+    },
+    "currentTruthCompatibility": {
+      "status": "pass",
+      "mode": "offline",
+      "explicitImplementationBranchAndHead": true,
+      "synchronizationGuard": "pass",
+      "findings": 0
+    },
+    "offlineOutputDeterminism": {
+      "status": "pass",
+      "runs": "3/3",
+      "uniqueHashes": 1,
+      "outputHash": "2bc7555469d0b507971387beeaaa15187f6693ab9d56bb7509c3cd7f770cf435",
+      "untrustedGithubEnvironmentIgnored": true
+    },
+    "schemaContracts": {
+      "status": "pass_with_routed_pr_e_limitation",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25,
+      "currentRecordCompatible": true,
+      "branchAndStatePatternsEnforced": true,
+      "positiveIntegerDeclared": true,
+      "generalIntegerAndMinimumValidatorSupport": "open-routed-pr-e"
+    },
+    "offlineAndSecretSafety": {
+      "status": "pass",
+      "networkCallsAdded": 0,
+      "providerMutationCallsAdded": 0,
+      "providerDefault": "offline",
+      "allProviderFailureProbesMachineJson": true,
+      "allProviderFailureProbesStackFree": true,
+      "redactionAppliedAtEmit": true,
+      "syntheticSecretMarkerRedacted": true,
+      "rawSecretOrPrivateEvidenceFound": false
+    },
+    "scopeAndNonInterference": {
+      "status": "pass",
+      "prScope": "pass",
+      "changedFiles": 5,
+      "netChangedLines": 686,
+      "highRiskDomains": [],
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "privateEvidenceCommitted": false
+    },
+    "focusedChecks": {
+      "status": "pass",
+      "nodeSyntaxFiles": 3,
+      "contractValidation": "pass",
+      "headBindingTestNamedCheckout": "pass",
+      "headBindingTestDetachedCheckout": "pass",
+      "currentTruthCli": "pass",
+      "branchParityFuzz": "pass",
+      "providerInventoryCliProbes": "pass",
+      "prScope": "pass",
+      "gitDiffCheck": "pass",
+      "networkAndMutationStaticScan": "pass"
+    },
+    "phase1Ci": {
+      "status": "not-run-by-review-lane",
+      "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+      "reason": "Full CI is coordinator-owned and this isolated review lane was instructed to run focused tests only.",
+      "eligibleAsProof": false
+    }
+  },
+  "testResultHash": "651312ee51c22451e342b59cf2d21a1abd918f07f94ff71b262e9f569827b5b2",
+  "reviewLevel": "B",
+  "reviewHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+  "reviewHeadSemantics": "implementation tip immediately preceding the review-evidence-only commit",
+  "reviewTimestamp": "2026-07-30T20:02:28Z",
+  "reviewerLanes": [
+    "architecture",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "cli-schema-git-context-final2"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_SYMBOLIC_ORIGIN_HEAD_SUBSTITUTION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Literal HEAD and non-canonical branch values are rejected by both schema and runtime validation, and the checkout is bound to a verified ref."
+    },
+    {
+      "id": "CURRENT_TRUTH_NAMED_MAIN_CHECKOUT_HEAD_UNBOUND",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "A named main checkout must equal origin/main; stale named-main contexts emit ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE."
+    },
+    {
+      "id": "CURRENT_TRUTH_DETACHED_EXPLICIT_MAIN_HEAD_BYPASS",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "An explicit main claim requires both the explicit head and checkout head to equal origin/main; a detached feature checkout cannot alias main."
+    },
+    {
+      "id": "CURRENT_TRUTH_HEAD_BINDING_TEST_DETACHED_CHECKOUT_DEPENDENCY",
+      "severity": "P1",
+      "status": "resolved",
+      "locations": [
+        "tests/assurance/current-truth-head-binding.test.mjs:27",
+        "tests/assurance/current-truth-head-binding.test.mjs:249"
+      ],
+      "resolution": "The provider CLI fixture now supplies the current valid branch and exact checkout head. The complete 29-case focused test passes with the same deterministic hash in named and detached exact-head checkouts."
+    },
+    {
+      "id": "CURRENT_TRUTH_CONTRACT_VALIDATOR_INTEGER_MINIMUM_DEFERRED",
+      "severity": "P2",
+      "status": "open-routed-pr-e",
+      "locations": [
+        "config/assurance/schemas-v1.json:103",
+        "scripts/assurance/validate-contracts.mjs:31",
+        "scripts/assurance/validate-contracts.mjs:33"
+      ],
+      "evidence": "The current-truth schema declares a positive integer and runtime validation rejects malformed PR numbers, but the foundation's general custom schema validator does not yet implement integer or minimum keywords.",
+      "impact": "Runtime current-truth and provider inventory gates fail closed; standalone schema-validation coverage remains incomplete for these general keywords.",
+      "requiredResolution": "Complete the already-routed PR E validator hardening with integer and minimum support and hostile contract fixtures; do not expand PR #90 for this nonblocking general-validator task."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPending": true,
+    "reviewDisposition": "exact-head-cli-review-clear-p2-routed-full-ci-coordinator-pending",
+    "humanApproval": false
+  }
+}
