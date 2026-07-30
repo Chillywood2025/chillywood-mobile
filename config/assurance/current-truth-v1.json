@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
-  "latestMergedImplementationPr": {"number": 90, "state": "merged", "head": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d", "mergeSha": "016eb44be9856afbe16dc38a53d88721b1f2a38f", "title": "Fail closed on stale current-truth implementation heads"},
+  "mainSha": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+  "latestMergedImplementationPr": {"number": 64, "state": "merged", "head": "46ab717c1a463d435b64bb044bc63f590fa52913", "mergeSha": "a24956a19a50182db9c0d0e727ed38e61b2f3f90", "title": "Add executable state and concurrency assurance"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -42,7 +42,6 @@
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
   "openImplementationPrs": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "open-draft", "disposition": "reconcile-then-supersede-unmerged"},
-    {"number": 64, "branch": "codex/first-pass-assurance-models", "head": "8829ca3d59453155c29370495f32f432bfece5c8", "state": "open-draft-frozen", "disposition": "redaction-remediation-frozen-run-four-fresh-exact-reviews-and-one-full-ci-after-this-sync"},
     {"number": 69, "branch": "codex/assurance-reconcile-revenuecat-transfer", "head": "a5a37296800419a50c9bb271d99e505f6ad7a056", "state": "open-draft-blocked-internal", "disposition": "do-not-merge-forward-only-authority-correction-required"},
     {"number": 70, "branch": "codex/assurance-reconcile-livekit-source-binding", "head": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e", "state": "open-draft-blocked-internal", "disposition": "do-not-merge-final-source-cross-binding-correction-required"},
     {"number": 75, "branch": "codex/assurance-reconcile-room-host-block-check", "head": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b", "state": "open-draft-blocked-internal", "disposition": "do-not-merge-null-auth-fail-closed-correction-required"}
@@ -80,24 +79,27 @@
     {"number": 95, "branch": "codex/first-pass-assurance-current-truth-head-binding-review-semantics-final2", "head": "3e8f5b64d5f2de459b4dc7c986843669cc1abe86", "reviewedImplementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d", "state": "open-draft-current", "disposition": "never-merge"},
     {"number": 96, "branch": "codex/first-pass-assurance-current-truth-head-binding-review-cli-final2", "head": "efc44e7b98051a4c5558488f11022d16191a91d3", "reviewedImplementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d", "state": "open-draft-current", "disposition": "never-merge"},
     {"number": 98, "branch": "codex/first-pass-assurance-current-truth-after-head-binding-review", "head": "278eb5e2326d2a7b7d12b6ba8b373541640d4e90", "reviewedImplementationHead": "867af2a2c446c4cea5b38cc990bd0143dac446c3", "state": "open-draft-current", "disposition": "never-merge"},
-    {"number": 99, "branch": "codex/first-pass-assurance-models-review-final-invariants", "head": "0853a6e2fa6154b28c5f61bcc5055468debfd636", "reviewedImplementationHead": "00355bd94d5a7e401d424bc7a8298017c46357d8", "state": "open-draft-stale", "disposition": "never-merge"},
-    {"number": 100, "branch": "codex/first-pass-assurance-models-review-final-concurrency", "head": "739a57db896369f1e1029e3ac45a715fb9bde23a", "reviewedImplementationHead": "00355bd94d5a7e401d424bc7a8298017c46357d8", "state": "open-draft-stale", "disposition": "never-merge"},
-    {"number": 101, "branch": "codex/first-pass-assurance-models-review-final-dependency-security", "head": "c8d0288feb9562ef91d43cfcb243df96638db8f8", "reviewedImplementationHead": "00355bd94d5a7e401d424bc7a8298017c46357d8", "state": "open-draft-stale", "disposition": "never-merge"},
-    {"number": 102, "branch": "codex/first-pass-assurance-models-review-final-architecture-scope", "head": "332f1d5fbd757ab2c1412abea1a0fc6f13ddc67d", "reviewedImplementationHead": "00355bd94d5a7e401d424bc7a8298017c46357d8", "state": "open-draft-stale", "disposition": "never-merge"},
     {"number": 104, "branch": "codex/first-pass-assurance-current-truth-before-model-review-review", "head": "a8f689702e83fab1b5c85119d9d638f8bfabda3b", "reviewedImplementationHead": "2cf85211ca8f832bd929619423a04fb52dce275e", "state": "open-draft-current", "disposition": "never-merge"},
-    {"number": 105, "branch": "codex/first-pass-assurance-models-review-successor-invariants", "head": "ee52f2d43eaf08b2d05586cb99cf9723a08360e4", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "open-draft-stale", "disposition": "never-merge"},
-    {"number": 106, "branch": "codex/first-pass-assurance-models-review-successor-concurrency", "head": "2cd410bd9be9c07cc1f1007c9fffe70725a328dd", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "open-draft-stale", "disposition": "never-merge"},
-    {"number": 107, "branch": "codex/first-pass-assurance-models-review-successor-dependency-security", "head": "8e1e873cb56aaa508dc3fb938c8f224b5193a94a", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "open-draft-stale", "disposition": "never-merge"},
-    {"number": 108, "branch": "codex/first-pass-assurance-models-review-successor-architecture-scope", "head": "2304de9e223b82fcb35cb1ac28b27babc4fd6264", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "open-draft-stale", "disposition": "never-merge"}
+    {"number": 110, "branch": "codex/first-pass-assurance-current-truth-before-model-final-review-review", "head": "d43b460cc2f82cb296668117a0bf73648dacd701", "reviewedImplementationHead": "502f9e2659d96389ae418b11f83171b171b5a708", "state": "open-draft-current", "disposition": "never-merge"}
+  ],
+  "closedReviewOnlyPrDispositions": [
+    {"number": 99, "branch": "codex/first-pass-assurance-models-review-final-invariants", "head": "f907f43f631083890166fd57c8e4a7d08b7ad6b9", "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
+    {"number": 100, "branch": "codex/first-pass-assurance-models-review-final-concurrency", "head": "ad53ffd92bdbe555579d026fd1f538c38a858cd6", "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
+    {"number": 101, "branch": "codex/first-pass-assurance-models-review-final-dependency-security", "head": "72b6468e1f9ae02b00ce22dca61487ed38169b0b", "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
+    {"number": 102, "branch": "codex/first-pass-assurance-models-review-final-architecture-scope", "head": "4e2d2c5aecc6c55e722a6457b8f2a9c1af8a0604", "reviewedImplementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
+    {"number": 105, "branch": "codex/first-pass-assurance-models-review-successor-invariants", "head": "ee52f2d43eaf08b2d05586cb99cf9723a08360e4", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "closed-unmerged-historical-stale", "disposition": "pre-addendum-duplicate-branch-retained-never-merge"},
+    {"number": 106, "branch": "codex/first-pass-assurance-models-review-successor-concurrency", "head": "2cd410bd9be9c07cc1f1007c9fffe70725a328dd", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "closed-unmerged-historical-stale", "disposition": "pre-addendum-duplicate-branch-retained-never-merge"},
+    {"number": 107, "branch": "codex/first-pass-assurance-models-review-successor-dependency-security", "head": "8e1e873cb56aaa508dc3fb938c8f224b5193a94a", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "closed-unmerged-historical-stale", "disposition": "pre-addendum-duplicate-branch-retained-never-merge"},
+    {"number": 108, "branch": "codex/first-pass-assurance-models-review-successor-architecture-scope", "head": "2304de9e223b82fcb35cb1ac28b27babc4fd6264", "reviewedImplementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187", "state": "closed-unmerged-historical-stale", "disposition": "pre-addendum-duplicate-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103"],
-    "active": "PR-B-BLOCKED-AND-PR-C-REMEDIATED-FINAL-BINDING",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64"],
+    "active": "PR-C-MERGED-PR-B-RECONCILIATION-BLOCKED",
     "nextActions": [
-      "Merge this three-file current-truth synchronization, then run four fresh exact-head review lanes and one full CI run for PR #64 at 8829ca3d59453155c29370495f32f432bfece5c8; the fresh lanes must approve its 12-file/1,600-line single-domain waiver and verify persisted replay redaction.",
-      "After PR #64 merges, run one post-merge main CI and synchronize current truth again.",
       "Keep reconciliation PRs #69, #70, and #75 BLOCKED_INTERNAL; their exact reviews require separate forward-only authority/security corrections and no production deployment is authorized.",
-      "Do not start PR D until reconciliation is complete; PR E and PR F remain dependency-blocked.",
+      "Complete the three bounded Git-only reconciliation corrections and exact reviews before PR D; do not deploy or reapply any migration.",
+      "After B1, B2, and B3 are reconciled and merged, begin PR D native/provider/runtime/artifact assurance without a production build, OTA, provider mutation, or product behavior change.",
+      "Keep PR E blocked until PRs C and D are merged; keep PR F blocked until PR E merges.",
       "Keep PR #52 frozen and unmerged and PR #53 stale, review-only, and unmerged until bounded reconciliation safely preserves all unique source."
     ],
     "prohibitions": [
@@ -106,10 +108,10 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-07-30T21:10:00Z",
-  "freshnessDeadline": "2026-07-31T21:10:00Z",
+  "timestamp": "2026-07-30T22:35:00Z",
+  "freshnessDeadline": "2026-07-31T22:35:00Z",
   "evidenceSources": [
-    {"id": "github-pr-readback-20260730-2110", "mode": "read-only", "covers": ["main", "PR #52", "PR #53", "PR #54-#108"]},
+    {"id": "github-pr-readback-20260730-2235", "mode": "read-only", "covers": ["main", "PR #52", "PR #53", "PR #64", "PR #99-#110", "Phase 1 CI 30586126318", "post-merge main CI 30587229729"]},
     {"id": "supabase-migration-readback-20260730", "mode": "read-only", "covers": ["remote migration versions", "names", "statement arrays", "hashes"]},
     {"id": "owner-supplied-safety-snapshot-20260730", "mode": "provided", "covers": ["switches", "schedules", "effective baseline", "sentinel counts", "non-interference"]}
   ],
