@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "current-truth-head-binding-semantics-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "semantic-fail-closed",
+  "humanApproval": false,
+  "implementationPrNumber": null,
+  "implementationPrState": "not-opened-at-review",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-head-binding",
+  "implementationHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+  "implementationTree": "0c4e9ac3e57a528498e66b7392d0f6d48a63a23a",
+  "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+  "changedFileHash": "2279d39fa71be10ca4d2ddd1534e6b39081a67292d117c4ea9e0b6868a47460f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "67b93c4dfb592cf14551598deb8a0edd4b7efe0df5e29d077548209f586c08f6",
+  "implementationDiffHash": "03096efa4eced2045adf05bc8128e86abce9d91bcdebff45c102ed0467c2d1f8",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_findings",
+      "lane": "semantic-fail-closed",
+      "focus": "pure helper and CLI semantics for duplicate, malformed, missing-ref, stale-head, listed-checkout, detached, merge-aware, self-reference, deterministic, false-pass, and false-block behavior",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+      "implementationTree": "0c4e9ac3e57a528498e66b7392d0f6d48a63a23a",
+      "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+      "mergeBaseMatched": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 5,
+      "additions": 375,
+      "deletions": 5,
+      "netChangedLines": 370,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "migrationFiles": 0,
+      "productImplementationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "implementationFocusedMatrix": {
+      "status": "pass_with_uncovered_hostile_cases",
+      "command": "node tests/assurance/current-truth-head-binding.test.mjs",
+      "declaredCases": 10,
+      "deterministicRuns": 3,
+      "matrixHash": "5983961b04e28b46610ca9ad88b269760b6d15b82eef038d1037388341202eed",
+      "stdoutHash": "21011dcc669500c580a09cd08b8c25c18211ccb0db014fe2787f7410a3f08097",
+      "covered": [
+        "exact named main",
+        "exact listed implementation checkout",
+        "stale tracked implementation ref",
+        "advanced listed implementation checkout",
+        "missing tracking ref",
+        "duplicate PR number and branch",
+        "malformed recorded SHA",
+        "detached explicit context",
+        "detached unresolved context",
+        "merge-aware synchronization cannot suppress a helper stale-binding finding"
+      ],
+      "missingBlockingCases": [
+        "named main checkout head differs from origin/main",
+        "read-only provider snapshot contradicts open implementation inventory"
+      ]
+    },
+    "adversarialHelperMatrix": {
+      "status": "fail",
+      "deterministicRuns": 3,
+      "passingFailClosedCases": [
+        "non-array implementation list",
+        "null implementation entry",
+        "partial explicit detached context",
+        "duplicate PR number",
+        "detached checkout exactly equal to origin/main"
+      ],
+      "blockingFalsePass": {
+        "case": "named-main-wrong-checkout",
+        "branch": "main",
+        "checkoutHeadEqualsRemoteMain": false,
+        "helperOk": true,
+        "context": "main",
+        "findingIds": []
+      }
+    },
+    "mergeAwareStaleBinding": {
+      "status": "pass",
+      "synchronizationAccepted": true,
+      "staleImplementationBindingAccepted": false,
+      "findingId": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE",
+      "note": "Aggregation preserves the stale-binding helper finding when the cached observed ref differs from the record."
+    },
+    "readOnlyProviderInventoryProbe": {
+      "status": "fail",
+      "commandShape": "node scripts/assurance/current-truth.mjs --provider-mode=read-only --snapshot=<synthetic-sanitized-snapshot>",
+      "snapshot": {
+        "openImplementationPrs": []
+      },
+      "recordedImplementationPrCount": 5,
+      "exitCode": 0,
+      "commandOk": true,
+      "findingIds": [],
+      "liveProviderReadbackReported": false,
+      "note": "The explicit provider comparison key list omits openImplementationPrs, so contrary current provider evidence does not participate in the decision."
+    },
+    "malformedDuplicateAndMissingEvidence": {
+      "status": "pass",
+      "nonArrayListFinding": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_LIST_MALFORMED",
+      "malformedEntryFindings": [
+        "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_BRANCH_MALFORMED",
+        "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_MALFORMED",
+        "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_PR_MALFORMED"
+      ],
+      "duplicateFinding": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_DUPLICATE",
+      "missingRefFinding": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_REF_MISSING",
+      "partialExplicitFinding": "ASSURANCE_CURRENT_TRUTH_EXPLICIT_CONTEXT_MALFORMED"
+    },
+    "checkoutAndDetachedContexts": {
+      "status": "fail",
+      "listedImplementationExact": "pass",
+      "listedImplementationAdvanced": "blocked",
+      "detachedMainExact": "pass",
+      "detachedNonMainWithoutExplicitContext": "blocked",
+      "detachedListedWithExactExplicitContext": "pass",
+      "namedMainDifferentFromOriginMain": "false_pass"
+    },
+    "selfReferenceBoundary": {
+      "status": "pass_with_deferred_policy",
+      "currentReviewBranchListed": false,
+      "context": "unlisted-control-branch",
+      "unlistedBranchPolicy": "deferred-to-pr-e",
+      "selfReferenceFalseBlockObserved": false,
+      "note": "This bounded guard does not recursively require its own not-yet-open PR. Completeness of unlisted branches remains explicitly deferred and is not treated as proof of a complete GitHub PR inventory."
+    },
+    "networkAndMutationBoundary": {
+      "status": "pass",
+      "implicitFetchCalls": 0,
+      "httpClientCalls": 0,
+      "providerMutationCalls": 0,
+      "gitMutatingCalls": 0,
+      "observations": "Local refs are read with git show-ref only; no fetch, network request, or provider mutation is present."
+    },
+    "contracts": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "currentTruthCurrentWorktree": {
+      "status": "pass",
+      "command": "node scripts/assurance/current-truth.mjs",
+      "context": "unlisted-control-branch",
+      "findings": 0,
+      "deterministicRuns": 3,
+      "stdoutHash": "7613e3789f4158a331e05a7260d716c28b264b6a8d15da7c3a81e8e8806fc96a"
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "denoLockChanged": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator",
+      "implementationHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "Remediate both P1 findings, freeze a successor exact head, invalidate this review, rerun impacted isolated review lanes, and let the coordinator own the one frozen-head Phase 1 CI execution."
+    }
+  },
+  "testResultHash": "03850ef9ba285e9ea84f2fd9e09d356d3d580063c7274c0a2dda67b1601e1012",
+  "reviewLevel": "B",
+  "reviewHead": "deabe3d7a89bfa3ca01ef5b8475c6577b35355a6",
+  "reviewHeadSemantics": "implementation tip immediately preceding the review-evidence-only commit",
+  "reviewTimestamp": "2026-07-30T19:37:51Z",
+  "reviewerLanes": [
+    "architecture",
+    "isolated-automated-review",
+    "semantic-fail-closed"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_NAMED_MAIN_CHECKOUT_UNBOUND",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "scripts/assurance/lib.mjs",
+        "scripts/assurance/current-truth.mjs",
+        "tests/assurance/current-truth-head-binding.test.mjs"
+      ],
+      "evidence": "With branch=main, checkout HEAD=c...c, and remoteMain=a...a, verifyCurrentTruthHeadBindings returns ok=true, context=main, and no findings. The CLI compounds this by defining mainMatches as synchronization.ok && (branch === main || mergeBase === remoteMain), so any named main checkout bypasses checkout-to-origin/main binding.",
+      "impact": "A stale or advanced local main checkout can report current truth clear while executing source and generated documents from a commit other than the authoritative origin/main head. This violates exact current-main binding and is a false pass at the merge gate.",
+      "requiredResolution": "Require a named main checkout to have HEAD exactly equal to origin/main, emit a stable BLOCKED_INTERNAL finding on mismatch, and add helper plus CLI regression coverage for named main behind, named main ahead, and detached exact main."
+    },
+    {
+      "id": "CURRENT_TRUTH_PROVIDER_SNAPSHOT_IGNORES_IMPLEMENTATION_HEADS",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "scripts/assurance/current-truth.mjs",
+        "tests/assurance/current-truth-head-binding.test.mjs"
+      ],
+      "evidence": "An explicit sanitized read-only snapshot containing openImplementationPrs=[] contradicts the five recorded open implementation PRs, yet the command exits 0 with ok=true and no findings because openImplementationPrs is absent from the provider comparison keys.",
+      "impact": "Local remote-tracking refs can be cached. Even when current read-only provider evidence is supplied, a remote branch advance, closure, omission, or replacement is ignored, allowing a stale implementation inventory and head to pass.",
+      "requiredResolution": "Normalize and compare supplied provider open-implementation evidence by PR number, branch, head, and state; fail closed on missing, extra, duplicate, malformed, or mismatched entries; add CLI tests proving contrary provider evidence cannot be overridden by cached local refs. Preserve offline no-fetch behavior and identify whether live provider readback participated."
+    },
+    {
+      "id": "CURRENT_TRUTH_HEAD_BINDING_BASELINE_BEHAVIOR",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The helper deterministically rejects duplicate, malformed, missing-ref, stale cached-ref, listed-checkout, and unresolved detached contexts. Merge-aware synchronization does not erase an existing stale-binding finding, branch names are converted to fixed refs only after validation, and no network or mutation call is present."
+    },
+    {
+      "id": "UNLISTED_CONTROL_BRANCH_POLICY_DEFERRED",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "Self-reference does not false-block this not-yet-open control PR, but unlisted-branch completeness remains explicitly deferred to PR E and cannot be represented as current provider inventory proof."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 2,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "changes-required-do-not-open-or-merge",
+    "humanApproval": false
+  }
+}
