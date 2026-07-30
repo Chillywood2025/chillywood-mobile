@@ -4,7 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
-  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
   "freshness": {"defaultHours": 24, "providerCriticalHours": 8, "clock": "UTC", "failClosed": true},
   "staleFindingIds": {
     "mainSha": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",

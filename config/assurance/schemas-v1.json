@@ -46,7 +46,7 @@
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
       "properties": {
         "mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
@@ -81,6 +81,16 @@
             "level01OwnerApprovalRequired": {"const": false},
             "level34OwnerApprovalRequired": {"const": true},
             "evidenceSource": {"type": "string"}
+          }
+        },
+        "assuranceProgram": {
+          "type": "object",
+          "required": ["completed", "active", "nextActions", "prohibitions"],
+          "properties": {
+            "completed": {"type": "array"},
+            "active": {"type": "string"},
+            "nextActions": {"type": "array", "minItems": 1},
+            "prohibitions": {"type": "array", "minItems": 1}
           }
         }
       }
