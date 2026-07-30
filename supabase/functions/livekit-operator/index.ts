@@ -1,6 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  hasExactChatCallTelemetryIdentity,
+  isApprovedTelemetryDigest,
+  resolveChatCallPreacceptTerminalCleanup,
+  resolveChatCallTelemetryBinding,
+} from "../_shared/chat-call-telemetry-authority.ts";
 import { hashSecurityText } from "../_shared/security-request-context.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -62,9 +68,12 @@ const safeMetadata = (value: unknown): JsonObject => {
     Object.entries(value as JsonObject)
       .filter(([key, entry]) => {
         const normalized = key.toLowerCase();
+        const safeTokenAuditBoolean =
+          (normalized === "tokenauditcorroborated" || normalized === "token_audit_corroborated")
+          && typeof entry === "boolean";
         if (
           normalized.includes("secret")
-          || normalized.includes("token")
+          || (normalized.includes("token") && !safeTokenAuditBoolean)
           || normalized.includes("password")
           || normalized.includes("key")
           || normalized.includes("authorization")
@@ -75,7 +84,12 @@ const safeMetadata = (value: unknown): JsonObject => {
           || entry === null;
       })
       .slice(0, 32)
-      .map(([key, entry]) => [key, typeof entry === "string" ? redactText(entry) : entry]),
+      .map(([key, entry]) => [
+        key,
+        typeof entry === "string" && !isApprovedTelemetryDigest(key, entry)
+          ? redactText(entry)
+          : entry,
+      ]),
   );
 };
 
@@ -330,14 +344,42 @@ const classifyRenderEvent = (renderEvent: JsonObject) => {
     const stage = safeLabel(renderEvent.stage);
     const mediaProvider = safeLabel(renderEvent.mediaProvider || renderEvent.media_provider);
     const liveKitSdkEvent = readRenderBoolean(renderEvent, "liveKitSdkEvent", "livekit_sdk_event");
+    const preacceptTerminalCleanupCorroborated = readRenderBoolean(
+      renderEvent,
+      "preacceptTerminalCleanupCorroborated",
+      "preaccept_terminal_cleanup_corroborated",
+    );
+    if (
+      preacceptTerminalCleanupCorroborated &&
+      (stage === "disconnected" || stage === "cleanup_complete")
+    ) {
+      return {
+        confidence: 0.99,
+        healthState: "observing",
+        reason: "chat_call_preaccept_terminal_cleanup_corroborated",
+        severity: "info",
+        surface: "chat_call",
+      };
+    }
     const tokenAuditCorroborated = readRenderBoolean(renderEvent, "tokenAuditCorroborated", "token_audit_corroborated");
+    const chatCallBindingCorroborated = readRenderBoolean(
+      renderEvent,
+      "chatCallBindingCorroborated",
+      "chat_call_binding_corroborated",
+    );
     const bindingsComplete = [
       renderEvent.communicationRoomHash,
       renderEvent.callInviteHash,
       renderEvent.threadHash,
       renderEvent.roomRunCorrelationHash,
     ].every((value) => /^[a-f0-9]{64}$/u.test(toText(value)));
-    if (surface !== "chat_call" || mediaProvider !== "livekit" || !liveKitSdkEvent || !bindingsComplete) {
+    if (
+      surface !== "chat_call"
+      || mediaProvider !== "livekit"
+      || !liveKitSdkEvent
+      || !bindingsComplete
+      || !chatCallBindingCorroborated
+    ) {
       return {
         confidence: 0.99,
         healthState: "non_livekit_chat_call_evidence_rejected",
@@ -464,38 +506,77 @@ Deno.serve(async (request: Request) => {
       delete renderEvent.thread_id;
       const userHash = await sha256Hex(appUser.id);
       if (safeLabel(renderEvent.surface) === "chat_call") {
-        renderEvent.communicationRoomHash = communicationRoomId
-          ? await sha256Hex(`chat-call-room:${communicationRoomId}`)
+        const exactIdentityBindingsValid = hasExactChatCallTelemetryIdentity(callInviteId, threadId);
+        const exactInvite = exactIdentityBindingsValid
+          ? await adminClient
+            .from("chat_call_invites")
+            .select("caller_user_id,callee_user_id,communication_room_id,thread_id,chat_call_media_provider,accepted_at,status")
+            .eq("id", callInviteId)
+            .maybeSingle()
           : null;
-        renderEvent.callInviteHash = callInviteId
-          ? await sha256Hex(`chat-call-invite:${callInviteId}`)
+        const exactInviteRow = exactInvite && !exactInvite.error
+          ? exactInvite.data as JsonObject | null | undefined
           : null;
-        renderEvent.threadHash = threadId
-          ? await sha256Hex(`chat-call-thread:${threadId}`)
+        const exactBinding = resolveChatCallTelemetryBinding({
+          appUserId: appUser.id,
+          callInviteId,
+          clientCommunicationRoomId: communicationRoomId,
+          invite: exactInviteRow,
+          threadId,
+        });
+        const preacceptTerminalCleanup = resolveChatCallPreacceptTerminalCleanup({
+          appUserId: appUser.id,
+          callInviteId,
+          invite: exactInviteRow,
+          stage: renderEvent.stage,
+          threadId,
+        });
+        const authoritativeCommunicationRoomId =
+          exactBinding.authoritativeCommunicationRoomId ||
+          preacceptTerminalCleanup.authoritativeCommunicationRoomId;
+        const exactLifecycleBinding =
+          exactBinding.corroborated || preacceptTerminalCleanup.corroborated;
+        renderEvent.communicationRoomHash = exactLifecycleBinding
+          ? await sha256Hex(`chat-call-room:${authoritativeCommunicationRoomId}`)
           : null;
-        renderEvent.roomRunCorrelationHash = communicationRoomId && callInviteId && threadId
-          ? await sha256Hex(`chat-call-run:${communicationRoomId}:${callInviteId}:${threadId}:${appUser.id}`)
+        renderEvent.callInviteHash = exactLifecycleBinding
+          ? await sha256Hex(`chat-call-invite:${exactBinding.callInviteId}`)
           : null;
-        const tokenAuditRoomHash = communicationRoomId
-          ? await hashSecurityText(communicationRoomId.toUpperCase(), "livekit-token-request:room")
+        renderEvent.threadHash = exactLifecycleBinding
+          ? await sha256Hex(`chat-call-thread:${exactBinding.threadId}`)
+          : null;
+        renderEvent.roomRunCorrelationHash = exactLifecycleBinding
+          ? await sha256Hex(
+            `chat-call-run:${authoritativeCommunicationRoomId}:${exactBinding.callInviteId}:${exactBinding.threadId}:${appUser.id}`,
+          )
+          : null;
+        renderEvent.chatCallBindingCorroborated = exactBinding.corroborated;
+        renderEvent.preacceptTerminalCleanupCorroborated =
+          preacceptTerminalCleanup.corroborated;
+        const tokenAuditRoomHash = exactBinding.corroborated
+          ? await hashSecurityText(authoritativeCommunicationRoomId, "livekit-token-request:room")
           : null;
         const sinceTokenIso = new Date(Date.now() - 10 * 60_000).toISOString();
-        let recentTokenAuditQuery = adminClient
-          .from("livekit_token_request_audit")
-          .select("id")
-          .eq("actor_user_id", appUser.id)
-          .eq("surface", "chat-call")
-          .eq("outcome", "success")
-          .eq("room_join", true)
-          .eq("can_publish", true)
-          .eq("can_subscribe", true)
-          .gte("created_at", sinceTokenIso)
-          .order("created_at", { ascending: false });
+        let tokenAuditCorroborated = false;
         if (tokenAuditRoomHash) {
-          recentTokenAuditQuery = recentTokenAuditQuery.eq("app_room_id_hash", tokenAuditRoomHash);
+          const recentTokenAudit = await adminClient
+            .from("livekit_token_request_audit")
+            .select("id")
+            .eq("actor_user_id", appUser.id)
+            .eq("surface", "chat-call")
+            .eq("outcome", "success")
+            .eq("room_join", true)
+            .eq("can_publish", true)
+            .eq("can_subscribe", true)
+            .eq("app_room_id_hash", tokenAuditRoomHash)
+            .gte("created_at", sinceTokenIso)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          tokenAuditCorroborated = !recentTokenAudit.error &&
+            !!recentTokenAudit.data;
         }
-        const recentTokenAudit = await recentTokenAuditQuery.limit(1).maybeSingle();
-        renderEvent.tokenAuditCorroborated = !recentTokenAudit.error && !!recentTokenAudit.data;
+        renderEvent.tokenAuditCorroborated = tokenAuditCorroborated;
       }
       const classification = classifyRenderEvent(renderEvent);
       const platform = ["ios", "android", "web"].includes(safeLabel(renderEvent.platform))
@@ -513,6 +594,28 @@ Deno.serve(async (request: Request) => {
       }
 
       const planned = planForState(classification.surface, classification.healthState, classification.reason);
+      const clientRenderMetadata = { ...renderEvent };
+      for (
+        const serverOwnedKey of [
+          "user_hash",
+          "chatCallBindingCorroborated",
+          "chat_call_binding_corroborated",
+          "tokenAuditCorroborated",
+          "token_audit_corroborated",
+          "preacceptTerminalCleanupCorroborated",
+          "preaccept_terminal_cleanup_corroborated",
+          "communicationRoomHash",
+          "communication_room_hash",
+          "callInviteHash",
+          "call_invite_hash",
+          "threadHash",
+          "thread_hash",
+          "roomRunCorrelationHash",
+          "room_run_correlation_hash",
+        ]
+      ) {
+        delete clientRenderMetadata[serverOwnedKey];
+      }
       await safeInsert(adminClient, "livekit_operator_events", {
         action_planned: planned.action,
         confidence: classification.confidence,
@@ -528,8 +631,17 @@ Deno.serve(async (request: Request) => {
         data_source: "authenticated_client_render_telemetry",
         readback_complete: true,
         metadata: safeMetadata({
-          ...renderEvent,
           user_hash: userHash,
+          chatCallBindingCorroborated:
+            renderEvent.chatCallBindingCorroborated,
+          tokenAuditCorroborated: renderEvent.tokenAuditCorroborated,
+          preacceptTerminalCleanupCorroborated:
+            renderEvent.preacceptTerminalCleanupCorroborated,
+          communicationRoomHash: renderEvent.communicationRoomHash,
+          callInviteHash: renderEvent.callInviteHash,
+          threadHash: renderEvent.threadHash,
+          roomRunCorrelationHash: renderEvent.roomRunCorrelationHash,
+          ...clientRenderMetadata,
         }),
         reason: classification.reason,
         severity: classification.severity,

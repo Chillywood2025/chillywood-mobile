@@ -3,6 +3,7 @@ const {
   withAndroidManifest,
   withAppBuildGradle,
   withDangerousMod,
+  withMainActivity,
   withMainApplication,
 } = require("@expo/config-plugins");
 const fs = require("node:fs");
@@ -11,6 +12,245 @@ const path = require("node:path");
 const PACKAGE_NAME = "com.chillywood.mobile";
 const JAVA_PACKAGE_PATH = PACKAGE_NAME.replace(/\./g, "/");
 const NATIVE_FILES = {
+  "ChillyChatNativeCallActionStore.kt": String.raw`package com.chillywood.mobile
+
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.os.SystemClock
+import android.util.Log
+import java.security.MessageDigest
+
+object ChillyChatNativeCallActionStore {
+  const val SCHEMA_VERSION = 1
+  private const val LOG_TAG = "ChillyChatCallAction"
+  private const val PREFERENCES_NAME = "chilly_chat_native_call_action_v1"
+  private const val KEY_SCHEMA_VERSION = "schema_version"
+  private const val KEY_THREAD_ID = "thread_id"
+  private const val KEY_CALL_INVITE_ID = "call_invite_id"
+  private const val KEY_NATIVE_ACTION = "native_action"
+  private const val KEY_REQUEST_KEY = "request_key"
+  private const val KEY_CREATED_AT = "created_at"
+  private const val KEY_CREATED_ELAPSED_AT = "created_elapsed_at"
+  private const val KEY_LAST_CONSUMED_REQUEST_KEY = "last_consumed_request_key"
+  private const val KEY_LAST_CONSUMED_ELAPSED_AT = "last_consumed_elapsed_at"
+  private const val MAX_ACTION_AGE_MS = 45_000L
+  private val UUID_PATTERN = Regex(
+    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+  )
+  private val REQUEST_KEY_PATTERN = Regex("^[0-9a-f]{64}$")
+
+  data class PendingAction(
+    val threadId: String,
+    val callInviteId: String,
+    val nativeCallAction: String,
+    val requestKey: String,
+    val createdAt: Long,
+    val schemaVersion: Int,
+  )
+
+  @Synchronized
+  fun capture(context: Context, intent: Intent?): Boolean {
+    val data = intent?.data ?: return false
+    if (!data.scheme.equals("chillywoodmobile", ignoreCase = true)) return false
+    if (!data.host.equals("chat", ignoreCase = true)) return false
+    if (data.userInfo != null || data.port != -1 || data.fragment != null) return false
+    if (data.pathSegments.size != 1) return false
+
+    val threadId = normalizeUuid(data.pathSegments.firstOrNull()) ?: return false
+    val inviteId = normalizeUuid(data.getQueryParameter("callInviteId")) ?: return false
+    val nativeAction = normalizeAction(data.getQueryParameter("nativeCallAction")) ?: return false
+    if (!matchesOptionalUuidExtra(intent, "threadId", threadId)) return false
+    if (!matchesOptionalUuidExtra(intent, "callInviteId", inviteId)) return false
+    if (!matchesOptionalActionExtra(intent, "nativeCallAction", nativeAction)) return false
+    Log.i(LOG_TAG, "ACTION_CAPTURED")
+
+    val requestKey = sha256("$threadId:$inviteId:$nativeAction")
+    val preferences = preferences(context)
+    val elapsedAt = SystemClock.elapsedRealtime()
+    val existingRequestKey = preferences.getString(KEY_REQUEST_KEY, null).orEmpty()
+    val existingElapsedAt = preferences.getLong(KEY_CREATED_ELAPSED_AT, 0L)
+    if (isFresh(existingElapsedAt, elapsedAt)) {
+      if (existingRequestKey == requestKey) {
+        Log.i(LOG_TAG, "ACTION_BUFFERED")
+        return true
+      }
+      Log.i(LOG_TAG, "ACTION_REPLAY_DENIED")
+      return false
+    }
+    val lastConsumedRequestKey =
+      preferences.getString(KEY_LAST_CONSUMED_REQUEST_KEY, null).orEmpty()
+    val lastConsumedElapsedAt = preferences.getLong(KEY_LAST_CONSUMED_ELAPSED_AT, 0L)
+    if (
+      lastConsumedRequestKey == requestKey
+      && isFresh(lastConsumedElapsedAt, elapsedAt)
+    ) {
+      Log.i(LOG_TAG, "ACTION_REPLAY_DENIED")
+      return false
+    }
+
+    val editor = preferences.edit()
+    if (!isFresh(lastConsumedElapsedAt, elapsedAt)) {
+      editor
+        .remove(KEY_LAST_CONSUMED_REQUEST_KEY)
+        .remove(KEY_LAST_CONSUMED_ELAPSED_AT)
+    }
+    val persisted = editor
+      .putInt(KEY_SCHEMA_VERSION, SCHEMA_VERSION)
+      .putString(KEY_THREAD_ID, threadId)
+      .putString(KEY_CALL_INVITE_ID, inviteId)
+      .putString(KEY_NATIVE_ACTION, nativeAction)
+      .putString(KEY_REQUEST_KEY, requestKey)
+      .putLong(KEY_CREATED_AT, System.currentTimeMillis())
+      .putLong(KEY_CREATED_ELAPSED_AT, elapsedAt)
+      .commit()
+    if (persisted) Log.i(LOG_TAG, "ACTION_BUFFERED")
+    return persisted
+  }
+
+  fun captureForActivity(context: Context, intent: Intent?) {
+    if (normalizeAction(
+      intent?.getStringExtra("nativeCallAction")
+        ?: intent?.data?.getQueryParameter("nativeCallAction"),
+    ) == null) return
+    if (capture(context, intent)) return
+
+    intent?.apply {
+      data = null
+      action = Intent.ACTION_MAIN
+      removeCategory(Intent.CATEGORY_BROWSABLE)
+      removeExtra("callInviteId")
+      removeExtra("threadId")
+      removeExtra("nativeCallAction")
+      removeExtra("openCall")
+    }
+  }
+
+  @Synchronized
+  fun consume(context: Context): PendingAction? {
+    val preferences = preferences(context)
+    val schemaVersion = preferences.getInt(KEY_SCHEMA_VERSION, 0)
+    val threadId = normalizeUuid(preferences.getString(KEY_THREAD_ID, null))
+    val inviteId = normalizeUuid(preferences.getString(KEY_CALL_INVITE_ID, null))
+    val nativeAction = normalizeAction(preferences.getString(KEY_NATIVE_ACTION, null))
+    val requestKey = preferences.getString(KEY_REQUEST_KEY, null).orEmpty()
+    val createdAt = preferences.getLong(KEY_CREATED_AT, 0L)
+    val createdElapsedAt = preferences.getLong(KEY_CREATED_ELAPSED_AT, 0L)
+    val elapsedAt = SystemClock.elapsedRealtime()
+    val expectedRequestKey = if (
+      threadId != null && inviteId != null && nativeAction != null
+    ) {
+      sha256("$threadId:$inviteId:$nativeAction")
+    } else {
+      ""
+    }
+    val valid = schemaVersion == SCHEMA_VERSION
+      && requestKey.matches(REQUEST_KEY_PATTERN)
+      && requestKey == expectedRequestKey
+      && createdAt > 0L
+      && isFresh(createdElapsedAt, elapsedAt)
+
+    val editor = removePending(preferences.edit())
+    if (valid) {
+      editor
+        .putString(KEY_LAST_CONSUMED_REQUEST_KEY, requestKey)
+        .putLong(KEY_LAST_CONSUMED_ELAPSED_AT, elapsedAt)
+    }
+    editor.commit()
+    if (
+      !valid
+      || threadId == null
+      || inviteId == null
+      || nativeAction == null
+    ) {
+      if (createdElapsedAt > 0L && !isFresh(createdElapsedAt, elapsedAt)) {
+        Log.i(LOG_TAG, "ACTION_EXPIRED")
+      }
+      return null
+    }
+    Log.i(LOG_TAG, "ACTION_CONSUMED")
+    return PendingAction(
+      threadId,
+      inviteId,
+      nativeAction,
+      requestKey,
+      createdAt,
+      schemaVersion,
+    )
+  }
+
+  @Synchronized
+  fun readStatus(context: Context): String {
+    val preferences = preferences(context)
+    val elapsedAt = SystemClock.elapsedRealtime()
+    if (!preferences.contains(KEY_REQUEST_KEY)) {
+      val lastConsumedElapsedAt =
+        preferences.getLong(KEY_LAST_CONSUMED_ELAPSED_AT, 0L)
+      if (!isFresh(lastConsumedElapsedAt, elapsedAt)) {
+        preferences.edit()
+          .remove(KEY_LAST_CONSUMED_REQUEST_KEY)
+          .remove(KEY_LAST_CONSUMED_ELAPSED_AT)
+          .commit()
+      }
+      return "empty"
+    }
+    val createdElapsedAt = preferences.getLong(KEY_CREATED_ELAPSED_AT, 0L)
+    if (
+      preferences.getInt(KEY_SCHEMA_VERSION, 0) != SCHEMA_VERSION
+      || !isFresh(createdElapsedAt, elapsedAt)
+    ) {
+      removePending(preferences.edit()).commit()
+      return "expired"
+    }
+    return "present"
+  }
+
+  private fun preferences(context: Context) =
+    context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+
+  private fun normalizeUuid(value: String?): String? {
+    val normalized = value?.trim().orEmpty()
+    return if (UUID_PATTERN.matches(normalized)) normalized.lowercase() else null
+  }
+
+  private fun normalizeAction(value: String?): String? {
+    val normalized = value?.trim()?.lowercase().orEmpty()
+    return normalized.takeIf { it == "answer" || it == "decline" }
+  }
+
+  private fun matchesOptionalUuidExtra(intent: Intent, key: String, expected: String): Boolean {
+    if (!intent.hasExtra(key)) return true
+    return normalizeUuid(intent.getStringExtra(key)) == expected
+  }
+
+  private fun matchesOptionalActionExtra(intent: Intent, key: String, expected: String): Boolean {
+    if (!intent.hasExtra(key)) return true
+    return normalizeAction(intent.getStringExtra(key)) == expected
+  }
+
+  private fun isFresh(createdElapsedAt: Long, currentElapsedAt: Long): Boolean {
+    val ageMs = currentElapsedAt - createdElapsedAt
+    return createdElapsedAt > 0L && ageMs in 0..MAX_ACTION_AGE_MS
+  }
+
+  private fun removePending(editor: SharedPreferences.Editor): SharedPreferences.Editor =
+    editor
+      .remove(KEY_SCHEMA_VERSION)
+      .remove(KEY_THREAD_ID)
+      .remove(KEY_CALL_INVITE_ID)
+      .remove(KEY_NATIVE_ACTION)
+      .remove(KEY_REQUEST_KEY)
+      .remove(KEY_CREATED_AT)
+      .remove(KEY_CREATED_ELAPSED_AT)
+
+  private fun sha256(value: String): String =
+    MessageDigest.getInstance("SHA-256")
+      .digest(value.toByteArray(Charsets.UTF_8))
+      .joinToString("") { byte ->
+        (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+      }
+}
+`,
   "ChillyChatCallNotifications.kt": String.raw`package com.chillywood.mobile
 
 import android.Manifest
@@ -229,7 +469,6 @@ object ChillyChatCallNotifications {
 
   fun openDeepLinkForAction(context: Context, inviteId: String?, threadId: String?, nativeAction: String) {
     if (inviteId.isNullOrBlank() || threadId.isNullOrBlank()) return
-    clearIncomingCallNotification(context, inviteId)
     val data = mapOf(
       "callInviteId" to inviteId,
       "threadId" to threadId,
@@ -252,6 +491,8 @@ object ChillyChatCallNotifications {
       putExtra("nativeCallAction", nativeAction)
       putExtra("openCall", if (nativeAction == "answer") "1" else "0")
     }
+    if (!ChillyChatNativeCallActionStore.capture(context, intent)) return
+    clearIncomingCallNotification(context, inviteId)
     context.startActivity(intent)
   }
 }
@@ -302,6 +543,7 @@ class ChillyChatCallNotificationActionReceiver : BroadcastReceiver() {
   "ChillyChatCallNotificationModule.kt": String.raw`package com.chillywood.mobile
 
 import android.content.ActivityNotFoundException
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -361,6 +603,50 @@ class ChillyChatCallNotificationModule(
       promise.reject("settings_error", "Unable to open Android full-screen call alert settings.", error)
     }
   }
+
+  @ReactMethod
+  fun consumePendingNativeCallAction(promise: Promise) {
+    try {
+      Log.i("ChillyChatCallAction", "REACT_CONTEXT_READY")
+      val pendingAction = ChillyChatNativeCallActionStore.consume(reactContext)
+      if (pendingAction == null) {
+        promise.resolve(null)
+        return
+      }
+      val payload = Arguments.createMap().apply {
+        putString("threadId", pendingAction.threadId)
+        putString("callInviteId", pendingAction.callInviteId)
+        putString("nativeCallAction", pendingAction.nativeCallAction)
+        putString("requestKey", pendingAction.requestKey)
+        putDouble("createdAt", pendingAction.createdAt.toDouble())
+        putInt("schemaVersion", pendingAction.schemaVersion)
+      }
+      promise.resolve(payload)
+    } catch (error: Exception) {
+      promise.reject(
+        "pending_action_error",
+        "Unable to consume the pending Chi'lly Chat native call action.",
+        error,
+      )
+    }
+  }
+
+  @ReactMethod
+  fun readPendingNativeCallActionStatus(promise: Promise) {
+    try {
+      val payload = Arguments.createMap().apply {
+        putString("status", ChillyChatNativeCallActionStore.readStatus(reactContext))
+        putInt("schemaVersion", ChillyChatNativeCallActionStore.SCHEMA_VERSION)
+      }
+      promise.resolve(payload)
+    } catch (error: Exception) {
+      promise.reject(
+        "pending_action_status_error",
+        "Unable to read the Chi'lly Chat native call action status.",
+        error,
+      )
+    }
+  }
 }
 `,
   "ChillyChatCallNotificationPackage.kt": String.raw`package com.chillywood.mobile
@@ -412,6 +698,36 @@ function ensureMainApplicationPackage(contents) {
     "          PackageList(this).packages.apply {",
     "          PackageList(this).packages.apply {\n              add(ChillyChatCallNotificationPackage())",
   );
+}
+
+function ensureMainActivityActionCapture(contents) {
+  let next = contents;
+  if (!next.includes("import android.content.Intent")) {
+    next = next.replace(
+      "import android.os.Build",
+      "import android.content.Intent\nimport android.os.Build",
+    );
+  }
+  if (!next.includes("ChillyChatNativeCallActionStore.captureForActivity(this, intent)")) {
+    next = next.replace(
+      "  override fun onCreate(savedInstanceState: Bundle?) {",
+      "  override fun onCreate(savedInstanceState: Bundle?) {\n    ChillyChatNativeCallActionStore.captureForActivity(this, intent)",
+    );
+  }
+  if (!next.includes("override fun onNewIntent(intent: Intent)")) {
+    next = next.replace(
+      "  /**\n   * Returns the name of the main component registered from JavaScript.",
+      `  override fun onNewIntent(intent: Intent) {
+    ChillyChatNativeCallActionStore.captureForActivity(this, intent)
+    setIntent(intent)
+    super.onNewIntent(intent)
+  }
+
+  /**
+   * Returns the name of the main component registered from JavaScript.`,
+    );
+  }
+  return next;
 }
 
 function ensureUsesPermission(androidManifest, permissionName) {
@@ -481,6 +797,11 @@ function withChillyChatNativeCallNotifications(config) {
     return nextConfig;
   });
 
+  config = withMainActivity(config, (nextConfig) => {
+    nextConfig.modResults.contents = ensureMainActivityActionCapture(nextConfig.modResults.contents);
+    return nextConfig;
+  });
+
   config = withDangerousMod(config, ["android", (nextConfig) => {
     const packageDir = path.join(
       nextConfig.modRequest.platformProjectRoot,
@@ -500,5 +821,5 @@ function withChillyChatNativeCallNotifications(config) {
 module.exports = createRunOncePlugin(
   withChillyChatNativeCallNotifications,
   "with-chilly-chat-native-call-notifications",
-  "1.0.0",
+  "1.1.0",
 );

@@ -9,7 +9,7 @@ import {
   type TrackPublication,
 } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, Linking } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 
 import { emitChatCallLiveKitStage } from "../_lib/chatCallLiveKitTelemetry";
 import type { ChillyChatCallInvite } from "../_lib/chillyChatCalls";
@@ -31,7 +31,11 @@ import {
   selectLiveKitAudioOutput,
   type LiveKitAudioOutput,
 } from "../_lib/livekit/audioRouting";
-import { LiveKitAudioSession } from "../_lib/livekit/react-native-module";
+import {
+  configureLiveKitIosAudioSession,
+  LiveKitAudioSession,
+  resetLiveKitIosAudioSession,
+} from "../_lib/livekit/react-native-module";
 import {
   requestLiveKitParticipantToken,
   validateChatCallLiveKitTokenClaims,
@@ -129,7 +133,9 @@ export function useLiveKitChatCallSession({
   const firstVideoRef = useRef(false);
   const tokenValidatedRef = useRef(false);
   const cameraFacingRef = useRef<"user" | "environment">("user");
+  const speakerRequestedRef = useRef(inviteCallType === "video");
   const mediaControlRef = useRef<Promise<unknown> | null>(null);
+  const ownsIosAudioConfigurationRef = useRef(false);
   const onRoomEndedRef = useRef(onRoomEnded);
   const telemetryStartedAtRef = useRef(Date.now());
   const [room, setRoom] = useState<CommunicationRoomState | null>(null);
@@ -266,10 +272,32 @@ export function useLiveKitChatCallSession({
     ];
   }, []);
 
+  const setSpeaker = useCallback(async (nextSpeakerEnabled: boolean) => {
+    const audioSessionReady = await LiveKitAudioSession.startAudioSession()
+      .then(() => true)
+      .catch(() => false);
+    if (!audioSessionReady) return false;
+    for (const output of getAudioOutputCandidates(nextSpeakerEnabled)) {
+      const selected = await selectLiveKitAudioOutput(output).catch(() => false);
+      if (selected) {
+        speakerRequestedRef.current = nextSpeakerEnabled;
+        setSpeakerEnabledState(nextSpeakerEnabled);
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
     const result = await runMediaControl(async () => {
       const liveKitRoom = roomRef.current;
       if (!liveKitRoom || liveKitRoom.state !== ConnectionState.Connected) return false;
+      if (nextEnabled) {
+        const audioSessionReady = await LiveKitAudioSession.startAudioSession()
+          .then(() => true)
+          .catch(() => false);
+        if (!audioSessionReady) return false;
+      }
       const publication = await liveKitRoom.localParticipant.setMicrophoneEnabled(nextEnabled);
       if (nextEnabled && !publication) return false;
       micRequestedRef.current = nextEnabled;
@@ -303,21 +331,25 @@ export function useLiveKitChatCallSession({
       if (nextEnabled) {
         emitStage("local_video_published", { connectionState: String(liveKitRoom.state) });
         updateFirstMediaState({ localVideoPublished: true });
+        await setSpeaker(speakerRequestedRef.current);
       }
       return true;
     });
     return result === true;
-  }, [emitStage, refreshParticipantViews, runMediaControl, updateFirstMediaState, updateMembershipMediaState]);
+  }, [emitStage, refreshParticipantViews, runMediaControl, setSpeaker, updateFirstMediaState, updateMembershipMediaState]);
 
   const toggleCamera = useCallback(async () => {
     try {
       const updated = await setCameraEnabled(!cameraRequestedRef.current);
       if (!updated) {
         setMediaPermissionMessage("Camera access is unavailable. The call remains connected.");
+        return false;
       }
+      return true;
     } catch (mediaError) {
       setMediaPermissionMessage("Camera access is unavailable. Check device settings and try again.");
       reportRuntimeError("chat-call-livekit-camera", mediaError);
+      return false;
     }
   }, [setCameraEnabled]);
 
@@ -351,17 +383,6 @@ export function useLiveKitChatCallSession({
     return result === true;
   }, [runMediaControl]);
 
-  const setSpeaker = useCallback(async (nextSpeakerEnabled: boolean) => {
-    for (const output of getAudioOutputCandidates(nextSpeakerEnabled)) {
-      const selected = await selectLiveKitAudioOutput(output).catch(() => false);
-      if (selected) {
-        setSpeakerEnabledState(nextSpeakerEnabled);
-        return true;
-      }
-    }
-    return false;
-  }, []);
-
   const openMediaSettings = useCallback(async () => {
     await Linking.openSettings().catch((settingsError) => {
       reportRuntimeError("chat-call-livekit-open-settings", settingsError);
@@ -387,6 +408,10 @@ export function useLiveKitChatCallSession({
         await liveKitRoom.disconnect().catch(() => undefined);
       }
       await LiveKitAudioSession.stopAudioSession().catch(() => undefined);
+      if (ownsIosAudioConfigurationRef.current) {
+        await resetLiveKitIosAudioSession().catch(() => undefined);
+        ownsIosAudioConfigurationRef.current = false;
+      }
       if (productRoom && currentIdentity && options.endRoomIfHost && productRoom.hostUserId === currentIdentity.userId) {
         await endCommunicationRoom(productRoom.roomId).catch(() => undefined);
       }
@@ -459,6 +484,7 @@ export function useLiveKitChatCallSession({
     firstVideoRef.current = false;
     tokenValidatedRef.current = false;
     cameraFacingRef.current = "user";
+    speakerRequestedRef.current = inviteCallType === "video";
     manualDisconnectRef.current = false;
     cameraRequestedRef.current = initialCameraEnabled;
     micRequestedRef.current = initialMicEnabled;
@@ -554,6 +580,11 @@ export function useLiveKitChatCallSession({
       }));
       roomRef.current = liveKitRoom;
 
+      if (Platform.OS === "ios" && !allowBackgroundAudio) {
+        await configureLiveKitIosAudioSession(inviteCallType === "video");
+        ownsIosAudioConfigurationRef.current = true;
+      }
+
       const refresh = () => refreshParticipantViews();
       liveKitRoom
         .on(RoomEvent.ParticipantConnected, () => {
@@ -581,6 +612,7 @@ export function useLiveKitChatCallSession({
           if (track.kind === Track.Kind.Audio) {
             updateFirstMediaState({ remoteAudioSubscribed: true });
             emitStage("remote_audio_subscribed", { connectionState: String(liveKitRoom.state) });
+            void setSpeaker(speakerRequestedRef.current);
           }
           if (track.kind === Track.Kind.Video) {
             updateFirstMediaState({ remoteVideoSubscribed: true });
@@ -613,6 +645,7 @@ export function useLiveKitChatCallSession({
           if (!active) return;
           setChannelState("live");
           emitStage("recovered", { connectionState: "connected" });
+          void setSpeaker(speakerRequestedRef.current);
           refresh();
         })
         .on(RoomEvent.ConnectionStateChanged, (connectionState) => {
@@ -661,6 +694,7 @@ export function useLiveKitChatCallSession({
       }
 
       if (!active) return;
+      await setSpeaker(speakerRequestedRef.current);
       await updateMembershipMediaState(initialCameraEnabled, initialMicEnabled);
       setCameraEnabledState(initialCameraEnabled);
       setMicEnabledState(initialMicEnabled);
@@ -740,6 +774,7 @@ export function useLiveKitChatCallSession({
     normalizedRoomId,
     refreshParticipantViews,
     sessionKey,
+    setSpeaker,
     threadId,
     updateFirstMediaState,
     updateMembershipMediaState,
@@ -772,23 +807,27 @@ export function useLiveKitChatCallSession({
       const liveKitRoom = roomRef.current;
       if (nextState === "active") {
         emitStage("foregrounded", { connectionState: String(liveKitRoom.state) });
-        void Promise.all([
-          liveKitRoom.localParticipant.setMicrophoneEnabled(micRequestedRef.current),
-          liveKitRoom.localParticipant.setCameraEnabled(
-            cameraRequestedRef.current,
-            LIVE_VIDEO_CAPTURE_OPTIONS,
-          ),
-        ]).then(() => {
-          setMicEnabledState(micRequestedRef.current);
-          setCameraEnabledState(cameraRequestedRef.current);
-          setChannelState(liveKitRoom.state === ConnectionState.Connected ? "live" : "reconnecting");
-          void updateMembershipMediaState(cameraRequestedRef.current, micRequestedRef.current);
-          emitStage("recovered", { connectionState: String(liveKitRoom.state) });
-          refreshParticipantViews();
-        }).catch((foregroundError) => {
-          setError("The call stayed connected, but local media could not be restored.");
-          reportRuntimeError("chat-call-livekit-foreground", foregroundError);
-        });
+        void LiveKitAudioSession.startAudioSession()
+          .then(() => Promise.all([
+            liveKitRoom.localParticipant.setMicrophoneEnabled(micRequestedRef.current),
+            liveKitRoom.localParticipant.setCameraEnabled(
+              cameraRequestedRef.current,
+              LIVE_VIDEO_CAPTURE_OPTIONS,
+            ),
+          ]))
+          .then(async () => {
+            await setSpeaker(speakerRequestedRef.current);
+            setMicEnabledState(micRequestedRef.current);
+            setCameraEnabledState(cameraRequestedRef.current);
+            setChannelState(liveKitRoom.state === ConnectionState.Connected ? "live" : "reconnecting");
+            void updateMembershipMediaState(cameraRequestedRef.current, micRequestedRef.current);
+            emitStage("recovered", { connectionState: String(liveKitRoom.state) });
+            refreshParticipantViews();
+          })
+          .catch((foregroundError) => {
+            setError("The call stayed connected, but local media could not be restored.");
+            reportRuntimeError("chat-call-livekit-foreground", foregroundError);
+          });
         return;
       }
 
@@ -814,6 +853,7 @@ export function useLiveKitChatCallSession({
     emitStage,
     refreshParticipantViews,
     sessionKey,
+    setSpeaker,
     updateMembershipMediaState,
   ]);
 
@@ -834,12 +874,15 @@ export function useLiveKitChatCallSession({
       .then(() => {
         setMicEnabledState(micRequestedRef.current);
         if (AppState.currentState === "active") setCameraEnabledState(cameraRequestedRef.current);
+        return setSpeaker(speakerRequestedRef.current);
+      })
+      .then(() => {
         refreshParticipantViews();
       })
       .catch((activationError) => {
         reportRuntimeError("chat-call-livekit-native-audio-activation", activationError);
       });
-  }, [mediaActivationSerial, refreshParticipantViews, sessionKey]);
+  }, [mediaActivationSerial, refreshParticipantViews, sessionKey, setSpeaker]);
 
   return {
     room,

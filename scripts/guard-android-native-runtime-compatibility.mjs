@@ -9,6 +9,7 @@ const root = process.cwd();
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const manifest = readJson("config/release/android-production.json");
+const chatQaManifest = readJson("config/release/android-chat-livekit-qa.json");
 const appJson = readJson("app.json").expo;
 const packageJson = readJson("package.json");
 const expoImageManipulatorModuleConfig = readJson("node_modules/expo-image-manipulator/expo-module.config.json");
@@ -38,16 +39,27 @@ assert.deepEqual(expoImageManipulatorModuleConfig.android?.publication, {
   repository: "local-maven-repo",
 });
 assert.equal(manifest.nativeCompatibility?.schemaVersion, 1);
-assert.equal(manifest.nativeCompatibility?.digest, compatibility.digest,
-  "Android native compatibility inputs changed without reviewing the manifest digest and runtime boundary");
+assert.match(manifest.nativeCompatibility?.digest, /^[0-9a-f]{64}$/u);
+const historicalBinding = (manifest.nativeCompatibility?.runtimeBindings ?? [])
+  .find((binding) => binding.digest === manifest.nativeCompatibility.digest);
+assert.ok(historicalBinding, "the installed production digest must retain its reviewed runtime binding");
+assert.equal(historicalBinding.runtimeVersion, manifest.runtimeVersion);
 
-const reviewedBinding = (manifest.nativeCompatibility?.runtimeBindings ?? [])
-  .find((binding) => binding.digest === compatibility.digest);
-assert.ok(reviewedBinding, "the current Android native digest must have a reviewed runtime binding");
-assert.equal(reviewedBinding.runtimeVersion, manifest.runtimeVersion);
-const digestBindings = (manifest.nativeCompatibility?.runtimeBindings ?? [])
-  .filter((binding) => binding.digest === compatibility.digest);
-assert.equal(digestBindings.length, 1, "a native digest may bind to only one reviewed Android runtime");
+assert.equal(chatQaManifest.platform, "android");
+assert.equal(chatQaManifest.packageIdentifier, manifest.packageIdentifier);
+assert.equal(chatQaManifest.nativeCompatibility?.schemaVersion, 1);
+assert.equal(chatQaManifest.nativeCompatibility?.digest, compatibility.digest,
+  "the replacement Android native inputs must bind to the isolated Chat QA runtime");
+assert.notEqual(chatQaManifest.runtimeVersion, manifest.runtimeVersion);
+assert.notEqual(chatQaManifest.runtimeVersion, manifest.legacyBuild?.runtimeVersion);
+assert.equal(chatQaManifest.requiredNativeBehavior?.validatedAnswerDeclinePersistence, true);
+assert.equal(chatQaManifest.requiredNativeBehavior?.oneTimeConsumeAndClear, true);
+assert.equal(chatQaManifest.requiredNativeBehavior?.boundedLifetimeMilliseconds, 45_000);
+assert.equal(chatQaManifest.requiredNativeBehavior?.reactStartupIndependent, true);
+assert.equal(chatQaManifest.rollback?.nativeBuild, "85");
+assert.equal(chatQaManifest.rollback?.runtimeVersion, manifest.runtimeVersion);
+assert.equal(chatQaManifest.deliveryConstraints?.androidUninstallOrReset, false);
+assert.equal(chatQaManifest.deliveryConstraints?.additionalOta, false);
 
 const artifactEvidence = manifest.artifactEvidence ?? {};
 for (const field of ["productionAabSha256", "qaApksSha256", "qaInstallArtifactSha256"]) {
@@ -112,7 +124,8 @@ assert.equal(playUpgradeEvidence.javascriptFatalObservedCount, 0);
 
 const appConfig = read("app.config.ts");
 assert.match(appConfig, /ANDROID_RELEASE_MANIFEST_PATH/u);
-assert.match(appConfig, /runtimeVersion:\s*androidRuntimeVersion/u);
+assert.match(appConfig, /ANDROID_CHAT_QA_RELEASE_MANIFEST_PATH/u);
+assert.match(appConfig, /runtimeVersion:\s*androidChatQaRuntimeVersion\s*\|\|\s*androidRuntimeVersion/u);
 assert.match(appConfig, /"config",\s*"release",\s*"android-production\.json"/u);
 assert.doesNotMatch(appConfig, /1\.0\.0-android-imagemanipulator-v1/u,
   "the Android runtime must be sourced from the canonical release manifest, not duplicated in app.config.ts");
@@ -124,7 +137,10 @@ assert.equal(packageJson.scripts?.["guard:android-native-runtime-compatibility"]
 
 const generatedContract = await import("../supabase/functions/_shared/release-manifest-contract.generated.mjs");
 assert.equal(generatedContract.ANDROID_PRODUCTION_RELEASE_MANIFEST.runtimeVersion, manifest.runtimeVersion);
-assert.equal(generatedContract.ANDROID_PRODUCTION_RELEASE_MANIFEST.nativeCompatibilityDigest, compatibility.digest);
+assert.equal(
+  generatedContract.ANDROID_PRODUCTION_RELEASE_MANIFEST.nativeCompatibilityDigest,
+  manifest.nativeCompatibility.digest,
+);
 assert.equal(generatedContract.IOS_QA_RELEASE_MANIFEST.runtimeVersion, "1.0.0-iosqa1");
 assert.equal(generatedContract.IOS_QA_RELEASE_MANIFEST.nativeBuild, "8");
 

@@ -15,13 +15,11 @@ type SupabaseClientLike = any;
 
 type DispatchPayload = {
   action?: unknown;
-  deliveryId?: unknown;
-  delivery_id?: unknown;
   inviteId?: unknown;
   invite_id?: unknown;
 };
 
-type DispatchAction = "incoming" | "missed" | "cancel" | "declined" | "end" | "timeout";
+type DispatchAction = "incoming";
 
 type CallInvite = {
   id: string;
@@ -46,7 +44,7 @@ type VoipToken = {
 };
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-chillywood-retry-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Origin": "*",
 } as const;
@@ -61,28 +59,8 @@ const toText = (value: unknown) => String(value ?? "").trim();
 
 const normalizeAction = (value: unknown): DispatchAction | null => {
   const normalized = toText(value).toLowerCase();
-  if (normalized === "missed" || normalized === "dispatch_missed") return "missed";
-  if (normalized === "cancel" || normalized === "dispatch_cancel") return "cancel";
-  if (normalized === "declined" || normalized === "decline" || normalized === "dispatch_declined") return "declined";
-  if (normalized === "end" || normalized === "ended" || normalized === "dispatch_end") return "end";
-  if (normalized === "timeout" || normalized === "dispatch_timeout") return "timeout";
   if (normalized === "incoming" || normalized === "dispatch_incoming") return "incoming";
   return null;
-};
-
-const isTerminalAction = (action: DispatchAction) => action !== "incoming" && action !== "missed";
-
-const resolveRecipientUserId = (input: {
-  action: DispatchAction;
-  actorUserId: string;
-  calleeUserId: string;
-  callerUserId: string;
-}) => {
-  if (input.action === "declined") return input.callerUserId;
-  if (input.action === "end") {
-    return input.actorUserId === input.callerUserId ? input.calleeUserId : input.callerUserId;
-  }
-  return input.calleeUserId;
 };
 
 const jsonResponse = (status: number, body: JsonObject) => (
@@ -303,9 +281,17 @@ Deno.serve(async (req): Promise<Response> => {
     const body = await parseBody(req);
     if (!body) return jsonResponse(400, { error: "invalid_json_body" });
     const action = normalizeAction(body.action);
-    const deliveryId = toText(body.deliveryId ?? body.delivery_id);
     const inviteId = toText(body.inviteId ?? body.invite_id);
-    if (!action) return jsonResponse(400, { error: "invalid_action" });
+    if (!action) {
+      return jsonResponse(200, {
+        eligible: false,
+        failedCount: 0,
+        reason: "non_incoming_uses_authoritative_state",
+        sentCount: 0,
+        skippedCount: 1,
+        status: "skipped",
+      });
+    }
     if (!inviteId) return jsonResponse(400, { error: "missing_invite_id" });
 
     const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -314,58 +300,8 @@ Deno.serve(async (req): Promise<Response> => {
       serviceRoleKey,
       { auth: { persistSession: false } },
     );
-    const requestAuthorization = req.headers.get("authorization") ?? "";
-    const retryToken = toText(req.headers.get("x-chillywood-retry-token"));
-    let callerUserId = "";
-    if (retryToken) {
-      if (!deliveryId || !isTerminalAction(action)) {
-        return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
-      }
-      const { data: authorized, error: authorizationError } = await adminClient.rpc(
-        "authorize_chilly_chat_call_transition_retry",
-        { p_token: retryToken },
-      );
-      if (authorizationError || authorized !== true) {
-        return jsonResponse(401, { error: "invalid_retry_authorization" });
-      }
-      const { data: internalDelivery, error: internalDeliveryError } = await adminClient
-        .from("chat_call_transition_deliveries")
-        .select("actor_user_id,call_invite_id,dispatch_action,delivery_status")
-        .eq("id", deliveryId)
-        .maybeSingle();
-      if (
-        internalDeliveryError
-        || !internalDelivery
-        || toText(internalDelivery.call_invite_id) !== inviteId
-        || toText(internalDelivery.dispatch_action) !== action
-        || toText(internalDelivery.delivery_status) !== "dispatching"
-      ) {
-        return jsonResponse(403, { error: "internal_delivery_scope_rejected" });
-      }
-      callerUserId = toText(internalDelivery.actor_user_id);
-    } else if (requestAuthorization === `Bearer ${serviceRoleKey}`) {
-      if (!deliveryId || !isTerminalAction(action)) {
-        return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
-      }
-      const { data: internalDelivery, error: internalDeliveryError } = await adminClient
-        .from("chat_call_transition_deliveries")
-        .select("actor_user_id,call_invite_id,dispatch_action,delivery_status")
-        .eq("id", deliveryId)
-        .maybeSingle();
-      if (
-        internalDeliveryError
-        || !internalDelivery
-        || toText(internalDelivery.call_invite_id) !== inviteId
-        || toText(internalDelivery.dispatch_action) !== action
-        || toText(internalDelivery.delivery_status) !== "dispatching"
-      ) {
-        return jsonResponse(403, { error: "internal_delivery_scope_rejected" });
-      }
-      callerUserId = toText(internalDelivery.actor_user_id);
-    } else {
-      callerUserId = await readAuthenticatedUserId(req) ?? "";
-      if (!callerUserId) return jsonResponse(401, { error: "unauthenticated" });
-    }
+    const callerUserId = await readAuthenticatedUserId(req) ?? "";
+    if (!callerUserId) return jsonResponse(401, { error: "unauthenticated" });
     const invite = await readInvite(adminClient, inviteId);
     if (!invite) return jsonResponse(404, { error: "invite_not_found" });
     const inviteCallerUserId = toText(invite.caller_user_id);
@@ -380,12 +316,7 @@ Deno.serve(async (req): Promise<Response> => {
       return jsonResponse(403, { error: "thread_membership_required" });
     }
 
-    const recipientUserId = resolveRecipientUserId({
-      action,
-      actorUserId: callerUserId,
-      calleeUserId,
-      callerUserId: inviteCallerUserId,
-    });
+    const recipientUserId = calleeUserId;
     if (await hasAudienceBlock(adminClient, inviteCallerUserId, calleeUserId)) {
       return jsonResponse(200, { eligible: false, reason: "audience_block", status: "blocked" });
     }
@@ -395,51 +326,20 @@ Deno.serve(async (req): Promise<Response> => {
     ) {
       return jsonResponse(200, { eligible: false, reason: "account_access_restricted", status: "blocked" });
     }
-    if (!isTerminalAction(action) && !await readCallPreference(adminClient, recipientUserId)) {
+    if (!await readCallPreference(adminClient, recipientUserId)) {
       return jsonResponse(200, { eligible: false, reason: "call_preference_disabled", status: "blocked" });
     }
 
     const inviteStatus = toText(invite.status).toLowerCase();
     const expiresAt = Date.parse(toText(invite.expires_at));
-    if (action === "incoming") {
-      if (callerUserId !== inviteCallerUserId) {
-        return jsonResponse(403, { error: "caller_required" });
-      }
-      if (inviteStatus !== "ringing") {
-        return jsonResponse(200, { eligible: false, reason: "invite_not_ringing", status: "blocked" });
-      }
-      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-        return jsonResponse(200, { eligible: false, reason: "invite_expired", status: "blocked" });
-      }
-    } else if (action === "declined") {
-      if (callerUserId !== calleeUserId) {
-        return jsonResponse(403, { error: "callee_required" });
-      }
-      if (inviteStatus !== "declined") {
-        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
-      }
-    } else if (action === "cancel") {
-      if (callerUserId !== inviteCallerUserId) {
-        return jsonResponse(403, { error: "caller_required" });
-      }
-      if (inviteStatus !== "canceled") {
-        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
-      }
-    } else if (action === "timeout") {
-      if (inviteStatus !== "missed" && inviteStatus !== "busy") {
-        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
-      }
-      if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) {
-        return jsonResponse(200, { eligible: false, reason: "invite_not_expired", status: "blocked" });
-      }
-    } else if (action === "end") {
-      if (inviteStatus !== "ended") {
-        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
-      }
-    } else if (action === "missed") {
-      if (inviteStatus !== "missed") {
-        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
-      }
+    if (callerUserId !== inviteCallerUserId) {
+      return jsonResponse(403, { error: "caller_required" });
+    }
+    if (inviteStatus !== "ringing") {
+      return jsonResponse(200, { eligible: false, reason: "invite_not_ringing", status: "blocked" });
+    }
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      return jsonResponse(200, { eligible: false, reason: "invite_expired", status: "blocked" });
     }
     if (!await enforceDispatchRateLimit(adminClient, callerUserId, inviteId)) {
       return jsonResponse(429, { eligible: false, reason: "rate_limited", status: "blocked" });

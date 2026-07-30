@@ -16,6 +16,7 @@ const assertNotIncludes = (source, needle, label) => assert(!source.includes(nee
 const packageJson = read("package.json");
 const bell = read("components/notifications/notification-bell-button.tsx");
 const layout = read("app/_layout.tsx");
+const nativeIntent = read("app/+native-intent.tsx");
 const appConfig = read("app.config.ts");
 const chatThread = read("app/chat/[threadId].tsx");
 const chatLib = read("_lib/chat.ts");
@@ -23,6 +24,9 @@ const settings = read("app/settings.tsx");
 const notifications = read("_lib/notifications.ts");
 const chillyChatCalls = read("_lib/chillyChatCalls.ts");
 const chillyChatCallSoundAssets = read("_lib/chillyChatCallSoundAssets.ts");
+const chillyChatNativeCallRouteBuffer = read("_lib/chillyChatNativeCallRouteBuffer.ts");
+const chillyChatNativeCallRoutes = read("_lib/chillyChatNativeCallRoutes.mjs");
+const authoritativeBusyBegin = read("supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql");
 const nativeCallPlugin = read("plugins/withChillyChatNativeCallNotifications.js");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
@@ -35,6 +39,7 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
   "proof:notification-icon-surface-wiring",
   "proof:room-safe-notification-and-call-behavior",
   "guard:notification-room-call-policy",
+  "test:chilly-chat-native-call-action-handoff",
 ].forEach((needle) => assertIncludes(packageJson, needle, "package notification room/call scripts"));
 
 assertIncludes(bell, "readNotificationSummary", "bell must use real unread summary");
@@ -156,6 +161,9 @@ assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller
 assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") return;", "caller timeout may only attempt a missed transition from ringing");
 assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\") return;", "caller timeout cleanup requires a confirmed missed transition");
 assertIncludes(chatThread, "nativeCallAction", "native Android notification actions must route through the chat thread");
+assertIncludes(chatThread, "requestedNativeCallOwnsTransition", "native Android actions must own acceptance without racing the openCall compatibility route");
+assertIncludes(chatThread, "|| requestedNativeCallOwnsTransition", "openCall compatibility handling must remain inert while a native action settles");
+assertIncludes(chatThread, "activeNativeCallActionRequestKeyRef", "native Android actions must survive unrelated rerenders while their exact request remains current");
 assertIncludes(chatThread, "readChillyChatCallInvite(requestedCallInviteId)", "native Android notification actions must read the invite by id after cold/background launch");
 assertIncludes(chatThread, "invite.threadId !== threadId", "native Android notification actions must reject wrong-thread invite ids");
 assertIncludes(chatThread, "invite.calleeUserId !== currentUserId", "native Android notification actions must reject invites for another callee");
@@ -164,6 +172,42 @@ assertIncludes(chatThread, "readAcceptableIncomingInvite", "native and same-thre
 assertIncludes(chatThread, "latestInvite.status === \"ringing\"", "native and same-thread Answer must require a currently ringing invite");
 assertIncludes(chatThread, "getCommunicationRoomSnapshot", "native and same-thread Answer must verify the room is active before joining");
 assertIncludes(chatThread, "dismissPresentedChillyChatCallNotifications", "native Answer/Decline must clear presented Android call notifications after safe invite handling");
+assertIncludes(chatThread, 'result.invite?.status === "busy"', "an authoritative busy result must not open a second media panel");
+assertIncludes(chatThread, "No media was started", "the caller must receive an honest no-media busy result");
+assertIncludes(authoritativeBusyBegin, 'invite."status" = \'accepted\'', "busy authority must require an accepted established invite");
+assertIncludes(authoritativeBusyBegin, 'established_thread."active_communication_room_id"', "busy authority must reject historical rooms that are no longer authoritative on their thread");
+assertIncludes(authoritativeBusyBegin, 'active_room."status" = \'active\'', "busy authority must require the established room to remain active");
+assertIncludes(authoritativeBusyBegin, "'busy'", "busy authority must terminate the overlap before delivery");
+assertIncludes(authoritativeBusyBegin, '"delivery_status" = \'skipped\'', "busy authority must explicitly skip the terminal delivery");
+assertIncludes(layout, "resolveChillyChatNativeCallRoute", "terminated Android native actions must replay their exact initial URL after authenticated boot");
+assertIncludes(layout, "setPendingNativeCallRoute((current)", "cold-start native actions must remain pending until session hydration finishes");
+assertIncludes(layout, "Linking.getInitialURL()", "terminated Android native actions must read the Activity initial URL");
+assertIncludes(layout, "function AndroidNativeCallRouteBridge()", "terminated Android native actions must use a dedicated always-mounted capture bridge");
+assertIncludes(layout, "<AndroidNativeCallRouteBridge />", "the Android native action capture bridge must mount at the session shell");
+assert(
+  layout.indexOf("<AndroidNativeCallRouteBridge />") >= 0
+  && layout.indexOf("<AuthRouteGate />") >= 0
+  && layout.indexOf("<AndroidNativeCallRouteBridge />") < layout.indexOf("<AuthRouteGate />"),
+  "the Android native action capture bridge must mount before the auth-gated navigator",
+);
+assertIncludes(chillyChatNativeCallRoutes, '["answer", "decline"].includes(nativeCallAction)', "cold-start replay must be limited to explicit Answer and Decline actions");
+assertIncludes(chillyChatNativeCallRoutes, "UUID_PATTERN", "cold-start replay must reject malformed thread and invite identities");
+assertNotIncludes(chillyChatNativeCallRoutes, "access_token", "cold-start call routes must not carry authentication credentials");
+assertIncludes(nativeIntent, "redirectSystemPath", "Expo Router must normalize Android native call actions before initial route caching");
+assertIncludes(nativeIntent, 'Platform.OS !== "android"', "native-intent call normalization must not change iOS system-path handling");
+assertIncludes(nativeIntent, "redirectEarlyAndroidNativeCallSystemPath", "Expo Router native-intent handling must install the early Android action buffer");
+assertNotIncludes(nativeIntent, "console.", "native call system-path normalization must not log private action URLs");
+assertIncludes(chillyChatNativeCallRouteBuffer, 'Platform.OS === "android"', "the early native call action buffer must remain Android-only");
+assertIncludes(chillyChatNativeCallRouteBuffer, 'Linking.addEventListener("url"', "the early native call action buffer must subscribe during native-intent module loading");
+assertIncludes(chillyChatNativeCallRouteBuffer, "createChillyChatNativeCallRouteBuffer", "the early action buffer must reject unvalidated system URLs and retain pre-mount actions");
+assertIncludes(chillyChatNativeCallRouteBuffer, "subscribeToEarlyAndroidNativeCallRoutes", "the authenticated root bridge must drain the early action buffer");
+assertIncludes(chillyChatNativeCallRouteBuffer, "consumePendingAndroidNativeCallRoute", "terminated Android actions must consume the native one-time store after React startup");
+assertIncludes(chillyChatNativeCallRouteBuffer, "resolveChillyChatNativeCallActionPayload", "native one-time store output must pass independent JavaScript validation");
+assertIncludes(layout, "subscribeToEarlyAndroidNativeCallRoutes", "the root bridge must consume live native actions retained during JS startup");
+assertIncludes(layout, "consumePendingAndroidNativeCallRoute()", "the root bridge must drain a terminated native action before authenticated routing");
+assertIncludes(layout, "nativeCallActionAuthReadyRef.current = !isLoading && isSignedIn", "native persistence must remain authoritative until session restoration completes");
+assertIncludes(layout, 'nextState === "active"', "the authenticated bridge must retry one-time native consumption when Android becomes active");
+assertNotIncludes(chillyChatNativeCallRouteBuffer, "console.", "the early native call action buffer must not log private URLs");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
@@ -200,6 +244,19 @@ assertIncludes(nativeCallPlugin, "Intent.CATEGORY_BROWSABLE", "native Answer dee
 assertIncludes(nativeCallPlugin, "putExtra(\"openCall\", if (nativeAction == \"answer\") \"1\" else \"0\")", "native Answer intent must preserve openCall=1 for the JS join trigger");
 assertIncludes(nativeCallPlugin, "readFullScreenCallAlertStatus", "native module must expose full-screen permission readback");
 assertIncludes(nativeCallPlugin, "openFullScreenCallAlertSettings", "native module must expose full-screen permission settings route");
+assertIncludes(nativeCallPlugin, "ChillyChatNativeCallActionStore.captureForActivity(this, intent)", "MainActivity must persist a validated call action before React startup");
+assertIncludes(nativeCallPlugin, "override fun onNewIntent(intent: Intent)", "warm Android call actions must update the Activity intent");
+assertIncludes(nativeCallPlugin, "setIntent(intent)", "React initial-link fallback must retain the latest native call action");
+assertIncludes(nativeCallPlugin, "fun consumePendingNativeCallAction(promise: Promise)", "the native module must expose one-time action consumption");
+assertIncludes(nativeCallPlugin, "removePending(preferences.edit())", "native action consumption must clear persisted state before routing");
+assertIncludes(nativeCallPlugin, "MAX_ACTION_AGE_MS = 45_000L", "persisted call actions must not outlive the bounded invite window");
+assertIncludes(nativeCallPlugin, "MessageDigest.getInstance(\"SHA-256\")", "native duplicate and replay checks must use a deterministic request-key hash");
+assertIncludes(nativeCallPlugin, "KEY_LAST_CONSUMED_REQUEST_KEY", "consumed native actions must retain a bounded replay tombstone");
+assertIncludes(nativeCallPlugin, "SCHEMA_VERSION = 1", "native pending actions must carry an explicit schema");
+assertIncludes(nativeCallPlugin, "readPendingNativeCallActionStatus", "physical proof must be able to read only empty, expired, or present native state");
+assertIncludes(nativeCallPlugin, "UUID_PATTERN", "native persistence must reject malformed thread and invite identities");
+assertIncludes(nativeCallPlugin, 'it == "answer" || it == "decline"', "native persistence must accept only explicit Answer or Decline actions");
+assertNotIncludes(nativeCallPlugin, "access_token", "native persistence must never retain authentication credentials");
 
 assertIncludes(notifications, "NOTIFICATION_PRIORITY_ORDER", "priority model must exist");
 assertIncludes(notifications, "INTERRUPTIVE_NOTIFICATION_PRIORITIES", "interruptive priority model must exist");

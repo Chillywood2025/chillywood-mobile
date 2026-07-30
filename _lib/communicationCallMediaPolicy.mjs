@@ -27,6 +27,13 @@ export function resolveIncomingCallRoomJoinAction(input) {
   return "blocked";
 }
 
+export function doesNativeCallActionOwnTransition(input) {
+  const callInviteId = String(input?.callInviteId ?? "").trim();
+  const nativeCallAction = String(input?.nativeCallAction ?? "").trim().toLowerCase();
+  return callInviteId.length > 0
+    && ["answer", "decline", "end", "mute", "unmute"].includes(nativeCallAction);
+}
+
 export function resolveChillyChatCallParticipantRole(input) {
   const currentUserId = String(input?.currentUserId ?? "").trim();
   const callerUserId = String(input?.callerUserId ?? "").trim();
@@ -38,6 +45,7 @@ export function resolveChillyChatCallParticipantRole(input) {
 }
 
 export function resolveIncomingCallPresentation(input) {
+  if (input?.nativeCallPresentationOwned === true) return "native_ios";
   const appState = String(input?.appState ?? "").trim().toLowerCase();
   if (appState !== "active") return "native_background";
   return input?.alreadyOnSameThread === true ? "thread_banner" : "app_banner";
@@ -50,6 +58,18 @@ export function shouldShowOutgoingRingingPanel(input) {
 
 export function resolveIosChatCallAudioRoute(callType) {
   return callType === "video" ? "speaker" : "receiver";
+}
+
+export function resolveAcceptedChatCallRoomId(input) {
+  const acceptedInviteRoomId = input?.inviteStatus === "accepted"
+    ? String(input?.inviteRoomId ?? "").trim()
+    : "";
+  return acceptedInviteRoomId || String(input?.threadRoomId ?? "").trim();
+}
+
+export function shouldKeepAcceptedChatCallPanelOpen(input) {
+  return input?.wasOpen === true
+    && resolveAcceptedChatCallRoomId(input).length > 0;
 }
 
 export function shouldActivateAcceptedChatCallMedia(input) {

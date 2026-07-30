@@ -30,6 +30,7 @@ type InRoomCommunicationPanelProps = {
   mediaPermissionMessage?: string | null;
   canOpenMediaSettings?: boolean;
   showControls?: boolean;
+  showMediaControls?: boolean;
   presentation?: "embedded" | "fullscreen";
   onToggleCamera: () => void;
   onToggleMic: () => void;
@@ -73,6 +74,7 @@ export function InRoomCommunicationPanel({
   mediaPermissionMessage,
   canOpenMediaSettings = false,
   showControls = true,
+  showMediaControls = true,
   presentation = "embedded",
   onToggleCamera,
   onToggleMic,
@@ -114,17 +116,23 @@ export function InRoomCommunicationPanel({
     }
   }, [channelState, loading, onInstalledUiConnected, statusMessage]);
 
-  const controlsVisible = showControls && !loading && !statusMessage;
+  const controlsVisible = showControls;
+  const mediaControlsVisible = showMediaControls && !loading && !statusMessage;
   const resolvedTitle = titleText ?? `${surfaceLabel} Chi'lly Chat`;
   const resolvedBody = bodyText ?? "Chi'lly Chat is Chi'llywood's native communication layer for direct threads, room-linked conversations, and live coordination.";
   const selfParticipant = participants.find((participant) => participant.isSelf);
-  const localVideoRenderable = cameraEnabled && !!selfParticipant?.streamURL;
+  const localVideoRenderable = cameraEnabled && (
+    !!selfParticipant?.streamURL
+    || !!selfParticipant?.liveKitVideoTrackReference
+  );
   const cameraStatus = cameraEnabled
     ? localVideoRenderable ? "on" : "connecting"
     : "off";
 
   return (
     <View
+      testID="communication-call-panel"
+      accessibilityLabel={`${surfaceLabel} call panel`}
       style={[
         styles.card,
         isFullscreen && styles.fullscreenCard,
@@ -173,7 +181,13 @@ export function InRoomCommunicationPanel({
           <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{isHost ? "Host" : "Participant"}</Text>
         </View>
         <View style={styles.metaPill}>
-          <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{statusLabelOverride ?? getStatusLabel(channelState)}</Text>
+          <Text
+            testID="communication-call-connection-status"
+            maxFontSizeMultiplier={textMaxFontSizeMultiplier}
+            style={styles.metaText}
+          >
+            {statusLabelOverride ?? getStatusLabel(channelState)}
+          </Text>
         </View>
       </View>
 
@@ -242,10 +256,11 @@ export function InRoomCommunicationPanel({
             cameraEnabled={cameraEnabled}
             cameraStatus={cameraStatus}
             micEnabled={micEnabled}
-            disabled={mediaControlsBusy}
+            disabled={mediaControlsBusy || loading || !!statusMessage}
             speakerEnabled={speakerEnabled}
             minimumTouchTarget={responsiveLayout.minimumTouchTarget}
             leaveLabel={leaveLabel ?? (isHost ? "End Call" : "Leave")}
+            showMediaControls={mediaControlsVisible}
             onToggleCamera={onToggleCamera}
             onToggleMic={onToggleMic}
             onToggleAudioRoute={onToggleAudioRoute}

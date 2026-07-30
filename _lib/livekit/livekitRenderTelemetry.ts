@@ -1,3 +1,4 @@
+import { sanitizeChatCallTelemetryBinding } from "../chatCallTelemetryBindingPolicy";
 import type { LiveKitOperatorSurface } from "../livekitAutonomousOperator";
 import { readReleaseDiagnostics } from "../releaseDiagnostics";
 import { supabase } from "../supabase";
@@ -103,12 +104,16 @@ export const buildLiveKitRenderTelemetryEvent = (
   input: LiveKitRenderTelemetryInput,
 ) => ({
   activeContractPresent: input.activeContractPresent === true,
-  callInviteId: safeText(input.callInviteId),
+  callInviteId: input.surface === "chat_call"
+    ? sanitizeChatCallTelemetryBinding(input.callInviteId, "uuid")
+    : "",
   bubbleGridItemCount: safeNumber(input.bubbleGridItemCount),
   bubbleGridTrackCount: safeNumber(input.bubbleGridTrackCount),
   canPublish: input.canPublish === true,
   connectionState: safeText(input.connectionState),
-  communicationRoomId: safeText(input.communicationRoomId),
+  communicationRoomId: input.surface === "chat_call"
+    ? sanitizeChatCallTelemetryBinding(input.communicationRoomId, "room_code")
+    : "",
   durationMs: safeNumber(input.durationMs),
   eventName,
   fallbackReason: safeText(input.fallbackReason),
@@ -123,7 +128,9 @@ export const buildLiveKitRenderTelemetryEvent = (
   shouldRenderSurface: input.shouldRenderSurface === true,
   stage: input.stage ?? null,
   surface: input.surface,
-  threadId: safeText(input.threadId),
+  threadId: input.surface === "chat_call"
+    ? sanitizeChatCallTelemetryBinding(input.threadId, "uuid")
+    : "",
   expDeltaSecondsBucket: bucketSeconds(input.tokenExpDeltaSeconds),
   nbfDeltaSecondsBucket: bucketSeconds(input.tokenNbfDeltaSeconds),
   tokenExpDeltaSecondsBucket: bucketSeconds(input.tokenExpDeltaSeconds),
@@ -132,8 +139,10 @@ export const buildLiveKitRenderTelemetryEvent = (
 
 export const sanitizeLiveKitRenderTelemetryPayload = (
   payload: Record<string, unknown>,
-) => Object.fromEntries(
-  Object.entries(payload)
+) => {
+  const isChatCall = payload.surface === "chat_call";
+  return Object.fromEntries(
+    Object.entries(payload)
     .filter(([key]) => {
       const normalized = key.toLowerCase();
       return !normalized.includes("token")
@@ -142,8 +151,17 @@ export const sanitizeLiveKitRenderTelemetryPayload = (
         && !normalized.includes("authorization")
         && !normalized.includes("key");
     })
-    .map(([key, value]) => [key, typeof value === "string" ? safeText(value) : value]),
-);
+    .map(([key, value]) => {
+      if (key === "callInviteId" || key === "threadId") {
+        return [key, isChatCall ? sanitizeChatCallTelemetryBinding(value, "uuid") : ""];
+      }
+      if (key === "communicationRoomId") {
+        return [key, isChatCall ? sanitizeChatCallTelemetryBinding(value, "room_code") : ""];
+      }
+      return [key, typeof value === "string" ? safeText(value) : value];
+    }),
+  );
+};
 
 export const emitLiveKitRenderTelemetryEvent = (
   eventName: LiveKitRenderTelemetryEventName,

@@ -1116,6 +1116,14 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       reason: delivery.reason,
       status: delivery.status,
     });
+  } else if (begunCall.invite.status === "busy") {
+    await endCommunicationRoom(roomId).catch(() => null);
+    logChatCall("thread_call_receiver_busy", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId: begunCall.invite.communicationRoomId ?? roomId,
+      mode: begunCall.invite.callType,
+    });
   } else {
     await endCommunicationRoom(roomId).catch(() => null);
     logChatCall("thread_call_collision_reused", {

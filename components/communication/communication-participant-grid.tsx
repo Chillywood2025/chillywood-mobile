@@ -86,7 +86,7 @@ export function CommunicationParticipantGrid({
         connectionState: participant.connectionState,
       })),
     });
-  }, [callType, isVideoCall, participants, presentation, responsiveLayout.deviceClass]);
+  }, [RTCView, callType, isVideoCall, participants, presentation, responsiveLayout.deviceClass]);
 
   return (
     <View
@@ -119,6 +119,8 @@ export function CommunicationParticipantGrid({
         return (
           <View
             key={participant.userId}
+            testID={participant.isSelf ? "communication-participant-self" : "communication-participant-remote"}
+            accessibilityLabel={participant.isSelf ? "Your call participant tile" : "Remote call participant tile"}
             style={[
               styles.tile,
               { minHeight: responsiveLayout.videoTileMinHeight },
@@ -140,6 +142,8 @@ export function CommunicationParticipantGrid({
             >
               {hasLiveKitVideo ? (
                 <View
+                  testID={participant.isSelf ? "communication-video-self" : "communication-video-remote"}
+                  accessibilityLabel={participant.isSelf ? "Your live video" : "Remote live video"}
                   style={[
                     styles.video,
                     isFullscreen && styles.videoFullscreen,
@@ -166,6 +170,7 @@ export function CommunicationParticipantGrid({
                 />
               ) : (
                 <View
+                  testID={participant.isSelf ? "communication-video-self-placeholder" : "communication-video-remote-placeholder"}
                   style={[
                     styles.avatarFrame,
                     compactTile && styles.avatarFrameCompact,
@@ -210,6 +215,7 @@ export function CommunicationParticipantGrid({
                     {participant.displayName}
                   </Text>
                   <Text
+                    testID={participant.isSelf ? "communication-media-status-self" : "communication-media-status-remote"}
                     maxFontSizeMultiplier={textMaxFontSizeMultiplier}
                     style={[styles.status, { fontSize: responsiveFontSize(11.5, responsiveLayout.fontScale, 0.9, 1.12) }]}
                     numberOfLines={1}
