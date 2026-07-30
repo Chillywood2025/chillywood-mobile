@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-64-models-exact-concurrency-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "property-concurrency-replay",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+  "implementationTree": "9324084ac054f0b9461fb70bef62e0e41cc709d4",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "7e349806beb6460ccb5ab27f35ff97317da203b36b53f03c2a5b7f0a1eb85ad7",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "da079d87b2d597b73cc654b3e39ce099037b97b221d8fe08e4ff499be9a502df",
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "implementationTree": "9324084ac054f0b9461fb70bef62e0e41cc709d4",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "mergeBaseMatched": true
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "recordedMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "remoteMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "findings": 0
+    },
+    "focusedModelSuite": {
+      "status": "pass",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyCases": 1200,
+      "deterministicSeeds": [
+        173501,
+        173502,
+        173503,
+        173504,
+        173505,
+        173506
+      ],
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20,
+      "escapedDefectFixtures": 13,
+      "positiveTransitionWitnesses": 3,
+      "dependencyEnvironment": "The isolated review worktree used a temporary, removed symlink to the exact implementation worktree's existing node_modules. No install ran and no package or lockfile changed."
+    },
+    "determinism": {
+      "status": "pass",
+      "runsPerSuite": 3,
+      "propertyOutputSha256": "52f9a67dfb614f7866a566a78293451df95486131ab36b22bc860ae50b390f59",
+      "concurrencyOutputSha256": "39c9e1664eb9836c95f9d3cec7a022d66908080f913fca1fb982bb4c9949f2d7",
+      "escapedDefectOutputSha256": "256c47c89b7c477a8ef1d8639b7eaa953427fba25cdda3ca05f9ed9bfdf65ce5",
+      "outputsIdenticalWithinSuite": true
+    },
+    "requiredInterleavings": {
+      "status": "pass-for-declared-schedules",
+      "acceptVersusTimeout": {
+        "orders": 2,
+        "resolutionCountEach": 1,
+        "outcomes": [
+          "accepted",
+          "timed_out"
+        ]
+      },
+      "oldCleanupVersusNewInvite": {
+        "orders": 2,
+        "finalGenerationEach": 2,
+        "finalThreadRoomEach": "room-2"
+      },
+      "allRequiredScenarioIdsPresent": true,
+      "bothDeclaredOrdersExecuted": true
+    },
+    "formerP1RegressionChecks": {
+      "expiredNativeActionReplay": "pass",
+      "duplicateNativeActionExpiryImmutable": "pass",
+      "liveKitStageSkip": "pass",
+      "malformedReplayJsonEnvelope": "pass",
+      "replayOutputNoClobber": "pass",
+      "revenueCatNonAuthoritativeSuppression": "pass",
+      "otaSourceCommitComparison": "pass",
+      "identifiedMigrationSuccessor": "pass",
+      "remainingP1s": [
+        "transition coverage remains vacuous for three domains",
+        "PushKit must-report liveness and terminal native-action cleanup remain vacuous"
+      ]
+    },
+    "adversarialCoverageProbe": {
+      "status": "fail",
+      "identityApplyReturnedModelClear": {
+        "revenuecat": {
+          "status": "MODEL_CLEAR",
+          "propertyCases": 20,
+          "transitionWitnesses": 0
+        },
+        "ota-build": {
+          "status": "MODEL_CLEAR",
+          "propertyCases": 20,
+          "transitionWitnesses": 0
+        },
+        "migrations": {
+          "status": "MODEL_CLEAR",
+          "propertyCases": 20,
+          "transitionWitnesses": 0
+        }
+      }
+    },
+    "notificationObligationProbe": {
+      "status": "fail",
+      "outstandingMustReport": {
+        "received": true,
+        "reported": false,
+        "completed": false,
+        "violations": []
+      },
+      "terminalPendingAction": {
+        "sequence": [
+          "native_answer(action-1)",
+          "server_timeout",
+          "auth_ready",
+          "react_ready",
+          "consume_action(action-1)"
+        ],
+        "serverStatus": "timed_out",
+        "actionConsumedAfterTerminal": true,
+        "violations": []
+      }
+    },
+    "revenueCatTieProbe": {
+      "status": "fail",
+      "eventTimestamp": 10,
+      "renewalThenTransferOwner": "target",
+      "transferThenRenewalOwner": "source",
+      "violationsInEitherOrder": 0,
+      "declaredConcurrencyFixtureUsesDistinctTimestamps": true
+    },
+    "cliFailClosedProbe": {
+      "status": "fail",
+      "command": "node scripts/assurance/models/run.mjs --suite=concurrency --domain=chat-call --path=0:1",
+      "exitCode": 0,
+      "reportedStatus": "MODEL_CLEAR",
+      "propertyResult": null,
+      "replayEvidence": null
+    },
+    "staticChecks": {
+      "status": "pass",
+      "nodeSyntaxFiles": 4,
+      "contractSchemas": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_run",
+      "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "The coordinator owns the single frozen-head Phase 1 CI run. Do not merge while the open P1 findings remain."
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "e16a5c399bcc5750e462f3fcea898a855c4cbe5c58685251dcfff1db46507031",
+  "reviewLevel": "C",
+  "reviewHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+  "reviewTimestamp": "2026-07-30T19:13:02Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "property-concurrency-replay",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR64_PROPERTY_TRANSITION_WITNESSES_INCOMPLETE_NOOP_CLEARANCE",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/properties.mjs:5",
+        "_lib/assurance/state-models/properties.mjs:32",
+        "_lib/assurance/state-models/properties.mjs:36",
+        "tests/assurance/property/state-models.test.mjs:15"
+      ],
+      "evidence": "The three committed positive witnesses cover only chat-call, livekit, and notification-native-action. RevenueCat, OTA/build, and migrations have zero witnesses. Replacing apply with an identity transition for each of those three domains still returned MODEL_CLEAR for 20/20 property cases with witnessCount=0.",
+      "impact": "Three mandatory T2 domains can ignore every generated command and still pass. Property-case totals therefore remain a false readiness signal for provider ordering, build/update compatibility, and migration reconciliation transitions.",
+      "requiredResolution": "Define required state/transition coverage and positive witnesses for every modeled domain, fail when any required witness is absent or not reached, and add a regression proving an identity/no-op apply function is BLOCKED_INTERNAL in all six domains."
+    },
+    {
+      "id": "PR64_NOTIFICATION_MUST_REPORT_AND_TERMINAL_CLEANUP_STILL_VACUOUS",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:440",
+        "_lib/assurance/state-models/models.mjs:443",
+        "_lib/assurance/state-models/models.mjs:469",
+        "_lib/assurance/state-models/models.mjs:476",
+        "_lib/assurance/state-models/models.mjs:492",
+        "_lib/assurance/state-models/properties.mjs:8"
+      ],
+      "evidence": "A must-report receive_push can remain unreported and uncompleted indefinitely with no violation. The added historical fixture only detects a variant that records completion without report; the fixed transition silently refuses completion and has no terminal obligation check or must-report witness. Separately, native Answer can remain pending across server_timeout and be consumed after the server is terminal, also with no violation.",
+      "impact": "MODEL_CLEAR still does not prove the required PushKit must-report obligation or exact decline/cancel/timeout cleanup, and it permits lifecycle-stale native actions after terminal server state.",
+      "requiredResolution": "Model an explicit must-report obligation with a bounded or terminal evaluation point and a positive receive-report-complete witness. Make terminal server transitions clear or irrevocably deny pending actions, reject post-terminal consumption, enforce exactly-once terminal cleanup, and add Answer/Decline/Cancel/Timeout/Busy regressions."
+    },
+    {
+      "id": "PR64_REVENUECAT_EQUAL_TIMESTAMP_ORDER_NOT_DETERMINISTIC",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:276",
+        "_lib/assurance/state-models/models.mjs:280",
+        "_lib/assurance/state-models/concurrency.mjs:60",
+        "_lib/assurance/state-models/concurrency.mjs:120",
+        "tests/assurance/concurrency/interleavings.test.mjs:13"
+      ],
+      "evidence": "The authoritative comparison rejects only strictly older events. With provider renewal and transfer at the same event time, renewal-then-transfer ends with target ownership while transfer-then-renewal ends with source ownership; both report zero violations. The declared concurrency scenario assigns times 10 and 20, so timestamp precedence—not an exact tie policy—makes its two schedules converge.",
+      "impact": "The same authoritative provider event multiset can yield different entitlement owners solely from delivery order. That defeats deterministic out-of-order reconciliation for a Level C money/provider model.",
+      "requiredResolution": "Define and model a total authoritative ordering or an explicit fail-closed ambiguity state for equal timestamps, include event identity/type precedence in the contract, and add equal-time renewal/transfer and expiration/renewal schedules that must converge or block."
+    },
+    {
+      "id": "PR64_REPLAY_PATH_SILENTLY_IGNORED_OUTSIDE_PROPERTY_SUITE",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/models/run.mjs:13",
+        "scripts/assurance/models/run.mjs:33",
+        "scripts/assurance/models/run.mjs:37"
+      ],
+      "evidence": "Running the concurrency suite with --domain=chat-call --path=0:1 exits 0 and reports MODEL_CLEAR while property is null and no replay evidence exists.",
+      "impact": "A syntactically valid replay request can be silently ignored while the command still claims the T2 status, weakening fail-closed evidence handling.",
+      "requiredResolution": "Reject --path unless the selected suite executes property replay, and report ASSURANCE_MODEL_REPLAY_SUITE_INVALID with a nonzero exit."
+    },
+    {
+      "id": "PR64_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "This isolated automated review lane ran focused tests only and did not start, monitor, or poll full CI.",
+      "requiredResolution": "The coordinator must own one complete Phase 1 CI execution at the unchanged frozen implementation head after all open P1 findings are resolved and exact-head reviews are rerun."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 3,
+    "p2Open": 2,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "changes-required-do-not-merge",
+    "humanApproval": false
+  }
+}
