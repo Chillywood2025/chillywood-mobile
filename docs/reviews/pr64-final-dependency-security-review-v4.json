@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-final-dependency-security-review-v4",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "security-authority",
+  "focus": "Final OTA identity completeness, finite model-domain privacy, replay safety, dependency provenance, merge-base scope, current-main preservation, current-truth sequencing, and non-interference",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationPrState": "open-draft-frozen",
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+  "implementationTree": "8264dc96759913dedda4e7a7b057b5ff068bd2cd",
+  "baseHead": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "currentMainAtReview": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+  "reviewBranchCheckpoint": "0605e1abda616d91deeb2009e50598a96213055c",
+  "changedFileHash": "904790aa515ea1edd95ceae0ea0abd7b40ca49ba6de26de1592186b8fb688408",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "4c9db4f23f89420e63108554cdc9921526a585d0c6133dae4ac60861ad53b773",
+  "implementationDiffHash": "a202b2c0b6ddb4eb6a011c1d3535dbf5c5a7c9197eb0f66f484d48ae71602495",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass_with_post_merge_truth_sync_and_pr_e_follow_up",
+      "lane": "security-authority",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationPrNumber": 64,
+      "implementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "implementationTree": "8264dc96759913dedda4e7a7b057b5ff068bd2cd",
+      "currentMainAtReview": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "realPrMergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802"
+    },
+    "reviewBranchTopology": {
+      "status": "pass",
+      "checkpoint": "0605e1abda616d91deeb2009e50598a96213055c",
+      "checkpointTree": "b14db79e3113f93db4b27759c2ecec69d91a69ad",
+      "firstParentV3Review": "3b09bfad593fbbc86b24cb13ca41214ddb8284c1",
+      "secondParentExactImplementation": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "normalTwoParentMerge": true,
+      "mergeBaseWithImplementation": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "implementationFilesInReviewDelta": 0,
+      "priorReviewFiles": [
+        "docs/reviews/pr64-final-dependency-security-review.json",
+        "docs/reviews/pr64-final-dependency-security-review-v2.json",
+        "docs/reviews/pr64-final-dependency-security-review-v3.json"
+      ],
+      "priorManifestSha256": {
+        "v1": "518eb95bcd38a9c89e32ec0e20d57123e54eea7310cf802c0a0023babd4849c7",
+        "v2": "357e885acd80a01f38ad1bfa01b812ab624015fa32c1af48d441a9dcc53d09fd",
+        "v3": "2fc4ccc37b0c8b934853b3e7015a31921479ff9c51678162dc210fde60738888"
+      },
+      "allPriorManifestsPreservedByteForByte": true
+    },
+    "ancestorCheckpoint": {
+      "status": "pass",
+      "checkpointMerge": "1744b698858e0bfb966de7045c1432084b0fbc0c",
+      "checkpointMergeTree": "70bb4c5ac582ab0728673141e2a8fe5318adb895",
+      "checkpointFirstParent": "00355bd94d5a7e401d424bc7a8298017c46357d8",
+      "checkpointSecondParent": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+      "normalTwoParentMerge": true,
+      "checkpointIsAncestorOfImplementation": true,
+      "currentMainIsIntentionalDescendantOfCheckpoint": true,
+      "explanation": "PR #64 contains synchronized main checkpoint 268b15f3 through normal merge 1744b698. Current main ac5575ba intentionally descends from that checkpoint and is merge-preservation input rather than implementation scope."
+    },
+    "realPrDelta": {
+      "status": "pass_with_scope_waiver",
+      "calculation": "git diff <merge-base-of-head-and-current-main>...implementation-head",
+      "files": 11,
+      "additions": 1511,
+      "deletions": 1,
+      "netChangedLines": 1510,
+      "effectiveFileMaximum": 12,
+      "effectiveLineMaximum": 1600,
+      "classifiedDomains": [
+        "CI-test-infrastructure"
+      ],
+      "unclassifiedChangedFiles": 0,
+      "highRiskDomains": [],
+      "secondHighRiskDomain": false,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "nativeSourceFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "scopeWaiver": {
+      "status": "valid_within_approved_bounds_pending_complete_fresh_review_set",
+      "contractId": "pr-c-model-integrity-scope-waiver-v1",
+      "reviewer": "successor-four-lane-exact-head-review-set",
+      "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
+      "approvalClaimedByImplementation": false,
+      "selfApproval": false,
+      "secondHighRiskDomain": false,
+      "newTimeboxHours": 4,
+      "fileBudget": {
+        "actual": 11,
+        "maximum": 12
+      },
+      "lineBudget": {
+        "actual": 1510,
+        "maximum": 1600
+      },
+      "prohibitedScopePathsTouched": []
+    },
+    "otaCoreIdentity": {
+      "status": "pass",
+      "requiredOnBuildAndUpdate": [
+        "platform",
+        "environment",
+        "runtime",
+        "channel",
+        "nativeDigest"
+      ],
+      "coreFields": 5,
+      "omissionScopesPerField": [
+        "build",
+        "update",
+        "both"
+      ],
+      "omissionConfigurations": 15,
+      "activationRejects": 15,
+      "rollbackRejects": 15,
+      "totalCoreFieldRejectOutcomes": 30,
+      "rejectedActivationLeavesCurrentUpdateNull": true,
+      "rejectedRollbackLeavesTargetAndCurrentUpdateNull": true,
+      "violationFreeFailClosedState": true,
+      "validCompleteIdentityActivationPasses": true,
+      "validExactRollbackTargetPasses": true
+    },
+    "finiteDomainBoundary": {
+      "status": "pass",
+      "allowlistSource": "modelDefinitions own properties",
+      "validationOccursBeforeModelExecution": true,
+      "unknownDomainFinding": "ASSURANCE_MODEL_DOMAIN_UNKNOWN",
+      "requestIdentityForUnknownDomain": null,
+      "hostileCases": [
+        "uuid-shaped",
+        "device-identifier-shaped",
+        "email-shaped"
+      ],
+      "rawIdentifierAbsentFromStdout": true,
+      "rawIdentifierAbsentFromStderr": true,
+      "replayArtifactCreatedForUnknownDomain": false,
+      "unknownDomainModelExecutionReached": false
+    },
+    "replayEvidence": {
+      "status": "pass",
+      "canonicalRedactionBeforePersistence": true,
+      "validKnownDomainRequiredForReplay": true,
+      "malformedReplayPathRetained": true,
+      "hostilePathMarkerAbsentFromStdout": true,
+      "hostilePathMarkerAbsentFromPersistedJson": true,
+      "replayFileMode": "0600",
+      "preexistingReplayFileMode": "0600",
+      "writeFlag": "wx",
+      "noClobber": true,
+      "existingFilePreserved": true,
+      "nonOfflineProviderModeRejected": true,
+      "temporaryEvidenceRemoved": true
+    },
+    "focusedSecurityRegression": {
+      "status": "pass",
+      "command": "node --test tests/assurance/models/escaped-defects.test.mjs",
+      "executionContext": "disposable exact-head checkout with pinned dev dependency in an ancestor node_modules directory",
+      "testFiles": 1,
+      "subtests": 2,
+      "passed": 2,
+      "failed": 0,
+      "coversHistoricalVariants": true,
+      "coversFiniteDomainPrivacy": true,
+      "coversReplayPrivacy": true,
+      "coversThirtyOtaCoreIdentityRejects": true
+    },
+    "dependencyLock": {
+      "status": "pass_reused_exact_blob_evidence",
+      "sameSessionReviewedHead": "88161959ddf4ccf5d4d560e940fca9c9007ab10c",
+      "packageJsonBlob": "04514a679cbfc9a9120e6bdc2138473fa4550bfb",
+      "packageLockBlob": "906e719b0b3b61416aa830d2c36e6c296451125b",
+      "packageLockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28",
+      "packageBlobsUnchangedSinceReviewedHead": true,
+      "lockDryRunPreviouslyPassedForExactBlob": true,
+      "fastCheck": {
+        "requestedVersion": "4.9.0",
+        "lockedVersion": "4.9.0",
+        "exact": true,
+        "devOnly": true,
+        "license": "MIT",
+        "integrity": "sha512-7ms6T7SybUev/PQITciI0yLM2pOSFy5zpG8Ty7tQofcVaQUvrMXp6CBwqF6fThLCLOrfBtuHAtwq6Yu4XPCllg=="
+      },
+      "pureRand": {
+        "lockedVersion": "8.4.2",
+        "devOnly": true,
+        "license": "MIT",
+        "integrity": "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng=="
+      },
+      "assignedWorktreeNodeModulesCreated": false
+    },
+    "advisoryReview": {
+      "status": "pass_for_unchanged_added_dependency_with_preexisting_repository_baseline",
+      "evidenceReusedBecausePackageAndLockBlobsAreIdentical": true,
+      "sameSessionCommandForExactBlob": "npm audit --package-lock-only --json",
+      "readOnly": true,
+      "moderate": 24,
+      "high": 0,
+      "critical": 0,
+      "fastCheckImplicated": false,
+      "pureRandImplicated": false,
+      "globalCleanAuditClaimed": false
+    },
+    "runtimeBundleBoundary": {
+      "status": "pass",
+      "runtimeDependenciesUnchanged": true,
+      "packageScriptsUnchanged": true,
+      "fastCheckAbsentFromRuntimeDependencies": true,
+      "fastCheckImportPaths": [
+        "_lib/assurance/state-models/properties.mjs"
+      ],
+      "runtimeProductImportFound": false,
+      "productSourceChanged": false
+    },
+    "mergePreservation": {
+      "status": "pass_with_expected_current_truth_head_binding_block",
+      "method": "disposable shared clone normal two-parent merge",
+      "mergeConflicts": 0,
+      "syntheticMergeTree": "4afaa24b1da6355162503b222c59962edea60875",
+      "syntheticMergeCommit": "99adfe0abcc7eb042bc384eabaeb13089a088bc6",
+      "syntheticMergeParents": [
+        "ac5575baf823b9189316b02ec5fa5e352d15b457",
+        "bfc761947f8c437663df4e416fb1b189c7817397"
+      ],
+      "currentMainTruthAndHeadBindingBlobsPreserved": 8,
+      "implementationBlobsPreserved": 11,
+      "implementationBlobMismatches": 0,
+      "currentTruthGuardPreserved": true,
+      "headBindingGuardPreserved": true
+    },
+    "currentTruthEvaluation": {
+      "status": "blocked_internal_exact_head_synchronization_required",
+      "syntheticMergeCommandExit": 1,
+      "findings": [
+        "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE"
+      ],
+      "findingCount": 1,
+      "synchronizationMergeShapeValid": true,
+      "recordedMain": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+      "remoteMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "recordedPr64Head": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "observedPr64Head": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "predecessorRecordBindsFinalHead": false,
+      "falsePassClaimed": false,
+      "requiredPostMergeAction": "After PR #64 merges normally and its merge SHA is known, create a bounded three-file current-truth synchronization from the resulting main. Record final implementation head bfc761947f8c437663df4e416fb1b189c7817397 and the resulting merge identity, regenerate CURRENT_STATE.md and NEXT_TASK.md, independently review the synchronization, and use the contract-required normal two-parent merge.",
+      "currentTruthClearBeforeSynchronization": false
+    },
+    "impactPlanner": {
+      "status": "open_routed_pr_e_p2",
+      "changedFiles": 11,
+      "classifiedDomains": [
+        "CI-test-infrastructure"
+      ],
+      "requiredModelGatesMissing": [
+        "assurance-state-model",
+        "assurance-property",
+        "assurance-concurrency"
+      ],
+      "disclosedFinding": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "blocksCurrentLane": false
+    },
+    "contractAndStaticChecks": {
+      "status": "pass_with_pr_e_hardening_follow_up",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25,
+      "nodeSyntaxFiles": 7,
+      "gitDiffCheck": "pass",
+      "committedSecretPatternScan": "pass",
+      "networkCallScan": "pass",
+      "forbiddenPathDiffCheck": "pass",
+      "newWaiverValidatedByCanonicalCommand": false,
+      "genericUnclassifiedPathFailClosed": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "denoLockChanged": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator",
+      "implementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "runByReviewLane": false,
+      "eligibleAsProof": false,
+      "resumptionAction": "After all four fresh exact-head review lanes are committed and current, the coordinator runs one full Phase 1 CI at exact implementation head bfc761947f8c437663df4e416fb1b189c7817397."
+    },
+    "reviewHeadGuard": {
+      "status": "blocked_only_by_coordinator_full_ci",
+      "implementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "implementationTree": "8264dc96759913dedda4e7a7b057b5ff068bd2cd",
+      "identityHashAndReviewOnlyChecksPassed": true,
+      "finding": "ASSURANCE_REVIEW_FROZEN_HEAD_CI_MISSING",
+      "actual": "pending_coordinator"
+    }
+  },
+  "testResultHash": "9c453af8d62cfceb5e8353c0f7bca7873858034cbfca4491ced80f41300d465e",
+  "reviewLevel": "C",
+  "reviewHead": "0605e1abda616d91deeb2009e50598a96213055c",
+  "reviewHeadSemantics": "normal review-branch merge checkpoint immediately preceding the v4 evidence-only commit; its second parent is exact implementation head bfc761947f8c437663df4e416fb1b189c7817397 and its first-parent history contains only preserved review records",
+  "reviewTimestamp": "2026-07-30T21:54:33Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-final-ota-domain-dependency-security",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "OTA_CORE_IDENTITY_MISSING_FIELD_ACCEPTED",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Exact head bfc76194 requires platform, environment, runtime, channel, and nativeDigest on both build and update identity. Fifteen build/update/both omission configurations produce fifteen activation rejects and fifteen rollback rejects with no false success."
+    },
+    {
+      "id": "MODEL_DOMAIN_UNBOUNDED_IDENTIFIER_REACHES_EXECUTION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Unknown UUID-, device-, and email-shaped domains fail against the finite model registry before execution, emit no raw identifier, and create no replay artifact."
+    },
+    {
+      "id": "PR64_CURRENT_MAIN_ANCESTRY_AND_GUARD_PRESERVATION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "PR #64 contains checkpoint 268b15f3 through normal merge 1744b698. A normal synthetic merge with current main preserves all eight truth/head-binding blobs and all eleven final implementation blobs."
+    },
+    {
+      "id": "CURRENT_TRUTH_FINAL_PR64_HEAD_SYNCHRONIZATION_REQUIRED",
+      "severity": "P2",
+      "status": "pending-post-merge-synchronization",
+      "evidence": "The preserved authoritative record binds predecessor PR #64 head 8829ca3d59453155c29370495f32f432bfece5c8. Exact final head bfc761947f8c437663df4e416fb1b189c7817397 is observed, so the synthetic merge correctly emits ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE.",
+      "impact": "Current truth cannot be called clear for the final PR #64 head until the resulting implementation merge identity is recorded and generated hot-path documents are synchronized.",
+      "requiredResolution": "After normal PR #64 merge, create and independently review the user-directed bounded three-file synchronization that records final head bfc761947f8c437663df4e416fb1b189c7817397 and resulting main merge identity."
+    },
+    {
+      "id": "FAST_CHECK_DEV_ONLY_DEPENDENCY_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "fast-check 4.9.0 and pure-rand 8.4.2 remain exact, dev-only, MIT-licensed, integrity-matched, absent from their reviewed advisory graph, and unreachable from product runtime imports."
+    },
+    {
+      "id": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "severity": "P2",
+      "status": "open-routed-pr-e",
+      "evidence": "The impact planner classifies all eleven files but does not yet route state-model, property, and concurrency jobs.",
+      "requiredResolution": "PR E must add the three focused model routes and require their results."
+    },
+    {
+      "id": "PR_C_SCOPE_WAIVER_NOT_REGISTERED_BY_CONTRACT_VALIDATOR",
+      "severity": "P2",
+      "status": "open-routed-pr-e",
+      "evidence": "The waiver is independently valid and enforced at 12 files and 1,600 lines, but canonical contract discovery does not register it.",
+      "requiredResolution": "PR E must register applicable waiver manifests and malformed-waiver regressions."
+    },
+    {
+      "id": "PR_SCOPE_GENERIC_UNCLASSIFIED_PATH_FAIL_CLOSED_DEFERRED",
+      "severity": "P2",
+      "status": "open-routed-pr-e",
+      "evidence": "All exact PR #64 paths classify correctly; generic empty-domain paths do not yet emit a blocking finding.",
+      "requiredResolution": "PR E must reject unclassified changed paths."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 4,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "currentTruthSynchronizationPending": true,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "exact-head-ota-domain-dependency-security-clear-postmerge-current-truth-sync-three-pr-e-p2-and-full-ci-pending",
+    "humanApproval": false
+  }
+}
