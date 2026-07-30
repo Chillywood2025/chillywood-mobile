@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-current-truth-after-sync-guard-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 60,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-sync-guard",
+  "implementationHead": "3f4615f3584ede3c1159b64296231bca0b7e3e09",
+  "implementationTree": "308e44aedfb0b3965c8977e9e7329053d0534ce5",
+  "baseHead": "a5e156c7921c8faef75358b95779beac1f5e08ad",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "123bc451e0ab8f2051733cafdc0da83bf34ab4bf00f1db1246c55ede9995eca6",
+  "testResults": {
+    "currentTruth": {
+      "status": "pass",
+      "mode": "exact-main",
+      "recordedMain": "a5e156c7921c8faef75358b95779beac1f5e08ad",
+      "remoteMain": "a5e156c7921c8faef75358b95779beac1f5e08ad",
+      "generatedDocumentsExact": true,
+      "findings": 0
+    },
+    "contracts": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "determinism": {
+      "status": "pass",
+      "currentTruth": {
+        "runs": "3/3",
+        "outputHash": "96acc45e84247fadfacca5af9c99794dc8f53dc8c44778be77062105d389429f"
+      },
+      "contracts": {
+        "runs": "3/3",
+        "outputHash": "e7a231d1567de0080b227784a473c4aa37cfdc0a804182a62b5583f5d31dd575"
+      }
+    },
+    "scope": {
+      "status": "pass",
+      "files": 3,
+      "additions": 24,
+      "deletions": 20,
+      "netChangedLines": 4,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "highRiskDomains": []
+    },
+    "retainedClaimComparison": {
+      "status": "pass",
+      "claimGroupsCompared": 13,
+      "unexpectedChangedClaims": [],
+      "groups": [
+        "android",
+        "ios",
+        "remoteMigrationHead",
+        "enabledCognitiveSwitches",
+        "enabledSchedules",
+        "scheduleState",
+        "effectiveBaselineCount",
+        "operationalClosures",
+        "operatingPolicy",
+        "blockedProviders",
+        "safety",
+        "liveProviderReadback",
+        "providerReadback"
+      ]
+    },
+    "implementationAncestry": {
+      "status": "pass",
+      "mergeBase": "a5e156c7921c8faef75358b95779beac1f5e08ad",
+      "implementationTree": "308e44aedfb0b3965c8977e9e7329053d0534ce5"
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "buildOrOta": false,
+      "productSourceChanged": false,
+      "migrationChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "f6d45386024e23838a4abfa5d6e0321c284c05db5bac0a7efbc62747a86eae49",
+  "reviewLevel": "A",
+  "reviewHead": "3f4615f3584ede3c1159b64296231bca0b7e3e09",
+  "reviewTimestamp": "2026-07-30T17:45:19Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "current-truth-generated-doc-consistency"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_MAIN_AND_MERGED_PR_BINDING",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The record binds merged PR #58 head b170c4ed99a9e2cc2b33b19fdf5e78b33f126157 to merge a5e156c7921c8faef75358b95779beac1f5e08ad, which is the exact base and recorded main."
+    },
+    {
+      "id": "CURRENT_TRUTH_GENERATED_DOCUMENT_DRIFT",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "CURRENT_STATE.md and NEXT_TASK.md reproduce from the machine-readable record without a working-tree delta, and current-truth output is deterministic 3/3."
+    },
+    {
+      "id": "CURRENT_TRUTH_PROVIDER_AND_BUILD_CLAIM_DRIFT",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Android, iOS, migration, switch, provider, operational-closure, and safety claim groups are unchanged from the base; the aggregate live-readback flag remains qualified by per-provider readback booleans."
+    },
+    {
+      "id": "CURRENT_TRUTH_SCOPE_AND_NON_INTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The implementation changes only the current-truth record and its two generated documents; it changes no product, migration, provider, build, OTA, or native source."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "reviewDisposition": "exact-head-review-clear",
+    "humanApproval": false
+  }
+}
