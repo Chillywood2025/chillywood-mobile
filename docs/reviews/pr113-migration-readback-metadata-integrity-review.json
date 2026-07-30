@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr113-migration-readback-metadata-integrity-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLabel": "isolated automated review lane",
+  "assignedLane": "manifest-integrity-and-reader-binding",
+  "humanApproval": false,
+  "implementationPrNumber": 113,
+  "implementationBranch": "codex/assurance-migration-readback-metadata",
+  "implementationHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+  "implementationTree": "a8c27824afa14e5f2fd684e5e02e9955637dcee1",
+  "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "baseTree": "f7193a67717c2877dad104f22fab513fac32b28c",
+  "mergeBase": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 0,
+    "implementationOnlyCommits": 1
+  },
+  "changedFileHash": "dddfbe92d08e04e9b88853d359fafc3ca0091e2cec0d21f81aea2ec08dbd3b6d",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base...implementation)",
+  "changedNameHash": "ac0775854bfafe9604f8ead0cf303cec0c94bc49b7bbeac29118cc746cd31407",
+  "implementationDiffHash": "410ccea5eadb219ecfca34e689ed5083c2cc3879e73f6e2d29373e4bf3b99fb6",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "migrationSetHashMethod": "sha256(changed migration path list); no migration path changed",
+  "configHash": "5faeff2bc3aeed2229e3701406bc6a31634a0e95172da7260dea3bd8ac687b6d",
+  "guardSourceHash": "f3f0371daeb0e97bb6ce6da8bdc84f2c3c822088ad7a6faa7fd5e7592556f091",
+  "testResultHash": "bec1aa2b63c1e7218fe04decccc66774866f296b0bda35c10de74cf86c561fa5",
+  "reviewLevel": "B",
+  "reviewHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+  "reviewHeadSemantics": "exact implementation tip immediately preceding this review-evidence-only commit",
+  "reviewTimestamp": "2026-07-30T23:44:50Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-automated-review",
+    "manifest-integrity-and-reader-binding"
+  ],
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "isolatedWorktree": true,
+      "reviewBranchParentIsExactImplementationHead": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+      "implementationTree": "a8c27824afa14e5f2fd684e5e02e9955637dcee1",
+      "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+      "baseTree": "f7193a67717c2877dad104f22fab513fac32b28c",
+      "mergeBaseMatchesBase": true,
+      "implementationParentMatchesBase": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "changedFiles": 2,
+      "additions": 1,
+      "deletions": 1,
+      "netChangedLines": 0,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "changedPaths": [
+        "config/assurance/chilly-chat-livekit-migration-readback.json",
+        "scripts/guard-chilly-chat-livekit-migration-readback.mjs"
+      ],
+      "manifestRenameSimilarityPercent": 100,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "packageFiles": 0,
+      "currentTruthFiles": 0,
+      "nativeSourceFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "manifestPreservation": {
+      "status": "pass",
+      "oldPath": "config/release/chilly-chat-livekit-migration-readback.json",
+      "newPath": "config/assurance/chilly-chat-livekit-migration-readback.json",
+      "oldPathAbsentAtImplementationHead": true,
+      "newPathPresentAtImplementationHead": true,
+      "baseByteCount": 2582,
+      "implementationByteCount": 2582,
+      "baseSha256": "5faeff2bc3aeed2229e3701406bc6a31634a0e95172da7260dea3bd8ac687b6d",
+      "implementationSha256": "5faeff2bc3aeed2229e3701406bc6a31634a0e95172da7260dea3bd8ac687b6d",
+      "byteForByteComparison": "pass",
+      "contentChanged": false
+    },
+    "readerBinding": {
+      "status": "pass",
+      "reader": "scripts/guard-chilly-chat-livekit-migration-readback.mjs",
+      "oldPathReferencesAtImplementationHead": 0,
+      "newPathReferencesAtImplementationHead": 1,
+      "otherReadersChanged": 0,
+      "readerBehaviorChangedBeyondPath": false
+    },
+    "focusedGuard": {
+      "status": "pass",
+      "command": "node scripts/guard-chilly-chat-livekit-migration-readback.mjs",
+      "output": "Chi'lly Chat linked migration readback guard passed."
+    },
+    "contracts": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "scope": {
+      "status": "pass",
+      "command": "node scripts/assurance/pr-scope.mjs --base=83800a68b426e94aaabca17b5d1f1d62a7783754 --feature=chilly-chat-call-lifecycle --objectiveDomains=CI-test-infrastructure",
+      "changedFiles": 2,
+      "netChangedLines": 0,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "highRiskDomains": [],
+      "findings": 0,
+      "waiverRequired": false
+    },
+    "deterministicOutput": {
+      "status": "pass",
+      "commands": [
+        "node scripts/guard-chilly-chat-livekit-migration-readback.mjs",
+        "node scripts/assurance/validate-contracts.mjs",
+        "node scripts/assurance/pr-scope.mjs --base=83800a68b426e94aaabca17b5d1f1d62a7783754 --feature=chilly-chat-call-lifecycle --objectiveDomains=CI-test-infrastructure"
+      ],
+      "runs": 3,
+      "identicalRuns": 3,
+      "stdoutSha256": "bec1aa2b63c1e7218fe04decccc66774866f296b0bda35c10de74cf86c561fa5"
+    },
+    "currentTruthAndPlan": {
+      "status": "pass",
+      "currentTruthMode": "offline",
+      "currentTruthFindings": 0,
+      "featureId": "chilly-chat-call-lifecycle",
+      "requirementsStatus": "REQUIREMENTS_CLEAR",
+      "architectureStatus": "ARCHITECTURE_CLEAR"
+    },
+    "hiddenImplementationAudit": {
+      "status": "pass",
+      "implementationFilesOutsideDeclaredDelta": 0,
+      "productSourceChanged": false,
+      "migrationSourceChanged": false,
+      "databaseTestChanged": false,
+      "workflowChanged": false,
+      "packageOrLockfileChanged": false,
+      "currentTruthChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryChanged": false,
+      "gitDiffCheck": "pass"
+    },
+    "privacyAndNonInterference": {
+      "status": "pass",
+      "providerContactByReviewLane": false,
+      "providerMutation": false,
+      "databaseContactByReviewLane": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "rawSecretCommitted": false,
+      "privateScreenshotCommitted": false,
+      "deviceIdentifierCommitted": false,
+      "privateLogCommitted": false,
+      "denoLockChanged": false
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "reviewedTier": "T1_SOURCE",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE",
+      "T3_INTEGRATION": "NOT_APPLICABLE",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE",
+      "forbiddenHigherTierClaimsAccepted": false
+    },
+    "remainingCoordinatorGates": {
+      "status": "pending",
+      "secondLevelBReviewLane": "pending",
+      "fullPhase1CiAtFrozenHead": "pending",
+      "runByThisReviewLane": false
+    }
+  },
+  "findings": [
+    {
+      "id": "PR113_MANIFEST_BYTES_PRESERVED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The old and new manifest blobs are byte-identical at 2,582 bytes with SHA-256 5faeff2bc3aeed2229e3701406bc6a31634a0e95172da7260dea3bd8ac687b6d."
+    },
+    {
+      "id": "PR113_SINGLE_READER_REBOUND",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The old path is absent, the new path is present, and exactly one reader now references it. The reader delta changes only that path literal."
+    },
+    {
+      "id": "PR113_SCOPE_CLASSIFICATION_CORRECTED_WITHOUT_POLICY_CHANGE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact implementation delta is classified only as CI-test-infrastructure, has no high-risk domain, and modifies no general scope policy."
+    },
+    {
+      "id": "PR113_HIDDEN_IMPLEMENTATION_ABSENT",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact delta contains no product, migration, database-test, native, package, workflow, current-truth, generated-native, provider, or private-evidence change."
+    },
+    {
+      "id": "PR113_SECOND_LEVEL_B_REVIEW_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "A second persistent isolated automated Level B review lane remains coordinator-owned before merge."
+    },
+    {
+      "id": "PR113_FROZEN_HEAD_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "The coordinator owns the single full Phase 1 CI run at the exact frozen implementation head after both Level B review lanes report P0=0 and P1=0."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 2,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "LANE_CLEAR_P0_P1_ZERO_PENDING_SECOND_REVIEW_AND_FULL_CI",
+    "humanApproval": false
+  }
+}
