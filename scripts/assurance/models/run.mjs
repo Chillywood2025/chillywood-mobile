@@ -9,13 +9,19 @@ import { runEscapedDefectChecks, runPropertyModels } from "../../../_lib/assuran
 const options = args();
 const suite = options.suite ?? "all";
 const allowedSuites = new Set(["all", "property", "concurrency", "escaped-defects"]);
-if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline")) {
+const invalidNumber = ["numRuns", "maxCommands", "seed"].find((key) => options[key] !== undefined && (!Number.isInteger(Number(options[key])) || Number(options[key]) <= 0));
+const invalidReplay = options.path && !options.domain;
+if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline") || invalidNumber || invalidReplay) {
+  const finding = !allowedSuites.has(suite)
+    ? ["ASSURANCE_MODEL_SUITE_UNKNOWN", suite]
+    : options.providerMode && options.providerMode !== "offline"
+      ? ["ASSURANCE_MODEL_PROVIDER_MODE_FORBIDDEN", options.providerMode]
+      : invalidNumber
+        ? ["ASSURANCE_MODEL_NUMERIC_OPTION_INVALID", invalidNumber]
+        : ["ASSURANCE_MODEL_REPLAY_DOMAIN_REQUIRED", options.path];
   emit("assurance:state-model", false, {
     status: "BLOCKED_INTERNAL",
-    findings: [{
-      id: !allowedSuites.has(suite) ? "ASSURANCE_MODEL_SUITE_UNKNOWN" : "ASSURANCE_MODEL_PROVIDER_MODE_FORBIDDEN",
-      detail: !allowedSuites.has(suite) ? suite : options.providerMode
-    }]
+    findings: [{ id: finding[0], detail: finding[1] }]
   });
 } else {
   const domains = options.domain ? [options.domain] : undefined;
