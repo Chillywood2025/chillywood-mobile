@@ -10,7 +10,7 @@
   "baseHead": "84c9ffdcea7de1b73163c60348267875f5d99ed3",
   "changedFileHash": "645dc10383c3100ba2a3838b0aef4e5671882962af5fa6178dbb9d46813299f3",
   "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "configHash": "097433492819dbb857f185cd887583828384c1db5e5c4a07a49d6d644b73f79b",
+  "configHash": "82f8286aa0a6d97af19741ef75564f65559f79135f97aff33701f7be3db402f8",
   "testResults": {
     "focusedFeatureBundleTests": {
       "status": "pass",
@@ -74,7 +74,7 @@
   },
   "testResultHash": "1b5347780ce0aa05afc0114900607491648d32030ade5306e3fec8b93d34ae2c",
   "reviewLevel": "B",
-  "reviewHead": "e730960a19d976db153e63f91e1f33bb14e29fcf",
+  "reviewHead": "f446e96a8ccbd1ad25e87cbc300773c44494f61b",
   "reviewTimestamp": "2026-07-30T18:00:43Z",
   "reviewerLanes": [
     "architecture",
