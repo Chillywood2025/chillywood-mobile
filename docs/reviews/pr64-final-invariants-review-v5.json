@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-final-invariants-review-v5",
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+  "implementationTree": "4afaa24b1da6355162503b222c59962edea60875",
+  "implementationParents": [
+    "bfc761947f8c437663df4e416fb1b189c7817397",
+    "ac5575baf823b9189316b02ec5fa5e352d15b457"
+  ],
+  "baseHead": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+  "baseTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+  "changedFileHash": "904790aa515ea1edd95ceae0ea0abd7b40ca49ba6de26de1592186b8fb688408",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "d751c0e7d6057db7d6db6d9f94b3355cb059c8adc25ca08e796703f791b1fbe5",
+  "implementationDiffHash": "89cdae044d9ddacd015896777b341a1d33f9926047209fb4c7b5d4cfb443513a",
+  "reviewBranch": "codex/first-pass-assurance-models-review-final-invariants",
+  "reviewHead": "d2d31dfefcbf3ae95d93b76972489cb44548ed0a",
+  "reviewTree": "4122cbcc64157216c62334f71253604c36a86290",
+  "reviewTopology": {
+    "kind": "normal-merge-persistent-review-lane",
+    "firstParent": "bef2e05676d9e054d39fbbd6e901be40b78747e6",
+    "secondParent": "46ab717c1a463d435b64bb044bc63f590fa52913",
+    "secondParentIsExactImplementationHead": true,
+    "implementationContainsExactMainAsSecondParent": true,
+    "implementationMergeBaseWithMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+    "implementationFilesAddedByReviewLane": 0
+  },
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state-model-invariants-final-v5",
+  "reviewLevel": "C",
+  "reviewTimestamp": "2026-07-30T22:18:28Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "final-model-invariants"
+  ],
+  "humanApproval": false,
+  "summary": {
+    "P0": {
+      "open": 0
+    },
+    "P1": {
+      "open": 0
+    },
+    "P2": {
+      "open": 4,
+      "blockingBeforeMerge": 1
+    },
+    "P3": {
+      "open": 0
+    },
+    "implementationFilesOnReviewBranch": 0,
+    "declaredModelAssertions": "MODEL_CLEAR",
+    "independentInvariantDisposition": "MODEL_CLEAR",
+    "reviewDisposition": "lane-clear-p0-p1-zero-await-coordinator-full-ci",
+    "proofTierReviewed": "T2_MODEL",
+    "proofSubstitutionAccepted": false,
+    "currentTruthFilesPreserved": true,
+    "currentTruthBindsExactImplementationHead": false,
+    "currentTruthSynchronization": "USER_DIRECTED_POST_MERGE_PENDING",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "fullCiPendingCoordinator": true,
+    "humanApproval": false
+  },
+  "findings": [
+    {
+      "id": "PR64_INVARIANT_DETECTOR_HISTORICAL_COVERAGE_REMAINS_PARTIAL",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs",
+        "_lib/assurance/state-models/properties.mjs"
+      ],
+      "evidence": "All 22 present fixtures detect their historical variant and pass the fixed model. Several explicit detector branches still have no targeted historical/fixed fixture, including LiveKit duplicate room/track, fixture-as-real pass, terminal cleanup, and migration deployed-body rewrite, RLS/FORCE RLS loss, and broad grant.",
+      "impact": "The current T2 properties and witnesses pass, but removal or inversion of the named detector branches would not necessarily fail this fixture corpus before PR E mutation enforcement exists.",
+      "requiredResolution": "Add minimized historical variants and fixed-model regressions for the named detector branches, or bind equivalent killed mutants when PR E introduces critical mutation enforcement.",
+      "blocksMerge": false
+    },
+    {
+      "id": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "severity": "P2",
+      "status": "BLOCKED_INTERNAL",
+      "owner": "PR E",
+      "evidence": "The exact runner reports this deferral while Lane C directly executes model, property, concurrency, and escaped-defect gates.",
+      "requiredResolution": "PR E adds model/property/concurrency job selection to the impact planner and final required-job matrix.",
+      "blocksMerge": false
+    },
+    {
+      "id": "PR64_FINAL_FROZEN_HEAD_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "owner": "coordinator",
+      "evidence": "This isolated review lane ran focused T2 and adversarial checks only. It did not acquire the serialized full-CI lock or start full Phase 1 CI.",
+      "requiredResolution": "After all four exact-head reviews bind 46ab717c1a463d435b64bb044bc63f590fa52913, the coordinator runs the one required frozen-head full Phase 1 CI execution.",
+      "blocksMerge": true
+    },
+    {
+      "id": "PR64_FINAL_HEAD_POST_MERGE_CURRENT_TRUTH_SYNC_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "owner": "coordinator",
+      "evidence": "The implementation preserves the three current-truth blobs from current main byte-for-byte. That record still binds PR #64 to predecessor head 8829ca3d59453155c29370495f32f432bfece5c8 rather than reviewed head 46ab717c1a463d435b64bb044bc63f590fa52913.",
+      "requiredResolution": "After PR #64 merges and the single post-merge main CI completes, synchronize the machine-readable record and generated hot-path documents to the actual merge/main identity and final disposition.",
+      "blocksMerge": false
+    }
+  ],
+  "closedFindings": [
+    {
+      "id": "PR64_CHAT_ACCEPTANCE_NOT_CAUSALLY_BOUND_TO_NATIVE_ACTION",
+      "priorSeverity": "P1",
+      "status": "closed",
+      "implementation": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "evidence": "An unconsumed and an expired native action both leave the invite ringing. A consumed, unexpired action for the current immutable generation accepts with authority native_action and the exact action identity. Foreground acceptance remains a distinct in_app authority with no native action."
+    },
+    {
+      "id": "PR64_PUSHKIT_MUST_REPORT_OBLIGATION_CAN_REACH_ACCEPTED",
+      "priorSeverity": "P1",
+      "status": "closed",
+      "implementation": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "evidence": "Missing CallKit report or missing completion leaves server acceptance ringing. Report plus completion permits the positive native Answer witness; terminal timeout is likewise blocked until both obligations are satisfied."
+    },
+    {
+      "id": "PR64_OTA_REQUIRED_IDENTITY_OR_NEW_SOURCE_WITNESS_INCOMPLETE",
+      "priorSeverity": "P1",
+      "status": "closed",
+      "implementation": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "evidence": "A compatible source-b update binds to the source-a build and activates. Independent omission probes reject all 9 required build identities and all 10 required update identities, for 19 fail-closed activation checks."
+    }
+  ],
+  "testResults": {
+    "phase1Ci": {
+      "status": "pending_coordinator_run",
+      "implementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "eligibleAsThisLaneProof": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "implementationTree": "4afaa24b1da6355162503b222c59962edea60875",
+      "implementationParents": [
+        "bfc761947f8c437663df4e416fb1b189c7817397",
+        "ac5575baf823b9189316b02ec5fa5e352d15b457"
+      ],
+      "reviewMergeHead": "d2d31dfefcbf3ae95d93b76972489cb44548ed0a",
+      "reviewMergeTree": "4122cbcc64157216c62334f71253604c36a86290",
+      "reviewMergeParents": [
+        "bef2e05676d9e054d39fbbd6e901be40b78747e6",
+        "46ab717c1a463d435b64bb044bc63f590fa52913"
+      ],
+      "implementationMergeBaseWithMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "implementationMainDivergence": {
+        "mainOnlyCommits": 0,
+        "implementationOnlyCommits": 14
+      }
+    },
+    "preservedEvidence": {
+      "status": "pass",
+      "modelTestPackageBlobsEqualFirstParent": 11,
+      "currentTruthBlobsEqualMain": 3,
+      "priorReviewSha256": {
+        "v1": "58e9e9d5d768dd451fcfd63e78dba18ce255ccfcd16d14faf7728951e216afee",
+        "v2": "ab5492a369d20f676e1218759de3f1f6b7d9aa928eaa3637670e21375326acd5",
+        "v3": "da81466875c48199c1fd6da6284343f4c06f5f8cbb980e743b21e214f39665cc",
+        "v4": "82892bf5c0c62dd758b5938edff71c359995da2e587a1fca3d2b356ceb78fff7"
+      },
+      "priorReviewsModified": false
+    },
+    "implementationScope": {
+      "status": "pass",
+      "base": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "waiver": "config/assurance/pr-c-model-integrity-scope-waiver-v1.json",
+      "changedFiles": 11,
+      "insertions": 1511,
+      "deletions": 1,
+      "netChangedLines": 1510,
+      "budgetFiles": 12,
+      "budgetNetLines": 1600,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "migrationFiles": 0,
+      "productImplementationFiles": 0,
+      "generatedNativePaths": 0,
+      "currentTruthFilesChanged": 0,
+      "gitDiffCheck": "pass"
+    },
+    "independentInvariantProbe": {
+      "status": "pass",
+      "execution": "disposable detached worktree at exact implementation head with fast-check 4.9.0 installed outside the repository",
+      "chatNativeAction": {
+        "unconsumedStatus": "ringing",
+        "expiredStatus": "ringing",
+        "positiveStatus": "accepted",
+        "positiveAuthority": "native_action",
+        "positiveAction": "action-1-1",
+        "positiveViolations": []
+      },
+      "chatForeground": {
+        "status": "accepted",
+        "authority": "in_app",
+        "nativeAcceptanceAction": null,
+        "violations": []
+      },
+      "pushKitObligations": {
+        "mustReportWithoutReport": "ringing",
+        "reportWithoutCompletion": "ringing",
+        "reportAndCompletionThenAnswer": "accepted",
+        "terminalWithoutObligations": "ringing",
+        "terminalAfterReportAndCompletion": "timed_out",
+        "positiveViolations": [],
+        "terminalViolations": []
+      },
+      "otaIdentityAndNewSource": {
+        "buildSource": "source-a",
+        "updateSource": "source-b",
+        "targetBuildId": "build-a",
+        "activatedUpdateId": "update-b",
+        "requiredBuildIdentityOmissionsRejected": 9,
+        "requiredUpdateIdentityOmissionsRejected": 10,
+        "totalIdentityOmissionsRejected": 19,
+        "violations": []
+      },
+      "properties": {
+        "status": "MODEL_CLEAR",
+        "domains": 6,
+        "cases": 1200,
+        "maxCommandsPerCase": 24,
+        "transitionWitnesses": 8,
+        "allWitnessesReached": true,
+        "witnessViolations": 0
+      }
+    },
+    "contracts": {
+      "status": "pass",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25
+    },
+    "currentTruth": {
+      "status": "SUPERSEDED_PENDING_POST_MERGE_SYNC",
+      "filesPreservedByImplementation": true,
+      "authoritativeMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "recordedMain": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+      "recordedPr64Head": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "reviewedPr64Head": "46ab717c1a463d435b64bb044bc63f590fa52913",
+      "guardFinding": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE",
+      "exactHeadBindingClaimed": false,
+      "liveProviderReadback": false,
+      "userDirectedSynchronizationPoint": "after PR #64 merge and the single post-merge main CI run"
+    },
+    "proofBoundary": {
+      "reviewedTier": "T2_MODEL",
+      "declaredRunnerStatus": "MODEL_CLEAR",
+      "independentReviewedStatus": "MODEL_CLEAR",
+      "proofSubstitutionsRejected": [
+        "JavaScript model != generated Kotlin/Swift behavior",
+        "source text present != runtime execution",
+        "generated native source != compiled native binary",
+        "APNs HTTP 200 != PushKit delivery",
+        "PushKit delivery != CallKit presentation",
+        "CallKit presentation != physical Answer/Decline",
+        "runtime match != native capability match",
+        "Android proof != iOS proof",
+        "shared evidence != platform evidence"
+      ],
+      "forbiddenClaims": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "higherTierBlockerPreserved": {
+        "featureId": "pushkit-callkit",
+        "tier": "T6_INSTALLED_PHYSICAL",
+        "status": "BLOCKED_EXTERNAL",
+        "detail": "Physical PushKit delivery remains outside Lane C; APNs acceptance is not delivery, CallKit presentation, or Answer/Decline proof."
+      }
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "productImplementationChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "currentTruthChangedByReview": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "f92b106d693e3adcb1a4b864761a18534edf6c4391988fb29d0dc25c5da532f2",
+  "exactCommands": [
+    "git fetch origin (once)",
+    "git merge --no-ff 46ab717c1a463d435b64bb044bc63f590fa52913",
+    "git rev-parse HEAD HEAD^{tree} HEAD^1 HEAD^2",
+    "git merge-base 46ab717c1a463d435b64bb044bc63f590fa52913 origin/main",
+    "git rev-list --left-right --count origin/main...46ab717c1a463d435b64bb044bc63f590fa52913",
+    "git blob equality checks for 11 model/test/package paths against bfc761947f8c437663df4e416fb1b189c7817397",
+    "git blob equality checks for CURRENT_STATE.md, NEXT_TASK.md, and config/assurance/current-truth-v1.json against ac5575baf823b9189316b02ec5fa5e352d15b457",
+    "node scripts/assurance/pr-scope.mjs --base=ac5575baf823b9189316b02ec5fa5e352d15b457 --waiver=config/assurance/pr-c-model-integrity-scope-waiver-v1.json --json",
+    "independent exact-head Node probes for native acceptance authority, expired and positive native witnesses, foreground authority, PushKit report/completion obligations and terminal witnesses, OTA newer-source binding, 19 required-identity omissions, and all six property domains",
+    "node scripts/assurance/validate-contracts.mjs --json",
+    "node scripts/assurance/current-truth.mjs --now=2026-07-30T22:30:00Z --json",
+    "git diff --check ac5575baf823b9189316b02ec5fa5e352d15b457..46ab717c1a463d435b64bb044bc63f590fa52913"
+  ],
+  "finalPermittedNextAction": "Coordinator validates the four exact-head review manifests for 46ab717c1a463d435b64bb044bc63f590fa52913 and runs the single frozen-head full Phase 1 CI. If the aggregate review and CI remain P0/P1 clear, merge PR #64, run post-merge main CI once, then perform the explicitly deferred current-truth synchronization. This review does not authorize T3-T7 claims or any provider, build, OTA, database, or release mutation."
+}
