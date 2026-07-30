@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-final-concurrency-review-v4",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewPrNumber": 100,
+  "assignedLane": "concurrency-property-replay-final-v4",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+  "implementationTree": "8264dc96759913dedda4e7a7b057b5ff068bd2cd",
+  "reviewMergeHead": "900f69ce9cac7a5e40a7cf276ab439b9fb03b3dc",
+  "reviewMergeTree": "9ae27f0dcbeff36c635a60506d8952d8f06d3da0",
+  "reviewMergeParents": [
+    "7e2c9daef883ccf64cb3b200b7e601998a2acf1f",
+    "bfc761947f8c437663df4e416fb1b189c7817397"
+  ],
+  "baseHead": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+  "baseTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+  "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 4,
+    "implementationOnlyCommits": 13
+  },
+  "changedFileHash": "51140b352a6c72653277135677128b883eaa222ca8a6c14efc6261f2b6ba0c5f",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames current-main...implementation)",
+  "changedNameHash": "2c617761c696bf69ffb6a66281119e723f5c8b9d680800753d0fb4f87b04bda1",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "d5884c6ee1a448cfe121128f104ed9524b75c9f15c48a5844d574f11ad62313f",
+  "implementationDiffHash": "89cdae044d9ddacd015896777b341a1d33f9926047209fb4c7b5d4cfb443513a",
+  "modelSourceSetHash": "656765fdf75f2fda334068066629edcdf56c70f557d6eefb797fcdeb8a036569",
+  "reviewMergeDeltaHash": "014b5969bacbfdb9aa74939a3d9662888aa044e7e2f33847a5c2f7776ea4f558",
+  "reviewMergeDeltaNameHash": "cadea2590fb4584eabdeabdd5983fcbd9afc4fd583d49ced28d09e9137fc0a41",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "concurrency-property-replay-final-v4",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "reviewMergeIntegrity": {
+      "status": "pass",
+      "reviewMergeHead": "900f69ce9cac7a5e40a7cf276ab439b9fb03b3dc",
+      "reviewMergeTree": "9ae27f0dcbeff36c635a60506d8952d8f06d3da0",
+      "firstParent": "7e2c9daef883ccf64cb3b200b7e601998a2acf1f",
+      "secondParentExactImplementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "exactImplementationTree": "8264dc96759913dedda4e7a7b057b5ff068bd2cd",
+      "nonReviewSourceEquivalentToImplementation": true,
+      "implementationFilesOnReviewBranch": 0,
+      "reviewFilesBeforeV4": [
+        "docs/reviews/pr64-final-concurrency-review.json",
+        "docs/reviews/pr64-final-concurrency-review-v2.json",
+        "docs/reviews/pr64-final-concurrency-review-v3.json"
+      ]
+    },
+    "priorEvidencePreservation": {
+      "status": "pass",
+      "v1": {
+        "path": "docs/reviews/pr64-final-concurrency-review.json",
+        "sha256BeforeV4": "a457581d5389e49b4c3951acaf0d352c9252cffd9e077b7eb8ad8043f0a12f2c",
+        "editedByV4Lane": false
+      },
+      "v2": {
+        "path": "docs/reviews/pr64-final-concurrency-review-v2.json",
+        "sha256BeforeV4": "f6dbd8a06425c08c3c175edc5b55486cca1bdbd1f5dc87b79fda46fc5c0bc957",
+        "editedByV4Lane": false
+      },
+      "v3": {
+        "path": "docs/reviews/pr64-final-concurrency-review-v3.json",
+        "sha256BeforeV4": "b0bd2030773c81b8e347408124329d910bbda3032af75eb7cdb498558a5dcc83",
+        "editedByV4Lane": false
+      }
+    },
+    "finalRepairDelta": {
+      "status": "pass",
+      "parentHead": "88161959ddf4ccf5d4d560e940fca9c9007ab10c",
+      "implementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "files": 2,
+      "additions": 21,
+      "deletions": 2,
+      "diffHash": "58675849b9ab822b7ed51d7362772be0172de0b7b38cbe93b0ab829d6691f1c9",
+      "filesChanged": [
+        "_lib/assurance/state-models/models.mjs",
+        "tests/assurance/models/escaped-defects.test.mjs"
+      ],
+      "buildCoreFieldsRequired": true,
+      "updateCoreFieldsRequired": true,
+      "undefinedCannotCompareAsCompatible": true,
+      "newSourcePositivePreserved": true
+    },
+    "currentTruthControlPlane": {
+      "status": "pending_coordinator_final_head_sync",
+      "currentMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "recordedImplementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "reviewedImplementationHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "recordTimeFresh": true,
+      "implementationHeadBindingFresh": false,
+      "blocksMergeUntilCoordinatorSync": true,
+      "reviewLaneModifiedCurrentTruth": false
+    },
+    "exactDelta": {
+      "status": "pass_under_machine_readable_waiver",
+      "scopeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+      "files": 11,
+      "additions": 1511,
+      "deletions": 1,
+      "netChangedLines": 1510,
+      "waivedFileBudget": 12,
+      "waivedLineBudget": 1600,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "migrationFiles": 0,
+      "productImplementationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "dependencyExecution": {
+      "status": "pass",
+      "reviewWorktreeInstallPerformed": false,
+      "packageOrLockfileChangedByReview": false,
+      "sourceUnderTest": "PR #100 worktree with all non-review source exactly equivalent to implementation tree",
+      "dependencySource": "clean frozen implementation worktree at the exact implementation head",
+      "dependencySourceHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+      "fastCheck": "4.9.0",
+      "pureRand": "8.4.2",
+      "resolutionMechanism": "process-local ESM loader mapping for the pinned fast-check package"
+    },
+    "focusedModelTests": {
+      "status": "pass",
+      "command": "node --test tests/assurance/concurrency/interleavings.test.mjs tests/assurance/property/state-models.test.mjs tests/assurance/models/escaped-defects.test.mjs",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyDomains": 6,
+      "propertyCases": 1200,
+      "maxCommands": 24,
+      "transitionWitnesses": 8,
+      "positiveTransitionWitnesses": 7,
+      "negativeTransitionWitnesses": 1,
+      "escapedDefectFixtures": 22,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20
+    },
+    "propertyAntiVacuity": {
+      "status": "pass",
+      "propertyCases": 1200,
+      "runsPerDomain": 200,
+      "domains": 6,
+      "transitionWitnesses": 8,
+      "allDomainsHaveWitnesses": true,
+      "allWitnessesReached": true,
+      "allWitnessesViolationFree": true,
+      "otaWitnessUsesNewSource": "source-b",
+      "propertyResultHash": "db9a887430a0b2debe9d9aa87487c20dbce369b36bfa6b45c6c4bd19ac441999",
+      "witnessHash": "b54f4f91b478c57b211f5c64298a467429112464a3d678f23379a3c83573b11d",
+      "seeds": {
+        "chat-call": 173501,
+        "revenuecat": 173502,
+        "ota-build": 173503,
+        "notification-native-action": 173504,
+        "livekit": 173505,
+        "migrations": 173506
+      }
+    },
+    "requiredInterleavings": {
+      "status": "pass",
+      "scenarioCount": 10,
+      "scheduleCount": 20,
+      "exactScheduleContracts": 8,
+      "exactContractFinalStatesMatched": 8,
+      "allSchedulesModelClear": true,
+      "mechanisms": [
+        "controlled barriers",
+        "promises",
+        "transaction lock",
+        "explicit schedules"
+      ],
+      "concurrencyResultHash": "515eb4df191eff6b15f0e90bd906b7947402239017d6b3c1b20a0df7fe18c2e0",
+      "scenarioResultHash": "ed934ff36d550f19e68f86a6e4a0c132ee99bd2214ff65b8c3885a221ba8b0b7",
+      "exactContractHash": "b5560864844fb0d84947a9e31e65a7d7fd2222d167d442562b34f04e7341c704",
+      "deletionAndGuardMutationProbes": {
+        "count": 8,
+        "killed": 8,
+        "survived": 0,
+        "scorePercent": 100,
+        "hash": "f5c935bf0e73a5aca2600dc003c1d626cd4eba973bd60f9ced34729d3f680e9c"
+      }
+    },
+    "escapedDefectRegression": {
+      "status": "pass",
+      "fixtureCount": 22,
+      "canonicalFixtureCount": 17,
+      "supplementalFixtureCount": 5,
+      "allHistoricalVariantsDetected": true,
+      "allCurrentVariantsClear": true,
+      "resultHash": "0c06962ea58fe93ca8884c21eff6d4b1f60fdb9cc1e3dd65754ae64748c0b9cf"
+    },
+    "replayFilterAndPrivacy": {
+      "status": "pass",
+      "resultHash": "91a4df97252c3f4e0b97068c8ce11daaec8bb3759a8858db87c7a2ba79e53547",
+      "documentedCasesPassed": 7,
+      "emptyAndBareCasesRejected": 6,
+      "unknownIdentifierShapesRejected": 3,
+      "unknownRawIdentityAbsent": true,
+      "unknownReplayFilesAbsent": true,
+      "persistedFailureRedacted": true,
+      "persistedFailureMode": "0600",
+      "existingFileNoClobber": true,
+      "unknownDomainFinding": "ASSURANCE_MODEL_DOMAIN_UNKNOWN",
+      "unknownDomainFindingDetail": "domain"
+    },
+    "idempotencyAndGeneration": {
+      "status": "pass",
+      "cases": 8,
+      "passed": 8,
+      "resultHash": "53ac0f9539d5efec58e32c26c7cf1c14b49d1597dea29b0ce843def253566b1e",
+      "checks": [
+        "chat native action consumes once",
+        "chat terminal history records once",
+        "stale generation cannot clear newer room",
+        "terminal membership remains ended",
+        "notification action consumes and accepts once",
+        "RevenueCat duplicate is idempotent",
+        "purchase then equal-time refund is refunded",
+        "equal-time refund then purchase remains refunded"
+      ]
+    },
+    "otaIdentityCompatibilityAndRollback": {
+      "status": "pass",
+      "resultHash": "0046c20d6b199285888061b514f952ececca465787009d2ec5aca07d715c0feb",
+      "compatibleNewSource": {
+        "buildSourceCommit": "source-a",
+        "updateSourceCommit": "source-b",
+        "accepted": true
+      },
+      "existingIdentityAndCompatibilityNegatives": 13,
+      "coreFields": [
+        "platform",
+        "environment",
+        "runtime",
+        "channel",
+        "nativeDigest"
+      ],
+      "deletionScopes": [
+        "build",
+        "update",
+        "both"
+      ],
+      "activationDeletionCases": 15,
+      "rollbackDeletionCases": 15,
+      "allMissingCoreCasesRejected": true,
+      "allRejectedStatesViolationFree": true,
+      "wrongRollbackIdentityRejected": true,
+      "exactRollbackIdentityAccepted": true
+    },
+    "deterministicOutputs": {
+      "status": "pass",
+      "runsPerSuite": 3,
+      "outputsIdenticalWithinEachSuite": true,
+      "allSuiteSha256": "c11a12dd7641a8c544fee3d90ffcdde00b25a9010f7bd6d45feb927ddb460169",
+      "propertySha256": "6347a567a8e03b3ca8041a58941defb7b9f415e04c653189f7fe7210c0ed5e50",
+      "concurrencySha256": "2a24c626fa157c322dcf1049b60be48343b40db8674f7abaef21ff09257ba3a4",
+      "escapedDefectSha256": "3eaa185b9729dd55da59da451a1cc9192eafdf662f9836675ee386e7e1a06554"
+    },
+    "staticChecks": {
+      "status": "pass",
+      "nodeSyntaxFiles": 7,
+      "gitDiffCheck": "pass",
+      "reviewMergePrivacyScan": "pass",
+      "v1Sha256Rechecked": "a457581d5389e49b4c3951acaf0d352c9252cffd9e077b7eb8ad8043f0a12f2c",
+      "v2Sha256Rechecked": "f6dbd8a06425c08c3c175edc5b55486cca1bdbd1f5dc87b79fda46fc5c0bc957",
+      "v3Sha256Rechecked": "b0bd2030773c81b8e347408124329d910bbda3032af75eb7cdb498558a5dcc83"
+    },
+    "proofBoundaries": {
+      "status": "pass",
+      "provedTier": "T2_MODEL",
+      "forbiddenClaimsPreserved": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "proofSubstitutionAccepted": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_exact_head_run",
+      "runByThisReviewLane": false,
+      "resumptionAction": "After all four exact-head v4 review lanes freeze and current truth is synchronized, run the single full Phase 1 CI execution for bfc761947f8c437663df4e416fb1b189c7817397."
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeOrDeviceTest": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "productImplementationChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "priorReviewEvidenceChangedByV4": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "07d6882685f46e3289c80d4d8c915245de5910e5015e144d51d6bdde30dacc70",
+  "reviewLevel": "C",
+  "reviewHead": "bfc761947f8c437663df4e416fb1b189c7817397",
+  "reviewHeadSemantics": "exact implementation second parent of the normal review merge; v4 evidence commit immediately follows that merge",
+  "reviewTimestamp": "2026-07-30T21:54:45Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "concurrency-property-replay-final-v4"
+  ],
+  "findings": [],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "independentT2Disposition": "MODEL_CLEAR",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "currentTruthFinalHeadSyncPending": true,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "lane-clear-await-current-truth-sync-other-reviews-and-coordinator-full-ci",
+    "humanApproval": false
+  }
+}
