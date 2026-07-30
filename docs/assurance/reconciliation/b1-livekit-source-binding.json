@@ -69,10 +69,28 @@
     "publicCanaryProofClaimed": false,
     "sourceSubstitutionAccepted": false
   },
+  "validation": {
+    "focusedPgTap": {
+      "cliVersion": "2.109.1",
+      "target": "already-running local stack",
+      "file": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+      "attempts": 1,
+      "status": "BLOCKED_INTERNAL",
+      "plannedTests": 23,
+      "executedTests": 1,
+      "exitCode": 1,
+      "failureClass": "LOCAL_STACK_BEHIND_SOURCE",
+      "detail": "The local stack does not contain cognitive_livekit_sandbox_premium_proof_v1, so the focused contract cannot execute without materializing the reconciled migration.",
+      "resetPerformed": false,
+      "remoteConnectionUsed": false,
+      "retryPerformed": false,
+      "resumptionAction": "On a separately authorized local stack already materialized through migration 20260730142519, run this focused pgTAP file once."
+    }
+  },
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
-    "Focused pgTAP remains pending the coordinator database-test lock.",
+    "Focused pgTAP is blocked because the already-running local stack is behind migration 20260730142519; no reset or retry was authorized.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {
