@@ -369,15 +369,16 @@ const revenueCat = {
 };
 
 const hasIdentity = (value) => typeof value === "string" && value.length > 0;
+const otaCoreFields = ["platform", "environment", "runtime", "channel", "nativeDigest"];
 const validBuild = (build) => Boolean(
   build
   && build.embeddedSafe
-  && [build.buildId, build.packageId, build.signedArtifactId, build.sourceCommit].every(hasIdentity)
+  && [build.buildId, build.packageId, build.signedArtifactId, build.sourceCommit, ...otaCoreFields.map((field) => build[field])].every(hasIdentity)
   && Array.isArray(build.providedCapabilities)
 );
 const validUpdate = (update) => Boolean(
   update
-  && [update.targetBuildId, update.packageId, update.updateId, update.group, update.sourceCommit].every(hasIdentity)
+  && [update.targetBuildId, update.packageId, update.updateId, update.group, update.sourceCommit, ...otaCoreFields.map((field) => update[field])].every(hasIdentity)
   && Array.isArray(update.requiredCapabilities)
 );
 const compatible = (build, update) => Boolean(
