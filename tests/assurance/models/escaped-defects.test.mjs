@@ -70,8 +70,19 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
   const concurrencyDomain = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency", "--domain=chat-call"], { encoding: "utf8" });
   const seedWithoutDomain = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=property", "--seed=173501"], { encoding: "utf8" });
   const seedWithConcurrency = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency", "--domain=chat-call", "--seed=173501"], { encoding: "utf8" });
+  const invalidIdentityOptions = [
+    ["domain", ["--suite=property", "--domain="]],
+    ["domain", ["--suite=property", "--domain"]],
+    ["seed", ["--suite=property", "--domain=chat-call", "--seed="]],
+    ["seed", ["--suite=property", "--domain=chat-call", "--seed"]],
+    ["path", ["--suite=property", "--domain=chat-call", "--path="]],
+    ["path", ["--suite=property", "--domain=chat-call", "--path"]]
+  ].map(([key, arguments_]) => [key, spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", ...arguments_], { encoding: "utf8" })]);
   const deferredRouting = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency"], { encoding: "utf8" });
   const clobber = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=missing", `--replay-output=${output}`], { encoding: "utf8" });
+  const syntheticSecret = ["g", "h", "p", "_"].join("") + ["synthetic", "review", "marker", "0001"].join("");
+  const privateOutput = path.join(directory, "redacted-replay.json");
+  const redactedReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", `--domain=${syntheticSecret}`, `--replay-output=${privateOutput}`], { encoding: "utf8" });
   assert.deepEqual([malformed.status, JSON.parse(malformed.stdout).findings[0].id], [1, "ASSURANCE_MODEL_REPLAY_PATH_INVALID"]);
   assert.equal(JSON.parse(malformed.stdout).requestIdentity.path, "bad:path");
   assert.deepEqual([emptyReplay.status, JSON.parse(emptyReplay.stdout).property.status], [1, "BLOCKED_INTERNAL"]);
@@ -80,7 +91,23 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
   assert.deepEqual([concurrencyDomain.status, JSON.parse(concurrencyDomain.stdout).findings[0].id], [1, "ASSURANCE_MODEL_DOMAIN_SUITE_UNSUPPORTED"]);
   assert.deepEqual([seedWithoutDomain.status, JSON.parse(seedWithoutDomain.stdout).findings[0].id], [1, "ASSURANCE_MODEL_SEED_DOMAIN_REQUIRED"]);
   assert.deepEqual([seedWithConcurrency.status, JSON.parse(seedWithConcurrency.stdout).findings[0].id], [1, "ASSURANCE_MODEL_SEED_SUITE_UNSUPPORTED"]);
+  for (const [key, result] of invalidIdentityOptions) {
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual([result.status, parsed.findings[0].id, parsed.findings[0].detail], [1, "ASSURANCE_MODEL_OPTION_VALUE_INVALID", key]);
+  }
   assert.deepEqual([deferredRouting.status, JSON.parse(deferredRouting.stdout).deferredFindings[0].id], [0, "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E"]);
   assert.deepEqual([clobber.status, JSON.parse(clobber.stdout).replayPersistence.finding, fs.readFileSync(output, "utf8")], [1, "ASSURANCE_MODEL_REPLAY_OUTPUT_EXISTS", "preserve"]);
+  const privateStdout = redactedReplay.stdout;
+  const privateReplay = fs.readFileSync(privateOutput, "utf8");
+  assert.equal(redactedReplay.status, 1);
+  assert.equal(privateStdout.includes(syntheticSecret), false);
+  assert.equal(privateReplay.includes(syntheticSecret), false);
+  assert.equal(privateStdout.includes("[REDACTED]"), true);
+  assert.equal(privateReplay.includes("[REDACTED]"), true);
+  assert.equal(JSON.parse(privateStdout).requestIdentity.domain, "[REDACTED]");
+  assert.equal(JSON.parse(privateReplay).requestIdentity.domain, "[REDACTED]");
+  assert.equal(JSON.parse(privateStdout).property.results[0].finding, "UNKNOWN_MODEL_DOMAIN:[REDACTED]");
+  assert.equal(JSON.parse(privateReplay).property.results[0].finding, "UNKNOWN_MODEL_DOMAIN:[REDACTED]");
+  assert.equal(fs.statSync(privateOutput).mode & 0o777, 0o600);
   fs.rmSync(directory, { recursive: true });
 });

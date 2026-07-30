@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { args, emit, stableJson } from "../lib.mjs";
+import { args, emit, redact, stableJson } from "../lib.mjs";
 import { runDeterministicInterleavings } from "../../../_lib/assurance/state-models/concurrency.mjs";
 import { higherTierBlockers } from "../../../_lib/assurance/state-models/models.mjs";
 import { runEscapedDefectChecks, runPropertyModels } from "../../../_lib/assurance/state-models/properties.mjs";
@@ -11,7 +11,7 @@ const suite = options.suite ?? "all";
 const allowedSuites = new Set(["all", "property", "concurrency", "escaped-defects"]);
 const propertySuites = new Set(["all", "property"]);
 const safeIdentity = (value) => {
-  const text = value === undefined ? null : String(value);
+  const text = typeof value === "string" ? value : null;
   return text && text.length <= 128 && /^[A-Za-z0-9_.:-]+$/u.test(text) ? text : null;
 };
 const requestIdentity = {
@@ -20,6 +20,7 @@ const requestIdentity = {
   seed: safeIdentity(options.seed),
   path: safeIdentity(options.path)
 };
+const invalidIdentityOption = ["domain", "seed", "path"].find((key) => options[key] !== undefined && (typeof options[key] !== "string" || options[key].length === 0));
 const invalidNumber = ["numRuns", "maxCommands", "seed"].find((key) => options[key] !== undefined && (!Number.isInteger(Number(options[key])) || Number(options[key]) <= 0));
 const replayFinding = options.path && !options.domain
   ? ["ASSURANCE_MODEL_REPLAY_DOMAIN_REQUIRED", options.path]
@@ -36,14 +37,16 @@ const seedFinding = options.seed && !options.domain
 const domainFinding = options.domain && !propertySuites.has(suite)
   ? ["ASSURANCE_MODEL_DOMAIN_SUITE_UNSUPPORTED", suite]
   : null;
-if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline") || invalidNumber || replayFinding || seedFinding || domainFinding) {
+if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline") || invalidIdentityOption || invalidNumber || replayFinding || seedFinding || domainFinding) {
   const finding = !allowedSuites.has(suite)
     ? ["ASSURANCE_MODEL_SUITE_UNKNOWN", suite]
     : options.providerMode && options.providerMode !== "offline"
       ? ["ASSURANCE_MODEL_PROVIDER_MODE_FORBIDDEN", options.providerMode]
-      : invalidNumber
-        ? ["ASSURANCE_MODEL_NUMERIC_OPTION_INVALID", invalidNumber]
-        : replayFinding ?? seedFinding ?? domainFinding;
+      : invalidIdentityOption
+        ? ["ASSURANCE_MODEL_OPTION_VALUE_INVALID", invalidIdentityOption]
+        : invalidNumber
+          ? ["ASSURANCE_MODEL_NUMERIC_OPTION_INVALID", invalidNumber]
+          : replayFinding ?? seedFinding ?? domainFinding;
   emit("assurance:state-model", false, {
     status: "BLOCKED_INTERNAL",
     requestIdentity,
@@ -81,7 +84,7 @@ if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !
     const output = path.resolve(options.replayOutput);
     try {
       fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(output, `${stableJson(payload, 2)}\n`, { mode: 0o600, flag: "wx" });
+      fs.writeFileSync(output, `${stableJson(redact(payload), 2)}\n`, { mode: 0o600, flag: "wx" });
       payload.replayPersistence = { status: "SOURCE_CLEAR", output };
     } catch (error) {
       payload.replayPersistence = { status: "BLOCKED_INTERNAL", finding: error?.code === "EEXIST" ? "ASSURANCE_MODEL_REPLAY_OUTPUT_EXISTS" : "ASSURANCE_MODEL_REPLAY_OUTPUT_WRITE_FAILED" };
