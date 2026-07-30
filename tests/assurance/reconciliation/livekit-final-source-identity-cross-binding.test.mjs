@@ -3,16 +3,15 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migrationPath =
-  "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql";
-const deployedPath =
-  "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql";
-const concurrencyPath =
-  "scripts/test-cognitive-livekit-platform-authorization-concurrency.mjs";
-const [migration, deployed, concurrency] = await Promise.all([
+const migrationPath = "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql";
+const deployedPath = "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql";
+const concurrencyPath = "scripts/test-cognitive-livekit-platform-authorization-concurrency.mjs";
+const pgTapPath = "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql";
+const [migration, deployed, concurrency, pgTap] = await Promise.all([
   readFile(migrationPath, "utf8"),
   readFile(deployedPath),
   readFile(concurrencyPath, "utf8"),
+  readFile(pgTapPath, "utf8"),
 ]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -71,14 +70,14 @@ test("the deployed migration remains byte-identical", () => {
 test("the successor binds both exact platform identity tuples", () => {
   for (const [platform, binding] of Object.entries(bindings)) {
     assert.equal(matches(platform, binding), true);
-    assert.equal(
-      sha256(binding.deliveredSourceCommit),
-      binding.sourceBuildHash,
-    );
+    assert.equal(sha256(binding.deliveredSourceCommit), binding.sourceBuildHash);
     for (const key of [
       "finalSourceCommit",
       "finalSourceTree",
       "deploymentHash",
+      "applicationIdentifier",
+      "distribution",
+      "buildNumber",
       "runtime",
       "channel",
       "updateId",
@@ -101,18 +100,44 @@ test("enabled finalization joins authorization, receipt, and run identities", ()
   assert.doesNotMatch(migration, /authorizations authorization\b/u);
   for (const required of [
     "authorization_value.preflight_receipt_id",
-    "authorization_value.source_commit <> receipt_value.source_commit",
-    "authorization_value.source_tree_hash <> receipt_value.source_tree_hash",
-    "authorization_value.deployment_hash <> receipt_value.deployment_hash",
-    "authorization_value.rollback_hash <> receipt_value.rollback_hash",
-    "receipt_value.internal_update_id",
-    "receipt_value.installed_artifact_hash",
-    "run.source_build_hash",
-    "run.runtime_identity_hash",
+    "authorization_value.shared_task_id is distinct from receipt_value.shared_task_id", "authorization_value.target_task_id is distinct from receipt_value.target_task_id",
+    "authorization_value.project_id is distinct from receipt_value.project_id", "authorization_value.shared_platform is distinct from receipt_value.shared_platform",
+    "authorization_value.target_platform is distinct from receipt_value.target_platform", "authorization_value.environment is distinct from receipt_value.environment",
+    "authorization_value.owner_user_id is distinct from receipt_value.owner_user_id", "authorization_value.baseline_version_id is distinct from receipt_value.baseline_version_id",
+    "authorization_value.source_commit is distinct from receipt_value.source_commit", "authorization_value.source_tree_hash is distinct from receipt_value.source_tree_hash",
+    "authorization_value.independent_review_hash is distinct from receipt_value.independent_review_hash", "authorization_value.tests_hash is distinct from receipt_value.tests_hash",
+    "authorization_value.deployment_hash is distinct from receipt_value.deployment_hash", "authorization_value.rollback_hash is distinct from receipt_value.rollback_hash",
+    "binding.internal_update_id = receipt_value.internal_update_id",
+    "binding.installed_artifact_hash = receipt_value.installed_artifact_hash",
+    "run.source_build_hash is distinct from binding_value.expected_source_build_hash",
+    "run.runtime_identity_hash is distinct from binding_value.expected_runtime_identity_hash",
     "expected_pair_count <> 9",
   ]) {
     assert.ok(migration.includes(required), required);
   }
+  for (const required of [
+    "binding.target_platform = p_target_platform", "binding.final_source_commit = p_final_source_commit",
+    "binding.final_source_tree_hash = p_final_source_tree_hash", "binding.final_deployment_hash = p_final_deployment_hash",
+    "binding.application_identifier = p_application_identifier", "binding.distribution = p_distribution",
+    "binding.build_number = p_build_number", "binding.runtime_version = p_runtime_version",
+    "binding.channel = p_channel", "binding.internal_update_id = p_internal_update_id",
+    "binding.installed_artifact_hash = p_installed_artifact_hash", "binding.expected_source_build_hash = p_source_build_hash",
+    "binding.expected_runtime_identity_hash = p_runtime_identity_hash",
+  ]) {
+    assert.ok(migration.includes(required), required);
+  }
+  assert.doesNotMatch(migration, /case receipt_value\.target_platform/u);
+  for (const required of [
+    "select plan(27)",
+    "authorization_source_commit",
+    "authorization_tests_hash",
+    "run_source_build_hash",
+    "run_runtime_identity_hash",
+    "the actual enabled v3 finalization trigger accepts one exact tuple",
+  ]) {
+    assert.ok(pgTap.includes(required), required);
+  }
+  assert.doesNotMatch(pgTap, /session_replication_role/u);
   assert.match(
     migration,
     /drop trigger if exists cognitive_livekit_platform_run_identity_v2/u,

@@ -3,7 +3,7 @@
   "contractId": "pr-b1-livekit-source-cross-binding-scope-waiver-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
   "objective": "Preserve the exact deployed LiveKit source-binding migration and add the forward-only cross-binding correction required by exact-head review.",
-  "exactReason": "The exact-source reconciliation is 885 net lines. Clearing LIVEKIT_FINAL_SOURCE_IDENTITY_CROSS_BINDING_MISSING requires a forward-only migration, behavioral database proof, deterministic source proof, concurrency-fixture repair, and corrected evidence; the deployed migration remains immutable and all changes stay within the registered LiveKit source-identity feature bundle.",
+  "exactReason": "The exact deployed-source-only predecessor was 885 net lines. Clearing LIVEKIT_FINAL_SOURCE_IDENTITY_CROSS_BINDING_MISSING now also requires constraint-valid enabled-finalization fixtures, one-field mutation-sensitive comparator proof, a forward-only migration, concurrency-fixture repair, and exact evidence; the deployed migration remains immutable and all changes stay within the registered LiveKit source-identity feature bundle.",
   "reviewer": "persistent-four-lane-exact-head-review-set",
   "mandatingReviewEvidence": [
     "PR #74",
@@ -25,7 +25,7 @@
   },
   "lineBudget": {
     "default": 1200,
-    "waivedMaximum": 1750
+    "waivedMaximum": 2500
   },
   "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
   "prohibitedScope": [

@@ -21,6 +21,7 @@
       "normalizedHash": "71cabbdf9f262ebefddd6f160094cb8677b6bdf51c0dea35adea99c68e1505f4"
     }
   ],
+  "hashAlgorithms": {"raw": "SHA-256 over exact UTF-8 migration statement bytes; this is the byte-identity authority", "remoteNormalized": "SHA-256 over the coordinator readback's canonical statement-array representation; retained as readback metadata, not substituted for raw byte identity", "repositoryNormalized": "SHA-256 after CRLF-to-LF conversion, trailing horizontal-whitespace removal, collapse of 3+ newlines to 2, and trim; diagnostic only"},
   "source": {
     "path": "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
     "frozenStoppedPr": 52,
@@ -57,7 +58,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
-    "T3_INTEGRATION": "INTEGRATION_CLEAR",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -75,7 +76,7 @@
     "historicalDeployedSourceMaterialization": {
       "cliVersion": "2.109.1",
       "target": "local stack only",
-      "attempts": 1,
+      "attempts": 3,
       "status": "SOURCE_CLEAR",
       "exitCode": 0,
       "materializedThrough": "20260730142519",
@@ -90,23 +91,28 @@
       "executedTests": 4,
       "exitCode": 0,
       "result": "PASS",
-      "detail": "Deterministic source proof preserves deployed bytes and rejects source/update/runtime/artifact tuple mutations.",
+      "detail": "Deterministic source proof passed identically 3/3, preserves deployed bytes, and rejects each source/update/runtime/artifact tuple mutation.",
       "databaseContact": false
     },
     "successorBehavioralPgTap": {
       "file": "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql",
-      "status": "INTEGRATION_CLEAR",
-      "plannedTests": 14,
-      "executedTests": 14,
-      "detail": "After two rolled-back transaction-only diagnostics, one coordinator-authorized disposable local reset materialized the successor and the exact focused pgTAP passed 14/14.",
-      "attempts": 3,
+      "status": "BLOCKED_INTERNAL",
+      "plannedTests": 27,
+      "executedTests": 21,
+      "detail": "The historical predicate-only suite passed 14/14 but did not execute the enabled v3 trigger. After one local-only reset materialized the remediated successor, attempt 1 stopped because the local test role cannot set session_replication_role. That bypass was removed. Attempt 2 used constraint-valid governance prerequisites and stopped at the existing v2 preflight trigger with livekit_sandbox_premium_proof_rejected. Both attempts ran 21/27 with zero assertion failures; the six actual-trigger assertions remain unexecuted.",
+      "attempts": 2,
       "migrationParsedCompletely": true,
+      "failureCodes": ["permission_denied_session_replication_role", "livekit_sandbox_premium_proof_rejected"],
       "sourceOrSchemaSubstitutionAccepted": false
-    }
+    },
+    "remoteDryRun": {"status": "BLOCKED_INTERNAL", "performed": false, "reason": "Coordinator-only explicit read-only provider mode has not been authorized for this remediated head; no remote contact was attempted."},
+    "exactHeadReview": {"status": "BLOCKED_INTERNAL", "reason": "Successor source is not frozen; exact implementation head/tree and review evidence remain pending."}
   },
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
+    "The six actual-trigger assertions are blocked by the existing v2 provider-backed Premium preflight proof boundary; no T3 pass is claimed.",
+    "The explicit read-only remote dry-run and exact-head review remain coordinator-owned and pending.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {

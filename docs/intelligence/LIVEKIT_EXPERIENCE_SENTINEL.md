@@ -57,9 +57,13 @@ unapplied forward successor
 adds an immutable two-platform manifest and requires an enabled final outcome to
 join its authorization and receipt to the exact final source/tree/deployment,
 delivered source hash, update, runtime, channel, and artifact. Static source
-proof passes; the coordinator-authorized disposable local reset and focused
-behavioral pgTAP pass 14/14 at T3. Neither T1 nor T3 can substitute for
-signed-artifact, installed, physical, or public-canary proof.
+proof passes. The historical 14/14 pgTAP result covered only the predicate; it
+does not clear T3. The remediated 27-test suite must transactionally execute the
+actual enabled v3 outcome trigger, including one-field lineage/run mismatches,
+before T3 may clear. Its local sanitized fixture is currently blocked by the
+existing v2 provider-backed Premium preflight proof; no T3 pass is claimed.
+Neither T1 nor T3 can substitute for signed-artifact, installed, physical, or
+public-canary proof.
 
 Initial authority:
 

@@ -176,6 +176,8 @@ declare
     public.cognitive_livekit_platform_canary_authorizations%rowtype;
   receipt_value
     public.cognitive_livekit_platform_preflight_receipts%rowtype;
+  binding_value
+    public.cognitive_livekit_final_source_identity_bindings%rowtype;
   expected_pair_count integer;
 begin
   if not new.enabled then
@@ -194,31 +196,42 @@ begin
 
   if authorization_value.id is null
      or receipt_value.id is null
-     or authorization_value.target_platform <> receipt_value.target_platform
-     or authorization_value.source_commit <> receipt_value.source_commit
-     or authorization_value.source_tree_hash <> receipt_value.source_tree_hash
-     or authorization_value.deployment_hash <> receipt_value.deployment_hash
-     or authorization_value.rollback_hash <> receipt_value.rollback_hash
-     or not public.cognitive_livekit_final_source_identity_matches_v3(
-       receipt_value.target_platform,receipt_value.source_commit,
-       receipt_value.source_tree_hash,receipt_value.deployment_hash,
-       receipt_value.application_identifier,receipt_value.distribution,
-       receipt_value.build_number,receipt_value.runtime_version,
-       receipt_value.channel,receipt_value.internal_update_id,
-       receipt_value.installed_artifact_hash,
-       case receipt_value.target_platform
-         when 'android' then
-           'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050'
-         else
-           '73792a29b2de5445bc7fc718abd6463d812ffec6b566b00ab930045a32d266cb'
-       end,
-       case receipt_value.target_platform
-         when 'android' then
-           '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0'
-         else
-           '17d0bf8d12eed354ab5784cc94a3373620c4a9dc09b9aeda81bdb13103351bcf'
-       end
-     ) then
+     or authorization_value.shared_task_id is distinct from receipt_value.shared_task_id
+     or authorization_value.target_task_id is distinct from receipt_value.target_task_id
+     or authorization_value.project_id is distinct from receipt_value.project_id
+     or authorization_value.shared_platform is distinct from receipt_value.shared_platform
+     or authorization_value.target_platform is distinct from receipt_value.target_platform
+     or authorization_value.environment is distinct from receipt_value.environment
+     or authorization_value.owner_user_id is distinct from receipt_value.owner_user_id
+     or authorization_value.baseline_version_id is distinct from receipt_value.baseline_version_id
+     or authorization_value.source_commit is distinct from receipt_value.source_commit
+     or authorization_value.source_tree_hash is distinct from receipt_value.source_tree_hash
+     or authorization_value.independent_review_hash is distinct from receipt_value.independent_review_hash
+     or authorization_value.tests_hash is distinct from receipt_value.tests_hash
+     or authorization_value.deployment_hash is distinct from receipt_value.deployment_hash
+     or authorization_value.rollback_hash is distinct from receipt_value.rollback_hash then
+    raise exception 'livekit_final_source_identity_cross_binding_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  select * into binding_value
+  from public.cognitive_livekit_final_source_identity_bindings binding
+  where binding.binding_version = 'livekit-final-source-identity-v3'
+    and binding.target_platform = receipt_value.target_platform
+    and binding.final_source_commit = receipt_value.source_commit
+    and binding.final_source_tree_hash = receipt_value.source_tree_hash
+    and binding.final_deployment_hash = receipt_value.deployment_hash
+    and binding.application_identifier =
+      receipt_value.application_identifier
+    and binding.distribution = receipt_value.distribution
+    and binding.build_number = receipt_value.build_number
+    and binding.runtime_version = receipt_value.runtime_version
+    and binding.channel = receipt_value.channel
+    and binding.internal_update_id = receipt_value.internal_update_id
+    and binding.installed_artifact_hash = receipt_value.installed_artifact_hash
+  for share;
+
+  if binding_value.binding_version is null then
     raise exception 'livekit_final_source_identity_cross_binding_rejected'
       using errcode = 'P0001';
   end if;
@@ -232,14 +245,9 @@ begin
       and run.environment = authorization_value.environment
       and run.sentinel_key = 'livekit_experience_sentinel'
       and run.observation_started_at >= authorization_value.opened_at
-      and not public.cognitive_livekit_final_source_identity_matches_v3(
-        receipt_value.target_platform,receipt_value.source_commit,
-        receipt_value.source_tree_hash,receipt_value.deployment_hash,
-        receipt_value.application_identifier,receipt_value.distribution,
-        receipt_value.build_number,receipt_value.runtime_version,
-        receipt_value.channel,receipt_value.internal_update_id,
-        receipt_value.installed_artifact_hash,run.source_build_hash,
-        run.runtime_identity_hash
+      and (
+        run.source_build_hash is distinct from binding_value.expected_source_build_hash
+        or run.runtime_identity_hash is distinct from binding_value.expected_runtime_identity_hash
       )
   ) then
     raise exception 'livekit_final_source_identity_cross_binding_rejected'
@@ -265,15 +273,10 @@ begin
       'success_baseline','bounded_failure_fixture',
       'background_foreground_recovery'
     )
-    and public.cognitive_livekit_final_source_identity_matches_v3(
-      receipt_value.target_platform,receipt_value.source_commit,
-      receipt_value.source_tree_hash,receipt_value.deployment_hash,
-      receipt_value.application_identifier,receipt_value.distribution,
-      receipt_value.build_number,receipt_value.runtime_version,
-      receipt_value.channel,receipt_value.internal_update_id,
-      receipt_value.installed_artifact_hash,run.source_build_hash,
-      run.runtime_identity_hash
-    );
+    and run.source_build_hash =
+      binding_value.expected_source_build_hash
+    and run.runtime_identity_hash =
+      binding_value.expected_runtime_identity_hash;
 
   if expected_pair_count <> 9 then
     raise exception 'livekit_final_source_identity_cross_binding_rejected'
