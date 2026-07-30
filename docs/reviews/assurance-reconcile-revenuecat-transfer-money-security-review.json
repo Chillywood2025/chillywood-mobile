@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "assurance-reconcile-revenuecat-transfer-money-security-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 69,
+  "implementationBranch": "codex/assurance-reconcile-revenuecat-transfer",
+  "implementationHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+  "implementationTree": "1691927122780fa6945564d0d46051cc9616bf40",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "09e26e52b66e12aefbe966aa277a95f89ecd455e91a6ad07d0b535e681c8e2e2",
+  "migrationSetHash": "0952a13b877402da20e63bc65b5d5e4fda2b2b5d283c90d3fa7dd4b3337ba62a",
+  "configHash": "fb28650ad9129c22086f30604e740a1edcb5896a028328502fcb04c571ad4e97",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_finding",
+      "lane": "security-authority",
+      "focus": "RevenueCat money and security authority",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 9,
+      "additions": 1180,
+      "deletions": 2,
+      "netChangedLines": 1178,
+      "implementationHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+      "implementationTree": "1691927122780fa6945564d0d46051cc9616bf40",
+      "mergeBase": "fc3d750158770a6f33ab10acc68e79a288b6ffa3"
+    },
+    "focusedNodeTests": {
+      "status": "pass",
+      "command": "node --test supabase/functions/revenuecat-webhook/store-policy.test.mjs tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures.test.mjs",
+      "tests": 17,
+      "passed": 17,
+      "failed": 0
+    },
+    "denoStaticCheck": {
+      "status": "pass",
+      "command": "deno check --no-lock --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts",
+      "denoLockCreated": false,
+      "providerContact": false,
+      "databaseContact": false
+    },
+    "signatureAndClassification": {
+      "status": "pass",
+      "signatureGatePrecedesEventExtractionAndMutation": true,
+      "invalidSignatureReturnsUnauthorized": true,
+      "malformedTransferIdentityFailsClosed": true,
+      "sandboxAppStoreEnvironmentRequired": true,
+      "terminalRefundRevocationEventsRemainRoutableWhenPurchaseActivationIsOff": true,
+      "retryClassificationExplicit": true
+    },
+    "serviceAuthority": {
+      "status": "pass",
+      "publicExecuteRevoked": true,
+      "anonExecuteRevoked": true,
+      "authenticatedExecuteRevoked": true,
+      "wrapperExecuteGrantedOnlyToServiceRole": true,
+      "failpointInternalExecuteRevokedFromServiceRole": true,
+      "securityDefinerSearchPathEmpty": true
+    },
+    "idempotencyAndAtomicity": {
+      "status": "pass_with_ordering_exception",
+      "eventScopedAdvisoryLock": true,
+      "bothUserLocksDeterministicallyOrdered": true,
+      "duplicateIdentityAndTerminalStateChecked": true,
+      "sourceAndTargetEffectsShareOneTransaction": true,
+      "failpointRollbackTestPresent": true,
+      "newerAuthoritativeEventGuard": false
+    },
+    "ordering": {
+      "status": "fail",
+      "futureSkewGuard": true,
+      "sourceAuthoritativeOrderComparison": false,
+      "targetAuthoritativeOrderComparison": false,
+      "databaseOutOfOrderCase": false,
+      "requiredResolution": "Add a forward-only corrective migration that rejects or deterministically reconciles a transfer older than current source or target authoritative state, with delayed-renewal, delayed-transfer, refund, revocation, and duplicate interleavings."
+    },
+    "fixtureSemantics": {
+      "status": "source_contract_only",
+      "categoriesDeclared": 11,
+      "identityResolverExercised": true,
+      "signatureHandlerExecuted": false,
+      "atomicRpcExecuted": false,
+      "retryFaultExecuted": false,
+      "timeoutFaultExecuted": false,
+      "outOfOrderStateExecuted": false,
+      "providerBehaviorClaimed": false
+    },
+    "nonPayableAndEntitlementBoundary": {
+      "status": "pass_except_ordering",
+      "sandboxOnly": true,
+      "sourceProviderEntitlementAndGrantRequired": true,
+      "exactStoreMappingRequired": true,
+      "destinationGrantViewerOnly": true,
+      "liveKitAuthorityFalse": true,
+      "payoutAccessFalse": true,
+      "zeroAmountLedger": true,
+      "destinationPayableState": "not_payable",
+      "productionTransferRejected": true,
+      "manualEntitlementCannotServeAsSourceProof": true
+    },
+    "auditAndEvidenceSafety": {
+      "status": "pass",
+      "rawProviderPayloadStored": false,
+      "providerEventIdHashedInEdgeAudit": true,
+      "sourceAndTargetUserIdsAbsentFromEdgeAudit": true,
+      "secretValuesAbsentFromFixtures": true,
+      "privateEvidenceCommitted": false
+    },
+    "migrationSourceHashes": {
+      "status": "pass_against_coordinator_supplied_remote_hashes",
+      "directRemoteReadbackByThisLane": false,
+      "revenuecatTransferRawSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "expiredTargetRawSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "deployedMigrationEditedByThisLane": false
+    },
+    "implementationPgTap": {
+      "status": "reported_pass_not_rerun_by_this_lane",
+      "reportedTests": 27,
+      "databaseContactByThisLane": false,
+      "outOfOrderCoveragePresent": false
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending",
+      "implementationHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "Do not run frozen-head CI as merge proof until the open P1 is corrected on a new exact implementation head and all four review lanes are rerun."
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "denoLockCreated": false
+    }
+  },
+  "testResultHash": "1dae77ddb0a7f9630026f0848d7cd1c987789971413c4e7ad194167e87246eb1",
+  "reviewLevel": "C",
+  "reviewHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+  "reviewTimestamp": "2026-07-30T18:30:19Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-money-security-authority",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "REVENUECAT_TRANSFER_OUT_OF_ORDER_AUTHORITY_OVERRIDE",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql",
+        "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql"
+      ],
+      "evidence": "The function validates only future skew at lines 54-55. It reads current source and target state at lines 117-225 without comparing occurred_at or authoritative event order, then applies source REVOCATION and target RENEWAL using the older transfer timestamp at lines 228-266. The pgTAP file contains no delayed or out-of-order transfer case.",
+      "impact": "A delayed TRANSFER can revoke a newer source Premium purchase or overwrite newer target entitlement/grant state, violating provider ordering and single-authority invariants.",
+      "requiredResolution": "Preserve both deployed migration files byte-for-byte. Add a forward-only corrective migration with per-user/product authoritative ordering checks and deterministic tests for renewal-versus-transfer, expiration-versus-delayed-transfer, refund/revocation-versus-transfer, duplicate replay, and both arrival orders."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_FIXTURE_CATEGORIES_DECLARATIVE_ONLY",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures-v1.json",
+        "tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures.test.mjs",
+        "docs/assurance/reconciliation/b2-revenuecat-transfer.json"
+      ],
+      "evidence": "The corpus declares delayed, out_of_order, retry, partial_failure, timeout, and environment categories, but its executable test calls only resolveRevenueCatTransferUsers and performs source-position checks; it does not execute the handler, atomic RPC, failpoint, retry, timeout, or ordering state.",
+      "impact": "The fixture list is useful T1 source evidence but cannot satisfy runtime event-class coverage or detect the open ordering defect.",
+      "requiredResolution": "Keep providerBehaviorProved=false and do not count the category list as T3/T4 evidence. Add executable sanitized handler/RPC fixtures in the appropriate successor without contacting RevenueCat."
+    },
+    {
+      "id": "REVENUECAT_RECONCILIATION_REPORT_VALIDATION_STALE",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "docs/assurance/reconciliation/b2-revenuecat-transfer.json"
+      ],
+      "evidence": "The report records baseHead 84c9ffd while this exact PR base is fc3d750, describes the database test as pending in proofLimits after recording 27/27 INTEGRATION_CLEAR, and asks to run the same database proof again as the next action.",
+      "impact": "The report is internally inconsistent and cannot be the current exact-head evidence record without correction.",
+      "requiredResolution": "Update only the reconciliation report on the successor implementation head to bind the current base/head and accurately distinguish already-run DB proof from the missing ordering proof."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_SERVICE_ONLY_AUTHORITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The public wrapper is executable only by service_role, the failpoint-bearing internal function is unavailable to service_role, and both functions use an empty search_path with qualified objects."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_SANDBOX_NONPAYABLE_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The transfer accepts only App Store sandbox events, requires an existing provider-backed source and exact non-authority mapping, writes zero-amount non-payable ledger effects, and grants no payout or LiveKit authority."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_AUDIT_REDACTION",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Edge audit data contains event hashes and boolean outcomes rather than source/target user IDs or raw payloads; fixtures are synthetic and contain no credential-shaped values."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_DUPLICATE_ATOMICITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Event/user advisory locks, identity-matched duplicate recognition, a single database transaction, and failpoint rollback protect duplicate and partial-failure handling apart from the separate chronological-order P1."
+    },
+    {
+      "id": "REVENUECAT_TERMINAL_EVENT_ROUTING",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Refund, revocation, expiration, cancellation, and pause events remain routable through the existing terminal-event policy while new purchases remain switch-controlled."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "p2Open": 2,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "moneyOrEntitlementChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "blocked-open-p1-forward-only-correction-required",
+    "humanApproval": false
+  }
+}
