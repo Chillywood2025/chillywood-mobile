@@ -1,0 +1,335 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-64-models-exact-invariants-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state-model-invariants",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+  "implementationTree": "9324084ac054f0b9461fb70bef62e0e41cc709d4",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "7e349806beb6460ccb5ab27f35ff97317da203b36b53f03c2a5b7f0a1eb85ad7",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "da079d87b2d597b73cc654b3e39ce099037b97b221d8fe08e4ff499be9a502df",
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "implementationTree": "9324084ac054f0b9461fb70bef62e0e41cc709d4",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "mergeBaseMatched": true,
+      "reviewWorktreeCleanBeforeEvidence": true
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "recordedMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "remoteMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "findings": 0
+    },
+    "scope": {
+      "status": "pass",
+      "files": 10,
+      "additions": 1142,
+      "deletions": 1,
+      "netChangedLines": 1141,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "unclassifiedFiles": 0,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "focusedModelSuite": {
+      "status": "pass_for_declared_assertions",
+      "implementationDependencyContextHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "implementationDependencyContextTree": "9324084ac054f0b9461fb70bef62e0e41cc709d4",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyCases": 1200,
+      "deterministicSeeds": [
+        173501,
+        173502,
+        173503,
+        173504,
+        173505,
+        173506
+      ],
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20,
+      "escapedDefectFixtures": 13,
+      "transitionWitnesses": 3,
+      "note": "The isolated review worktree had no node_modules. Fast-check-dependent focused tests ran read-only in the clean implementation worktree after independently proving its head and tree exactly matched this review target. The review lane ran no install and changed no implementation or lockfile."
+    },
+    "formerP1Remediation": {
+      "duplicateNativeActionExpiryExtension": "pass",
+      "expiredNotificationActionReplay": "pass",
+      "revenueCatNonAuthoritativeSuppression": "pass",
+      "otaSourceCommitBinding": "pass",
+      "migrationSuccessorIdentity": "pass",
+      "liveKitStageSkip": "pass",
+      "malformedReplayJsonEnvelope": "pass",
+      "replayEvidenceNoClobber": "pass",
+      "mustReportTerminalObligation": "fail",
+      "notificationTerminalCleanup": "fail",
+      "perDomainTransitionCoverage": "fail"
+    },
+    "adversarialInvariantProbes": {
+      "chatExpiredNativeActionAcceptance": {
+        "status": "fail",
+        "sequence": [
+          "invite generation 1",
+          "native action expires at 2",
+          "tick to 2",
+          "accept"
+        ],
+        "finalInviteStatus": "accepted",
+        "expiredActions": [
+          "action-1"
+        ],
+        "violations": []
+      },
+      "chatPreviousGenerationNativeActionAcceptance": {
+        "status": "fail",
+        "sequence": [
+          "invite generation 1",
+          "retain native action",
+          "timeout generation 1",
+          "invite generation 2",
+          "initialize auth and React",
+          "consume old action",
+          "accept generation 2"
+        ],
+        "finalGeneration": 2,
+        "finalInviteStatus": "accepted",
+        "consumedActions": [
+          "action-1"
+        ],
+        "violations": []
+      },
+      "pushKitMustReportOutstanding": {
+        "status": "fail",
+        "sequence": [
+          "receive must-report push"
+        ],
+        "callKitReported": [],
+        "completedPushes": [],
+        "violations": []
+      },
+      "terminalNativeActionConsumption": {
+        "status": "fail",
+        "cancel": {
+          "serverStatus": "cancelled",
+          "consumedAfterTerminal": true,
+          "violations": []
+        },
+        "timeout": {
+          "serverStatus": "timed_out",
+          "consumedAfterTerminal": true,
+          "violations": []
+        }
+      },
+      "revenueCatEqualTimestampOrdering": {
+        "status": "fail",
+        "renewalThenRevocation": {
+          "entitlement": "revoked",
+          "productionAccess": false,
+          "violations": []
+        },
+        "revocationThenRenewal": {
+          "entitlement": "active",
+          "productionAccess": true,
+          "violations": []
+        }
+      },
+      "transitionWitnessCoverage": {
+        "status": "fail",
+        "witnessCounts": {
+          "chat-call": 1,
+          "revenuecat": 0,
+          "ota-build": 0,
+          "notification-native-action": 1,
+          "livekit": 1,
+          "migrations": 0
+        },
+        "emptyWitnessArrayPassesEvery": true
+      }
+    },
+    "escapedDefectCoverage": {
+      "status": "partial",
+      "declaredFixturesDetectedHistorically": 13,
+      "declaredFixturesPassCurrentModel": 13,
+      "liveKitReconnectDuplicateCounterexamplePresent": false,
+      "liveKitPlatformCrossEvidenceCounterexamplePresent": false,
+      "higherTierPhysicalProofSubstitutionAccepted": false
+    },
+    "staticAndContractChecks": {
+      "contracts": "pass",
+      "features": 20,
+      "escapedDefectCatalogEntries": 25,
+      "plans": {
+        "chilly-chat-call-lifecycle": "pass",
+        "livekit-media-transport": "pass",
+        "revenuecat-premium": "pass",
+        "eas-build-update-release": "pass",
+        "notifications-fcm": "pass",
+        "supabase-migrations-rls": "pass"
+      },
+      "nodeSyntax": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_run",
+      "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "Coordinator owns the single serialized complete Phase 1 CI run at the unchanged frozen implementation head."
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "productImplementationChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "b55f82e801b215ffdf130fbf273d93feb3a534e6648b23c0b9a4996458bd49d3",
+  "reviewLevel": "C",
+  "reviewHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+  "reviewTimestamp": "2026-07-30T19:13:20Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "model-invariants-exact"
+  ],
+  "findings": [
+    {
+      "id": "PR64_CHAT_NATIVE_ACTION_NOT_BOUND_TO_ACCEPTANCE_GENERATION",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:41",
+        "_lib/assurance/state-models/models.mjs:77",
+        "_lib/assurance/state-models/models.mjs:113",
+        "_lib/assurance/state-models/models.mjs:146",
+        "_lib/assurance/state-models/models.mjs:203"
+      ],
+      "evidence": "The chat model stores a pending native action without invite/call generation and accepts via an unrelated command. invite does not clear or rebind a pending action. An expired generation-1 action followed by accept reaches accepted with expiredNativeActions=[action-1] and no violation; a retained generation-1 action can also be consumed after generation 2 starts and generation 2 becomes accepted with no violation.",
+      "impact": "The T2 chat-call result does not prove the required expired-action denial or prevent an old native Answer from authorizing a newer call. The separate notification model is not composed with invite, token, room, or cleanup state and cannot supply this missing end-to-end invariant.",
+      "requiredResolution": "Bind every native action to immutable call/invite identity and generation, model the native acceptance transition into the authoritative call state, deny expired or prior-generation actions, clear or terminalize pending action state on terminal transitions, and add both minimized sequences as fixed-model regressions."
+    },
+    {
+      "id": "PR64_PUSHKIT_MUST_REPORT_OBLIGATION_HAS_NO_TERMINAL_EVALUATION",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:439",
+        "_lib/assurance/state-models/models.mjs:443",
+        "_lib/assurance/state-models/models.mjs:490",
+        "_lib/assurance/state-models/models.mjs:492",
+        "_lib/assurance/state-models/properties.mjs:8"
+      ],
+      "evidence": "receive_push(mustReport=true) records an outstanding push, but violations only checks a must-report push after it appears in completedPushes. The fixed transition refuses complete_push before report, so the obligation may remain outstanding indefinitely with callKitReported=[], completedPushes=[], violations=[], and MODEL_CLEAR. The only notification transition witness covers native Answer/server acceptance, not PushKit report and completion.",
+      "impact": "The model proves that one forbidden completion is blocked but does not prove the required must-report path or fail a quiescent/terminal execution that never reports to CallKit.",
+      "requiredResolution": "Represent the must-report obligation explicitly, add a bounded terminal/quiescence evaluation command, require report before terminal completion, add a receive-report-complete witness, and retain the historical complete-without-report fixture."
+    },
+    {
+      "id": "PR64_NATIVE_ACTION_CONSUMED_AFTER_TERMINAL_CALL_STATE",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:448",
+        "_lib/assurance/state-models/models.mjs:462",
+        "_lib/assurance/state-models/models.mjs:476",
+        "_lib/assurance/state-models/models.mjs:478",
+        "tests/assurance/models/escaped-defects.test.mjs:26"
+      ],
+      "evidence": "server_cancel and server_timeout only change serverStatus. They leave pendingActions live, and consume_action does not require serverStatus=ringing. Both native_answer -> terminal server transition -> auth_ready -> react_ready -> consume_action schedules consume the Answer after terminal state with violations=[]. The committed hostile test checks only that the terminal status string changed.",
+      "impact": "Cancel/timeout cleanup is not exact and a native action survives beyond the authoritative call lifetime. A later bridge/session boot can consume terminal work even though server_accept happens to reject it.",
+      "requiredResolution": "Atomically terminalize pending actions on cancel, timeout, decline, and end; forbid consumption outside ringing; add invariants for terminal/pending and terminal/new-consumption overlap; and add cancel and timeout historical/current regression sequences."
+    },
+    {
+      "id": "PR64_REVENUECAT_EQUAL_TIME_AUTHORITY_AND_DELAYED_RENEWAL_RACE_UNDEFINED",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:276",
+        "_lib/assurance/state-models/models.mjs:280",
+        "_lib/assurance/state-models/models.mjs:302",
+        "_lib/assurance/state-models/models.mjs:312",
+        "_lib/assurance/state-models/concurrency.mjs:129"
+      ],
+      "evidence": "The authority guard rejects only eventTime < maxAuthoritativeTime. A renewal and revocation at the same provider time produce active access or revoked access solely from arrival order, and both final states have no violation. The scenario named revenuecat-expiration-versus-delayed-renewal assigns expiration time 10 and renewal time 20, so both schedules correctly end active and never exercise a stale renewal delivered after a newer expiration.",
+      "impact": "Out-of-order authority is not deterministic at equal timestamps, and the reported 20 schedules do not include the required stale delayed-renewal interleaving. This can hide terminal entitlement reactivation.",
+      "requiredResolution": "Define a deterministic authoritative ordering key and equal-time policy, model terminal event precedence or an exact provider sequence, change the delayed-renewal schedule so the delayed delivery is older than the expiration, and assert the terminal state in both serialized orders."
+    },
+    {
+      "id": "PR64_PROPERTY_TRANSITION_WITNESSES_REMAIN_PARTIAL",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/properties.mjs:5",
+        "_lib/assurance/state-models/properties.mjs:32",
+        "_lib/assurance/state-models/properties.mjs:36",
+        "tests/assurance/property/state-models.test.mjs:15"
+      ],
+      "evidence": "Only chat-call, notification-native-action, and livekit have transition witnesses. revenuecat, ota-build, and migrations each report transitionWitnesses=[] and still become MODEL_CLEAR because Array.every on an empty array is true. The test loops over whatever witnesses exist and never requires at least one witness or required-state coverage per domain.",
+      "impact": "A no-op or transition-suppressing implementation for half of the modeled domains can still satisfy the non-vacuity guard, so the former vacuous property-coverage P1 is only partially fixed.",
+      "requiredResolution": "Declare required states/transitions and positive/negative witnesses per domain, fail when any selected domain lacks its required witnesses, record reached-state coverage, and add a regression proving no-op RevenueCat, OTA, and migration models are BLOCKED_INTERNAL."
+    },
+    {
+      "id": "PR64_LIVEKIT_RECONNECT_AND_PLATFORM_COUNTEREXAMPLES_MISSING",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:519",
+        "_lib/assurance/state-models/models.mjs:528",
+        "_lib/assurance/state-models/models.mjs:544",
+        "_lib/assurance/state-models/models.mjs:545",
+        "_lib/assurance/state-models/models.mjs:631"
+      ],
+      "evidence": "The fixed transitions reject cross-platform evidence and clamp reconnect counts, but no historical variant or escaped-defect fixture can make LIVEKIT_DUPLICATE_ROOM_OR_TRACK or PLATFORM_SCOPE_MISMATCH fire. The 13-fixture report therefore does not demonstrate that these explicit LiveKit invariant detectors fail before a historical fix and pass now.",
+      "impact": "These invariant branches lack executable counterexamples and can silently become dead or be removed without a focused regression failing.",
+      "requiredResolution": "Add historical variants and minimized fixtures for reconnect duplication and platform evidence crossing while retaining separate Android/iOS higher-tier evidence."
+    },
+    {
+      "id": "PR64_FROZEN_HEAD_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "This isolated review lane ran focused checks only and did not start, monitor, or wait on full CI.",
+      "requiredResolution": "The coordinator must own one complete Phase 1 CI execution at exact implementation head 01ad30e4e0143cc4586b6d1be93c650ed753fd38 after review freeze."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 5,
+    "p2Open": 2,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "changes-required-do-not-merge",
+    "humanApproval": false
+  }
+}
