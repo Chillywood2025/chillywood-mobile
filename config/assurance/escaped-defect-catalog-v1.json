@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "contractId": "escaped-defect-catalog-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/escapedDefectCatalog",
+  "defects": [
+    {
+      "id": "NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT", "tags": ["native", "lifecycle", "chat-call"], "affectedDomains": ["notifications-native-calls", "Chat"],
+      "preImplementationQuestions": ["Can the action arrive before React/session/router readiness?", "Where is it retained and consumed once?"], "requiredProofTier": "T4_NATIVE_PROVIDER",
+      "detectionRule": "Exercise cold onCreate/onNewIntent with React unavailable and prove bounded consume-once retention.", "testTemplate": "native-action-cold-start", "runtimeSignature": "ringing invite with no consumed action/token/media",
+      "rollback": "disable native action route and retain server-authoritative ringing/timeout", "prevention": "private bounded native store plus native instrumentation", "blocks": ["build", "OTA", "merge", "release"]
+    },
+    {
+      "id": "ACCEPT_TIMEOUT_RACE", "tags": ["concurrency", "chat-call"], "affectedDomains": ["Chat", "database-RLS"],
+      "preImplementationQuestions": ["Which transaction wins accept versus timeout?", "Is terminal history exactly once?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Controlled barrier schedule for accept/timeout in both orders.", "testTemplate": "accept-timeout-interleaving", "runtimeSignature": "accepted invite with ended room or duplicate terminal event",
+      "rollback": "fail closed to terminal server state", "prevention": "atomic transition and locked invariant checks", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "STALE_CLEANUP_CLEARS_NEW_CALL", "tags": ["concurrency", "generation"], "affectedDomains": ["Chat", "database-RLS"],
+      "preImplementationQuestions": ["What generation owns the thread active-room link?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Pause old cleanup, create newer invite, then resume cleanup.", "testTemplate": "old-cleanup-new-invite", "runtimeSignature": "new active room link becomes null or points to old room",
+      "rollback": "stop cleanup worker and repair from authoritative invite generation", "prevention": "generation/room ownership predicate", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "TERMINAL_ROOM_ORPHAN", "tags": ["state", "cleanup"], "affectedDomains": ["Chat", "LiveKit", "database-RLS"],
+      "preImplementationQuestions": ["Do all terminal paths end rooms, memberships, thread links, media, and history?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Assert zero active/reconnecting memberships and exact terminal history after every terminal command.", "testTemplate": "terminal-cleanup-invariants", "runtimeSignature": "terminal invite with active room/membership/link",
+      "rollback": "emergency terminal cleanup using generation guard", "prevention": "single authoritative terminal transition", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "EAS_ENVIRONMENT_OVERRIDE", "tags": ["release", "environment"], "affectedDomains": ["release-OTA"],
+      "preImplementationQuestions": ["Which exact EAS environment produced build and update config?"], "requiredProofTier": "T4_NATIVE_PROVIDER",
+      "detectionRule": "Generate both configs with the exact environment and compare all release identity fields.", "testTemplate": "eas-environment-parity", "runtimeSignature": "build/update config differs only after EAS environment injection",
+      "rollback": "do not publish; select compatible prior update", "prevention": "environment-bound artifact contract", "blocks": ["build", "OTA", "release"]
+    },
+    {
+      "id": "OTA_NATIVE_CAPABILITY_MISMATCH", "tags": ["OTA", "native"], "affectedDomains": ["release-OTA", "notifications-native-calls"],
+      "preImplementationQuestions": ["What native capabilities does the bundle require and build provide?"], "requiredProofTier": "T5_SIGNED_ARTIFACT",
+      "detectionRule": "Required capabilities minus provided capabilities must be empty.", "testTemplate": "ota-capability-set-difference", "runtimeSignature": "JS calls an absent native module/API",
+      "rollback": "serve compatible rollback or embedded bundle", "prevention": "signed capability manifests", "blocks": ["OTA", "release"]
+    },
+    {
+      "id": "MISSING_NATIVE_MODULE_IN_RUNTIME", "tags": ["native", "runtime"], "affectedDomains": ["release-OTA"],
+      "preImplementationQuestions": ["Is every required module compiled and registered in the target runtime?"], "requiredProofTier": "T5_SIGNED_ARTIFACT",
+      "detectionRule": "Inspect compiled module inventory and installed readback.", "testTemplate": "native-module-inventory", "runtimeSignature": "Native module cannot be null",
+      "rollback": "load embedded safe bundle or prior compatible update", "prevention": "runtime capability registry", "blocks": ["OTA", "release"]
+    },
+    {
+      "id": "DOUBLE_SERIALIZED_JSONB", "tags": ["database", "serialization"], "affectedDomains": ["database-RLS", "Cognitive"],
+      "preImplementationQuestions": ["Is JSON encoded exactly once at every adapter boundary?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Round-trip typed JSON through real RPC/Edge adapter and reject stringified JSON.", "testTemplate": "jsonb-round-trip", "runtimeSignature": "JSONB value has string type containing escaped object",
+      "rollback": "disable writer and forward-correct affected rows", "prevention": "typed adapter contract", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "EVALUATOR_NUMERIC_SCALE_MISMATCH", "tags": ["Cognitive", "numeric"], "affectedDomains": ["Cognitive"],
+      "preImplementationQuestions": ["Are producer, storage, and evaluator scales identical?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Boundary fixtures for min/max/threshold units across adapters.", "testTemplate": "numeric-scale-contract", "runtimeSignature": "confidence/score is 100x expected",
+      "rollback": "stop evaluation/finalization", "prevention": "canonical units and schema bounds", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "PLATFORM_SCOPE_MISMATCH", "tags": ["platform", "evidence"], "affectedDomains": ["release-OTA", "Cognitive"],
+      "preImplementationQuestions": ["Can shared or sibling-platform evidence satisfy this claim?"], "requiredProofTier": "T4_NATIVE_PROVIDER",
+      "detectionRule": "Reject evidence whose platform differs from the gate platform.", "testTemplate": "platform-evidence-isolation", "runtimeSignature": "iOS result finalized from Android/shared receipt",
+      "rollback": "revoke invalid outcome", "prevention": "platform in primary keys and manifests", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "PUSHKIT_DELIVERY_SUPPRESSED", "tags": ["iOS", "PushKit"], "affectedDomains": ["notifications-native-calls"],
+      "preImplementationQuestions": ["Are must-report and completion obligations satisfied for every VoIP push?"], "requiredProofTier": "T6_INSTALLED_PHYSICAL",
+      "detectionRule": "Signed physical background/terminated delivery with CallKit and completion evidence.", "testTemplate": "pushkit-physical-lifecycle", "runtimeSignature": "APNs accepted but no device PushKit callback",
+      "rollback": "stop VoIP delivery lane and preserve missed-call fallback", "prevention": "native must-report contract and physical canary", "blocks": ["release"]
+    },
+    {
+      "id": "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200", "tags": ["proof-substitution", "iOS"], "affectedDomains": ["notifications-native-calls"],
+      "preImplementationQuestions": ["Does evidence include PushKit callback, CallKit presentation, and physical action?"], "requiredProofTier": "T6_INSTALLED_PHYSICAL",
+      "detectionRule": "Reject APNs response-only evidence.", "testTemplate": "apns-to-callkit-chain", "runtimeSignature": "provider 200 with absent installed call",
+      "rollback": "retain gate as blocked external", "prevention": "denylist chain", "blocks": ["release"]
+    },
+    {
+      "id": "LIVEKIT_CONNECTED_WITHOUT_MEDIA", "tags": ["LiveKit", "media"], "affectedDomains": ["LiveKit", "Chat"],
+      "preImplementationQuestions": ["Where are publication, subscription, and first-frame/audio measured?"], "requiredProofTier": "T6_INSTALLED_PHYSICAL",
+      "detectionRule": "Require full token-to-first-media chain.", "testTemplate": "livekit-first-media-chain", "runtimeSignature": "Connected UI with no remote frames/audio",
+      "rollback": "end session and use authorized fallback", "prevention": "stage-specific evidence", "blocks": ["release"]
+    },
+    {
+      "id": "LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION", "tags": ["LiveKit", "UI"], "affectedDomains": ["LiveKit", "UI"],
+      "preImplementationQuestions": ["Does installed UI render the correct participant/track after first media?"], "requiredProofTier": "T6_INSTALLED_PHYSICAL",
+      "detectionRule": "Bind first media telemetry to installed route and participant UI.", "testTemplate": "media-ui-resolution", "runtimeSignature": "track subscribed but UI remains preparing/blank",
+      "rollback": "show honest failure/fallback and end cleanly", "prevention": "track-to-UI identity contract", "blocks": ["release"]
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_TARGET_MISMATCH", "tags": ["RevenueCat", "entitlement"], "affectedDomains": ["RevenueCat-Premium", "money-payouts"],
+      "preImplementationQuestions": ["Are source/target/store/product/environment identities exact?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Reject target conflicts and prove atomic single-owner transfer.", "testTemplate": "revenuecat-transfer-identity", "runtimeSignature": "two active owners or wrong target entitlement",
+      "rollback": "revoke derived access and reconcile from verified provider event", "prevention": "locked identity-bound transfer", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "REVENUECAT_OUT_OF_ORDER_EVENT", "tags": ["RevenueCat", "ordering"], "affectedDomains": ["RevenueCat-Premium"],
+      "preImplementationQuestions": ["What event time/version is authoritative for every type?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Run renewal/expiration/refund/transfer in deterministic delayed orders.", "testTemplate": "revenuecat-event-ordering", "runtimeSignature": "older event improperly restores or removes access",
+      "rollback": "reconcile from verified latest provider state", "prevention": "idempotency and authoritative ordering", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "SOURCE_REVIEW_HEAD_DRIFT", "tags": ["review", "Git"], "affectedDomains": ["CI-test-infrastructure"],
+      "preImplementationQuestions": ["What exact implementation head/tree was reviewed?"], "requiredProofTier": "T1_SOURCE",
+      "detectionRule": "Compare review manifest head/tree/hash to current implementation.", "testTemplate": "review-exact-head", "runtimeSignature": "review body SHA differs from PR head",
+      "rollback": "invalidate review and rerun lanes", "prevention": "exact-head manifest", "blocks": ["merge"]
+    },
+    {
+      "id": "REVIEW_BRANCH_DIVERGED", "tags": ["review", "Git"], "affectedDomains": ["CI-test-infrastructure"],
+      "preImplementationQuestions": ["Is the review branch based on and descendant of the current implementation?"], "requiredProofTier": "T1_SOURCE",
+      "detectionRule": "Verify base/ancestry and review-files-only diff.", "testTemplate": "review-branch-shape", "runtimeSignature": "review branch merge-base is an older implementation head",
+      "rollback": "create fresh review-only branch", "prevention": "review branch contract", "blocks": ["merge"]
+    },
+    {
+      "id": "REMOTE_MIGRATION_AHEAD_OF_GIT", "tags": ["database", "drift"], "affectedDomains": ["database-RLS"],
+      "preImplementationQuestions": ["Does Git contain every remote version/name/body exactly?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Read-only remote statement comparison against Git.", "testTemplate": "remote-source-parity", "runtimeSignature": "remote migration version absent from source",
+      "rollback": "block DB merge and add exact deployed source without reapply", "prevention": "migration parity gate", "blocks": ["build", "merge", "release"]
+    },
+    {
+      "id": "MIGRATION_VERSION_NAME_MISMATCH", "tags": ["database", "migration"], "affectedDomains": ["database-RLS"],
+      "preImplementationQuestions": ["Do version, name, statement count, and body hash all match?"], "requiredProofTier": "T3_INTEGRATION",
+      "detectionRule": "Compare exact four-part migration identity.", "testTemplate": "migration-identity", "runtimeSignature": "same body under a different local version/name",
+      "rollback": "align Git filename to deployed identity without rewriting body", "prevention": "immutable migration manifest", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "SECRET_EXPOSED_BY_PROCESS_INSPECTION", "tags": ["security", "secrets"], "affectedDomains": ["CI-test-infrastructure", "autonomous-operators"],
+      "preImplementationQuestions": ["Can credentials appear in argv, environment dumps, ps output, or logs?"], "requiredProofTier": "T1_SOURCE",
+      "detectionRule": "Reject secret-bearing argv and scan evidence/log output.", "testTemplate": "secret-process-redaction", "runtimeSignature": "token-like value in command/process evidence",
+      "rollback": "stop process, rotate exposed credential, purge private evidence", "prevention": "stdin/root-owned files and redaction", "blocks": ["build", "merge", "release"]
+    },
+    {
+      "id": "DEVICE_IDENTIFIER_EXPOSED_IN_EVIDENCE", "tags": ["privacy", "device"], "affectedDomains": ["CI-test-infrastructure"],
+      "preImplementationQuestions": ["Are serials, UDIDs, accounts, and private media excluded?"], "requiredProofTier": "T1_SOURCE",
+      "detectionRule": "Privacy scan committed evidence and require redacted summary.", "testTemplate": "evidence-redaction", "runtimeSignature": "raw serial/UDID/account in Git diff",
+      "rollback": "remove from Git history under incident procedure", "prevention": "raw evidence outside Git", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "UNDOCUMENTED_TIMER_MONITORING_LOOP", "tags": ["operations", "waiting"], "affectedDomains": ["autonomous-operators", "CI-test-infrastructure"],
+      "preImplementationQuestions": ["What timer, duration, stop condition, and owner authorize monitoring?"], "requiredProofTier": "T0_REQUIREMENT",
+      "detectionRule": "Reject polling/sleep loops without bounded documented policy.", "testTemplate": "bounded-wait-policy", "runtimeSignature": "repeated provider/device polls beyond 15 minutes",
+      "rollback": "stop process and record BLOCKED_EXTERNAL resumption", "prevention": "15-minute no-wait rule", "blocks": ["merge", "release"]
+    },
+    {
+      "id": "EXHAUSTIVE_MATRIX_WITHOUT_COVERAGE_PLAN", "tags": ["testing", "combinatorial"], "affectedDomains": ["CI-test-infrastructure"],
+      "preImplementationQuestions": ["What exhaustive count, pairwise/3-way coverage, and mandatory goldens apply?"], "requiredProofTier": "T2_MODEL",
+      "detectionRule": "Require deterministic covering-array report before manual execution.", "testTemplate": "covering-array-proof", "runtimeSignature": "large manual matrix with unknown interaction coverage",
+      "rollback": "stop redundant execution and regenerate plan", "prevention": "measured t-way coverage", "blocks": ["merge"]
+    },
+    {
+      "id": "MIXED_HIGH_RISK_PR_SCOPE", "tags": ["scope", "review"], "affectedDomains": ["CI-test-infrastructure"],
+      "preImplementationQuestions": ["Does one objective cover every touched high-risk domain without unrelated work?"], "requiredProofTier": "T0_REQUIREMENT",
+      "detectionRule": "Map changed paths to domains and reject unrelated high-risk pairs.", "testTemplate": "pr-domain-classification", "runtimeSignature": "sentinel objective plus provider-money/native/database implementation",
+      "rollback": "split into bounded successor PRs", "prevention": "machine-readable objective and scope budget", "blocks": ["implementation", "merge"]
+    }
+  ]
+}

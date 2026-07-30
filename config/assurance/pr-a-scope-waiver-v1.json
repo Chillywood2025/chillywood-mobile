@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-a-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Create the repository-only First-Pass Assurance contract foundation and deterministic dogfood detector.",
+  "exactReason": "The owner-mandated foundation names ten independent contracts, a schema catalog, six scoped instruction files, nine executable command entry points, generated hot-path documents, current-truth data, and dogfood evidence. Combining or omitting those addressable control-plane artifacts would break the required contract surface.",
+  "reviewer": "foundation-control-plane-exact-head-review-lane",
+  "supportingDomains": ["CI-test-infrastructure", "documentation-metadata"],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 4,
+  "fileBudget": {"default": 15, "waivedMaximum": 36},
+  "lineBudget": {"default": 1200, "waivedMaximum": 6000},
+  "reviewStatus": "REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": ["app product source", "Supabase migration source", "Edge Functions", "native plugins", "EAS/provider state", "PR #52 branch", "PR #53 branch"]
+}

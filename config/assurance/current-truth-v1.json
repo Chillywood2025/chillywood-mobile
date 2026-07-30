@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "contractId": "current-truth-record-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
+  "mainSha": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
+  "latestMergedImplementationPr": {"number": 50, "state": "merged", "head": "934b6ae2ef07d79295e21a77d2b033f3be778c32", "mergeSha": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6", "title": "Migrate Chi'lly Chat calls to LiveKit media"},
+  "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
+  "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
+  "remoteMigrationHead": "20260730161737",
+  "enabledCognitiveSwitches": ["cognitive_android_visual_sentinel", "cognitive_ios_visual_sentinel"],
+  "enabledSchedules": [],
+  "scheduleState": {"enabled": 0, "total": 5},
+  "effectiveBaselineCount": 1,
+  "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
+  "openImplementationPrs": [{"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "open-draft", "disposition": "reconcile-then-supersede-unmerged"}],
+  "openReviewOnlyPrs": [{"number": 53, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review", "head": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b", "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "state": "open-draft-stale", "disposition": "never-merge"}],
+  "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
+  "timestamp": "2026-07-30T16:49:50Z",
+  "freshnessDeadline": "2026-07-31T16:49:50Z",
+  "evidenceSources": [
+    {"id": "github-pr-readback-20260730", "mode": "read-only", "covers": ["main", "PR #50", "PR #52", "PR #53"]},
+    {"id": "supabase-migration-readback-20260730", "mode": "read-only", "covers": ["remote migration versions", "names", "statement arrays", "hashes"]},
+    {"id": "owner-supplied-safety-snapshot-20260730", "mode": "provided", "covers": ["switches", "schedules", "effective baseline", "sentinel counts", "non-interference"]}
+  ],
+  "liveProviderReadback": true,
+  "providerReadback": {"github": true, "supabase": true, "eas": false, "apple": false, "googlePlay": false, "revenueCat": false, "liveKit": false}
+}

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "contractId": "dogfood-pr-a-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/dogfood",
+  "snapshotTimestamp": "2026-07-30T16:49:50Z",
+  "requiredFindingIds": [
+    "ASSURANCE_CURRENT_TRUTH_STALE",
+    "ASSURANCE_REVIEW_HEAD_STALE",
+    "ASSURANCE_REVIEW_BRANCH_DIVERGED",
+    "ASSURANCE_REMOTE_MIGRATION_DRIFT",
+    "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+    "ASSURANCE_LIVEKIT_FORMAL_RUNS_MISSING",
+    "ASSURANCE_REVENUECAT_CURRENT_REVIEW_MISSING"
+  ],
+  "subjects": [
+    {
+      "id": "PR-50-HISTORICAL",
+      "type": "pull_request_history",
+      "facts": {
+        "prNumber": 50, "merged": true, "changedFiles": 71,
+        "domains": ["Chat", "LiveKit", "notifications-native-calls", "database-RLS", "release-OTA", "CI-test-infrastructure"],
+        "objectiveDomains": ["Chat", "LiveKit"],
+        "sourceProofSubstitutions": [{"offered": "regex source test", "required": "native lifecycle test"}, {"offered": "generated native source", "required": "compiled native binary"}],
+        "missingPrebuildNativeLifecycle": true,
+        "missingInterleavings": ["accept-versus-timeout", "old-cleanup-versus-new-invite"],
+        "easEnvironmentParityGap": true,
+        "repeatedProviderOrDeliveryAttempts": true,
+        "undocumentedWaitingLoop": true
+      }
+    },
+    {
+      "id": "PR-52-CURRENT",
+      "type": "pull_request",
+      "facts": {
+        "prNumber": 52, "state": "open-draft", "implementationHead": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "reviewedHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d",
+        "changedFiles": 15, "domains": ["LiveKit", "RevenueCat-Premium", "database-RLS", "CI-test-infrastructure"], "objectiveDomains": ["LiveKit"],
+        "formalLiveKitRuns": 0, "liveKitSwitchEnabled": false, "providerReconciliationAddedAfterReviewedHead": true,
+        "migrationComparisons": [
+          {"remoteVersion": "20260730142519", "remoteName": "cognitive_livekit_final_chat_source_identity_binding", "remoteHash": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204", "sourceVersion": "20260730142519", "sourceName": "cognitive_livekit_final_chat_source_identity_binding", "sourceHash": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204"},
+          {"remoteVersion": "20260730153724", "remoteName": "revenuecat_verified_transfer_reconciliation", "remoteHash": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8", "sourceVersion": "20260730152710", "sourceName": "revenuecat_verified_transfer_reconciliation", "sourceHash": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8"},
+          {"remoteVersion": "20260730154416", "remoteName": "allow_expired_revenuecat_transfer_target_reconciliation", "remoteHash": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e", "sourceVersion": "20260730160000", "sourceName": "allow_expired_revenuecat_transfer_target_reconciliation", "sourceHash": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e"},
+          {"remoteVersion": "20260730161737", "remoteName": "allow_room_host_participant_block_check", "remoteHash": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765", "sourceVersion": null, "sourceName": null, "sourceHash": null}
+        ]
+      }
+    },
+    {
+      "id": "PR-53-CURRENT",
+      "type": "review_pull_request",
+      "facts": {
+        "prNumber": 53, "state": "open-draft", "reviewHead": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b", "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "currentImplementationHead": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+        "mergeBaseWithImplementation": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "reviewContainsCurrentImplementation": false, "reviewBranchDiverged": true,
+        "containsImplementationSource": true, "reviewIncludesRevenueCatChanges": false, "mayMerge": false
+      }
+    },
+    {
+      "id": "REMOTE-MIGRATIONS-20260730",
+      "type": "remote_migrations",
+      "facts": {
+        "remoteHead": "20260730161737", "mainSourceHead": "20260730040727",
+        "remoteAfterMain": [
+          {"version": "20260730142519", "name": "cognitive_livekit_final_chat_source_identity_binding", "hash": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204"},
+          {"version": "20260730153724", "name": "revenuecat_verified_transfer_reconciliation", "hash": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8"},
+          {"version": "20260730154416", "name": "allow_expired_revenuecat_transfer_target_reconciliation", "hash": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e"},
+          {"version": "20260730161737", "name": "allow_room_host_participant_block_check", "hash": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765"}
+        ]
+      }
+    },
+    {
+      "id": "CURRENT-STATE-MD-BEFORE-FOUNDATION",
+      "type": "hot_path_document",
+      "facts": {
+        "document": "CURRENT_STATE.md", "recordedMainSha": "77e0dcbf810e91e44b2716b999a534aaace9d108", "actualMainSha": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
+        "recordedAndroidBuild": "84", "actualAndroidBuild": "86", "recordedIosUpdate": "019f9c13-9f6d-7c52-9cee-71265b8fd565", "actualIosUpdate": "019fb099-f7c3-7130-97aa-a4bb1c49792f",
+        "resolvedProviderBlockerStillActive": "Supabase PUBLIC schema net USAGE", "recordedRoles": "NOLOGIN", "roleStateClaimStale": true, "actualPublicNetUsage": "denied",
+        "recordedEnabledVisualSwitches": 0, "actualEnabledVisualSwitches": 2
+      }
+    },
+    {
+      "id": "NEXT-TASK-MD-BEFORE-FOUNDATION",
+      "type": "hot_path_document",
+      "facts": {
+        "document": "NEXT_TASK.md", "describesPrEra": 10, "actualLatestMergedPr": 50, "nextTaskMismatch": true,
+        "forbiddenStaleNextAction": "resume old July 25 provider/device work", "actualNextAction": "merge PR A then read-only source reconciliation"
+      }
+    }
+  ]
+}

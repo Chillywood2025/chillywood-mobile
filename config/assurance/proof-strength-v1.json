@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "contractId": "proof-strength-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/proofStrength",
+  "claimRule": "Evidence proves only its own tier and named platform/environment/artifact; higher tiers require independent evidence.",
+  "tiers": [
+    {"id": "T0_REQUIREMENT", "proves": ["requirement", "non-goals", "ownership", "risk", "applicability", "failure-modes", "planned-evidence"]},
+    {"id": "T1_SOURCE", "proves": ["static-source", "lint", "typecheck", "source-contract", "unit-test", "generated-architecture-graph"]},
+    {"id": "T2_MODEL", "proves": ["executable-state-model", "property-test", "state-machine-commands", "deterministic-race-fault-permutations", "invariants", "replayable-counterexample"]},
+    {"id": "T3_INTEGRATION", "proves": ["real-database-login", "transaction", "RPC", "RLS", "concurrency", "idempotency", "runtime-adapter", "sanitized-provider-fixture"]},
+    {"id": "T4_NATIVE_PROVIDER", "proves": ["generated-native-source", "native-compile", "android-instrumentation", "ios-native-test", "exact-provider-fixture", "exact-environment-config", "runtime-capability-comparison"]},
+    {"id": "T5_SIGNED_ARTIFACT", "proves": ["signed-AAB-IPA-TestFlight-Play-artifact", "artifact-hash", "signing-identity", "runtime", "channel", "embedded-update", "native-capability-manifest", "installer-readback"]},
+    {"id": "T6_INSTALLED_PHYSICAL", "proves": ["installed-source-identity", "installed-UI", "first-media", "actual-native-action", "background-terminated", "camera-microphone", "store-purchase-restore", "device-interaction", "cleanup"]},
+    {"id": "T7_PUBLIC_CANARY", "proves": ["bounded-public-or-staged-cohort", "real-provider-state", "rollback", "monitoring", "zero-critical-findings"]}
+  ]
+}

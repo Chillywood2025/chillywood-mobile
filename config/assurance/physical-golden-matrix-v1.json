@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "contractId": "physical-golden-matrix-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/physicalGoldenMatrix",
+  "evidenceRules": {
+    "platformIsolation": true,
+    "artifactIdentityRequired": true,
+    "installerReadbackRequired": true,
+    "interactionRequired": true,
+    "authoritativeCleanupRequired": true,
+    "rawEvidenceLocation": "outside-git",
+    "committedEvidence": "redacted-summary-only",
+    "forbiddenSubstitutes": ["simulator-for-signed-artifact", "screenshot-for-interaction", "one-device-for-two-device", "one-direction-for-bidirectional"]
+  },
+  "cases": [
+    {"id": "ANDROID_TERMINATED_NATIVE_ANSWER", "platform": "android", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "ANDROID_TERMINATED_NATIVE_DECLINE", "platform": "android", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "IOS_TERMINATED_CALLKIT_ANSWER", "platform": "ios", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "IOS_TERMINATED_CALLKIT_DECLINE", "platform": "ios", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "VOICE_ANDROID_TO_IOS", "platform": "cross-platform", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "VOICE_IOS_TO_ANDROID", "platform": "cross-platform", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "VIDEO_ANDROID_TO_IOS", "platform": "cross-platform", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "VIDEO_IOS_TO_ANDROID", "platform": "cross-platform", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "CALL_TIMEOUT_MISSED", "platform": "each-applicable", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "CALL_BUSY_OVERLAP", "platform": "cross-platform", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "ANDROID_BACKGROUND_RECOVERY", "platform": "android", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "IOS_BACKGROUND_RECOVERY", "platform": "ios", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "GOOGLE_PLAY_PROVIDER_PURCHASE_RESTORE", "platform": "android", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "APP_STORE_PROVIDER_PURCHASE_RESTORE", "platform": "ios", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "PLAY_SIGNED_ARTIFACT_LAUNCH", "platform": "android", "tier": "T6_INSTALLED_PHYSICAL"},
+    {"id": "TESTFLIGHT_SIGNED_ARTIFACT_LAUNCH", "platform": "ios", "tier": "T6_INSTALLED_PHYSICAL"}
+  ]
+}

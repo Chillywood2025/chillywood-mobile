@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "contractId": "current-truth-contract-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
+  "recordPath": "config/assurance/current-truth-v1.json",
+  "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
+  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "freshness": {"defaultHours": 24, "providerCriticalHours": 8, "clock": "UTC", "failClosed": true},
+  "staleFindingIds": {
+    "mainSha": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
+    "mergedPrState": "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE",
+    "providerBlocker": "ASSURANCE_CURRENT_TRUTH_PROVIDER_STALE",
+    "buildRuntime": "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE",
+    "remoteMigrationHead": "ASSURANCE_CURRENT_TRUTH_MIGRATION_STALE",
+    "switches": "ASSURANCE_CURRENT_TRUTH_SWITCH_STALE",
+    "age": "ASSURANCE_CURRENT_TRUTH_STALE"
+  },
+  "providerMode": {"default": "offline", "allowedExplicitMode": "read-only", "mutationAllowed": false, "secretOutputAllowed": false}
+}

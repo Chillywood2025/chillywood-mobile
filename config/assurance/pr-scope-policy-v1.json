@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-scope-policy-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/prScopePolicy",
+  "defaultBudget": {"changedFiles": 15, "netChangedLines": 1200},
+  "timeboxesHours": {"documentationContract": 4, "sourceTest": 6, "nativeDatabaseSecurity": 8, "absoluteTaskMaximum": 8},
+  "domains": [
+    {"id": "UI", "risk": "medium", "paths": ["app/", "components/", "hooks/"]},
+    {"id": "Chat", "risk": "high", "paths": ["app/chat/", "components/chat/", "_lib/chat", "_lib/chillyChat"]},
+    {"id": "LiveKit", "risk": "high", "paths": ["_lib/livekit/", "ops/livekit-", "workers/livekit-", "supabase/functions/livekit"]},
+    {"id": "notifications-native-calls", "risk": "high", "paths": ["modules/chillywood-native-calls/", "plugins/withChillyChat", "supabase/functions/ios-voip", "supabase/functions/chilly-chat-call-dispatch"]},
+    {"id": "RevenueCat-Premium", "risk": "high", "paths": ["supabase/functions/revenuecat-", "components/monetization/", "config/ios/"]},
+    {"id": "money-payouts", "risk": "high", "paths": ["ops/money-", "docs/payouts/", "supabase/functions/money-", "supabase/functions/stripe"]},
+    {"id": "database-RLS", "risk": "high", "paths": ["supabase/migrations/", "supabase/tests/", "supabase/database.types.ts"]},
+    {"id": "auth", "risk": "high", "paths": ["app/(auth)/", "app/auth/", "_lib/auth", "supabase/functions/*auth*"]},
+    {"id": "media-storage", "risk": "high", "paths": ["workers/", "ops/media-", "supabase/functions/media-", "components/creator-media/"]},
+    {"id": "release-OTA", "risk": "high", "paths": ["eas.json", "app.config.ts", "config/release/", "ops/release-", "docs/release/"]},
+    {"id": "Cognitive", "risk": "high", "paths": ["config/intelligence/", "docs/intelligence/", "supabase/functions/cognitive-"]},
+    {"id": "autonomous-operators", "risk": "high", "paths": ["config/autonomy/", "ops/", "_lib/autonomous", "_lib/ownerCommand"]},
+    {"id": "CI-test-infrastructure", "risk": "supporting", "paths": [".github/", "scripts/", "tests/", "package.json", "package-lock.json", "config/assurance/"]},
+    {"id": "legal-store", "risk": "high", "paths": ["legal/", "docs/legal/", "docs/google-play/", "tools/ios-storekit-harness/"]}
+  ],
+  "violations": [
+    "two-unrelated-high-risk-domains",
+    "objective-omits-affected-domain",
+    "provider-money-in-sentinel-only-objective",
+    "native-without-native-gate",
+    "database-without-migration-gate",
+    "ci-or-package-hides-unrelated-scope",
+    "silent-budget-growth"
+  ],
+  "waiverRequirements": ["machineReadable", "exactReason", "reviewer", "noSecondHighRiskDomain", "newTimeboxHours", "explicitFileAndLineBudgets"],
+  "supportingDomain": "CI-test-infrastructure cannot conceal a high-risk implementation objective."
+}

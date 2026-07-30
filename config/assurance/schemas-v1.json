@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chillywood.local/assurance/schemas-v1.json",
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9_.:-]*$"},
+    "lowerId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]*$"},
+    "stringArray": {"type": "array", "items": {"type": "string"}},
+    "status": {"enum": ["REQUIREMENTS_CLEAR", "ARCHITECTURE_CLEAR", "SOURCE_CLEAR", "MODEL_CLEAR", "INTEGRATION_CLEAR", "NATIVE_CLEAR", "PROVIDER_CLEAR", "ARTIFACT_CLEAR", "INSTALLED_CLEAR", "PHYSICAL_CLEAR", "RELEASE_CLEAR", "BLOCKED_INTERNAL", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+    "baseContract": {
+      "type": "object",
+      "required": ["schemaVersion", "contractId"],
+      "properties": {"schemaVersion": {"const": 1}, "contractId": {"type": "string"}},
+      "additionalProperties": true
+    },
+    "gateCatalog": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["statuses", "gates", "phaseBlockers"],
+      "properties": {"statuses": {"type": "array", "items": {"$ref": "#/$defs/status"}, "uniqueItems": true}, "gates": {"type": "array", "minItems": 8}, "phaseBlockers": {"type": "object"}}
+    },
+    "proofStrength": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["tiers", "claimRule"],
+      "properties": {"tiers": {"type": "array", "minItems": 8}, "claimRule": {"type": "string"}}
+    },
+    "proofSubstitutionDenylist": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["mode", "substitutions"],
+      "properties": {"mode": {"const": "reject"}, "substitutions": {"type": "array", "minItems": 35}}
+    },
+    "prScopePolicy": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["defaultBudget", "timeboxesHours", "domains", "violations", "waiverRequirements"],
+      "properties": {"domains": {"type": "array", "minItems": 13}}
+    },
+    "reviewContract": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["manifestRequiredFields", "reviewOnlyRules", "invalidations", "levels"]
+    },
+    "testImpactMap": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["pathRules", "riskCommands", "supportingDomain"]
+    },
+    "currentTruthContract": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "freshness", "staleFindingIds"]
+    },
+    "currentTruthRecord": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "properties": {"mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"}, "liveProviderReadback": {"type": "boolean"}}
+    },
+    "physicalGoldenMatrix": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["cases", "evidenceRules"],
+      "properties": {"cases": {"type": "array", "minItems": 13}}
+    },
+    "escapedDefectCatalog": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["defects"],
+      "properties": {"defects": {"type": "array", "minItems": 25}}
+    },
+    "featureManifest": {
+      "type": "object",
+      "required": ["featureId", "currentState", "ownerSystems", "productOwner", "routes", "components", "edgeFunctions", "tablesRpcs", "nativeModulesPlugins", "providers", "platformScope", "environments", "riskLevel", "requirements", "nonGoals", "states", "transitions", "invariants", "knownDefectTags", "threatFailureModes", "proofTierApplicability", "commands", "artifactRequirements", "installedRequirements", "physicalGoldenCases", "rollback", "emergencyStop", "evidenceRetention", "reviewRequirements", "unresolvedBlockers"],
+      "properties": {"featureId": {"$ref": "#/$defs/lowerId"}, "currentState": {"type": "string"}, "riskLevel": {"enum": ["A", "B", "C", "D"]}}
+    },
+    "featureRegistry": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["features", "registryState"],
+      "properties": {"features": {"type": "array", "minItems": 18, "items": {"$ref": "#/$defs/featureManifest"}}, "registryState": {"const": "REGISTERED_NOT_PROVED"}}
+    },
+    "scopeWaiver": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["objective", "exactReason", "reviewer", "supportingDomains", "secondHighRiskDomain", "newTimeboxHours", "fileBudget", "lineBudget", "reviewStatus"],
+      "properties": {"secondHighRiskDomain": {"const": false}, "newTimeboxHours": {"maximum": 8}}
+    },
+    "dogfood": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["subjects", "requiredFindingIds"],
+      "properties": {"subjects": {"type": "array", "minItems": 5}, "requiredFindingIds": {"type": "array", "minItems": 7}}
+    }
+  }
+}
