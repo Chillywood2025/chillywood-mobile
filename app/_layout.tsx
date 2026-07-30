@@ -1,6 +1,6 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
@@ -42,7 +42,10 @@ import {
   stopChillyChatCallSound,
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
-import { subscribeToEarlyAndroidNativeCallRoutes } from "../_lib/chillyChatNativeCallRouteBuffer";
+import {
+  consumePendingAndroidNativeCallRoute,
+  subscribeToEarlyAndroidNativeCallRoutes,
+} from "../_lib/chillyChatNativeCallRouteBuffer";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
 import {
   resolveChillyChatNativeCallRoute,
@@ -169,8 +172,28 @@ function AndroidNativeCallRouteBridge() {
   const router = useRouter();
   const { isLoading, isSignedIn } = useSession();
   const handledNativeCallRouteKeysRef = useRef(new Set<string>());
+  const nativeCallActionAuthReadyRef = useRef(false);
   const [pendingNativeCallRoute, setPendingNativeCallRoute] =
     useState<ReturnType<typeof resolveChillyChatNativeCallRoute>>(null);
+  const captureResolvedNativeCallRoute = useCallback((
+    nativeCallRoute: NonNullable<ReturnType<typeof resolveChillyChatNativeCallRoute>>,
+  ) => {
+    if (
+      !nativeCallActionAuthReadyRef.current
+      || handledNativeCallRouteKeysRef.current.has(nativeCallRoute.requestKey)
+    ) {
+      return;
+    }
+    setPendingNativeCallRoute((current) => (
+      current?.requestKey === nativeCallRoute.requestKey
+        ? current
+        : nativeCallRoute
+    ));
+  }, []);
+
+  useEffect(() => {
+    nativeCallActionAuthReadyRef.current = !isLoading && isSignedIn;
+  }, [isLoading, isSignedIn]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return () => {};
@@ -184,26 +207,12 @@ function AndroidNativeCallRouteBridge() {
       ) {
         return;
       }
-      setPendingNativeCallRoute((current) => (
-        current?.requestKey === nativeCallRoute.requestKey
-          ? current
-          : nativeCallRoute
-      ));
-    };
-    const captureResolvedNativeCallRoute = (
-      nativeCallRoute: NonNullable<ReturnType<typeof resolveChillyChatNativeCallRoute>>,
-    ) => {
-      if (!active || handledNativeCallRouteKeysRef.current.has(nativeCallRoute.requestKey)) {
-        return;
-      }
-      setPendingNativeCallRoute((current) => (
-        current?.requestKey === nativeCallRoute.requestKey
-          ? current
-          : nativeCallRoute
-      ));
+      captureResolvedNativeCallRoute(nativeCallRoute);
     };
     const unsubscribeEarlyNativeCallRoutes =
-      subscribeToEarlyAndroidNativeCallRoutes(captureResolvedNativeCallRoute);
+      subscribeToEarlyAndroidNativeCallRoutes((nativeCallRoute) => {
+        if (active) captureResolvedNativeCallRoute(nativeCallRoute);
+      });
 
     void Linking.getInitialURL()
       .then(captureNativeCallRoute)
@@ -217,7 +226,33 @@ function AndroidNativeCallRouteBridge() {
       active = false;
       unsubscribeEarlyNativeCallRoutes();
     };
-  }, []);
+  }, [captureResolvedNativeCallRoute]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || isLoading || !isSignedIn) return () => {};
+    let active = true;
+    const consumePendingNativeCallAction = () => {
+      void consumePendingAndroidNativeCallRoute()
+        .then((nativeCallRoute) => {
+          if (active && nativeCallRoute) {
+            captureResolvedNativeCallRoute(nativeCallRoute);
+          }
+        })
+        .catch((error) => {
+          reportRuntimeError("android-native-call-pending-action", error, {
+            source: "root-layout",
+          });
+        });
+    };
+    consumePendingNativeCallAction();
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") consumePendingNativeCallAction();
+    });
+    return () => {
+      active = false;
+      appStateSubscription.remove();
+    };
+  }, [captureResolvedNativeCallRoute, isLoading, isSignedIn]);
 
   useEffect(() => {
     if (
@@ -238,6 +273,11 @@ function AndroidNativeCallRouteBridge() {
       if (oldestRequestKey) handledNativeCallRouteKeysRef.current.delete(oldestRequestKey);
     }
     setPendingNativeCallRoute(null);
+    void consumePendingAndroidNativeCallRoute().catch((error) => {
+      reportRuntimeError("android-native-call-pending-action-clear", error, {
+        source: "root-layout",
+      });
+    });
     router.replace(
       pendingNativeCallRoute.destination as Parameters<typeof router.replace>[0],
     );

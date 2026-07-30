@@ -1,9 +1,35 @@
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const NATIVE_REQUEST_KEY_PATTERN = /^[0-9a-f]{64}$/u;
 
 const normalizeUuid = (value) => {
   const normalized = String(value ?? "").trim();
   return UUID_PATTERN.test(normalized) ? normalized.toLowerCase() : "";
+};
+
+const buildResolvedNativeCallRoute = (
+  threadId,
+  callInviteId,
+  nativeCallAction,
+) => {
+  if (
+    !threadId
+    || !callInviteId
+    || !["answer", "decline"].includes(nativeCallAction)
+  ) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    callInviteId,
+    nativeCallAction,
+  });
+  if (nativeCallAction === "answer") params.set("openCall", "1");
+
+  return {
+    destination: `/chat/${encodeURIComponent(threadId)}?${params.toString()}`,
+    requestKey: `${threadId}:${callInviteId}:${nativeCallAction}`,
+  };
 };
 
 const readChatThreadId = (parsedUrl) => {
@@ -46,24 +72,26 @@ export const resolveChillyChatNativeCallRoute = (value) => {
   const nativeCallAction = String(
     parsedUrl.searchParams.get("nativeCallAction") ?? "",
   ).trim().toLowerCase();
+  return buildResolvedNativeCallRoute(threadId, callInviteId, nativeCallAction);
+};
+
+export const resolveChillyChatNativeCallActionPayload = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const threadId = normalizeUuid(value.threadId);
+  const callInviteId = normalizeUuid(value.callInviteId);
+  const nativeCallAction = String(value.nativeCallAction ?? "").trim().toLowerCase();
+  const nativeRequestKey = String(value.requestKey ?? "").trim().toLowerCase();
+  const createdAt = Number(value.createdAt);
+  const schemaVersion = Number(value.schemaVersion);
   if (
-    !threadId
-    || !callInviteId
-    || !["answer", "decline"].includes(nativeCallAction)
+    !NATIVE_REQUEST_KEY_PATTERN.test(nativeRequestKey)
+    || !Number.isSafeInteger(createdAt)
+    || createdAt <= 0
+    || schemaVersion !== 1
   ) {
     return null;
   }
-
-  const params = new URLSearchParams({
-    callInviteId,
-    nativeCallAction,
-  });
-  if (nativeCallAction === "answer") params.set("openCall", "1");
-
-  return {
-    destination: `/chat/${encodeURIComponent(threadId)}?${params.toString()}`,
-    requestKey: `${threadId}:${callInviteId}:${nativeCallAction}`,
-  };
+  return buildResolvedNativeCallRoute(threadId, callInviteId, nativeCallAction);
 };
 
 export const redirectChillyChatNativeCallSystemPath = (value) => (

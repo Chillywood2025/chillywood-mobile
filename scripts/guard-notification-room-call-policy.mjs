@@ -39,6 +39,7 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
   "proof:notification-icon-surface-wiring",
   "proof:room-safe-notification-and-call-behavior",
   "guard:notification-room-call-policy",
+  "test:chilly-chat-native-call-action-handoff",
 ].forEach((needle) => assertIncludes(packageJson, needle, "package notification room/call scripts"));
 
 assertIncludes(bell, "readNotificationSummary", "bell must use real unread summary");
@@ -200,7 +201,12 @@ assertIncludes(chillyChatNativeCallRouteBuffer, 'Platform.OS === "android"', "th
 assertIncludes(chillyChatNativeCallRouteBuffer, 'Linking.addEventListener("url"', "the early native call action buffer must subscribe during native-intent module loading");
 assertIncludes(chillyChatNativeCallRouteBuffer, "createChillyChatNativeCallRouteBuffer", "the early action buffer must reject unvalidated system URLs and retain pre-mount actions");
 assertIncludes(chillyChatNativeCallRouteBuffer, "subscribeToEarlyAndroidNativeCallRoutes", "the authenticated root bridge must drain the early action buffer");
+assertIncludes(chillyChatNativeCallRouteBuffer, "consumePendingAndroidNativeCallRoute", "terminated Android actions must consume the native one-time store after React startup");
+assertIncludes(chillyChatNativeCallRouteBuffer, "resolveChillyChatNativeCallActionPayload", "native one-time store output must pass independent JavaScript validation");
 assertIncludes(layout, "subscribeToEarlyAndroidNativeCallRoutes", "the root bridge must consume live native actions retained during JS startup");
+assertIncludes(layout, "consumePendingAndroidNativeCallRoute()", "the root bridge must drain a terminated native action before authenticated routing");
+assertIncludes(layout, "nativeCallActionAuthReadyRef.current = !isLoading && isSignedIn", "native persistence must remain authoritative until session restoration completes");
+assertIncludes(layout, 'nextState === "active"', "the authenticated bridge must retry one-time native consumption when Android becomes active");
 assertNotIncludes(chillyChatNativeCallRouteBuffer, "console.", "the early native call action buffer must not log private URLs");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
@@ -238,6 +244,19 @@ assertIncludes(nativeCallPlugin, "Intent.CATEGORY_BROWSABLE", "native Answer dee
 assertIncludes(nativeCallPlugin, "putExtra(\"openCall\", if (nativeAction == \"answer\") \"1\" else \"0\")", "native Answer intent must preserve openCall=1 for the JS join trigger");
 assertIncludes(nativeCallPlugin, "readFullScreenCallAlertStatus", "native module must expose full-screen permission readback");
 assertIncludes(nativeCallPlugin, "openFullScreenCallAlertSettings", "native module must expose full-screen permission settings route");
+assertIncludes(nativeCallPlugin, "ChillyChatNativeCallActionStore.captureForActivity(this, intent)", "MainActivity must persist a validated call action before React startup");
+assertIncludes(nativeCallPlugin, "override fun onNewIntent(intent: Intent)", "warm Android call actions must update the Activity intent");
+assertIncludes(nativeCallPlugin, "setIntent(intent)", "React initial-link fallback must retain the latest native call action");
+assertIncludes(nativeCallPlugin, "fun consumePendingNativeCallAction(promise: Promise)", "the native module must expose one-time action consumption");
+assertIncludes(nativeCallPlugin, "removePending(preferences.edit())", "native action consumption must clear persisted state before routing");
+assertIncludes(nativeCallPlugin, "MAX_ACTION_AGE_MS = 45_000L", "persisted call actions must not outlive the bounded invite window");
+assertIncludes(nativeCallPlugin, "MessageDigest.getInstance(\"SHA-256\")", "native duplicate and replay checks must use a deterministic request-key hash");
+assertIncludes(nativeCallPlugin, "KEY_LAST_CONSUMED_REQUEST_KEY", "consumed native actions must retain a bounded replay tombstone");
+assertIncludes(nativeCallPlugin, "SCHEMA_VERSION = 1", "native pending actions must carry an explicit schema");
+assertIncludes(nativeCallPlugin, "readPendingNativeCallActionStatus", "physical proof must be able to read only empty, expired, or present native state");
+assertIncludes(nativeCallPlugin, "UUID_PATTERN", "native persistence must reject malformed thread and invite identities");
+assertIncludes(nativeCallPlugin, 'it == "answer" || it == "decline"', "native persistence must accept only explicit Answer or Decline actions");
+assertNotIncludes(nativeCallPlugin, "access_token", "native persistence must never retain authentication credentials");
 
 assertIncludes(notifications, "NOTIFICATION_PRIORITY_ORDER", "priority model must exist");
 assertIncludes(notifications, "INTERRUPTIVE_NOTIFICATION_PRIORITIES", "interruptive priority model must exist");

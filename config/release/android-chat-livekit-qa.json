@@ -1,0 +1,40 @@
+{
+  "manifestVersion": 1,
+  "platform": "android",
+  "packageIdentifier": "com.chillywood.mobile",
+  "appVersion": "1.0.0",
+  "expectedNativeBuild": "86",
+  "runtimeVersion": "1.0.0-android-chat-call-action-v1",
+  "channel": "android-chat-livekit-qa",
+  "distributionSource": "google_play_internal",
+  "buildProfile": "android-chat-livekit-qa",
+  "status": "authorized_candidate_not_built",
+  "authorizationScope": "one_replacement_internal_android_binary",
+  "sourceAtAuthorization": "268f5d7e93e2cc5044286a956f870fe35dbf2638",
+  "nativeCompatibility": {
+    "schemaVersion": 1,
+    "digest": "c8f385720b3d17cddf9f3a576d24109796288f454f8ada80a1b2c33576d89610"
+  },
+  "requiredNativeBehavior": {
+    "validatedAnswerDeclinePersistence": true,
+    "oneTimeConsumeAndClear": true,
+    "boundedLifetimeMilliseconds": 45000,
+    "reactStartupIndependent": true
+  },
+  "rollback": {
+    "nativeBuild": "85",
+    "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+    "updateId": "019fb1a9-e08d-72d2-a103-a092cc59564a",
+    "updateGroup": "44173a3d-93b8-429e-bb27-658846afa6ed",
+    "sourceCommit": "268f5d7e93e2cc5044286a956f870fe35dbf2638"
+  },
+  "deliveryConstraints": {
+    "androidUninstallOrReset": false,
+    "iosBinary": false,
+    "publicRelease": false,
+    "productionTrackMutation": false,
+    "openTrackMutation": false,
+    "closedTrackMutation": false,
+    "additionalOta": false
+  }
+}

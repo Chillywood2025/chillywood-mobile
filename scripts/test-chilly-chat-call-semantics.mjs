@@ -32,6 +32,7 @@ import {
 import {
   createChillyChatNativeCallRouteBuffer,
   redirectChillyChatNativeCallSystemPath,
+  resolveChillyChatNativeCallActionPayload,
   resolveChillyChatNativeCallRoute,
 } from "../_lib/chillyChatNativeCallRoutes.mjs";
 import {
@@ -97,6 +98,59 @@ assert.equal(
   ),
   null,
   "native call replay rejects fragment-bearing action URLs",
+);
+assert.deepEqual(
+  resolveChillyChatNativeCallActionPayload({
+    callInviteId: nativeRouteInviteId.toUpperCase(),
+    createdAt: 1_722_000_000_000,
+    nativeCallAction: "ANSWER",
+    requestKey: "a".repeat(64),
+    schemaVersion: 1,
+    threadId: nativeRouteThreadId.toUpperCase(),
+  }),
+  {
+    destination:
+      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
+    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:answer`,
+  },
+  "the one-time native store payload is independently normalized before authenticated routing",
+);
+assert.equal(
+  resolveChillyChatNativeCallActionPayload({
+    callInviteId: nativeRouteInviteId,
+    createdAt: 1_722_000_000_000,
+    nativeCallAction: "incoming",
+    requestKey: "b".repeat(64),
+    schemaVersion: 1,
+    threadId: nativeRouteThreadId,
+  }),
+  null,
+  "the one-time native store cannot elevate an ordinary incoming-open action",
+);
+assert.equal(
+  resolveChillyChatNativeCallActionPayload({
+    access_token: "forbidden",
+    callInviteId: nativeRouteInviteId,
+    createdAt: 1_722_000_000_000,
+    nativeCallAction: "answer",
+    requestKey: "c".repeat(64),
+    schemaVersion: 1,
+    threadId: "not-a-thread",
+  }),
+  null,
+  "malformed native-store identities are rejected without inspecting credential-shaped fields",
+);
+assert.equal(
+  resolveChillyChatNativeCallActionPayload({
+    callInviteId: nativeRouteInviteId,
+    createdAt: 1_722_000_000_000,
+    nativeCallAction: "decline",
+    requestKey: "not-a-hash",
+    schemaVersion: 1,
+    threadId: nativeRouteThreadId,
+  }),
+  null,
+  "native-store payloads require the bounded native request-key hash contract",
 );
 assert.equal(
   redirectChillyChatNativeCallSystemPath(
@@ -776,12 +830,12 @@ assert.match(rootLayoutSource, /testID="app-wide-incoming-call-banner"/u, "foreg
 assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foreground calls cannot use the large app-wide modal");
 assert.match(
   rootLayoutSource,
-  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,1800}Linking\.getInitialURL\(\)[\s\S]{0,180}captureNativeCallRoute/u,
+  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,3000}Linking\.getInitialURL\(\)[\s\S]{0,180}captureNativeCallRoute/u,
   "terminated Android native actions must be captured from the Activity initial URL before the authenticated navigator mounts",
 );
 assert.match(
   rootLayoutSource,
-  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,2600}isLoading[\s\S]{0,120}!isSignedIn[\s\S]{0,120}!pendingNativeCallRoute[\s\S]{0,900}router\.replace/u,
+  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,7000}\|\| isLoading[\s\S]{0,120}\|\| !isSignedIn[\s\S]{0,120}\|\| !pendingNativeCallRoute[\s\S]{0,1200}router\.replace/u,
   "cold-start native actions must wait for the authenticated session before deterministic routing",
 );
 const nativeCallRouteBridgeMountIndex = rootLayoutSource.indexOf("<AndroidNativeCallRouteBridge />");
