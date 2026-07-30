@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-69-revenuecat-architecture-scope-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state",
+  "humanApproval": false,
+  "implementationPrNumber": 69,
+  "implementationBranch": "codex/assurance-reconcile-revenuecat-transfer",
+  "implementationHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+  "implementationTree": "1691927122780fa6945564d0d46051cc9616bf40",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "09e26e52b66e12aefbe966aa277a95f89ecd455e91a6ad07d0b535e681c8e2e2",
+  "migrationSetHash": "356cbdcf0fb6eed2693fbefe7dd95abb1ea408c4ddabd0f95a74868e32c24765",
+  "configHash": "9a22dedca08b6e9f566ae93e55034cd4350ca3389d150e49e8642a26a2d32807",
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+      "implementationTree": "1691927122780fa6945564d0d46051cc9616bf40",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "pullRequestHeadMatched": true,
+      "pullRequestBaseMatched": true
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "findings": 0
+    },
+    "featurePlan": {
+      "status": "pass",
+      "featureId": "revenuecat-premium",
+      "requirements": "REQUIREMENTS_CLEAR",
+      "architecture": "ARCHITECTURE_CLEAR"
+    },
+    "scope": {
+      "status": "pass",
+      "files": 9,
+      "additions": 1180,
+      "deletions": 2,
+      "netChangedLines": 1178,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "highRiskDomains": [
+        "RevenueCat-Premium",
+        "database-RLS"
+      ],
+      "registeredFeatureBundle": "revenuecat-premium",
+      "outsideAllowlist": [],
+      "liveKitImplementationPaths": [],
+      "roomHostPaths": [],
+      "workflowOrPackagePaths": [],
+      "generatedNativePaths": []
+    },
+    "focusedNodeTests": {
+      "status": "pass",
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "files": [
+        "supabase/functions/revenuecat-webhook/store-policy.test.mjs",
+        "tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures.test.mjs"
+      ]
+    },
+    "staticChecks": {
+      "status": "pass-with-isolated-deno-environment-gap",
+      "nodeSyntaxFiles": 3,
+      "jsonFilesParsed": 2,
+      "gitDiffCheck": "pass",
+      "sourceSecretPatternScan": "pass",
+      "denoCheck": {
+        "status": "BLOCKED_INTERNAL",
+        "reason": "The clean review worktree lacked the npm:openai dependency required by the cached Supabase edge-runtime type graph; no install, lockfile write, or network retry was permitted in this lane."
+      }
+    },
+    "localMigrationHashes": {
+      "status": "pass",
+      "remoteReadbackRepeatedByThisLane": false,
+      "source20260730153724": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "source20260730154416": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e"
+    },
+    "architectureOrderingProbe": {
+      "status": "fail",
+      "transferAcceptsNullOccurredAtAsNow": true,
+      "onlyTemporalGuardRejectsMoreThanFiveMinutesInFuture": true,
+      "staleAgainstSourceProviderEventGuard": false,
+      "transferUserLockNamespace": "revenuecat-transfer-user:",
+      "normalPremiumLockNamespace": "revenuecat-premium:",
+      "sharedRenewalTransferLockDomain": false
+    },
+    "fixtureExecutionProbe": {
+      "status": "fail",
+      "declaredOutOfOrderStage": "atomic-rpc-ordering",
+      "fixtureTestExecutesRpc": false,
+      "fixtureTestExecutesEndpoint": false,
+      "fixtureTestExercisesPureIdentityResolver": true,
+      "fixtureLabelsAcceptedAsProviderOrIntegrationProof": false
+    },
+    "reconciliationReport": {
+      "status": "fail",
+      "recordedBaseHead": "84c9ffdcea7de1b73163c60348267875f5d99ed3",
+      "actualPullRequestBaseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "recordedBaseDiffFiles": 16,
+      "actualPullRequestDiffFiles": 9,
+      "reportedT3Status": "INTEGRATION_CLEAR",
+      "outOfOrderInvariantExecuted": false,
+      "remoteDryRunStatus": "BLOCKED_INTERNAL",
+      "mergePermittedByThisReview": false
+    },
+    "proofSubstitutions": {
+      "status": "fail",
+      "correctlyRejected": [
+        "source text present != runtime execution",
+        "synthetic entitlement != provider-backed sandbox entitlement",
+        "remote migration present != source aligned",
+        "source migration filename match != statement-body match"
+      ],
+      "rejectedByThisReview": [
+        "fixture category present != atomic ordering execution",
+        "pure resolver test != RPC concurrency proof",
+        "local pgTAP without delayed-renewal ordering case != complete T3 ordering proof"
+      ]
+    },
+    "rollbackAndEmergency": {
+      "status": "qualified",
+      "deployedMigrationRewritePermitted": false,
+      "newMigrationDeploymentPermitted": false,
+      "webhookDeploymentPermitted": false,
+      "providerMutationPermitted": false,
+      "requiredCorrectionShape": "separately reviewed forward-only ordering correction; never rewrite either deployed migration",
+      "currentEmergencyBehavior": "keep the webhook undeployed and provider delivery stopped under Money Flow Control"
+    },
+    "remoteDryRun": {
+      "status": "BLOCKED_INTERNAL",
+      "executedByThisLane": false,
+      "reason": "The implementation report records the isolated worktree as unlinked; the mandated assembled-source dry-run remains a pre-merge action."
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_rerun",
+      "implementationHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+      "cancelledRunId": 30570253124,
+      "cancelledRunConclusion": "cancelled",
+      "eligibleAsProof": false,
+      "resumptionAction": "Coordinator starts one fresh exact-head Phase 1 CI run only after all four Level C review lanes freeze."
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "premiumOrEntitlementRuntimeChange": false,
+      "moneyOrPayoutChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "unrelatedProductSourceChanged": false,
+      "revenueCatWebhookSourceChanged": true,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "572898f917229b10c1d907b9eeab5cf05e0f991389e858eae4ea1f7b51fe72b1",
+  "reviewLevel": "C",
+  "reviewHead": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+  "reviewTimestamp": "2026-07-30T18:32:01Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "architecture-scope-noninterference"
+  ],
+  "findings": [
+    {
+      "id": "REVENUECAT_TRANSFER_STALE_EVENT_AND_RENEWAL_INTERLEAVING_UNGUARDED",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql:24",
+        "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql:54",
+        "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql:64",
+        "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql:117",
+        "supabase/functions/revenuecat-webhook/index.ts:2239"
+      ],
+      "evidence": "The RPC converts a missing occurred_at to now and rejects only timestamps more than five minutes in the future. It never compares the transfer time with the source provider event or current entitlement authority. Transfer locks use revenuecat-transfer-user:* while ordinary renewal writes lock revenuecat-premium:<user>:<product>. A renewal can therefore update after the transfer reads the source but before its nested source revocation, after which the transfer overwrites the newer state using the stale pre-lock snapshot.",
+      "impact": "A delayed TRANSFER or renewal-versus-transfer interleaving can revoke or move a newer authoritative entitlement, violating the registered older-event and single-owner invariants.",
+      "requiredResolution": "Do not rewrite either deployed migration. Keep the webhook undeployed and add a separately reviewed forward-only correction that shares the Premium user/product lock domain, validates a non-null provider timestamp against authoritative state, and has deterministic delayed-event plus renewal-versus-transfer tests."
+    },
+    {
+      "id": "B2_RECONCILIATION_T3_CLAIM_EXCEEDS_EXECUTED_PROOF",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "docs/assurance/reconciliation/b2-revenuecat-transfer.json:64",
+        "docs/assurance/reconciliation/b2-revenuecat-transfer.json:86",
+        "tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures-v1.json:50",
+        "tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures.test.mjs:39"
+      ],
+      "evidence": "The reconciliation report marks T3_INTEGRATION INTEGRATION_CLEAR and lists out_of_order coverage, but the fixture test only exercises resolveRevenueCatTransferUsers and static source ordering. It never invokes the webhook, RPC, or a renewal-versus-transfer schedule, and the 27-case pgTAP file has duplicate and rollback cases but no stale transfer or concurrent renewal case.",
+      "impact": "Fixture labels and source checks are being allowed to stand in for the missing atomic ordering proof, exactly the proof substitution the assurance contract requires rejecting.",
+      "requiredResolution": "Set T3_INTEGRATION to BLOCKED_INTERNAL until a deterministic database ordering/interleaving test passes. Keep fixture-corpus existence classified as T1 source evidence only."
+    },
+    {
+      "id": "B2_RECONCILIATION_REPORT_BASE_IS_STALE",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "docs/assurance/reconciliation/b2-revenuecat-transfer.json:15"
+      ],
+      "evidence": "The report records baseHead 84c9ffdcea7de1b73163c60348267875f5d99ed3, while PR #69 is based on fc3d750158770a6f33ab10acc68e79a288b6ffa3. The recorded-base diff contains 16 files; the actual PR diff contains the bounded 9 files.",
+      "impact": "The committed feature evidence is not bound to the reviewed scope and can silently include or omit prerequisite-main changes.",
+      "requiredResolution": "Refresh the reconciliation report to the frozen PR base and exact tree evidence, then invalidate and rerun all exact-head reviews after the implementation head changes."
+    },
+    {
+      "id": "B2_ASSEMBLED_REMOTE_DRY_RUN_MISSING",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "docs/assurance/reconciliation/b2-revenuecat-transfer.json:65",
+        "docs/assurance/reconciliation/b2-revenuecat-transfer.json:92"
+      ],
+      "evidence": "The implementation honestly records remoteDryRun as BLOCKED_INTERNAL and names the assembled dry-run as the next required action. No dry-run was run by this review lane.",
+      "impact": "The explicit B reconciliation pre-merge gate remains unsatisfied even though source raw hashes match the supplied read-only remote statement evidence.",
+      "requiredResolution": "Run the coordinator-controlled read-only assembled-source supabase db push --dry-run, preserve sanitized output, and bind the result to the unchanged implementation head before merge."
+    },
+    {
+      "id": "B2_ISOLATED_DENO_CHECK_DEPENDENCY_GAP",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "supabase/functions/revenuecat-webhook/index.ts:1"
+      ],
+      "evidence": "The clean review worktree could not reproduce deno check because the cached edge-runtime declaration resolves npm:openai but the package was absent locally. This lane did not install packages, create deno.lock, or retry with network mutation.",
+      "impact": "The implementation-supplied Deno pass was not independently reproduced in this lane; the 17 Node tests and static checks remain valid.",
+      "requiredResolution": "Use the coordinator's approved dependency environment for the frozen-head full CI/typecheck; keep deno.lock untracked and unstaged."
+    },
+    {
+      "id": "B2_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "The only observed exact-head Phase 1 run, 30570253124, was cancelled for coordinator serialization and is not pass evidence.",
+      "requiredResolution": "After the four isolated Level C lanes freeze, the coordinator must run one complete Phase 1 CI execution at a5a37296800419a50c9bb271d99e505f6ad7a056."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 4,
+    "p2Open": 2,
+    "scopeDisposition": "bounded-related-revenuecat-database-bundle",
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "reviewDisposition": "changes-required-do-not-merge",
+    "humanApproval": false
+  }
+}
