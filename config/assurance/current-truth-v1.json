@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
-  "latestMergedImplementationPr": {"number": 50, "state": "merged", "head": "934b6ae2ef07d79295e21a77d2b033f3be778c32", "mergeSha": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6", "title": "Migrate Chi'lly Chat calls to LiveKit media"},
+  "mainSha": "2f3b0d1cc4765c4196cd831ab782417a0f000c23",
+  "latestMergedImplementationPr": {"number": 54, "state": "merged", "head": "cc4d4582743cc7201785cdb784134663b4fd0e1b", "mergeSha": "2f3b0d1cc4765c4196cd831ab782417a0f000c23", "title": "Add Chi'llywood First-Pass Assurance contracts"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -41,12 +41,30 @@
   },
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
   "openImplementationPrs": [{"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "open-draft", "disposition": "reconcile-then-supersede-unmerged"}],
-  "openReviewOnlyPrs": [{"number": 53, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review", "head": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b", "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "state": "open-draft-stale", "disposition": "never-merge"}],
+  "openReviewOnlyPrs": [
+    {"number": 53, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review", "head": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b", "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "state": "open-draft-stale", "disposition": "never-merge"},
+    {"number": 55, "branch": "codex/first-pass-assurance-foundation-review", "head": "aff39b454a53a09cd028c0d84d39e836f808e3d1", "reviewedImplementationHead": "cc4d4582743cc7201785cdb784134663b4fd0e1b", "state": "open-draft-current", "disposition": "never-merge"}
+  ],
+  "assuranceProgram": {
+    "completed": ["PR-A"],
+    "active": "PR-B-RECONCILIATION",
+    "nextActions": [
+      "Run the merged assurance engine read-only against PR #52, PR #53, and remote migration head `20260730161737`.",
+      "Create and exact-head review bounded Git-only reconciliation PR B1 for the LiveKit source-identity migration.",
+      "Create and exact-head review bounded Git-only reconciliation PR B2 for RevenueCat transfer migrations.",
+      "Create and exact-head review bounded Git-only reconciliation PR B3 for the room-host participant block check.",
+      "After all unique source is safely on main, close PR #52 unmerged as superseded and PR #53 unmerged as stale review-only; retain both branches."
+    ],
+    "prohibitions": [
+      "Do not resume Cognitive LiveKit activation.",
+      "Do not build, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, or release publicly."
+    ]
+  },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-07-30T16:49:50Z",
-  "freshnessDeadline": "2026-07-31T16:49:50Z",
+  "timestamp": "2026-07-30T17:21:30Z",
+  "freshnessDeadline": "2026-07-31T17:21:30Z",
   "evidenceSources": [
-    {"id": "github-pr-readback-20260730", "mode": "read-only", "covers": ["main", "PR #50", "PR #52", "PR #53"]},
+    {"id": "github-pr-readback-20260730", "mode": "read-only", "covers": ["main", "PR #54", "PR #55", "PR #52", "PR #53"]},
     {"id": "supabase-migration-readback-20260730", "mode": "read-only", "covers": ["remote migration versions", "names", "statement arrays", "hashes"]},
     {"id": "owner-supplied-safety-snapshot-20260730", "mode": "provided", "covers": ["switches", "schedules", "effective baseline", "sentinel counts", "non-interference"]}
   ],
