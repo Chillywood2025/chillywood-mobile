@@ -1,0 +1,338 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-final-concurrency-review-v2",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewPrNumber": 100,
+  "assignedLane": "concurrency-property-replay-final-v2",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+  "implementationTree": "99ff062923ca128c017a7d050eb34d62be4d7037",
+  "reviewMergeHead": "f9705d1e3a79fe598861582868c10f9e3716cb88",
+  "reviewMergeTree": "89b092f969bf9055dea2f7b6e9fa2559bfb3ddc6",
+  "reviewMergeParents": [
+    "739a57db896369f1e1029e3ac45a715fb9bde23a",
+    "8829ca3d59453155c29370495f32f432bfece5c8"
+  ],
+  "baseHead": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+  "baseTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+  "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 4,
+    "implementationOnlyCommits": 11
+  },
+  "changedFileHash": "8f8a3345e8eb53b3a8214d5f3af66c738b036b1550f8a5c353101992a8d11f45",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base...implementation)",
+  "changedNameHash": "140824304f89fccb5cef1ca286ce63fe7f71996a7dadb081e5a132f00569c48f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "1275a01e647677891dd7db7a0c76c17f2d3a5af95534e23bc7d36a4093eded76",
+  "implementationDiffHash": "031eb82f139a93d812755cdbbb75def3489839b69d52b7a010a03f3e5b7075b5",
+  "modelSourceSetHash": "344f91251fd3e1003e432f7bf5bd6c16f5a600dd852f4c186703b61f96ce0476",
+  "reviewMergeDeltaHash": "a72d1d01a15e5df60a719b0623337a7c7c3e7cab9116287c3e345b03aa266732",
+  "reviewMergeDeltaNameHash": "b094257fbb631a22bc73d6ed62c08330df51abba723e9a799025ce764ed5db7a",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "concurrency-property-replay-final-v2",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "reviewMergeIntegrity": {
+      "status": "pass",
+      "reviewMergeHead": "f9705d1e3a79fe598861582868c10f9e3716cb88",
+      "reviewMergeTree": "89b092f969bf9055dea2f7b6e9fa2559bfb3ddc6",
+      "firstParent": "739a57db896369f1e1029e3ac45a715fb9bde23a",
+      "secondParentExactImplementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "exactImplementationTree": "99ff062923ca128c017a7d050eb34d62be4d7037",
+      "nonReviewSourceEquivalentToImplementation": true,
+      "implementationFilesOnReviewBranch": 0,
+      "reviewFilesBeforeV2": [
+        "docs/reviews/pr64-final-concurrency-review.json"
+      ]
+    },
+    "v1EvidencePreservation": {
+      "status": "pass",
+      "path": "docs/reviews/pr64-final-concurrency-review.json",
+      "sha256BeforeV2": "a457581d5389e49b4c3951acaf0d352c9252cffd9e077b7eb8ad8043f0a12f2c",
+      "editedByV2Lane": false
+    },
+    "currentTruthControlPlane": {
+      "status": "pass_on_current_main",
+      "currentMain": "ac5575baf823b9189316b02ec5fa5e352d15b457",
+      "currentMainTree": "f401d24a20baf562ac01b7f8b5ed4d927625bf3e",
+      "recordedImplementationHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "recordedImplementationState": "open-draft-frozen",
+      "recordedDisposition": "redaction-remediation-frozen-run-four-fresh-exact-reviews-and-one-full-ci-after-this-sync",
+      "implementationBranchEmbeddedSnapshot": "historical"
+    },
+    "exactDelta": {
+      "status": "pass_under_machine_readable_waiver",
+      "files": 11,
+      "additions": 1424,
+      "deletions": 1,
+      "netChangedLines": 1423,
+      "waivedFileBudget": 12,
+      "waivedLineBudget": 1600,
+      "migrationFiles": 0,
+      "productImplementationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "dependencyExecution": {
+      "status": "pass",
+      "reviewWorktreeInstallPerformed": false,
+      "packageOrLockfileChangedByReview": false,
+      "sourceUnderTest": "PR #100 worktree with non-review source exactly equivalent to implementation tree",
+      "dependencySource": "clean frozen implementation worktree at the exact implementation head",
+      "dependencySourceHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+      "fastCheck": "4.9.0",
+      "pureRand": "8.4.2",
+      "resolutionMechanism": "process-local ESM loader mapping for the pinned fast-check package; inherited by hostile child-process probes"
+    },
+    "focusedModelTests": {
+      "status": "pass",
+      "command": "node --test tests/assurance/concurrency/interleavings.test.mjs tests/assurance/property/state-models.test.mjs tests/assurance/models/escaped-defects.test.mjs",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyDomains": 6,
+      "propertyCases": 1200,
+      "maxCommands": 24,
+      "transitionWitnesses": 8,
+      "positiveTransitionWitnesses": 7,
+      "negativeTransitionWitnesses": 1,
+      "escapedDefectFixtures": 22,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20
+    },
+    "propertyAntiVacuity": {
+      "status": "pass",
+      "propertyCases": 1200,
+      "runsPerDomain": 200,
+      "domains": 6,
+      "transitionWitnesses": 8,
+      "allDomainsHaveWitnesses": true,
+      "allWitnessesReached": true,
+      "allWitnessesViolationFree": true,
+      "witnessHash": "42f816008deb873f60d344bb1f6139d18e1e441d3ca4826129145ee04d5ec57a",
+      "seeds": {
+        "chat-call": 173501,
+        "revenuecat": 173502,
+        "ota-build": 173503,
+        "notification-native-action": 173504,
+        "livekit": 173505,
+        "migrations": 173506
+      }
+    },
+    "requiredInterleavings": {
+      "status": "pass",
+      "scenarioCount": 10,
+      "scheduleCount": 20,
+      "exactScheduleContracts": 8,
+      "exactContractFinalStatesMatched": 8,
+      "allSchedulesModelClear": true,
+      "mechanisms": [
+        "controlled barriers",
+        "promises",
+        "transaction lock",
+        "explicit schedules"
+      ],
+      "scenarioResultHash": "8143256a903a371b6ede8bc3130c61395928fdeba0f72a121a0f73e1a03ed89b",
+      "exactContractHash": "d68233b2534f0ed73f681b44047e93150e56c56b763607443e48dcc5a33e17fb",
+      "deletionAndGuardMutationProbes": {
+        "count": 8,
+        "killed": 8,
+        "survived": 0,
+        "hash": "bd802c29f3f5989a12e048d137785bebf98499c9bf31e1bd717b455e211f9d47",
+        "mutants": [
+          "accept-timeout accept no-op",
+          "accept-timeout timeout no-op",
+          "accept-cancel accept no-op",
+          "accept-cancel cancel no-op",
+          "OTA activate no-op",
+          "OTA rollback no-op",
+          "emergency mutation no-op",
+          "emergency mutation ignores stopped guard"
+        ]
+      }
+    },
+    "escapedDefectRegression": {
+      "status": "pass",
+      "fixtureCount": 22,
+      "canonicalFixtureCount": 17,
+      "supplementalFixtureCount": 5,
+      "allHistoricalVariantsDetected": true,
+      "allCurrentVariantsClear": true,
+      "resultHash": "fbfff87147fb6df4d3d5d7bbdebd4ccc101d26af8d595e32e0ecef5b8d41c1d8",
+      "canonicalDefects": [
+        "ACCEPT_TIMEOUT_RACE",
+        "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200",
+        "DOUBLE_SERIALIZED_JSONB",
+        "EAS_ENVIRONMENT_OVERRIDE",
+        "LIVEKIT_CONNECTED_WITHOUT_MEDIA",
+        "LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION",
+        "MIGRATION_VERSION_NAME_MISMATCH",
+        "MISSING_NATIVE_MODULE_IN_RUNTIME",
+        "NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT",
+        "OTA_NATIVE_CAPABILITY_MISMATCH",
+        "PLATFORM_SCOPE_MISMATCH",
+        "PUSHKIT_DELIVERY_SUPPRESSED",
+        "REMOTE_MIGRATION_AHEAD_OF_GIT",
+        "REVENUECAT_OUT_OF_ORDER_EVENT",
+        "REVENUECAT_TRANSFER_TARGET_MISMATCH",
+        "STALE_CLEANUP_CLEARS_NEW_CALL",
+        "TERMINAL_ROOM_ORPHAN"
+      ]
+    },
+    "replayFilterAndPersistence": {
+      "status": "pass",
+      "resultHash": "0e8fd67979eca9e262c5d6982ab19e9a00f31ef0ba87a523a46b80b642b5afef",
+      "documentedCases": 7,
+      "documentedCasesPassed": 7,
+      "seedWithoutDomainRejected": "ASSURANCE_MODEL_SEED_DOMAIN_REQUIRED",
+      "domainWithConcurrencyRejected": "ASSURANCE_MODEL_DOMAIN_SUITE_UNSUPPORTED",
+      "seedWithConcurrencyRejected": "ASSURANCE_MODEL_SEED_SUITE_UNSUPPORTED",
+      "pathWithConcurrencyRejected": "ASSURANCE_MODEL_REPLAY_SUITE_UNSUPPORTED",
+      "malformedPathRejected": "ASSURANCE_MODEL_REPLAY_PATH_INVALID",
+      "unknownDomainBlocked": "UNKNOWN_MODEL_DOMAIN:missing",
+      "validDomainSeedPreserved": {
+        "domain": "chat-call",
+        "seed": 173501,
+        "propertyCases": 200
+      },
+      "emptyAndBareCases": 6,
+      "emptyAndBareCasesRejected": 6,
+      "emptyAndBareFinding": "ASSURANCE_MODEL_OPTION_VALUE_INVALID",
+      "hostilePersistence": {
+        "stdoutRawMarkerAbsent": true,
+        "fileRawMarkerAbsent": true,
+        "stdoutIdentity": "[REDACTED]",
+        "fileIdentity": "[REDACTED]",
+        "stdoutFinding": "UNKNOWN_MODEL_DOMAIN:[REDACTED]",
+        "fileFinding": "UNKNOWN_MODEL_DOMAIN:[REDACTED]",
+        "fileMode": "0600"
+      },
+      "existingFileNoClobber": {
+        "finding": "ASSURANCE_MODEL_REPLAY_OUTPUT_EXISTS",
+        "contentPreserved": true,
+        "fileMode": "0600"
+      }
+    },
+    "idempotencyAndGeneration": {
+      "status": "pass",
+      "cases": 8,
+      "passed": 8,
+      "resultHash": "a0076c9b146470efb56d4d369586315e5b033105a92230f10433d4e436c11425",
+      "checks": [
+        "chat native action duplicate consumes once",
+        "chat terminal history records exactly once",
+        "stale chat generation is denied and cannot clear the newer room",
+        "terminal chat membership remains ended",
+        "notification native action consumes and server-accepts once",
+        "RevenueCat duplicate event is idempotent",
+        "RevenueCat purchase then equal-time refund ends refunded",
+        "RevenueCat equal-time refund then purchase remains refunded"
+      ]
+    },
+    "deterministicOutputs": {
+      "status": "pass",
+      "runsPerSuite": 3,
+      "outputsIdenticalWithinEachSuite": true,
+      "allSuiteSha256": "2ca86d1032a75dfd346bc02694c5b0ddce808f7a9f465919fdddc9cbc03a5c57",
+      "propertySha256": "a7f133567b8350f206d5d0ab9ae3b0fe90589ad54eb66270f2e7f423a44ed436",
+      "concurrencySha256": "2a24c626fa157c322dcf1049b60be48343b40db8674f7abaef21ff09257ba3a4",
+      "escapedDefectSha256": "3eaa185b9729dd55da59da451a1cc9192eafdf662f9836675ee386e7e1a06554"
+    },
+    "resolvedV1Findings": {
+      "status": "pass",
+      "requiredInterleavingAssertionsMutationVacuous": "resolved",
+      "mustReportPushAcceptedWithoutCallKitOrCompletion": "resolved",
+      "canonicalEscapedDefectVariantsIncomplete": "resolved",
+      "replaySeedAndConcurrencyDomainOptionsIgnored": "resolved",
+      "emptyAndBareCliOptionsIgnored": "resolved",
+      "persistedReplaySecretRedaction": "resolved"
+    },
+    "staticChecks": {
+      "status": "pass",
+      "nodeSyntaxFiles": 5,
+      "gitDiffCheck": "pass",
+      "reviewMergePrivacyScan": "pass",
+      "v1Sha256Rechecked": "a457581d5389e49b4c3951acaf0d352c9252cffd9e077b7eb8ad8043f0a12f2c"
+    },
+    "proofBoundaries": {
+      "status": "pass",
+      "provedTier": "T2_MODEL",
+      "forbiddenClaimsPreserved": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "pushkitPhysicalBlockerStillExternal": true,
+      "proofSubstitutionAccepted": false
+    },
+    "deferredPrEJobRouting": {
+      "status": "recorded_nonblocking_for_pr_c",
+      "finding": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "owner": "PR E",
+      "blocksCurrentLane": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_exact_head_run",
+      "runByThisReviewLane": false,
+      "findingOpenedByThisLane": false,
+      "resumptionAction": "After all four exact-head v2 review lanes freeze, the coordinator runs the single full Phase 1 CI execution for implementation head 8829ca3d59453155c29370495f32f432bfece5c8."
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeOrDeviceTest": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "productImplementationChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "v1ReviewChangedByV2": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "545d94170c3f738be58ea00335945dd8b3b1bb74d5c798aacb39dac252273c7b",
+  "reviewLevel": "C",
+  "reviewHead": "8829ca3d59453155c29370495f32f432bfece5c8",
+  "reviewHeadSemantics": "exact implementation second parent of the normal review merge; v2 evidence commit immediately follows that merge",
+  "reviewTimestamp": "2026-07-30T21:26:55Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "concurrency-property-replay-final-v2"
+  ],
+  "findings": [],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "independentT2Disposition": "MODEL_CLEAR",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "lane-clear-await-other-reviews-and-coordinator-full-ci",
+    "humanApproval": false
+  }
+}
