@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-feature-domain-scope-operator-contract-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 62,
+  "implementationBranch": "codex/first-pass-assurance-feature-domain-scope",
+  "implementationHead": "08ca9b11b28677268f7db932086256645d29c794",
+  "implementationTree": "0ddc0091d84cdd3c8f8e3bbbc7f85d356f063690",
+  "baseHead": "84c9ffdcea7de1b73163c60348267875f5d99ed3",
+  "changedFileHash": "645dc10383c3100ba2a3838b0aef4e5671882962af5fa6178dbb9d46813299f3",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "82f8286aa0a6d97af19741ef75564f65559f79135f97aff33701f7be3db402f8",
+  "testResults": {
+    "focusedFeatureBundleTests": {
+      "status": "pass",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "operatorCliProbes": {
+      "status": "pass-with-qualified-feedback-gap",
+      "probes": 6,
+      "machineJsonParseable": 6,
+      "humanLinesPresent": 6,
+      "exitCodesMatchedDecision": 6,
+      "selfSupportingScope": "pass",
+      "b1RegisteredBundle": "pass",
+      "b2RegisteredBundle": "pass",
+      "b2ObjectiveOmission": {
+        "status": "rejected",
+        "finding": "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "omittedDomains": [
+          "database-RLS"
+        ],
+        "relatedHighRiskScopeAuthorized": false
+      },
+      "b2FeatureOmission": {
+        "status": "rejected",
+        "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+        "reason": "explicit-feature-required"
+      },
+      "pr52LikeMixedScope": {
+        "status": "rejected",
+        "finding": "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+        "reason": "domain-outside-feature-bundle",
+        "outsideBundle": [
+          "RevenueCat-Premium"
+        ]
+      },
+      "trackedDiffQualification": "B1 and B2 probes classified the Git-visible tracked diff at readback; untracked lane files were not treated as frozen PR evidence."
+    },
+    "regressionMatrix": {
+      "status": "pass",
+      "documentationNoHighRisk": "authorized",
+      "singleHighRiskWithCompleteObjective": "authorized",
+      "singleHighRiskObjectiveOmission": "rejected",
+      "registeredLiveKitBundle": "authorized",
+      "registeredRevenueCatBundle": "authorized",
+      "unknownFeatureForMixedScope": "rejected",
+      "registeredFeatureWithoutBundleForMixedScope": "rejected",
+      "waiverForUnrelatedMixedScope": "rejected",
+      "universalBundlePolicy": "rejected"
+    },
+    "objectiveAuthorizationCorrection": {
+      "status": "pass",
+      "implementationCommit": "08ca9b11b28677268f7db932086256645d29c794",
+      "blockingFindingPresent": true,
+      "relatedHighRiskScopeAuthorized": false
+    },
+    "determinism": {
+      "status": "pass",
+      "runs": "3/3",
+      "outputHash": "d65478f0cf5d63184cc87771868823cb72493e7a51d528de2e17f6af41990499"
+    },
+    "syntaxChecks": {
+      "status": "pass",
+      "files": [
+        "scripts/assurance/pr-scope.mjs",
+        "scripts/assurance/pr-scope-lib.mjs"
+      ]
+    },
+    "contracts": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "findings": 0
+    },
+    "phase1Ci": {
+      "status": "pass",
+      "implementationHead": "08ca9b11b28677268f7db932086256645d29c794",
+      "runId": 30568756522,
+      "completedJobsAtReadback": 13,
+      "totalJobs": 13,
+      "eligibleAsProof": true,
+      "conclusion": "success"
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "buildOrOta": false,
+      "productSourceChanged": false,
+      "migrationChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "c606e8bafe33042747e92457d6d83d19d169fa9a4eee42b98e32944a3f9cc882",
+  "reviewLevel": "B",
+  "reviewHead": "08ca9b11b28677268f7db932086256645d29c794",
+  "reviewTimestamp": "2026-07-30T18:09:38Z",
+  "reviewerLanes": [
+    "architecture",
+    "product-UX",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "operator-contract-and-regression-impact"
+  ],
+  "findings": [
+    {
+      "id": "PR_SCOPE_OBJECTIVE_OMISSION_AUTHORIZATION_CONTRADICTION",
+      "severity": "P1",
+      "status": "resolved",
+      "locations": [
+        "scripts/assurance/pr-scope-lib.mjs:93",
+        "tests/assurance/pr-scope-feature-bundles.test.mjs:105"
+      ],
+      "resolution": "The authorization result now derives from all findings, so an omitted affected objective domain emits ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN and returns relatedHighRiskScopeAuthorized=false."
+    },
+    {
+      "id": "PR_SCOPE_REGISTERED_BUNDLE_CLASSIFICATION",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The registered LiveKit and RevenueCat reconciliation bundles authorize their bounded related domains, while a PR #52-like LiveKit/RevenueCat/database combination remains rejected with RevenueCat-Premium outside the selected LiveKit bundle."
+    },
+    {
+      "id": "PR_SCOPE_HUMAN_FAILURE_FEEDBACK_NOT_ACTIONABLE",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/pr-scope.mjs:42"
+      ],
+      "evidence": "Objective omission and missing-feature probes returned correct nonzero exits and structured JSON findings, but both human stderr lines only reported generic FAIL, budget totals, and classified domains. They did not identify the finding, omitted domain, required feature flag, or mixed-scope reason.",
+      "impact": "Machine consumers are correct, but a human operator must inspect the JSON payload to learn how to repair a routine scope failure.",
+      "requiredResolution": "Route to PR E's bounded final PR-scope and CI enforcement contract: append concise deterministic finding IDs and actionable omitted-domain or feature-selection detail to the human output without changing JSON or decision semantics."
+    },
+    {
+      "id": "PR_SCOPE_FEATURE_BUNDLE_SCHEMA_UNDERSPECIFIED",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "config/assurance/schemas-v1.json:30",
+        "scripts/assurance/pr-scope-lib.mjs:13"
+      ],
+      "evidence": "The prScopePolicy schema does not require or type featureDomainBundles, featureId, allowedHighRiskDomains, or reason. An in-memory malformed allowedHighRiskDomains value of 42 produced a TypeError before emit() could return the required machine-readable finding.",
+      "impact": "The committed policy is valid and current decisions fail closed, but a future malformed policy edit can pass contract validation and degrade the CLI from structured failure to an exception.",
+      "requiredResolution": "Route to PR E's bounded final PR-scope and CI enforcement contract: define the bundle object schema and make runtime validation return ASSURANCE_SCOPE_POLICY_INVALID as machine JSON for malformed shapes."
+    },
+    {
+      "id": "PR_SCOPE_PHASE1_CI_IN_PROGRESS",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Coordinator-owned run 30568756522 completed successfully with all thirteen jobs at exact implementation head 08ca9b11b28677268f7db932086256645d29c794. No duplicate run was started by this review lane."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPending": false,
+    "reviewDisposition": "exact-head-operator-review-clear-with-nonblocking-p2-follow-ups",
+    "humanApproval": false
+  }
+}
