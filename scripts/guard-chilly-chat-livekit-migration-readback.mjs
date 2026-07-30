@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 
 const manifest = JSON.parse(
-  fs.readFileSync("config/release/chilly-chat-livekit-migration-readback.json", "utf8"),
+  fs.readFileSync("config/assurance/chilly-chat-livekit-migration-readback.json", "utf8"),
 );
 const sha256File = (relativePath) => createHash("sha256")
   .update(fs.readFileSync(relativePath))
