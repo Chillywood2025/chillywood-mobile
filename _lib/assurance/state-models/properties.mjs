@@ -2,6 +2,11 @@ import * as fc from "fast-check";
 import { escapedDefectFixtures, modelDefinitions, runCommands } from "./models.mjs";
 
 const serialize = (value) => JSON.parse(JSON.stringify(value));
+const transitionWitnesses = [
+  { id: "chat-remote-media", domain: "chat-call", commands: [{ type: "invite", generation: 1, provider: "livekit" }, { type: "accept" }, { type: "issue_token" }, { type: "connect_room" }, { type: "publish_local" }, { type: "remote_participant" }, { type: "subscribe_remote" }, { type: "first_media" }], reached: (s) => s.remoteMedia },
+  { id: "livekit-room-to-ui", domain: "livekit", commands: ["token", "claims", "room", "publication", "remote_participant", "subscription", "first_media", "ui"].map((stage) => ({ type: "advance", stage, platform: "android", fixture: false })).concat({ type: "declare_pass" }), reached: (s) => s.pass },
+  { id: "native-server-acceptance", domain: "notification-native-action", commands: [{ type: "native_answer", id: "witness", expiresAt: 5 }, { type: "auth_ready" }, { type: "react_ready" }, { type: "consume_action", id: "witness" }, { type: "server_accept", id: "witness" }], reached: (s) => s.serverStatus === "accepted" }
+];
 
 export function runPropertyModels(options = {}) {
   const ids = options.domains?.length ? options.domains : Object.keys(modelDefinitions);
@@ -24,14 +29,21 @@ export function runPropertyModels(options = {}) {
       numRuns,
       ...(options.path && ids.length === 1 ? { path: options.path } : {})
     });
+    const witnesses = transitionWitnesses.filter(({ domain }) => domain === id).map(({ id: witnessId, commands, reached }) => {
+      const execution = runCommands(id, commands);
+      return { id: witnessId, reached: reached(execution.state), commandCount: commands.length, commands, violations: execution.violations };
+    });
+    const clear = !details.failed && details.numRuns > 0 && witnesses.every(({ reached, violations }) => reached && violations.length === 0);
     return {
       domain: id,
       featureId: definition.featureId,
-      status: details.failed ? "BLOCKED_INTERNAL" : "MODEL_CLEAR",
+      status: clear ? "MODEL_CLEAR" : "BLOCKED_INTERNAL",
       seed: details.seed,
       path: details.counterexamplePath ?? null,
       replayPath: details.failed ? `--domain=${id} --seed=${details.seed} --path=${details.counterexamplePath}` : `--domain=${id} --seed=${details.seed}`,
       minimizedCommandSequence: details.failed ? serialize(details.counterexample?.[0] ?? []) : [],
+      replayExecuted: details.numRuns > 0,
+      transitionWitnesses: witnesses,
       numRuns: details.numRuns,
       numShrinks: details.numShrinks
     };
@@ -41,6 +53,7 @@ export function runPropertyModels(options = {}) {
     status: results.every(({ status }) => status === "MODEL_CLEAR") ? "MODEL_CLEAR" : "BLOCKED_INTERNAL",
     propertyCases: results.reduce((total, result) => total + (result.numRuns ?? 0), 0),
     maxCommands,
+    witnessCount: results.reduce((total, result) => total + (result.transitionWitnesses?.length ?? 0), 0),
     results
   };
 }

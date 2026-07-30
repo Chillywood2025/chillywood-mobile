@@ -114,6 +114,7 @@ const chatCall = {
         const key = `action-${command.actionId}`;
         state.receivedNativeActions = uniq([...state.receivedNativeActions, key]);
         if (state.consumedNativeActions.includes(key) || state.expiredNativeActions.includes(key)) break;
+        if (state.nativeAction?.id === key) break;
         if (variant === "native-action-lost" && !state.reactReady) break;
         if (command.expiresAt <= state.now) {
           state.expiredNativeActions = uniq([...state.expiredNativeActions, key]);
@@ -262,17 +263,21 @@ const revenueCat = {
   }),
   apply(current, command, variant = "fixed") {
     const state = copy(current);
+    const authoritative = command.authority === "provider" && !["manual", "migration"].includes(command.eventType);
+    if (!authoritative) {
+      if (state.maxAuthoritativeTime < 0) state.entitlement = "test_only";
+      return state;
+    }
     if (state.processedEventIds.includes(command.eventId)) {
       state.duplicateCount += 1;
       return state;
     }
     state.processedEventIds.push(command.eventId);
-    const authoritative = command.authority === "provider";
-    if (authoritative) state.maxAuthoritativeTime = Math.max(state.maxAuthoritativeTime, command.eventTime);
-    if (command.eventTime < state.eventTime && variant !== "out-of-order-wins") {
+    if (authoritative && command.eventTime < state.maxAuthoritativeTime && variant !== "out-of-order-wins") {
       state.outOfOrderCount += 1;
       return state;
     }
+    state.maxAuthoritativeTime = Math.max(state.maxAuthoritativeTime, command.eventTime);
     state.lastEventId = command.eventId;
     state.lastEventType = command.eventType;
     state.eventTime = command.eventTime;
@@ -280,12 +285,6 @@ const revenueCat = {
     state.environment = command.environment;
     state.product = command.product;
     state.expiration = command.expiresAt;
-    if (["manual", "migration"].includes(command.eventType) || !authoritative) {
-      state.providerBacked = false;
-      state.productionAccess = false;
-      state.entitlement = "test_only";
-      return state;
-    }
     if (command.eventType === "transfer") {
       state.transferSource = state.owners[0] ?? command.appUser;
       state.transferTarget = command.target;
@@ -299,6 +298,7 @@ const revenueCat = {
         : [command.target];
       state.appUser = command.target;
       state.entitlement = "active";
+      state.cancelled = state.refunded = state.revoked = false;
     } else if (["purchase", "renewal"].includes(command.eventType)) {
       state.owners = [command.appUser];
       state.appUser = command.appUser;
@@ -337,7 +337,7 @@ const compatible = (build, update) => Boolean(
   && build.runtime === update.runtime
   && build.channel === update.channel
   && build.nativeDigest === update.nativeDigest
-  && update.sourceCommit
+  && build.sourceCommit === update.sourceCommit
   && update.requiredCapabilities.every((entry) => build.providedCapabilities.includes(entry))
 );
 
@@ -354,6 +354,7 @@ const otaBuild = {
       runtime: fc.constantFrom("runtime-1", "runtime-2"),
       channel: fc.constantFrom("internal", "production"),
       nativeDigest: fc.constantFrom("native-a", "native-b"),
+      sourceCommit: fc.constantFrom("source-a", "source-b"),
       embeddedSafe: fc.boolean(),
       providedCapabilities: fc.uniqueArray(fc.constantFrom("camera", "microphone", "callkit", "livekit"), { maxLength: 4 })
     }),
@@ -418,15 +419,17 @@ const notificationAction = {
     receivedActions: [],
     pendingActions: [],
     consumedActions: [],
+    consumedActionKinds: {},
     expiredActions: [],
-    serverAccepted: []
+    serverAccepted: [],
+    serverStatus: "ringing"
   }),
   commandArbitrary: (fc) => fc.oneof(
     fc.record({ type: fc.constantFrom("apns_accept", "receive_push", "report_callkit", "complete_push"), id: fc.integer({ min: 1, max: 5 }).map(String), mustReport: fc.boolean() }),
-    fc.record({ type: fc.constant("native_answer"), id: fc.integer({ min: 1, max: 5 }).map(String), expiresAt: fc.integer({ min: 1, max: 8 }) }),
-    fc.record({ type: fc.constantFrom("consume_action", "server_accept"), id: fc.integer({ min: 1, max: 5 }).map(String) }),
+    fc.record({ type: fc.constantFrom("native_answer", "native_decline"), id: fc.integer({ min: 1, max: 5 }).map(String), expiresAt: fc.integer({ min: 1, max: 8 }) }),
+    fc.record({ type: fc.constantFrom("consume_action", "server_accept", "server_decline"), id: fc.integer({ min: 1, max: 5 }).map(String) }),
     fc.record({ type: fc.constant("tick"), amount: fc.integer({ min: 1, max: 3 }) }),
-    fc.constantFrom({ type: "auth_ready" }, { type: "react_ready" })
+    fc.constantFrom({ type: "auth_ready" }, { type: "react_ready" }, { type: "server_cancel" }, { type: "server_timeout" })
   ),
   apply(current, command, variant = "fixed") {
     const state = copy(current);
@@ -442,13 +445,14 @@ const notificationAction = {
       if (push && (!push.mustReport || state.callKitReported.includes(command.id) || variant === "complete-without-report")) {
         state.completedPushes = uniq([...state.completedPushes, command.id]);
       }
-    } else if (command.type === "native_answer") {
+    } else if (["native_answer", "native_decline"].includes(command.type)) {
       state.receivedActions = uniq([...state.receivedActions, command.id]);
+      if (state.consumedActions.includes(command.id) || state.expiredActions.includes(command.id) || state.pendingActions.some((entry) => entry.id === command.id)) return state;
       if (variant !== "native-action-lost" || state.reactReady) {
         if (command.expiresAt <= state.now) {
           state.expiredActions = uniq([...state.expiredActions, command.id]);
         } else if (!state.pendingActions.some((entry) => entry.id === command.id) && !state.consumedActions.includes(command.id)) {
-          state.pendingActions.push({ id: command.id, expiresAt: command.expiresAt });
+          state.pendingActions.push({ id: command.id, expiresAt: command.expiresAt, action: command.type.slice(7) });
         }
       }
     } else if (command.type === "auth_ready") {
@@ -459,10 +463,20 @@ const notificationAction = {
       const pending = state.pendingActions.find((entry) => entry.id === command.id && entry.expiresAt > state.now);
       if (pending && state.authenticationReady && state.reactReady && !state.consumedActions.includes(command.id)) {
         state.consumedActions.push(command.id);
+        state.consumedActionKinds[command.id] = pending.action;
         state.pendingActions = state.pendingActions.filter((entry) => entry.id !== command.id);
       }
     } else if (command.type === "server_accept") {
-      if (state.consumedActions.includes(command.id)) state.serverAccepted = uniq([...state.serverAccepted, command.id]);
+      if (state.serverStatus === "ringing" && state.consumedActionKinds[command.id] === "answer") {
+        state.serverAccepted = uniq([...state.serverAccepted, command.id]);
+        state.serverStatus = "accepted";
+      }
+    } else if (command.type === "server_decline") {
+      if (state.serverStatus === "ringing" && state.consumedActionKinds[command.id] === "decline") state.serverStatus = "declined";
+    } else if (command.type === "server_cancel") {
+      if (state.serverStatus === "ringing") state.serverStatus = "cancelled";
+    } else if (command.type === "server_timeout") {
+      if (state.serverStatus === "ringing") state.serverStatus = "timed_out";
     } else if (command.type === "tick") {
       state.now += command.amount;
       const expired = state.pendingActions.filter((entry) => entry.expiresAt <= state.now).map(({ id }) => id);
@@ -492,7 +506,7 @@ const liveKit = {
   id: "livekit",
   featureId: "livekit-media-transport",
   seed: 173505,
-  initial: () => ({ stage: "none", platform: null, evidencePlatforms: [], fixture: false, pass: false, rooms: 0, tracks: 0, terminal: false }),
+  initial: () => ({ stage: "none", visitedStages: ["none"], platform: null, evidencePlatforms: [], fixture: false, pass: false, rooms: 0, tracks: 0, terminal: false }),
   commandArbitrary: (fc) => fc.oneof(
     fc.record({ type: fc.constant("advance"), stage: fc.constantFrom(...liveKitStages.slice(1)), platform: fc.constantFrom("android", "ios"), fixture: fc.boolean() }),
     fc.constantFrom({ type: "reconnect" }, { type: "cleanup" }, { type: "declare_pass" })
@@ -507,6 +521,7 @@ const liveKit = {
         state.evidencePlatforms = uniq([...state.evidencePlatforms, command.platform]);
         state.fixture ||= command.fixture;
         state.stage = command.stage;
+        state.visitedStages = uniq([...state.visitedStages, command.stage]);
         if (command.stage === "room") state.rooms = 1;
         if (command.stage === "publication") state.tracks = 1;
       }
@@ -514,7 +529,8 @@ const liveKit = {
       state.rooms = Math.min(1, state.rooms);
       state.tracks = Math.min(1, state.tracks);
     } else if (command.type === "declare_pass") {
-      if ((state.stage === "ui" && !state.fixture) || variant === "connected-is-pass") state.pass = true;
+      const fullChain = state.visitedStages.join(",") === liveKitStages.join(",");
+      if ((state.stage === "ui" && fullChain && !state.fixture) || variant === "connected-is-pass") state.pass = true;
     } else if (command.type === "cleanup") {
       state.terminal = true;
       state.rooms = 0;
@@ -531,7 +547,7 @@ const liveKit = {
     if (state.pass && state.stage !== "ui") failures.push("LIVEKIT_MEDIA_WITHOUT_UI_RESOLUTION");
     if (state.pass && state.fixture) failures.push("LIVEKIT_FIXTURE_FALSE_REAL_FINDING");
     if (state.terminal && (state.rooms !== 0 || state.tracks !== 0)) failures.push("LIVEKIT_CLEANUP_NOT_TERMINAL");
-    if (index >= liveKitStages.indexOf("first_media") && index < liveKitStages.indexOf("subscription")) failures.push("LIVEKIT_STAGE_SKIPPED");
+    if (state.visitedStages.join(",") !== liveKitStages.slice(0, index + 1).join(",")) failures.push("LIVEKIT_STAGE_SKIPPED");
     return uniq(failures);
   }
 };
@@ -557,14 +573,15 @@ const migrations = {
     forceRls: true,
     broadGrant: false,
     remoteImmutableHash: "hash-2",
-    forwardCorrections: 0
+    forwardSuccessors: []
   }),
   commandArbitrary: (fc) => fc.oneof(
     fc.constantFrom(
       { type: "align_exact" }, { type: "source_wrong_version" }, { type: "source_wrong_body" },
       { type: "request_merge" }, { type: "broad_grant" }, { type: "drop_force_rls" },
-      { type: "rewrite_remote" }, { type: "forward_correction" }
-    )
+      { type: "rewrite_remote" }
+    ),
+    fc.record({ type: fc.constant("forward_correction"), version: fc.constantFrom("3", "4"), name: fc.constantFrom("deployed_successor", ""), hash: fc.constantFrom("hash-3", "") })
   ),
   apply(current, command, variant = "fixed") {
     const state = copy(current);
@@ -576,7 +593,10 @@ const migrations = {
     } else if (command.type === "broad_grant" && variant === "broad-grant") state.broadGrant = true;
     else if (command.type === "drop_force_rls" && variant === "rls-lost") state.forceRls = false;
     else if (command.type === "rewrite_remote" && variant === "rewrite-deployed") state.remote.hash = "rewritten";
-    else if (command.type === "forward_correction") state.forwardCorrections += 1;
+    else if (command.type === "forward_correction") {
+      const identified = Number(command.version) > Number(state.remote.version) && command.name && command.hash && command.hash !== state.remote.hash;
+      if ((identified && !state.forwardSuccessors.some(({ version }) => version === command.version)) || variant === "anonymous-forward-counter") state.forwardSuccessors.push({ version: command.version, name: command.name, hash: command.hash });
+    }
     state.classification = classifyMigration(state);
     if (state.classification !== "REMOTE_AND_SOURCE_MATCH" && variant !== "remote-ahead-merge") state.mergeAllowed = false;
     return state;
@@ -587,6 +607,7 @@ const migrations = {
     if (state.remote.hash !== state.remoteImmutableHash) failures.push("MIGRATION_DEPLOYED_BODY_REWRITTEN");
     if (!state.rls || !state.forceRls) failures.push("MIGRATION_RLS_NOT_MAINTAINED");
     if (state.broadGrant) failures.push("MIGRATION_BROAD_GRANT");
+    if (state.forwardSuccessors.some(({ version, name, hash }) => Number(version) <= Number(state.remote.version) || !name || !hash || hash === state.remote.hash)) failures.push("MIGRATION_FORWARD_CORRECTION_UNIDENTIFIED");
     return failures;
   }
 };
@@ -625,12 +646,15 @@ export const escapedDefectFixtures = Object.freeze([
     { type: "activate_update", platform: "ios", environment: "internal", runtime: "runtime-2", channel: "internal", nativeDigest: "native-b", sourceCommit: "source-a", requiredCapabilities: ["callkit"] }
   ] },
   { id: "CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200", domain: "notification-native-action", variant: "apns-200-is-delivery", commands: [{ type: "apns_accept", id: "1", mustReport: true }] },
+  { id: "PUSHKIT_MUST_REPORT_BREACH", domain: "notification-native-action", variant: "complete-without-report", commands: [{ type: "receive_push", id: "1", mustReport: true }, { type: "complete_push", id: "1", mustReport: true }] },
   { id: "LIVEKIT_CONNECTED_WITHOUT_MEDIA", domain: "livekit", variant: "connected-is-pass", commands: [
     { type: "advance", stage: "token", platform: "android", fixture: false },
     { type: "advance", stage: "claims", platform: "android", fixture: false },
     { type: "advance", stage: "room", platform: "android", fixture: false },
     { type: "declare_pass" }
   ] },
+  { id: "LIVEKIT_STAGE_SKIPPED", domain: "livekit", variant: "stage-skip", commands: [{ type: "advance", stage: "ui", platform: "ios", fixture: false }, { type: "declare_pass" }] },
+  { id: "MIGRATION_FORWARD_CORRECTION_UNIDENTIFIED", domain: "migrations", variant: "anonymous-forward-counter", commands: [{ type: "forward_correction", version: "2", name: "", hash: "" }] },
   { id: "REMOTE_MIGRATION_AHEAD_OF_GIT", domain: "migrations", variant: "remote-ahead-merge", commands: [{ type: "source_wrong_body" }, { type: "request_merge" }] }
 ]);
 

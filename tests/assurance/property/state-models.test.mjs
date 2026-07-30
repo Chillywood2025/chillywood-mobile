@@ -12,5 +12,8 @@ for (const [domain, definition] of Object.entries(modelDefinitions)) {
     assert.equal(report.results[0].status, "MODEL_CLEAR");
     assert.match(report.results[0].replayPath, new RegExp(`--domain=${domain} --seed=${definition.seed}`));
     assert.deepEqual(report.results[0].minimizedCommandSequence, []);
+    for (const witness of report.results[0].transitionWitnesses) {
+      assert.equal(witness.reached && witness.violations.length === 0, true, JSON.stringify(witness));
+    }
   });
 }

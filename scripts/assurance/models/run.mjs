@@ -10,15 +10,19 @@ const options = args();
 const suite = options.suite ?? "all";
 const allowedSuites = new Set(["all", "property", "concurrency", "escaped-defects"]);
 const invalidNumber = ["numRuns", "maxCommands", "seed"].find((key) => options[key] !== undefined && (!Number.isInteger(Number(options[key])) || Number(options[key]) <= 0));
-const invalidReplay = options.path && !options.domain;
-if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline") || invalidNumber || invalidReplay) {
+const replayFinding = options.path && !options.domain
+  ? ["ASSURANCE_MODEL_REPLAY_DOMAIN_REQUIRED", options.path]
+  : options.path && (!/^\d+(?::\d+)*$/u.test(String(options.path)) || String(options.path).split(":").some((part) => !Number.isSafeInteger(Number(part))))
+    ? ["ASSURANCE_MODEL_REPLAY_PATH_INVALID", options.path]
+    : null;
+if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline") || invalidNumber || replayFinding) {
   const finding = !allowedSuites.has(suite)
     ? ["ASSURANCE_MODEL_SUITE_UNKNOWN", suite]
     : options.providerMode && options.providerMode !== "offline"
       ? ["ASSURANCE_MODEL_PROVIDER_MODE_FORBIDDEN", options.providerMode]
       : invalidNumber
         ? ["ASSURANCE_MODEL_NUMERIC_OPTION_INVALID", invalidNumber]
-        : ["ASSURANCE_MODEL_REPLAY_DOMAIN_REQUIRED", options.path];
+        : replayFinding;
   emit("assurance:state-model", false, {
     status: "BLOCKED_INTERNAL",
     findings: [{ id: finding[0], detail: finding[1] }]
@@ -44,9 +48,13 @@ if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !
   };
   if (!ok && options.replayOutput) {
     const output = path.resolve(options.replayOutput);
-    fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(output, `${stableJson(payload, 2)}\n`, { mode: 0o600 });
-    payload.replayOutput = output;
+    try {
+      fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(output, `${stableJson(payload, 2)}\n`, { mode: 0o600, flag: "wx" });
+      payload.replayPersistence = { status: "SOURCE_CLEAR", output };
+    } catch (error) {
+      payload.replayPersistence = { status: "BLOCKED_INTERNAL", finding: error?.code === "EEXIST" ? "ASSURANCE_MODEL_REPLAY_OUTPUT_EXISTS" : "ASSURANCE_MODEL_REPLAY_OUTPUT_WRITE_FAILED" };
+    }
   }
   emit("assurance:state-model", ok, payload, [
     `assurance state model: ${ok ? "PASS" : "FAIL"} — ${property?.propertyCases ?? 0} property cases, ${concurrency?.scheduleCount ?? 0} schedules, ${escapedDefects?.fixtureCount ?? 0} escaped-defect fixtures`
