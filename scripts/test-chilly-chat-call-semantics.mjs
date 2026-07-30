@@ -734,8 +734,8 @@ assert.match(
 );
 assert.match(
   authoritativeBusyBeginSource,
-  /invite\."thread_id" <> p_thread_id[\s\S]{0,240}invite\."status" = 'accepted'[\s\S]{0,420}active_room\."status" = 'active'/u,
-  "busy authority must require a different-thread accepted call backed by an active room",
+  /invite\."thread_id" <> p_thread_id[\s\S]{0,240}invite\."status" = 'accepted'[\s\S]{0,560}established_thread\."active_communication_room_id"[\s\S]{0,520}active_room\."status" = 'active'/u,
+  "busy authority must require a different-thread accepted call whose active room remains authoritative on its thread",
 );
 assert.match(
   authoritativeBusyBeginSource,

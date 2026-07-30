@@ -172,6 +172,7 @@ assertIncludes(chatThread, "dismissPresentedChillyChatCallNotifications", "nativ
 assertIncludes(chatThread, 'result.invite?.status === "busy"', "an authoritative busy result must not open a second media panel");
 assertIncludes(chatThread, "No media was started", "the caller must receive an honest no-media busy result");
 assertIncludes(authoritativeBusyBegin, 'invite."status" = \'accepted\'', "busy authority must require an accepted established invite");
+assertIncludes(authoritativeBusyBegin, 'established_thread."active_communication_room_id"', "busy authority must reject historical rooms that are no longer authoritative on their thread");
 assertIncludes(authoritativeBusyBegin, 'active_room."status" = \'active\'', "busy authority must require the established room to remain active");
 assertIncludes(authoritativeBusyBegin, "'busy'", "busy authority must terminate the overlap before delivery");
 assertIncludes(authoritativeBusyBegin, '"delivery_status" = \'skipped\'', "busy authority must explicitly skip the terminal delivery");

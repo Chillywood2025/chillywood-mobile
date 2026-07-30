@@ -1,11 +1,9 @@
--- Reject an overlapping Chi'lly Chat invite inside the authoritative begin
--- transaction when its callee already belongs to an accepted call whose room
--- is still active. The losing candidate is transitioned to busy before any
--- incoming delivery can be requested, so no second native presentation, token,
--- membership, or media path can start.
+-- Require an accepted Chi'lly Chat room to remain linked as the exact
+-- authoritative room on its thread before it can win same-thread reuse or
+-- produce a different-thread busy result. Historical rooms left active by
+-- pre-cleanup clients are not current calls and must not block new invites.
 
 set check_function_bodies = false;
-
 create or replace function public."begin_chilly_chat_call"(
   p_thread_id uuid,
   p_communication_room_id text,
