@@ -57,6 +57,11 @@ const resolveOnce = (outcome) => (state) => {
   return state;
 };
 
+const exactSchedule = (expectedBySchedule) => ({
+  expectedBySchedule,
+  safe: (state, order) => JSON.stringify(state) === JSON.stringify(expectedBySchedule[order.join(" -> ")])
+});
+
 const applyAuthoritative = (event) => (state) => {
   if (event.time < state.authoritativeTime) return state;
   state.authoritativeTime = event.time;
@@ -90,13 +95,19 @@ const scenarios = [
     id: "accept-versus-timeout",
     initial: { outcome: "pending", resolutionCount: 0 },
     operations: { accept: resolveOnce("accepted"), timeout: resolveOnce("timed_out") },
-    safe: (s) => s.resolutionCount === 1
+    ...exactSchedule({
+      "accept -> timeout": { outcome: "accepted", resolutionCount: 1 },
+      "timeout -> accept": { outcome: "timed_out", resolutionCount: 1 }
+    })
   },
   {
     id: "accept-versus-cancel",
     initial: { outcome: "pending", resolutionCount: 0 },
     operations: { accept: resolveOnce("accepted"), cancel: resolveOnce("cancelled") },
-    safe: (s) => s.resolutionCount === 1
+    ...exactSchedule({
+      "accept -> cancel": { outcome: "accepted", resolutionCount: 1 },
+      "cancel -> accept": { outcome: "cancelled", resolutionCount: 1 }
+    })
   },
   {
     id: "old-cleanup-versus-new-invite",
@@ -154,12 +165,27 @@ const scenarios = [
   },
   {
     id: "update-activation-versus-rollback",
-    initial: { active: "embedded", compatible: true },
+    initial: { active: "embedded", compatible: true, activationEnabled: true, activationAttempts: 0, activations: 0, rollbacks: 0 },
     operations: {
-      activate: (s) => { if (s.compatible) s.active = "update"; return s; },
-      rollback: (s) => { s.active = "embedded"; return s; }
+      activate: (s) => {
+        s.activationAttempts += 1;
+        if (s.compatible && s.activationEnabled) {
+          s.active = "update";
+          s.activations += 1;
+        }
+        return s;
+      },
+      rollback: (s) => {
+        s.active = "embedded";
+        s.activationEnabled = false;
+        s.rollbacks += 1;
+        return s;
+      }
     },
-    safe: (s) => s.compatible && ["embedded", "update"].includes(s.active)
+    ...exactSchedule({
+      "activate -> rollback": { active: "embedded", compatible: true, activationEnabled: false, activationAttempts: 1, activations: 1, rollbacks: 1 },
+      "rollback -> activate": { active: "embedded", compatible: true, activationEnabled: false, activationAttempts: 1, activations: 0, rollbacks: 1 }
+    })
   },
   {
     id: "emergency-stop-versus-mutation",
@@ -172,7 +198,10 @@ const scenarios = [
         return s;
       }
     },
-    safe: (s) => s.stopped && s.mutations <= 1 && s.deniedMutations <= 1
+    ...exactSchedule({
+      "emergency_stop -> mutation": { stopped: true, mutations: 0, deniedMutations: 1 },
+      "mutation -> emergency_stop": { stopped: true, mutations: 1, deniedMutations: 0 }
+    })
   }
 ];
 
@@ -182,10 +211,12 @@ export async function runDeterministicInterleavings() {
     const ids = Object.keys(scenario.operations);
     for (const order of [ids, [...ids].reverse()]) {
       const state = await execute(scenario.initial, scenario.operations, order);
+      const schedule = order.join(" -> ");
       results.push({
         scenario: scenario.id,
-        schedule: order.join(" -> "),
-        status: scenario.safe(state) ? "MODEL_CLEAR" : "BLOCKED_INTERNAL",
+        schedule,
+        status: scenario.safe(state, order) ? "MODEL_CLEAR" : "BLOCKED_INTERNAL",
+        expectedState: scenario.expectedBySchedule?.[schedule] ?? null,
         finalState: state
       });
     }

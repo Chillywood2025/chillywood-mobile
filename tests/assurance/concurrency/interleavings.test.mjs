@@ -18,4 +18,22 @@ test("required races run in both deterministic orders behind barriers and a tran
     assert.equal(report.results.filter(({ scenario }) => scenario === required).length, 2);
   }
   assert.equal(report.results.filter(({ scenario, finalState }) => scenario === "revenuecat-expiration-versus-delayed-renewal" && finalState.authoritativeTime === 20 && !finalState.access).length, 2);
+  const exactSchedules = {
+    "accept-versus-timeout/accept -> timeout": { outcome: "accepted", resolutionCount: 1 },
+    "accept-versus-timeout/timeout -> accept": { outcome: "timed_out", resolutionCount: 1 },
+    "accept-versus-cancel/accept -> cancel": { outcome: "accepted", resolutionCount: 1 },
+    "accept-versus-cancel/cancel -> accept": { outcome: "cancelled", resolutionCount: 1 },
+    "update-activation-versus-rollback/activate -> rollback": { active: "embedded", compatible: true, activationEnabled: false, activationAttempts: 1, activations: 1, rollbacks: 1 },
+    "update-activation-versus-rollback/rollback -> activate": { active: "embedded", compatible: true, activationEnabled: false, activationAttempts: 1, activations: 0, rollbacks: 1 },
+    "emergency-stop-versus-mutation/emergency_stop -> mutation": { stopped: true, mutations: 0, deniedMutations: 1 },
+    "emergency-stop-versus-mutation/mutation -> emergency_stop": { stopped: true, mutations: 1, deniedMutations: 0 }
+  };
+  const exactResults = report.results.filter(({ expectedState }) => expectedState);
+  assert.equal(exactResults.length, 8);
+  for (const result of exactResults) {
+    const expected = exactSchedules[`${result.scenario}/${result.schedule}`];
+    assert.deepEqual(result.expectedState, expected);
+    assert.deepEqual(result.finalState, expected, `${result.scenario}/${result.schedule}`);
+  }
+  assert.equal(Object.keys(exactSchedules).length, exactResults.length);
 });
