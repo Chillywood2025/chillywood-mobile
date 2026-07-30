@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(52);
 
 insert into auth.users (id)
 values
@@ -8,7 +8,17 @@ values
   ('e0000000-0000-4000-8000-000000000003'),
   ('f0000000-0000-4000-8000-000000000004'),
   ('a1111111-1111-4111-8111-111111111111'),
-  ('b1111111-1111-4111-8111-111111111111')
+  ('b1111111-1111-4111-8111-111111111111'),
+  ('c1000000-0000-4000-8000-000000000001'),
+  ('c1000000-0000-4000-8000-000000000002'),
+  ('c2000000-0000-4000-8000-000000000001'),
+  ('c2000000-0000-4000-8000-000000000002'),
+  ('c3000000-0000-4000-8000-000000000001'),
+  ('c3000000-0000-4000-8000-000000000002'),
+  ('c4000000-0000-4000-8000-000000000001'),
+  ('c4000000-0000-4000-8000-000000000002'),
+  ('c5000000-0000-4000-8000-000000000001'),
+  ('c5000000-0000-4000-8000-000000000002')
 on conflict (id) do nothing;
 
 insert into public.user_entitlements (
@@ -108,6 +118,47 @@ exception when others then
     where event.provider_event_id like 'transfer:transfer-failure-1:%'
   );
 end;
+$$;
+
+create function pg_temp.apply_premium_event(
+  p_event_id text,
+  p_event_type text,
+  p_user_id uuid,
+  p_status text,
+  p_occurred_at timestamptz,
+  p_expires_at timestamptz
+)
+returns jsonb
+language sql
+volatile
+as $$
+  select public.process_revenuecat_premium_event_atomic_internal(
+    'revenuecat_app_store',
+    p_event_id,
+    p_event_type,
+    p_user_id,
+    mapping.provider_product_id,
+    null,
+    'sandbox',
+    p_status,
+    p_occurred_at - interval '30 days',
+    p_expires_at,
+    p_occurred_at,
+    mapping.reference_price_minor,
+    mapping.reference_currency,
+    'sha256-ordering-' || p_event_id,
+    'NORMAL',
+    'app_store',
+    'ios',
+    mapping.id,
+    mapping.product_id,
+    null
+  )
+  from public.monetization_product_store_mappings mapping
+  where mapping.provider = 'revenuecat_app_store'
+    and mapping.provider_product_id = 'com.chillywood.premium.monthly'
+    and mapping.environment = 'sandbox'
+  limit 1;
 $$;
 
 select lives_ok(
@@ -290,7 +341,232 @@ select lives_ok(
 );
 select ok(
   pg_temp.transfer_failure_rolled_back(),
-  'forced failure after source revocation rolls back the entire transfer'
+  'forced failure rolls back the entire transfer and leaves no one-sided duplicate marker'
+);
+
+select throws_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'transfer-null-time',
+    'c1000000-0000-4000-8000-000000000001',
+    'c1000000-0000-4000-8000-000000000002',
+    'sandbox',
+    null,
+    'sha256-transfer-null-time'
+  )$$,
+  'transfer_occurred_at_required',
+  'transfer authority requires an exact provider occurrence time'
+);
+
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-source-1', 'INITIAL_PURCHASE',
+    'c1000000-0000-4000-8000-000000000001',
+    'active', now() - interval '4 hours', now() + interval '30 days'
+  )$$,
+  'delayed-transfer source begins with older provider authority'
+);
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-renewal-1', 'RENEWAL',
+    'c1000000-0000-4000-8000-000000000001',
+    'active', now() - interval '1 hour', now() + interval '60 days'
+  )$$,
+  'newer renewal becomes source authority before delayed transfer'
+);
+select throws_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'ordering-delayed-transfer-1',
+    'c1000000-0000-4000-8000-000000000001',
+    'c1000000-0000-4000-8000-000000000002',
+    'sandbox',
+    now() - interval '2 hours',
+    'sha256-ordering-delayed-transfer-1'
+  )$$,
+  'transfer_event_stale',
+  'delayed transfer cannot replace a newer source renewal'
+);
+select is(
+  (select metadata->>'revenuecat_event_id'
+   from public.user_entitlements
+   where user_id = 'c1000000-0000-4000-8000-000000000001'
+     and entitlement_key = 'premium'),
+  'ordering-renewal-1',
+  'rejected delayed transfer preserves the newer renewal authority'
+);
+select is(
+  (select count(*)::integer
+   from public.user_entitlements
+   where user_id = 'c1000000-0000-4000-8000-000000000002'
+     and entitlement_key = 'premium'),
+  0,
+  'rejected delayed transfer creates no destination entitlement'
+);
+
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-source-2', 'INITIAL_PURCHASE',
+    'c2000000-0000-4000-8000-000000000001',
+    'active', now() - interval '3 hours', now() + interval '30 days'
+  )$$,
+  'newer-transfer source has older provider authority'
+);
+select lives_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'ordering-newer-transfer-2',
+    'c2000000-0000-4000-8000-000000000001',
+    'c2000000-0000-4000-8000-000000000002',
+    'sandbox',
+    now() - interval '1 hour',
+    'sha256-ordering-newer-transfer-2'
+  )$$,
+  'newer transfer may follow an older source event'
+);
+select is(
+  (select status from public.user_entitlements
+   where user_id = 'c2000000-0000-4000-8000-000000000001'
+     and entitlement_key = 'premium'),
+  'revoked',
+  'valid newer transfer revokes the source exactly once'
+);
+select is(
+  (select status from public.user_entitlements
+   where user_id = 'c2000000-0000-4000-8000-000000000002'
+     and entitlement_key = 'premium'),
+  'active',
+  'valid newer transfer activates the destination exactly once'
+);
+
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-source-3', 'INITIAL_PURCHASE',
+    'c3000000-0000-4000-8000-000000000001',
+    'active', now() - interval '4 hours', now() + interval '30 days'
+  )$$,
+  'expiration ordering source begins active'
+);
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-expiration-3', 'EXPIRATION',
+    'c3000000-0000-4000-8000-000000000001',
+    'expired', now() - interval '1 hour', now() - interval '1 hour'
+  )$$,
+  'newer expiration becomes authoritative'
+);
+select throws_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'ordering-delayed-transfer-3',
+    'c3000000-0000-4000-8000-000000000001',
+    'c3000000-0000-4000-8000-000000000002',
+    'sandbox',
+    now() - interval '2 hours',
+    'sha256-ordering-delayed-transfer-3'
+  )$$,
+  'transfer_event_stale',
+  'delayed transfer cannot replace a newer expiration'
+);
+
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-source-4', 'INITIAL_PURCHASE',
+    'c4000000-0000-4000-8000-000000000001',
+    'active', now() - interval '4 hours', now() + interval '30 days'
+  )$$,
+  'refund ordering source begins active'
+);
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-refund-4', 'REFUND',
+    'c4000000-0000-4000-8000-000000000001',
+    'revoked', now() - interval '1 hour', now() + interval '30 days'
+  )$$,
+  'newer refund becomes authoritative'
+);
+select throws_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'ordering-delayed-transfer-4',
+    'c4000000-0000-4000-8000-000000000001',
+    'c4000000-0000-4000-8000-000000000002',
+    'sandbox',
+    now() - interval '2 hours',
+    'sha256-ordering-delayed-transfer-4'
+  )$$,
+  'transfer_event_stale',
+  'delayed transfer cannot replace a newer refund or revocation'
+);
+
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-source-5', 'INITIAL_PURCHASE',
+    'c5000000-0000-4000-8000-000000000001',
+    'active', now() - interval '4 hours', now() + interval '30 days'
+  )$$,
+  'duplicate ordering source begins active'
+);
+select lives_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'ordering-transfer-5',
+    'c5000000-0000-4000-8000-000000000001',
+    'c5000000-0000-4000-8000-000000000002',
+    'sandbox',
+    now() - interval '2 hours',
+    'sha256-ordering-transfer-5'
+  )$$,
+  'initial ordered transfer succeeds'
+);
+select lives_ok(
+  $$select pg_temp.apply_premium_event(
+    'ordering-target-renewal-5', 'RENEWAL',
+    'c5000000-0000-4000-8000-000000000002',
+    'active', now() - interval '1 hour', now() + interval '60 days'
+  )$$,
+  'newer destination renewal follows the transfer'
+);
+select lives_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'ordering-transfer-5',
+    'c5000000-0000-4000-8000-000000000001',
+    'c5000000-0000-4000-8000-000000000002',
+    'sandbox',
+    now() - interval '2 hours',
+    'sha256-ordering-transfer-5'
+  )$$,
+  'duplicate replay remains idempotent after a newer renewal'
+);
+select is(
+  (select metadata->>'revenuecat_event_id'
+   from public.user_entitlements
+   where user_id = 'c5000000-0000-4000-8000-000000000002'
+     and entitlement_key = 'premium'),
+  'ordering-target-renewal-5',
+  'duplicate replay does not overwrite newer destination authority'
+);
+select is(
+  (select count(*)::integer
+   from public.provider_events
+   where provider_event_id like 'transfer:ordering-transfer-5:%'),
+  2,
+  'duplicate ordered transfer retains exactly two normalized events'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.process_revenuecat_premium_transfer_ordered_internal(text,uuid,uuid,text,timestamptz,text,text)'::regprocedure
+  ) like '%revenuecat-premium:%',
+  'transfer and ordinary Premium lifecycle events share an advisory-lock namespace'
+);
+select ok(
+  pg_get_functiondef(
+    'public.process_revenuecat_premium_transfer_ordered_internal(text,uuid,uuid,text,timestamptz,text,text)'::regprocedure
+  ) like '%transfer_event_stale%',
+  'ordered transfer rechecks authoritative event time after serialization'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.process_revenuecat_premium_transfer_ordered_internal(text,uuid,uuid,text,timestamptz,text,text)',
+    'EXECUTE'
+  ),
+  'service role cannot bypass the ordered public transfer wrapper'
 );
 
 select ok(

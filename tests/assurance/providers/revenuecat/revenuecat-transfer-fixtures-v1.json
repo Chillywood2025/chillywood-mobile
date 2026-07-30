@@ -113,5 +113,44 @@
       "expectedStage": "environment-rejection",
       "resolverExpectation": "identities_resolved"
     }
+  ],
+  "orderingSchedules": [
+    {
+      "id": "newer-renewal-then-delayed-transfer",
+      "operations": [
+        { "kind": "lifecycle", "user": "source", "eventId": "renewal-new", "occurredAt": 300 },
+        { "kind": "transfer", "eventId": "transfer-old", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["lifecycle_applied", "transfer_event_stale"],
+      "expectedOwner": "source"
+    },
+    {
+      "id": "older-renewal-then-newer-transfer",
+      "operations": [
+        { "kind": "lifecycle", "user": "source", "eventId": "renewal-old", "occurredAt": 100 },
+        { "kind": "transfer", "eventId": "transfer-new", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["lifecycle_applied", "transfer_applied"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "older-transfer-then-newer-renewal",
+      "operations": [
+        { "kind": "transfer", "eventId": "transfer-old", "occurredAt": 200 },
+        { "kind": "lifecycle", "user": "target", "eventId": "renewal-new", "occurredAt": 300 }
+      ],
+      "expectedOutcomes": ["transfer_applied", "lifecycle_applied"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "duplicate-after-newer-renewal",
+      "operations": [
+        { "kind": "transfer", "eventId": "transfer-once", "occurredAt": 200 },
+        { "kind": "lifecycle", "user": "target", "eventId": "renewal-new", "occurredAt": 300 },
+        { "kind": "transfer", "eventId": "transfer-once", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["transfer_applied", "lifecycle_applied", "duplicate_ignored"],
+      "expectedOwner": "target"
+    }
   ]
 }

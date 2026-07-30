@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reportId": "b2-revenuecat-transfer-reconciliation",
   "featureId": "revenuecat-premium",
-  "objective": "Align Git with the exact already-deployed RevenueCat transfer migrations and preserve the bounded stopped webhook transfer source.",
+  "objective": "Align Git with the exact deployed RevenueCat transfer migrations and add a forward-only authoritative-ordering correction without deployment.",
   "nonGoals": [
     "deploy or reapply a migration",
     "call or mutate RevenueCat",
@@ -11,7 +11,7 @@
     "claim provider-backed purchase, installed, physical, or release proof"
   ],
   "risk": "C",
-  "baseHead": "84c9ffdcea7de1b73163c60348267875f5d99ed3",
+  "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
   "stoppedImplementation": {
     "pr": 52,
     "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
@@ -45,7 +45,8 @@
       "classification": "REMOTE_AND_SOURCE_MATCH",
       "stoppedSourceVersion": "20260730160000",
       "stoppedClassification": "VERSION_MISMATCH"
-    }
+    },
+    {"version": "20260730170000", "name": "revenuecat_transfer_authoritative_ordering", "file": "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql", "classification": "SOURCE_ONLY_FORWARD_CORRECTION", "deployed": false}
   ],
   "sourceClassifications": [
     {"path": "supabase/functions/revenuecat-webhook/index.ts", "classification": "FUNCTION_SOURCE_PENDING", "resolution": "INCLUDED_IN_B2"},
@@ -54,11 +55,13 @@
     {"path": "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql", "classification": "SOURCE_ONLY", "resolution": "INCLUDED_IN_B2"}
   ],
   "focusedValidation": {
-    "nodeTests": {"passed": 17, "failed": 0},
+    "nodeTests": {"passed": 19, "failed": 0},
     "denoCheck": "SOURCE_CLEAR",
     "migrationRawHashes": "SOURCE_CLEAR",
-    "databasePgTap": {"status": "INTEGRATION_CLEAR", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
-    "remoteDryRun": {"status": "BLOCKED_INTERNAL", "reason": "unlinked worktree; no remote mutation attempted"}
+    "databasePgTap": {"status": "HISTORICAL_BASELINE_CLEAR", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
+    "successorPgTap": {"status": "BLOCKED_INTERNAL", "planned": 52, "reason": "successor schema applied once locally, but the shared stack lacked its immutable deployed-function prerequisite; test data rolled back"},
+    "orderingSchedules": {"status": "MODEL_CLEAR", "passed": 4, "failed": 0, "deterministic": true},
+    "remoteDryRun": {"status": "BLOCKED_INTERNAL", "reason": "coordinator-controlled read-only assembled-source dry-run remains required; no remote connection or mutation attempted"}
   },
   "fixtureCoverage": [
     "success",
@@ -76,8 +79,8 @@
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
-    "T2_MODEL": "BLOCKED_INTERNAL",
-    "T3_INTEGRATION": "INTEGRATION_CLEAR",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
     "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -85,11 +88,11 @@
   },
   "proofLimits": [
     "The fixture corpus proves only deterministic sanitized source contracts.",
-    "The pending database test is not substituted by JavaScript fixtures.",
+    "The prior 27/27 local pgTAP baseline does not substitute for the unexecuted 52-case successor suite.",
     "No provider, installed, physical, signed-artifact, or release behavior is claimed."
   ],
-  "rollback": "Retain immutable deployed migration source. If the undeployed webhook source is defective, stop its delivery and revert only that source in an exact-head reviewed successor.",
+  "rollback": "Retain immutable deployed migration source. The forward correction remains undeployed; any future deployed correction requires another forward-only successor rather than rewriting migration history.",
   "emergencyStop": "Do not deploy the webhook or mutate provider state; route any future provider action to Money Flow Control under separate authorization.",
-  "finalPermittedNextAction": "Run focused local database proof under the coordinator lock, pass exact-head review and scope enforcement, then merge this Git-only reconciliation.",
+  "finalPermittedNextAction": "Run the 52-case focused local database proof under the coordinator lock, pass the linked read-only assembled-source dry-run, then require fresh exact-head review and scope enforcement before this Git-only reconciliation may merge.",
   "claimedFeatureCompletion": false
 }
