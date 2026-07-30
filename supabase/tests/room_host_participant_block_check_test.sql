@@ -1,5 +1,5 @@
 begin;
-select plan(10);
+select plan(18);
 
 select has_function(
   'public',
@@ -11,12 +11,12 @@ select has_function(
 select ok(
   (
     select procedure.prosecdef
-      and procedure.proconfig @> array['search_path=public']
+      and procedure.proconfig @> array['search_path=""']
     from pg_proc procedure
     where procedure.oid =
       'public.watch_party_room_actor_blocked_by_host(text,text)'::regprocedure
   ),
-  'the block check remains a search-path-locked security-definer boundary'
+  'the corrected block check uses an empty search-path security-definer boundary'
 );
 
 select ok(
@@ -46,7 +46,8 @@ insert into auth.users (id, is_sso_user, is_anonymous)
 values
   ('46111111-1111-4111-8111-111111111111', false, false),
   ('46222222-2222-4222-8222-222222222222', false, false),
-  ('46333333-3333-4333-8333-333333333333', false, false)
+  ('46333333-3333-4333-8333-333333333333', false, false),
+  ('46444444-4444-4444-8444-444444444444', false, false)
 on conflict (id) do nothing;
 
 insert into public.watch_party_rooms (
@@ -61,22 +62,82 @@ insert into public.watch_party_rooms (
   started_at,
   last_activity_at
 )
-values (
-  'ROOM-HOST-BLOCK-CHECK',
-  '46111111-1111-4111-8111-111111111111',
-  'live',
-  'open',
-  'open',
-  true,
-  'paused',
-  0,
-  now(),
-  now()
+values
+  (
+    'ROOM-HOST-BLOCK-CHECK',
+    '46111111-1111-4111-8111-111111111111',
+    'live',
+    'open',
+    'open',
+    true,
+    'paused',
+    0,
+    now(),
+    now()
+  ),
+  (
+    'OTHER-HOST-BLOCK-CHECK',
+    '46333333-3333-4333-8333-333333333333',
+    'live',
+    'open',
+    'open',
+    true,
+    'paused',
+    0,
+    now(),
+    now()
+  );
+
+set local role anon;
+select set_config('request.jwt.claim.role', 'anon', true);
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select throws_ok(
+  $$select public.watch_party_room_actor_blocked_by_host(
+    'ROOM-HOST-BLOCK-CHECK',
+    '46222222-2222-4222-8222-222222222222'
+  )$$,
+  '42501',
+  'permission denied for function watch_party_room_actor_blocked_by_host',
+  'anonymous execution is denied at the function boundary'
+);
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select throws_ok(
+  $$select public.watch_party_room_actor_blocked_by_host(
+    'ROOM-HOST-BLOCK-CHECK',
+    '46222222-2222-4222-8222-222222222222'
+  )$$,
+  'P0001',
+  'room_block_check_forbidden',
+  'authenticated execution without a subject fails closed'
 );
 
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select throws_ok(
+  $$select public.watch_party_room_actor_blocked_by_host(
+    'ROOM-HOST-BLOCK-CHECK',
+    '46222222-2222-4222-8222-222222222222'
+  )$$,
+  'P0001',
+  'room_block_check_forbidden',
+  'an authenticated database role cannot spoof service authority with claims'
+);
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config(
   'request.jwt.claim.sub',
   '46222222-2222-4222-8222-222222222222',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
   true
 );
 select lives_ok(
@@ -90,6 +151,11 @@ select lives_ok(
 select set_config(
   'request.jwt.claim.sub',
   '46111111-1111-4111-8111-111111111111',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111"}',
   true
 );
 select lives_ok(
@@ -135,6 +201,11 @@ select set_config(
   '46222222-2222-4222-8222-222222222222',
   true
 );
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  true
+);
 select is(
   public.watch_party_room_actor_blocked_by_host(
     'ROOM-HOST-BLOCK-CHECK',
@@ -149,6 +220,31 @@ select set_config(
   '46333333-3333-4333-8333-333333333333',
   true
 );
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"46333333-3333-4333-8333-333333333333"}',
+  true
+);
+select throws_ok(
+  $$select public.watch_party_room_actor_blocked_by_host(
+    'ROOM-HOST-BLOCK-CHECK',
+    '46222222-2222-4222-8222-222222222222'
+  )$$,
+  'P0001',
+  'room_block_check_forbidden',
+  'a host of another room cannot inspect this room participant'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  '46444444-4444-4444-8444-444444444444',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444"}',
+  true
+);
 select throws_ok(
   $$select public.watch_party_room_actor_blocked_by_host(
     'ROOM-HOST-BLOCK-CHECK',
@@ -158,6 +254,60 @@ select throws_ok(
   'room_block_check_forbidden',
   'an unrelated authenticated user cannot inspect another participant'
 );
+
+select set_config(
+  'request.jwt.claim.sub',
+  '46222222-2222-4222-8222-222222222222',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  true
+);
+select is(
+  public.watch_party_room_actor_blocked_by_host(
+    '',
+    '46222222-2222-4222-8222-222222222222'
+  ),
+  false,
+  'an empty room identifier returns false without querying authority state'
+);
+select is(
+  public.watch_party_room_actor_blocked_by_host(
+    'ROOM-HOST-BLOCK-CHECK',
+    ''
+  ),
+  false,
+  'an empty actor identifier returns false without querying authority state'
+);
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select is(
+  public.watch_party_room_actor_blocked_by_host(
+    'ROOM-HOST-BLOCK-CHECK',
+    '46222222-2222-4222-8222-222222222222'
+  ),
+  true,
+  'the explicit service-role path may inspect the blocked participant'
+);
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select throws_ok(
+  $$select public.watch_party_room_actor_blocked_by_host(
+    'ROOM-HOST-BLOCK-CHECK',
+    '46222222-2222-4222-8222-222222222222'
+  )$$,
+  'P0001',
+  'room_block_check_forbidden',
+  'service database role without the matching request claim fails closed'
+);
+reset role;
 
 select * from finish();
 rollback;
