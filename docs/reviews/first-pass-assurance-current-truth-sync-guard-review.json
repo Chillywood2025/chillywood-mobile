@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-current-truth-sync-guard-review-v1",
+  "implementationPrNumber": 58,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-sync-guard",
+  "implementationHead": "b170c4ed99a9e2cc2b33b19fdf5e78b33f126157",
+  "implementationTree": "dbc57e041b87a7a75d91963e0ecbbf1a0469063d",
+  "baseHead": "ebefdd26a278533b51a5a2e5b981640b6518a777",
+  "changedFileHash": "b4f335fa384269f0adfed3a701702c36ff28cfaec3485dd131ec405c6a7d12ca",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "02cc89f3a9449104793bec3a696fa8fdbbe34b314762e81684c27aec73770664",
+  "testResults": {
+    "currentTruthSynchronization": {
+      "status": "pass",
+      "cases": 9,
+      "bootstrapMerge": "exact-sha-first-parent-and-path-set",
+      "futureMergeAllowlist": [
+        "config/assurance/current-truth-v1.json",
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md"
+      ]
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "bootstrap-synchronization-merge",
+      "remoteMain": "ebefdd26a278533b51a5a2e5b981640b6518a777",
+      "recordedMain": "2f3b0d1cc4765c4196cd831ab782417a0f000c23"
+    },
+    "providerMainReadback": {
+      "matchingRemoteMain": "pass",
+      "mismatchedRemoteMain": "rejected",
+      "recordCheckpointUsedAsProviderSha": false
+    },
+    "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
+    "determinism": "3/3",
+    "scope": {"status": "pass", "files": 5, "fileBudget": 15, "netChangedLines": 139, "lineBudget": 1200},
+    "gitDiffCheck": "pass"
+  },
+  "testResultHash": "e1a2b38f4a38a072aa3eb5700279da8e3f490050e774601cdbc5442619f643cb",
+  "reviewLevel": "A",
+  "reviewHead": "de87a22eb53978d909621a1b57b2c71c6e062ad0",
+  "reviewTimestamp": "2026-07-30T17:35:26Z",
+  "reviewerLanes": ["independent", "separate-clean-worktree", "current-truth-fail-closed"],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_SYNC_ALLOWLIST_TOO_BROAD",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Grandfathered only PR #56's exact merge SHA, first parent, and changed-path set; future synchronization merges allow only the record and generated hot-path documents."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "mergeApproval": "approved_exact_head"
+  }
+}
