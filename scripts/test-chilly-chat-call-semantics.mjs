@@ -714,13 +714,21 @@ assert.match(rootLayoutSource, /testID="app-wide-incoming-call-banner"/u, "foreg
 assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foreground calls cannot use the large app-wide modal");
 assert.match(
   rootLayoutSource,
-  /Linking\.getInitialURL\(\)[\s\S]{0,260}routeNativeCallUrl\(url\)/u,
-  "terminated Android native actions must be replayed from the Activity initial URL",
+  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,1800}Linking\.getInitialURL\(\)[\s\S]{0,180}captureNativeCallRoute/u,
+  "terminated Android native actions must be captured from the Activity initial URL before the authenticated navigator mounts",
 );
 assert.match(
   rootLayoutSource,
-  /setPendingNativeCallRoute\(nativeCallRoute\)[\s\S]{0,1800}!isSignedIn \|\| !pendingNativeCallRoute[\s\S]{0,700}router\.replace/u,
+  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,2600}isLoading[\s\S]{0,120}!isSignedIn[\s\S]{0,120}!pendingNativeCallRoute[\s\S]{0,900}router\.replace/u,
   "cold-start native actions must wait for the authenticated session before deterministic routing",
+);
+const nativeCallRouteBridgeMountIndex = rootLayoutSource.indexOf("<AndroidNativeCallRouteBridge />");
+const authRouteGateMountIndex = rootLayoutSource.indexOf("<AuthRouteGate />");
+assert.ok(
+  nativeCallRouteBridgeMountIndex >= 0
+  && authRouteGateMountIndex >= 0
+  && nativeCallRouteBridgeMountIndex < authRouteGateMountIndex,
+  "the Android native action bridge must mount outside and before the auth-gated navigator",
 );
 assert.match(
   chatThreadSource,

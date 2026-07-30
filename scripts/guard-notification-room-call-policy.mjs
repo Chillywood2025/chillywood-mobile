@@ -177,8 +177,16 @@ assertIncludes(authoritativeBusyBegin, 'active_room."status" = \'active\'', "bus
 assertIncludes(authoritativeBusyBegin, "'busy'", "busy authority must terminate the overlap before delivery");
 assertIncludes(authoritativeBusyBegin, '"delivery_status" = \'skipped\'', "busy authority must explicitly skip the terminal delivery");
 assertIncludes(layout, "resolveChillyChatNativeCallRoute", "terminated Android native actions must replay their exact initial URL after authenticated boot");
-assertIncludes(layout, "setPendingNativeCallRoute(nativeCallRoute)", "cold-start native actions must remain pending until session hydration finishes");
+assertIncludes(layout, "setPendingNativeCallRoute((current)", "cold-start native actions must remain pending until session hydration finishes");
 assertIncludes(layout, "Linking.getInitialURL()", "terminated Android native actions must read the Activity initial URL");
+assertIncludes(layout, "function AndroidNativeCallRouteBridge()", "terminated Android native actions must use a dedicated always-mounted capture bridge");
+assertIncludes(layout, "<AndroidNativeCallRouteBridge />", "the Android native action capture bridge must mount at the session shell");
+assert(
+  layout.indexOf("<AndroidNativeCallRouteBridge />") >= 0
+  && layout.indexOf("<AuthRouteGate />") >= 0
+  && layout.indexOf("<AndroidNativeCallRouteBridge />") < layout.indexOf("<AuthRouteGate />"),
+  "the Android native action capture bridge must mount before the auth-gated navigator",
+);
 assertIncludes(chillyChatNativeCallRoutes, '["answer", "decline"].includes(nativeCallAction)', "cold-start replay must be limited to explicit Answer and Decline actions");
 assertIncludes(chillyChatNativeCallRoutes, "UUID_PATTERN", "cold-start replay must reject malformed thread and invite identities");
 assertNotIncludes(chillyChatNativeCallRoutes, "access_token", "cold-start call routes must not carry authentication credentials");
