@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "a5e156c7921c8faef75358b95779beac1f5e08ad",
-  "latestMergedImplementationPr": {"number": 58, "state": "merged", "head": "b170c4ed99a9e2cc2b33b19fdf5e78b33f126157", "mergeSha": "a5e156c7921c8faef75358b95779beac1f5e08ad", "title": "Make assurance current-truth synchronization merge-aware"},
+  "mainSha": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+  "latestMergedImplementationPr": {"number": 62, "state": "merged", "head": "08ca9b11b28677268f7db932086256645d29c794", "mergeSha": "55ec0d2876f74b7cccfa62588bddb508f477e6e4", "title": "Authorize registered related-domain assurance scope"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -40,21 +40,27 @@
     "evidenceSource": "merged autonomous operating-model contract and source guard"
   },
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
-  "openImplementationPrs": [{"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "open-draft", "disposition": "reconcile-then-supersede-unmerged"}],
+  "openImplementationPrs": [
+    {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "open-draft", "disposition": "reconcile-then-supersede-unmerged"},
+    {"number": 64, "branch": "codex/first-pass-assurance-models", "head": "13ff4c0ffc1c38f402dc1bf7744758d6419b151b", "state": "open-draft", "disposition": "merge-current-truth-sync-then-exact-review"}
+  ],
   "openReviewOnlyPrs": [
     {"number": 53, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review", "head": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b", "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d", "state": "open-draft-stale", "disposition": "never-merge"},
     {"number": 55, "branch": "codex/first-pass-assurance-foundation-review", "head": "aff39b454a53a09cd028c0d84d39e836f808e3d1", "reviewedImplementationHead": "cc4d4582743cc7201785cdb784134663b4fd0e1b", "state": "open-draft-current", "disposition": "never-merge"},
     {"number": 57, "branch": "codex/first-pass-assurance-current-truth-review", "head": "c4557aaea42db104050c9a0d4dc0458ea9f433d9", "reviewedImplementationHead": "8308e0b34050735fd75efe6ff3415cde1f39144a", "state": "open-draft-current", "disposition": "never-merge"},
-    {"number": 59, "branch": "codex/first-pass-assurance-current-truth-sync-guard-review", "head": "919188a43823071498cbfe62a22fd31c633c0e02", "reviewedImplementationHead": "b170c4ed99a9e2cc2b33b19fdf5e78b33f126157", "state": "open-draft-current", "disposition": "never-merge"}
+    {"number": 59, "branch": "codex/first-pass-assurance-current-truth-sync-guard-review", "head": "919188a43823071498cbfe62a22fd31c633c0e02", "reviewedImplementationHead": "b170c4ed99a9e2cc2b33b19fdf5e78b33f126157", "state": "open-draft-current", "disposition": "never-merge"},
+    {"number": 61, "branch": "codex/first-pass-assurance-current-truth-after-sync-guard-review", "head": "85a34c1d5c072364d53890c30956548b6be94558", "reviewedImplementationHead": "3f4615f3584ede3c1159b64296231bca0b7e3e09", "state": "open-draft-current", "disposition": "never-merge"},
+    {"number": 65, "branch": "codex/first-pass-assurance-feature-domain-scope-review-fail-closed-rerun", "head": "096f35c44bb916edf41714ca3d6a7aa3d8410e35", "reviewedImplementationHead": "08ca9b11b28677268f7db932086256645d29c794", "state": "open-draft-current", "disposition": "never-merge"},
+    {"number": 66, "branch": "codex/first-pass-assurance-feature-domain-scope-review-operator-contract", "head": "2ab51ce74a0ed80551407aab66b1d44192056120", "reviewedImplementationHead": "08ca9b11b28677268f7db932086256645d29c794", "state": "open-draft-current", "disposition": "never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58"],
-    "active": "PR-B-RECONCILIATION-AND-PR-C-MODELS",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62"],
+    "active": "PR-B-RECONCILIATION-AND-PR-C-EXACT-REVIEW",
     "nextActions": [
-      "Freeze and exact-head review bounded Git-only reconciliation PR B1 for the LiveKit source-identity migration.",
-      "Freeze and exact-head review bounded Git-only reconciliation PR B2 for RevenueCat transfer migrations.",
+      "Synchronize this current-truth checkpoint, then exact-head review bounded Git-only reconciliation PR B1 for the LiveKit source-identity migration.",
+      "Synchronize this current-truth checkpoint, then exact-head review bounded Git-only reconciliation PR B2 for RevenueCat transfer migrations.",
       "Run bounded Git-only reconciliation PR B3 for the room-host participant block check after a worker slot is available.",
-      "Build PR C executable state, property, and concurrency models in its isolated worktree without product changes.",
+      "Run four isolated exact-head review lanes and one frozen-head CI for PR C executable state, property, and concurrency models.",
       "After all unique source is safely on main, close PR #52 unmerged as superseded and PR #53 unmerged as stale review-only; retain both branches."
     ],
     "prohibitions": [
@@ -63,10 +69,10 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-07-30T17:42:27Z",
-  "freshnessDeadline": "2026-07-31T17:42:27Z",
+  "timestamp": "2026-07-30T18:13:30Z",
+  "freshnessDeadline": "2026-07-31T18:13:30Z",
   "evidenceSources": [
-    {"id": "github-pr-readback-20260730", "mode": "read-only", "covers": ["main", "PR #54", "PR #55", "PR #56", "PR #57", "PR #58", "PR #59", "PR #52", "PR #53"]},
+    {"id": "github-pr-readback-20260730", "mode": "read-only", "covers": ["main", "PR #54", "PR #55", "PR #56", "PR #57", "PR #58", "PR #59", "PR #60", "PR #61", "PR #62", "PR #63", "PR #64", "PR #65", "PR #66", "PR #52", "PR #53"]},
     {"id": "supabase-migration-readback-20260730", "mode": "read-only", "covers": ["remote migration versions", "names", "statement arrays", "hashes"]},
     {"id": "owner-supplied-safety-snapshot-20260730", "mode": "provided", "covers": ["switches", "schedules", "effective baseline", "sentinel counts", "non-interference"]}
   ],
