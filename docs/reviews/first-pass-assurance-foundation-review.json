@@ -3,15 +3,16 @@
   "reviewId": "first-pass-assurance-foundation-review-v1",
   "implementationPrNumber": 54,
   "implementationBranch": "codex/first-pass-assurance-foundation",
-  "implementationHead": "3e528d5acfcf2ede1ee74591f8b343cf86d9bced",
-  "implementationTree": "f5f56142cfadebe350e058cab79c6e6e0b799809",
+  "implementationHead": "cc4d4582743cc7201785cdb784134663b4fd0e1b",
+  "implementationTree": "8bde3881e744f49689b72e1edccba2942ac17845",
   "baseHead": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
   "changedFileHash": "d435597445aa615c7e7bf09d2629d24d8f6c182e658a3b9ccf1971077a41c22c",
   "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "configHash": "a59a273d7fd3c2f5151cf7589d9487574346189b7b890cdda1935673f6a37c76",
-  "testResultHash": "6df1aa26c3de01d35dc4d08807a0c94f8bdfd138e31f178fef253a77fe418806",
-  "reviewHead": "3e528d5acfcf2ede1ee74591f8b343cf86d9bced",
-  "reviewTimestamp": "2026-07-30T17:13:37Z",
+  "configHash": "546fe27ba256093e299572e26053e24660e48ce6cf417a44c040853132b41d83",
+  "testResultHash": "f3b3216b2275daffc8340feedc59b8afd96e9b16d1e2ff60b89b08617de1bedc",
+  "reviewLevel": "B",
+  "reviewHead": "414a5ad146994638fd0850c801b374415e6cafd6",
+  "reviewTimestamp": "2026-07-30T17:15:32Z",
   "reviewerLanes": [
     "separate-clean-worktree",
     "architecture",
@@ -20,15 +21,15 @@
   ],
   "testResults": {
     "phase1Ci": {
-      "runId": 30564904535,
-      "implementationHead": "3e528d5acfcf2ede1ee74591f8b343cf86d9bced",
+      "runId": 30565124156,
+      "implementationHead": "cc4d4582743cc7201785cdb784134663b4fd0e1b",
       "status": "in_progress"
     },
     "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
     "determinism": {"contracts": "3/3", "architecturePlan": "3/3", "dogfood": "3/3", "currentTruth": "3/3"},
     "dogfood": {"status": "pass", "unwaivedFindings": 31, "requiredDetectorGaps": 0},
     "negativeFixtures": {"proofSubstitutionsRejected": "2/2", "staleCurrentTruthRejected": true, "missingEvidenceRejected": true},
-    "scope": {"status": "pass", "files": 32, "fileBudget": 36, "netChangedLines": -3492, "lineBudget": 6000},
+    "scope": {"status": "pass", "files": 32, "fileBudget": 36, "netChangedLines": -3477, "lineBudget": 6000},
     "localContractSequences": {"allPlatform": "pass", "ios": "pass", "cognitive": "pass"},
     "lint": {"status": "pass", "errors": 0, "inheritedWarnings": 85},
     "typescript": "pass",
@@ -65,6 +66,13 @@
       "status": "resolved",
       "summary": "Generated hot-path documents dropped active closure and operating-policy facts required by existing Phase 1 guards.",
       "resolution": "Operational closures and autonomous approval policy are structured fields in current truth and are rendered deterministically."
+    },
+    {
+      "id": "PR-A-REVIEW-005",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "The review guard verified the test-result hash but did not reject an in-progress frozen-head CI result.",
+      "resolution": "Review manifests now bind a review level, required lanes, and a passing Phase 1 result at the exact implementation head."
     }
   ],
   "summary": {
