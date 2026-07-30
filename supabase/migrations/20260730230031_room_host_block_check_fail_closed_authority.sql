@@ -2,6 +2,12 @@
 -- rewriting migration 20260730161737. Authenticated calls must have an exact
 -- subject. A subject-less service call is allowed only when both the invoking
 -- database role and the request claim are explicitly service_role.
+--
+-- SECURITY DEFINER changes current_user to the function owner, so current_user
+-- is not caller evidence. current_setting('role') retains the PostgREST SET
+-- ROLE provenance; when it is unset or "none", session_user is the only direct
+-- session fallback. The signed full-claims role takes precedence over the
+-- legacy request.jwt.claim.role setting.
 
 create or replace function public."watch_party_room_actor_blocked_by_host"(
   p_party_id text,
@@ -17,6 +23,7 @@ declare
   v_party_id text := upper(nullif(btrim(coalesce(p_party_id, '')), ''));
   v_actor_user_id text := nullif(btrim(coalesce(p_actor_user_id, '')), '');
   v_auth_user_id text := nullif((auth.uid())::text, '');
+  -- Do not replace this with current_user: SECURITY DEFINER owns current_user.
   v_configured_role text := nullif(current_setting('role', true), '');
   v_invoker_role text := case
     when v_configured_role is null or v_configured_role = 'none'
@@ -24,6 +31,7 @@ declare
     else v_configured_role
   end;
   v_request_role text := coalesce(
+    -- Prefer the signed full claims document; retain the legacy-role fallback.
     nullif(auth.jwt() ->> 'role', ''),
     nullif(current_setting('request.jwt.claim.role', true), '')
   );

@@ -48,9 +48,9 @@
     "version": "20260730230031",
     "name": "room_host_block_check_fail_closed_authority",
     "file": "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql",
-    "rawSha256": "0b00f644631319b406f56af930fbaf7f512f3548d936d729a1d208219b907e07",
-    "repositoryNormalizeSqlV1Sha256": "9099507a732ba23071f0f814236f2ef46e6d105f680c51a68a4a45cd7becf102",
-    "lowerWhitespaceV1Sha256": "442e34e890f39086779b3b4f2b8276085dc68a69ed6093562c8e24b2e081983f",
+    "rawSha256": "4aea3d852682f921c13aa382f7afe59c971999793472f1654c0d74f3c7376127",
+    "repositoryNormalizeSqlV1Sha256": "998420f5d381a0c6077012fdd9cca3ff6249979d406811f29f02a7d4ef1779b7",
+    "lowerWhitespaceV1Sha256": "99d98a9cb31daab6b2e1eb58e07c742f4506298c6a80e2948c392d5238b548ee",
     "classification": "SOURCE_ONLY_FORWARD_CORRECTION",
     "deployed": false,
     "behavior": {
@@ -59,8 +59,10 @@
       "authenticatedNullSubject": "raise-room_block_check_forbidden",
       "authenticatedServiceClaimSpoof": "raise-room_block_check_forbidden",
       "serviceNullSubject": "allowed-only-when-invoker-role-and-request-role-are-service_role",
+      "serviceNonNullSubject": "self-or-exact-room-host-only-without-null-subject-bypass",
       "otherRoomHost": "raise-room_block_check_forbidden",
-      "unrelatedAuthenticated": "raise-room_block_check_forbidden"
+      "unrelatedAuthenticated": "raise-room_block_check_forbidden",
+      "invalidInputOrder": "normalize-inputs-and-return-false-before-reading-authority-state"
     },
     "securityBoundary": {
       "securityDefiner": true,
@@ -68,10 +70,22 @@
       "relationsSchemaQualified": true,
       "publicExecuteRevoked": true,
       "anonExecuteRevoked": true,
+      "exactExplicitNonOwnerGrantees": [
+        "authenticated",
+        "service_role"
+      ],
       "executeGrantedTo": [
         "authenticated",
         "service_role"
       ]
+    },
+    "roleProvenance": {
+      "securityDefinerCurrentUser": "function-owner-not-caller-authority",
+      "configuredRole": "current_setting-role-retains-PostgREST-SET-ROLE-provenance",
+      "roleNoneFallback": "session_user",
+      "fullClaimsPrecedence": "auth.jwt-role-before-legacy-request.jwt.claim.role",
+      "serviceAuthority": "both-invoker-role-and-request-role-must-equal-service_role",
+      "authenticatedClaimSpoof": "denied-when-invoker-role-is-authenticated"
     },
     "rollback": "Do not deploy this source under this program. Before any separately authorized deployment, block and supersede it with another forward-only migration if review finds a defect; never rewrite 20260730161737."
   },
@@ -118,23 +132,38 @@
   },
   "focusedTest": {
     "file": "supabase/tests/room_host_participant_block_check_test.sql",
-    "fileRawSha256": "9b57229dfbb4cbad1caef9c8bc1afb67ade60624a5057b17a0fffb96100db11e",
-    "mode": "local-transaction-rolled-back",
-    "assertions": 18,
-    "passed": 18,
-    "failed": 0,
-    "resultHashAlgorithm": "sha256-stable-json-of-result-fields-and-cases",
-    "resultSha256": "c30c12deabda49adbee99aece41e8845cb032e005b79db60e6f77b01462c2224",
+    "fileRawSha256": "f0db6aad56394b403affdebab1076da9d412c899e1bb92c4648bc8aff48a0e34",
+    "mode": "local-focused-pgTap",
+    "assertions": 31,
+    "executionStatus": "BLOCKED_INTERNAL",
+    "executionReason": "The pre-final audit explicitly prohibited database execution; the current 31-case file has static validation only.",
     "databaseReset": false,
     "remoteAccess": false,
     "successorPersisted": false,
     "temporaryPgTapPersisted": false,
+    "staticValidation": {
+      "planMatchesAssertions": true,
+      "plannedAssertions": 31,
+      "mappedCases": 31
+    },
+    "lastExecutedBaseline": {
+      "fileRawSha256": "9b57229dfbb4cbad1caef9c8bc1afb67ade60624a5057b17a0fffb96100db11e",
+      "assertions": 18,
+      "passed": 18,
+      "failed": 0,
+      "mode": "local-transaction-rolled-back",
+      "doesNotProveCurrentFile": true
+    },
     "cases": [
       "function exists",
       "empty search path is fixed on the security definer",
       "anonymous execute privilege is absent",
       "authenticated and service-role execute grants are exact",
+      "function ACL has exactly authenticated and service_role as explicit non-owner grantees",
+      "security-definer owner is separated from caller role provenance",
       "anonymous runtime call is denied",
+      "role none falls back to session_user and rejects claim-only service authority",
+      "invalid input returns false before null-auth authority evaluation",
       "authenticated null subject is denied",
       "authenticated service-claim spoof is denied",
       "participant self-check is allowed",
@@ -145,16 +174,25 @@
       "host of another room is denied",
       "unrelated authenticated caller is denied",
       "empty room input returns false",
+      "null room input returns false",
+      "whitespace room input returns false",
+      "malformed room input returns false",
+      "nonexistent room self-check returns false",
       "empty actor input returns false",
+      "null actor input returns false",
+      "whitespace actor input returns false",
       "explicit service-role null-subject call is allowed",
-      "service database role with mismatched request role is denied"
+      "full-claims role takes precedence over legacy role",
+      "legacy role is used only when full claims omit role",
+      "service role with unrelated non-null subject is denied",
+      "service role with exact non-null subject follows the participant self path"
     ]
   },
   "gateApplicability": {
     "scope": "this-B3-source-reconciliation-and-forward-correction-only",
     "T0_REQUIREMENT": "required",
     "T1_SOURCE": "required",
-    "T2_MODEL": "owned-by-PR-C-not-substituted-here",
+    "T2_MODEL": "not-applicable-no-room-host-state-model-the-31-case-pgTap-is-T3-only",
     "T3_INTEGRATION": "required-local-only",
     "T4_NATIVE_PROVIDER": "not-applicable-to-this-PR",
     "T5_SIGNED_ARTIFACT": "not-applicable-to-this-PR",
@@ -165,16 +203,19 @@
     "scope": "this-B3-source-reconciliation-and-forward-correction-only",
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
-    "T2_MODEL": "MODEL_CLEAR",
-    "T3_INTEGRATION": "INTEGRATION_CLEAR",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T2_MODEL_REASON": "This narrow reconciliation has no executable room-host state model. Source inspection and the pgTAP matrix cannot substitute for T2.",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION_REASON": "The current 31-case pgTAP file requires one focused transaction-rolled-back execution after the audit freeze.",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
     "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
   },
   "knownFindingDisposition": {
-    "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "resolved-in-forward-source-and-local-18-case-matrix-not-deployed",
-    "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "resolved-in-local-matrix",
+    "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "SOURCE_CLEAR-forward-correction-not-deployed-current-31-case-runtime-pending",
+    "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "SOURCE_CLEAR-current-31-case-runtime-pending",
+    "B3_CURRENT_31_CASE_PGTAP_NOT_EXECUTED": "BLOCKED_INTERNAL",
     "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING": "BLOCKED_INTERNAL-no-substitution",
     "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER": "BLOCKED_INTERNAL-no-substitution"
   },
@@ -191,7 +232,7 @@
   },
   "rollback": "Block merge or deployment on any authority, role, room, version, name, body, hash, grant, RLS, dry-run, or exact-review mismatch. Any correction remains forward-only.",
   "emergencyStop": "Stop the database lane; do not apply, rewrite, rename, or re-run deployed migration 20260730161737.",
-  "permittedNextAction": "Freeze this bounded source checkpoint, run exact successor review in the existing review lanes, and separately authorize one linked no-apply dry-run before any merge decision.",
+  "permittedNextAction": "Freeze this bounded source checkpoint. After the coordinator supplies the linked no-apply dry-run disposition, run the current 31-case focused pgTAP once in a rolled-back local transaction, then run exact successor review in the existing review lanes.",
   "safety": {
     "liveDatabaseChanged": false,
     "localDatabasePersistentlyChanged": false,
