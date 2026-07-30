@@ -59,6 +59,28 @@ matrix.detachedExactMain = verify({ branch: "" });
 assert.equal(matrix.detachedExactMain.ok, true);
 assert.equal(matrix.detachedExactMain.context, "detached-main");
 
+matrix.detachedExplicitMainExact = verify({
+  branch: "",
+  head: main,
+  explicitBranch: "main",
+  explicitHead: main
+});
+assert.equal(matrix.detachedExplicitMainExact.ok, true);
+assert.equal(matrix.detachedExplicitMainExact.context, "detached-main");
+
+for (const [label, checkout] of [["Behind", "f".repeat(40)], ["Ahead", advancedCheckout], ["Feature", pr64Recorded]]) {
+  const result = verify({
+    branch: "",
+    head: checkout,
+    explicitBranch: "main",
+    explicitHead: checkout
+  });
+  matrix[`detachedExplicitMain${label}`] = result;
+  assert.equal(result.ok, false);
+  assert.equal(result.context, "invalid-main-context");
+  assert(ids(result).includes("ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE"));
+}
+
 matrix.exactListedBranch = verify({
   branch: pr64Branch,
   head: pr64Recorded
@@ -180,6 +202,16 @@ matrix.providerDuplicateNumberAndBranch = verifyProviderImplementationSnapshot(e
 assert.equal(matrix.providerDuplicateNumberAndBranch.ok, false);
 assert.equal(ids(matrix.providerDuplicateNumberAndBranch).filter((id) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_DUPLICATE").length, 2);
 
+for (const [label, state] of [["Whitespace", "   "], ["Untrimmed", " open-draft "]]) {
+  const result = verifyProviderImplementationSnapshot(entries, [
+    { ...entries[0], state },
+    entries[1]
+  ]);
+  matrix[`providerState${label}`] = result;
+  assert.equal(result.ok, false);
+  assert(ids(result).includes("ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_ENTRY_MALFORMED"));
+}
+
 const schemas = readJson("config/assurance/schemas-v1.json");
 const branchPattern = new RegExp(schemas.$defs.gitBranch.pattern, "u");
 for (const valid of [pr52Branch, pr64Branch]) assert.equal(branchPattern.test(valid), isValidGitBranchName(valid));
@@ -194,27 +226,42 @@ for (const codePoint of [...Array.from({ length: 33 }, (_, index) => index), 127
 }
 const numberSchema = schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.number;
 assert.deepEqual(numberSchema, { type: "integer", minimum: 1 });
+const statePattern = new RegExp(schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.state.pattern, "u");
+for (const validState of ["open", "open-draft", "open draft"]) assert.equal(statePattern.test(validState), true);
+for (const invalidState of ["", " ", " open", "open ", "\topen"]) assert.equal(statePattern.test(invalidState), false);
 
 const hashes = Array.from({ length: 3 }, () => sha256(stableJson(matrix)));
 assert.equal(new Set(hashes).size, 1);
 
 const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-current-truth-provider-"));
 try {
-  const snapshotPath = path.join(tempDirectory, "empty-open-implementation-inventory.json");
-  fs.writeFileSync(snapshotPath, `${JSON.stringify({ openImplementationPrs: [] })}\n`, { mode: 0o600 });
-  const cli = spawnSync(process.execPath, [
-    rel("scripts/assurance/current-truth.mjs"),
-    "--provider-mode=read-only",
-    `--snapshot=${snapshotPath}`,
-    "--now=2026-07-30T20:00:00Z"
-  ], { cwd: rel(), encoding: "utf8" });
-  assert.notEqual(cli.status, 0);
-  const payload = JSON.parse(cli.stdout.trim().split(/\r?\n/u).at(-1));
+  const runSnapshotCli = (name, contents) => {
+    const snapshotPath = path.join(tempDirectory, name);
+    fs.writeFileSync(snapshotPath, contents, { mode: 0o600 });
+    const cli = spawnSync(process.execPath, [
+      rel("scripts/assurance/current-truth.mjs"),
+      "--provider-mode=read-only",
+      `--snapshot=${snapshotPath}`,
+      "--now=2026-07-30T20:00:00Z"
+    ], { cwd: rel(), encoding: "utf8" });
+    assert.notEqual(cli.status, 0);
+    return JSON.parse(cli.stdout.trim().split(/\r?\n/u).at(-1));
+  };
+
+  const payload = runSnapshotCli("empty-open-implementation-inventory.json", `${JSON.stringify({ openImplementationPrs: [] })}\n`);
   assert.equal(payload.headBindings.ok, true);
   assert.equal(payload.providerImplementationSnapshot.ok, false);
   assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"));
+
+  const invalidJsonPayload = runSnapshotCli("invalid.json", "{");
+  assert.equal(invalidJsonPayload.ok, false);
+  assert(invalidJsonPayload.findings.some(({ id }) => id === "ASSURANCE_PROVIDER_SNAPSHOT_READ_FAILED"));
+
+  const invalidRootPayload = runSnapshotCli("invalid-root.json", "[]\n");
+  assert.equal(invalidRootPayload.ok, false);
+  assert(invalidRootPayload.findings.some(({ id }) => id === "ASSURANCE_PROVIDER_SNAPSHOT_ROOT_MALFORMED"));
 } finally {
   fs.rmSync(tempDirectory, { recursive: true });
 }
 
-process.stdout.write(`current-truth head binding: PASS (21 cases, provider CLI fail-closed, deterministic 3/3, ${hashes[0]})\n`);
+process.stdout.write(`current-truth head binding: PASS (29 cases, provider CLI fail-closed, deterministic 3/3, ${hashes[0]})\n`);

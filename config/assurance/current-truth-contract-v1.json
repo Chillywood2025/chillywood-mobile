@@ -44,6 +44,8 @@
     "namedMainCheckoutMustEqualOriginMain": true,
     "providerSnapshotImplementationFields": ["number", "branch", "head", "state"],
     "providerSnapshotInventoryMismatch": "BLOCKED_INTERNAL",
+    "providerSnapshotReadOrRootFailure": "BLOCKED_INTERNAL",
+    "providerSnapshotState": "nonblank-trimmed-string",
     "detachedCi": "explicit-branch-and-head-required-unless-head-is-origin-main",
     "unlistedBranchPolicy": "deferred-to-pr-e"
   },

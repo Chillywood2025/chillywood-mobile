@@ -118,7 +118,9 @@ function normalizeImplementationInventory(value, subject, findings) {
     const numberValid = Number.isInteger(entry?.number) && entry.number > 0;
     const branchValid = isValidGitBranchName(entry?.branch);
     const headValid = typeof entry?.head === "string" && gitShaPattern.test(entry.head);
-    const stateValid = typeof entry?.state === "string" && entry.state.length > 0;
+    const stateValid = typeof entry?.state === "string"
+      && entry.state.length > 0
+      && entry.state === entry.state.trim();
 
     if (!numberValid || !branchValid || !headValid || !stateValid) {
       findings.push({
@@ -316,13 +318,21 @@ export function verifyCurrentTruthHeadBindings({
   }
 
   const contextBranch = explicitBranch || namedBranch;
-  const detachedMain = !namedBranch && checkoutHeadValid && remoteMainValid && head === remoteMain;
-  if (namedBranch === "main" && checkoutHeadValid && remoteMainValid && head !== remoteMain) {
+  const claimsMain = contextBranch === "main";
+  const mainCheckoutCurrent = checkoutHeadValid
+    && remoteMainValid
+    && head === remoteMain
+    && (explicitBranch !== "main" || explicitHead === remoteMain);
+  const detachedMain = !namedBranch
+    && (!hasExplicitContext || explicitBranch === "main")
+    && mainCheckoutCurrent;
+  if (claimsMain && !mainCheckoutCurrent) {
     findings.push({
       id: "ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE",
       status: "BLOCKED_INTERNAL",
       actual: head,
-      expected: remoteMain
+      expected: remoteMain,
+      explicitHead: explicitHead || null
     });
   }
   if (!namedBranch && !detachedMain && !hasExplicitContext) {
@@ -342,11 +352,13 @@ export function verifyCurrentTruthHeadBindings({
   }
 
   const sortedFindings = sortStable(findings);
-  const mainContext = namedBranch === "main" || detachedMain;
+  const mainContext = claimsMain || detachedMain;
   return {
     ok: sortedFindings.length === 0,
     bindings: sortStable(bindings),
-    context: detachedMain
+    context: claimsMain && !mainCheckoutCurrent
+      ? "invalid-main-context"
+      : detachedMain
       ? "detached-main"
       : mainContext
         ? "main"

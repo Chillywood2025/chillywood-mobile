@@ -68,7 +68,7 @@
         },
         "implementationHeadBinding": {
           "type": "object",
-          "required": ["required", "networkAccess", "refNamespace", "missingRef", "malformedSha", "duplicatePrOrBranch", "recordedObservedMismatch", "listedCurrentBranchCheckoutMustMatch", "namedMainCheckoutMustEqualOriginMain", "providerSnapshotImplementationFields", "providerSnapshotInventoryMismatch", "detachedCi", "unlistedBranchPolicy"],
+          "required": ["required", "networkAccess", "refNamespace", "missingRef", "malformedSha", "duplicatePrOrBranch", "recordedObservedMismatch", "listedCurrentBranchCheckoutMustMatch", "namedMainCheckoutMustEqualOriginMain", "providerSnapshotImplementationFields", "providerSnapshotInventoryMismatch", "providerSnapshotReadOrRootFailure", "providerSnapshotState", "detachedCi", "unlistedBranchPolicy"],
           "properties": {
             "required": {"const": true},
             "networkAccess": {"const": "forbidden"},
@@ -81,6 +81,8 @@
             "namedMainCheckoutMustEqualOriginMain": {"const": true},
             "providerSnapshotImplementationFields": {"type": "array", "items": {"enum": ["number", "branch", "head", "state"]}, "minItems": 4, "maxItems": 4, "uniqueItems": true},
             "providerSnapshotInventoryMismatch": {"const": "BLOCKED_INTERNAL"},
+            "providerSnapshotReadOrRootFailure": {"const": "BLOCKED_INTERNAL"},
+            "providerSnapshotState": {"const": "nonblank-trimmed-string"},
             "detachedCi": {"const": "explicit-branch-and-head-required-unless-head-is-origin-main"},
             "unlistedBranchPolicy": {"const": "deferred-to-pr-e"}
           }
@@ -103,7 +105,7 @@
               "number": {"type": "integer", "minimum": 1},
               "branch": {"$ref": "#/$defs/gitBranch"},
               "head": {"$ref": "#/$defs/gitSha"},
-              "state": {"type": "string"},
+              "state": {"type": "string", "minLength": 1, "pattern": "^\\S(?:[\\s\\S]*\\S)?$"},
               "disposition": {"type": "string"}
             }
           }
