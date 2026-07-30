@@ -1,7 +1,8 @@
 # LiveKit Experience Sentinel
 
 Status: protected Level 0/1 source surface registered; Android and iOS
-authorization/finalization source boundary implemented; live installed-product
+authorization/finalization source boundary implemented; current internal
+platform identities are bound by a forward migration; live installed-product
 canaries not yet run.
 
 Registered switch:
@@ -40,6 +41,48 @@ Platform activation is a three-step Owner path:
 
 The Android and iOS visual switches are outside this path. The shared visual and
 shared LiveKit switches remain off, and recurring schedules remain off.
+
+## Current activation identity contract
+
+`config/intelligence/cognitive-livekit-platform-activation-v1.json` is the
+canonical, non-secret activation contract. It binds:
+
+- the merged Part A Chat Call commit and exact source tree;
+- Android build 86 on its isolated native call-action runtime/channel;
+- iOS Internal TestFlight build 8 on `ios-qa`;
+- the exact successfully launched internal update and reviewed artifact hash for
+  each platform;
+- a separate, compatible rollback identity for each platform;
+- all three reviewed routes and all three required scenarios; and
+- the distinct Android/iOS final policies while shared LiveKit and schedules
+  remain off.
+
+Migration
+`20260730140101_cognitive_livekit_final_chat_source_identity_binding.sql`
+supersedes only the stale identity constants from the already-deployed
+authorization migration. It does not rewrite that migration, open a canary,
+create evidence, or change a switch. The migration intentionally refuses to
+apply if a prior platform authorization lifecycle is already in progress.
+
+The manifest's canonical SHA-256 is required as the preflight deployment hash,
+and each platform's canonical rollback-object SHA-256 is required as its
+rollback hash. This lets the existing preflight remain fail-closed without
+placing device identifiers, account identities, credentials, provider tokens,
+or raw evidence in Git.
+
+Each platform also carries two derived run bindings:
+
+- `sourceBuildHash` is SHA-256 of the exact installed source commit string.
+- `runtimeIdentityHash` is SHA-256 of canonical JSON containing only
+  `applicationIdentifier`, `appVersion`, `buildNumber`, `channel`,
+  `installedArtifactSha256`, `installedSourceCommit`, `internalUpdateId`, and
+  `runtimeVersion`.
+
+The activation-outcome trigger rejects a successful finalization if any run in
+the authorization window uses another source/runtime pair, or if the complete
+nine route/scenario pairs are not present under that exact identity. A failed
+or emergency rollback finalization remains available without this success
+evidence.
 
 Initial authority:
 
