@@ -51,7 +51,8 @@ if (mode) {
   const mergeBase = git(["merge-base", "HEAD", "origin/main"]);
   const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
   const observedImplementationRefs = {};
-  for (const entry of record.openImplementationPrs) {
+  const implementationEntries = Array.isArray(record.openImplementationPrs) ? record.openImplementationPrs : [];
+  for (const entry of implementationEntries) {
     if (!isValidGitBranchName(entry?.branch)) continue;
     const ref = implementationRemoteRef(entry.branch);
     try {
