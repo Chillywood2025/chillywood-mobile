@@ -11,6 +11,7 @@ const fail = (message) => {
 
 const dispatchPath = "supabase/functions/chilly-chat-call-dispatch/index.ts";
 const dispatchPolicyPath = "supabase/functions/_shared/chilly-chat-call-dispatch-policy.mjs";
+const fcmErrorPolicyPath = "supabase/functions/_shared/fcm-error-policy.mjs";
 const expoReceiptsPath = "supabase/functions/_shared/expo-push-receipts.ts";
 const transitionPath = "supabase/functions/chilly-chat-call-transition/index.ts";
 const transitionMigrationPath = "supabase/migrations/20260718103000_durable_chat_call_status_transition.sql";
@@ -22,12 +23,13 @@ const nativeCallPluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const configPath = "supabase/config.toml";
 const packagePath = "package.json";
 
-for (const filePath of [dispatchPath, dispatchPolicyPath, expoReceiptsPath, transitionPath, transitionMigrationPath, callsLibPath, soundAssetsPath, chatThreadPath, notificationsPath, nativeCallPluginPath, configPath, packagePath]) {
+for (const filePath of [dispatchPath, dispatchPolicyPath, fcmErrorPolicyPath, expoReceiptsPath, transitionPath, transitionMigrationPath, callsLibPath, soundAssetsPath, chatThreadPath, notificationsPath, nativeCallPluginPath, configPath, packagePath]) {
   if (!fs.existsSync(path.join(ROOT, filePath))) fail(`missing required file ${filePath}`);
 }
 
 const dispatch = read(dispatchPath);
 const dispatchPolicy = read(dispatchPolicyPath);
+const fcmErrorPolicy = read(fcmErrorPolicyPath);
 const expoReceipts = read(expoReceiptsPath);
 const transition = read(transitionPath);
 const transitionMigration = read(transitionMigrationPath);
@@ -138,6 +140,18 @@ if (!dispatch.includes("sanitizeErrorMessage")) {
 
 if (!dispatch.includes("DeviceNotRegistered") || !dispatch.includes("revoked_at")) {
   fail("dispatcher must revoke expired provider tokens");
+}
+if (!dispatch.includes("readFcmProviderErrorCode")) {
+  fail("dispatcher must parse provider-specific FCM error details");
+}
+if (!dispatch.includes("isPermanentFcmTokenError")) {
+  fail("dispatcher must revoke only provider-confirmed permanent FCM token failures");
+}
+if (!fcmErrorPolicy.includes("google.firebase.fcm.v1.FcmError")) {
+  fail("FCM error policy must require the provider-specific REST detail type");
+}
+if (!fcmErrorPolicy.includes("UNREGISTERED") || !fcmErrorPolicy.includes("SENDER_ID_MISMATCH")) {
+  fail("FCM error policy must retain both permanent token failure reasons");
 }
 
 if (!dispatch.includes("reconcileRecentExpoPushReceipts") || !expoReceipts.includes("getReceipts")) {

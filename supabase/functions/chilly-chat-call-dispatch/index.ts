@@ -15,6 +15,10 @@ import {
   resolveChillyChatCallPreferencePolicy,
   summarizeChillyChatCallDispatch,
 } from "../_shared/chilly-chat-call-dispatch-policy.mjs";
+import {
+  isPermanentFcmTokenError,
+  readFcmProviderErrorCode,
+} from "../_shared/fcm-error-policy.mjs";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -508,12 +512,11 @@ async function sendFcmDataMessage(input: {
   });
   const body = await response.json().catch(() => ({}));
   const providerMessageId = toText((body as { name?: unknown }).name) || null;
-  const errorPayload = body && typeof body === "object" && "error" in body
-    ? (body as { error?: JsonObject }).error ?? {}
-    : {};
-  const errorCode = toText(errorPayload.status)
-    || toText(errorPayload.message)
-    || (response.ok ? null : `fcm_http_${response.status}`);
+  const errorCode = readFcmProviderErrorCode({
+    body,
+    httpStatus: response.status,
+    responseOk: response.ok,
+  });
 
   return {
     body,
@@ -800,7 +803,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         recipientUserId: input.recipientUserId,
         status: sent ? "sent" : "failed",
       });
-      if (androidReason === "UNREGISTERED" || androidReason === "SENDER_ID_MISMATCH") {
+      if (isPermanentFcmTokenError(androidReason)) {
         await revokePushToken(adminClient, token.id);
       }
     }

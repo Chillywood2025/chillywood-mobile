@@ -30,6 +30,10 @@ import {
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 import { resolveChillyChatNativeCallRoute } from "../_lib/chillyChatNativeCallRoutes.mjs";
+import {
+  isPermanentFcmTokenError,
+  readFcmProviderErrorCode,
+} from "../supabase/functions/_shared/fcm-error-policy.mjs";
 
 const nativeRouteThreadId = "11111111-1111-4111-8111-111111111111";
 const nativeRouteInviteId = "22222222-2222-4222-8222-222222222222";
@@ -90,6 +94,53 @@ assert.equal(
   null,
   "native call replay rejects fragment-bearing action URLs",
 );
+assert.equal(
+  readFcmProviderErrorCode({
+    body: {
+      error: {
+        status: "NOT_FOUND",
+        details: [{
+          "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError",
+          errorCode: "UNREGISTERED",
+        }],
+      },
+    },
+    httpStatus: 404,
+    responseOk: false,
+  }),
+  "UNREGISTERED",
+  "FCM token invalidation uses the provider-specific nested reason rather than generic HTTP NOT_FOUND",
+);
+assert.equal(
+  readFcmProviderErrorCode({
+    body: {
+      error: {
+        status: "PERMISSION_DENIED",
+        details: [{
+          "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError",
+          error_code: "SENDER_ID_MISMATCH",
+        }],
+      },
+    },
+    httpStatus: 403,
+    responseOk: false,
+  }),
+  "SENDER_ID_MISMATCH",
+  "FCM snake-case provider details remain compatible",
+);
+assert.equal(
+  readFcmProviderErrorCode({
+    body: { error: { status: "UNAVAILABLE" } },
+    httpStatus: 503,
+    responseOk: false,
+  }),
+  "UNAVAILABLE",
+  "transient FCM failures retain their top-level retryable reason",
+);
+assert.equal(isPermanentFcmTokenError("UNREGISTERED"), true, "unregistered FCM tokens are revoked");
+assert.equal(isPermanentFcmTokenError("SENDER_ID_MISMATCH"), true, "wrong-sender FCM tokens are revoked");
+assert.equal(isPermanentFcmTokenError("NOT_FOUND"), false, "generic NOT_FOUND cannot revoke a token without FCM detail");
+assert.equal(isPermanentFcmTokenError("UNAVAILABLE"), false, "transient FCM failures never revoke tokens");
 
 const root = new URL("../", import.meta.url);
 const importTranspiledTypeScript = async (relativePath) => {
