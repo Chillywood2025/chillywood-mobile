@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 
-import { redirectChillyChatNativeCallSystemPath } from "../_lib/chillyChatNativeCallRoutes.mjs";
+import { redirectEarlyAndroidNativeCallSystemPath } from "../_lib/chillyChatNativeCallRouteBuffer";
 
 export function redirectSystemPath({
   path,
@@ -9,5 +9,5 @@ export function redirectSystemPath({
   initial: boolean;
 }) {
   if (Platform.OS !== "android") return path;
-  return redirectChillyChatNativeCallSystemPath(path);
+  return redirectEarlyAndroidNativeCallSystemPath(path);
 }

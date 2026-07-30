@@ -69,3 +69,32 @@ export const resolveChillyChatNativeCallRoute = (value) => {
 export const redirectChillyChatNativeCallSystemPath = (value) => (
   resolveChillyChatNativeCallRoute(value)?.destination ?? String(value ?? "")
 );
+
+export const createChillyChatNativeCallRouteBuffer = () => {
+  let bufferedRoute = null;
+  const listeners = new Set();
+
+  return {
+    capture(value) {
+      const route = resolveChillyChatNativeCallRoute(value);
+      if (!route) return false;
+      if (listeners.size === 0) {
+        bufferedRoute = route;
+      } else {
+        listeners.forEach((listener) => listener(route));
+      }
+      return true;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      if (bufferedRoute) {
+        const route = bufferedRoute;
+        bufferedRoute = null;
+        listener(route);
+      }
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+};

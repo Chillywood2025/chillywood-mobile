@@ -10,3 +10,13 @@ export function resolveChillyChatNativeCallRoute(
 export function redirectChillyChatNativeCallSystemPath(
   value?: string | null,
 ): string;
+
+export type ChillyChatNativeCallRouteBuffer = {
+  capture(value?: string | null): boolean;
+  subscribe(
+    listener: (route: ChillyChatNativeCallRoute) => void,
+  ): () => void;
+};
+
+export function createChillyChatNativeCallRouteBuffer():
+  ChillyChatNativeCallRouteBuffer;

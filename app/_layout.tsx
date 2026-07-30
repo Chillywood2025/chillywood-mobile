@@ -42,6 +42,7 @@ import {
   stopChillyChatCallSound,
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
+import { subscribeToEarlyAndroidNativeCallRoutes } from "../_lib/chillyChatNativeCallRouteBuffer";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
 import {
   resolveChillyChatNativeCallRoute,
@@ -189,6 +190,20 @@ function AndroidNativeCallRouteBridge() {
           : nativeCallRoute
       ));
     };
+    const captureResolvedNativeCallRoute = (
+      nativeCallRoute: NonNullable<ReturnType<typeof resolveChillyChatNativeCallRoute>>,
+    ) => {
+      if (!active || handledNativeCallRouteKeysRef.current.has(nativeCallRoute.requestKey)) {
+        return;
+      }
+      setPendingNativeCallRoute((current) => (
+        current?.requestKey === nativeCallRoute.requestKey
+          ? current
+          : nativeCallRoute
+      ));
+    };
+    const unsubscribeEarlyNativeCallRoutes =
+      subscribeToEarlyAndroidNativeCallRoutes(captureResolvedNativeCallRoute);
 
     void Linking.getInitialURL()
       .then(captureNativeCallRoute)
@@ -197,13 +212,10 @@ function AndroidNativeCallRouteBridge() {
           source: "root-layout",
         });
       });
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      captureNativeCallRoute(url);
-    });
 
     return () => {
       active = false;
-      subscription.remove();
+      unsubscribeEarlyNativeCallRoutes();
     };
   }, []);
 

@@ -30,6 +30,7 @@ import {
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
+  createChillyChatNativeCallRouteBuffer,
   redirectChillyChatNativeCallSystemPath,
   resolveChillyChatNativeCallRoute,
 } from "../_lib/chillyChatNativeCallRoutes.mjs";
@@ -116,6 +117,45 @@ assert.equal(
   "chillywoodmobile://settings",
   "native-intent normalization preserves unrelated system paths",
 );
+const earlyNativeCallRouteBuffer = createChillyChatNativeCallRouteBuffer();
+const bufferedNativeCallRoutes = [];
+assert.equal(
+  earlyNativeCallRouteBuffer.capture("chillywoodmobile://settings"),
+  false,
+  "the early native-call buffer rejects unrelated system URLs",
+);
+assert.equal(
+  earlyNativeCallRouteBuffer.capture(
+    `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
+  ),
+  true,
+  "a valid Answer arriving before the authenticated bridge is retained",
+);
+const unsubscribeEarlyNativeCallRoutes = earlyNativeCallRouteBuffer.subscribe(
+  (route) => bufferedNativeCallRoutes.push(route),
+);
+assert.deepEqual(
+  bufferedNativeCallRoutes,
+  [{
+    destination:
+      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
+    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:answer`,
+  }],
+  "the authenticated bridge receives the exact retained Answer once",
+);
+assert.equal(
+  earlyNativeCallRouteBuffer.capture(
+    `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
+  ),
+  true,
+  "a valid live Decline reaches the mounted bridge",
+);
+assert.equal(
+  bufferedNativeCallRoutes.at(-1)?.requestKey,
+  `${nativeRouteThreadId}:${nativeRouteInviteId}:decline`,
+  "the mounted bridge receives the exact live Decline action",
+);
+unsubscribeEarlyNativeCallRoutes();
 assert.equal(
   readFcmProviderErrorCode({
     body: {
