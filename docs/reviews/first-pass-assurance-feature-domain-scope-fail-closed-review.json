@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-feature-domain-scope-fail-closed-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 62,
+  "implementationBranch": "codex/first-pass-assurance-feature-domain-scope",
+  "implementationHead": "e730960a19d976db153e63f91e1f33bb14e29fcf",
+  "implementationTree": "fba1dc9da17389bbfec000715d9d19f065e4ac54",
+  "baseHead": "84c9ffdcea7de1b73163c60348267875f5d99ed3",
+  "changedFileHash": "645dc10383c3100ba2a3838b0aef4e5671882962af5fa6178dbb9d46813299f3",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "097433492819dbb857f185cd887583828384c1db5e5c4a07a49d6d644b73f79b",
+  "testResults": {
+    "focusedFeatureBundleTests": {
+      "status": "pass",
+      "tests": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "hostileBypassProbes": {
+      "status": "fail",
+      "unknownFeature": "rejected",
+      "universalBundle": "rejected",
+      "partialBundleOutsideDomain": "rejected",
+      "objectiveOmission": {
+        "blockingFindingPresent": true,
+        "relatedHighRiskScopeAuthorized": true,
+        "requiredAuthorizationValue": false,
+        "status": "fail"
+      },
+      "scopeWaiver": "rejected",
+      "pr52MixedDomains": "rejected"
+    },
+    "contracts": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "findings": 0
+    },
+    "scopeSelfCheck": {
+      "status": "pass",
+      "files": 4,
+      "additions": 263,
+      "deletions": 3,
+      "netChangedLines": 260,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "highRiskDomains": []
+    },
+    "phase1Ci": {
+      "status": "not_run_due_coordinator_lock",
+      "implementationHead": "e730960a19d976db153e63f91e1f33bb14e29fcf",
+      "cancelledRunId": 30568279689,
+      "cancelledRunConclusion": "cancelled",
+      "eligibleAsProof": false,
+      "resumptionAction": "Coordinator starts one fresh exact-head Phase 1 CI run after both isolated Level B review lanes freeze."
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "buildOrOta": false,
+      "productSourceChanged": false,
+      "migrationChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "1b5347780ce0aa05afc0114900607491648d32030ade5306e3fec8b93d34ae2c",
+  "reviewLevel": "B",
+  "reviewHead": "e730960a19d976db153e63f91e1f33bb14e29fcf",
+  "reviewTimestamp": "2026-07-30T18:00:43Z",
+  "reviewerLanes": [
+    "architecture",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "fail-closed-scope-policy"
+  ],
+  "findings": [
+    {
+      "id": "PR_SCOPE_OBJECTIVE_OMISSION_AUTHORIZATION_CONTRADICTION",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "scripts/assurance/pr-scope-lib.mjs:96",
+        "tests/assurance/pr-scope-feature-bundles.test.mjs:112"
+      ],
+      "evidence": "With RevenueCat-Premium and database-RLS touched but database-RLS omitted from objectiveDomains, the helper correctly emits ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN while also returning relatedHighRiskScopeAuthorized=true. The independent invariant probe expected false and failed with true !== false.",
+      "impact": "The CLI currently exits nonzero because it consumes findings, but the exported authorization field contradicts the required fail-closed decision. A later planner or CI consumer could trust that boolean and treat an objective-incomplete multi-domain change as authorized.",
+      "requiredResolution": "Include objective-domain completeness in relatedHighRiskScopeAuthorized and change the regression test to require false whenever any affected high-risk domain is omitted."
+    },
+    {
+      "id": "PR_SCOPE_PHASE1_CI_COORDINATED_NOT_RUN",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "Run 30568279689 targeted the exact implementation head but was intentionally cancelled by the coordinator because it overlapped the post-PR60 main full-CI resource lock. It is not failure evidence and is not a pass.",
+      "requiredResolution": "After the implementation fix and both Level B reviews freeze, the coordinator must run one fresh full Phase 1 CI execution at the new exact implementation head."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPending": true,
+    "reviewDisposition": "changes-required-and-ci-pending",
+    "humanApproval": false
+  }
+}
