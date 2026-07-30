@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "current-truth-head-binding-semantics-final2-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "semantic-fail-closed-final2",
+  "humanApproval": false,
+  "implementationPrNumber": 90,
+  "implementationPrState": "open-draft",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-head-binding",
+  "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+  "implementationTree": "2e2535fd55679670b15b3900ccb63caea3432810",
+  "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+  "changedFileHash": "2279d39fa71be10ca4d2ddd1534e6b39081a67292d117c4ea9e0b6868a47460f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "7d399f0e1bba5c0164f1d5bdcd516490b081d628d5e810f1b9f4caa05d61e389",
+  "implementationDiffHash": "a7e67f683a9d2fedf801c3f3eec46851c9aec5fb30a31354cc15fa49f83868a0",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_deferred_p2",
+      "lane": "semantic-fail-closed-final2",
+      "focus": "final successor review of the full five-file contract plus the seven-line checkout-independent provider CLI regression change",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationPrNumber": 90,
+      "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+      "implementationTree": "2e2535fd55679670b15b3900ccb63caea3432810",
+      "baseHead": "fceca2d0710c0387512f681c8ce9530a34f26b4e",
+      "mergeBaseMatched": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 5,
+      "additions": 698,
+      "deletions": 12,
+      "netChangedLines": 686,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "migrationFiles": 0,
+      "productImplementationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "successorDelta": {
+      "status": "pass",
+      "parentImplementationHead": "66d024103a2791160214f4d03e7db5c67b7073fa",
+      "changedFiles": [
+        "tests/assurance/current-truth-head-binding.test.mjs"
+      ],
+      "additions": 7,
+      "deletions": 0,
+      "productionGuardLogicChanged": false,
+      "contractOrSchemaChanged": false,
+      "purpose": "Supply the provider CLI subprocess an explicit current checkout branch and exact head so detached CI does not fail for unrelated context resolution."
+    },
+    "checkoutIndependence": {
+      "status": "pass",
+      "namedControlExact": "pass",
+      "detachedControlExact": "pass",
+      "detachedControlWrongExplicitHead": "blocked",
+      "detachedListedExact": "pass",
+      "detachedListedAdvanced": "blocked",
+      "detachedExactMain": "pass",
+      "detachedFeatureClaimingMain": "blocked",
+      "namedReviewExplicitControlMismatch": "blocked",
+      "exactHeadBoundToSubprocess": true,
+      "testFallbackBranchValid": true,
+      "testFallbackBranchPolicy": "unlisted-control-branch-deferred-to-pr-e",
+      "falsePassObserved": false
+    },
+    "mainAndDetachedSemantics": {
+      "status": "pass",
+      "namedMainExact": "pass",
+      "namedMainBehind": "blocked",
+      "namedMainAhead": "blocked",
+      "detachedMainExact": "pass",
+      "detachedExplicitMainExact": "pass",
+      "detachedExplicitMainBehind": "blocked",
+      "detachedExplicitMainAhead": "blocked",
+      "detachedExplicitMainFeature": "blocked",
+      "blockingFinding": "ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE"
+    },
+    "recordedImplementationSemantics": {
+      "status": "pass",
+      "recordedObservedHeadMismatch": "blocked",
+      "missingObservedRef": "blocked",
+      "malformedObservedHead": "blocked",
+      "duplicatePrNumber": "blocked",
+      "duplicateBranch": "blocked",
+      "malformedPrNumber": "blocked",
+      "malformedBranch": "blocked",
+      "malformedRecordedHead": "blocked",
+      "listedCheckoutMismatch": "blocked"
+    },
+    "providerContradictionAndStateNormalization": {
+      "status": "pass",
+      "exactInventory": "pass",
+      "missingInventoryEntry": "blocked",
+      "extraInventoryEntry": "blocked",
+      "headContradiction": "blocked",
+      "stateContradiction": "blocked",
+      "numberRemap": "blocked",
+      "branchRemap": "blocked",
+      "duplicateNumber": "blocked",
+      "duplicateBranch": "blocked",
+      "blankOrUntrimmedState": "blocked",
+      "invalidJson": "machine-readable-block",
+      "invalidRoot": "machine-readable-block",
+      "missingFile": "machine-readable-block"
+    },
+    "implementationFocusedMatrix": {
+      "status": "pass",
+      "command": "node tests/assurance/current-truth-head-binding.test.mjs",
+      "declaredCases": 29,
+      "providerCliFailClosed": true,
+      "deterministicRuns": 3,
+      "matrixHash": "e21a45ab500d7ceaf5808aa5de0f92cba72918b3a9e225137f2b7e7c74e77d24",
+      "stdoutHash": "b62e146b4280806ac784bdd929b76ba0cee1c9aea70a5bc84ee699a0b89c22e8"
+    },
+    "independentCheckoutAndProviderMatrix": {
+      "status": "pass",
+      "deterministicRuns": 3,
+      "matrixHash": "71ab95df917dba0e66e1a1145306f2aabc750dfd7d0c6df89f755fb35690f2d4",
+      "checkoutContexts": 8,
+      "providerCases": 7,
+      "expectedPasses": [
+        "detached explicit control exact head",
+        "detached listed exact head",
+        "detached exact main",
+        "named control exact head",
+        "exact provider inventory"
+      ],
+      "unexpectedPasses": []
+    },
+    "mergeAwareIndependence": {
+      "status": "pass",
+      "synchronizationCanPassIndependently": true,
+      "staleImplementationBindingAccepted": false,
+      "providerInventoryMismatchAccepted": false,
+      "mainAliasAccepted": false
+    },
+    "selfReferenceBoundary": {
+      "status": "pass_with_deferred_policy",
+      "currentReviewBranchListed": false,
+      "context": "unlisted-control-branch",
+      "unlistedBranchPolicy": "deferred-to-pr-e",
+      "selfReferenceFalseBlockObserved": false
+    },
+    "networkAndMutationBoundary": {
+      "status": "pass",
+      "implicitFetchCalls": 0,
+      "httpClientCalls": 0,
+      "providerContact": false,
+      "providerMutationCalls": 0,
+      "gitMutatingCalls": 0,
+      "checkoutIndependenceGitReads": [
+        "branch --show-current",
+        "rev-parse HEAD"
+      ],
+      "observations": "The seven-line change adds local read-only Git identity calls to the test only. No fetch, network access, checkout mutation, or provider call is present."
+    },
+    "contracts": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "syntax": {
+      "status": "pass",
+      "checkedFiles": [
+        "scripts/assurance/current-truth.mjs",
+        "scripts/assurance/lib.mjs",
+        "tests/assurance/current-truth-head-binding.test.mjs"
+      ]
+    },
+    "currentTruthCurrentWorktree": {
+      "status": "pass",
+      "command": "node scripts/assurance/current-truth.mjs",
+      "context": "unlisted-control-branch",
+      "findings": 0,
+      "deterministicRuns": 3,
+      "stdoutHash": "722872610612d4de3679322f51e2dd43cd1b86bab5404bfde8989abf9a6f777b"
+    },
+    "gitDiffCheck": "pass",
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "denoLockChanged": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator",
+      "implementationHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "The coordinator owns the single frozen-head Phase 1 CI execution and exact PR disposition."
+    }
+  },
+  "testResultHash": "5c1004f416edf896be2b860b798c59231f30b3666679052a29e46d1d48e9ae4d",
+  "reviewLevel": "B",
+  "reviewHead": "5cc9b4fed9a5b4eccb6dd904681a2a1bbe83ba5d",
+  "reviewHeadSemantics": "implementation tip immediately preceding the review-evidence-only commit",
+  "reviewTimestamp": "2026-07-30T20:02:24Z",
+  "reviewerLanes": [
+    "architecture",
+    "isolated-automated-review",
+    "semantic-fail-closed-final2"
+  ],
+  "findings": [
+    {
+      "id": "CHECKOUT_INDEPENDENT_PROVIDER_CLI_REGRESSION",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The seven-line test-only change supplies a valid explicit current branch and exact checkout head to the provider subprocess. Detached explicit exact-head execution passes, while wrong explicit heads, listed-head drift, named/explicit mismatch, and main aliasing still block."
+    },
+    {
+      "id": "CURRENT_TRUTH_NAMED_MAIN_CHECKOUT_UNBOUND",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Named main behind and ahead emit ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE; exact origin/main passes."
+    },
+    {
+      "id": "CURRENT_TRUTH_PROVIDER_SNAPSHOT_IGNORES_IMPLEMENTATION_HEADS",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Read-only mode exactly compares provider number, branch, head, and trimmed nonblank state. Missing, extra, duplicate, malformed, remapped, and mismatched entries block."
+    },
+    {
+      "id": "CURRENT_TRUTH_DETACHED_EXPLICIT_MAIN_ALIAS_BYPASS",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Any named or explicit main context requires checkout and explicit heads to equal origin/main; feature, behind, and ahead aliases block."
+    },
+    {
+      "id": "PROVIDER_SNAPSHOT_MALFORMED_INPUT_REPORTING",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Missing files, invalid JSON, null roots, array roots, and blank or edge-untrimmed states produce machine-readable blockers."
+    },
+    {
+      "id": "UNLISTED_CONTROL_BRANCH_POLICY_DEFERRED",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "Self-reference remains nonblocking for review and control branches. Completeness enforcement for unlisted implementation branches is explicitly deferred to PR E and is not represented as live provider proof."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "exact-head-level-b-semantic-clear-coordinator-ci-pending",
+    "humanApproval": false
+  }
+}
