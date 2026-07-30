@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-86-current-truth-before-head-binding-review-rerun-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 86,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-before-head-binding",
+  "implementationHead": "90b65335e4b080daf5053a54d14e47c7b857c65c",
+  "implementationTree": "e96719fa912e708ea4fa4af282eff83c6a88bfc6",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "4039553c0c955087e2ee4d430886ed02fbd00baefee1d59c7b6bd2b1a0ea2d1e",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "independent-current-truth",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "90b65335e4b080daf5053a54d14e47c7b857c65c",
+      "implementationTree": "e96719fa912e708ea4fa4af282eff83c6a88bfc6",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "remoteImplementationRefMatched": true
+    },
+    "generatedDocuments": {
+      "status": "pass",
+      "currentStateExact": true,
+      "nextTaskExact": true,
+      "comparisonHash": "0c7ee00f573ab239a7457f84b1a7a96cdedc288a13c862df8f8a6105289417c2"
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "offline",
+      "recordedMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "remoteMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "synchronizationMode": "exact-main",
+      "findings": 0
+    },
+    "retainedEvidenceFreshness": {
+      "status": "pass",
+      "timestamp": "2026-07-30T18:13:30Z",
+      "freshnessDeadline": "2026-07-31T18:13:30Z",
+      "timestampUnchangedFromBase": true,
+      "deadlineUnchangedFromBase": true,
+      "liveProviderReadback": false,
+      "providerReadbackPerformedByReviewLane": false,
+      "providerFreshnessExtendedByThisChange": false,
+      "retainedPerProviderFlagsChanged": false
+    },
+    "implementationInventory": {
+      "status": "pass",
+      "entries": 5,
+      "allCommitObjectsPresent": true,
+      "allRecordedHeadsMatchLocalRemoteRefs": true,
+      "pr64": {
+        "head": "00355bd94d5a7e401d424bc7a8298017c46357d8",
+        "state": "open-draft-frozen",
+        "headMatchesLocalRemoteRef": true
+      },
+      "blockedReconciliation": {
+        "prs": [
+          69,
+          70,
+          75
+        ],
+        "statesRetainedAsBlockedInternal": true,
+        "headsMatchLocalRemoteRefs": true,
+        "noMergeOrDeploymentAuthorized": true
+      }
+    },
+    "reviewOnlyInventory": {
+      "status": "pass",
+      "entries": 22,
+      "allReviewCommitObjectsPresent": true,
+      "allReviewedImplementationObjectsPresent": true,
+      "allRecordedReviewHeadsMatchLocalRemoteRefs": true,
+      "statusLabelsPreservedFromSanitizedReadback": true,
+      "liveOpenStateRequeriedByReviewLane": false,
+      "pr53RemainsStale": true,
+      "pr80Through82RemainStale": true,
+      "pr83Through85RemainStaleAfterPr64HeadChange": true,
+      "allDispositionsRemainNeverMerge": true
+    },
+    "scope": {
+      "status": "pass",
+      "files": 3,
+      "additions": 57,
+      "deletions": 21,
+      "netChangedLines": 36,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "changedPaths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "productSourceFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "implementationMergeTopology": {
+      "status": "pass",
+      "mergeCommit": true,
+      "parents": [
+        "5781964853e7e2d1494c6502a2ac85b77b36ca8c",
+        "f01e0985fabefe3e24ed71387007cf9762e7861a"
+      ],
+      "bothLineageCommitsRetained": true,
+      "finalTreeMatchesFirstParentTree": true,
+      "divergentAggregateReadbackFlagResolvedToFalse": true,
+      "historyRewritePerformedByReviewLane": false
+    },
+    "synchronizationMergeCompatibility": {
+      "status": "pass_with_required_merge_method",
+      "simulatedMergedTree": "e96719fa912e708ea4fa4af282eff83c6a88bfc6",
+      "recordedMainCanBeFirstParent": true,
+      "implementationCanBeSecondParent": true,
+      "requiredPathsPresent": true,
+      "changedPathsAllowed": true,
+      "requiredMergeMethod": "normal-two-parent-merge",
+      "fastForwardOrSquashPermitted": false
+    },
+    "contracts": {
+      "status": "pass",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "determinism": {
+      "status": "pass",
+      "currentTruthRuns": "3/3",
+      "currentTruthOutputHash": "d7a2e3752325b4d38a69a2263d13c8355b744b0f4d6209be210d640a12f71249",
+      "contractRuns": "3/3",
+      "contractOutputHash": "e7a231d1567de0080b227784a473c4aa37cfdc0a804182a62b5583f5d31dd575"
+    },
+    "focusedChecks": {
+      "status": "pass",
+      "currentTruth": "pass",
+      "contractSchemas": "pass",
+      "prScope": "pass",
+      "impactPlanner": "pass",
+      "generatedDocumentEquivalence": "pass",
+      "localRemoteRefBinding": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "privacyAndNonInterference": {
+      "status": "pass",
+      "providerContactByReviewLane": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "generatedNativeDirectoryCommitted": false,
+      "rawSecretCommitted": false,
+      "privateScreenshotCommitted": false,
+      "deviceIdentifierCommitted": false,
+      "privateLogCommitted": false,
+      "denoLockChanged": false
+    },
+    "phase1Ci": {
+      "status": "not_run_by_review_lane",
+      "implementationHead": "90b65335e4b080daf5053a54d14e47c7b857c65c",
+      "eligibleAsReviewLaneProof": false,
+      "levelAFocusedReviewComplete": true,
+      "resumptionAction": "The coordinator owns any single frozen-head Phase 1 CI execution required by the program."
+    }
+  },
+  "testResultHash": "8982170f03b92266758fa3d857145274afbde6c103801a8ce60855ba1f7b8aab",
+  "reviewLevel": "A",
+  "reviewHead": "90b65335e4b080daf5053a54d14e47c7b857c65c",
+  "reviewTimestamp": "2026-07-30T19:30:16Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-automated-review",
+    "current-truth-generated-doc-consistency"
+  ],
+  "findings": [
+    {
+      "id": "CURRENT_TRUTH_GENERATED_DOCUMENT_EQUIVALENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "CURRENT_STATE.md and NEXT_TASK.md are byte-exact renderings of the authoritative machine-readable record."
+    },
+    {
+      "id": "CURRENT_TRUTH_PROVIDER_FRESHNESS_NOT_EXTENDED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The aggregate live-provider flag is false and the provider evidence timestamp and deadline remain unchanged; this Git-only synchronization does not claim a new provider readback."
+    },
+    {
+      "id": "CURRENT_TRUTH_IMPLEMENTATION_AND_REVIEW_HEAD_BINDING",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "All 5 recorded implementation heads and all 22 recorded review-only heads match their available local remote refs. PR #64 binds 00355bd94d5a7e401d424bc7a8298017c46357d8, and its earlier review PRs remain explicitly stale."
+    },
+    {
+      "id": "CURRENT_TRUTH_NORMAL_SYNCHRONIZATION_MERGE_REQUIRED",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "Merge PR #86 only as a normal two-parent synchronization merge with fc3d750158770a6f33ab10acc68e79a288b6ffa3 as first parent and the exact implementation head as second parent. Fast-forward, squash, or rebase would not satisfy the current synchronization contract."
+    },
+    {
+      "id": "CURRENT_TRUTH_SCOPE_PRIVACY_AND_NONINTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact delta contains only the record and two generated documents and introduces no product, migration, workflow, native, private-evidence, provider, database, build, OTA, release, money, entitlement, rights, role, auth/RLS, switch, or schedule change."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "exact-head-level-a-review-clear-normal-synchronization-merge-required",
+    "humanApproval": false
+  }
+}
