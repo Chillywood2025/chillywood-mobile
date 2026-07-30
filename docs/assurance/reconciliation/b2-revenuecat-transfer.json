@@ -11,7 +11,9 @@
     "claim provider-backed purchase, installed, physical, or release proof"
   ],
   "risk": "C",
-  "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "initialBaseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "mainSynchronizationMerge": "ce5a91f27f2368857a69a701c40c3cb7142719ca",
   "stoppedImplementation": {
     "pr": 52,
     "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
@@ -59,8 +61,27 @@
     "deterministicNodeOutput": {"runs": 3, "normalizedSha256": "bceb38a2ee1b7b788ffda0788b36ab180e500fffdb17e60320fd6a12f39de21a"},
     "denoCheck": "SOURCE_CLEAR",
     "migrationRawHashes": "SOURCE_CLEAR",
+    "scope": "SOURCE_CLEAR",
     "databasePgTap": {"status": "HISTORICAL_BASELINE_CLEAR", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
-    "successorPgTap": {"status": "BLOCKED_EXTERNAL", "planned": 69, "reason": "assembled local reset was interrupted after about 70 seconds by an uncached Docker image; no retry, remote link, or provider call occurred"},
+    "successorPgTap": {
+      "status": "INTEGRATION_CLEAR",
+      "planned": 69,
+      "executed": 69,
+      "passed": 69,
+      "failed": 0,
+      "mode": "one-outer-rollback-only-local-transaction",
+      "implementationHead": "ea98a826b2f89fcb2ec6ae2eddfb884d0afb1619",
+      "deployedTransferSourceSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "deployedExpiredTargetSourceSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "orderingCorrectionSha256": "6853c6003f79ff04e7210bff77ddb17befacadbcf2f23ce972152c14a4e5ecac",
+      "focusedTestSha256": "af1cd31b9c0b981a2bd4808bb0b0491d6dbe0d7e77504f0847586fdfd7975f0c",
+      "outerTransaction": "ROLLBACK",
+      "postRollbackPgTapExtensionCount": 0,
+      "postRollbackOrderingInternalFunctionCount": 0,
+      "postRollbackPublicWrappersReferenceOrdering": 0,
+      "persistentDatabaseMutation": false,
+      "providerContact": false
+    },
     "orderingSchedules": {"status": "MODEL_CLEAR", "passed": 8, "failed": 0, "antiVacuityControls": 1, "deterministic": true},
     "remoteDryRun": {"status": "BLOCKED_INTERNAL", "reason": "coordinator-controlled read-only assembled-source dry-run remains required; no remote connection or mutation attempted"}
   },
@@ -81,7 +102,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "MODEL_CLEAR",
-    "T3_INTEGRATION": "BLOCKED_EXTERNAL",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
     "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -89,11 +110,12 @@
   },
   "proofLimits": [
     "The fixture corpus proves only deterministic sanitized source contracts.",
-    "The prior 27/27 local pgTAP baseline does not substitute for the unexecuted 69-case successor suite.",
+    "The frozen 69/69 local pgTAP result proves the current source only inside its outer rollback-only local transaction.",
+    "The local integration result does not substitute for the pending linked no-apply dry-run or provider-backed proof.",
     "No provider, installed, physical, signed-artifact, or release behavior is claimed."
   ],
   "rollback": "Retain immutable deployed migration source. The forward correction remains undeployed; any future deployed correction requires another forward-only successor rather than rewriting migration history.",
   "emergencyStop": "Do not deploy the webhook or mutate provider state; route any future provider action to Money Flow Control under separate authorization.",
-  "finalPermittedNextAction": "Run the 69-case focused local database proof on an assembled disposable stack under the coordinator lock, pass the linked read-only assembled-source dry-run, then require fresh exact-head review and scope enforcement before this Git-only reconciliation may merge.",
+  "finalPermittedNextAction": "Pass the coordinator-controlled linked read-only assembled-source no-apply dry-run, then require fresh exact-head review and scope enforcement before this Git-only reconciliation may merge.",
   "claimedFeatureCompletion": false
 }
