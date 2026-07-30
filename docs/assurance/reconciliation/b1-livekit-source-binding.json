@@ -97,12 +97,12 @@
     "successorBehavioralPgTap": {
       "file": "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql",
       "status": "BLOCKED_INTERNAL",
-      "plannedTests": 27,
-      "executedTests": 21,
-      "detail": "The historical predicate-only suite passed 14/14 but did not execute the enabled v3 trigger. After one local-only reset materialized the remediated successor, attempt 1 stopped because the local test role cannot set session_replication_role. That bypass was removed. Attempt 2 used constraint-valid governance prerequisites and stopped at the existing v2 preflight trigger with livekit_sandbox_premium_proof_rejected. Both attempts ran 21/27 with zero assertion failures; the six actual-trigger assertions remain unexecuted.",
-      "attempts": 2,
-      "migrationParsedCompletely": true,
-      "failureCodes": ["permission_denied_session_replication_role", "livekit_sandbox_premium_proof_rejected"],
+      "plannedTests": 27, "executedTests": 21,
+      "passedTests": 21, "failedTests": 0,
+      "detail": "The frozen normalized fixture removed every trigger bypass, supplied an exact 2/0/0/2/2 eligible sanitized RevenueCat sandbox proof, and passed assertions 1-21 with enabled guards. The final verified-stack transaction then spent sustained CPU in cognitive_json_is_sanitized -> cognitive_text_has_private_identifier -> cognitive_security_normalize while inserting the nine guarded LiveKit manifests. It was canceled under the no-indefinite-loop rule before assertions 22-27; rollback readback found zero fixture users, provider events, canaries, sentinel runs, outcomes, pgTAP state, or active test backends.",
+      "attempts": 5, "migrationParsedCompletely": true,
+      "failureCodes": ["permission_denied_session_replication_role", "livekit_sandbox_premium_proof_rejected", "local_pgtap_missing", "local_predecessor_schema_missing", "sanitizer_cpu_path_unbounded"],
+      "focusedTestSha256": "3ecc60ca2130b4e755c6463dd6faf3735c630df5b9256f07611e17a4128d78cd",
       "sourceOrSchemaSubstitutionAccepted": false
     },
     "remoteDryRun": {"status": "BLOCKED_INTERNAL", "performed": false, "reason": "Coordinator-only explicit read-only provider mode has not been authorized for this remediated head; no remote contact was attempted."},
@@ -111,7 +111,7 @@
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
-    "The six actual-trigger assertions are blocked by the existing v2 provider-backed Premium preflight proof boundary; no T3 pass is claimed.",
+    "Diagnose and bound the normal-manifest sanitizer CPU path, then obtain separate authorization for one exact frozen 27-case transaction; no T3 pass is claimed.",
     "The explicit read-only remote dry-run and exact-head review remain coordinator-owned and pending.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
