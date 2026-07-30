@@ -57,7 +57,8 @@
     "nodeTests": {"passed": 17, "failed": 0},
     "denoCheck": "SOURCE_CLEAR",
     "migrationRawHashes": "SOURCE_CLEAR",
-    "databasePgTap": "BLOCKED_INTERNAL"
+    "databasePgTap": {"status": "INTEGRATION_CLEAR", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
+    "remoteDryRun": {"status": "BLOCKED_INTERNAL", "reason": "unlinked worktree; no remote mutation attempted"}
   },
   "fixtureCoverage": [
     "success",
@@ -76,7 +77,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "BLOCKED_INTERNAL",
-    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
     "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
