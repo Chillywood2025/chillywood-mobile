@@ -30,7 +30,7 @@ import {
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
-  CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS,
+  redirectChillyChatNativeCallSystemPath,
   resolveChillyChatNativeCallRoute,
 } from "../_lib/chillyChatNativeCallRoutes.mjs";
 import {
@@ -40,22 +40,6 @@ import {
 
 const nativeRouteThreadId = "11111111-1111-4111-8111-111111111111";
 const nativeRouteInviteId = "22222222-2222-4222-8222-222222222222";
-assert.deepEqual(
-  CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS,
-  [0, 120, 350, 800, 1_600, 2_800],
-  "terminated Android native action initial-URL retries stay bounded to early cold boot",
-);
-assert.equal(
-  CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS.every(
-    (delayMs, index, delays) => (
-      Number.isSafeInteger(delayMs)
-      && delayMs >= 0
-      && (index === 0 || delayMs > delays[index - 1])
-    ),
-  ),
-  true,
-  "terminated Android native action initial-URL retries must be finite, non-negative, and increasing",
-);
 assert.deepEqual(
   resolveChillyChatNativeCallRoute(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
@@ -112,6 +96,25 @@ assert.equal(
   ),
   null,
   "native call replay rejects fragment-bearing action URLs",
+);
+assert.equal(
+  redirectChillyChatNativeCallSystemPath(
+    `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
+  ),
+  `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
+  "Expo Router rewrites a terminated Android Answer before caching its initial route",
+);
+assert.equal(
+  redirectChillyChatNativeCallSystemPath(
+    `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
+  ),
+  `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
+  "Expo Router rewrites a terminated Android Decline without adding media intent",
+);
+assert.equal(
+  redirectChillyChatNativeCallSystemPath("chillywoodmobile://settings"),
+  "chillywoodmobile://settings",
+  "native-intent normalization preserves unrelated system paths",
 );
 assert.equal(
   readFcmProviderErrorCode({

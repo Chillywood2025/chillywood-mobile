@@ -16,6 +16,7 @@ const assertNotIncludes = (source, needle, label) => assert(!source.includes(nee
 const packageJson = read("package.json");
 const bell = read("components/notifications/notification-bell-button.tsx");
 const layout = read("app/_layout.tsx");
+const nativeIntent = read("app/+native-intent.tsx");
 const appConfig = read("app.config.ts");
 const chatThread = read("app/chat/[threadId].tsx");
 const chatLib = read("_lib/chat.ts");
@@ -179,11 +180,6 @@ assertIncludes(authoritativeBusyBegin, '"delivery_status" = \'skipped\'', "busy 
 assertIncludes(layout, "resolveChillyChatNativeCallRoute", "terminated Android native actions must replay their exact initial URL after authenticated boot");
 assertIncludes(layout, "setPendingNativeCallRoute((current)", "cold-start native actions must remain pending until session hydration finishes");
 assertIncludes(layout, "Linking.getInitialURL()", "terminated Android native actions must read the Activity initial URL");
-assertIncludes(layout, "CHILLY_CHAT_NATIVE_CALL_INITIAL_ROUTE_RETRY_DELAYS_MS", "terminated Android native actions must retry the initial Activity URL during bounded cold boot");
-assertIncludes(layout, "scheduleInitialNativeCallRouteReads", "cold-start native action capture must close the Activity-to-JS listener timing gap");
-assertIncludes(layout, 'AppState.addEventListener("change"', "terminated Android native actions must re-read the Activity URL when the app becomes active");
-assertIncludes(layout, "clearInitialRouteRetryTimers", "cold-start native action retries must be cancelled after capture and unmount");
-assertNotIncludes(layout, "setInterval(readInitialNativeCallRoute", "cold-start native action replay must not create an unbounded polling loop");
 assertIncludes(layout, "function AndroidNativeCallRouteBridge()", "terminated Android native actions must use a dedicated always-mounted capture bridge");
 assertIncludes(layout, "<AndroidNativeCallRouteBridge />", "the Android native action capture bridge must mount at the session shell");
 assert(
@@ -195,6 +191,10 @@ assert(
 assertIncludes(chillyChatNativeCallRoutes, '["answer", "decline"].includes(nativeCallAction)', "cold-start replay must be limited to explicit Answer and Decline actions");
 assertIncludes(chillyChatNativeCallRoutes, "UUID_PATTERN", "cold-start replay must reject malformed thread and invite identities");
 assertNotIncludes(chillyChatNativeCallRoutes, "access_token", "cold-start call routes must not carry authentication credentials");
+assertIncludes(nativeIntent, "redirectSystemPath", "Expo Router must normalize Android native call actions before initial route caching");
+assertIncludes(nativeIntent, 'Platform.OS !== "android"', "native-intent call normalization must not change iOS system-path handling");
+assertIncludes(nativeIntent, "redirectChillyChatNativeCallSystemPath", "Expo Router native-intent handling must reuse the exact validated call-route resolver");
+assertNotIncludes(nativeIntent, "console.", "native call system-path normalization must not log private action URLs");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
