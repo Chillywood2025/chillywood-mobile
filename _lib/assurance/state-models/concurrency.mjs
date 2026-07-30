@@ -129,10 +129,10 @@ const scenarios = [
     id: "revenuecat-expiration-versus-delayed-renewal",
     initial: { authoritativeTime: 0, owner: "source", access: true },
     operations: {
-      expiration: applyAuthoritative({ time: 10, access: false }),
-      delayed_renewal: applyAuthoritative({ time: 20, owner: "source", access: true })
+      expiration: applyAuthoritative({ time: 20, access: false }),
+      delayed_renewal: applyAuthoritative({ time: 10, owner: "source", access: true })
     },
-    safe: (s) => s.authoritativeTime === 20 && s.access
+    safe: (s) => s.authoritativeTime === 20 && !s.access
   },
   {
     id: "push-receipt-versus-session-boot",

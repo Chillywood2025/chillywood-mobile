@@ -8,6 +8,7 @@ for (const [domain, definition] of Object.entries(modelDefinitions)) {
     const report = runPropertyModels({ domains: [domain], numRuns: 200, maxCommands: 24 });
     assert.equal(report.ok, true, JSON.stringify(report));
     assert.equal(report.propertyCases, 200);
+    assert.equal(report.witnessCount, 1);
     assert.equal(report.results[0].seed, definition.seed);
     assert.equal(report.results[0].status, "MODEL_CLEAR");
     assert.match(report.results[0].replayPath, new RegExp(`--domain=${domain} --seed=${definition.seed}`));

@@ -15,6 +15,8 @@ function finishCall(state, status) {
   state.nativeCallState = status;
   state.timeoutWorker = "stopped";
   state.terminalHistory += 1;
+  if (state.nativeAction) state.deniedNativeActions = uniq([...state.deniedNativeActions, state.nativeAction.id]);
+  state.nativeAction = null;
   if (state.threadGeneration === state.callGeneration) {
     state.threadActiveRoom = null;
     state.threadGeneration = null;
@@ -58,7 +60,7 @@ const chatCall = {
   }),
   commandArbitrary: (fc) => fc.oneof(
     fc.record({ type: fc.constant("invite"), generation: fc.integer({ min: 1, max: 4 }), provider: fc.constantFrom("livekit", "legacy") }),
-    fc.record({ type: fc.constant("native_action"), actionId: fc.integer({ min: 1, max: 5 }), expiresAt: fc.integer({ min: 1, max: 8 }) }),
+    fc.record({ type: fc.constant("native_action"), actionId: fc.integer({ min: 1, max: 5 }), generation: fc.integer({ min: 1, max: 4 }), expiresAt: fc.integer({ min: 1, max: 8 }) }),
     fc.record({ type: fc.constant("cleanup"), generation: fc.integer({ min: 1, max: 4 }) }),
     fc.record({ type: fc.constant("membership_write"), generation: fc.integer({ min: 1, max: 4 }), role: fc.constantFrom("caller", "callee", "intruder") }),
     fc.record({ type: fc.constant("change_provider"), provider: fc.constantFrom("livekit", "legacy") }),
@@ -111,8 +113,12 @@ const chatCall = {
         state.reactReady = true;
         break;
       case "native_action": {
-        const key = `action-${command.actionId}`;
+        const key = `action-${command.generation}-${command.actionId}`;
         state.receivedNativeActions = uniq([...state.receivedNativeActions, key]);
+        if (command.generation !== state.callGeneration || terminalInvite.has(state.inviteStatus)) {
+          state.deniedNativeActions = uniq([...state.deniedNativeActions, key]);
+          break;
+        }
         if (state.consumedNativeActions.includes(key) || state.expiredNativeActions.includes(key)) break;
         if (state.nativeAction?.id === key) break;
         if (variant === "native-action-lost" && !state.reactReady) break;
@@ -124,12 +130,12 @@ const chatCall = {
           state.deniedNativeActions = uniq([...state.deniedNativeActions, key]);
           break;
         }
-        state.nativeAction = { id: key, expiresAt: command.expiresAt };
+        state.nativeAction = { id: key, generation: command.generation, expiresAt: command.expiresAt };
         state.nativeCallState = "answer_pending";
         break;
       }
       case "consume_native":
-        if (state.nativeAction && state.nativeAction.expiresAt > state.now && state.authenticationReady && state.reactReady) {
+        if (state.nativeAction?.generation === state.callGeneration && state.nativeAction.expiresAt > state.now && state.authenticationReady && state.reactReady) {
           const key = state.nativeAction.id;
           if (!state.consumedNativeActions.includes(key)) state.consumedNativeActions.push(key);
           state.nativeAction = null;
@@ -219,6 +225,7 @@ const chatCall = {
   }
 };
 
+const revenueAuthorityRank = { cancel: 1, purchase: 2, renewal: 3, transfer: 4, expiration: 5, refund: 6, revocation: 7 };
 const revenueCat = {
   id: "revenuecat",
   featureId: "revenuecat-premium",
@@ -232,6 +239,7 @@ const revenueCat = {
     lastEventType: null,
     eventTime: -1,
     maxAuthoritativeTime: -1,
+    authoritativeOrder: null,
     product: null,
     owners: [],
     transferSource: null,
@@ -273,10 +281,14 @@ const revenueCat = {
       return state;
     }
     state.processedEventIds.push(command.eventId);
-    if (authoritative && command.eventTime < state.maxAuthoritativeTime && variant !== "out-of-order-wins") {
+    const order = { time: command.eventTime, rank: revenueAuthorityRank[command.eventType] ?? 0, eventId: command.eventId };
+    const prior = state.authoritativeOrder;
+    const older = prior && (order.time < prior.time || (order.time === prior.time && (order.rank < prior.rank || (order.rank === prior.rank && order.eventId.localeCompare(prior.eventId) < 0))));
+    if (older && variant !== "out-of-order-wins") {
       state.outOfOrderCount += 1;
       return state;
     }
+    state.authoritativeOrder = order;
     state.maxAuthoritativeTime = Math.max(state.maxAuthoritativeTime, command.eventTime);
     state.lastEventId = command.eventId;
     state.lastEventType = command.eventType;
@@ -421,6 +433,7 @@ const notificationAction = {
     consumedActions: [],
     consumedActionKinds: {},
     expiredActions: [],
+    retiredActions: [],
     serverAccepted: [],
     serverStatus: "ringing"
   }),
@@ -433,11 +446,12 @@ const notificationAction = {
   ),
   apply(current, command, variant = "fixed") {
     const state = copy(current);
+    const obligationsClear = () => state.receivedPushes.every(({ id, mustReport }) => !mustReport || (state.callKitReported.includes(id) && state.completedPushes.includes(id)));
     if (command.type === "apns_accept") {
       state.apnsAccepted = uniq([...state.apnsAccepted, command.id]);
       if (variant === "apns-200-is-delivery") state.deliveryProof = uniq([...state.deliveryProof, command.id]);
     } else if (command.type === "receive_push") {
-      if (!state.receivedPushes.some((entry) => entry.id === command.id)) state.receivedPushes.push({ id: command.id, mustReport: command.mustReport });
+      if (state.serverStatus === "ringing" && !state.receivedPushes.some((entry) => entry.id === command.id)) state.receivedPushes.push({ id: command.id, mustReport: command.mustReport });
     } else if (command.type === "report_callkit") {
       if (state.receivedPushes.some((entry) => entry.id === command.id)) state.callKitReported = uniq([...state.callKitReported, command.id]);
     } else if (command.type === "complete_push") {
@@ -461,7 +475,7 @@ const notificationAction = {
       state.reactReady = true;
     } else if (command.type === "consume_action") {
       const pending = state.pendingActions.find((entry) => entry.id === command.id && entry.expiresAt > state.now);
-      if (pending && state.authenticationReady && state.reactReady && !state.consumedActions.includes(command.id)) {
+      if (pending && state.serverStatus === "ringing" && state.authenticationReady && state.reactReady && !state.consumedActions.includes(command.id)) {
         state.consumedActions.push(command.id);
         state.consumedActionKinds[command.id] = pending.action;
         state.pendingActions = state.pendingActions.filter((entry) => entry.id !== command.id);
@@ -472,11 +486,9 @@ const notificationAction = {
         state.serverStatus = "accepted";
       }
     } else if (command.type === "server_decline") {
-      if (state.serverStatus === "ringing" && state.consumedActionKinds[command.id] === "decline") state.serverStatus = "declined";
-    } else if (command.type === "server_cancel") {
-      if (state.serverStatus === "ringing") state.serverStatus = "cancelled";
-    } else if (command.type === "server_timeout") {
-      if (state.serverStatus === "ringing") state.serverStatus = "timed_out";
+      if (state.serverStatus === "ringing" && obligationsClear() && state.consumedActionKinds[command.id] === "decline") state.serverStatus = "declined";
+    } else if (["server_cancel", "server_timeout"].includes(command.type)) {
+      if (state.serverStatus === "ringing" && (obligationsClear() || variant === "terminal-without-report")) state.serverStatus = command.type === "server_cancel" ? "cancelled" : "timed_out";
     } else if (command.type === "tick") {
       state.now += command.amount;
       const expired = state.pendingActions.filter((entry) => entry.expiresAt <= state.now).map(({ id }) => id);
@@ -485,15 +497,20 @@ const notificationAction = {
     } else {
       throw new Error(`UNKNOWN_NOTIFICATION_COMMAND:${command.type}`);
     }
+    if (["declined", "cancelled", "timed_out"].includes(state.serverStatus) && state.pendingActions.length) {
+      state.retiredActions = uniq([...state.retiredActions, ...state.pendingActions.map(({ id }) => id)]);
+      state.pendingActions = [];
+    }
     return state;
   },
   violations(state) {
     const failures = [];
     for (const push of state.receivedPushes) {
-      if (push.mustReport && state.completedPushes.includes(push.id) && !state.callKitReported.includes(push.id)) failures.push("PUSHKIT_MUST_REPORT_BREACH");
+      const due = state.completedPushes.includes(push.id) || ["declined", "cancelled", "timed_out"].includes(state.serverStatus);
+      if (push.mustReport && due && (!state.callKitReported.includes(push.id) || !state.completedPushes.includes(push.id))) failures.push("PUSHKIT_MUST_REPORT_BREACH");
     }
     if (state.deliveryProof.some((id) => !state.receivedPushes.some((push) => push.id === id))) failures.push("CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200");
-    const retained = new Set([...state.pendingActions.map(({ id }) => id), ...state.consumedActions, ...state.expiredActions]);
+    const retained = new Set([...state.pendingActions.map(({ id }) => id), ...state.consumedActions, ...state.expiredActions, ...state.retiredActions]);
     if (state.receivedActions.some((id) => !retained.has(id))) failures.push("NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT");
     if (state.consumedActions.length !== uniq(state.consumedActions).length) failures.push("NATIVE_ACTION_CONSUMED_TWICE");
     if (state.serverAccepted.some((id) => !state.consumedActions.includes(id))) failures.push("NATIVE_ACTION_MUTATED_SERVER_DIRECTLY");

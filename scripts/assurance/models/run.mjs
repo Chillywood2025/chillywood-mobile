@@ -12,6 +12,8 @@ const allowedSuites = new Set(["all", "property", "concurrency", "escaped-defect
 const invalidNumber = ["numRuns", "maxCommands", "seed"].find((key) => options[key] !== undefined && (!Number.isInteger(Number(options[key])) || Number(options[key]) <= 0));
 const replayFinding = options.path && !options.domain
   ? ["ASSURANCE_MODEL_REPLAY_DOMAIN_REQUIRED", options.path]
+  : options.path && !["all", "property"].includes(suite)
+    ? ["ASSURANCE_MODEL_REPLAY_SUITE_UNSUPPORTED", suite]
   : options.path && (!/^\d+(?::\d+)*$/u.test(String(options.path)) || String(options.path).split(":").some((part) => !Number.isSafeInteger(Number(part))))
     ? ["ASSURANCE_MODEL_REPLAY_PATH_INVALID", options.path]
     : null;

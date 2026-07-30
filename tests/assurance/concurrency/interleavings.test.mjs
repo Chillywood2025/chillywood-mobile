@@ -17,4 +17,5 @@ test("required races run in both deterministic orders behind barriers and a tran
   ]) {
     assert.equal(report.results.filter(({ scenario }) => scenario === required).length, 2);
   }
+  assert.equal(report.results.filter(({ scenario, finalState }) => scenario === "revenuecat-expiration-versus-delayed-renewal" && finalState.authoritativeTime === 20 && !finalState.access).length, 2);
 });
