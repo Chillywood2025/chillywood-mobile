@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-64-model-invariants-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+  "implementationTree": "01f5ce9abf821b901a4a13033aefd04c59cc9adf",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "c3200e1f3e7ac5d2b9cd23df7c0d439a8659e3b6163f6e6570ad9825fee11d57",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "fb28650ad9129c22086f30604e740a1edcb5896a028328502fcb04c571ad4e97",
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+      "implementationTree": "01f5ce9abf821b901a4a13033aefd04c59cc9adf",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "mergeBaseMatched": true
+    },
+    "currentTruth": {
+      "status": "pass",
+      "mode": "synchronization-merge",
+      "recordedMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "remoteMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "findings": 0
+    },
+    "scope": {
+      "status": "pass",
+      "files": 9,
+      "additions": 1060,
+      "deletions": 0,
+      "netChangedLines": 1060,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "focusedModelSuite": {
+      "status": "pass",
+      "implementationDependencyContextHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "propertyCases": 1200,
+      "deterministicSeeds": [
+        173501,
+        173502,
+        173503,
+        173504,
+        173505,
+        173506
+      ],
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20,
+      "escapedDefectFixtures": 10,
+      "isolatedConcurrencyTest": "pass",
+      "isolatedGitDiffCheck": "pass",
+      "note": "The clean review worktree had no node_modules. The fast-check-dependent tests were therefore executed read-only in the frozen implementation worktree after independently proving its head and tree exactly matched this review target; concurrency and adversarial model probes ran in the isolated review worktree."
+    },
+    "chatCallInvariantProbe": {
+      "status": "fail",
+      "sequence": [
+        "native_action(action-1, expiresAt=2)",
+        "tick(1)",
+        "native_action(action-1, expiresAt=8)"
+      ],
+      "originalExpiry": 2,
+      "finalExpiry": 8,
+      "violations": [],
+      "duplicateWasIdempotent": false
+    },
+    "notificationInvariantProbe": {
+      "status": "fail",
+      "sequence": [
+        "receive_push(push-1, mustReport=true)"
+      ],
+      "callKitReported": [],
+      "violations": [],
+      "mustReportObligationEnforced": false,
+      "nativeDeclineCommandPresent": false,
+      "cancelTimeoutCleanupCommandsPresent": false
+    },
+    "revenueCatAuthorityProbe": {
+      "status": "fail",
+      "sequence": [
+        "manual(manual-newer, eventTime=20)",
+        "provider_purchase(provider-purchase, eventTime=10)"
+      ],
+      "finalEventTime": 20,
+      "maxAuthoritativeTime": 10,
+      "finalEntitlement": "test_only",
+      "providerBacked": false,
+      "productionAccess": false,
+      "violations": [],
+      "providerEventSuppressedByNonAuthoritativeEvent": true
+    },
+    "otaSourceBindingProbe": {
+      "status": "fail",
+      "buildDeclaresSourceCommit": false,
+      "acceptedSourceA": true,
+      "acceptedUnboundSourceB": true,
+      "violationsForUnboundSource": [],
+      "nativeDigestCompared": true,
+      "sourceCommitComparedToBuildIdentity": false
+    },
+    "migrationForwardCorrectionProbe": {
+      "status": "fail",
+      "sequence": [
+        "forward_correction"
+      ],
+      "forwardCorrectionCount": 1,
+      "source": null,
+      "classification": "REMOTE_ONLY",
+      "successorVersionRecorded": false,
+      "successorBodyRecorded": false,
+      "violations": []
+    },
+    "liveKitInvariantInspection": {
+      "status": "qualified",
+      "orderedAdvanceTransitionPresent": true,
+      "fixtureCannotDeclareRealPass": true,
+      "platformEvidenceSeparated": true,
+      "higherTierEvidenceClaimed": false,
+      "stageSkippedPredicateReachable": false,
+      "stageSkipEscapedDefectFixturePresent": false,
+      "reconnectDuplicateEscapedDefectFixturePresent": false
+    },
+    "proofTierClassification": {
+      "status": "pass",
+      "claimedTier": "T2_MODEL",
+      "forbiddenClaims": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "falseHigherTierClaimDetected": false,
+      "pushKitPhysicalStatus": "BLOCKED_EXTERNAL"
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_run",
+      "implementationHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+      "eligibleAsProof": false,
+      "resumptionAction": "Coordinator runs the one serialized full Phase 1 CI at the unchanged frozen implementation head after all four review lanes freeze."
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChange": false,
+      "rightsRolesAuthRlsChange": false,
+      "switchOrScheduleChange": false,
+      "liveKitActivationResumed": false,
+      "productImplementationChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "01c4644b3a2e7aa56fe5decb8307f11dbee3f97c543c992483490502e302b473",
+  "reviewLevel": "C",
+  "reviewHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+  "reviewTimestamp": "2026-07-30T18:55:44Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "model-invariants"
+  ],
+  "findings": [
+    {
+      "id": "CHAT_DUPLICATE_NATIVE_ACTION_EXTENDS_EXPIRY",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:113",
+        "_lib/assurance/state-models/models.mjs:122",
+        "_lib/assurance/state-models/models.mjs:126",
+        "_lib/assurance/state-models/models.mjs:212"
+      ],
+      "evidence": "Receiving action-1 with expiresAt=2, advancing time to 1, and receiving the same action ID with expiresAt=8 replaces the pending object's expiry with 8. The received set remains unique and violations() returns no finding, so the current duplicate check proves list uniqueness but not idempotent state.",
+      "impact": "A duplicate native action can extend the original acceptance window and remain consumable after its authoritative TTL, violating duplicate idempotency and the expired-action acceptance boundary.",
+      "requiredResolution": "Make an already-pending action ID an immutable no-op or explicit denied duplicate, retain its original expiry, and add a deterministic historical/current fixture plus property assertion for duplicate-before-expiry and duplicate-after-expiry sequences."
+    },
+    {
+      "id": "NOTIFICATION_MUST_REPORT_AND_TERMINAL_ACTION_MODEL_INCOMPLETE",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:424",
+        "_lib/assurance/state-models/models.mjs:442",
+        "_lib/assurance/state-models/models.mjs:476",
+        "_lib/assurance/state-models/models.mjs:479"
+      ],
+      "evidence": "A receive_push command with mustReport=true and no report_callkit command leaves callKitReported empty while violations() returns no finding. The invariant only fires after complete_push, so an unreported must-report push may remain indefinitely MODEL_CLEAR. The command vocabulary also has native_answer but no native Decline, Cancel, Timeout, Busy, or corresponding exact cleanup transitions.",
+      "impact": "The T2 report can pass while the core PushKit must-report obligation is unsatisfied and while the required decline/cancel/timeout lifecycle has no executable state or invariant coverage.",
+      "requiredResolution": "Represent an outstanding must-report obligation with an explicit bounded/terminal evaluation point, require report before completion, and add native decline, cancel, timeout/busy, presentation dedupe, and exact cleanup commands with historical/current fixtures. Keep physical delivery separately BLOCKED_EXTERNAL."
+    },
+    {
+      "id": "REVENUECAT_NONAUTHORITATIVE_EVENT_SUPPRESSES_PROVIDER_EVENT",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:269",
+        "_lib/assurance/state-models/models.mjs:271",
+        "_lib/assurance/state-models/models.mjs:272",
+        "_lib/assurance/state-models/models.mjs:283",
+        "_lib/assurance/state-models/models.mjs:324"
+      ],
+      "evidence": "A manual event at time 20 stores eventTime=20 and test_only. A provider purchase at time 10 then raises maxAuthoritativeTime to 10 but is discarded because it is older than the non-authoritative eventTime. The final state remains test_only/providerBacked=false, and eventTime 20 is not less than maxAuthoritativeTime 10, so the ordering invariant reports no violation.",
+      "impact": "Manual, test, or migration evidence can suppress a real provider-backed event. The model therefore does not prove that only newer authoritative provider state can override provider entitlement state.",
+      "requiredResolution": "Separate provider-authoritative ordering from non-authoritative/test evidence, compare provider events only against the authoritative cursor with defined equal-time ordering, and add mixed-authority duplicate/out-of-order sequences that must preserve provider truth."
+    },
+    {
+      "id": "OTA_SOURCE_COMMIT_NOT_BOUND_TO_BUILD",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:333",
+        "_lib/assurance/state-models/models.mjs:340",
+        "_lib/assurance/state-models/models.mjs:350",
+        "_lib/assurance/state-models/models.mjs:381"
+      ],
+      "evidence": "install_build has no sourceCommit identity. compatible() only checks that an update sourceCommit is truthy, so otherwise-identical updates labeled source-a and unbound-source-b are both accepted with no violation.",
+      "impact": "The model proves native digest/runtime/channel/platform matching but cannot prove the required source-commit/native-digest binding or reject an update that is not bound to the target build lineage.",
+      "requiredResolution": "Add the build source/native manifest identity and an explicit accepted update lineage or source/native binding, compare it in compatible(), and add a historical variant demonstrating that a merely non-empty source commit is insufficient."
+    },
+    {
+      "id": "MIGRATION_FORWARD_CORRECTION_NOT_EXECUTABLE",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:551",
+        "_lib/assurance/state-models/models.mjs:566",
+        "_lib/assurance/state-models/models.mjs:578",
+        "_lib/assurance/state-models/models.mjs:579",
+        "_lib/assurance/state-models/models.mjs:584"
+      ],
+      "evidence": "forward_correction only increments a counter. Starting from REMOTE_ONLY, the command leaves source null, records no successor version/name/body, remains REMOTE_ONLY, and produces no violation.",
+      "impact": "MODEL_CLEAR cannot demonstrate that a correction is a new forward-only migration rather than an undeclared count, version reuse, or body rewrite.",
+      "requiredResolution": "Model immutable deployed migration identity and an explicit successor migration with strictly newer unique version, name, and body hash; require reconciliation/merge rules over the resulting set and add same-version and deployed-body-rewrite counterexamples."
+    },
+    {
+      "id": "LIVEKIT_STAGE_SKIP_PREDICATE_UNREACHABLE",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:490",
+        "_lib/assurance/state-models/models.mjs:504",
+        "_lib/assurance/state-models/models.mjs:534",
+        "_lib/assurance/state-models/models.mjs:628"
+      ],
+      "evidence": "The LIVEKIT_STAGE_SKIPPED condition requires index >= first_media (7) and index < subscription (6), which is impossible. Fixed transitions currently reject non-next stages, but no stage-skip escaped-defect fixture proves the invariant itself and no visited-stage prefix is retained.",
+      "impact": "The transition guard currently protects the happy model, but the advertised missing-stage invariant has a dead detection branch and can regress without an executable counterexample.",
+      "requiredResolution": "Track the visited stage prefix or otherwise encode the ordered-chain invariant, fix the predicate, and add a stage-skip historical variant that is detected while the current transition sequence passes."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 5,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "reviewDisposition": "changes-required-do-not-merge",
+    "humanApproval": false
+  }
+}
