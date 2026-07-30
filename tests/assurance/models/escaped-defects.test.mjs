@@ -76,6 +76,24 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
     const rejected = runCommands("ota-build", [build, candidate]).state;
     assert.deepEqual([rejected.currentUpdate, rejected.activationRejected], [null, 1]);
   }
+  const withoutField = (value, field) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== field));
+  for (const field of ["platform", "environment", "runtime", "channel", "nativeDigest"]) {
+    for (const [scope, candidateBuild, candidateUpdate] of [
+      ["build", withoutField(build, field), update],
+      ["update", build, withoutField(update, field)],
+      ["both", withoutField(build, field), withoutField(update, field)]
+    ]) {
+      const activation = runCommands("ota-build", [candidateBuild, candidateUpdate]);
+      assert.deepEqual([activation.state.currentUpdate, activation.state.activationRejected, activation.violations], [null, 1, []], `activation:${scope}:${field}`);
+      const rollbackUpdate = { ...candidateUpdate, type: "set_rollback", updateId: "update-rollback", group: "group-rollback", sourceCommit: "source-rollback" };
+      const rollback = runCommands("ota-build", [candidateBuild, rollbackUpdate, { type: "rollback", rollbackId: "update-rollback" }]);
+      assert.deepEqual(
+        [rollback.state.rollbackTarget, rollback.state.currentUpdate, rollback.state.rollbackTargetRejected, rollback.state.rollbackRejected, rollback.violations],
+        [null, null, 1, 1, []],
+        `rollback:${scope}:${field}`
+      );
+    }
+  }
   assert.equal(runCommands("ota-build", [{ ...build, signedArtifactId: "" }]).state.build, null);
   const rollbackTarget = { ...update, type: "set_rollback", updateId: "update-rollback", group: "group-rollback", sourceCommit: "source-rollback" };
   const invalidRollback = runCommands("ota-build", [build, rollbackTarget, { type: "rollback", rollbackId: "other-update" }]).state;
