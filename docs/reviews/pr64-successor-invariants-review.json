@@ -1,0 +1,357 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-successor-invariants-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state-model-invariants",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+  "implementationTree": "1666e884bb7786b62979df0b784f8c1722a63732",
+  "baseHead": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "baseTree": "a6c507de2e09664681c913daba5b6b82f4cc7af0",
+  "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "changedFileHash": "24006b0bed5548df4d53108b77c9e7ca096a4d7c1fde188c74cd095e6c1d5479",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base..implementation)",
+  "changedNameHash": "140824304f89fccb5cef1ca286ce63fe7f71996a7dadb081e5a132f00569c48f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "ca5ea7d32a3c7f45f65308672c35317c73009ceaaa2421135fe78d12c31dc7f7",
+  "modelSourceSetHash": "fad0ae83f88f553038e272bfb15541c694c49e65abe460165e91302abc680b92",
+  "focusedTestSetHash": "8b9758eca19df8a373d90ba4ce3ebbb5b7dc0d8b3e053e55b5dd6ab8fcec5dc0",
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+      "implementationTree": "1666e884bb7786b62979df0b784f8c1722a63732",
+      "reviewWorktreeCleanBeforeEvidence": true,
+      "reviewBranchParentIsExactImplementationHead": true,
+      "implementationContainsCurrentBase": true
+    },
+    "successorDelta": {
+      "status": "pass",
+      "priorRemediationHead": "54e4c7f082d310254d8fb8ed7f6b081fd8d09485",
+      "changedFiles": [
+        "config/assurance/pr-c-model-integrity-scope-waiver-v1.json"
+      ],
+      "reviewedModelSourceChangedSinceRemediation": false,
+      "focusedTestsChangedSinceRemediation": false,
+      "changePurpose": "Bind the waiver reviewer to the pending successor four-lane exact-head review set."
+    },
+    "dependencyMaterialization": {
+      "initialFocusedCommandStatus": "environment_failed_before_property_execution",
+      "initialPassedTests": 1,
+      "initialLoadFailures": 2,
+      "initialFailure": "ERR_MODULE_NOT_FOUND: fast-check",
+      "resolutionCommand": "npm ci --ignore-scripts --no-audit --no-fund",
+      "sharedInstallLockUsed": true,
+      "trackedFilesChanged": false,
+      "classification": "review-environment prerequisite, not implementation finding"
+    },
+    "focusedSuite": {
+      "status": "pass",
+      "command": "node --test tests/assurance/property/state-models.test.mjs tests/assurance/concurrency/interleavings.test.mjs tests/assurance/models/escaped-defects.test.mjs",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "propertyDomains": 6,
+      "propertyCases": 1200,
+      "maxCommandsPerCase": 24,
+      "transitionWitnesses": 8,
+      "deterministicSeeds": {
+        "chat-call": 173501,
+        "revenuecat": 173502,
+        "ota-build": 173503,
+        "notification-native-action": 173504,
+        "livekit": 173505,
+        "migrations": 173506
+      },
+      "canonicalEscapedDefectFixtures": 17,
+      "supplementalEscapedDefectFixtures": 5,
+      "historicalVariantsDetected": 22,
+      "fixedVariantsPassing": 22,
+      "concurrencyScenarios": 10,
+      "concurrencySchedules": 20,
+      "exactScheduleStateContracts": 8
+    },
+    "deterministicOutput": {
+      "status": "pass",
+      "command": "node scripts/assurance/models/run.mjs",
+      "runs": 3,
+      "identicalRuns": 3,
+      "sha256": "2ca86d1032a75dfd346bc02694c5b0ddce808f7a9f465919fdddc9cbc03a5c57",
+      "reportedStatus": "MODEL_CLEAR",
+      "reportedProofTier": "T2_MODEL"
+    },
+    "adversarialAcceptanceProbes": {
+      "command": "node --input-type=module with explicit runCommands sequences",
+      "expiredNativeAction": {
+        "status": "pass",
+        "fixedInviteStatus": "ringing",
+        "fixedAcceptanceAuthority": null,
+        "fixedConsumedActions": [],
+        "fixedExpiredActions": [
+          "action-1-1"
+        ],
+        "fixedViolations": [],
+        "historicalInviteStatus": "accepted",
+        "historicalAcceptanceAuthority": "native_action",
+        "historicalViolations": [
+          "CHAT_NATIVE_ACCEPTANCE_UNAUTHORIZED"
+        ]
+      },
+      "unconsumedNativeAction": {
+        "status": "pass",
+        "fixedInviteStatus": "ringing",
+        "fixedAcceptanceAuthority": null,
+        "fixedConsumedActions": [],
+        "fixedViolations": []
+      },
+      "consumedNativeAction": {
+        "status": "pass",
+        "fixedInviteStatus": "accepted",
+        "fixedAcceptanceAuthority": "native_action",
+        "fixedNativeAcceptanceAction": "action-1-1",
+        "fixedConsumedActions": [
+          "action-1-1"
+        ],
+        "fixedViolations": []
+      },
+      "inAppAcceptanceAfterExpiredNativeAction": {
+        "status": "pass",
+        "fixedInviteStatus": "accepted",
+        "fixedAcceptanceAuthority": "in_app",
+        "fixedExpiredActions": [
+          "action-1-1"
+        ],
+        "fixedViolations": []
+      }
+    },
+    "adversarialPushKitProbes": {
+      "featureAttribution": {
+        "status": "pass",
+        "modelId": "notification-native-action",
+        "featureId": "pushkit-callkit"
+      },
+      "incompleteMustReportObligation": {
+        "status": "pass",
+        "fixedServerStatus": "ringing",
+        "fixedCallKitReported": [],
+        "fixedCompletedPushes": [],
+        "fixedConsumedActions": [
+          "answer"
+        ],
+        "fixedViolations": [],
+        "historicalServerStatus": "accepted",
+        "historicalViolations": [
+          "PUSHKIT_MUST_REPORT_BREACH",
+          "PUSHKIT_ACCEPTED_WITHOUT_REPORT"
+        ]
+      },
+      "reportedAndCompletedMustReportObligation": {
+        "status": "pass",
+        "fixedServerStatus": "accepted",
+        "fixedCallKitReported": [
+          "push"
+        ],
+        "fixedCompletedPushes": [
+          "push"
+        ],
+        "fixedConsumedActions": [
+          "answer"
+        ],
+        "fixedViolations": []
+      }
+    },
+    "domainReview": [
+      {
+        "domain": "chat-call",
+        "featureId": "chilly-chat-call-lifecycle",
+        "status": "MODEL_CLEAR",
+        "reviewed": [
+          "in-app versus native authority",
+          "same-generation consumed native action",
+          "expired and unconsumed denial",
+          "token and media ordering",
+          "terminal cleanup and stale generation"
+        ]
+      },
+      {
+        "domain": "revenuecat",
+        "featureId": "revenuecat-premium",
+        "status": "MODEL_CLEAR",
+        "reviewed": [
+          "provider authority and idempotency",
+          "deterministic event ordering",
+          "single-owner transfer",
+          "sandbox/manual isolation",
+          "refund/revocation access removal"
+        ]
+      },
+      {
+        "domain": "ota-build",
+        "featureId": "eas-build-update-release",
+        "status": "MODEL_CLEAR",
+        "reviewed": [
+          "platform/environment/runtime/channel parity",
+          "native digest and capability subset",
+          "embedded safety",
+          "compatible rollback"
+        ],
+        "p2Observation": "A realistic compatible new-source OTA transition remains unrepresented."
+      },
+      {
+        "domain": "notification-native-action",
+        "featureId": "pushkit-callkit",
+        "status": "MODEL_CLEAR",
+        "reviewed": [
+          "APNs acceptance is not delivery",
+          "must-report CallKit reporting and completion",
+          "accepted obligation evaluation",
+          "consume-once retained action",
+          "terminal action retirement"
+        ]
+      },
+      {
+        "domain": "livekit",
+        "featureId": "livekit-media-transport",
+        "status": "MODEL_CLEAR",
+        "reviewed": [
+          "ordered token-to-UI chain",
+          "first media requirement",
+          "platform isolation",
+          "fixture isolation",
+          "terminal cleanup"
+        ],
+        "p2Observation": "Some explicit invariant branches still lack historical/fixed fixture pairs."
+      },
+      {
+        "domain": "migrations",
+        "featureId": "supabase-migrations-rls",
+        "status": "MODEL_CLEAR",
+        "reviewed": [
+          "remote/source classification",
+          "version/name/body identity",
+          "deployed immutability",
+          "RLS/FORCE RLS and grant policy",
+          "forward-only correction and JSONB encoding"
+        ],
+        "p2Observation": "Some explicit invariant branches still lack historical/fixed fixture pairs."
+      }
+    ],
+    "proofBoundary": {
+      "status": "pass",
+      "reviewedTier": "T2_MODEL",
+      "javascriptModelPresentedAsNativeProof": false,
+      "providerFixturePresentedAsProviderBehavior": false,
+      "apnsAcceptancePresentedAsPushKitDelivery": false,
+      "sharedPlatformEvidenceAccepted": false,
+      "physicalPushKitStatus": "BLOCKED_EXTERNAL",
+      "forbiddenClaims": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ]
+    },
+    "contractScopeSyntaxPrivacy": {
+      "contracts": "pass: 13 contracts, 20 features, 25 escaped defects",
+      "scope": "pass: 11/12 files, 1393/1600 net lines, CI-test-infrastructure only",
+      "syntax": "pass",
+      "gitDiffCheck": "pass",
+      "privacyPatternCheck": "pass"
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_run",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "After all four successor exact-head review lanes are frozen, the coordinator owns the single full Phase 1 CI run."
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeTestOrBuild": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "currentTruthChanged": false,
+      "impactPlannerChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "2ca86d1032a75dfd346bc02694c5b0ddce808f7a9f465919fdddc9cbc03a5c57",
+  "reviewLevel": "C",
+  "reviewHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+  "reviewTimestamp": "2026-07-30T21:00:36Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "successor-model-invariants"
+  ],
+  "findings": [
+    {
+      "id": "PR64_OTA_NEW_SOURCE_UPDATE_TRANSITION_NOT_REPRESENTED",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:371",
+        "_lib/assurance/state-models/models.mjs:378",
+        "_lib/assurance/state-models/properties.mjs:10"
+      ],
+      "evidence": "Compatibility still requires build.sourceCommit === update.sourceCommit, and the positive witness reuses one source identity. An otherwise compatible update sourced from a successor commit is rejected.",
+      "impact": "The model proves source equality, not a realistic new-JavaScript-source OTA bound to an unchanged compatible native target.",
+      "requiredResolution": "In the PR D/E artifact contract, distinguish build source, update source, and target native capability identity; add a positive compatible successor-source OTA transition without weakening native/runtime/platform parity."
+    },
+    {
+      "id": "PR64_REMAINING_INVARIANT_BRANCHES_LACK_HISTORICAL_FIXTURES",
+      "severity": "P2",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:593",
+        "_lib/assurance/state-models/models.mjs:597",
+        "_lib/assurance/state-models/models.mjs:659",
+        "_lib/assurance/state-models/models.mjs:660",
+        "_lib/assurance/state-models/models.mjs:661"
+      ],
+      "evidence": "The expanded 17-canonical/5-supplemental corpus covers every review-mandated canonical gap, but explicit detectors for duplicate LiveKit room/track, fixture-as-real proof, deployed migration rewrite, RLS/FORCE RLS loss, and broad grants still lack historical/current fixture pairs.",
+      "impact": "Those detector branches can regress or become dead without the escaped-defect corpus failing.",
+      "requiredResolution": "Add minimized supplemental historical/current fixtures for the remaining explicit detector branches when that coverage is next expanded."
+    },
+    {
+      "id": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "severity": "P2",
+      "status": "deferred",
+      "owner": "PR E",
+      "evidence": "The machine report explicitly records impact-planner routing for model/property/concurrency jobs as deferred and non-blocking for Lane C.",
+      "requiredResolution": "PR E adds and tests the exact impact routing; Lane C must not hide or implement it."
+    },
+    {
+      "id": "PR64_SUCCESSOR_FROZEN_HEAD_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "This isolated review lane was explicitly prohibited from running full CI.",
+      "requiredResolution": "The coordinator runs one full Phase 1 CI execution after all four successor reviews bind this unchanged implementation head."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 4,
+    "implementationFilesOnReviewBranch": 0,
+    "t2ModelStatus": "MODEL_CLEAR",
+    "higherTierStatus": "not-reviewed-and-not-substituted",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "t2-model-clear-p2-followups-four-lane-and-ci-still-required",
+    "humanApproval": false
+  }
+}
