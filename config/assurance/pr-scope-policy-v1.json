@@ -20,8 +20,21 @@
     {"id": "CI-test-infrastructure", "risk": "supporting", "paths": [".github/", "scripts/", "tests/", "package.json", "package-lock.json", "config/assurance/"]},
     {"id": "legal-store", "risk": "high", "paths": ["legal/", "docs/legal/", "docs/google-play/", "tools/ios-storekit-harness/"]}
   ],
+  "featureDomainBundles": [
+    {
+      "featureId": "livekit-media-transport",
+      "allowedHighRiskDomains": ["Cognitive", "LiveKit", "database-RLS"],
+      "reason": "LiveKit source-identity contracts may require their governed Cognitive configuration and exact database migration source in one bounded objective."
+    },
+    {
+      "featureId": "revenuecat-premium",
+      "allowedHighRiskDomains": ["RevenueCat-Premium", "database-RLS"],
+      "reason": "RevenueCat transfer reconciliation binds the verified webhook policy to its exact deployed migration source."
+    }
+  ],
   "violations": [
     "two-unrelated-high-risk-domains",
+    "missing-registered-feature-domain-bundle",
     "objective-omits-affected-domain",
     "provider-money-in-sentinel-only-objective",
     "native-without-native-gate",
