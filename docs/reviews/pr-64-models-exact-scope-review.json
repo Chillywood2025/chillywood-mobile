@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-64-models-exact-scope-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "security-authority",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+  "implementationTree": "9324084ac054f0b9461fb70bef62e0e41cc709d4",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "7e349806beb6460ccb5ab27f35ff97317da203b36b53f03c2a5b7f0a1eb85ad7",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "da079d87b2d597b73cc654b3e39ce099037b97b221d8fe08e4ff499be9a502df",
+  "testResults": {
+    "laneIdentity": {
+      "status": "completed_with_blocking_findings",
+      "lane": "security-authority",
+      "focus": "dependency, package, scope, fail-closed behavior, proof-tier boundary, current-truth binding, and evidence-data safety",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "implementationTree": "9324084ac054f0b9461fb70bef62e0e41cc709d4",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "mergeBaseMatched": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 10,
+      "additions": 1142,
+      "deletions": 1,
+      "netChangedLines": 1141,
+      "fileBudget": 15,
+      "lineBudget": 1200,
+      "scopeWaiver": null,
+      "classifiedDomains": [
+        "CI-test-infrastructure"
+      ],
+      "unclassifiedChangedFiles": 0,
+      "productImplementationFiles": 0,
+      "migrationFiles": 0,
+      "workflowFiles": 0,
+      "generatedNativePaths": 0
+    },
+    "dependencyLock": {
+      "status": "pass",
+      "packageDeltaFromPreviouslyReviewedHead": "unchanged",
+      "previouslyReviewedHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+      "lockfileVersion": 3,
+      "fastCheck": {
+        "requestedVersion": "4.9.0",
+        "lockedVersion": "4.9.0",
+        "devOnly": true,
+        "license": "MIT",
+        "integrityMatchesRegistry": true,
+        "nodeEngine": ">=12.17.0"
+      },
+      "pureRand": {
+        "lockedVersion": "8.4.2",
+        "devOnly": true,
+        "license": "MIT",
+        "integrityMatchesRegistry": true
+      },
+      "carryForwardEvidence": "origin/codex/first-pass-assurance-models-review-dependency-scope-security at its exact reviewed package delta",
+      "npmInstallRunByReviewLane": false
+    },
+    "advisoryReview": {
+      "status": "pass_with_preexisting_moderate_baseline",
+      "command": "npm audit --package-lock-only --json",
+      "info": 0,
+      "low": 0,
+      "moderate": 24,
+      "high": 0,
+      "critical": 0,
+      "fastCheckImplicated": false,
+      "pureRandImplicated": false,
+      "newDependencyAdvisoryFound": false
+    },
+    "runtimeBundleBoundary": {
+      "status": "pass",
+      "fastCheckAbsentFromRuntimeDependencies": true,
+      "fastCheckImportedOnlyByAssurancePropertyModule": true,
+      "assuranceModelModulesImportedOnlyByAssuranceScriptAndTests": true,
+      "runtimeProductImportFound": false
+    },
+    "scopeSelfCheck": {
+      "status": "pass_with_follow_up",
+      "command": "node scripts/assurance/pr-scope.mjs --base=origin/main --objective='Executable state property and concurrency assurance' --objective-domains=CI-test-infrastructure",
+      "commandDecision": "pass",
+      "files": 10,
+      "classifiedAsCiTestInfrastructure": 10,
+      "unclassifiedFiles": 0,
+      "highRiskDomains": [],
+      "secondHighRiskDomain": false,
+      "supportingDomainConcealedProductSource": false,
+      "genericUnclassifiedSourceIsBlocking": false
+    },
+    "formerP1Verification": {
+      "status": "fail",
+      "resolvedCases": [
+        "chat duplicate native action cannot extend expiry",
+        "notification duplicate native action cannot extend expiry",
+        "non-authoritative RevenueCat evidence cannot suppress a provider event with the same identifier",
+        "OTA update source commit must match the installed build source commit",
+        "migration forward correction records a unique newer version, name, and body hash",
+        "LiveKit skipped stage is detected by the historical variant and cannot create a current pass",
+        "replay output uses no-clobber creation",
+        "_lib/assurance model paths are classified for this exact delta"
+      ],
+      "unresolvedCases": [
+        "terminal chat and notification states do not clear or deny pending native actions",
+        "PushKit must-report obligation has no fail-closed terminal evaluation",
+        "positive property witnesses are absent for RevenueCat, OTA/build, and migration models"
+      ]
+    },
+    "terminalNativeActionProbe": {
+      "status": "fail",
+      "notificationSequence": [
+        "native_answer(probe, expiresAt=10)",
+        "server_cancel",
+        "auth_ready",
+        "react_ready",
+        "consume_action(probe)"
+      ],
+      "notificationFinalServerStatus": "cancelled",
+      "notificationConsumedActions": [
+        "probe"
+      ],
+      "notificationViolations": [],
+      "chatSequence": [
+        "invite(generation=1)",
+        "native_action(action-1, expiresAt=10)",
+        "cancel",
+        "auth_ready",
+        "react_ready",
+        "consume_native"
+      ],
+      "chatFinalInviteStatus": "cancelled",
+      "chatConsumedActions": [
+        "action-1"
+      ],
+      "chatViolations": []
+    },
+    "mustReportProbe": {
+      "status": "fail",
+      "sequence": [
+        "receive_push(push, mustReport=true)",
+        "server_timeout"
+      ],
+      "finalServerStatus": "timed_out",
+      "reported": [],
+      "completed": [],
+      "violations": []
+    },
+    "propertyCoverage": {
+      "status": "fail",
+      "modelDomains": 6,
+      "transitionWitnesses": 3,
+      "domainsWithPositiveWitness": [
+        "chat-call",
+        "livekit",
+        "notification-native-action"
+      ],
+      "domainsWithoutPositiveWitness": [
+        "revenuecat",
+        "ota-build",
+        "migrations"
+      ],
+      "emptyWitnessListCanClear": true,
+      "reason": "runPropertyModels uses witnesses.every(...) without requiring a witness for each selected domain; the property test also iterates an empty witness list successfully."
+    },
+    "currentTruth": {
+      "status": "fail",
+      "command": "node scripts/assurance/current-truth.mjs",
+      "commandDecision": "pass",
+      "recordFreshnessDeadline": "2026-07-31T18:13:30Z",
+      "recordedMain": "55ec0d2876f74b7cccfa62588bddb508f477e6e4",
+      "remoteMain": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+      "synchronizationMode": "synchronization-merge",
+      "recordedPr64Head": "13ff4c0ffc1c38f402dc1bf7744758d6419b151b",
+      "exactPr64Head": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "openImplementationHeadMatched": false,
+      "staleHeadFindingEmitted": false
+    },
+    "proofTierBoundary": {
+      "status": "pass",
+      "claimedTier": "T2_MODEL",
+      "higherTierBlockerRecorded": "PushKit T6_INSTALLED_PHYSICAL BLOCKED_EXTERNAL",
+      "forbiddenHigherTierClaims": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ],
+      "higherTierProofClaimFound": false,
+      "proofSubstitutionAccepted": false
+    },
+    "focusedChecks": {
+      "status": "pass_with_expected_hostile_probe_failures",
+      "contractSchemas": {
+        "status": "pass",
+        "contracts": 13,
+        "features": 20,
+        "escapedDefects": 25
+      },
+      "concurrencyNodeTest": {
+        "status": "pass",
+        "tests": 1,
+        "scenarios": 10,
+        "schedules": 20
+      },
+      "nodeSyntaxFiles": {
+        "status": "pass",
+        "files": 4
+      },
+      "gitDiffCheck": "pass",
+      "correctedFormerP1Probes": "pass",
+      "hostileTerminalCleanupProbe": "fail_as_finding",
+      "hostileMustReportProbe": "fail_as_finding",
+      "fullPropertySuite": {
+        "status": "not_repeated",
+        "reason": "The exact implementation lane already supplied current trustworthy 9/9 focused evidence at this head; this clean review worktree has no dependency install and the addendum forbids duplicate npm installation or heavy test contention.",
+        "carriedEvidence": {
+          "tests": 9,
+          "passed": 9,
+          "propertyCases": 1200,
+          "concurrencySchedules": 20,
+          "escapedDefectFixtures": 13,
+          "transitionWitnesses": 3,
+          "deterministicRuns": 3,
+          "deterministicHash": "a55195cc96a076a079c61555eb9a0921da9936d2f3478ded4ce61a380e30571b"
+        }
+      }
+    },
+    "modelDataAndSecretSafety": {
+      "status": "pass",
+      "privateKeyMarkers": 0,
+      "jwtShapes": 0,
+      "credentialAssignments": 0,
+      "directNetworkCalls": 0,
+      "fixturesSynthetic": true,
+      "providerPayloadCommitted": false,
+      "privateEvidenceCommitted": false,
+      "deviceIdentifierCommitted": false
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "productSourceChanged": false,
+      "workflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "denoLockChanged": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator",
+      "implementationHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "Correct the open P1 findings, freeze a new exact implementation head, rerun impacted exact review lanes, synchronize current truth, and let the coordinator own the one frozen-head Phase 1 CI execution."
+    }
+  },
+  "testResultHash": "d4377a19771065d030a86b2b284e0aac5bc5c92c0182326a35df2d40b145c69f",
+  "reviewLevel": "C",
+  "reviewHead": "01ad30e4e0143cc4586b6d1be93c650ed753fd38",
+  "reviewTimestamp": "2026-07-30T19:12:47Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "exact-scope-dependency-fail-closed"
+  ],
+  "findings": [
+    {
+      "id": "TERMINAL_NATIVE_ACTION_CLEANUP_FAILS_OPEN",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "_lib/assurance/state-models/models.mjs",
+        "tests/assurance/models/escaped-defects.test.mjs"
+      ],
+      "evidence": "Both models retain actionable native state across a terminal server/call transition. In notification-native-action, native_answer -> server_cancel -> auth_ready -> react_ready -> consume_action ends cancelled but records the action as consumed with no violation. In chat-call, invite -> native_action -> cancel -> auth_ready -> react_ready -> consume_native ends cancelled but consumes action-1 with no violation.",
+      "impact": "The T2 model can report MODEL_CLEAR while stale Answer state survives terminal cancel/timeout/decline and is consumed later. This does not prove the required exact terminal cleanup or replay denial and leaves the historical lost/stale-action class incompletely prevented.",
+      "requiredResolution": "Clear or terminally deny every pending native action when a call becomes cancelled, declined, timed out, busy, or ended; prohibit consumption after any terminal state; add current and historical fixtures plus deterministic accept/cancel/timeout action interleavings."
+    },
+    {
+      "id": "PUSHKIT_MUST_REPORT_OBLIGATION_CAN_TERMINATE_CLEAR",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "_lib/assurance/state-models/models.mjs",
+        "tests/assurance/models/escaped-defects.test.mjs"
+      ],
+      "evidence": "receive_push(mustReport=true) followed by server_timeout leaves the call terminal, CallKit unreported, the push uncompleted, and violations empty. The invariant only rejects a completed push lacking a report, while the fixed transition refuses such completion, so the obligation can remain outstanding indefinitely and MODEL_CLEAR.",
+      "impact": "The earlier must-report P1 is not fully corrected: a guard that makes the violating completion unreachable substitutes rejection for proof that every must-report push is reported and completed exactly once.",
+      "requiredResolution": "Represent a bounded outstanding must-report obligation and an explicit terminal/evaluation transition that fails unless CallKit report and completion obligations were satisfied exactly once. Add a fixed positive witness and hostile missed-report schedules."
+    },
+    {
+      "id": "PROPERTY_MODEL_CLEAR_WITHOUT_DOMAIN_WITNESS",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "_lib/assurance/state-models/properties.mjs",
+        "tests/assurance/property/state-models.test.mjs"
+      ],
+      "evidence": "There are six model domains but transitionWitnesses defines only chat-call, livekit, and notification-native-action. runPropertyModels computes clearance with witnesses.every(...), which is true for an empty list, and the test likewise loops an empty list without asserting at least one reached witness.",
+      "impact": "RevenueCat, OTA/build, and migration domains can claim MODEL_CLEAR after generated commands that are all rejected or never reach the authoritative success state. This is a fail-open T2 proof and only partially resolves the prior vacuous-property P1.",
+      "requiredResolution": "Require one or more declared positive witnesses for every selected model domain, assert each reaches a domain-specific authoritative state, and fail MODEL_CLEAR when witness coverage is absent. Retain deterministic random properties in addition to these non-vacuity witnesses."
+    },
+    {
+      "id": "CURRENT_TRUTH_PR64_HEAD_STALE_UNDETECTED",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "config/assurance/current-truth-v1.json",
+        "CURRENT_STATE.md",
+        "scripts/assurance/current-truth.mjs"
+      ],
+      "evidence": "The authoritative current-truth record and generated CURRENT_STATE.md still bind open PR #64 to 13ff4c0ffc1c38f402dc1bf7744758d6419b151b, while this exact review binds 01ad30e4e0143cc4586b6d1be93c650ed753fd38. current-truth.mjs returns PASS and emits no stale open-implementation-head finding.",
+      "impact": "The exact class this assurance layer is meant to prevent remains present at the frozen review head. A passing current-truth command is not evidence that the open implementation inventory is current, so merge eligibility would accept stale hot-path truth.",
+      "requiredResolution": "The coordinator must update the authoritative current-truth record and generated hot-path documents at a coherent exact-head boundary, and the guard must fail closed when a tracked open implementation head differs from current evidence. Any implementation-head change invalidates this review."
+    },
+    {
+      "id": "PR_SCOPE_GENERIC_UNCLASSIFIED_SOURCE_NOT_BLOCKING",
+      "severity": "P2",
+      "status": "open",
+      "affectedPaths": [
+        "scripts/assurance/pr-scope.mjs",
+        "config/assurance/pr-scope-policy-v1.json"
+      ],
+      "evidence": "The exact PR delta is now fully classified after adding _lib/assurance to CI-test-infrastructure, but pr-scope.mjs still records an empty domains array without adding a finding for an arbitrary future unclassified source path.",
+      "impact": "This exact PR is coherently scoped, but the wider future-feature scope gate remains allow-by-default for unknown paths until PR E hardens it.",
+      "requiredResolution": "In PR E, reject every unclassified changed source path unless a bounded policy explicitly marks it documentation or generated non-source evidence; add regression tests proving supporting files cannot conceal an unknown source path."
+    },
+    {
+      "id": "FAST_CHECK_DEPENDENCY_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "fast-check is exactly pinned at 4.9.0 as a devDependency; pure-rand is locked at 8.4.2. Both are MIT, lock-integrity reviewed, absent from the current advisory graph, and unreachable from product runtime imports."
+    },
+    {
+      "id": "MODEL_EVIDENCE_PRIVACY_AND_NONINTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact delta contains synthetic model identities, no credential/device/private evidence values, no network calls, no provider or database mutation, no migration/native/product/workflow source, no generated native directory, and no deno.lock change."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 4,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "changes-required-do-not-merge",
+    "humanApproval": false
+  }
+}
