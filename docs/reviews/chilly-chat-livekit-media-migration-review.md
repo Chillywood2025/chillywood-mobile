@@ -375,3 +375,40 @@ Android-to-iOS and iOS-to-Android voice/video LiveKit token, publication,
 subscription, first-media, UI Connected, controls, recovery, end, and cleanup.
 The implementation PR and review-only PR remain draft. No merge or activation
 is approved at this checkpoint.
+
+## Additive final implementation and smoke review
+
+Frozen implementation head:
+`934b6ae2ef07d79295e21a77d2b033f3be778c32`
+
+The review-only branch merged the frozen implementation head additively in
+merge commit `b381e1e986b8e19314aee3a5e07eb61afc5bab34`. No earlier review
+history was rewritten.
+
+The replacement Play Internal build 86 native handoff and Android physical
+matrix are accepted as recorded in PR #50. A final focused smoke run passed:
+
+- Chat Call provider/media migration proof;
+- LiveKit token and telemetry authority, 28/28;
+- durable native pending-action handoff;
+- Android native-runtime compatibility and isolated build profile;
+- PushKit incoming-only and terminal lifecycle semantics;
+- linked immutable migration readback;
+- iOS native-call source/backend policy;
+- TypeScript plus Live Stage and Watch-Party guards;
+- implementation CI, 13/13.
+
+The Owner explicitly changed the acceptance sequence on 2026-07-30: finish the
+full scoped implementation with smoke testing and defer the remaining
+exhaustive physical evidence. Accordingly, Android-caller to iPhone-receiver
+accepted cells, iPhone-receiver lifecycle negatives, and the locked-screen
+CallKit case remain deferred and are not represented as passed. The confirmed
+`callservicesd` suppression state is not bypassed with synthetic CallKit,
+ordinary notifications, simulator evidence, reinstall, an iOS build, or an
+iOS OTA.
+
+Final source review at the frozen implementation head remains P0=0 and P1=0.
+Public/default Chat Call remains `legacy_webrtc`; the exact two-account canary
+remains bounded. Supabase remains the invite and lifecycle authority, token and
+media activation remain post-acceptance, and no shared switch or schedule is
+enabled. PR #51 remains review-only and must close unmerged after its final CI.
