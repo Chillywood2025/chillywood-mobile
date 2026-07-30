@@ -1,0 +1,285 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-64-models-concurrency-replay-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "property-concurrency-replay",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+  "implementationTree": "01f5ce9abf821b901a4a13033aefd04c59cc9adf",
+  "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3",
+  "changedFileHash": "c3200e1f3e7ac5d2b9cd23df7c0d439a8659e3b6163f6e6570ad9825fee11d57",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "9a22dedca08b6e9f566ae93e55034cd4350ca3389d150e49e8642a26a2d32807",
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+      "implementationTree": "01f5ce9abf821b901a4a13033aefd04c59cc9adf",
+      "baseHead": "fc3d750158770a6f33ab10acc68e79a288b6ffa3"
+    },
+    "currentTruth": {
+      "status": "pass",
+      "findings": 0
+    },
+    "focusedNodeTests": {
+      "status": "pass",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "files": [
+        "tests/assurance/property/state-models.test.mjs",
+        "tests/assurance/concurrency/interleavings.test.mjs",
+        "tests/assurance/models/escaped-defects.test.mjs"
+      ],
+      "dependencyEnvironment": "Existing exact implementation-lane node_modules was mounted read-only by a temporary symlink; this lane ran no install and changed no lockfile."
+    },
+    "determinism": {
+      "status": "pass",
+      "concurrencyRuns": 3,
+      "concurrencyOutputSha256": "39c9e1664eb9836c95f9d3cec7a022d66908080f913fca1fb982bb4c9949f2d7",
+      "propertyRuns": 3,
+      "propertyOutputSha256": "e0567017c6f7561096e808b54b592fa94bf4aaa4f5f6e580f7f8e85f56492587",
+      "outputsIdenticalWithinSuite": true
+    },
+    "propertyReplayAndMinimization": {
+      "status": "pass-for-valid-path",
+      "domain": "chat-call",
+      "seed": 173501,
+      "path": "0:1:1",
+      "minimizedCommandSequence": [
+        {
+          "type": "tick",
+          "amount": 1
+        }
+      ],
+      "replayMatchedMinimizedSequence": true,
+      "initialShrinks": 2,
+      "replayShrinks": 0
+    },
+    "deterministicInterleavings": {
+      "status": "pass",
+      "scenarioCount": 10,
+      "scheduleCount": 20,
+      "ordersPerScenario": 2,
+      "mechanismsInspected": [
+        "controlled barriers",
+        "promises",
+        "transaction lock",
+        "explicit schedules"
+      ],
+      "requiredScenariosPresent": [
+        "accept-versus-timeout",
+        "accept-versus-cancel",
+        "old-cleanup-versus-new-invite",
+        "end-versus-membership-update",
+        "revenuecat-renewal-versus-transfer",
+        "revenuecat-expiration-versus-delayed-renewal",
+        "push-receipt-versus-session-boot",
+        "native-answer-versus-react-initialization",
+        "update-activation-versus-rollback",
+        "emergency-stop-versus-mutation"
+      ],
+      "bothOrdersExecuted": true,
+      "operationsSerializedByTransactionLock": true
+    },
+    "escapedDefectBaseline": {
+      "status": "pass-for-declared-fixtures",
+      "fixtureCount": 10,
+      "historicalDetected": 10,
+      "currentModelPass": 10,
+      "undeclaredHistoricalVariantDetectedByReview": "stage-skip"
+    },
+    "adversarialProbes": {
+      "status": "fail",
+      "expiredNativeActionReplay": {
+        "fixedModelStatus": "MODEL_CLEAR",
+        "expiredActions": [
+          "replay-1"
+        ],
+        "consumedActions": [
+          "replay-1"
+        ],
+        "serverAccepted": [
+          "replay-1"
+        ],
+        "violations": []
+      },
+      "liveKitStageSkip": {
+        "historicalVariant": "stage-skip",
+        "finalStage": "ui",
+        "pass": true,
+        "rooms": 0,
+        "tracks": 0,
+        "violations": []
+      },
+      "invalidReplayPath": {
+        "exitCode": 1,
+        "stdoutBytes": 0,
+        "machineReadableEnvelopeEmitted": false,
+        "stderrContainsUncaughtFastCheckStack": true
+      },
+      "vacuousTransitionCoverage": {
+        "configuredRuns": 200,
+        "maxCommands": 24,
+        "liveKitReachedStages": [
+          "none",
+          "token",
+          "claims"
+        ],
+        "liveKitReachedRoomOrLater": false,
+        "chatReachedRemoteMedia": false,
+        "notificationReachedServerAccepted": false,
+        "noOpLiveKitApplyReportedModelClear": true
+      }
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_run",
+      "implementationHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+      "eligibleAsProof": false,
+      "resumptionAction": "Coordinator runs one complete frozen-head Phase 1 CI execution only after all four exact-head Level C review lanes freeze and the implementation fixes are reviewed."
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    },
+    "gitDiffCheck": "pass"
+  },
+  "testResultHash": "bec007af13e540978acf0b637fffd6500907dccc8229cd4e16107f1270818596",
+  "reviewLevel": "C",
+  "reviewHead": "179bb58089e5ae6500c23a63f899c0edf0906f86",
+  "reviewTimestamp": "2026-07-30T18:56:01Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "separate-clean-worktree",
+    "property-concurrency-replay"
+  ],
+  "findings": [
+    {
+      "id": "PR64_EXPIRED_NATIVE_ACTION_REPLAY_ACCEPTED",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:445",
+        "_lib/assurance/state-models/models.mjs:482",
+        "tests/assurance/property/state-models.test.mjs:6"
+      ],
+      "minimizedCommands": [
+        {
+          "type": "native_answer",
+          "id": "replay-1",
+          "expiresAt": 1
+        },
+        {
+          "type": "tick",
+          "amount": 1
+        },
+        {
+          "type": "native_answer",
+          "id": "replay-1",
+          "expiresAt": 5
+        },
+        {
+          "type": "auth_ready"
+        },
+        {
+          "type": "react_ready"
+        },
+        {
+          "type": "consume_action",
+          "id": "replay-1"
+        },
+        {
+          "type": "server_accept",
+          "id": "replay-1"
+        }
+      ],
+      "evidence": "The fixed notification-native-action model ends with replay-1 in expiredActions, consumedActions, and serverAccepted while violations is empty. native_answer checks pending and consumed IDs but never denies an ID already recorded as expired, and the invariant set never rejects expired/consumed overlap.",
+      "impact": "The T2 gate can return MODEL_CLEAR for an expired native Answer replay that reaches server acceptance, violating expiration, consume-once, and replay-denial requirements.",
+      "requiredResolution": "Reject native actions already expired or otherwise terminal, add an invariant forbidding expired/consumed/server-accepted overlap, add this exact fixed-model property regression, and retain seed/path/minimized replay evidence."
+    },
+    {
+      "id": "PR64_LIVEKIT_STAGE_SKIP_FALSE_PASS",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/models.mjs:500",
+        "_lib/assurance/state-models/models.mjs:525",
+        "_lib/assurance/state-models/models.mjs:534",
+        "_lib/assurance/state-models/models.mjs:610",
+        "tests/assurance/models/escaped-defects.test.mjs:5"
+      ],
+      "minimizedCommands": [
+        {
+          "type": "advance",
+          "stage": "ui",
+          "platform": "android",
+          "fixture": false
+        },
+        {
+          "type": "declare_pass"
+        }
+      ],
+      "evidence": "Under the declared stage-skip historical variant, the model advances directly from none to ui, declares pass, retains rooms=0 and tracks=0, and reports no violation. The LIVEKIT_STAGE_SKIPPED comparison tests an index being both at least first_media and less than subscription, an impossible range; stage-skip is omitted from escapedDefectFixtures.",
+      "impact": "The model accepts a missing token/claims/room/publication/participant/subscription/first-media chain as a LiveKit pass, defeating the required no-missing-stage rule and historical-fix proof.",
+      "requiredResolution": "Track reached stages explicitly, require every ordered predecessor before pass, repair the skipped-stage invariant, and add a stage-skip escaped-defect fixture whose historical variant fails while the fixed sequence passes."
+    },
+    {
+      "id": "PR64_INVALID_REPLAY_PATH_BREAKS_JSON_CONTRACT",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/properties.mjs:15",
+        "scripts/assurance/models/run.mjs:12",
+        "scripts/assurance/models/run.mjs:30"
+      ],
+      "minimizedCommand": "node scripts/assurance/models/run.mjs --suite=property --domain=chat-call --seed=173501 --path=not-a-valid-fast-check-path --json",
+      "evidence": "The command exits 1 with zero stdout bytes and an uncaught fast-check stack on stderr. The CLI validates only path-without-domain, then calls fc.check without validating or converting replay errors into the assurance JSON envelope.",
+      "impact": "Malformed or stale replay evidence cannot be consumed deterministically by CI and can echo caller-supplied path text outside the secret-redacting emitter, violating the machine-readable, concise, secret-safe fail-closed script contract.",
+      "requiredResolution": "Validate the replay path or catch fast-check replay errors, emit ASSURANCE_MODEL_REPLAY_PATH_INVALID through the redacting JSON emitter, add hostile path tests, and preserve nonzero exit behavior."
+    },
+    {
+      "id": "PR64_PROPERTY_MODEL_CLEAR_IS_VACUOUS_WITHOUT_TRANSITION_COVERAGE",
+      "severity": "P1",
+      "status": "open",
+      "locations": [
+        "_lib/assurance/state-models/properties.mjs:12",
+        "_lib/assurance/state-models/properties.mjs:15",
+        "tests/assurance/property/state-models.test.mjs:6"
+      ],
+      "evidence": "At the committed seeds with 200 runs and 24 maximum commands, LiveKit reached only none/token/claims, Chat never reached remoteMedia=true, and notification actions never reached serverAccepted. Replacing the LiveKit apply function with a no-op still returned MODEL_CLEAR for all 200 cases because the runner checks only for observed safety violations and has no required transition/state coverage.",
+      "impact": "A model that ignores every command, or never reaches its risky success states, can satisfy the mandatory T2 gate. The reported propertyCases count therefore does not prove the required state transitions or invariants at those transitions.",
+      "requiredResolution": "Use state-aware commands with explicit preconditions or an equivalent deterministic transition generator, record required transition/state coverage per domain, fail when required states and invariant witnesses are not reached, and add a regression proving a no-op or transition-suppressing model is BLOCKED_INTERNAL."
+    },
+    {
+      "id": "PR64_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "This isolated automated review lane ran focused tests only and did not start or poll full CI.",
+      "requiredResolution": "After all Level C lanes freeze and implementation fixes receive exact-head reviews, the coordinator must run one complete Phase 1 CI execution at the resulting frozen implementation head."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 4,
+    "p2Open": 1,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPending": true,
+    "reviewDisposition": "changes-required-do-not-merge",
+    "humanApproval": false
+  }
+}
