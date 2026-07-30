@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr64-successor-architecture-scope-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-domain-coverage-proof-strength-scope",
+  "humanApproval": false,
+  "implementationPrNumber": 64,
+  "implementationBranch": "codex/first-pass-assurance-models",
+  "implementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+  "implementationTree": "1666e884bb7786b62979df0b784f8c1722a63732",
+  "baseHead": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+  "baseTree": "9415d5311f9db1e970a59fac1943e7d119652ed7",
+  "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 2,
+    "implementationOnlyCommits": 10
+  },
+  "changedFileHash": "24006b0bed5548df4d53108b77c9e7ca096a4d7c1fde188c74cd095e6c1d5479",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames merge-base..implementation)",
+  "currentBaseTwoDotHash": "1032ebfa035f47069c2e16f7bab68eb3b75d2f0f20c540055b0c49ccc0886423",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "ca5ea7d32a3c7f45f65308672c35317c73009ceaaa2421135fe78d12c31dc7f7",
+  "modelSourceSetHash": "fad0ae83f88f553038e272bfb15541c694c49e65abe460165e91302abc680b92",
+  "focusedTestSetHash": "8b9758eca19df8a373d90ba4ce3ebbb5b7dc0d8b3e053e55b5dd6ab8fcec5dc0",
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+      "implementationTree": "1666e884bb7786b62979df0b784f8c1722a63732",
+      "currentOriginMain": "10145b029708fd99ae9036b4c52eb018d4f36c3f",
+      "mergeBase": "268b15f3f23c444e083c1587f83f1a7ec9a9c802",
+      "reviewWorktreeCleanBeforeEvidence": true,
+      "reviewBranchParentIsExactImplementationHead": true
+    },
+    "realPrScope": {
+      "status": "pass",
+      "comparison": "merge-base..implementation",
+      "changedFiles": 11,
+      "additions": 1394,
+      "deletions": 1,
+      "netChangedLines": 1393,
+      "waivedFileMaximum": 12,
+      "waivedNetLineMaximum": 1600,
+      "domains": [
+        "CI-test-infrastructure"
+      ],
+      "highRiskDomains": [],
+      "findings": []
+    },
+    "currentBaseScopeCommand": {
+      "status": "fail_closed_false_positive",
+      "command": "node scripts/assurance/pr-scope.mjs --base=origin/main --objective='Correct review-mandated PR C model integrity gaps' --objective-domains=CI-test-infrastructure --waiver=config/assurance/pr-c-model-integrity-scope-waiver-v1.json",
+      "reportedFiles": 14,
+      "reportedNetChangedLines": 1383,
+      "finding": "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+      "mainOnlyPathsCounted": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "explanation": "The two-dot command counts the current-main-only head-binding synchronization in addition to the real PR delta. The merge-base comparison proves the implementation itself remains within the waiver."
+    },
+    "scopeWaiver": {
+      "status": "pass_pending_all_successor_reviews",
+      "contractId": "pr-c-model-integrity-scope-waiver-v1",
+      "objectiveCoherent": true,
+      "exactReasonPresent": true,
+      "reviewer": "successor-four-lane-exact-head-review-set",
+      "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
+      "mandatingReviewEvidence": [
+        "PR #99",
+        "PR #100",
+        "PR #101",
+        "PR #102"
+      ],
+      "secondHighRiskDomain": false,
+      "timeboxHours": 4,
+      "fileMaximum": 12,
+      "netLineMaximum": 1600,
+      "prohibitedScopePresent": true
+    },
+    "architectureCoverage": {
+      "status": "pass",
+      "modelCount": 6,
+      "uniqueRegisteredFeatureCount": 6,
+      "allMappedFeaturesRequireT2": true,
+      "mappings": [
+        {
+          "modelId": "chat-call",
+          "featureId": "chilly-chat-call-lifecycle",
+          "status": "pass"
+        },
+        {
+          "modelId": "revenuecat",
+          "featureId": "revenuecat-premium",
+          "status": "pass"
+        },
+        {
+          "modelId": "ota-build",
+          "featureId": "eas-build-update-release",
+          "status": "pass"
+        },
+        {
+          "modelId": "notification-native-action",
+          "featureId": "pushkit-callkit",
+          "status": "pass"
+        },
+        {
+          "modelId": "livekit",
+          "featureId": "livekit-media-transport",
+          "status": "pass"
+        },
+        {
+          "modelId": "migrations",
+          "featureId": "supabase-migrations-rls",
+          "status": "pass"
+        }
+      ],
+      "notificationsFcm": {
+        "featureId": "notifications-fcm",
+        "status": "REGISTERED_UNPROVED",
+        "falseModelClearReceived": false,
+        "note": "Non-VoIP FCM remains a separate feature and is not misattributed the PushKit/native-action result."
+      }
+    },
+    "domainArchitecture": [
+      {
+        "domain": "chat-call",
+        "status": "pass",
+        "boundaries": [
+          "in-app acceptance authority",
+          "native acceptance authority",
+          "token/media order",
+          "terminal cleanup generation"
+        ]
+      },
+      {
+        "domain": "revenuecat",
+        "status": "pass",
+        "boundaries": [
+          "provider authority",
+          "ordered idempotent events",
+          "single-owner transfer",
+          "no payable balance"
+        ]
+      },
+      {
+        "domain": "ota-build",
+        "status": "pass_with_known_p2_transition_gap",
+        "boundaries": [
+          "platform/environment/runtime/channel",
+          "native digest/capabilities",
+          "embedded bundle",
+          "rollback"
+        ]
+      },
+      {
+        "domain": "notification-native-action",
+        "status": "pass",
+        "boundaries": [
+          "APNs versus PushKit delivery",
+          "CallKit report and completion",
+          "retained consume-once action",
+          "server authority"
+        ]
+      },
+      {
+        "domain": "livekit",
+        "status": "pass_with_known_p2_fixture_followups",
+        "boundaries": [
+          "ordered proof chain",
+          "first media and UI",
+          "platform isolation",
+          "fixture isolation",
+          "terminal cleanup"
+        ]
+      },
+      {
+        "domain": "migrations",
+        "status": "pass_with_known_p2_fixture_followups",
+        "boundaries": [
+          "remote/source identity",
+          "immutable deployed body",
+          "RLS/FORCE RLS/grants",
+          "forward-only correction",
+          "JSONB encoding"
+        ]
+      }
+    ],
+    "escapedDefectReuse": {
+      "status": "pass",
+      "totalFixtures": 22,
+      "canonicalFixtures": 17,
+      "supplementalFixtures": 5,
+      "catalogClassificationMismatches": 0,
+      "fixturesByDomain": {
+        "chat-call": 4,
+        "revenuecat": 2,
+        "ota-build": 3,
+        "notification-native-action": 5,
+        "livekit": 4,
+        "migrations": 4
+      },
+      "exactHeadFocusedEvidence": {
+        "testsPassed": 9,
+        "testsFailed": 0,
+        "propertyCases": 1200,
+        "transitionWitnesses": 8,
+        "concurrencySchedules": 20,
+        "deterministicRuns": 3,
+        "deterministicOutputHash": "2ca86d1032a75dfd346bc02694c5b0ddce808f7a9f465919fdddc9cbc03a5c57"
+      }
+    },
+    "proofStrength": {
+      "status": "pass",
+      "command": "node scripts/assurance/proof-strength.mjs --catalog",
+      "catalogCommandOk": true,
+      "modelClaim": "T2_MODEL",
+      "javascriptPresentedAsNativeProof": false,
+      "providerFixturePresentedAsProviderBehavior": false,
+      "apnsAcceptancePresentedAsPushKitDelivery": false,
+      "sharedPlatformEvidenceAccepted": false,
+      "physicalPushKitStatus": "BLOCKED_EXTERNAL",
+      "forbiddenClaims": [
+        "T3_INTEGRATION",
+        "T4_NATIVE_PROVIDER",
+        "T5_SIGNED_ARTIFACT",
+        "T6_INSTALLED_PHYSICAL",
+        "T7_PUBLIC_CANARY"
+      ]
+    },
+    "impactRouting": {
+      "status": "deferred_p2",
+      "command": "node scripts/assurance/impact.mjs --base=origin/main --head=HEAD",
+      "reportedOk": true,
+      "realChangedFiles": 11,
+      "reportedRequiredGates": [
+        "assurance-contracts",
+        "assurance-current-truth",
+        "assurance-final-summary",
+        "assurance-pr-scope",
+        "assurance-review-head",
+        "git-diff",
+        "links",
+        "supply-chain"
+      ],
+      "missingFutureAutomatedRoutes": [
+        "assurance-state-model",
+        "assurance-property",
+        "assurance-concurrency"
+      ],
+      "owner": "PR E",
+      "cLaneP1": false,
+      "reasonNotCP1": "Lane C runs and records the focused gates directly, emits the deferred finding in its machine report, and was explicitly prohibited from changing the PR E-owned impact map. The gap remains blocking for PR E completion before future automated enforcement can be claimed."
+    },
+    "testOnlyBoundary": {
+      "status": "pass",
+      "productRuntimeImportsOfStateModels": 0,
+      "productRuntimeImportsOfFastCheck": 0,
+      "productImplementationFilesInRealDelta": 0,
+      "migrationFilesInRealDelta": 0,
+      "nativeFilesInRealDelta": 0,
+      "providerFilesInRealDelta": 0,
+      "workflowFilesInRealDelta": 0,
+      "generatedNativePathsInRealDelta": 0
+    },
+    "securityReviewCrossLane": {
+      "status": "BLOCKED_INTERNAL",
+      "knownDependencyLaneP1": "PR64_PERSISTED_REPLAY_EVIDENCE_NOT_REDACTED",
+      "independentlyConfirmedArchitecture": "On a failed run with --replay-output, scripts/assurance/models/run.mjs writes the complete payload through stableJson without a contract allowlist/redaction boundary before persistence.",
+      "additionalArchitectureSecurityP0": 0,
+      "additionalArchitectureSecurityP1": 0,
+      "scopeAction": "Do not implement in this review branch; require a bounded implementation-head correction and refresh all successor reviews."
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_run",
+      "eligibleAsThisLaneProof": false,
+      "resumptionAction": "After the replay-redaction P1 is corrected and four exact-head successor reviews bind the new unchanged head, the coordinator runs one full Phase 1 CI execution."
+    },
+    "nonInterference": {
+      "providerContact": false,
+      "providerMutation": false,
+      "databaseContact": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeTestOrBuild": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "implementationSourceChangedByReview": false,
+      "packageOrLockfileChangedByReview": false,
+      "currentTruthChanged": false,
+      "impactPlannerChanged": false,
+      "generatedNativeDirectoryCommitted": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "2ca86d1032a75dfd346bc02694c5b0ddce808f7a9f465919fdddc9cbc03a5c57",
+  "reviewLevel": "C",
+  "reviewHead": "6fbb96f9502932bf4c0a83c32e71b0e621ca4187",
+  "reviewTimestamp": "2026-07-30T21:03:43Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "isolated-automated-review",
+    "successor-domain-coverage-proof-strength-scope"
+  ],
+  "findings": [
+    {
+      "id": "PR64_PERSISTED_REPLAY_EVIDENCE_NOT_REDACTED",
+      "severity": "P1",
+      "status": "open",
+      "source": "successor dependency-security review lane",
+      "locations": [
+        "scripts/assurance/models/run.mjs:17",
+        "scripts/assurance/models/run.mjs:62",
+        "scripts/assurance/models/run.mjs:80",
+        "scripts/assurance/models/run.mjs:84"
+      ],
+      "evidence": "The persistence branch writes stableJson(payload) directly. The payload includes request identity and complete property/failure evidence, but no redaction or persistence allowlist is applied before the file write.",
+      "impact": "Persisted replay evidence can violate the assurance contract's no-user/device/private-identifier boundary even though the file mode and no-clobber behavior are safe.",
+      "requiredResolution": "Create a bounded redacted persistence contract, retain replayability through approved hashes/IDs and minimized synthetic commands, reject or redact identifier-shaped/user-derived fields, add hostile persistence tests, and rerun all four exact-head reviews. Do not broaden into impact routing or product source."
+    },
+    {
+      "id": "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E",
+      "severity": "P2",
+      "status": "deferred",
+      "owner": "PR E",
+      "evidence": "The impact command omits model/property/concurrency routes for the real model delta, while the Lane C machine report explicitly records the gap as deferred and non-blocking for Lane C.",
+      "requiredResolution": "PR E adds exact changed-path and feature routing plus fail-closed required-job tests before automated enforcement is claimed."
+    },
+    {
+      "id": "PR64_CURRENT_MAIN_TWO_DOT_SCOPE_FALSE_POSITIVE",
+      "severity": "P2",
+      "status": "open",
+      "evidence": "The real merge-base delta passes at 11 files and 1,393 net lines, but pr-scope with base=origin/main counts three current-main-only synchronization files and fails at 14 files.",
+      "requiredResolution": "At the next implementation-head correction, merge current main normally or make the future PR E planner distinguish merge-base PR scope from base-only synchronization state without weakening fail-closed scope enforcement."
+    },
+    {
+      "id": "PR64_MODEL_REGISTRY_COVERAGE_NOT_CONTRACT_VALIDATED",
+      "severity": "P2",
+      "status": "open",
+      "evidence": "Manual review confirms all six model mappings are unique, registered, and T2-required, but the contract validator does not derive and validate modelDefinitions against the feature registry.",
+      "requiredResolution": "PR E adds a deterministic model-to-feature coverage contract so future attribution drift fails automatically."
+    },
+    {
+      "id": "PR64_SUCCESSOR_FROZEN_HEAD_PHASE1_CI_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "evidence": "This isolated architecture/scope lane was explicitly prohibited from starting full CI.",
+      "requiredResolution": "After P1 remediation and refreshed exact-head reviews, the coordinator runs the single full Phase 1 CI execution."
+    }
+  ],
+  "knownCrossLaneP2NotRecounted": [
+    "PR64_OTA_NEW_SOURCE_UPDATE_TRANSITION_NOT_REPRESENTED",
+    "PR64_REMAINING_INVARIANT_BRANCHES_LACK_HISTORICAL_FIXTURES"
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "newArchitectureSecurityP1Open": 0,
+    "p2Open": 4,
+    "implementationFilesOnReviewBranch": 0,
+    "architectureCoverageStatus": "pass",
+    "proofTierBoundaryStatus": "pass",
+    "escapedDefectReuseStatus": "pass",
+    "realScopeStatus": "pass",
+    "securityStatus": "BLOCKED_INTERNAL",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "reviewDisposition": "changes-required-do-not-merge",
+    "humanApproval": false
+  }
+}
