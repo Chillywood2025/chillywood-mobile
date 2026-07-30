@@ -69,6 +69,40 @@ export function requiredKeys(value, keys, label) {
   return keys.flatMap((key) => Object.hasOwn(value, key) ? [] : [`${label} missing ${key}`]);
 }
 
+export function verifyCurrentTruthSynchronization({
+  recordedMain,
+  remoteMain,
+  parents,
+  changedPaths,
+  requiredChangedPaths,
+  allowedChangedPaths,
+  bootstrapMerge
+}) {
+  if (recordedMain === remoteMain) return { ok: true, mode: "exact-main" };
+  const required = new Set(requiredChangedPaths);
+  const allowed = new Set(allowedChangedPaths);
+  const changed = new Set(changedPaths);
+  const parentShapeMatches = parents.length === 2 && parents[0] === recordedMain;
+  const requiredPathsPresent = [...required].every((file) => changed.has(file));
+  const changedPathsAllowed = [...changed].every((file) => allowed.has(file));
+  const normalSynchronization = parentShapeMatches && requiredPathsPresent && changedPathsAllowed;
+  const bootstrapSynchronization = Boolean(
+    bootstrapMerge
+    && remoteMain === bootstrapMerge.mergeSha
+    && recordedMain === bootstrapMerge.firstParent
+    && parentShapeMatches
+    && JSON.stringify([...changed].sort()) === JSON.stringify([...bootstrapMerge.changedPaths].sort())
+  );
+  return {
+    ok: normalSynchronization || bootstrapSynchronization,
+    mode: bootstrapSynchronization ? "bootstrap-synchronization-merge" : "synchronization-merge",
+    parentShapeMatches,
+    requiredPathsPresent,
+    changedPathsAllowed,
+    bootstrapSynchronization
+  };
+}
+
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
 export const featureRequired = ["featureId", "currentState", "ownerSystems", "productOwner", "routes", "components", "edgeFunctions", "tablesRpcs", "nativeModulesPlugins", "providers", "platformScope", "environments", "riskLevel", "requirements", "nonGoals", "states", "transitions", "invariants", "knownDefectTags", "threatFailureModes", "proofTierApplicability", "commands", "artifactRequirements", "installedRequirements", "physicalGoldenCases", "rollback", "emergencyStop", "evidenceRetention", "reviewRequirements", "unresolvedBlockers"];
 
