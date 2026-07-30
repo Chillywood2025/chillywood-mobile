@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "first-pass-assurance-foundation-review-v1",
+  "implementationPrNumber": 54,
+  "implementationBranch": "codex/first-pass-assurance-foundation",
+  "implementationHead": "3e528d5acfcf2ede1ee74591f8b343cf86d9bced",
+  "implementationTree": "f5f56142cfadebe350e058cab79c6e6e0b799809",
+  "baseHead": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
+  "changedFileHash": "d435597445aa615c7e7bf09d2629d24d8f6c182e658a3b9ccf1971077a41c22c",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a59a273d7fd3c2f5151cf7589d9487574346189b7b890cdda1935673f6a37c76",
+  "testResultHash": "6df1aa26c3de01d35dc4d08807a0c94f8bdfd138e31f178fef253a77fe418806",
+  "reviewHead": "3e528d5acfcf2ede1ee74591f8b343cf86d9bced",
+  "reviewTimestamp": "2026-07-30T17:13:37Z",
+  "reviewerLanes": [
+    "separate-clean-worktree",
+    "architecture",
+    "product-UX",
+    "privacy-scope"
+  ],
+  "testResults": {
+    "phase1Ci": {
+      "runId": 30564904535,
+      "implementationHead": "3e528d5acfcf2ede1ee74591f8b343cf86d9bced",
+      "status": "in_progress"
+    },
+    "contracts": {"status": "pass", "contracts": 13, "features": 20, "escapedDefects": 25},
+    "determinism": {"contracts": "3/3", "architecturePlan": "3/3", "dogfood": "3/3", "currentTruth": "3/3"},
+    "dogfood": {"status": "pass", "unwaivedFindings": 31, "requiredDetectorGaps": 0},
+    "negativeFixtures": {"proofSubstitutionsRejected": "2/2", "staleCurrentTruthRejected": true, "missingEvidenceRejected": true},
+    "scope": {"status": "pass", "files": 32, "fileBudget": 36, "netChangedLines": -3492, "lineBudget": 6000},
+    "localContractSequences": {"allPlatform": "pass", "ios": "pass", "cognitive": "pass"},
+    "lint": {"status": "pass", "errors": 0, "inheritedWarnings": 85},
+    "typescript": "pass",
+    "gitDiffCheck": "pass",
+    "secretAndDeviceIdentifierScan": "pass",
+    "generatedNativeDirectoryCheck": "pass",
+    "dependencies": {"newDependencies": 0, "lockfilesChanged": false, "inheritedModerateAdvisories": 24}
+  },
+  "findings": [
+    {
+      "id": "PR-A-REVIEW-001",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "A scope waiver could suppress an unrelated mixed-high-risk-domain finding.",
+      "resolution": "Mixed high-risk scope now fails independently of waivers and the objective must enumerate affected domains."
+    },
+    {
+      "id": "PR-A-REVIEW-002",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Review manifest mode trusted supplied hashes and branch shape without recomputing them.",
+      "resolution": "The review guard now recomputes changed-file, migration, config, and test hashes and checks implementation ancestry and review-only paths."
+    },
+    {
+      "id": "PR-A-REVIEW-003",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "A report could mark a non-requirement tier clear without binding evidence.",
+      "resolution": "Non-T0 passing tiers now require evidenceRefs and all status values are validated."
+    },
+    {
+      "id": "PR-A-REVIEW-004",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Generated hot-path documents dropped active closure and operating-policy facts required by existing Phase 1 guards.",
+      "resolution": "Operational closures and autonomous approval policy are structured fields in current truth and are rendered deterministically."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "providerMutation": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "mergeApproval": "pending_frozen_head_ci"
+  }
+}
