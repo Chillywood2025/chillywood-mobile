@@ -4,13 +4,14 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
   "objective": "Correct review-mandated integrity gaps in the existing PR C state, property, concurrency, escaped-defect, and replay contracts.",
   "exactReason": "Review-mandated single-domain integrity correction beyond 1,200 net lines; the correction stays within Lane C assurance source and focused tests and does not add a second high-risk domain.",
-  "reviewer": "fresh-four-lane-exact-head-review-set-pr-99-through-pr-102",
-  "reviewEvidence": [
+  "reviewer": "successor-four-lane-exact-head-review-set",
+  "mandatingReviewEvidence": [
     "PR #99",
     "PR #100",
     "PR #101",
     "PR #102"
   ],
+  "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
   "supportingDomains": [
     "CI-test-infrastructure"
   ],
