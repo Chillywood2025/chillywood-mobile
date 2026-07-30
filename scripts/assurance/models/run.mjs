@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { args, emit, redact, stableJson } from "../lib.mjs";
 import { runDeterministicInterleavings } from "../../../_lib/assurance/state-models/concurrency.mjs";
-import { higherTierBlockers } from "../../../_lib/assurance/state-models/models.mjs";
+import { higherTierBlockers, modelDefinitions } from "../../../_lib/assurance/state-models/models.mjs";
 import { runEscapedDefectChecks, runPropertyModels } from "../../../_lib/assurance/state-models/properties.mjs";
 
 const options = args();
@@ -16,11 +16,12 @@ const safeIdentity = (value) => {
 };
 const requestIdentity = {
   suite: safeIdentity(suite),
-  domain: safeIdentity(options.domain),
+  domain: typeof options.domain === "string" && Object.hasOwn(modelDefinitions, options.domain) ? options.domain : null,
   seed: safeIdentity(options.seed),
   path: safeIdentity(options.path)
 };
 const invalidIdentityOption = ["domain", "seed", "path"].find((key) => options[key] !== undefined && (typeof options[key] !== "string" || options[key].length === 0));
+const unknownDomainOption = typeof options.domain === "string" && options.domain.length > 0 && !Object.hasOwn(modelDefinitions, options.domain);
 const invalidNumber = ["numRuns", "maxCommands", "seed"].find((key) => options[key] !== undefined && (!Number.isInteger(Number(options[key])) || Number(options[key]) <= 0));
 const replayFinding = options.path && !options.domain
   ? ["ASSURANCE_MODEL_REPLAY_DOMAIN_REQUIRED", options.path]
@@ -37,16 +38,18 @@ const seedFinding = options.seed && !options.domain
 const domainFinding = options.domain && !propertySuites.has(suite)
   ? ["ASSURANCE_MODEL_DOMAIN_SUITE_UNSUPPORTED", suite]
   : null;
-if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline") || invalidIdentityOption || invalidNumber || replayFinding || seedFinding || domainFinding) {
+if (!allowedSuites.has(suite) || (options.providerMode && options.providerMode !== "offline") || invalidIdentityOption || unknownDomainOption || invalidNumber || replayFinding || seedFinding || domainFinding) {
   const finding = !allowedSuites.has(suite)
     ? ["ASSURANCE_MODEL_SUITE_UNKNOWN", suite]
     : options.providerMode && options.providerMode !== "offline"
       ? ["ASSURANCE_MODEL_PROVIDER_MODE_FORBIDDEN", options.providerMode]
       : invalidIdentityOption
         ? ["ASSURANCE_MODEL_OPTION_VALUE_INVALID", invalidIdentityOption]
-        : invalidNumber
-          ? ["ASSURANCE_MODEL_NUMERIC_OPTION_INVALID", invalidNumber]
-          : replayFinding ?? seedFinding ?? domainFinding;
+        : unknownDomainOption
+          ? ["ASSURANCE_MODEL_DOMAIN_UNKNOWN", "domain"]
+          : invalidNumber
+            ? ["ASSURANCE_MODEL_NUMERIC_OPTION_INVALID", invalidNumber]
+            : replayFinding ?? seedFinding ?? domainFinding;
   emit("assurance:state-model", false, {
     status: "BLOCKED_INTERNAL",
     requestIdentity,
