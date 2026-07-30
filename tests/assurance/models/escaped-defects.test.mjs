@@ -55,15 +55,37 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
   assert.equal(runCommands("revenuecat", [event("shared", 100, "manual"), event("shared", 1, "provider")]).state.productionAccess, true);
   const equalEvent = (eventId, eventType) => ({ ...event(eventId, 5, "provider"), eventType });
   assert.deepEqual(["purchase,refund", "refund,purchase"].map((order) => runCommands("revenuecat", order.split(",").map((type) => equalEvent(type, type))).state.entitlement), ["refunded", "refunded"]);
-  const build = { type: "install_build", platform: "android", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: [] };
-  const update = { ...build, type: "activate_update", sourceCommit: "source-b", requiredCapabilities: [] };
-  assert.equal(runCommands("ota-build", [build, update]).state.currentUpdate, null);
-  assert.equal(runCommands("ota-build", [build, { ...update, sourceCommit: "source-a" }]).state.currentUpdate.sourceCommit, "source-a");
+  const build = { type: "install_build", buildId: "build-a", packageId: "com.chillywood.mobile", signedArtifactId: "artifact-a", platform: "android", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-a", embeddedSafe: true, providedCapabilities: ["camera"] };
+  const update = { type: "activate_update", targetBuildId: "build-a", packageId: "com.chillywood.mobile", updateId: "update-b", group: "group-b", platform: "android", environment: "internal", runtime: "runtime-1", channel: "internal", nativeDigest: "native-a", sourceCommit: "source-b", requiredCapabilities: ["camera"] };
+  assert.equal(runCommands("ota-build", [build, update]).state.currentUpdate.sourceCommit, "source-b");
+  for (const candidate of [
+    { ...update, runtime: "runtime-2" },
+    { ...update, platform: "ios" },
+    { ...update, environment: "production" },
+    { ...update, channel: "production" },
+    { ...update, nativeDigest: "native-b" },
+    { ...update, requiredCapabilities: ["callkit"] },
+    { ...update, targetBuildId: "build-b" },
+    { ...update, packageId: "com.chillywood.other" },
+    { ...update, targetBuildId: "" },
+    { ...update, packageId: "" },
+    { ...update, updateId: "" },
+    { ...update, group: "" },
+    { ...update, sourceCommit: "" }
+  ]) {
+    const rejected = runCommands("ota-build", [build, candidate]).state;
+    assert.deepEqual([rejected.currentUpdate, rejected.activationRejected], [null, 1]);
+  }
+  assert.equal(runCommands("ota-build", [{ ...build, signedArtifactId: "" }]).state.build, null);
+  const rollbackTarget = { ...update, type: "set_rollback", updateId: "update-rollback", group: "group-rollback", sourceCommit: "source-rollback" };
+  const invalidRollback = runCommands("ota-build", [build, rollbackTarget, { type: "rollback", rollbackId: "other-update" }]).state;
+  assert.deepEqual([invalidRollback.currentUpdate, invalidRollback.rollbackRejected], [null, 1]);
+  assert.equal(runCommands("ota-build", [build, rollbackTarget, { type: "rollback", rollbackId: "update-rollback" }]).state.currentUpdate.updateId, "update-rollback");
   assert.deepEqual(runCommands("migrations", [{ type: "forward_correction", version: "3", name: "successor", hash: "hash-3" }, { type: "forward_correction", version: "3", name: "mutated", hash: "hash-4" }]).state.forwardSuccessors, [{ version: "3", name: "successor", hash: "hash-3" }]);
   assert.equal(runCommands("livekit", [{ type: "advance", stage: "ui", platform: "ios", fixture: false }, { type: "declare_pass" }]).state.pass, false);
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-replay-"));
   const output = path.join(directory, "replay.json");
-  fs.writeFileSync(output, "preserve");
+  fs.writeFileSync(output, "preserve", { mode: 0o600 });
   const malformed = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=chat-call", "--path=bad:path"], { encoding: "utf8" });
   const emptyReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=chat-call", "--path=999:999"], { encoding: "utf8" });
   const concurrencyReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency", "--domain=chat-call", "--path=0"], { encoding: "utf8" });
@@ -78,11 +100,19 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
     ["path", ["--suite=property", "--domain=chat-call", "--path="]],
     ["path", ["--suite=property", "--domain=chat-call", "--path"]]
   ].map(([key, arguments_]) => [key, spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", ...arguments_], { encoding: "utf8" })]);
+  const unknownDomains = [
+    ["00000000", "1111", "2222", "3333", "444444444444"].join("-"),
+    ["device", "synthetic", "serial", "0001"].join("-"),
+    ["synthetic", "account"].join(".") + ["@", "example", ".", "invalid"].join("")
+  ].map((domain, index) => {
+    const replayOutput = path.join(directory, `unknown-${index}.json`);
+    return { domain, replayOutput, result: spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", `--domain=${domain}`, `--replay-output=${replayOutput}`], { encoding: "utf8" }) };
+  });
   const deferredRouting = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--suite=concurrency"], { encoding: "utf8" });
-  const clobber = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=missing", `--replay-output=${output}`], { encoding: "utf8" });
+  const clobber = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=chat-call", "--path=999:999", `--replay-output=${output}`], { encoding: "utf8" });
   const syntheticSecret = ["g", "h", "p", "_"].join("") + ["synthetic", "review", "marker", "0001"].join("");
-  const privateOutput = path.join(directory, "redacted-replay.json");
-  const redactedReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", `--domain=${syntheticSecret}`, `--replay-output=${privateOutput}`], { encoding: "utf8" });
+  const privateOutput = path.join(directory, syntheticSecret, "redacted-replay.json");
+  const redactedReplay = spawnSync(process.execPath, ["scripts/assurance/models/run.mjs", "--domain=chat-call", "--path=999:999", `--replay-output=${privateOutput}`], { encoding: "utf8" });
   assert.deepEqual([malformed.status, JSON.parse(malformed.stdout).findings[0].id], [1, "ASSURANCE_MODEL_REPLAY_PATH_INVALID"]);
   assert.equal(JSON.parse(malformed.stdout).requestIdentity.path, "bad:path");
   assert.deepEqual([emptyReplay.status, JSON.parse(emptyReplay.stdout).property.status], [1, "BLOCKED_INTERNAL"]);
@@ -95,19 +125,25 @@ test("hostile review cases cannot create vacuous model clearance or clobber repl
     const parsed = JSON.parse(result.stdout);
     assert.deepEqual([result.status, parsed.findings[0].id, parsed.findings[0].detail], [1, "ASSURANCE_MODEL_OPTION_VALUE_INVALID", key]);
   }
+  for (const { domain, replayOutput, result } of unknownDomains) {
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual([result.status, parsed.requestIdentity.domain, parsed.findings[0].id, parsed.findings[0].detail], [1, null, "ASSURANCE_MODEL_DOMAIN_UNKNOWN", "domain"]);
+    assert.equal(result.stdout.includes(domain), false);
+    assert.equal(result.stderr.includes(domain), false);
+    assert.equal(fs.existsSync(replayOutput), false);
+  }
   assert.deepEqual([deferredRouting.status, JSON.parse(deferredRouting.stdout).deferredFindings[0].id], [0, "ASSURANCE_MODEL_JOB_ROUTING_DEFERRED_PR_E"]);
   assert.deepEqual([clobber.status, JSON.parse(clobber.stdout).replayPersistence.finding, fs.readFileSync(output, "utf8")], [1, "ASSURANCE_MODEL_REPLAY_OUTPUT_EXISTS", "preserve"]);
+  assert.equal(fs.statSync(output).mode & 0o777, 0o600);
   const privateStdout = redactedReplay.stdout;
   const privateReplay = fs.readFileSync(privateOutput, "utf8");
   assert.equal(redactedReplay.status, 1);
   assert.equal(privateStdout.includes(syntheticSecret), false);
   assert.equal(privateReplay.includes(syntheticSecret), false);
   assert.equal(privateStdout.includes("[REDACTED]"), true);
-  assert.equal(privateReplay.includes("[REDACTED]"), true);
-  assert.equal(JSON.parse(privateStdout).requestIdentity.domain, "[REDACTED]");
-  assert.equal(JSON.parse(privateReplay).requestIdentity.domain, "[REDACTED]");
-  assert.equal(JSON.parse(privateStdout).property.results[0].finding, "UNKNOWN_MODEL_DOMAIN:[REDACTED]");
-  assert.equal(JSON.parse(privateReplay).property.results[0].finding, "UNKNOWN_MODEL_DOMAIN:[REDACTED]");
+  assert.equal(JSON.parse(privateStdout).requestIdentity.domain, "chat-call");
+  assert.equal(JSON.parse(privateReplay).requestIdentity.domain, "chat-call");
+  assert.equal(JSON.parse(privateReplay).property.status, "BLOCKED_INTERNAL");
   assert.equal(fs.statSync(privateOutput).mode & 0o777, 0o600);
   fs.rmSync(directory, { recursive: true });
 });
