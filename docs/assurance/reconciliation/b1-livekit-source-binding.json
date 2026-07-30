@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "recordId": "b1-livekit-source-binding-reconciliation",
+  "lane": "B1",
+  "branch": "codex/assurance-reconcile-livekit-source-binding",
+  "objective": "Represent the already-deployed LiveKit platform source-identity binding exactly in Git without applying it again.",
+  "riskLevel": "C",
+  "classification": "REMOTE_AND_SOURCE_MATCH",
+  "remoteReadback": {
+    "mode": "read-only",
+    "evidenceSource": "coordinator-supabase-migration-ledger-readback-2026-07-30",
+    "remoteMigrationHead": "20260730161737",
+    "stateMutation": false
+  },
+  "migrations": [
+    {
+      "version": "20260730142519",
+      "name": "cognitive_livekit_final_chat_source_identity_binding",
+      "statementCount": 1,
+      "hash": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "normalizedHash": "71cabbdf9f262ebefddd6f160094cb8677b6bdf51c0dea35adea99c68e1505f4"
+    }
+  ],
+  "source": {
+    "path": "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
+    "frozenStoppedPr": 52,
+    "frozenStoppedHead": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+    "fileSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+    "repositoryNormalizedSha256": "77c5721e859846432a3f5b6d7c5fb7f79550ed37cd560c2c50936855d6f283f7",
+    "bodyPreservedExactly": true,
+    "versionPreservedExactly": true,
+    "namePreservedExactly": true
+  },
+  "scope": {
+    "domains": [
+      "LiveKit",
+      "database/RLS"
+    ],
+    "included": [
+      "deployed migration source parity",
+      "focused binding pgTAP",
+      "existing authorization source guard",
+      "Git-only reconciliation documentation"
+    ],
+    "excluded": [
+      "Cognitive LiveKit activation",
+      "RevenueCat reconciliation",
+      "room-host participant block check",
+      "package or CI changes",
+      "build or OTA",
+      "provider or database mutation"
+    ]
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "proofLimits": {
+    "formalLiveKitSentinelRuns": 0,
+    "formalLiveKitFindings": 0,
+    "installedProofClaimed": false,
+    "physicalProofClaimed": false,
+    "publicCanaryProofClaimed": false,
+    "sourceSubstitutionAccepted": false
+  },
+  "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
+  "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
+  "unresolvedBlockers": [
+    "Focused pgTAP remains pending the coordinator database-test lock.",
+    "The feature still has zero formal installed LiveKit sentinel runs."
+  ],
+  "nonInterference": {
+    "migrationApplied": false,
+    "providerStateChanged": false,
+    "switchChanged": false,
+    "scheduleChanged": false,
+    "buildCreated": false,
+    "otaPublished": false,
+    "moneyOrEntitlementChanged": false
+  }
+}
