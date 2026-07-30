@@ -5,7 +5,7 @@
     "id": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9_.:-]*$"},
     "lowerId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]*$"},
     "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "gitBranch": {"type": "string", "pattern": "^(?!-)(?!/)(?!@$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:\\.\\.|//|@\\{|[ ~^:?*\\[\\\\]))(?!.*[/.]$).+$"},
+    "gitBranch": {"type": "string", "pattern": "^(?!-)(?!/)(?!@$)(?!HEAD$)(?!.*(?:^|/)\\.)(?!.*(?:^|/)[^/]*\\.lock(?:/|$))(?!.*(?:\\.\\.|//|@\\{|[\\u0000-\\u0020~^:?*\\[\\]\\\\\\u007f]))(?!.*[/.]$).+$"},
     "stringArray": {"type": "array", "items": {"type": "string"}},
     "status": {"enum": ["REQUIREMENTS_CLEAR", "ARCHITECTURE_CLEAR", "SOURCE_CLEAR", "MODEL_CLEAR", "INTEGRATION_CLEAR", "NATIVE_CLEAR", "PROVIDER_CLEAR", "ARTIFACT_CLEAR", "INSTALLED_CLEAR", "PHYSICAL_CLEAR", "RELEASE_CLEAR", "BLOCKED_INTERNAL", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
     "baseContract": {
@@ -68,7 +68,7 @@
         },
         "implementationHeadBinding": {
           "type": "object",
-          "required": ["required", "networkAccess", "refNamespace", "missingRef", "malformedSha", "duplicatePrOrBranch", "recordedObservedMismatch", "listedCurrentBranchCheckoutMustMatch", "detachedCi", "unlistedBranchPolicy"],
+          "required": ["required", "networkAccess", "refNamespace", "missingRef", "malformedSha", "duplicatePrOrBranch", "recordedObservedMismatch", "listedCurrentBranchCheckoutMustMatch", "namedMainCheckoutMustEqualOriginMain", "providerSnapshotImplementationFields", "providerSnapshotInventoryMismatch", "detachedCi", "unlistedBranchPolicy"],
           "properties": {
             "required": {"const": true},
             "networkAccess": {"const": "forbidden"},
@@ -78,6 +78,9 @@
             "duplicatePrOrBranch": {"const": "BLOCKED_INTERNAL"},
             "recordedObservedMismatch": {"const": "BLOCKED_INTERNAL"},
             "listedCurrentBranchCheckoutMustMatch": {"const": true},
+            "namedMainCheckoutMustEqualOriginMain": {"const": true},
+            "providerSnapshotImplementationFields": {"type": "array", "items": {"enum": ["number", "branch", "head", "state"]}, "minItems": 4, "maxItems": 4, "uniqueItems": true},
+            "providerSnapshotInventoryMismatch": {"const": "BLOCKED_INTERNAL"},
             "detachedCi": {"const": "explicit-branch-and-head-required-unless-head-is-origin-main"},
             "unlistedBranchPolicy": {"const": "deferred-to-pr-e"}
           }
@@ -97,7 +100,7 @@
             "type": "object",
             "required": ["number", "branch", "head", "state", "disposition"],
             "properties": {
-              "number": {"type": "number"},
+              "number": {"type": "integer", "minimum": 1},
               "branch": {"$ref": "#/$defs/gitBranch"},
               "head": {"$ref": "#/$defs/gitSha"},
               "state": {"type": "string"},

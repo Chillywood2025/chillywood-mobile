@@ -13,6 +13,7 @@ import {
   renderCurrentState,
   renderNextTask,
   verifyCurrentTruthHeadBindings,
+  verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization
 } from "./lib.mjs";
 
@@ -83,10 +84,11 @@ if (mode) {
     allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
     bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge
   });
-  const mainMatches = synchronization.ok && (branch === "main" || mergeBase === remoteMain);
+  const mainMatches = synchronization.ok && (branch === "main" ? head === remoteMain : mergeBase === remoteMain);
   const now = options.now ? new Date(options.now) : new Date();
   const freshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
   const findings = [...headBindings.findings];
+  let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!freshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
   for (const [file, expected] of Object.entries(expectedDocs)) {
@@ -95,6 +97,8 @@ if (mode) {
   if (record.latestMergedImplementationPr.state !== "merged") findings.push({ id: "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE", status: "BLOCKED_INTERNAL" });
   if (mode === "read-only") {
     const snapshot = readJson(options.providerSnapshot ?? options.snapshot);
+    providerImplementationSnapshot = verifyProviderImplementationSnapshot(record.openImplementationPrs, snapshot.openImplementationPrs);
+    findings.push(...providerImplementationSnapshot.findings);
     if (snapshot.mainSha !== undefined && snapshot.mainSha !== remoteMain) {
       findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAINSHA_STALE", status: "BLOCKED_INTERNAL" });
     }
@@ -104,6 +108,6 @@ if (mode) {
   }
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
-    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), headBindings, synchronization, findings
+    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
   }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — main ${record.mainSha.slice(0, 8)}, remote migration ${record.remoteMigrationHead}, deadline ${record.freshnessDeadline}`]);
 }

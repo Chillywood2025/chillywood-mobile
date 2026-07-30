@@ -76,6 +76,7 @@ export function isValidGitBranchName(value) {
   return typeof value === "string"
     && value.length > 0
     && value !== "@"
+    && value !== "HEAD"
     && !value.startsWith("-")
     && !value.startsWith("/")
     && !value.endsWith("/")
@@ -97,6 +98,118 @@ function sortStable(values) {
     const rightJson = stableJson(right);
     return leftJson < rightJson ? -1 : leftJson > rightJson ? 1 : 0;
   });
+}
+
+function normalizeImplementationInventory(value, subject, findings) {
+  const entries = Array.isArray(value) ? value : [];
+  const normalized = [];
+  const seenNumbers = new Set();
+  const seenBranches = new Set();
+
+  if (!Array.isArray(value)) {
+    findings.push({
+      id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_LIST_MALFORMED",
+      status: "BLOCKED_INTERNAL",
+      subject
+    });
+  }
+
+  for (const entry of entries) {
+    const numberValid = Number.isInteger(entry?.number) && entry.number > 0;
+    const branchValid = isValidGitBranchName(entry?.branch);
+    const headValid = typeof entry?.head === "string" && gitShaPattern.test(entry.head);
+    const stateValid = typeof entry?.state === "string" && entry.state.length > 0;
+
+    if (!numberValid || !branchValid || !headValid || !stateValid) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_ENTRY_MALFORMED",
+        status: "BLOCKED_INTERNAL",
+        number: numberValid ? entry.number : null,
+        subject
+      });
+    }
+    if (numberValid && seenNumbers.has(entry.number)) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_DUPLICATE",
+        status: "BLOCKED_INTERNAL",
+        field: "number",
+        subject,
+        value: entry.number
+      });
+    }
+    if (branchValid && seenBranches.has(entry.branch)) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_DUPLICATE",
+        status: "BLOCKED_INTERNAL",
+        field: "branch",
+        subject,
+        value: entry.branch
+      });
+    }
+    if (numberValid) seenNumbers.add(entry.number);
+    if (branchValid) seenBranches.add(entry.branch);
+    if (numberValid && branchValid && headValid && stateValid) {
+      normalized.push({
+        branch: entry.branch,
+        head: entry.head,
+        number: entry.number,
+        state: entry.state
+      });
+    }
+  }
+
+  return sortStable(normalized);
+}
+
+export function verifyProviderImplementationSnapshot(recordEntries, snapshotEntries) {
+  const findings = [];
+  const record = normalizeImplementationInventory(recordEntries, "record", findings);
+  const snapshot = normalizeImplementationInventory(snapshotEntries, "snapshot", findings);
+  const recordByNumber = new Map(record.map((entry) => [entry.number, entry]));
+  const snapshotByNumber = new Map(snapshot.map((entry) => [entry.number, entry]));
+
+  for (const expected of record) {
+    const observed = snapshotByNumber.get(expected.number);
+    if (!observed) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING",
+        status: "BLOCKED_INTERNAL",
+        branch: expected.branch,
+        number: expected.number
+      });
+      continue;
+    }
+    const mismatchedFields = ["branch", "head", "state"].filter((field) => expected[field] !== observed[field]);
+    if (mismatchedFields.length) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISMATCH",
+        status: "BLOCKED_INTERNAL",
+        fields: mismatchedFields,
+        number: expected.number,
+        observed,
+        recorded: expected
+      });
+    }
+  }
+
+  for (const observed of snapshot) {
+    if (!recordByNumber.has(observed.number)) {
+      findings.push({
+        id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_EXTRA",
+        status: "BLOCKED_INTERNAL",
+        branch: observed.branch,
+        number: observed.number
+      });
+    }
+  }
+
+  const sortedFindings = sortStable(findings);
+  return {
+    ok: sortedFindings.length === 0,
+    findings: sortedFindings,
+    record,
+    snapshot
+  };
 }
 
 export function verifyCurrentTruthHeadBindings({
@@ -204,6 +317,14 @@ export function verifyCurrentTruthHeadBindings({
 
   const contextBranch = explicitBranch || namedBranch;
   const detachedMain = !namedBranch && checkoutHeadValid && remoteMainValid && head === remoteMain;
+  if (namedBranch === "main" && checkoutHeadValid && remoteMainValid && head !== remoteMain) {
+    findings.push({
+      id: "ASSURANCE_CURRENT_TRUTH_MAIN_CHECKOUT_STALE",
+      status: "BLOCKED_INTERNAL",
+      actual: head,
+      expected: remoteMain
+    });
+  }
   if (!namedBranch && !detachedMain && !hasExplicitContext) {
     findings.push({ id: "ASSURANCE_CURRENT_TRUTH_DETACHED_CONTEXT_UNRESOLVED", status: "BLOCKED_INTERNAL", head: checkoutHeadValid ? head : null });
   }
