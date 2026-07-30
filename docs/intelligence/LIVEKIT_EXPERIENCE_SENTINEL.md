@@ -58,7 +58,7 @@ canonical, non-secret activation contract. It binds:
   remain off.
 
 Migration
-`20260730140101_cognitive_livekit_final_chat_source_identity_binding.sql`
+`20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql`
 supersedes only the stale identity constants from the already-deployed
 authorization migration. It does not rewrite that migration, open a canary,
 create evidence, or change a switch. The migration intentionally refuses to

@@ -34,7 +34,7 @@ const androidRelease = readJson(
 );
 const iosRelease = readJson("config/release/ios-qa.json");
 const migration = read(
-  "supabase/migrations/20260730140101_cognitive_livekit_final_chat_source_identity_binding.sql",
+  "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
 );
 
 const SHA1 = /^[a-f0-9]{40}$/u;
