@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-dry-run-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "changedFileHash": "a1ac619e8774b923a8667e88633069338a82ac7d84aa6186cecbb9b97b045fc5",
+  "migrationSetHash": "2c9c329d6fdbe8fdc821de5fbb2c3c4220e47626a582039ee73dfdc9aa89ccc8",
+  "configHash": "0970da388bb6ed77b5dfda958c3644227b391dcd38ff99fac959592daf08de70",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "no-apply-dry-run-determinism-stale-source",
+      "focus": "preserved assembled dry-run identity, fail-closed stale-source resolution, exact pending set, no-apply boundaries, unlink lifecycle, deterministic static evidence, and freshness",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactBinding": {
+      "status": "pass",
+      "implementationPrNumber": 116,
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+      "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "baseIsAncestor": true,
+      "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3"
+    },
+    "reportEvidence": {
+      "status": "pass",
+      "path": "docs/assurance/reconciliation/b0-chat-call-remote-history.json",
+      "rawSha256": "156057606802f284a27d996559f8736c41de7212c645b96f730d2a4fc009da72",
+      "reportBaseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "remoteMigrationHead": "20260730161737",
+      "newProviderReadback": false,
+      "rawProviderLogCommitted": false,
+      "sanitizedMachineReadableEvidenceUsed": true
+    },
+    "assembledSourceBinding": {
+      "status": "pass",
+      "head": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "tree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+      "headObjectPresent": true,
+      "treeMatchesReport": true,
+      "componentHeadsAreAncestors": true,
+      "componentHeads": {
+        "B0": "860ee2b80a9f215497128785b199add8418e66ee",
+        "B1": "7e39e49f2dc176fee29e78128443190638545ced",
+        "B2": "fdc04d5cfb02cfc34e408a11db265d55ce0dfdb6",
+        "B3": "67edc2b766e89b28b16962062ea7c7eb2c0d2565"
+      }
+    },
+    "firstDryRunFailClosedResolution": {
+      "status": "pass",
+      "preservedFindingId": "ASSURANCE_B0_FIRST_DRY_RUN_B3_SOURCE_ONLY_CANDIDATE",
+      "preFinalAssembledHead": "98b9dc7364f1e656fe77291d0b62ecfe9d9f31ae",
+      "preFinalAssembledTree": "ecd7aac3ea325dd02859216601a92f8bfd07ce39",
+      "staleSourceCandidate": "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql",
+      "candidatePresentInPreFinalTree": true,
+      "candidateAbsentFromFinalTree": true,
+      "finalForwardCorrection": "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql",
+      "finalForwardCorrectionPresent": true,
+      "historicalFindingDisposition": "SUPERSEDED",
+      "interpretation": "The first preserved dry-run evidence failed closed on the stale source-only candidate; the final assembled tree removes that candidate and retains the bounded forward-only correction."
+    },
+    "finalDryRun": {
+      "status": "PASS_NO_APPLY",
+      "command": "supabase db push --dry-run",
+      "supabaseCliVersion": "2.110.0",
+      "remoteHistorySourceAligned": true,
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "pendingForwardSetSha256": "90f41aa7f7f298b171d8a4624bfe0792f4f2e7206f5fa4de12095aefd6cf349e",
+      "assembledTreeFilesAfterRemoteHeadMatchPendingSet": true,
+      "includeAllFlagPresent": false,
+      "includeSeedFlagPresent": false,
+      "includeRolesFlagPresent": false,
+      "seedFiles": [],
+      "roleFiles": [],
+      "migrationApplyAttempted": false,
+      "remoteMutation": false,
+      "providerMutation": false,
+      "reviewReranDryRun": false,
+      "reviewContactedRemote": false
+    },
+    "unlinkLifecycle": {
+      "status": "pass",
+      "recordedLifecycle": "linked-for-one-final-read-only-dry-run-and-immediately-unlinked",
+      "assembledWorktreeLinkMetadataPresentAtReview": false,
+      "projectIdentifierReadOrRecordedByReview": false
+    },
+    "staticDeterminism": {
+      "status": "pass",
+      "command": "node --test tests/assurance/reconciliation/chat-call-remote-history.test.mjs",
+      "runs": 3,
+      "passedPerRun": 5,
+      "failedPerRun": 0,
+      "timingNormalization": "replace every TAP duration_ms numeric value with the literal <normalized>",
+      "timingNormalizedSha256": "af7d1a908fe5fe9b9ef3beecf7513f3109cbad17452516013aee815d31c349c7",
+      "allRunsIdentical": true,
+      "implementationRecordedNormalizedSha256": "3b98e6d33bf2cb0633d450a7d77f86ae85c11c2cc6be9070887bbd96fe56ee28",
+      "implementationHashAcceptedAsSubstituteForReviewRun": false
+    },
+    "reviewFreshness": {
+      "status": "pass",
+      "implementationAuthoredAt": "2026-07-31T00:16:15Z",
+      "reviewedAt": "2026-07-31T00:25:45Z",
+      "criticalFreshnessHours": 24,
+      "ageMinutesAtReview": 9,
+      "implementationHeadUnchanged": true,
+      "implementationTreeUnchanged": true
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T3Reason": "The linked no-apply dry-run proves source/history planning only and does not prove migration execution or database behavior.",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE",
+      "higherTierProofClaimedByReview": false
+    },
+    "phase1Ci": {
+      "status": "not-run-by-this-review-lane",
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "coordinatorOwned": true
+    },
+    "nonInterference": {
+      "remoteContactByReview": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "dryRunRerun": false,
+      "buildOrOta": false,
+      "implementationEdit": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "2f4a18d3ac9f70463777fbe751aa6f99f053274b9fc3a1c381cfe92561cefdd6",
+  "reviewLevel": "C",
+  "reviewHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "reviewTimestamp": "2026-07-31T00:25:45Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-no-apply-dry-run-determinism-stale-source",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR116_ASSEMBLED_SOURCE_EXACT_BINDING",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The preserved dry-run report binds to existing assembled head 24237254 and exact tree 88588462; all four component heads are ancestors."
+    },
+    {
+      "id": "PR116_FIRST_DRY_RUN_STALE_SOURCE_FAIL_CLOSED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The stale 20260725224000 candidate is present in the pre-final assembled tree and absent in the final tree, while the final forward correction remains pending."
+    },
+    {
+      "id": "PR116_FINAL_DRY_RUN_PENDING_SET",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The final PASS_NO_APPLY evidence and final assembled tree agree on exactly 20260730170000, 20260730230022, and 20260730230031."
+    },
+    {
+      "id": "PR116_NO_APPLY_SEED_ROLE_OR_INCLUDE_ALL",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact recorded command is dry-run-only, contains no include-all/seed/roles flag, reports empty seed and role lists, reports no mutation, and records immediate unlink."
+    },
+    {
+      "id": "PR116_STATIC_DETERMINISM_AND_FRESHNESS",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The focused five-case suite passed three of three independent runs with one timing-normalized hash, and the review binds to the unchanged implementation head/tree within the critical freshness window."
+    }
+  ],
+  "severityCounts": {
+    "P0": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P1": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P2": {
+      "open": 0,
+      "resolved": 5,
+      "total": 5
+    },
+    "P3": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    }
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "resolvedFindings": 5,
+    "implementationFilesOnReviewBranch": 0,
+    "reviewDisposition": "DRY_RUN_EVIDENCE_CLEAR_PENDING_OTHER_LEVEL_C_LANES_AND_FROZEN_HEAD_CI",
+    "humanApproval": false,
+    "remoteContactByReview": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
