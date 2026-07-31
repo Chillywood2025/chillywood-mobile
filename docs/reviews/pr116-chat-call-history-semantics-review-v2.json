@@ -19,13 +19,26 @@
   "expectedIntegrationTreeMethod": "git merge-tree --write-tree implementationHead baseHead",
   "reviewBranch": "codex/assurance-reconcile-chat-call-history-review-semantics",
   "reviewHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
-  "reviewHeadSemantics": "the unchanged exact implementation head is combined with current main by the recorded history-preserving review integration merge",
-  "reviewIntegrationMerge": {
+  "reviewHeadSemantics": "the review branch tree remains the unchanged exact implementation tree plus versioned review evidence; current main was evaluated prospectively and is not retained as review-branch content",
+  "prospectiveBaseVerification": {
     "commit": "573022d3d53d351ee792e8ce1868dc16ed87792a",
     "tree": "fab0175cce46dee1fae2c4404b36075c520c95da",
     "firstParent": "eb4385f809de612888daac9961028dec3a29470a",
     "secondParent": "4be481c8576b2cb3284f58b1ea9756b375e20833",
-    "diffFromExpectedIntegrationTree": [
+    "verificationOnly": true,
+    "currentMainContentRetainedInReviewTree": false
+  },
+  "reviewTreeCorrection": {
+    "commit": "2e1fbaabe6e78ee85f13c7bce632fe6bc807815c",
+    "tree": "9ea79021e98b9a27a0fa906c12a92fe043d55cb6",
+    "restoredPaths": [
+      "CURRENT_STATE.md",
+      "NEXT_TASK.md",
+      "config/assurance/current-truth-v1.json"
+    ],
+    "restoredByteForByteFromImplementationHead": true,
+    "diffFromImplementationAfterCorrection": [
+      "docs/reviews/pr116-chat-call-history-semantics-review-v2.json",
       "docs/reviews/pr116-chat-call-history-semantics-review.json"
     ]
   },
@@ -80,16 +93,20 @@
     },
     "historyPreservingReviewReuse": {
       "status": "SOURCE_CLEAR",
-      "normalMergeCommit": "573022d3d53d351ee792e8ce1868dc16ed87792a",
-      "currentMainIsSecondParent": true,
+      "prospectiveMainVerificationCommit": "573022d3d53d351ee792e8ce1868dc16ed87792a",
+      "reviewTreeCorrectionCommit": "2e1fbaabe6e78ee85f13c7bce632fe6bc807815c",
+      "currentMainContentRetainedInReviewTree": false,
       "v1EvidencePreservedUnchanged": true,
-      "reviewDiffBeforeV2": [
+      "reviewDiffAfterCorrection": [
+        "docs/reviews/pr116-chat-call-history-semantics-review-v2.json",
         "docs/reviews/pr116-chat-call-history-semantics-review.json"
       ]
     },
     "currentTruthSynchronization": {
       "status": "SOURCE_CLEAR",
       "command": "node scripts/assurance/current-truth.mjs",
+      "verificationContextCommit": "573022d3d53d351ee792e8ce1868dc16ed87792a",
+      "verificationWasProspectiveOnly": true,
       "recordedMain": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
       "observedMain": "4be481c8576b2cb3284f58b1ea9756b375e20833",
       "synchronizationMode": "synchronization-merge",
@@ -197,9 +214,11 @@
     },
     "reviewBranchIntegrity": {
       "status": "SOURCE_CLEAR",
-      "expectedIntegratedImplementationTree": "827eee9cf00a166d7cbb00236e08bbbb86e48f66",
-      "reviewIntegrationTreeBeforeV2": "fab0175cce46dee1fae2c4404b36075c520c95da",
-      "permittedReviewDeltaBeforeV2": [
+      "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+      "reviewOnlyTreeAtCorrectionCommit": "9ea79021e98b9a27a0fa906c12a92fe043d55cb6",
+      "allNonReviewPathsByteIdenticalToImplementation": true,
+      "permittedReviewDelta": [
+        "docs/reviews/pr116-chat-call-history-semantics-review-v2.json",
         "docs/reviews/pr116-chat-call-history-semantics-review.json"
       ],
       "implementationFilesPermittedOnReviewBranch": false,
@@ -213,7 +232,7 @@
       "runByThisReviewLane": false
     }
   },
-  "testResultHash": "732dbe283dc600dc9de21f23cbd81babf712b21436d0173ad2b1a720bb5406d5",
+  "testResultHash": "874853b2ab837104959153844941b69a9fb39194134f0a67d0f8a1c691285d05",
   "testResultHashMethod": "sha256(jq -cS .testResults plus trailing newline)",
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
