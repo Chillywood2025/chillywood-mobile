@@ -16,6 +16,8 @@
     "migrationHead": "20260730161737",
     "mode": "coordinator-supplied-prior-read-only-list-and-statement-hashes",
     "newProviderReadback": false,
+    "coordinatorLiveReadbackOccurred": true,
+    "readbackMode": "coordinator-linked-db-push-dry-run-no-apply",
     "providerMutation": false,
     "databaseMutation": false,
     "candidateAbsenceConfirmed": true
@@ -118,15 +120,34 @@
     "scope": "SOURCE_CLEAR",
     "deterministicOutput": {
       "runs": 3,
-      "normalizedSha256": "5ba38136fbe8d6f75b6cd53ab87a9fbc0a9626fb1df921cd435eabca970e3af1"
+      "normalizedSha256": "3b98e6d33bf2cb0633d450a7d77f86ae85c11c2cc6be9070887bbd96fe56ee28"
     },
-    "assembledLinkedDryRun": "BLOCKED_INTERNAL"
+    "assembledLinkedDryRun": {
+      "status": "PASS_NO_APPLY",
+      "command": "supabase db push --dry-run",
+      "supabaseCliVersion": "2.110.0",
+      "assembledBranchHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "assembledBranchTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+      "componentB0Head": "860ee2b80a9f215497128785b199add8418e66ee",
+      "remoteHistorySourceAligned": true,
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "seedFiles": [],
+      "roleFiles": [],
+      "linkLifecycle": "linked-for-one-final-read-only-dry-run-and-immediately-unlinked",
+      "remoteMutation": false,
+      "providerMutation": false
+    }
   },
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
     "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION_REASON": "The linked no-apply dry-run proves remote history/source planning, not migration execution or database behavior.",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -136,18 +157,31 @@
     "The static hash gate proves only exact Git source parity with the prior read-only migration snapshot.",
     "It does not prove execution, installed behavior, native behavior, provider behavior, or release readiness.",
     "The merged metadata prerequisite classifies the migration-readback manifest as CI/test supporting evidence without weakening general release-path classification.",
-    "One coordinator-controlled assembled linked no-apply dry-run and fresh exact-head review remain required."
+    "The coordinator-controlled assembled linked no-apply dry-run passed with exactly three forward-only files pending.",
+    "That dry-run does not substitute for migration execution or database-behavior proof; fresh exact-head review remains required."
   ],
   "resolvedPrerequisites": [
     {
       "id": "ASSURANCE_B0_READBACK_MANIFEST_SCOPE_CLASSIFICATION",
       "status": "SOURCE_CLEAR",
       "resolution": "PR #113 moved the manifest to config/assurance with history preserved; current main was merged normally and the scope guard now reports only database-RLS as high risk."
+    },
+    {
+      "id": "ASSURANCE_B0_ASSEMBLED_LINKED_DRY_RUN",
+      "status": "SOURCE_CLEAR",
+      "resolution": "The final assembled linked dry-run passed without apply, proved remote history/source alignment, reported exactly three forward-only files, and immediately unlinked."
+    }
+  ],
+  "resolvedHistoricalFindings": [
+    {
+      "id": "ASSURANCE_B0_FIRST_DRY_RUN_B3_SOURCE_ONLY_CANDIDATE",
+      "status": "SUPERSEDED",
+      "resolution": "The first dry-run surfaced the B3 forward-correction source-only candidate before the final assembled source was frozen. The final assembled dry-run includes it as an expected pending forward file; it is historical resolved evidence and not a B0 failure."
     }
   ],
   "unresolvedInternalBlockers": [],
   "rollback": "Before merge, abandon this Git-only branch. After merge, correct any new source-history finding with another bounded Git-only change; never rewrite or reapply a deployed remote migration.",
   "emergencyStop": "Do not deploy, repair migration history, or contact a provider from this lane.",
-  "finalPermittedNextAction": "Run one coordinator-controlled assembled linked no-apply dry-run and require fresh exact-head review before merging this Git-only history reconciliation.",
+  "finalPermittedNextAction": "Require fresh exact-head review of the passed assembled linked no-apply dry-run before merging this Git-only history reconciliation.",
   "claimedFeatureCompletion": false
 }
