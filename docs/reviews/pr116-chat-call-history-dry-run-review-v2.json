@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-dry-run-review-v2",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "baseHead": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+  "baseTree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57",
+  "changedFileHash": "f6278ab83a3eceda0901644d7e9028556b2bbe77016d703c78733005e17b57bc",
+  "migrationSetHash": "2c9c329d6fdbe8fdc821de5fbb2c3c4220e47626a582039ee73dfdc9aa89ccc8",
+  "configHash": "0970da388bb6ed77b5dfda958c3644227b391dcd38ff99fac959592daf08de70",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "no-apply-dry-run-determinism-stale-source-v2",
+      "focus": "new-main current-truth compatibility, preserved assembled dry-run identity, exact pending set, stale-source boundary, offline determinism, additive review freshness, and no-apply/provider claims",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactBinding": {
+      "status": "pass",
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+      "newBaseHead": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "newBaseTree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57",
+      "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "implementationHeadIntentionallyUnchanged": true,
+      "implementationTreeIntentionallyUnchanged": true,
+      "newBaseIsImplementationAncestor": false,
+      "baseAdvanceCompatibilityVerified": true
+    },
+    "reviewEvidenceLifecycle": {
+      "status": "pass",
+      "v1Path": "docs/reviews/pr116-chat-call-history-dry-run-review.json",
+      "v1ReviewCommit": "5cbb5f237cd20ac6168500267de7fc7f77f129d9",
+      "v1RawSha256": "7312f862d2b422ab964337eff34add70f311659e8692d81970c95145b268463e",
+      "v1ReviewedBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "v1EvidenceStatus": "historical_stale",
+      "v1StaleReason": "Current main advanced through the three-file current-truth synchronization dependency.",
+      "v1ModifiedByV2": false,
+      "v2EvidenceStatus": "current"
+    },
+    "currentTruthBaseDependency": {
+      "status": "pass",
+      "resolved": true,
+      "currentMain": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "currentMainCommitSubject": "Synchronize current truth after migration metadata (#117)",
+      "currentMainFirstParent": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "currentTruthRecordMainSha": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "synchronizationMergeContract": true,
+      "changedPaths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "onlyAllowedCurrentTruthPathsChanged": true,
+      "dryRunReportChangedByBaseSync": false,
+      "migrationTreeChangedByBaseSync": false,
+      "migrationReadbackManifestChangedByBaseSync": false,
+      "staticTestChangedByBaseSync": false
+    },
+    "assembledDryRunEvidence": {
+      "status": "PASS_NO_APPLY",
+      "reportPath": "docs/assurance/reconciliation/b0-chat-call-remote-history.json",
+      "reportRawSha256": "156057606802f284a27d996559f8736c41de7212c645b96f730d2a4fc009da72",
+      "assembledHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "assembledTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+      "command": "supabase db push --dry-run",
+      "supabaseCliVersion": "2.110.0",
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "pendingForwardSetSha256": "90f41aa7f7f298b171d8a4624bfe0792f4f2e7206f5fa4de12095aefd6cf349e",
+      "baseSyncChangedPendingSet": false,
+      "seedFiles": [],
+      "roleFiles": [],
+      "includeAllFlagPresent": false,
+      "includeSeedFlagPresent": false,
+      "includeRolesFlagPresent": false,
+      "migrationApplyClaimed": false,
+      "providerBehaviorClaimed": false,
+      "remoteMutation": false,
+      "providerMutation": false,
+      "reviewReranDryRun": false,
+      "reviewContactedRemote": false
+    },
+    "staleSourceBoundary": {
+      "status": "pass_with_explicit_assembled_scope",
+      "knownB3SourceOnlyCandidate": "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql",
+      "candidatePresentInImplementationTree": true,
+      "candidateAbsentFromAssembledDryRunTree": true,
+      "candidateRemovalOwnedByB3Component": true,
+      "assembledEvidenceClaimedAsStandaloneImplementationDryRun": false,
+      "hiddenStaleSourceAccepted": false,
+      "interpretation": "The dry-run claim is bound only to the exact assembled source tree. PR #116 alone retains the known B3-owned candidate and is not represented as independently aligned."
+    },
+    "staticDeterminism": {
+      "status": "pass",
+      "command": "node --test tests/assurance/reconciliation/chat-call-remote-history.test.mjs",
+      "runs": 3,
+      "passedPerRun": 5,
+      "failedPerRun": 0,
+      "timingNormalization": "replace every TAP duration_ms numeric value with the literal <normalized>",
+      "timingNormalizedSha256": "af7d1a908fe5fe9b9ef3beecf7513f3109cbad17452516013aee815d31c349c7",
+      "allRunsIdentical": true,
+      "baseSyncChangedResults": false
+    },
+    "reviewFreshness": {
+      "status": "pass",
+      "reviewedAt": "2026-07-31T00:43:57Z",
+      "implementationHeadUnchanged": true,
+      "implementationTreeUnchanged": true,
+      "newBaseIsCurrentLocalOriginMain": true,
+      "v1HistoricalStale": true,
+      "v2Current": true,
+      "reviewSourceStale": false
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T3Reason": "The no-apply dry-run proves assembled source/history planning only; it does not prove migration execution, database behavior, provider behavior, or the standalone PR-head source set.",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE",
+      "proofSubstitutionAccepted": false
+    },
+    "phase1Ci": {
+      "status": "not-run-by-this-review-lane",
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "coordinatorOwned": true
+    },
+    "nonInterference": {
+      "remoteContactByReview": false,
+      "dryRunRerun": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "buildOrOta": false,
+      "implementationEdit": false,
+      "v1EvidenceEdit": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "0c5f41f30b3975ac4659e6adbb8de1b146327cf32e537dd7ad2907ce7d4bcff0",
+  "reviewLevel": "C",
+  "reviewHead": "5cbb5f237cd20ac6168500267de7fc7f77f129d9",
+  "reviewTimestamp": "2026-07-31T00:43:57Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-no-apply-dry-run-determinism-stale-source-v2",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR116_DRY_RUN_V2_CURRENT_TRUTH_DEPENDENCY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Current main is the bounded three-file synchronization merge, and those changes do not alter dry-run, migration, readback, or static-test evidence."
+    },
+    {
+      "id": "PR116_DRY_RUN_V2_ASSEMBLED_EVIDENCE_STABLE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact assembled head/tree, PASS_NO_APPLY status, and three-file pending set remain unchanged."
+    },
+    {
+      "id": "PR116_DRY_RUN_V2_STALE_SOURCE_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The known B3 candidate remains explicit in the standalone implementation tree and absent in the assembled dry-run tree; no standalone alignment claim or hidden stale-source waiver is accepted."
+    },
+    {
+      "id": "PR116_DRY_RUN_V2_STATIC_DETERMINISM",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The offline focused suite passes five of five across three deterministic reruns."
+    },
+    {
+      "id": "PR116_DRY_RUN_V2_REVIEW_FRESHNESS",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "v1 is retained unchanged as historical_stale for its old base; v2 is current for the unchanged implementation head/tree and new base."
+    }
+  ],
+  "severityCounts": {
+    "P0": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P1": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P2": {
+      "open": 0,
+      "resolved": 5,
+      "total": 5
+    },
+    "P3": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    }
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "resolvedFindings": 5,
+    "implementationFilesOnReviewBranch": 0,
+    "v1EvidenceStatus": "historical_stale",
+    "v2EvidenceStatus": "current",
+    "reviewDisposition": "DRY_RUN_EVIDENCE_V2_CLEAR_PENDING_OTHER_LEVEL_C_LANES_AND_FROZEN_HEAD_CI",
+    "humanApproval": false,
+    "remoteContactByReview": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
