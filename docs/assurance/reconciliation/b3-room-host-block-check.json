@@ -5,8 +5,8 @@
   "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
   "startingImplementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
   "currentMainMerged": {
-    "mainHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
-    "mergeCommit": "3f05a08f8fcd618842e88232a98b5bf11b703a4e",
+    "mainHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+    "mergeCommit": "897d2b5e9269f5f8d4e51c310b5cee75e605e81e",
     "method": "normal-history-preserving-merge",
     "rebase": false,
     "forcePush": false
@@ -135,8 +135,8 @@
     "fileRawSha256": "f0db6aad56394b403affdebab1076da9d412c899e1bb92c4648bc8aff48a0e34",
     "mode": "local-focused-pgTap",
     "assertions": 31,
-    "executionStatus": "BLOCKED_INTERNAL",
-    "executionReason": "The pre-final audit explicitly prohibited database execution; the current 31-case file has static validation only.",
+    "executionStatus": "INTEGRATION_CLEAR",
+    "executionReason": "The exact frozen 31-case file passed 31/31 inside one outer rollback-only local transaction under the coordinator database lock.",
     "databaseReset": false,
     "remoteAccess": false,
     "successorPersisted": false,
@@ -144,9 +144,27 @@
     "staticValidation": {
       "planMatchesAssertions": true,
       "plannedAssertions": 31,
-      "mappedCases": 31
+      "mappedCases": 31,
+      "deterministicOutput": {
+        "runs": 3,
+        "sha256": "eafb2cf687d0ea5eb33ddc2e806a2d9e3f4f71717ad861f0a854cf9596f8383c"
+      }
     },
-    "lastExecutedBaseline": {
+    "executionEvidence": {
+      "planned": 31,
+      "executed": 31,
+      "passed": 31,
+      "failed": 0,
+      "deployedSourceSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "forwardCorrectionSha256": "4aea3d852682f921c13aa382f7afe59c971999793472f1654c0d74f3c7376127",
+      "focusedTestSha256": "f0db6aad56394b403affdebab1076da9d412c899e1bb92c4648bc8aff48a0e34",
+      "outerTransaction": "ROLLBACK",
+      "postRollbackPgTapExtensionCount": 0,
+      "postRollbackFunctionSearchPath": "public",
+      "persistentDatabaseMutation": false,
+      "providerContact": false
+    },
+    "historicalExecutedBaseline": {
       "fileRawSha256": "9b57229dfbb4cbad1caef9c8bc1afb67ade60624a5057b17a0fffb96100db11e",
       "assertions": 18,
       "passed": 18,
@@ -205,17 +223,17 @@
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
     "T2_MODEL_REASON": "This narrow reconciliation has no executable room-host state model. Source inspection and the pgTAP matrix cannot substitute for T2.",
-    "T3_INTEGRATION": "BLOCKED_INTERNAL",
-    "T3_INTEGRATION_REASON": "The current 31-case pgTAP file requires one focused transaction-rolled-back execution after the audit freeze.",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
+    "T3_INTEGRATION_REASON": "The exact frozen 31-case pgTAP file passed 31/31 inside one outer rollback-only local transaction with no persisted extension or correction state.",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
     "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
   },
   "knownFindingDisposition": {
-    "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "SOURCE_CLEAR-forward-correction-not-deployed-current-31-case-runtime-pending",
-    "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "SOURCE_CLEAR-current-31-case-runtime-pending",
-    "B3_CURRENT_31_CASE_PGTAP_NOT_EXECUTED": "BLOCKED_INTERNAL",
+    "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "INTEGRATION_CLEAR-forward-correction-not-deployed",
+    "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "INTEGRATION_CLEAR",
+    "B3_CURRENT_31_CASE_PGTAP_NOT_EXECUTED": "SUPERSEDED-by-31-of-31-rollback-only-result",
     "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING": "BLOCKED_INTERNAL-no-substitution",
     "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER": "BLOCKED_INTERNAL-no-substitution"
   },
@@ -223,7 +241,7 @@
     "status": "pending-successor-exact-head-review",
     "implementationHead": "record-at-freeze-outside-self-referential-source-report",
     "implementationTree": "record-at-freeze-outside-self-referential-source-report",
-    "baseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+    "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
     "reviewPrsToReuse": [
       77,
       78,
@@ -232,7 +250,7 @@
   },
   "rollback": "Block merge or deployment on any authority, role, room, version, name, body, hash, grant, RLS, dry-run, or exact-review mismatch. Any correction remains forward-only.",
   "emergencyStop": "Stop the database lane; do not apply, rewrite, rename, or re-run deployed migration 20260730161737.",
-  "permittedNextAction": "Freeze this bounded source checkpoint. After the coordinator supplies the linked no-apply dry-run disposition, run the current 31-case focused pgTAP once in a rolled-back local transaction, then run exact successor review in the existing review lanes.",
+  "permittedNextAction": "Run the coordinator-controlled linked no-apply dry-run, then run exact successor review in the existing review lanes without deploying either source-only migration.",
   "safety": {
     "liveDatabaseChanged": false,
     "localDatabasePersistentlyChanged": false,
