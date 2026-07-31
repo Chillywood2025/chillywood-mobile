@@ -2,9 +2,9 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Main SHA observed at this assurance checkpoint: `a24956a19a50182db9c0d0e727ed38e61b2f3f90`.
-- Latest merged implementation: PR #64, `46ab717c1a463d435b64bb044bc63f590fa52913`; merge `a24956a19a50182db9c0d0e727ed38e61b2f3f90`.
-- Assurance program: PR-C-MERGED-PR-B-RECONCILIATION-BLOCKED; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64.
+- Main SHA observed at this assurance checkpoint: `ee29494539cd9a88ea179aafb48f745511b6ffa3`.
+- Latest merged implementation: PR #113, `f1e5c46b2099845c59f32eedc20e347204400e36`; merge `ee29494539cd9a88ea179aafb48f745511b6ffa3`.
+- Assurance program: PR-B0-EXACT-REVIEW-PAUSED-FOR-CURRENT-TRUTH-SYNCHRONIZATION; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
 - iOS internal: build 8, runtime `1.0.0-iosqa1`, channel `ios-qa`, update `019fb099-f7c3-7130-97aa-a4bb1c49792f`.
 - Remote migration head: `20260730161737`.
@@ -15,14 +15,15 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Chi'llywood autonomous app operating model is now documented and guarded at `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.
 - Installed Product QA closure retained: chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped; proof rows `ff81956d-94e3-49e9-8c80-fae2c12b0dd8`, `1dc00369-b5ca-4289-92bc-daf5bae00222`, `282fb154-101c-402b-9539-d3fb8080de51`; current matrix state `POLL_HTTP_FAILED`; the daily timer is enabled.
 - RevenueCat provider readback is closed: dashboard TEST returned HTTP `200` / `test_received` with `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`.
-- Evidence timestamp: `2026-07-30T22:35:00Z`; freshness deadline: `2026-07-31T22:35:00Z`; live provider readback: false.
+- Evidence timestamp: `2026-07-31T00:42:00Z`; freshness deadline: `2026-08-01T00:42:00Z`; live provider readback: true.
 
 ## Open implementation PRs
 
 - PR #52 at `2b7f9fa491180cb1f2b9a883c07b317eb39ae43a`: open-draft; reconcile-then-supersede-unmerged.
-- PR #69 at `a5a37296800419a50c9bb271d99e505f6ad7a056`: open-draft-blocked-internal; do-not-merge-forward-only-authority-correction-required.
-- PR #70 at `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`: open-draft-blocked-internal; do-not-merge-final-source-cross-binding-correction-required.
-- PR #75 at `bded4793b26e8e2e8bd2331df7f5b3fcc55f141b`: open-draft-blocked-internal; do-not-merge-null-auth-fail-closed-correction-required.
+- PR #69 at `a5a37296800419a50c9bb271d99e505f6ad7a056`: open-draft-remote-predecessor-local-successor-frozen; local successor f30d37a1 is frozen; push and exact review follow B0 merge.
+- PR #70 at `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`: open-draft-remote-predecessor-local-successor-frozen; local successor e841f986 is frozen; push and exact review follow B0 merge.
+- PR #75 at `bded4793b26e8e2e8bd2331df7f5b3fcc55f141b`: open-draft-remote-predecessor-local-successor-frozen; local successor b2cd9318 is frozen; push and exact review follow B0 merge.
+- PR #116 at `b455e31ad43bac29ff78e0f31e7f99aeabd37ba8`: open-draft-blocked-current-truth; resume its four persistent Level C review lanes after this bounded synchronization.
 
 ## Open review-only PRs
 
