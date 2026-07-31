@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr117-current-truth-after-metadata-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLabel": "isolated automated Level A review; not human approval",
+  "reviewLevel": "A",
+  "implementationPrNumber": 117,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-metadata",
+  "implementationHead": "93f0f71c9730f999145340657b8ab0b9633a405c",
+  "implementationTree": "89bdb4c4079c138f67331d051502b219d0407ca6",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 0,
+    "implementationOnlyCommits": 1
+  },
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-metadata-review",
+  "reviewHead": "93f0f71c9730f999145340657b8ab0b9633a405c",
+  "reviewHeadSemantics": "exact implementation tip immediately preceding this review-evidence-only commit",
+  "reviewTimestamp": "2026-07-31T00:32:07Z",
+  "reviewerLanes": [
+    "independent-current-truth-metadata"
+  ],
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "changedFileHash": "5bc9f9905d0c754108ef4292dfa05af6985232a55d27393576b8e906a327b84c",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base...implementationHead)",
+  "changedNameHash": "cf0ec400e5b1418792707fffe37a921cb3288d81647bde7ef62e1722496d648c",
+  "changedNameHashMethod": "sha256(git diff --name-only base...implementationHead)",
+  "implementationDiffHash": "5311bec755e2dd3c05080c7fc1d1b4a08141266536ad86290a63d977eeaedda0",
+  "implementationDiffHashMethod": "sha256(git diff --binary --no-renames base...implementationHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "migrationSetHashMethod": "sha256(newline-delimited changed supabase/migrations/*.sql paths; empty set)",
+  "configHash": "ed79a87e0eb05abb235deaa73bf2c9f83b75e8abf093d6783aa757b1d06d562a",
+  "configHashMethod": "sha256(config/assurance/current-truth-v1.json)",
+  "artifactHashes": {
+    "CURRENT_STATE.md": "811c114fb28ca53f7acb1be73c2ece62d4e6431ced2c0fd68b04e901b1d765be",
+    "NEXT_TASK.md": "5067372a26660a8922c29f0b7d2f6719e93021f689dec38ee5ea9798e5c6716d"
+  },
+  "testResults": {
+    "exactImplementationBinding": {
+      "status": "SOURCE_CLEAR",
+      "head": "93f0f71c9730f999145340657b8ab0b9633a405c",
+      "tree": "89bdb4c4079c138f67331d051502b219d0407ca6",
+      "base": "ee29494539cd9a88ea179aafb48f745511b6ffa3"
+    },
+    "allowedFileScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "additions": 25,
+      "deletions": 23,
+      "netChangedLines": 2,
+      "paths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ]
+    },
+    "mainAndLatestMergedImplementation": {
+      "status": "SOURCE_CLEAR",
+      "main": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "latestMergedPr": 113,
+      "latestMergedHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+      "mainSubject": "Move Chat Call migration readback into assurance metadata (#113)"
+    },
+    "openImplementationRemoteHeadBindings": {
+      "status": "SOURCE_CLEAR",
+      "bindingsChecked": 5,
+      "pr116Head": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "findingCount": 0
+    },
+    "boundedSuccessorDispositions": {
+      "status": "SOURCE_CLEAR",
+      "remotePredecessors": {
+        "69": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+        "70": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+        "75": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b"
+      },
+      "localFrozenSuccessors": {
+        "69": "f30d37a1c580915242648d186ed7260c00e2e0e4",
+        "70": "e841f9867e0c90aede88723894b3ef52504be731",
+        "75": "b2cd931802329d3aee82a0ab2bad6ce843950387"
+      },
+      "conclusion": "The record binds each open PR to its remote predecessor head and describes the distinct frozen local successor without presenting that successor as the remote PR head."
+    },
+    "assembledNoApplyAndProviderReadbackWording": {
+      "status": "SOURCE_CLEAR",
+      "supportingReportHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "assembledStatus": "PASS_NO_APPLY",
+      "remoteHistorySourceAligned": true,
+      "pendingForwardFiles": 3,
+      "coordinatorLiveReadbackOccurred": true,
+      "providerMapDisclosesPartialCoverage": true,
+      "conclusion": "The record accurately distinguishes read-only GitHub and Supabase readback from providers not read back and does not claim that the three pending forward corrections were applied."
+    },
+    "generatedDocuments": {
+      "status": "SOURCE_CLEAR",
+      "exactlyRenderedFromAuthoritativeRecord": true,
+      "driftFindings": 0
+    },
+    "contractValidation": {
+      "status": "SOURCE_CLEAR",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25
+    },
+    "prScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "maximumFiles": 15,
+      "netChangedLines": 2,
+      "maximumNetChangedLines": 1200,
+      "highRiskDomains": []
+    },
+    "deterministicCurrentTruth": {
+      "status": "SOURCE_CLEAR",
+      "runs": 3,
+      "identical": true,
+      "outputSha256": "f9cceeae0a0085d9fa94a1ab0a4dfbf16964eb1fdf077cf9eeffbb88a3e36f5e"
+    },
+    "timestampCausality": {
+      "status": "BLOCKED_INTERNAL",
+      "implementationCommittedAt": "2026-07-31T00:28:04Z",
+      "recordedEvidenceTimestamp": "2026-07-31T00:42:00Z",
+      "recordedTimestampAfterImplementationCommitSeconds": 836,
+      "currentTruthGuardRejectedFutureTimestamp": false
+    },
+    "diffCheck": {
+      "status": "SOURCE_CLEAR"
+    },
+    "privacyAndSecretScan": {
+      "status": "SOURCE_CLEAR",
+      "newPrivateEvidence": false,
+      "newSecretMaterial": false,
+      "newDeviceIdentifiers": false
+    },
+    "nonInterference": {
+      "status": "SOURCE_CLEAR",
+      "productSourceChanged": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "nativeChange": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "generatedNativeDirectoryChanged": false,
+      "denoLockChanged": false
+    }
+  },
+  "testResultHash": "61f03e3695b19858360d1a4d1e6313520e8d770729ebaceda1b8ab61b98e6f19",
+  "testResultHashMethod": "sha256(jq -cS .testResults plus trailing newline)",
+  "proofTiers": {
+    "T0_REQUIREMENT": "BLOCKED_INTERNAL",
+    "T1_SOURCE": "BLOCKED_INTERNAL",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T3_INTEGRATION": "NOT_APPLICABLE",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "findings": [
+    {
+      "id": "ASSURANCE_CURRENT_TRUTH_FUTURE_EVIDENCE_TIMESTAMP",
+      "severity": "P1",
+      "status": "BLOCKED_INTERNAL",
+      "path": "config/assurance/current-truth-v1.json",
+      "evidence": "The exact implementation commit was authored and committed at 2026-07-31T00:28:04Z, but the record claims its evidence timestamp is 2026-07-31T00:42:00Z, 836 seconds later.",
+      "impact": "The authoritative current-truth record claims evidence from after the commit that contains it and extends the fail-closed freshness interval into the future.",
+      "requiredRemediation": "Replace the timestamp with the actual readback time at or before the implementation commit, set the deadline from that truthful time, regenerate both hot-path documents, and make current-truth validation reject record timestamps later than the evaluation clock in a separately bounded guard correction if that script change does not fit this three-file synchronization."
+    }
+  ],
+  "severityCounts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 0,
+    "P3": 0
+  },
+  "openSeverityCounts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 0,
+    "P3": 0
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "p2Open": 0,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "generatedDocumentsExact": true,
+    "headBindingsExact": true,
+    "scopeClear": true,
+    "privacyClear": true,
+    "nonInterferenceClear": true,
+    "timestampCausalityClear": false,
+    "reviewDisposition": "CHANGES_REQUIRED_DO_NOT_MERGE",
+    "mergeAuthorizedByThisLane": false,
+    "humanApproval": false
+  },
+  "disposition": "CHANGES_REQUIRED_DO_NOT_MERGE"
+}
