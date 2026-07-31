@@ -58,7 +58,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
-    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -67,8 +67,8 @@
   "proofLimits": {
     "formalLiveKitSentinelRuns": 0,
     "formalLiveKitFindings": 0,
-    "installedProofClaimed": false,
-    "physicalProofClaimed": false,
+    "providerProofClaimed": false,
+    "installedProofClaimed": false, "physicalProofClaimed": false,
     "publicCanaryProofClaimed": false,
     "sourceSubstitutionAccepted": false
   },
@@ -96,22 +96,22 @@
     },
     "successorBehavioralPgTap": {
       "file": "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql",
-      "status": "BLOCKED_INTERNAL",
-      "plannedTests": 27, "executedTests": 21,
-      "passedTests": 21, "failedTests": 0,
-      "detail": "The normalized fixture removed every trigger bypass, supplied an exact 2/0/0/2/2 eligible sanitized RevenueCat sandbox proof, and passed assertions 1-21 with enabled guards. Its six non-failure manifests previously entered the deployed sanitizer's 2..10-string permutation branch. The frozen test-only correction adds exactly two inert string leaves only to those packets, moving that generic shape from 9 to 11 while leaving the exact bounded-failure manifest unchanged. T3 remains pending one authorized 27-case transaction.",
-      "attempts": 5, "migrationParsedCompletely": true,
+      "status": "INTEGRATION_CLEAR",
+      "plannedTests": 27, "executedTests": 27,
+      "passedTests": 27, "failedTests": 0,
+      "detail": "The exact frozen rollback-only transaction passed 27/27 through enabled v2/v3, immutable, capability, task-write, scenario, and bounded-fixture guards. Its normalized two-user RevenueCat chain proved counts 2/0/0/2/2 and eligible; the two inert test-only non-failure strings avoided the deployed sanitizer's 2..10-string permutation branch without changing the exact bounded-failure packet. Post-rollback counts were zero for pgTAP, fixture users/events/canaries, runs, outcomes, and active test backends.",
+      "proofBoundary": "T3 local database integration only: sanitized provider fixtures are not T4 real-provider behavior, and no native, signed-artifact, installed, physical, or public-canary proof is claimed.",
+      "attempts": 6, "elapsedSeconds": 18.24, "migrationParsedCompletely": true,
       "failureCodes": ["permission_denied_session_replication_role", "livekit_sandbox_premium_proof_rejected", "local_pgtap_missing", "local_predecessor_schema_missing", "sanitizer_cpu_path_unbounded"],
       "focusedTestSha256": "54c7b7cec9ad366ef8b65a74447ea4316a2723ddb469f43923bf1472ea0985ba",
       "sourceOrSchemaSubstitutionAccepted": false
     },
     "remoteDryRun": {"status": "BLOCKED_INTERNAL", "performed": false, "reason": "Coordinator-only explicit read-only provider mode has not been authorized for this remediated head; no remote contact was attempted."},
-    "exactHeadReview": {"status": "BLOCKED_INTERNAL", "reason": "Successor source is not frozen; exact implementation head/tree and review evidence remain pending."}
+    "exactHeadReview": {"status": "BLOCKED_INTERNAL", "reason": "Exact implementation head/tree review evidence remains pending."}
   },
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
-    "Run one separately authorized exact frozen 27-case transaction for the additive non-failure fixture correction; no T3 pass is claimed before it passes.",
     "The explicit read-only remote dry-run and exact-head review remain coordinator-owned and pending.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
