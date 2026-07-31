@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-semantics-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLabel": "isolated automated review lane",
+  "assignedLane": "migration-history-semantics",
+  "humanApproval": false,
+  "reviewLevel": "C",
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "baseTree": "a8c27824afa14e5f2fd684e5e02e9955637dcee1",
+  "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 0,
+    "implementationOnlyCommits": 4
+  },
+  "reviewBranch": "codex/assurance-reconcile-chat-call-history-review-semantics",
+  "reviewHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "reviewHeadSemantics": "exact implementation tip immediately preceding this review-evidence-only commit",
+  "reviewTimestamp": "2026-07-31T00:22:35Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-automated-review",
+    "migration-history-semantics"
+  ],
+  "changedFileHash": "fc77b0e07cf86c0c329ba76af30f2cdfa2f8a4203b549980e89d2ccf82924a76",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base...implementation)",
+  "changedNameHash": "dae93f6464ee24fc778ecba816275e39dc0791e98ef572e8e839a1acf4b3c3af",
+  "implementationDiffHash": "169a586e6dec7a84508b3f9fa130963c9e63cd310b821cfacb211990e194b568",
+  "migrationSetHash": "b759f74c657bdb0bdaec8f7795709fd524f19112e433d5cdb193304cf917ff9d",
+  "migrationSetHashMethod": "sha256(concatenated sha256sum records for changed migration paths in lexical diff order)",
+  "configHash": "f2776f6c630956ec1a4154453f1ed390123419a2f39fbd3bbf80085c176b5268",
+  "configHashMethod": "sha256(concatenated sha256sum records for changed config paths in lexical diff order)",
+  "testResultHash": "3b98e6d33bf2cb0633d450a7d77f86ae85c11c2cc6be9070887bbd96fe56ee28",
+  "artifactHashes": {
+    "migrationReadbackManifestSha256": "4492b7aa74245473c2c8371acafd73766ed83d8caa6f2583ace38cecbfa02758",
+    "scopeWaiverSha256": "0601f53936529b021808012b702e4fb2fc2eaf28fb8899c6f2b2b2446734af2c",
+    "reconciliationReportSha256": "156057606802f284a27d996559f8736c41de7212c645b96f730d2a4fc009da72",
+    "focusedTestSourceSha256": "97cd13039f90223c738f886038c148dabe7912bf8c3e5fa6d06dfc268e295702",
+    "packageLockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28"
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "isolatedWorktree": true,
+      "reviewBranchParentIsExactImplementationHead": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactIdentity": {
+      "status": "pass",
+      "headMatchesAssignment": true,
+      "treeMatchesAssignment": true,
+      "baseMatchesAssignment": true,
+      "mergeBaseMatchesBase": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "changedFiles": 9,
+      "additions": 436,
+      "deletions": 15,
+      "netChangedLines": 421,
+      "fileBudget": 14,
+      "lineBudget": 2600,
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "supportingDomains": [
+        "CI-test-infrastructure"
+      ],
+      "scopeWaiver": "config/assurance/pr-b0-chat-call-remote-history-scope-waiver-v1.json"
+    },
+    "duplicateRemoteVersions": {
+      "status": "pass",
+      "versions": [
+        "20260729175447",
+        "20260729204336"
+      ],
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "remoteDeploymentSequence": [
+        1,
+        2
+      ],
+      "byteIdentical": true,
+      "firstByteCount": 1770,
+      "secondByteCount": 1770,
+      "firstSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "secondSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "semanticConclusion": "Both separately deployed remote versions intentionally retain the same exact statement body; neither entry is collapsed or substituted."
+    },
+    "authoritativeBusyIdentity": {
+      "status": "pass",
+      "deployedVersion": "20260730034533",
+      "deployedName": "chilly_chat_authoritative_busy_begin",
+      "implementationPath": "supabase/migrations/20260730034533_chilly_chat_authoritative_busy_begin.sql",
+      "implementationSha256": "018ebe4cbb7f0346fce34aa2d47ca9b675004dcbfd9b677c945b0c0a08f4a429",
+      "provenHistoricalBlob": "e4589c1bd3d80e84cff96794e9895f3683d37696:supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+      "provenHistoricalBlobSha256": "018ebe4cbb7f0346fce34aa2d47ca9b675004dcbfd9b677c945b0c0a08f4a429",
+      "historicalBlobByteIdentical": true,
+      "rejectedLaterCandidatePath": "ee29494539cd9a88ea179aafb48f745511b6ffa3:supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+      "rejectedLaterCandidateSha256": "07a192dcce590748f4abe06d8bf494a4baf666ce917387bfdfe8bbc54e2156a0",
+      "rejectedLaterCandidateByteIdentical": false,
+      "semanticConclusion": "The exact proven remote/historical body is preserved under the deployed version; the later mismatched candidate is not relabeled as deployed source."
+    },
+    "retiredCandidateSemantics": {
+      "status": "pass",
+      "retiredCount": 4,
+      "allRecordedRemotePresentFalse": true,
+      "allAbsentAtImplementationHead": true,
+      "onlyMigrationPathsRemovedFromBase": true,
+      "retiredCandidates": [
+        {
+          "version": "20260728143000",
+          "name": "chilly_chat_livekit_media_rollout",
+          "classification": "VERSION_MISMATCH"
+        },
+        {
+          "version": "20260729185000",
+          "name": "chilly_chat_active_thread_clear_race_guard",
+          "classification": "VERSION_MISMATCH_DUPLICATE_REMOTE_BODY"
+        },
+        {
+          "version": "20260730032500",
+          "name": "chilly_chat_authoritative_busy_begin",
+          "classification": "VERSION_MISMATCH_AND_BODY_MISMATCH"
+        },
+        {
+          "version": "20260730040000",
+          "name": "chilly_chat_busy_active_thread_guard",
+          "classification": "VERSION_MISMATCH"
+        }
+      ],
+      "evidenceBoundary": "Candidate absence relies on the sanitized coordinator read-only remote ledger and final PASS_NO_APPLY dry-run; this review lane did not contact Supabase."
+    },
+    "chronologicalHistoryImmutability": {
+      "status": "pass",
+      "exactDeployedVersionsRepresented": [
+        "20260728141417",
+        "20260729175447",
+        "20260729204336",
+        "20260730034533",
+        "20260730040727"
+      ],
+      "deployedMigrationRewritten": false,
+      "deployedMigrationRenamed": false,
+      "deployedMigrationDeleted": false,
+      "deployedMigrationReapplied": false,
+      "remoteHistoryMutation": false,
+      "gitRenameHeuristicsOriginateOnlyFromConfirmedUndeployedCandidatePaths": true,
+      "semanticConclusion": "Git similarity labels do not imply a deployed-history rename: the old paths were confirmed undeployed candidates and the new paths are exact immutable deployed identities."
+    },
+    "forwardCorrectionSeparation": {
+      "status": "pass",
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "presentInPr116Tree": false,
+      "reportedByFinalAssembledDryRun": true,
+      "assembledDryRunStatus": "PASS_NO_APPLY",
+      "assembledDryRunRemoteHistorySourceAligned": true,
+      "appliedByPr116": false,
+      "semanticConclusion": "B0 carries historical alignment only; all three behavior corrections remain separate forward-only sources owned by their bounded lanes."
+    },
+    "focusedStaticTests": {
+      "status": "pass",
+      "command": "node --test tests/assurance/reconciliation/chat-call-remote-history.test.mjs",
+      "passed": 5,
+      "failed": 0
+    },
+    "readbackGuard": {
+      "status": "pass",
+      "command": "node scripts/guard-chilly-chat-livekit-migration-readback.mjs",
+      "output": "Chi'lly Chat linked migration readback guard passed."
+    },
+    "contractValidation": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "featurePlan": {
+      "status": "pass",
+      "featureId": "chilly-chat-call-lifecycle",
+      "requirements": "REQUIREMENTS_CLEAR",
+      "architecture": "ARCHITECTURE_CLEAR"
+    },
+    "scope": {
+      "status": "pass",
+      "command": "node scripts/assurance/pr-scope.mjs --base=ee29494539cd9a88ea179aafb48f745511b6ffa3 --feature=chilly-chat-call-lifecycle --objectiveDomains=database-RLS --waiver=config/assurance/pr-b0-chat-call-remote-history-scope-waiver-v1.json",
+      "changedFiles": 9,
+      "netChangedLines": 421,
+      "domains": [
+        "CI-test-infrastructure",
+        "database-RLS"
+      ],
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "findings": 0
+    },
+    "deterministicOutput": {
+      "status": "pass",
+      "runs": 3,
+      "identicalRuns": 3,
+      "stdoutSha256": "3b98e6d33bf2cb0633d450a7d77f86ae85c11c2cc6be9070887bbd96fe56ee28"
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T3Reason": "PASS_NO_APPLY proves remote planning and source alignment, not migration execution or database behavior.",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "higherTierSubstitutionAccepted": false
+    },
+    "currentTruthObservation": {
+      "status": "pending-coordinator-control-plane-gate",
+      "command": "node scripts/assurance/current-truth.mjs",
+      "finding": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
+      "recordedMain": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+      "observedMain": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "introducedByPr116": false,
+      "migrationSemanticsImpact": false,
+      "mergeAuthorizationByThisLane": false,
+      "resumptionAction": "The coordinator must satisfy the current-truth gate in its bounded control-plane lane before any merge that requires it; PR #116 must not absorb current-truth changes."
+    },
+    "privacyAndNonInterference": {
+      "status": "pass",
+      "providerContactByReviewLane": false,
+      "providerMutation": false,
+      "databaseContactByReviewLane": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "rawSecretCommitted": false,
+      "privateEvidenceCommitted": false,
+      "deviceIdentifierCommitted": false,
+      "denoLockChanged": false,
+      "gitDiffCheck": "pass"
+    },
+    "reviewBranchIntegrity": {
+      "statusBeforeReviewCommit": "exact-implementation-head",
+      "reviewBranchBaseHeadMatchesImplementationHead": true,
+      "reviewBranchBaseTreeMatchesImplementationTree": true,
+      "permittedReviewDelta": [
+        "docs/reviews/pr116-chat-call-history-semantics-review.json"
+      ],
+      "implementationFilesPermittedOnReviewBranch": false,
+      "neverMergeReviewBranch": true
+    },
+    "remainingCoordinatorGates": {
+      "status": "pending",
+      "otherLevelCReviewLanes": "pending-or-separately-owned",
+      "currentTruthGate": "pending",
+      "fullPhase1CiAtFrozenHead": "pending",
+      "runByThisReviewLane": false
+    }
+  },
+  "findings": [
+    {
+      "id": "PR116_DUPLICATE_REMOTE_HISTORY_PRESERVED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Versions 20260729175447 and 20260729204336 remain separate chronological entries with byte-identical 1,770-byte bodies and the same exact remote hash."
+    },
+    {
+      "id": "PR116_AUTHORITATIVE_BUSY_REMOTE_BODY_PRESERVED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Version 20260730034533 is byte-identical to the proven historical/remote blob at e4589c1 and differs from the rejected later 07a192dc candidate."
+    },
+    {
+      "id": "PR116_ONLY_CONFIRMED_UNDEPLOYED_CANDIDATES_RETIRED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Exactly four migration paths are retired from the base, and the sanitized coordinator evidence classifies all four as absent remotely."
+    },
+    {
+      "id": "PR116_CHRONOLOGICAL_HISTORY_IMMUTABLE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The five exact deployed identities are preserved without remote rewrite, rename, deletion, reapply, or mutation. Git rename heuristics refer only to confirmed undeployed candidate paths."
+    },
+    {
+      "id": "PR116_FORWARD_CORRECTIONS_REMAIN_SEPARATE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The three pending behavior corrections are absent from PR #116 and appear only as separate expected forward files in the final assembled PASS_NO_APPLY evidence."
+    },
+    {
+      "id": "PR116_CURRENT_TRUTH_CONTROL_PLANE_GATE_PENDING",
+      "severity": "P2",
+      "status": "pending",
+      "resolution": "The offline current-truth guard reports the pre-existing recorded-main mismatch. This semantics lane does not own or modify current truth; the coordinator must resolve the gate separately before merge when required."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 1,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "migrationSemantics": "clear",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "currentTruthGatePendingCoordinator": true,
+    "reviewDisposition": "LANE_CLEAR_P0_P1_ZERO_MIGRATION_SEMANTICS_VERIFIED_CURRENT_TRUTH_AND_OTHER_LEVEL_C_GATES_PENDING",
+    "mergeAuthorizedByThisLane": false,
+    "humanApproval": false
+  },
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 6,
+    "P3": 0
+  },
+  "openSeverityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 1,
+    "P3": 0
+  },
+  "disposition": "LANE_CLEAR_P0_P1_ZERO_MIGRATION_SEMANTICS_VERIFIED_CURRENT_TRUTH_AND_OTHER_LEVEL_C_GATES_PENDING"
+}
