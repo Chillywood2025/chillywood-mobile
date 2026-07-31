@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-scope-review-v1",
+  "reviewType": "isolated automated review lane",
+  "reviewLevel": "C",
+  "reviewLane": "scope-security-non-interference-proof-tiers",
+  "humanApproval": false,
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "baseBranch": "main",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "baseTree": "a8c27824afa14e5f2fd684e5e02e9955637dcee1",
+  "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "implementationParents": [
+    "860ee2b80a9f215497128785b199add8418e66ee"
+  ],
+  "mainSynchronizationMerge": "91d3736af8a96d4830992ec8110938aa1ed36779",
+  "reviewBranch": "codex/assurance-reconcile-chat-call-history-review-scope",
+  "reviewBranchBaseHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "reviewBranchBaseTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "reviewTimestamp": "2026-07-31T00:22:35Z",
+  "reviewHeadBeforeEvidenceCommit": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "changedFileHash": "dae93f6464ee24fc778ecba816275e39dc0791e98ef572e8e839a1acf4b3c3af",
+  "migrationSetHash": "0497b13338370a5d309fef0fc7191afc999240ad52c1335f17fd5e79e185cf48",
+  "configHash": "9a358248a01b93140d84d6194a863c1a0ccf8dca26b12168819931fe79fbaac6",
+  "testResultHash": "42f93250e028270010193168614600fc5819056bcb474fbea1ba8a300414df1c",
+  "hashes": {
+    "changedFileHashMethod": "sha256 of newline-terminated lexically sorted paths from git diff --find-renames --name-only -z base...head",
+    "changedNameStatusHash": "a1ac619e8774b923a8667e88633069338a82ac7d84aa6186cecbb9b97b045fc5",
+    "changedNameStatusHashMethod": "sha256 of git diff --find-renames --name-status -z base...head",
+    "patchHash": "169a586e6dec7a84508b3f9fa130963c9e63cd310b821cfacb211990e194b568",
+    "patchHashMethod": "sha256 of git diff --find-renames --binary base...head",
+    "migrationSetHashMethod": "sha256 of stable JSON sorted path and raw-SHA-256 entries for changed migration targets at implementation head",
+    "configHashMethod": "sha256 of stable JSON sorted path and raw-SHA-256 entries for changed config targets at implementation head",
+    "reconciliationReportSha256": "156057606802f284a27d996559f8736c41de7212c645b96f730d2a4fc009da72",
+    "scopeWaiverSha256": "0601f53936529b021808012b702e4fb2fc2eaf28fb8899c6f2b2b2446734af2c",
+    "readbackManifestSha256": "4492b7aa74245473c2c8371acafd73766ed83d8caa6f2583ace38cecbfa02758",
+    "focusedTestSourceSha256": "97cd13039f90223c738f886038c148dabe7912bf8c3e5fa6d06dfc268e295702",
+    "currentTruthRecordSha256": "267a98a603289d001c77e13b8c8307655eaf48b9b4df848217c6b32612bbbaee",
+    "packageJsonSha256": "3cd1f2049b72a89bb5630659b76d24f6add21d7e670ca0003ecb0a5f122ea744",
+    "packageLockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28"
+  },
+  "testResults": {
+    "exactBinding": {
+      "status": "pass",
+      "headMatchesAssignment": true,
+      "treeMatchesAssignment": true,
+      "baseMatchesAssignment": true,
+      "baseIsMergeBase": true,
+      "implementationBranchContainsNormalMainMerge": true,
+      "rebaseDetected": false,
+      "forcePushPerformedByReview": false
+    },
+    "contractValidation": {
+      "status": "pass",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25,
+      "errors": 0
+    },
+    "featurePlans": {
+      "status": "pass",
+      "plans": [
+        {
+          "featureId": "chilly-chat-call-lifecycle",
+          "requirements": "REQUIREMENTS_CLEAR",
+          "architecture": "ARCHITECTURE_CLEAR"
+        },
+        {
+          "featureId": "supabase-migrations-rls",
+          "requirements": "REQUIREMENTS_CLEAR",
+          "architecture": "ARCHITECTURE_CLEAR"
+        }
+      ]
+    },
+    "scope": {
+      "status": "pass",
+      "objectiveDomain": "database-RLS",
+      "supportingDomain": "CI-test-infrastructure",
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "changedFiles": 9,
+      "additions": 436,
+      "deletions": 15,
+      "netChangedLines": 421,
+      "defaultFileBudget": 15,
+      "defaultLineBudget": 1200,
+      "withinDefaultBudget": true,
+      "scopeCommandWithWaiver": "pass",
+      "unexpectedDomains": [],
+      "secondHighRiskDomain": false
+    },
+    "scopeWaiver": {
+      "status": "pass_exact_head_only",
+      "contractId": "pr-b0-chat-call-remote-history-scope-waiver-v1",
+      "machineReadable": true,
+      "exactObjectiveRecorded": true,
+      "exactReasonRecorded": true,
+      "reviewerSetRecorded": true,
+      "newTimeboxHours": 4,
+      "secondHighRiskDomain": false,
+      "prohibitedScopeRecorded": true,
+      "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
+      "actualDeltaNeedsNumericException": false,
+      "numericExceptionUsedToExcuseCurrentDelta": false,
+      "headChangeInvalidatesThisReview": true
+    },
+    "impactPlanner": {
+      "status": "pass_with_required_gates_pending_other_lanes",
+      "changedFiles": 9,
+      "domains": [
+        "CI-test-infrastructure",
+        "database-RLS"
+      ],
+      "requiredGateCount": 12,
+      "findings": 0,
+      "requiredGates": [
+        "RLS",
+        "assurance-concurrency",
+        "assurance-contracts",
+        "assurance-current-truth",
+        "assurance-final-summary",
+        "assurance-migration-source",
+        "assurance-pr-scope",
+        "assurance-review-head",
+        "focused-pgTAP",
+        "full-database-frozen-head",
+        "git-diff",
+        "links"
+      ]
+    },
+    "sourceParityGuard": {
+      "status": "pass",
+      "output": "Chi'lly Chat linked migration readback guard passed."
+    },
+    "focusedSourceContract": {
+      "status": "pass",
+      "testsPassed": 5,
+      "testsFailed": 0,
+      "runs": 3,
+      "deterministic": true,
+      "outputSha256": "7e6f8ac764b179af8820cd45ed546bf7efbbbcb2828d4ce5e507eded6ab1279d"
+    },
+    "proofTierBoundary": {
+      "status": "pass_no_overclaim",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "featureLevelT2ThroughT6ClearedByThisPr": false,
+      "dryRunSubstitutedForMigrationExecution": false,
+      "sourceParitySubstitutedForNativeProviderOrInstalledProof": false,
+      "topLevelFeatureCompletionClaimed": false
+    },
+    "reportPlanScopeCoherence": {
+      "status": "pass",
+      "reportFeatureId": "chilly-chat-call-lifecycle",
+      "scopeFeatureId": "supabase-migrations-rls",
+      "coherence": "The report names the affected Chat Call lifecycle while the scope guard correctly classifies the implementation objective as one database-history domain.",
+      "remoteHistorySourceAlignedClaimBoundToNoApplyDryRun": true,
+      "pendingForwardFilesReported": 3,
+      "migrationExecutionClaimed": false,
+      "providerBehaviorClaimed": false
+    },
+    "currentTruth": {
+      "status": "fail_inherited_base_condition",
+      "findingId": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
+      "recordedMain": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+      "expectedMain": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "implementationChangedCurrentTruth": false,
+      "implementationMayRepairInScope": false,
+      "mergeGateSatisfied": false
+    },
+    "securityAndPrivacy": {
+      "status": "pass",
+      "addedLinesScanned": 436,
+      "privateKeyMatches": 0,
+      "credentialMatches": 0,
+      "emailMatches": 0,
+      "signedUrlMatches": 0,
+      "deviceIdentifierMatches": 0,
+      "rawProviderResponseAdded": false,
+      "privateScreenshotAdded": false,
+      "privateLogAdded": false,
+      "userOrDeviceIdentifierAdded": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "productImplementationPaths": [],
+      "currentTruthPaths": [],
+      "packageOrLockPaths": [],
+      "workflowPaths": [],
+      "nativePaths": [],
+      "generatedAndroidOrIosPaths": [],
+      "providerImplementationPaths": [],
+      "providerContactByReview": false,
+      "providerMutation": false,
+      "databaseContactByReview": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "databaseReset": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "denoLockChanged": false
+    },
+    "gitDiffCheck": {
+      "status": "pass"
+    },
+    "phase1Ci": {
+      "status": "not-run-by-review-lane",
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "owner": "coordinator",
+      "eligibleBeforeCurrentTruthRepair": false,
+      "fullCiRunByReviewLane": false
+    }
+  },
+  "findings": [
+    {
+      "id": "PR116_CURRENT_TRUTH_MAIN_BINDING_STALE",
+      "severity": "P1",
+      "status": "open",
+      "affectedPaths": [
+        "config/assurance/current-truth-v1.json",
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md"
+      ],
+      "evidence": "The offline current-truth guard at exact implementation head b455e31ad43bac29ff78e0f31e7f99aeabd37ba8 reports ASSURANCE_CURRENT_TRUTH_MAIN_STALE: recorded main a24956a19a50182db9c0d0e727ed38e61b2f3f90, expected origin/main ee29494539cd9a88ea179aafb48f745511b6ffa3.",
+      "scopeAssessment": "This is inherited from the exact base and PR #116 correctly does not modify current-truth files. It is nevertheless an always-required Level C merge gate and cannot be waived by this review.",
+      "requiredResolution": "The coordinator must create and merge one bounded current-truth synchronization, merge the resulting current origin/main normally into PR #116 without rebasing, rerun focused checks, and refresh all exact-head reviews. Do not repair current truth inside this database-history PR."
+    }
+  ],
+  "severityCounts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 0,
+    "P3": 0
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 1,
+    "p2Open": 0,
+    "p3Open": 0,
+    "scopeDisposition": "bounded-single-database-history-domain-with-supporting-assurance",
+    "waiverDisposition": "valid-for-exact-head-no-current-numeric-exception-needed",
+    "proofTierDisposition": "honest-no-T3-or-higher-overclaim",
+    "implementationFilesOnReviewBranchAfterEvidenceCommit": 0,
+    "privateEvidenceDetected": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "humanApproval": false,
+    "mergeAuthorizedByThisLane": false,
+    "reviewDisposition": "CHANGES_REQUIRED_DO_NOT_MERGE"
+  },
+  "reviewBranchIntegrity": {
+    "statusBeforeReviewCommit": "exact-implementation-head",
+    "implementationAncestor": true,
+    "reviewBranchBaseHeadMatchesImplementationHead": true,
+    "reviewBranchBaseTreeMatchesImplementationTree": true,
+    "permittedReviewDelta": [
+      "docs/reviews/pr116-chat-call-history-scope-review.json"
+    ],
+    "implementationFilesPermittedOnReviewBranch": false,
+    "neverMergeReviewBranch": true
+  },
+  "disposition": "BLOCKED_INTERNAL_CURRENT_TRUTH_SYNC_REQUIRED_CHANGES_REQUIRED_DO_NOT_MERGE",
+  "remainingRequiredAction": "Synchronize current truth separately, normally merge refreshed main into PR #116, and rerun all exact-head review lanes before coordinator-owned frozen-head CI. This isolated automated review is not human approval and authorizes no implementation, database, provider, build, OTA, or release action."
+}
