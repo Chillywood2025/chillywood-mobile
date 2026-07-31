@@ -106,13 +106,13 @@
       "focusedTestSha256": "54c7b7cec9ad366ef8b65a74447ea4316a2723ddb469f43923bf1472ea0985ba",
       "sourceOrSchemaSubstitutionAccepted": false
     },
-    "remoteDryRun": {"status": "BLOCKED_INTERNAL", "performed": false, "reason": "Coordinator-only explicit read-only provider mode has not been authorized for this remediated head; no remote contact was attempted."},
+    "remoteDryRun": {"status": "PASS_NO_APPLY", "performed": true, "mode": "assembled-linked-read-only", "assembledHead": "24237254fba83534018c3dca5e986d5c4f73ba66", "assembledTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880", "components": {"B0": "860ee2b", "B1": "7e39e49f", "B2": "fdc04d5", "B3": "67edc2b"}, "cliVersion": "2.110.0", "remoteDeployedHistory": "ALIGNED", "pendingForwardCorrections": ["20260730170000", "20260730230022", "20260730230031"], "seeds": [], "roles": [], "unlinkedImmediately": true, "migrationApplied": false, "providerMutation": false},
     "exactHeadReview": {"status": "BLOCKED_INTERNAL", "reason": "Exact implementation head/tree review evidence remains pending."}
   },
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
-    "The explicit read-only remote dry-run and exact-head review remain coordinator-owned and pending.",
+    "Exact-head review remains coordinator-owned and pending.",
     "The feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {
