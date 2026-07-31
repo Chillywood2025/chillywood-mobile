@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-semantics-review-v2",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLabel": "isolated automated Level C migration-history semantics review; not human approval",
+  "reviewLevel": "C",
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "baseHead": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+  "baseTree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57",
+  "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 3,
+    "implementationOnlyCommits": 4
+  },
+  "expectedBaseImplementationIntegrationTree": "827eee9cf00a166d7cbb00236e08bbbb86e48f66",
+  "expectedIntegrationTreeMethod": "git merge-tree --write-tree implementationHead baseHead",
+  "reviewBranch": "codex/assurance-reconcile-chat-call-history-review-semantics",
+  "reviewHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "reviewHeadSemantics": "the unchanged exact implementation head is combined with current main by the recorded history-preserving review integration merge",
+  "reviewIntegrationMerge": {
+    "commit": "573022d3d53d351ee792e8ce1868dc16ed87792a",
+    "tree": "fab0175cce46dee1fae2c4404b36075c520c95da",
+    "firstParent": "eb4385f809de612888daac9961028dec3a29470a",
+    "secondParent": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+    "diffFromExpectedIntegrationTree": [
+      "docs/reviews/pr116-chat-call-history-semantics-review.json"
+    ]
+  },
+  "reviewTimestamp": "2026-07-31T00:42:21Z",
+  "reviewerLanes": [
+    "migration-history-semantics"
+  ],
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "evidenceVersions": {
+    "v1": {
+      "status": "historical_stale",
+      "path": "docs/reviews/pr116-chat-call-history-semantics-review.json",
+      "reviewCommit": "eb4385f809de612888daac9961028dec3a29470a",
+      "reviewedImplementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "reviewedBaseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "sha256": "c5794c1435db4392d6e3a70b771c45ed00b161eee4d27b1b2c76612e93bd4ed3",
+      "preservedUnchanged": true,
+      "staleReason": "current main advanced through the bounded current-truth synchronization while the implementation head and tree remained unchanged"
+    },
+    "v2": {
+      "status": "current",
+      "path": "docs/reviews/pr116-chat-call-history-semantics-review-v2.json",
+      "reviewedImplementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "reviewedBaseHead": "4be481c8576b2cb3284f58b1ea9756b375e20833"
+    }
+  },
+  "changedFileHash": "fc77b0e07cf86c0c329ba76af30f2cdfa2f8a4203b549980e89d2ccf82924a76",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames baseHead expectedBaseImplementationIntegrationTree)",
+  "changedNameHash": "dae93f6464ee24fc778ecba816275e39dc0791e98ef572e8e839a1acf4b3c3af",
+  "changedNameHashMethod": "sha256(git diff --name-only baseHead expectedBaseImplementationIntegrationTree)",
+  "implementationDiffHash": "169a586e6dec7a84508b3f9fa130963c9e63cd310b821cfacb211990e194b568",
+  "implementationDiffHashMethod": "sha256(git diff --binary mergeBase...implementationHead)",
+  "migrationSetHash": "b759f74c657bdb0bdaec8f7795709fd524f19112e433d5cdb193304cf917ff9d",
+  "migrationSetHashMethod": "sha256(concatenated sha256sum records for changed migration paths in lexical diff order)",
+  "configHash": "f2776f6c630956ec1a4154453f1ed390123419a2f39fbd3bbf80085c176b5268",
+  "configHashMethod": "sha256(concatenated sha256sum records for changed config paths in lexical diff order)",
+  "artifactHashes": {
+    "migrationReadbackManifestSha256": "4492b7aa74245473c2c8371acafd73766ed83d8caa6f2583ace38cecbfa02758",
+    "scopeWaiverSha256": "0601f53936529b021808012b702e4fb2fc2eaf28fb8899c6f2b2b2446734af2c",
+    "reconciliationReportSha256": "156057606802f284a27d996559f8736c41de7212c645b96f730d2a4fc009da72",
+    "focusedTestSourceSha256": "97cd13039f90223c738f886038c148dabe7912bf8c3e5fa6d06dfc268e295702",
+    "packageLockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28"
+  },
+  "testResults": {
+    "exactIdentity": {
+      "status": "SOURCE_CLEAR",
+      "implementationHeadUnchanged": true,
+      "implementationTreeUnchanged": true,
+      "currentBaseHead": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "currentBaseTree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57"
+    },
+    "historyPreservingReviewReuse": {
+      "status": "SOURCE_CLEAR",
+      "normalMergeCommit": "573022d3d53d351ee792e8ce1868dc16ed87792a",
+      "currentMainIsSecondParent": true,
+      "v1EvidencePreservedUnchanged": true,
+      "reviewDiffBeforeV2": [
+        "docs/reviews/pr116-chat-call-history-semantics-review.json"
+      ]
+    },
+    "currentTruthSynchronization": {
+      "status": "SOURCE_CLEAR",
+      "command": "node scripts/assurance/current-truth.mjs",
+      "recordedMain": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "observedMain": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "synchronizationMode": "synchronization-merge",
+      "synchronizationMergeParentShapeMatches": true,
+      "synchronizationMergeChangedPathsAllowed": true,
+      "synchronizationMergeRequiredPathsPresent": true,
+      "implementationHeadBindings": 5,
+      "findings": 0
+    },
+    "deterministicCurrentTruth": {
+      "status": "SOURCE_CLEAR",
+      "runs": 3,
+      "identical": true,
+      "outputSha256": "3928ba03b8fff96ba2ee0ef3d29c431120162c2b601a183b8450d90987c77fd0"
+    },
+    "semanticEvidenceContinuity": {
+      "status": "SOURCE_CLEAR",
+      "implementationIdentityUnchanged": true,
+      "allV1ArtifactHashesUnchanged": true,
+      "fullSemanticAuditRepeated": false,
+      "reasonNotRepeated": "The implementation head, tree, migration source, report, test source, scope waiver, and package lock are byte-identical to the exact v1 evidence; only current-main control-plane synchronization changed."
+    },
+    "duplicateRemoteVersions": {
+      "status": "SOURCE_CLEAR",
+      "versions": [
+        "20260729175447",
+        "20260729204336"
+      ],
+      "byteIdentical": true,
+      "firstSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "secondSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "unchangedFromV1": true
+    },
+    "authoritativeBusyIdentity": {
+      "status": "SOURCE_CLEAR",
+      "deployedVersion": "20260730034533",
+      "implementationSha256": "018ebe4cbb7f0346fce34aa2d47ca9b675004dcbfd9b677c945b0c0a08f4a429",
+      "matchesProvenHistoricalRemoteBody": true,
+      "unchangedFromV1": true
+    },
+    "chronologicalHistoryImmutability": {
+      "status": "SOURCE_CLEAR",
+      "deployedMigrationRewritten": false,
+      "deployedMigrationRenamed": false,
+      "deployedMigrationDeleted": false,
+      "deployedMigrationReapplied": false,
+      "unchangedFromV1": true
+    },
+    "forwardCorrectionSeparation": {
+      "status": "SOURCE_CLEAR",
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "presentInExpectedIntegrationTree": false,
+      "assembledDryRunStatus": "PASS_NO_APPLY",
+      "remoteHistorySourceAligned": true,
+      "remoteMutation": false,
+      "providerMutation": false
+    },
+    "exactDeltaAgainstCurrentBase": {
+      "status": "SOURCE_CLEAR",
+      "expectedIntegrationTree": "827eee9cf00a166d7cbb00236e08bbbb86e48f66",
+      "changedFiles": 9,
+      "additions": 436,
+      "deletions": 15,
+      "netChangedLines": 421,
+      "fileBudget": 14,
+      "lineBudget": 2600,
+      "currentTruthPathsInImplementationDelta": false
+    },
+    "proofBoundary": {
+      "status": "SOURCE_CLEAR",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T3Reason": "PASS_NO_APPLY proves remote planning and source alignment, not migration execution or database behavior.",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE_TO_THIS_HISTORY_ONLY_PR",
+      "higherTierSubstitutionAccepted": false
+    },
+    "privacyAndNonInterference": {
+      "status": "SOURCE_CLEAR",
+      "providerContactByReviewLane": false,
+      "providerMutation": false,
+      "databaseContactByReviewLane": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "productSourceChanged": false,
+      "moneyOrEntitlementChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "rawSecretCommitted": false,
+      "privateEvidenceCommitted": false,
+      "deviceIdentifierCommitted": false,
+      "denoLockChanged": false,
+      "gitDiffCheck": "pass"
+    },
+    "reviewBranchIntegrity": {
+      "status": "SOURCE_CLEAR",
+      "expectedIntegratedImplementationTree": "827eee9cf00a166d7cbb00236e08bbbb86e48f66",
+      "reviewIntegrationTreeBeforeV2": "fab0175cce46dee1fae2c4404b36075c520c95da",
+      "permittedReviewDeltaBeforeV2": [
+        "docs/reviews/pr116-chat-call-history-semantics-review.json"
+      ],
+      "implementationFilesPermittedOnReviewBranch": false,
+      "neverMergeReviewBranch": true
+    },
+    "remainingCoordinatorGates": {
+      "status": "pending",
+      "otherLevelCReviewLanes": "pending-or-separately-owned",
+      "currentTruthGate": "resolved",
+      "fullPhase1CiAtFrozenHead": "pending",
+      "runByThisReviewLane": false
+    }
+  },
+  "testResultHash": "732dbe283dc600dc9de21f23cbd81babf712b21436d0173ad2b1a720bb5406d5",
+  "testResultHashMethod": "sha256(jq -cS .testResults plus trailing newline)",
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "historicalFindings": [
+    {
+      "id": "PR116_CURRENT_TRUTH_CONTROL_PLANE_GATE_PENDING",
+      "severity": "P2",
+      "v1Status": "pending",
+      "v2Status": "SUPERSEDED",
+      "resolution": "Current main is now the bounded three-file synchronization merge and the offline current-truth guard passes with exact head bindings and no findings."
+    }
+  ],
+  "findings": [],
+  "historicalResolvedSeverityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 1,
+    "P3": 0
+  },
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "openSeverityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "migrationSemantics": "clear",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "productSourceChanged": false,
+    "privateEvidenceCommitted": false,
+    "fullCiPendingCoordinator": true,
+    "currentTruthGatePendingCoordinator": false,
+    "v1EvidenceStatus": "historical_stale",
+    "v2EvidenceStatus": "current",
+    "reviewDisposition": "LANE_CLEAR_P0_P1_P2_P3_ZERO_MIGRATION_SEMANTICS_AND_CURRENT_TRUTH_VERIFIED",
+    "mergeAuthorizedByThisLane": false,
+    "humanApproval": false
+  },
+  "disposition": "LANE_CLEAR_P0_P1_P2_P3_ZERO_MIGRATION_SEMANTICS_AND_CURRENT_TRUTH_VERIFIED"
+}
