@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-scope-review-v2",
+  "reviewType": "isolated automated review lane",
+  "reviewLevel": "C",
+  "reviewLane": "scope-security-non-interference-proof-tiers",
+  "humanApproval": false,
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "currentBaseBranch": "main",
+  "currentBaseHead": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+  "currentBaseTree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57",
+  "implementationOriginalMergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "reviewBranch": "codex/assurance-reconcile-chat-call-history-review-scope",
+  "priorReviewHead": "25cc3d2d06a6eede7130b2f18a564c1fb2a6a3fa",
+  "reviewTimestamp": "2026-07-31T00:42:06Z",
+  "evidenceVersions": {
+    "v1": {
+      "file": "docs/reviews/pr116-chat-call-history-scope-review.json",
+      "sha256": "a796668127ad8036cd30be6c0b83d6f0e4715b5848c154759da35764ce485aa0",
+      "status": "historical_stale",
+      "reviewedImplementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "reviewedBaseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "reason": "The implementation is unchanged, but main advanced through the approved current-truth synchronization and resolved the sole v1 P1 in the actual merge context."
+    },
+    "v2": {
+      "file": "docs/reviews/pr116-chat-call-history-scope-review-v2.json",
+      "status": "current",
+      "reviewedImplementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "reviewedBaseHead": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "reviewedSyntheticTree": "827eee9cf00a166d7cbb00236e08bbbb86e48f66"
+    }
+  },
+  "syntheticMergeBinding": {
+    "mode": "disposable-detached-worktree-no-commit",
+    "worktree": "/Users/loverslane/chillywood-assurance-worktrees/pr116-scope-v2-synthetic-20260731",
+    "head": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+    "mergeHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+    "tree": "827eee9cf00a166d7cbb00236e08bbbb86e48f66",
+    "mergeCommand": "git merge --no-commit --no-ff b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+    "mergeConflict": false,
+    "commitCreated": false,
+    "mergeAborted": true,
+    "worktreeRemovedImmediately": true,
+    "worktreePresentAfterReview": false
+  },
+  "changedFileHash": "dae93f6464ee24fc778ecba816275e39dc0791e98ef572e8e839a1acf4b3c3af",
+  "migrationSetHash": "0497b13338370a5d309fef0fc7191afc999240ad52c1335f17fd5e79e185cf48",
+  "configHash": "9a358248a01b93140d84d6194a863c1a0ccf8dca26b12168819931fe79fbaac6",
+  "testResultHash": "d8e190e132cf3f3cb3e7f9fa7e1e9c811ec5bc6cb625409c47dee284359c0494",
+  "hashes": {
+    "changedFileHashMethod": "sha256 of newline-terminated lexically sorted synthetic base-to-tree changed paths",
+    "changedNameStatusHash": "a1ac619e8774b923a8667e88633069338a82ac7d84aa6186cecbb9b97b045fc5",
+    "changedNameStatusHashMethod": "sha256 of git diff --find-renames --name-status -z current-base synthetic-tree",
+    "syntheticPatchHash": "169a586e6dec7a84508b3f9fa130963c9e63cd310b821cfacb211990e194b568",
+    "syntheticPatchHashMethod": "sha256 of git diff --find-renames --binary current-base synthetic-tree",
+    "currentTruthRecordAtMainSha256": "482030291469e84cca12768e719ace697f1ee550af5b44fd9355a9361b8b8111",
+    "currentStateAtMainSha256": "ef3ee904eb05e46f1c80ba54109f20c3cf9992fb7a076be601f4d27497fe8a09",
+    "nextTaskAtMainSha256": "5067372a26660a8922c29f0b7d2f6719e93021f689dec38ee5ea9798e5c6716d",
+    "v1EvidenceSha256": "a796668127ad8036cd30be6c0b83d6f0e4715b5848c154759da35764ce485aa0"
+  },
+  "testResults": {
+    "implementationIdentity": {
+      "status": "pass_unchanged",
+      "head": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "tree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+      "v1ImplementationHeadMatches": true,
+      "v1ImplementationTreeMatches": true
+    },
+    "baseSynchronization": {
+      "status": "pass",
+      "previousMain": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "currentMain": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "currentMainTree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57",
+      "mergePr": 117,
+      "objective": "Synchronize current truth after migration metadata",
+      "changedPaths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "unexpectedPaths": [],
+      "implementationPathsChangedBySynchronization": false
+    },
+    "currentTruthSyntheticMerge": {
+      "status": "pass_previous_p1_resolved",
+      "commandMode": "offline",
+      "findings": 0,
+      "head": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "recordedMain": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "remoteMain": "4be481c8576b2cb3284f58b1ea9756b375e20833",
+      "synchronizationMode": "synchronization-merge",
+      "parentShapeMatches": true,
+      "requiredPathsPresent": true,
+      "changedPathsAllowed": true,
+      "implementationHeadBindingPresent": true,
+      "implementationHeadBindingExact": true,
+      "providerImplementationSnapshot": null,
+      "recordLiveProviderReadbackField": true,
+      "newProviderReadbackByReview": false,
+      "providerContactByReview": false
+    },
+    "contractValidationSyntheticMerge": {
+      "status": "pass",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25,
+      "errors": 0
+    },
+    "scopeSyntheticMerge": {
+      "status": "pass",
+      "objectiveDomain": "database-RLS",
+      "supportingDomain": "CI-test-infrastructure",
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "changedFiles": 9,
+      "additions": 436,
+      "deletions": 15,
+      "netChangedLines": 421,
+      "defaultFileBudget": 15,
+      "defaultLineBudget": 1200,
+      "withinDefaultBudget": true,
+      "waiver": "pr-b0-chat-call-remote-history-scope-waiver-v1",
+      "scopeWaiverAuthorizesMixedRisk": false,
+      "secondHighRiskDomain": false,
+      "unexpectedDomains": [],
+      "findings": 0
+    },
+    "diffSyntheticMerge": {
+      "status": "pass",
+      "mergeConflict": false,
+      "gitDiffCheck": "pass",
+      "currentTruthPathsInPrDelta": [],
+      "productPathsInPrDelta": [],
+      "packageOrWorkflowPathsInPrDelta": [],
+      "nativePathsInPrDelta": [],
+      "providerImplementationPathsInPrDelta": []
+    },
+    "carriedForwardUnchangedImplementationEvidence": {
+      "status": "valid_implementation_head_unchanged",
+      "sourceParityGuard": "pass",
+      "focusedSourceTests": "5-of-5",
+      "deterministicRuns": 3,
+      "deterministicOutputSha256": "7e6f8ac764b179af8820cd45ed546bf7efbbbcb2828d4ce5e507eded6ab1279d",
+      "featurePlans": [
+        "chilly-chat-call-lifecycle:REQUIREMENTS_CLEAR:ARCHITECTURE_CLEAR",
+        "supabase-migrations-rls:REQUIREMENTS_CLEAR:ARCHITECTURE_CLEAR"
+      ],
+      "notRerunReason": "The implementation head and tree are byte-identical; v2 reran only the checks affected by the approved base synchronization."
+    },
+    "proofTierBoundary": {
+      "status": "pass_no_overclaim",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE_TO_THIS_HISTORY_RECONCILIATION",
+      "featureLevelT2ThroughT6ClearedByThisPr": false,
+      "sourceParitySubstitutionAccepted": false,
+      "dryRunSubstitutionAccepted": false,
+      "featureCompletionClaimed": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "providerContactByReview": false,
+      "providerMutation": false,
+      "databaseContactByReview": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "databaseReset": false,
+      "productSourceChanged": false,
+      "currentTruthChangedByPr116": false,
+      "packageOrWorkflowChanged": false,
+      "nativeSourceChanged": false,
+      "generatedAndroidOrIosCommitted": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "switchOrScheduleChanged": false
+    },
+    "phase1Ci": {
+      "status": "not-run-by-review-lane",
+      "owner": "coordinator",
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "syntheticTree": "827eee9cf00a166d7cbb00236e08bbbb86e48f66",
+      "fullCiRunByReviewLane": false
+    }
+  },
+  "previousFindingDisposition": [
+    {
+      "id": "PR116_CURRENT_TRUTH_MAIN_BINDING_STALE",
+      "v1Severity": "P1",
+      "v1Status": "open",
+      "v2Status": "resolved",
+      "resolution": "PR #117 synchronized the approved three-file current-truth set. In the actual no-commit merge context of current main plus unchanged PR #116, the offline current-truth guard passed with zero findings and exact PR #116 head binding."
+    }
+  ],
+  "findings": [],
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "v1EvidenceStatus": "historical_stale",
+    "v2EvidenceStatus": "current",
+    "scopeDisposition": "bounded-single-database-history-domain-with-supporting-assurance",
+    "proofTierDisposition": "honest-no-T3-or-higher-overclaim",
+    "currentTruthDisposition": "clear-in-current-main-synthetic-merge",
+    "privateEvidenceDetected": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "humanApproval": false,
+    "mergeAuthorizedByThisLane": false,
+    "reviewDisposition": "LANE_CLEAR_P0_P1_ZERO_PENDING_OTHER_LEVEL_C_LANES_AND_FROZEN_HEAD_CI"
+  },
+  "reviewBranchIntegrity": {
+    "implementationAncestor": true,
+    "v1PreservedUnchanged": true,
+    "permittedReviewDelta": [
+      "docs/reviews/pr116-chat-call-history-scope-review.json",
+      "docs/reviews/pr116-chat-call-history-scope-review-v2.json"
+    ],
+    "implementationSourceOnReviewBranch": false,
+    "neverMergeReviewBranch": true
+  },
+  "disposition": "LANE_CLEAR_P0_P1_ZERO",
+  "remainingRequiredAction": "Combine this current v2 lane with the other exact Level C reviews and coordinator-owned frozen-head CI in the current-main merge context. This isolated automated review is not human approval and authorizes no implementation, database, provider, build, OTA, or release action."
+}
