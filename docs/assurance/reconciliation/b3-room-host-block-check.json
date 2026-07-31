@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "reconciliationId": "first-pass-assurance-b3-room-host-block-check",
   "implementationPrNumber": 75,
   "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
@@ -11,7 +11,7 @@
     "rebase": false,
     "forcePush": false
   },
-  "objective": "Preserve the exact deployed room-host participant block-check source and add a forward-only fail-closed authority correction without applying it.",
+  "objective": "Preserve the exact deployed room-host participant block-check source, remove the confirmed undeployed predecessor candidate, and retain a forward-only fail-closed authority correction without applying it.",
   "risk": "C",
   "domains": [
     "database/RLS"
@@ -43,6 +43,18 @@
     "classification": "REMOTE_AND_SOURCE_MATCH",
     "deployedFileModified": false,
     "remoteMigrationReapplied": false
+  },
+  "removedSourceOnlyCandidate": {
+    "version": "20260725224000",
+    "name": "allow_room_host_participant_block_check",
+    "formerFile": "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql",
+    "formerRawSha256": "8c0509254110ebb045a1e7c24c0a5dc593d5d4baa14b01f16079dc6e44aada9f",
+    "remotePresent": false,
+    "sourcePresent": false,
+    "classificationBeforeRemoval": "SOURCE_ONLY",
+    "disposition": "removed-after-first-linked-dry-run-confirmed-local-before-remote",
+    "deployedMigrationReplacement": "20260730161737",
+    "deployedMigrationChanged": false
   },
   "forwardCorrection": {
     "version": "20260730230031",
@@ -90,9 +102,9 @@
     "rollback": "Do not deploy this source under this program. Before any separately authorized deployment, block and supersede it with another forward-only migration if review finds a defect; never rewrite 20260730161737."
   },
   "assembledSourceParity": {
-    "evidenceId": "b3-assembled-source-parity-v2",
+    "evidenceId": "b3-assembled-source-parity-v3",
     "evidenceHashAlgorithm": "sha256-stable-json-of-remoteEvidence-and-classifications",
-    "evidenceSha256": "f298059e75eab1ba86ebf8228e9d108577ead2f827247424ee61a4065df0b339",
+    "evidenceSha256": "aecb8199b98a0bec049e9b43532599f0d113a375d95bfa774b68b7d982937476",
     "remoteEvidence": {
       "mode": "preserved-read-only",
       "head": "20260730161737",
@@ -106,7 +118,8 @@
         "version": "20260725224000",
         "name": "allow_room_host_participant_block_check",
         "classification": "SOURCE_ONLY",
-        "disposition": "preserved-unchanged"
+        "sourcePresent": false,
+        "disposition": "removed-after-linked-dry-run-confirmation"
       },
       {
         "version": "20260730161737",
@@ -124,11 +137,39 @@
     "linkedDryRun": {
       "command": "supabase db push --dry-run",
       "executedByThisLane": false,
-      "reason": "The authorized remediation expressly forbids contacting Supabase.",
-      "status": "BLOCKED_INTERNAL",
-      "substitutionRejected": "preserved-ledger-plus-source-comparison-is-not-linked-cli-dry-run",
-      "exactResumptionAction": "In a separately authorized read-only linked context, run one no-apply dry-run at the frozen head and retain sanitized output. Do not apply either source-only migration."
+      "assembledHead": "98b9dc7364f1e656fe77291d0b62ecfe9d9f31ae",
+      "attempt": 1,
+      "status": "FAIL_CLOSED_NO_APPLY",
+      "errorClass": "LegacyDbPushMissingRemoteError",
+      "requiresIncludeAll": true,
+      "includeAllUsed": false,
+      "applyOccurred": false,
+      "identifiedLocalBeforeRemote": [
+        "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql"
+      ],
+      "otherMigrationIdentified": false,
+      "temporaryWorktreeUnlinkedImmediately": true,
+      "substitutionRejected": "a failed no-apply dry-run identifies the source-only predecessor but does not prove successor deployability",
+      "exactResumptionAction": "After this source-only predecessor deletion freezes and receives exact review, the coordinator may assemble the lanes and run one new linked no-apply dry-run. Do not use --include-all and do not apply the forward correction."
     }
+  },
+  "staticSourceContract": {
+    "file": "tests/assurance/reconciliation/room-host-source-parity.test.mjs",
+    "fileRawSha256": "0d6de60bab6985e7421e54558be1e795bed00fc63a08f2c9045f05f7aea58ada",
+    "assertionGroups": 4,
+    "status": "SOURCE_CLEAR",
+    "deterministicOutput": {
+      "runs": 3,
+      "identical": true,
+      "reporter": "dot",
+      "sha256": "dd29908dd97805d66daeec8bab6b2e2b632de7c11bb01889203309ec93cad524"
+    },
+    "asserts": [
+      "20260725224000 source-only predecessor is absent",
+      "20260730161737 deployed version, name, source path, raw body hash, and remote statement hash remain exact",
+      "20260730230031 forward-only correction remains present, byte-identical, and undeployed",
+      "first assembled dry-run classification is fail-closed/no-apply with no proof substitution"
+    ]
   },
   "focusedTest": {
     "file": "supabase/tests/room_host_participant_block_check_test.sql",
@@ -234,8 +275,8 @@
     "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "INTEGRATION_CLEAR-forward-correction-not-deployed",
     "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "INTEGRATION_CLEAR",
     "B3_CURRENT_31_CASE_PGTAP_NOT_EXECUTED": "SUPERSEDED-by-31-of-31-rollback-only-result",
-    "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING": "BLOCKED_INTERNAL-no-substitution",
-    "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER": "BLOCKED_INTERNAL-no-substitution"
+    "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING": "SUPERSEDED-by-first-linked-fail-closed-no-apply-result",
+    "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER": "SOURCE_CLEAR-candidate-removed-successor-dry-run-pending"
   },
   "reviewBinding": {
     "status": "pending-successor-exact-head-review",
@@ -250,13 +291,14 @@
   },
   "rollback": "Block merge or deployment on any authority, role, room, version, name, body, hash, grant, RLS, dry-run, or exact-review mismatch. Any correction remains forward-only.",
   "emergencyStop": "Stop the database lane; do not apply, rewrite, rename, or re-run deployed migration 20260730161737.",
-  "permittedNextAction": "Run the coordinator-controlled linked no-apply dry-run, then run exact successor review in the existing review lanes without deploying either source-only migration.",
+  "permittedNextAction": "Freeze and review this candidate deletion, then let the coordinator assemble the lanes and run one new linked no-apply dry-run without --include-all. Do not deploy the forward correction.",
   "safety": {
     "liveDatabaseChanged": false,
     "localDatabasePersistentlyChanged": false,
     "providerStateChanged": false,
     "migrationDeployed": false,
     "deployedMigrationChanged": false,
+    "confirmedUndeployedCandidateRemoved": true,
     "packageOrCiChanged": false,
     "currentTruthChanged": false,
     "productSourceChanged": false,
