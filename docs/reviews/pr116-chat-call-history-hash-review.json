@@ -1,0 +1,308 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-hash-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "changedFileHash": "a1ac619e8774b923a8667e88633069338a82ac7d84aa6186cecbb9b97b045fc5",
+  "changedNameHash": "a6d094069758722714706adc3514ac7786ad710501aabe66c7d5a3bfab52cd4f",
+  "migrationSetHash": "2c9c329d6fdbe8fdc821de5fbb2c3c4220e47626a582039ee73dfdc9aa89ccc8",
+  "configHash": "0970da388bb6ed77b5dfda958c3644227b391dcd38ff99fac959592daf08de70",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "version-body-hash-immutability",
+      "focus": "exact deployed migration version, name, raw body hash, local-source binding, duplicate-body identity, retired-candidate absence, and immutable lineage",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "exactBinding": {
+      "status": "pass",
+      "implementationPrNumber": 116,
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "implementationTree": "b43f1de80d184800b5f6fbb8a8b8ddd1beb6408d",
+      "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "baseIsAncestor": true,
+      "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3"
+    },
+    "preservedRemoteEvidence": {
+      "status": "pass",
+      "source": "config/assurance/chilly-chat-livekit-migration-readback.json",
+      "sourceRawSha256": "4492b7aa74245473c2c8371acafd73766ed83d8caa6f2583ace38cecbfa02758",
+      "mode": "coordinator-supplied-prior-read-only-list-and-statement-hashes",
+      "remoteMigrationHead": "20260730161737",
+      "reviewQueriedRemote": false,
+      "newProviderReadback": false
+    },
+    "deployedMigrationBindings": [
+      {
+        "version": "20260728141417",
+        "name": "chilly_chat_livekit_media_rollout",
+        "path": "supabase/migrations/20260728141417_chilly_chat_livekit_media_rollout.sql",
+        "byteCount": 8550,
+        "rawSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0",
+        "gitBlob": "a75656f21248149623138bc6d3b6558ef392aa88",
+        "preservedBodySource": "ee29494539cd9a88ea179aafb48f745511b6ffa3:supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql",
+        "preservedBodyBlob": "a75656f21248149623138bc6d3b6558ef392aa88",
+        "classification": "REMOTE_AND_SOURCE_MATCH"
+      },
+      {
+        "version": "20260729175447",
+        "name": "chilly_chat_active_thread_clear_race_guard",
+        "path": "supabase/migrations/20260729175447_chilly_chat_active_thread_clear_race_guard.sql",
+        "byteCount": 1770,
+        "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+        "gitBlob": "d85c32744a45ad769051dc0f9ebf54172be5f2fa",
+        "preservedBodySource": "ee29494539cd9a88ea179aafb48f745511b6ffa3:supabase/migrations/20260729185000_chilly_chat_active_thread_clear_race_guard.sql",
+        "preservedBodyBlob": "d85c32744a45ad769051dc0f9ebf54172be5f2fa",
+        "remoteDeploymentSequence": 1,
+        "classification": "REMOTE_AND_SOURCE_MATCH"
+      },
+      {
+        "version": "20260729204336",
+        "name": "chilly_chat_active_thread_clear_race_guard",
+        "path": "supabase/migrations/20260729204336_chilly_chat_active_thread_clear_race_guard.sql",
+        "byteCount": 1770,
+        "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+        "gitBlob": "d85c32744a45ad769051dc0f9ebf54172be5f2fa",
+        "preservedBodySource": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8:supabase/migrations/20260729175447_chilly_chat_active_thread_clear_race_guard.sql",
+        "preservedBodyBlob": "d85c32744a45ad769051dc0f9ebf54172be5f2fa",
+        "remoteDeploymentSequence": 2,
+        "classification": "REMOTE_AND_SOURCE_MATCH"
+      },
+      {
+        "version": "20260730034533",
+        "name": "chilly_chat_authoritative_busy_begin",
+        "path": "supabase/migrations/20260730034533_chilly_chat_authoritative_busy_begin.sql",
+        "byteCount": 8243,
+        "rawSha256": "018ebe4cbb7f0346fce34aa2d47ca9b675004dcbfd9b677c945b0c0a08f4a429",
+        "gitBlob": "25f1c6ac15df8e7c883640bee534752d2827d823",
+        "preservedBodySource": "e4589c1bd3d80e84cff96794e9895f3683d37696:supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+        "preservedBodyBlob": "25f1c6ac15df8e7c883640bee534752d2827d823",
+        "classification": "REMOTE_AND_SOURCE_MATCH"
+      },
+      {
+        "version": "20260730040727",
+        "name": "chilly_chat_busy_active_thread_guard",
+        "path": "supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql",
+        "byteCount": 8555,
+        "rawSha256": "79fcdb34fe5575dcc461900c9b146fb60d6b825162742c39d7ac172338bdd948",
+        "gitBlob": "e919fda65e5818321c41e72b76d4fd3e07966234",
+        "preservedBodySource": "ee29494539cd9a88ea179aafb48f745511b6ffa3:supabase/migrations/20260730040000_chilly_chat_busy_active_thread_guard.sql",
+        "preservedBodyBlob": "e919fda65e5818321c41e72b76d4fd3e07966234",
+        "classification": "REMOTE_AND_SOURCE_MATCH"
+      }
+    ],
+    "localSourcePathBinding": {
+      "status": "pass",
+      "exactVersionNamePathCount": 5,
+      "manifestBindingsMatchPaths": true,
+      "reportBindingsMatchPaths": true,
+      "rawHashesMatchPreservedReadback": true,
+      "rawHashesMatchCurrentFileBytes": true,
+      "byteCountsMatchCurrentFiles": true
+    },
+    "duplicateBodyIdentity": {
+      "status": "pass",
+      "versions": [
+        "20260729175447",
+        "20260729204336"
+      ],
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "gitBlob": "d85c32744a45ad769051dc0f9ebf54172be5f2fa",
+      "byteIdentical": true
+    },
+    "retiredCandidateAbsence": {
+      "status": "pass_against_preserved_candidate_absence_evidence",
+      "reviewQueriedRemote": false,
+      "candidateAbsenceConfirmedByPreservedReadback": true,
+      "treeAbsenceConfirmed": true,
+      "candidates": [
+        {
+          "version": "20260728143000",
+          "path": "supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql",
+          "remotePresent": false,
+          "implementationTreePresent": false,
+          "baseRawSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0"
+        },
+        {
+          "version": "20260729185000",
+          "path": "supabase/migrations/20260729185000_chilly_chat_active_thread_clear_race_guard.sql",
+          "remotePresent": false,
+          "implementationTreePresent": false,
+          "baseRawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e"
+        },
+        {
+          "version": "20260730032500",
+          "path": "supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+          "remotePresent": false,
+          "implementationTreePresent": false,
+          "baseRawSha256": "07a192dcce590748f4abe06d8bf494a4baf666ce917387bfdfe8bbc54e2156a0"
+        },
+        {
+          "version": "20260730040000",
+          "path": "supabase/migrations/20260730040000_chilly_chat_busy_active_thread_guard.sql",
+          "remotePresent": false,
+          "implementationTreePresent": false,
+          "baseRawSha256": "79fcdb34fe5575dcc461900c9b146fb60d6b825162742c39d7ac172338bdd948"
+        }
+      ]
+    },
+    "immutability": {
+      "status": "pass",
+      "exactDeployedPathsAbsentFromBase": true,
+      "deployedBodyRewritten": false,
+      "deployedMigrationReapplied": false,
+      "migrationDeploymentAttemptedByReview": false,
+      "existingRemoteVersionRenamedByReview": false,
+      "sourceAlignmentCommit": "cd678d29ae431fb0cd71903e5fe6769605122759",
+      "migrationBodiesUnchangedAfterSourceAlignmentCommit": true,
+      "authoritativeBusyUndeployedCandidateKeptDistinctFromDeployedBody": true,
+      "futureCorrectionMustBeForwardOnly": true
+    },
+    "guardAndStaticDeterminism": {
+      "status": "pass",
+      "staticCommand": "node --test tests/assurance/reconciliation/chat-call-remote-history.test.mjs",
+      "staticRuns": 3,
+      "staticPassedPerRun": 5,
+      "staticFailedPerRun": 0,
+      "staticTimingNormalizedSha256": "af7d1a908fe5fe9b9ef3beecf7513f3109cbad17452516013aee815d31c349c7",
+      "guardCommand": "node scripts/guard-chilly-chat-livekit-migration-readback.mjs",
+      "guardRuns": 3,
+      "guardPassedPerRun": 1,
+      "guardFailedPerRun": 0,
+      "guardOutputSha256": "8a6f40b7278f5f23f401d01b8d50aa9f6a4509bfdadb2b98e24126313644db02",
+      "combinedTimingNormalizedSha256": "43d574daa2bbeec74e2b28e605bda6bb301566ea55edffff9487c3e7a49aeb2a"
+    },
+    "sourceEvidenceHashes": {
+      "readbackManifestRawSha256": "4492b7aa74245473c2c8371acafd73766ed83d8caa6f2583ace38cecbfa02758",
+      "reconciliationReportRawSha256": "156057606802f284a27d996559f8736c41de7212c645b96f730d2a4fc009da72",
+      "staticTestRawSha256": "97cd13039f90223c738f886038c148dabe7912bf8c3e5fa6d06dfc268e295702"
+    },
+    "currentTruthContext": {
+      "status": "coordinator_owned_outside_hash_lane",
+      "commandRun": "node scripts/assurance/current-truth.mjs",
+      "commandPassed": false,
+      "finding": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
+      "recordedMain": "a24956a19a50182db9c0d0e727ed38e61b2f3f90",
+      "observedOriginMain": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "reviewInterpretation": "Not scored as a version/body/hash defect; the coordinator retains the repository-wide current-truth merge gate."
+    },
+    "phase1Ci": {
+      "status": "not-run-by-this-review-lane",
+      "implementationHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "coordinatorOwned": true
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE",
+      "higherTierProofClaimedByReview": false
+    },
+    "nonInterference": {
+      "providerContactByReview": false,
+      "providerMutation": false,
+      "databaseContactByReview": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "buildOrOta": false,
+      "productOrNativeEdit": false,
+      "implementationEdit": false,
+      "privateEvidenceCommitted": false
+    }
+  },
+  "testResultHash": "d415d73c5193456efdae044c76d98273fd2b0e4dc9b0f0193ac5e27c6b770d5f",
+  "reviewLevel": "C",
+  "reviewHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+  "reviewTimestamp": "2026-07-31T00:22:28Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-version-body-hash-immutability",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR116_EXACT_DEPLOYED_VERSION_NAME_BODY_HASHES",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "All five exact deployed version/name/path bindings reproduce the preserved remote raw SHA-256 values and current file byte counts."
+    },
+    {
+      "id": "PR116_DUPLICATE_DEPLOYMENT_BODY_IDENTITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Versions 20260729175447 and 20260729204336 are byte-identical and resolve to the same Git blob and raw SHA-256."
+    },
+    {
+      "id": "PR116_OLD_CANDIDATE_ABSENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The four coordinator-confirmed non-remote candidates are absent from the implementation tree; this review performed no new remote query."
+    },
+    {
+      "id": "PR116_DEPLOYED_MIGRATION_IMMUTABILITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "No deployed body was rewritten, renamed, deleted, or reapplied. The authoritative-busy deployed body is the exact preserved historical blob, not the differing undeployed candidate."
+    },
+    {
+      "id": "PR116_HASH_GUARD_STATIC_DETERMINISM",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The five-case static suite and seven-binding readback guard passed independently three of three times with stable timing-normalized output hashes."
+    }
+  ],
+  "severityCounts": {
+    "P0": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P1": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P2": {
+      "open": 0,
+      "resolved": 5,
+      "total": 5
+    },
+    "P3": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    }
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "resolvedFindings": 5,
+    "implementationFilesOnReviewBranch": 0,
+    "reviewDisposition": "HASH_IMMUTABILITY_CLEAR_PENDING_OTHER_LEVEL_C_LANES_CURRENT_TRUTH_AND_FROZEN_HEAD_CI",
+    "humanApproval": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
