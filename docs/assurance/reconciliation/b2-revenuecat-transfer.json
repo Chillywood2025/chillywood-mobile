@@ -21,6 +21,7 @@
   },
   "remoteSnapshot": {
     "mode": "read-only-coordinator-supplied",
+    "coordinatorLiveReadbackOccurred": true,
     "providerMutation": false,
     "databaseMutation": false,
     "migrationHead": "20260730161737"
@@ -83,7 +84,31 @@
       "providerContact": false
     },
     "orderingSchedules": {"status": "MODEL_CLEAR", "passed": 8, "failed": 0, "antiVacuityControls": 1, "deterministic": true},
-    "remoteDryRun": {"status": "BLOCKED_INTERNAL", "reason": "coordinator-controlled read-only assembled-source dry-run remains required; no remote connection or mutation attempted"}
+    "remoteDryRun": {
+      "status": "PASS_NO_APPLY",
+      "command": "supabase db push --dry-run",
+      "supabaseCliVersion": "2.110.0",
+      "assembledBranchHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "assembledBranchTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+      "componentHeads": {
+        "B0": "860ee2b80a9f215497128785b199add8418e66ee",
+        "B1": "7e39e49f2dc176fee29e78128443190638545ced",
+        "B2": "fdc04d5cfb02cfc34e408a11db265d55ce0dfdb6",
+        "B3": "67edc2b766e89b28b16962062ea7c7eb2c0d2565"
+      },
+      "remoteHistorySourceAligned": true,
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "seedFiles": [],
+      "roleFiles": [],
+      "linkLifecycle": "linked-for-one-final-read-only-dry-run-and-immediately-unlinked",
+      "applied": false,
+      "remoteMutation": false,
+      "providerMutation": false
+    }
   },
   "fixtureCoverage": [
     "success",
@@ -111,11 +136,12 @@
   "proofLimits": [
     "The fixture corpus proves only deterministic sanitized source contracts.",
     "The frozen 69/69 local pgTAP result proves the current source only inside its outer rollback-only local transaction.",
-    "The local integration result does not substitute for the pending linked no-apply dry-run or provider-backed proof.",
+    "The final assembled linked no-apply dry-run passed with remote history/source aligned and exactly three forward-only files pending.",
+    "The local integration and dry-run results do not substitute for provider-backed proof.",
     "No provider, installed, physical, signed-artifact, or release behavior is claimed."
   ],
   "rollback": "Retain immutable deployed migration source. The forward correction remains undeployed; any future deployed correction requires another forward-only successor rather than rewriting migration history.",
   "emergencyStop": "Do not deploy the webhook or mutate provider state; route any future provider action to Money Flow Control under separate authorization.",
-  "finalPermittedNextAction": "Pass the coordinator-controlled linked read-only assembled-source no-apply dry-run, then require fresh exact-head review and scope enforcement before this Git-only reconciliation may merge.",
+  "finalPermittedNextAction": "Require fresh exact-head review and scope enforcement of the passed assembled linked no-apply dry-run before this Git-only reconciliation may merge.",
   "claimedFeatureCompletion": false
 }
