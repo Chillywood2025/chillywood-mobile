@@ -779,7 +779,7 @@ begin
       'sanitizationVersion','bounded-nonpersonal-v1',
       'observationKind','livekit_experience',
       'evidenceHashes',jsonb_build_array(evidence_hash_value),
-      'metrics',metrics
+      'metrics',metrics || jsonb_build_object('assuranceFixtureStatus','ok','assuranceFixtureState','state')
     );
   end if;
   select * into fixture from b1_livekit_fixture_state
