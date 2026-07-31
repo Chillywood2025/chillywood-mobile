@@ -102,9 +102,9 @@
     "rollback": "Do not deploy this source under this program. Before any separately authorized deployment, block and supersede it with another forward-only migration if review finds a defect; never rewrite 20260730161737."
   },
   "assembledSourceParity": {
-    "evidenceId": "b3-assembled-source-parity-v3",
-    "evidenceHashAlgorithm": "sha256-stable-json-of-remoteEvidence-and-classifications",
-    "evidenceSha256": "aecb8199b98a0bec049e9b43532599f0d113a375d95bfa774b68b7d982937476",
+    "evidenceId": "b3-assembled-source-parity-v4",
+    "evidenceHashAlgorithm": "sha256-stable-json-of-remoteEvidence-classifications-historicalLinkedDryRuns-and-linkedDryRun",
+    "evidenceSha256": "134ff86d8769bb7ef07bba9c49b0d8a4e4e2b9f62d4f6950b89d26a6e11f68c6",
     "remoteEvidence": {
       "mode": "preserved-read-only",
       "head": "20260730161737",
@@ -134,28 +134,70 @@
         "disposition": "not-deployed"
       }
     ],
+    "historicalLinkedDryRuns": [
+      {
+        "command": "supabase db push --dry-run",
+        "executedByThisLane": false,
+        "assembledHead": "98b9dc7364f1e656fe77291d0b62ecfe9d9f31ae",
+        "attempt": 1,
+        "status": "historical_resolved",
+        "originalStatus": "FAIL_CLOSED_NO_APPLY",
+        "errorClass": "LegacyDbPushMissingRemoteError",
+        "requiresIncludeAll": true,
+        "includeAllUsed": false,
+        "applyOccurred": false,
+        "identifiedLocalBeforeRemote": [
+          "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql"
+        ],
+        "otherMigrationIdentified": false,
+        "resolution": "The confirmed undeployed source-only predecessor was removed at B3 head 67edc2b766e89b28b16962062ea7c7eb2c0d2565; the successor assembled dry-run passed without apply.",
+        "temporaryWorktreeUnlinkedImmediately": true,
+        "substitutionRejected": "a historical failed no-apply dry-run identified the source-only predecessor but did not prove successor deployability"
+      }
+    ],
     "linkedDryRun": {
       "command": "supabase db push --dry-run",
       "executedByThisLane": false,
-      "assembledHead": "98b9dc7364f1e656fe77291d0b62ecfe9d9f31ae",
-      "attempt": 1,
-      "status": "FAIL_CLOSED_NO_APPLY",
-      "errorClass": "LegacyDbPushMissingRemoteError",
-      "requiresIncludeAll": true,
+      "assembledHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "assembledTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+      "componentHeads": {
+        "B0": "860ee2b80a9f215497128785b199add8418e66ee",
+        "B1": "7e39e49f2dc176fee29e78128443190638545ced",
+        "B2": "fdc04d5cfb02cfc34e408a11db265d55ce0dfdb6",
+        "B3": "67edc2b766e89b28b16962062ea7c7eb2c0d2565"
+      },
+      "cliVersion": "2.110.0",
+      "attempt": 2,
+      "status": "PASS_NO_APPLY",
       "includeAllUsed": false,
       "applyOccurred": false,
-      "identifiedLocalBeforeRemote": [
-        "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql"
+      "providerMutation": false,
+      "databaseMutation": false,
+      "pendingCount": 3,
+      "pendingMigrations": [
+        {
+          "version": "20260730170000",
+          "name": "revenuecat_transfer_authoritative_ordering"
+        },
+        {
+          "version": "20260730230022",
+          "name": "cognitive_livekit_final_source_identity_cross_binding"
+        },
+        {
+          "version": "20260730230031",
+          "name": "room_host_block_check_fail_closed_authority"
+        }
       ],
-      "otherMigrationIdentified": false,
+      "seedFiles": [],
+      "roleFiles": [],
       "temporaryWorktreeUnlinkedImmediately": true,
-      "substitutionRejected": "a failed no-apply dry-run identifies the source-only predecessor but does not prove successor deployability",
-      "exactResumptionAction": "After this source-only predecessor deletion freezes and receives exact review, the coordinator may assemble the lanes and run one new linked no-apply dry-run. Do not use --include-all and do not apply the forward correction."
+      "substitutionRejected": "PASS_NO_APPLY proves assembled source parity and pending-plan readability only; it does not prove deployment, live runtime behavior, or provider behavior.",
+      "exactNextAction": "Proceed to exact-head review and frozen-head CI. Do not apply the three pending forward corrections under this program."
     }
   },
   "staticSourceContract": {
     "file": "tests/assurance/reconciliation/room-host-source-parity.test.mjs",
-    "fileRawSha256": "0d6de60bab6985e7421e54558be1e795bed00fc63a08f2c9045f05f7aea58ada",
+    "fileRawSha256": "66bc766c31a07b9cf78907ae8c2acfba60b6e10ea7ddded4fe83f3ebb23fc8f3",
     "assertionGroups": 4,
     "status": "SOURCE_CLEAR",
     "deterministicOutput": {
@@ -168,7 +210,7 @@
       "20260725224000 source-only predecessor is absent",
       "20260730161737 deployed version, name, source path, raw body hash, and remote statement hash remain exact",
       "20260730230031 forward-only correction remains present, byte-identical, and undeployed",
-      "first assembled dry-run classification is fail-closed/no-apply with no proof substitution"
+      "first assembled dry-run is retained as historical_resolved and the successor assembled dry-run is PASS_NO_APPLY with no proof substitution"
     ]
   },
   "focusedTest": {
@@ -275,8 +317,8 @@
     "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "INTEGRATION_CLEAR-forward-correction-not-deployed",
     "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "INTEGRATION_CLEAR",
     "B3_CURRENT_31_CASE_PGTAP_NOT_EXECUTED": "SUPERSEDED-by-31-of-31-rollback-only-result",
-    "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING": "SUPERSEDED-by-first-linked-fail-closed-no-apply-result",
-    "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER": "SOURCE_CLEAR-candidate-removed-successor-dry-run-pending"
+    "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING": "SUPERSEDED-by-final-linked-PASS_NO_APPLY-result",
+    "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER": "SUPERSEDED-candidate-removed-final-assembled-dry-run-PASS_NO_APPLY"
   },
   "reviewBinding": {
     "status": "pending-successor-exact-head-review",
@@ -291,7 +333,7 @@
   },
   "rollback": "Block merge or deployment on any authority, role, room, version, name, body, hash, grant, RLS, dry-run, or exact-review mismatch. Any correction remains forward-only.",
   "emergencyStop": "Stop the database lane; do not apply, rewrite, rename, or re-run deployed migration 20260730161737.",
-  "permittedNextAction": "Freeze and review this candidate deletion, then let the coordinator assemble the lanes and run one new linked no-apply dry-run without --include-all. Do not deploy the forward correction.",
+  "permittedNextAction": "Proceed to exact-head review and frozen-head CI. Do not deploy any pending forward correction.",
   "safety": {
     "liveDatabaseChanged": false,
     "localDatabasePersistentlyChanged": false,
@@ -299,6 +341,8 @@
     "migrationDeployed": false,
     "deployedMigrationChanged": false,
     "confirmedUndeployedCandidateRemoved": true,
+    "assembledDryRunStatus": "PASS_NO_APPLY",
+    "assembledDryRunApplyOccurred": false,
     "packageOrCiChanged": false,
     "currentTruthChanged": false,
     "productSourceChanged": false,

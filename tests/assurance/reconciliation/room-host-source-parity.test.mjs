@@ -91,7 +91,7 @@ test("the forward-only authority correction remains present and unchanged", () =
   assert.equal(report.forwardCorrection.deployed, false);
 });
 
-test("the report records the first assembled dry-run without substitution", () => {
+test("the report preserves the resolved first dry-run and binds the final no-apply pass", () => {
   const removed = report.removedSourceOnlyCandidate;
   const parity = report.assembledSourceParity;
   const removedClassification = parity.classifications.find(
@@ -106,7 +106,11 @@ test("the report records the first assembled dry-run without substitution", () =
   const evidenceValue = {
     remoteEvidence: parity.remoteEvidence,
     classifications: parity.classifications,
+    historicalLinkedDryRuns: parity.historicalLinkedDryRuns,
+    linkedDryRun: parity.linkedDryRun,
   };
+  const historicalDryRun = parity.historicalLinkedDryRuns[0];
+  const finalDryRun = parity.linkedDryRun;
 
   assert.equal(report.staticSourceContract.file, staticContractPath);
   assert.equal(
@@ -138,27 +142,68 @@ test("the report records the first assembled dry-run without substitution", () =
     sha256(JSON.stringify(stableValue(evidenceValue))),
     parity.evidenceSha256,
   );
-  assert.deepEqual(parity.linkedDryRun.identifiedLocalBeforeRemote, [
+  assert.equal(parity.historicalLinkedDryRuns.length, 1);
+  assert.deepEqual(historicalDryRun.identifiedLocalBeforeRemote, [
     removedCandidatePath,
   ]);
   assert.equal(
-    parity.linkedDryRun.assembledHead,
+    historicalDryRun.assembledHead,
     "98b9dc7364f1e656fe77291d0b62ecfe9d9f31ae",
   );
-  assert.equal(parity.linkedDryRun.attempt, 1);
-  assert.equal(parity.linkedDryRun.status, "FAIL_CLOSED_NO_APPLY");
+  assert.equal(historicalDryRun.attempt, 1);
+  assert.equal(historicalDryRun.status, "historical_resolved");
+  assert.equal(historicalDryRun.originalStatus, "FAIL_CLOSED_NO_APPLY");
   assert.equal(
-    parity.linkedDryRun.errorClass,
+    historicalDryRun.errorClass,
     "LegacyDbPushMissingRemoteError",
   );
-  assert.equal(parity.linkedDryRun.requiresIncludeAll, true);
-  assert.equal(parity.linkedDryRun.includeAllUsed, false);
-  assert.equal(parity.linkedDryRun.applyOccurred, false);
-  assert.equal(parity.linkedDryRun.otherMigrationIdentified, false);
+  assert.equal(historicalDryRun.requiresIncludeAll, true);
+  assert.equal(historicalDryRun.includeAllUsed, false);
+  assert.equal(historicalDryRun.applyOccurred, false);
+  assert.equal(historicalDryRun.otherMigrationIdentified, false);
   assert.equal(
-    parity.linkedDryRun.temporaryWorktreeUnlinkedImmediately,
+    historicalDryRun.temporaryWorktreeUnlinkedImmediately,
     true,
   );
+  assert.equal(
+    finalDryRun.assembledHead,
+    "24237254fba83534018c3dca5e986d5c4f73ba66",
+  );
+  assert.equal(
+    finalDryRun.assembledTree,
+    "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+  );
+  assert.deepEqual(finalDryRun.componentHeads, {
+    B0: "860ee2b80a9f215497128785b199add8418e66ee",
+    B1: "7e39e49f2dc176fee29e78128443190638545ced",
+    B2: "fdc04d5cfb02cfc34e408a11db265d55ce0dfdb6",
+    B3: "67edc2b766e89b28b16962062ea7c7eb2c0d2565",
+  });
+  assert.equal(finalDryRun.cliVersion, "2.110.0");
+  assert.equal(finalDryRun.attempt, 2);
+  assert.equal(finalDryRun.status, "PASS_NO_APPLY");
+  assert.equal(finalDryRun.includeAllUsed, false);
+  assert.equal(finalDryRun.applyOccurred, false);
+  assert.equal(finalDryRun.providerMutation, false);
+  assert.equal(finalDryRun.databaseMutation, false);
+  assert.equal(finalDryRun.pendingCount, 3);
+  assert.deepEqual(finalDryRun.pendingMigrations, [
+    {
+      version: "20260730170000",
+      name: "revenuecat_transfer_authoritative_ordering",
+    },
+    {
+      version: "20260730230022",
+      name: "cognitive_livekit_final_source_identity_cross_binding",
+    },
+    {
+      version: "20260730230031",
+      name: "room_host_block_check_fail_closed_authority",
+    },
+  ]);
+  assert.deepEqual(finalDryRun.seedFiles, []);
+  assert.deepEqual(finalDryRun.roleFiles, []);
+  assert.equal(finalDryRun.temporaryWorktreeUnlinkedImmediately, true);
   assert.equal(report.safety.migrationDeployed, false);
   assert.equal(report.safety.deployedMigrationChanged, false);
   assert.equal(report.safety.confirmedUndeployedCandidateRemoved, true);
