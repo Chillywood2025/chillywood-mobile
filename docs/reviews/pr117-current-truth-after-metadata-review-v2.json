@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr117-current-truth-after-metadata-review-v2",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLabel": "isolated automated Level A review; not human approval",
+  "reviewLevel": "A",
+  "implementationPrNumber": 117,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-metadata",
+  "implementationHead": "18974e84c549cf89ca1979c9bf937f5a12e4a7c0",
+  "implementationTree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "mergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "baseImplementationDivergence": {
+    "baseOnlyCommits": 0,
+    "implementationOnlyCommits": 2
+  },
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-metadata-review",
+  "reviewHead": "18974e84c549cf89ca1979c9bf937f5a12e4a7c0",
+  "reviewHeadSemantics": "exact successor implementation head merged history-preservingly as the second parent of the review integration merge immediately preceding this v2 evidence",
+  "reviewIntegrationMerge": {
+    "commit": "85b520d755ae77dbfcd6f6c78050c12c56c3660f",
+    "tree": "65b8bac8148a3010674de52b9c517f8107b25073",
+    "firstParent": "22873b1c8f7e3eee2f9b69c1832170e85e48385e",
+    "secondParent": "18974e84c549cf89ca1979c9bf937f5a12e4a7c0"
+  },
+  "reviewTimestamp": "2026-07-31T00:34:17Z",
+  "reviewerLanes": [
+    "independent-current-truth-metadata"
+  ],
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "evidenceVersions": {
+    "v1": {
+      "status": "historical_stale",
+      "path": "docs/reviews/pr117-current-truth-after-metadata-review.json",
+      "reviewCommit": "22873b1c8f7e3eee2f9b69c1832170e85e48385e",
+      "reviewedImplementationHead": "93f0f71c9730f999145340657b8ab0b9633a405c",
+      "sha256": "76ebc655a251533cd3d1dcdfa10e2f1d2b9bfbf5cbbeb6d130aac5f2c17e84d8",
+      "preservedUnchanged": true
+    },
+    "v2": {
+      "status": "current",
+      "path": "docs/reviews/pr117-current-truth-after-metadata-review-v2.json",
+      "reviewedImplementationHead": "18974e84c549cf89ca1979c9bf937f5a12e4a7c0"
+    }
+  },
+  "changedFileHash": "6e81cd5945f2e3272a857b94d90ebb8a2c8293b155e917585246b10bd2f1500a",
+  "changedFileHashMethod": "sha256(git diff --raw --no-renames base...implementationHead)",
+  "changedNameHash": "cf0ec400e5b1418792707fffe37a921cb3288d81647bde7ef62e1722496d648c",
+  "changedNameHashMethod": "sha256(git diff --name-only base...implementationHead)",
+  "implementationDiffHash": "3f3a0e4e9b22779bb0b78a163574c109e3a232ffc1b17319bdc50a966ddcb9c5",
+  "implementationDiffHashMethod": "sha256(git diff --binary --no-renames base...implementationHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "migrationSetHashMethod": "sha256(newline-delimited changed supabase/migrations/*.sql paths; empty set)",
+  "configHash": "482030291469e84cca12768e719ace697f1ee550af5b44fd9355a9361b8b8111",
+  "configHashMethod": "sha256(config/assurance/current-truth-v1.json)",
+  "artifactHashes": {
+    "CURRENT_STATE.md": "ef3ee904eb05e46f1c80ba54109f20c3cf9992fb7a076be601f4d27497fe8a09",
+    "NEXT_TASK.md": "5067372a26660a8922c29f0b7d2f6719e93021f689dec38ee5ea9798e5c6716d"
+  },
+  "testResults": {
+    "exactImplementationBinding": {
+      "status": "SOURCE_CLEAR",
+      "head": "18974e84c549cf89ca1979c9bf937f5a12e4a7c0",
+      "tree": "207eaa7b1bd89f518720a7a8f529b16d7cecfb57",
+      "base": "ee29494539cd9a88ea179aafb48f745511b6ffa3"
+    },
+    "historyPreservingReviewReuse": {
+      "status": "SOURCE_CLEAR",
+      "normalMergeCommit": "85b520d755ae77dbfcd6f6c78050c12c56c3660f",
+      "successorImplementationIsSecondParent": true,
+      "v1EvidencePreservedUnchanged": true,
+      "reviewDiffBeforeV2": [
+        "docs/reviews/pr117-current-truth-after-metadata-review.json"
+      ]
+    },
+    "allowedFileScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "additions": 25,
+      "deletions": 23,
+      "netChangedLines": 2,
+      "paths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ]
+    },
+    "mainAndLatestMergedImplementation": {
+      "status": "SOURCE_CLEAR",
+      "main": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "latestMergedPr": 113,
+      "latestMergedHead": "f1e5c46b2099845c59f32eedc20e347204400e36",
+      "mainSubject": "Move Chat Call migration readback into assurance metadata (#113)"
+    },
+    "openImplementationRemoteHeadBindings": {
+      "status": "SOURCE_CLEAR",
+      "bindingsChecked": 5,
+      "pr116Head": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "findingCount": 0
+    },
+    "boundedSuccessorDispositions": {
+      "status": "SOURCE_CLEAR",
+      "remotePredecessors": {
+        "69": "a5a37296800419a50c9bb271d99e505f6ad7a056",
+        "70": "6d05b2bd2e56695e76a7bcfb0890303bf768cb8e",
+        "75": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b"
+      },
+      "localFrozenSuccessors": {
+        "69": "f30d37a1c580915242648d186ed7260c00e2e0e4",
+        "70": "e841f9867e0c90aede88723894b3ef52504be731",
+        "75": "b2cd931802329d3aee82a0ab2bad6ce843950387"
+      },
+      "conclusion": "The record binds each open PR to its remote predecessor head and describes the distinct frozen local successor without presenting that successor as the remote PR head."
+    },
+    "assembledNoApplyAndProviderReadbackWording": {
+      "status": "SOURCE_CLEAR",
+      "supportingReportHead": "b455e31ad43bac29ff78e0f31e7f99aeabd37ba8",
+      "assembledStatus": "PASS_NO_APPLY",
+      "remoteHistorySourceAligned": true,
+      "pendingForwardFiles": 3,
+      "coordinatorLiveReadbackOccurred": true,
+      "providerMapDisclosesPartialCoverage": true,
+      "conclusion": "The record accurately distinguishes read-only GitHub and Supabase readback from providers not read back and does not claim that the three pending forward corrections were applied."
+    },
+    "generatedDocuments": {
+      "status": "SOURCE_CLEAR",
+      "exactlyRenderedFromAuthoritativeRecord": true,
+      "driftFindings": 0
+    },
+    "contractValidation": {
+      "status": "SOURCE_CLEAR",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25
+    },
+    "prScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "maximumFiles": 15,
+      "netChangedLines": 2,
+      "maximumNetChangedLines": 1200,
+      "highRiskDomains": []
+    },
+    "deterministicCurrentTruth": {
+      "status": "SOURCE_CLEAR",
+      "runs": 3,
+      "identical": true,
+      "outputSha256": "9e8513614b70a921da95b26364b7181c8623307169bfaa4c8257a36a20665d30"
+    },
+    "timestampCausality": {
+      "status": "SOURCE_CLEAR",
+      "implementationCommittedAt": "2026-07-31T00:32:53Z",
+      "recordedEvidenceTimestamp": "2026-07-31T00:32:00Z",
+      "reviewClockAtFocusedCheck": "2026-07-31T00:34:02.417Z",
+      "recordedTimestampBeforeImplementationCommitSeconds": 53,
+      "recordedTimestampNotFuture": true,
+      "freshnessDeadline": "2026-08-01T00:32:00Z",
+      "freshnessWindowHours": 24
+    },
+    "diffCheck": {
+      "status": "SOURCE_CLEAR"
+    },
+    "privacyAndSecretScan": {
+      "status": "SOURCE_CLEAR",
+      "newPrivateEvidence": false,
+      "newSecretMaterial": false,
+      "newDeviceIdentifiers": false
+    },
+    "nonInterference": {
+      "status": "SOURCE_CLEAR",
+      "productSourceChanged": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "nativeChange": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "generatedNativeDirectoryChanged": false,
+      "denoLockChanged": false
+    }
+  },
+  "testResultHash": "0e4ebc17e36503573c322941c1bdc5815f34177e820b8752c1f3d6b7d6396a8c",
+  "testResultHashMethod": "sha256(jq -cS .testResults plus trailing newline)",
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T3_INTEGRATION": "NOT_APPLICABLE",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "historicalFindings": [
+    {
+      "id": "ASSURANCE_CURRENT_TRUTH_FUTURE_EVIDENCE_TIMESTAMP",
+      "severity": "P1",
+      "v1Status": "BLOCKED_INTERNAL",
+      "v2Status": "SUPERSEDED",
+      "resolution": "The successor records the actual 2026-07-31T00:32:00Z evidence time, 53 seconds before its implementation commit, and derives a coherent 24-hour deadline."
+    }
+  ],
+  "findings": [],
+  "historicalResolvedSeverityCounts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 0,
+    "P3": 0
+  },
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "openSeverityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "implementationFilesOnReviewBranch": 0,
+    "generatedDocumentsExact": true,
+    "headBindingsExact": true,
+    "scopeClear": true,
+    "privacyClear": true,
+    "nonInterferenceClear": true,
+    "timestampCausalityClear": true,
+    "v1EvidenceStatus": "historical_stale",
+    "v2EvidenceStatus": "current",
+    "reviewDisposition": "LANE_CLEAR_P0_P1_ZERO_CURRENT_TRUTH_METADATA_VERIFIED",
+    "mergeAuthorizedByThisLane": false,
+    "humanApproval": false
+  },
+  "disposition": "LANE_CLEAR_P0_P1_ZERO_CURRENT_TRUTH_METADATA_VERIFIED"
+}
