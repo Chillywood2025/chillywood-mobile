@@ -665,7 +665,7 @@ const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root)
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
 const chatLibSource = await readFile(new URL("_lib/chat.ts", root), "utf8");
 const authoritativeBusyBeginSource = await readFile(
-  new URL("supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql", root),
+  new URL("supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql", root),
   "utf8",
 );
 const iosNativeCallsSource = await readFile(new URL("_lib/iosNativeCalls.ts", root), "utf8");
