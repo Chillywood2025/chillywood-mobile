@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr129-cognitive-db-lock-order-review-v1",
+  "reviewType": "isolated-review-only-assurance-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 129,
+  "implementationBranch": "codex/assurance-deterministic-cognitive-db-lock-order",
+  "implementationHead": "ceaf222a4ba55d7a1c89902298d0df649eecf61c",
+  "implementationTree": "72fc7a21924e87cf69884f081ffd272fe234f1e4",
+  "baseHead": "3ef2f1c5f5b332bc644a822004c04a48be9107a0",
+  "changedFileHash": "198771762cc2fc0fc8a8002b1f2a4553c72af3d15fa5275e236e0493beeafebb",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "da49c81b0ddd67c34db46ccc5219d589a77a8b959d638875589c6bdcddaf8a9b",
+  "reviewLevel": "A",
+  "reviewHead": "ceaf222a4ba55d7a1c89902298d0df649eecf61c",
+  "reviewTimestamp": "2026-08-01T21:21:25Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-fresh-checkout",
+    "concurrency-lock-order"
+  ],
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationPrNumber": 129,
+      "implementationHead": "ceaf222a4ba55d7a1c89902298d0df649eecf61c",
+      "implementationTree": "72fc7a21924e87cf69884f081ffd272fe234f1e4",
+      "baseHead": "3ef2f1c5f5b332bc644a822004c04a48be9107a0"
+    },
+    "rootCause": {
+      "status": "pass",
+      "classification": "test-harness-process-startup-order",
+      "deployedFunctionDefect": false,
+      "failingRun": 30717640039,
+      "failingAssertion": "side effect must fail after cancellation"
+    },
+    "orderedBarriers": {
+      "status": "pass",
+      "pattern": "writer-output-marker-before-contender-start",
+      "orderedCases": [
+        "service-principal-revocation",
+        "emergency-stop-during-execution",
+        "task-cancellation-during-execution",
+        "bootstrap-revocation-after-staging",
+        "bootstrap-emergency-stop"
+      ],
+      "orderedCaseCount": 5,
+      "workerSleepDependencyRemoved": true,
+      "existingAssertionsPreserved": true
+    },
+    "sourceChecks": {
+      "status": "pass",
+      "javascriptSyntax": "pass",
+      "eslintChangedFile": "pass",
+      "barrierOrder": "5/5 pass",
+      "gitDiffCheck": "pass"
+    },
+    "contractValidation": {
+      "status": "pass",
+      "contractsValidated": 13,
+      "errors": 0
+    },
+    "scope": {
+      "status": "pass",
+      "changedFiles": 1,
+      "additions": 88,
+      "deletions": 33,
+      "netChangedLines": 55,
+      "domains": ["CI-test-infrastructure"],
+      "highRiskDomains": [],
+      "withinDefaultBudget": true
+    },
+    "nonInterference": {
+      "status": "pass",
+      "assertionWeakenedOrRemoved": false,
+      "protectionRuleChanged": false,
+      "bypassIdentityAdded": false,
+      "implementationPr116Changed": false,
+      "workflowOrPackageChanged": false,
+      "productOrMigrationChanged": false,
+      "providerOrRemoteDatabaseMutation": false,
+      "buildOrOta": false,
+      "reviewBranchContainsImplementationDelta": false
+    }
+  },
+  "testResultHash": "22161685e02e82994306c66d5105a8dfba48f3791d0680e07c77ed36b7d5beee",
+  "findings": []
+}
