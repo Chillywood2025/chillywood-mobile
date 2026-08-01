@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr116-chat-call-history-semantics-review-v3",
+  "reviewType": "persistent-review-only-exact-head-lane",
+  "programReviewLevel": "C",
+  "implementationPrNumber": 116,
+  "implementationBranch": "codex/assurance-reconcile-chat-call-remote-history",
+  "implementationHead": "e2bf3fe95db76d70b6c262e946bb918cf81ead57",
+  "implementationTree": "b9226bdd711f955286b848401191378452e8b62c",
+  "baseHead": "00a9d342459db89f54d5edca930fb45db67750af",
+  "baseTree": "788daffea8ef188db5f9867681634b2c34299298",
+  "syntheticMergeTree": "fdc274cd53a3257ae4366c365e7887ad740d5c1a",
+  "manifestHash": "4492b7aa74245473c2c8371acafd73766ed83d8caa6f2583ace38cecbfa02758",
+  "canonicalMigrationSetHash": "b759f74c657bdb0bdaec8f7795709fd524f19112e433d5cdb193304cf917ff9d",
+  "changedFileHash": "40c6dc94ca90dbd694a5b782f8c46402071d347d658c9ae75471b3919281175a",
+  "migrationSetHash": "2c9c329d6fdbe8fdc821de5fbb2c3c4220e47626a582039ee73dfdc9aa89ccc8",
+  "configHash": "0970da388bb6ed77b5dfda958c3644227b391dcd38ff99fac959592daf08de70",
+  "evidenceLifecycle": {
+    "v1": "historical_stale",
+    "v2": "historical_stale",
+    "v3": "current"
+  },
+  "laneEvidence": {
+    "canonicalMigrationSemanticsExact": true,
+    "authoritativeBusyBeginPreserved": true,
+    "busyActiveThreadGuardPreserved": true,
+    "terminalCleanupAndRaceProtectionPreserved": true,
+    "policyRegression": false,
+    "sourceOnlyClaimPresentedAsDeployedRuntime": false
+  },
+  "testResults": {
+    "exactBinding": {
+      "baseHead": "00a9d342459db89f54d5edca930fb45db67750af",
+      "implementationHead": "e2bf3fe95db76d70b6c262e946bb918cf81ead57",
+      "status": "pass",
+      "syntheticMergeTree": "fdc274cd53a3257ae4366c365e7887ad740d5c1a"
+    },
+    "focusedValidation": {
+      "contracts": "pass",
+      "currentTruthSynthetic": "pass",
+      "diffCheck": "pass",
+      "migrationReadbackGuard": "pass",
+      "notificationRoomCallPolicyGuard": "pass",
+      "reconciliationTests": "5/5",
+      "semanticFixtures": "pass"
+    },
+    "lane": {
+      "name": "migration-semantics",
+      "status": "pass"
+    },
+    "phase1Ci": {
+      "implementationHead": "e2bf3fe95db76d70b6c262e946bb918cf81ead57",
+      "status": "pending-coordinator-fresh-run"
+    },
+    "proofBoundary": {
+      "T1": "SOURCE_CLEAR",
+      "T3_T7": "NOT_CLAIMED"
+    },
+    "nonInterference": {
+      "buildOrOta": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "providerMutation": false
+    }
+  },
+  "testResultHash": "737022436ab8e15f590a7cd367a2f5f486093296d43b0f120bdcb7bb82efc435",
+  "reviewLevel": "A",
+  "reviewHead": "a1c27cba136ceede5e8da0a2d6fe7a41797b3faa",
+  "reviewTimestamp": "2026-08-01T18:50:50Z",
+  "reviewerLanes": [
+    "independent",
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "migration-semantics"
+  ],
+  "findings": [],
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "disposition": "LANE_CLEAR_P0_P1_ZERO_PENDING_FRESH_PHASE1_CI",
+  "neverMergeReviewBranch": true
+}
