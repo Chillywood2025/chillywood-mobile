@@ -2,9 +2,9 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Main SHA observed at this assurance checkpoint: `4be481c8576b2cb3284f58b1ea9756b375e20833`.
-- Latest merged implementation: PR #113, `f1e5c46b2099845c59f32eedc20e347204400e36`; merge `ee29494539cd9a88ea179aafb48f745511b6ffa3`.
-- Assurance program: PR-B0-GUARD-REMEDIATION-FROZEN-PENDING-V3-REVIEWS; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113.
+- Main SHA observed at this assurance checkpoint: `8b02a5882511c029581fda0ef39af862bb62ef2a`.
+- Latest merged implementation: PR #116, `4c0a2619da79d3109bfbcb19c1e30a2645f85211`; merge `8b02a5882511c029581fda0ef39af862bb62ef2a`.
+- Assurance program: PR-B1-LIVEKIT-SOURCE-BINDING-SUCCESSOR-PREPARATION; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
 - iOS internal: build 8, runtime `1.0.0-iosqa1`, channel `ios-qa`, update `019fb099-f7c3-7130-97aa-a4bb1c49792f`.
 - Remote migration head: `20260730161737`.
@@ -15,7 +15,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Chi'llywood autonomous app operating model is now documented and guarded at `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.
 - Installed Product QA closure retained: chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped; proof rows `ff81956d-94e3-49e9-8c80-fae2c12b0dd8`, `1dc00369-b5ca-4289-92bc-daf5bae00222`, `282fb154-101c-402b-9539-d3fb8080de51`; current matrix state `POLL_HTTP_FAILED`; the daily timer is enabled.
 - RevenueCat provider readback is closed: dashboard TEST returned HTTP `200` / `test_received` with `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`.
-- Evidence timestamp: `2026-08-01T18:18:00Z`; freshness deadline: `2026-08-02T18:18:00Z`; live provider readback: true.
+- Evidence timestamp: `2026-08-01T21:54:00Z`; freshness deadline: `2026-08-02T21:54:00Z`; live provider readback: true.
 
 ## Open implementation PRs
 
@@ -23,7 +23,6 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - PR #69 at `a5a37296800419a50c9bb271d99e505f6ad7a056`: open-draft-remote-predecessor-local-successor-frozen; local successor f30d37a1 is frozen; push and exact review follow B0 merge.
 - PR #70 at `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`: open-draft-remote-predecessor-local-successor-frozen; local successor e841f986 is frozen; push and exact review follow B0 merge.
 - PR #75 at `bded4793b26e8e2e8bd2331df7f5b3fcc55f141b`: open-draft-remote-predecessor-local-successor-frozen; local successor b2cd9318 is frozen; push and exact review follow B0 merge.
-- PR #116 at `e2bf3fe95db76d70b6c262e946bb918cf81ead57`: open-draft-frozen-pending-v3-review; validate against current main without changing the frozen head, then reuse persistent review PRs #119-#122 additively.
 
 ## Open review-only PRs
 
@@ -61,10 +60,6 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - PR #98 at `278eb5e2326d2a7b7d12b6ba8b373541640d4e90`: open-draft-current, reviews `867af2a2c446c4cea5b38cc990bd0143dac446c3`; never-merge.
 - PR #104 at `a8f689702e83fab1b5c85119d9d638f8bfabda3b`: open-draft-current, reviews `2cf85211ca8f832bd929619423a04fb52dce275e`; never-merge.
 - PR #110 at `d43b460cc2f82cb296668117a0bf73648dacd701`: open-draft-current, reviews `502f9e2659d96389ae418b11f83171b171b5a708`; never-merge.
-- PR #119 at `0d9754b83586734a0d15dbce70df0ab3cbcac349`: open-draft-stale, reviews `b455e31ad43bac29ff78e0f31e7f99aeabd37ba8`; reuse additively for e2bf3fe95db76d70b6c262e946bb918cf81ead57; never-merge.
-- PR #120 at `9454223a06858e70bf7f6ba717160a633577e766`: open-draft-stale, reviews `b455e31ad43bac29ff78e0f31e7f99aeabd37ba8`; reuse additively for e2bf3fe95db76d70b6c262e946bb918cf81ead57; never-merge.
-- PR #121 at `677c60e68ef8137772428b10b5565f4ca5e12cf2`: open-draft-stale, reviews `b455e31ad43bac29ff78e0f31e7f99aeabd37ba8`; reuse additively for e2bf3fe95db76d70b6c262e946bb918cf81ead57; never-merge.
-- PR #122 at `c21207047180636090d0c36215e85bafa86198b0`: open-draft-stale, reviews `b455e31ad43bac29ff78e0f31e7f99aeabd37ba8`; reuse additively for e2bf3fe95db76d70b6c262e946bb918cf81ead57; never-merge.
 
 ## Current external blockers
 
