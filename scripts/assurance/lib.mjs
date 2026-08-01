@@ -37,6 +37,16 @@ export function git(gitArgs, options = {}) {
   return execFileSync("git", gitArgs, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }).trim();
 }
 
+export function baseSynchronizationFirstParentDistance(sourceHead, observedHead, runGit = git) {
+  if (!gitShaPattern.test(sourceHead ?? "") || !gitShaPattern.test(observedHead ?? "")) return null;
+  try {
+    const distance = runGit(["rev-list", "--first-parent", "--count", `${sourceHead}..${observedHead}`]);
+    return /^\d+$/u.test(distance ?? "") ? Number(distance) : null;
+  } catch {
+    return null;
+  }
+}
+
 const secretKey = /(secret|password|credential|authorization|private.?key|raw.?payload|device.?id|device.?serial|udid|signed.?url)/iu;
 const secretString = /(bearer\s+[a-z0-9._-]+|(?:service_role|sk|pk|gh[opsu])_[a-z0-9_-]{12,}|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu;
 export function redact(value, key = "") {
