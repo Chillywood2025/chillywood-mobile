@@ -2,8 +2,8 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Keep reconciliation PRs #69, #70, and #75 BLOCKED_INTERNAL; their exact reviews require separate forward-only authority/security corrections and no production deployment is authorized.
-2. Complete the three bounded Git-only reconciliation corrections and exact reviews before PR D; do not deploy or reapply any migration.
+1. Merge this bounded current-truth synchronization, validate frozen PR #116 against current main without changing its implementation head, and reuse review PRs #119-#122 with additive v3 evidence.
+2. After PR #116 merges, synchronize current truth at the coherent boundary, then push and review the frozen B1, B2, and B3 successors in order without deploying their forward-only corrections.
 3. After B1, B2, and B3 are reconciled and merged, begin PR D native/provider/runtime/artifact assurance without a production build, OTA, provider mutation, or product behavior change.
 4. Keep PR E blocked until PRs C and D are merged; keep PR F blocked until PR E merges.
 5. Keep PR #52 frozen and unmerged and PR #53 stale, review-only, and unmerged until bounded reconciliation safely preserves all unique source.
