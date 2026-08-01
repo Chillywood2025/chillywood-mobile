@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import {
   args,
+  baseSynchronizationFirstParentDistance,
   emit,
   git,
   implementationRemoteRef,
@@ -56,7 +57,7 @@ function collectBaseSynchronizationReviewEvidence(reviewEntries) {
 
 function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEvidence }) {
   const parents = safeGit(["show", "-s", "--format=%P", observedHead], "").split(/\s+/u).filter(Boolean);
-  const commitDistanceText = safeGit(["rev-list", "--count", `${entry.head}..${observedHead}`]);
+  const commitDistance = baseSynchronizationFirstParentDistance(entry.head, observedHead);
   const observedTree = safeGit(["rev-parse", `${observedHead}^{tree}`]);
   const mergeBase = safeGit(["merge-base", entry.head, currentMain]);
   let sourceIsAncestor = false;
@@ -83,7 +84,7 @@ function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEv
   const synchronizedChangedPaths = splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", currentMain, observedHead], ""));
   return {
     sourceIsAncestor,
-    commitDistance: /^\d+$/u.test(commitDistanceText ?? "") ? Number(commitDistanceText) : null,
+    commitDistance,
     parents,
     observedTree,
     canonicalTree,
