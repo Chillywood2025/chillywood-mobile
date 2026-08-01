@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  baseSynchronizationFirstParentDistance,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
@@ -353,6 +354,7 @@ const baseSyncContract = readJson("config/assurance/current-truth-contract-v1.js
 assert.equal(baseSyncContract.classification, "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH");
 assert.equal(baseSyncContract.exactHeadMatchingRemainsDefault, true);
 assert.equal(baseSyncContract.commitDistance, 1);
+assert.equal(baseSyncContract.commitDistanceTraversal, "first-parent");
 assert.equal(baseSyncContract.ordinaryMergeParentCount, 2);
 assert.equal(baseSyncContract.firstParent, "recorded-source-head");
 assert.equal(baseSyncContract.secondParent, "exact-origin-main");
@@ -364,6 +366,44 @@ assert.equal(baseSyncContract.reviewFreshnessHours, 24);
 assert.equal(baseSyncContract.repeatedMergeChainAllowed, false);
 assert.equal(baseSyncContract.manualResolutionAllowed, false);
 assert.deepEqual(baseSyncContract.criticalFindingMaximum, { P0: 0, P1: 0 });
+
+const topologyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-base-sync-topology-"));
+try {
+  const runTopologyGit = (gitArgs) => {
+    const result = spawnSync("git", gitArgs, { cwd: topologyDirectory, encoding: "utf8" });
+    assert.equal(result.status, 0, `${gitArgs.join(" ")} failed: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  runTopologyGit(["init", "--quiet"]);
+  runTopologyGit(["config", "user.name", "Chi'llywood Assurance"]);
+  runTopologyGit(["config", "user.email", "assurance@example.invalid"]);
+  fs.writeFileSync(path.join(topologyDirectory, "base.txt"), "base\n");
+  runTopologyGit(["add", "base.txt"]);
+  runTopologyGit(["commit", "--quiet", "-m", "base"]);
+  const baseHead = runTopologyGit(["rev-parse", "HEAD"]);
+
+  runTopologyGit(["switch", "--quiet", "-c", "reviewed-source"]);
+  fs.writeFileSync(path.join(topologyDirectory, "implementation.txt"), "reviewed source\n");
+  runTopologyGit(["add", "implementation.txt"]);
+  runTopologyGit(["commit", "--quiet", "-m", "reviewed source"]);
+  const reviewedSourceHead = runTopologyGit(["rev-parse", "HEAD"]);
+
+  runTopologyGit(["switch", "--quiet", "-c", "current-main", baseHead]);
+  for (const version of [1, 2]) {
+    fs.writeFileSync(path.join(topologyDirectory, "main.txt"), `main ${version}\n`);
+    runTopologyGit(["add", "main.txt"]);
+    runTopologyGit(["commit", "--quiet", "-m", `main ${version}`]);
+  }
+  runTopologyGit(["switch", "--quiet", "reviewed-source"]);
+  runTopologyGit(["merge", "--quiet", "--no-ff", "--no-edit", "current-main"]);
+  const synchronizedHead = runTopologyGit(["rev-parse", "HEAD"]);
+
+  assert.equal(Number(runTopologyGit(["rev-list", "--count", `${reviewedSourceHead}..${synchronizedHead}`])), 3);
+  assert.equal(baseSynchronizationFirstParentDistance(reviewedSourceHead, synchronizedHead, runTopologyGit), 1);
+  assert.equal(baseSynchronizationFirstParentDistance("not-a-sha", synchronizedHead, runTopologyGit), null);
+} finally {
+  fs.rmSync(topologyDirectory, { recursive: true });
+}
 
 const hashes = Array.from({ length: 3 }, () => sha256(stableJson(matrix)));
 assert.equal(new Set(hashes).size, 1);
@@ -386,8 +426,7 @@ try {
   };
 
   const payload = runSnapshotCli("empty-open-implementation-inventory.json", `${JSON.stringify({ openImplementationPrs: [] })}\n`);
-  assert.equal(payload.headBindings.ok, true);
-  assert.notEqual(payload.headBindings.context, "detached-unresolved");
+  assert.equal(payload.headBindings.context, "unlisted-control-branch");
   assert.equal(payload.providerImplementationSnapshot.ok, false);
   assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"));
 
@@ -402,4 +441,4 @@ try {
   fs.rmSync(tempDirectory, { recursive: true });
 }
 
-process.stdout.write(`current-truth head binding: PASS (exact-head cases unchanged; base-sync acceptance plus 25 fail-closed rejection cases; provider CLI fail-closed; deterministic 3/3; ${hashes[0]})\n`);
+process.stdout.write(`current-truth head binding: PASS (exact-head cases unchanged; first-parent base-sync acceptance plus 25 fail-closed rejection cases; provider CLI fail-closed; deterministic 3/3; ${hashes[0]})\n`);
