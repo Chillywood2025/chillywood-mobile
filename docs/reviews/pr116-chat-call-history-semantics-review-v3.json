@@ -50,7 +50,10 @@
     },
     "phase1Ci": {
       "implementationHead": "e2bf3fe95db76d70b6c262e946bb918cf81ead57",
-      "status": "pending-coordinator-fresh-run"
+      "jobsPassed": 13,
+      "jobsTotal": 13,
+      "runId": 30713556538,
+      "status": "pass"
     },
     "proofBoundary": {
       "T1": "SOURCE_CLEAR",
@@ -63,10 +66,10 @@
       "providerMutation": false
     }
   },
-  "testResultHash": "737022436ab8e15f590a7cd367a2f5f486093296d43b0f120bdcb7bb82efc435",
-  "reviewLevel": "A",
-  "reviewHead": "a1c27cba136ceede5e8da0a2d6fe7a41797b3faa",
-  "reviewTimestamp": "2026-08-01T18:50:50Z",
+  "testResultHash": "5c15df499db1a74df54d2fa9021ddf3d399414f2e6fd0e934396005b42db6f70",
+  "reviewLevel": "C",
+  "reviewHead": "19d2890e1d71d9e832b7670fe223e95b84eb424d",
+  "reviewTimestamp": "2026-08-01T19:00:52Z",
   "reviewerLanes": [
     "independent",
     "architecture-state",
@@ -82,6 +85,6 @@
     "P2": 0,
     "P3": 0
   },
-  "disposition": "LANE_CLEAR_P0_P1_ZERO_PENDING_FRESH_PHASE1_CI",
+  "disposition": "LANE_CLEAR_P0_P1_ZERO_PHASE1_CI_13_OF_13",
   "neverMergeReviewBranch": true
 }
