@@ -113,10 +113,11 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-07-31T00:56:00Z",
-  "freshnessDeadline": "2026-08-01T00:56:00Z",
+  "timestamp": "2026-08-01T18:18:00Z",
+  "freshnessDeadline": "2026-08-02T18:18:00Z",
   "evidenceSources": [
-    {"id": "github-pr-readback-20260731-0056", "mode": "read-only", "covers": ["main", "PR #52", "PR #53", "PR #64", "PR #113", "PR #116", "review PRs #119-#122", "historical failed Phase 1 CI 30593185483", "canceled pre-review Phase 1 CI 30594911963"]},
+    {"id": "github-pr-readback-20260801-1818", "mode": "read-only", "covers": ["main", "PR #52", "PR #53", "PR #64", "PR #113", "PR #116", "PR #123", "PR #124", "review PRs #119-#122", "historical failed Phase 1 CI 30593185483", "canceled pre-review Phase 1 CI 30594911963", "PR #123 Phase 1 CI 30595025051"]},
+    {"id": "supabase-migration-list-readback-20260801-1818", "mode": "read-only", "covers": ["remote migration versions", "remote migration head"]},
     {"id": "supabase-migration-readback-and-no-apply-dry-run-20260731", "mode": "read-only", "covers": ["remote migration versions", "names", "statement arrays", "hashes", "assembled source parity", "pending forward-only migrations", "no-apply dry-run"]},
     {"id": "owner-supplied-safety-snapshot-20260730", "mode": "provided", "covers": ["switches", "schedules", "effective baseline", "sentinel counts", "non-interference"]}
   ],
