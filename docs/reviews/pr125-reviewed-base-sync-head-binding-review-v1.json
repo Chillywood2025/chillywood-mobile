@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr125-reviewed-base-sync-head-binding-review-v1",
+  "reviewType": "isolated-review-only-assurance-lane",
+  "humanApproval": false,
+  "implementationPrNumber": 125,
+  "implementationBranch": "codex/assurance-reviewed-base-sync-head-binding",
+  "implementationHead": "a1f069ceec3a93f77c78558decfc86bbe9026c60",
+  "implementationTree": "cf2baad75177f76d5d71619289b01ef3c2239523",
+  "baseHead": "00a9d342459db89f54d5edca930fb45db67750af",
+  "changedFileHash": "a9b6d66da0bab4b626c1e9660e55be273d7f3267ce1e65c6c58fd0aaf96be89f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "48ec10f6b1283acf43055553fe1b6855bc784a14da8c7c69ae831dbce87e4968",
+  "reviewLevel": "A",
+  "reviewHead": "a1f069ceec3a93f77c78558decfc86bbe9026c60",
+  "reviewTimestamp": "2026-08-01T20:39:12Z",
+  "reviewerLanes": [
+    "independent",
+    "isolated-fresh-checkout",
+    "current-truth-head-binding"
+  ],
+  "testResults": {
+    "exactIdentity": {
+      "status": "pass",
+      "implementationPrNumber": 125,
+      "implementationHead": "a1f069ceec3a93f77c78558decfc86bbe9026c60",
+      "implementationTree": "cf2baad75177f76d5d71619289b01ef3c2239523",
+      "baseHead": "00a9d342459db89f54d5edca930fb45db67750af"
+    },
+    "defaultPolicy": {
+      "status": "pass",
+      "exactHeadMatchingRemainsDefault": true,
+      "generalStaleHeadExceptionAdded": false,
+      "classificationAdded": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH"
+    },
+    "acceptanceAlgorithm": {
+      "status": "pass",
+      "sourceAncestorRequired": true,
+      "exactCommitDistance": 1,
+      "ordinaryTwoParentMergeRequired": true,
+      "firstParentIsImmutableSource": true,
+      "secondParentIsExactCurrentMain": true,
+      "canonicalConflictFreeTreeRequired": true,
+      "sourceDeltaByteEquivalenceRequired": true,
+      "changedPathEquivalenceRequired": true,
+      "remoteRefAndProviderSnapshotBindingRequired": true,
+      "freshReviewOnlyEvidenceRequired": true,
+      "criticalFindingMaximum": {"P0": 0, "P1": 0}
+    },
+    "rejectionMatrix": {
+      "status": "pass",
+      "focusedCommand": "node --test tests/assurance/current-truth-head-binding.test.mjs tests/assurance/current-truth-sync.test.mjs",
+      "baseSyncRejectionCases": 25,
+      "rejects": [
+        "arbitrary-commit",
+        "empty-commit",
+        "rebase",
+        "squash",
+        "cherry-pick",
+        "wrong-first-parent",
+        "non-main-merge",
+        "old-main-merge",
+        "octopus-merge",
+        "merge-conflict",
+        "manual-resolution",
+        "altered-implementation-tree",
+        "altered-migration-tree",
+        "source-delta-change",
+        "changed-file-hash-change",
+        "changed-path-scope-growth",
+        "source-not-ancestor",
+        "repeated-merge-chain",
+        "provider-head-mismatch",
+        "missing-review",
+        "wrong-head-tree-review",
+        "expired-review",
+        "future-dated-review",
+        "mergeable-review-evidence",
+        "open-P0-or-P1-review"
+      ],
+      "previousExactHeadCasesUnchanged": true,
+      "providerCliRemainsFailClosed": true,
+      "deterministicRuns": 3,
+      "deterministicResultSha256": "c45b995f5d45366e92912199ccf505c99d1c46155e2e0e0f972647d3e04b48cb"
+    },
+    "contractValidation": {
+      "status": "pass",
+      "contractsValidated": 13,
+      "errors": 0
+    },
+    "scope": {
+      "status": "pass",
+      "changedFiles": 4,
+      "additions": 409,
+      "deletions": 12,
+      "netChangedLines": 397,
+      "domains": ["CI-test-infrastructure"],
+      "highRiskDomains": [],
+      "withinDefaultBudget": true
+    },
+    "nonInterference": {
+      "status": "pass",
+      "protectionRuleChanged": false,
+      "bypassIdentityAdded": false,
+      "implementationPr116Changed": false,
+      "workflowChanged": false,
+      "productOrMigrationChanged": false,
+      "providerOrDatabaseMutation": false,
+      "buildOrOta": false,
+      "reviewBranchContainsImplementationDelta": false
+    }
+  },
+  "testResultHash": "f0b22e59ff3c11824bbdcdf7413692a39afd66bd69a0cd097c8dae5b0bf6d2da",
+  "findings": []
+}
