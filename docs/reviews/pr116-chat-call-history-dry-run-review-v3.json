@@ -24,7 +24,7 @@
     "command": "supabase db push --dry-run",
     "status": "PASS_NO_APPLY",
     "assembledBaseHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
-    "assembledExactImplementationTree": "7f922fe9095a4f7e84455ca7604285cb96cc295a",
+    "assembledExactImplementationTree": "ac059de4b14f19369339860a0e19673b7ebf3cba",
     "reconciliationMigrationsPending": [],
     "separatelyOwnedForwardFilesPending": [
       "20260730170000_revenuecat_transfer_authoritative_ordering.sql",
@@ -77,8 +77,8 @@
   },
   "testResultHash": "4fa2bfdfc4bc3c6cc72f4fff15d1a100db91a412c701f6a26509f6486e651e39",
   "reviewLevel": "C",
-  "reviewHead": "91adb15c67670ba61f5867f36f85abc4e9b78bbb",
-  "reviewTimestamp": "2026-08-01T19:00:52Z",
+  "reviewHead": "072ec15e412fd8dc350a62eb87b4e17a8cce93a5",
+  "reviewTimestamp": "2026-08-01T19:04:00Z",
   "reviewerLanes": [
     "independent",
     "architecture-state",
