@@ -81,7 +81,6 @@ begin
       (invite."status" = 'ringing' and invite."expires_at" > v_now)
       or (
         invite."status" = 'accepted'
-        and v_thread."active_communication_room_id" = invite."communication_room_id"
         and exists (
           select 1
           from public."communication_rooms" active_room
@@ -127,13 +126,6 @@ begin
   where invite."thread_id" <> p_thread_id
     and invite."status" = 'accepted'
     and v_callee_user_id in (invite."caller_user_id", invite."callee_user_id")
-    and exists (
-      select 1
-      from public."chat_threads" established_thread
-      where established_thread."id" = invite."thread_id"
-        and established_thread."active_communication_room_id" =
-          invite."communication_room_id"
-    )
     and exists (
       select 1
       from public."communication_rooms" active_room
@@ -286,7 +278,7 @@ end;
 $$;
 
 comment on function public."begin_chilly_chat_call"(uuid, text, text) is
-  'Atomically selects one same-thread call and rejects a different-thread overlap as busy only when the accepted room remains authoritative on its thread; stale historical active-room rows cannot create false busy results.';
+  'Atomically selects one same-thread call and rejects a different-thread overlap as busy when the callee already has an accepted call in an active room; no second incoming delivery is required.';
 
 revoke all on function public."begin_chilly_chat_call"(uuid, text, text)
   from public, anon;

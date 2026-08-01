@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  baseSynchronizationFirstParentDistance,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
@@ -12,6 +13,7 @@ import {
   rel,
   sha256,
   stableJson,
+  verifyBaseSynchronizedImplementationHead,
   verifyCurrentTruthHeadBindings,
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization
@@ -97,6 +99,107 @@ matrix.pr64Stale = verify({
 });
 assert.equal(matrix.pr64Stale.ok, false);
 assert(ids(matrix.pr64Stale).includes("ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE"));
+
+const synchronizedTree = "1".repeat(40);
+const sourceDeltaHash = "2".repeat(64);
+const changedFileHash = "3".repeat(64);
+const synchronizedPaths = ["config/assurance/example.json", "scripts/assurance/example.mjs"];
+const baseSyncReviewEvidence = {
+  reviewId: "pr64-base-sync-review-v1",
+  classification: "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  implementationPrNumber: 64,
+  implementationBranch: pr64Branch,
+  immutableSourceHead: pr64Recorded,
+  synchronizedBranchHead: pr64Observed,
+  currentBase: main,
+  synchronizedTree,
+  canonicalSyntheticTree: synchronizedTree,
+  sourceDeltaHash,
+  changedFileHash,
+  scopeStatus: "pass",
+  reviewOnly: true,
+  mergePermitted: false,
+  criticalFindingCounts: { P0: 0, P1: 0 },
+  reviewRef: "refs/remotes/origin/codex/pr64-review",
+  reviewRefHead: "4".repeat(40),
+  reviewTimestamp: "2026-08-01T20:00:00Z"
+};
+const baseSyncFacts = {
+  sourceIsAncestor: true,
+  commitDistance: 1,
+  parents: [pr64Recorded, main],
+  observedTree: synchronizedTree,
+  canonicalTree: synchronizedTree,
+  mergeConflict: false,
+  reviewedSourceDeltaHash: sourceDeltaHash,
+  synchronizedSourceDeltaHash: sourceDeltaHash,
+  reviewedChangedFileHash: changedFileHash,
+  synchronizedChangedFileHash: changedFileHash,
+  reviewedChangedPaths: synchronizedPaths,
+  synchronizedChangedPaths: [...synchronizedPaths].reverse(),
+  providerHead: pr64Observed,
+  reviewEvidence: [baseSyncReviewEvidence],
+  reviewFreshnessHours: 24,
+  evaluationTime: "2026-08-01T20:30:00Z"
+};
+const verifyBaseSync = (facts = {}) => verify({
+  observedRefs: { ...exactRefs, [implementationRemoteRef(pr64Branch)]: pr64Observed },
+  baseSynchronizations: {
+    [implementationRemoteRef(pr64Branch)]: { ...baseSyncFacts, ...facts }
+  }
+});
+
+matrix.baseSynchronized = verifyBaseSync();
+assert.equal(matrix.baseSynchronized.ok, true);
+const synchronizedBinding = matrix.baseSynchronized.bindings.find(({ number }) => number === 64);
+assert.equal(synchronizedBinding.classification, "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH");
+assert.equal(synchronizedBinding.recordedHead, pr64Recorded);
+assert.equal(synchronizedBinding.observedHead, pr64Observed);
+
+const rejectionCases = [
+  ["arbitraryCommit", { parents: [pr64Recorded] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],
+  ["emptyCommit", { parents: [pr64Recorded] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],
+  ["rebase", { parents: [main] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],
+  ["squash", { parents: [main] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],
+  ["cherryPick", { parents: [main] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],
+  ["firstParentChanged", { parents: ["5".repeat(40), main] }, "ASSURANCE_BASE_SYNC_FIRST_PARENT_INVALID"],
+  ["otherBranchMerge", { parents: [pr64Recorded, "6".repeat(40)] }, "ASSURANCE_BASE_SYNC_SECOND_PARENT_INVALID"],
+  ["oldMainMerge", { parents: [pr64Recorded, "7".repeat(40)] }, "ASSURANCE_BASE_SYNC_SECOND_PARENT_INVALID"],
+  ["octopusMerge", { parents: [pr64Recorded, main, "8".repeat(40)] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],
+  ["canonicalConflict", { mergeConflict: true }, "ASSURANCE_BASE_SYNC_CANONICAL_MERGE_CONFLICT"],
+  ["manualResolution", { observedTree: "9".repeat(40) }, "ASSURANCE_BASE_SYNC_TREE_MISMATCH"],
+  ["alteredImplementation", { observedTree: "a".repeat(40) }, "ASSURANCE_BASE_SYNC_TREE_MISMATCH"],
+  ["alteredMigrationBody", { observedTree: "b".repeat(40) }, "ASSURANCE_BASE_SYNC_TREE_MISMATCH"],
+  ["sourceDeltaChanged", { synchronizedSourceDeltaHash: "c".repeat(64) }, "ASSURANCE_BASE_SYNC_SOURCE_DELTA_MISMATCH"],
+  ["scopeHashChanged", { synchronizedChangedFileHash: "d".repeat(64) }, "ASSURANCE_BASE_SYNC_CHANGED_FILE_HASH_MISMATCH"],
+  ["scopePathChanged", { synchronizedChangedPaths: [...synchronizedPaths, "src/unapproved.ts"] }, "ASSURANCE_BASE_SYNC_CHANGED_PATHS_MISMATCH"],
+  ["sourceNotAncestor", { sourceIsAncestor: false }, "ASSURANCE_BASE_SYNC_SOURCE_NOT_ANCESTOR"],
+  ["repeatedMergeChain", { commitDistance: 2 }, "ASSURANCE_BASE_SYNC_COMMIT_DISTANCE_INVALID"],
+  ["providerMismatch", { providerHead: "e".repeat(40) }, "ASSURANCE_BASE_SYNC_PROVIDER_HEAD_MISMATCH"],
+  ["missingReview", { reviewEvidence: [] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["staleReview", { reviewEvidence: [{ ...baseSyncReviewEvidence, currentBase: "f".repeat(40) }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["expiredReview", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewTimestamp: "2026-07-30T20:00:00Z" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["futureReview", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewTimestamp: "2026-08-02T20:00:00Z" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["reviewAllowsMerge", { reviewEvidence: [{ ...baseSyncReviewEvidence, mergePermitted: true }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["reviewCriticalFinding", { reviewEvidence: [{ ...baseSyncReviewEvidence, criticalFindingCounts: { P0: 0, P1: 1 } }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"]
+];
+for (const [label, facts, findingId] of rejectionCases) {
+  const result = verifyBaseSync(facts);
+  matrix[`baseSyncReject${label}`] = result;
+  assert.equal(result.ok, false, label);
+  assert(ids(result).includes("ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE"), label);
+  assert(ids(result).includes(findingId), label);
+}
+
+matrix.baseSyncDirect = verifyBaseSynchronizedImplementationHead({
+  number: 64,
+  branch: pr64Branch,
+  sourceHead: pr64Recorded,
+  synchronizedHead: pr64Observed,
+  currentMain: main,
+  ...baseSyncFacts
+});
+assert.equal(matrix.baseSyncDirect.ok, true);
 
 matrix.listedBranchAdvanced = verify({
   branch: pr64Branch,
@@ -184,6 +287,19 @@ matrix.providerMismatch = verifyProviderImplementationSnapshot(entries, [
 assert.equal(matrix.providerMismatch.ok, false);
 assert(ids(matrix.providerMismatch).includes("ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISMATCH"));
 
+matrix.providerBaseSynchronized = verifyProviderImplementationSnapshot(entries, [
+  entries[0],
+  { ...entries[1], head: pr64Observed }
+], matrix.baseSynchronized.acceptedBaseSynchronizations);
+assert.equal(matrix.providerBaseSynchronized.ok, true);
+
+matrix.providerBaseSynchronizedUnverified = verifyProviderImplementationSnapshot(entries, [
+  entries[0],
+  { ...entries[1], head: pr64Observed }
+]);
+assert.equal(matrix.providerBaseSynchronizedUnverified.ok, false);
+assert(ids(matrix.providerBaseSynchronizedUnverified).includes("ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISMATCH"));
+
 matrix.providerExtra = verifyProviderImplementationSnapshot(entries, [
   ...entries,
   { number: 99, branch: "codex/extra", head: "f".repeat(40), state: "open-draft" }
@@ -234,6 +350,61 @@ const statePattern = new RegExp(schemas.$defs.currentTruthRecord.properties.open
 for (const validState of ["open", "open-draft", "open draft"]) assert.equal(statePattern.test(validState), true);
 for (const invalidState of ["", " ", " open", "open ", "\topen"]) assert.equal(statePattern.test(invalidState), false);
 
+const baseSyncContract = readJson("config/assurance/current-truth-contract-v1.json").implementationHeadBinding.baseSynchronization;
+assert.equal(baseSyncContract.classification, "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH");
+assert.equal(baseSyncContract.exactHeadMatchingRemainsDefault, true);
+assert.equal(baseSyncContract.commitDistance, 1);
+assert.equal(baseSyncContract.commitDistanceTraversal, "first-parent");
+assert.equal(baseSyncContract.ordinaryMergeParentCount, 2);
+assert.equal(baseSyncContract.firstParent, "recorded-source-head");
+assert.equal(baseSyncContract.secondParent, "exact-origin-main");
+assert.equal(baseSyncContract.canonicalMergeTreeRequired, true);
+assert.equal(baseSyncContract.sourceDeltaMustBeByteEquivalent, true);
+assert.equal(baseSyncContract.changedPathSetMustBeEquivalent, true);
+assert.equal(baseSyncContract.providerRemoteRefMustMatch, true);
+assert.equal(baseSyncContract.reviewFreshnessHours, 24);
+assert.equal(baseSyncContract.repeatedMergeChainAllowed, false);
+assert.equal(baseSyncContract.manualResolutionAllowed, false);
+assert.deepEqual(baseSyncContract.criticalFindingMaximum, { P0: 0, P1: 0 });
+
+const topologyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-base-sync-topology-"));
+try {
+  const runTopologyGit = (gitArgs) => {
+    const result = spawnSync("git", gitArgs, { cwd: topologyDirectory, encoding: "utf8" });
+    assert.equal(result.status, 0, `${gitArgs.join(" ")} failed: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  runTopologyGit(["init", "--quiet"]);
+  runTopologyGit(["config", "user.name", "Chi'llywood Assurance"]);
+  runTopologyGit(["config", "user.email", "assurance@example.invalid"]);
+  fs.writeFileSync(path.join(topologyDirectory, "base.txt"), "base\n");
+  runTopologyGit(["add", "base.txt"]);
+  runTopologyGit(["commit", "--quiet", "-m", "base"]);
+  const baseHead = runTopologyGit(["rev-parse", "HEAD"]);
+
+  runTopologyGit(["switch", "--quiet", "-c", "reviewed-source"]);
+  fs.writeFileSync(path.join(topologyDirectory, "implementation.txt"), "reviewed source\n");
+  runTopologyGit(["add", "implementation.txt"]);
+  runTopologyGit(["commit", "--quiet", "-m", "reviewed source"]);
+  const reviewedSourceHead = runTopologyGit(["rev-parse", "HEAD"]);
+
+  runTopologyGit(["switch", "--quiet", "-c", "current-main", baseHead]);
+  for (const version of [1, 2]) {
+    fs.writeFileSync(path.join(topologyDirectory, "main.txt"), `main ${version}\n`);
+    runTopologyGit(["add", "main.txt"]);
+    runTopologyGit(["commit", "--quiet", "-m", `main ${version}`]);
+  }
+  runTopologyGit(["switch", "--quiet", "reviewed-source"]);
+  runTopologyGit(["merge", "--quiet", "--no-ff", "--no-edit", "current-main"]);
+  const synchronizedHead = runTopologyGit(["rev-parse", "HEAD"]);
+
+  assert.equal(Number(runTopologyGit(["rev-list", "--count", `${reviewedSourceHead}..${synchronizedHead}`])), 3);
+  assert.equal(baseSynchronizationFirstParentDistance(reviewedSourceHead, synchronizedHead, runTopologyGit), 1);
+  assert.equal(baseSynchronizationFirstParentDistance("not-a-sha", synchronizedHead, runTopologyGit), null);
+} finally {
+  fs.rmSync(topologyDirectory, { recursive: true });
+}
+
 const hashes = Array.from({ length: 3 }, () => sha256(stableJson(matrix)));
 assert.equal(new Set(hashes).size, 1);
 
@@ -255,8 +426,7 @@ try {
   };
 
   const payload = runSnapshotCli("empty-open-implementation-inventory.json", `${JSON.stringify({ openImplementationPrs: [] })}\n`);
-  assert.equal(payload.headBindings.ok, true);
-  assert.notEqual(payload.headBindings.context, "detached-unresolved");
+  assert.equal(payload.headBindings.context, "unlisted-control-branch");
   assert.equal(payload.providerImplementationSnapshot.ok, false);
   assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"));
 
@@ -271,4 +441,4 @@ try {
   fs.rmSync(tempDirectory, { recursive: true });
 }
 
-process.stdout.write(`current-truth head binding: PASS (29 cases, provider CLI fail-closed, deterministic 3/3, ${hashes[0]})\n`);
+process.stdout.write(`current-truth head binding: PASS (exact-head cases unchanged; first-parent base-sync acceptance plus 25 fail-closed rejection cases; provider CLI fail-closed; deterministic 3/3; ${hashes[0]})\n`);
