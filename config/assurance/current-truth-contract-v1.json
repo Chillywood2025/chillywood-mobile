@@ -53,6 +53,7 @@
       "exactHeadMatchingRemainsDefault": true,
       "sourceMustBeAncestor": true,
       "commitDistance": 1,
+      "commitDistanceTraversal": "first-parent",
       "ordinaryMergeParentCount": 2,
       "firstParent": "recorded-source-head",
       "secondParent": "exact-origin-main",
