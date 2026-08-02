@@ -50,6 +50,7 @@ const iosEvent = (overrides = {}) => ({
   ...overrides,
 });
 const consumeInput = (claimId, overrides = {}) => ({
+  action: "answer",
   authenticatedUserId: USER,
   claimId,
   inviteId: INVITE,
@@ -72,6 +73,7 @@ const sources = Object.fromEntries(await Promise.all([
   "app/profile/[userId].tsx",
   "app.json",
 ].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
+const provenanceDeclarations = await readFile(new URL("../_lib/nativeCallTransitionProvenance.d.ts", import.meta.url), "utf8");
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const trackedProductionPaths = execFileSync("git", ["ls-files", "-z"], {
@@ -89,6 +91,26 @@ const trackedProductionSources = Object.fromEntries(await Promise.all(
   ]),
 ));
 const PROVENANCE_CREATOR_POLICIES = Object.freeze({
+  consumeNativeCallTransitionClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+  }),
+  createNativeCallTransitionProvenanceRegistry: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  createForegroundAuthenticatedUiCallIntentRegistry: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  consumeTrustedIosCallKitNativeEventClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  consumeMountedIosNativeCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeMountedForegroundAuthenticatedUiCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
   createForegroundAuthenticatedUiCallIntent: Object.freeze({
     "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
     "app/_layout.tsx": Object.freeze({references: 2, specifier: "../_lib/nativeCallTransitionProvenance.mjs"}),
@@ -191,7 +213,7 @@ pass(doesNativeCallActionOwnTransition({
   platform: "ios",
   threadId: THREAD,
   trustedNativeClaim: consumed,
-}), "the exact consumed claim owns the iOS native answer request");
+}) === false, "a test-created registry claim cannot manufacture production attestation");
 monotonicNow = consumed.expiresAtMonotonicMs;
 pass(doesNativeCallActionOwnTransition({
   authority: "trusted_native_claim",
@@ -211,6 +233,7 @@ pass(bindingRegistry.consume(consumeInput(bindingCreated.claimId, {threadId: OTH
 pass(bindingRegistry.consume(consumeInput(bindingCreated.claimId, {authenticatedUserId: OTHER_CALL})) === null, "wrong account cannot consume");
 pass(bindingRegistry.consume(consumeInput(bindingCreated.claimId, {inviteId: OTHER_INVITE})) === null, "wrong invite cannot consume");
 pass(bindingRegistry.consume(consumeInput(bindingCreated.claimId, {nativeIdentity: OTHER_CALL})) === null, "wrong UUID cannot consume");
+pass(bindingRegistry.consume(consumeInput(bindingCreated.claimId, {action: "decline"})) === null, "wrong expected action cannot consume");
 pass(bindingRegistry.consume(consumeInput(bindingCreated.claimId))?.action === "answer", "exact binding remains consumable after denied mismatches");
 pass(doesNativeCallActionOwnTransition({
   authority: "trusted_native_claim", callInviteId: INVITE, currentUserId: USER,
@@ -273,7 +296,7 @@ pass(doesForegroundAuthenticatedUiCallIntentOwnAction({
   foregroundUiIntent: consumedForeground,
   monotonicNowMs: foregroundNow,
   threadId: THREAD,
-}), "the exact mounted foreground UI intent owns its bounded action");
+}) === false, "a test-created foreground registry intent cannot manufacture production attestation");
 pass(foregroundRegistry.consume({
   authenticatedUserId: USER,
   claimId: foregroundCreated.claimId,
@@ -372,6 +395,7 @@ const unsubscribeSyntheticBridge = subscribeSyntheticNativeBridge(productionBrid
 assert.equal(await trustedBridgeListener(validProducerEvent), "routed", "the actual production bridge handler routes one trusted event");
 const trustedInternalRoute = new URL(trustedInternalDestination, `https://${configuredUniversalLinkHost}`);
 const producerConsumed = consumeMountedIosNativeCallRoute({
+  action: "answer",
   authenticatedUserId: USER,
   authLoading: false,
   callUuid: trustedInternalRoute.searchParams.get("nativeCallUuid"),
@@ -396,6 +420,7 @@ pass(doesNativeCallActionOwnTransition({
   trustedNativeClaim: producerConsumed,
 }), "the real producer, route handle, consumer, and ownership policy form one bounded production chain");
 pass(consumeMountedIosNativeCallRoute({
+  action: "answer",
   authenticatedUserId: USER,
   authLoading: false,
   callUuid: CALL,
@@ -425,7 +450,7 @@ const failingRouterHandler = createIosCallKitAnswerRouteHandler({
 pass(await failingRouterHandler({...validProducerEvent, nativeEventGeneration: 11}) === "denied", "router failure fails the native answer closed");
 const failedRoute = new URL(failedRouteDestination, `https://${configuredUniversalLinkHost}`);
 pass(failedRouteCompletion === 1 && consumeMountedIosNativeCallRoute({
-  authenticatedUserId: USER, authLoading: false, callUuid: failedRoute.searchParams.get("nativeCallUuid"),
+  action: "answer", authenticatedUserId: USER, authLoading: false, callUuid: failedRoute.searchParams.get("nativeCallUuid"),
   claimId: failedRoute.searchParams.get("nativeCallClaim"), inviteId: INVITE, isSignedIn: true,
   platform: "ios", threadId: THREAD,
 }) === null, "router failure consumes its exact claim before settling CallKit false");
@@ -434,6 +459,7 @@ const externalSystemRoute = sanitizeExternalIosNativeCallPath(
 );
 const externallyMountedRoute = new URL(externalSystemRoute, `https://${configuredUniversalLinkHost}`);
 pass(consumeMountedIosNativeCallRoute({
+  action: "answer",
   authenticatedUserId: USER,
   authLoading: false,
   callUuid: externallyMountedRoute.searchParams.get("nativeCallUuid"),
@@ -468,6 +494,7 @@ pass(platformScopedRegistry.inspectCounts().active === 2, "a denied unscoped cle
 pass(platformScopedRegistry.clear("ios") === true, "iOS lifecycle clearing is explicitly platform-scoped");
 pass(platformScopedRegistry.consume(consumeInput(scopedIos.claimId)) === null, "iOS lifecycle clearing removes iOS authority");
 pass(platformScopedRegistry.consume({
+  action: "answer",
   authenticatedUserId: USER,
   claimId: scopedAndroid.claimId,
   inviteId: OTHER_INVITE,
@@ -553,6 +580,8 @@ assert.ok(!/requestedCallMode|autoStartCallRef/u.test(sources["app/chat/[threadI
 assert.ok(!sources["app/chat/[threadId].tsx"].includes("nativeCallAction: nativeCallActionParam"), "route action text is not read as authority");
 assert.ok(!sources["_lib/nativeCallTransitionProvenance.mjs"].match(/AsyncStorage|UserDefaults|SecureStore|console\.|Math\.random|trackEvent|Crashlytics/u), "claims are memory-only, crypto-only, and undisclosed");
 assert.ok(!sources["_lib/nativeCallTransitionProvenance.mjs"].match(/livekit|token|camera|microphone|media/i), "claim creation has no token or media authority");
+assert.ok(sources["_lib/nativeCallTransitionProvenance.mjs"].includes("expectedAction !== claim.action"), "registry consumption atomically binds the expected action");
+assert.ok(provenanceDeclarations.includes("action: NativeCallTransitionAction;"), "the registry declaration requires an expected action");
 assert.equal((sources["_lib/iosNativeCalls.ts"].match(/clearNativeCallTransitionClaims\("ios"\)/gu) ?? []).length, 2, "readiness/account lifecycle clears only iOS claims");
 
 let mutantImportSerial = 0;
@@ -569,43 +598,26 @@ const replaceRequired = (source, search, replacement, label) => {
   return source.replace(search, replacement);
 };
 let policyFixtureSerial = 100;
-const consumedClaimFixture = (overrides = {}) => {
-  const platform = overrides.platform ?? "ios";
-  const source = overrides.source ?? (platform === "ios" ? "ios_callkit_native_event" : "android_native_action_store");
-  const nativeIdentity = overrides.nativeIdentity ?? (platform === "ios" ? CALL : "b".repeat(64));
-  const registry = createNativeCallTransitionProvenanceRegistry({
-    claimIdFactory: () => (policyFixtureSerial++).toString(16).padStart(64, "0"),
-    now: () => 100,
+const consumedClaimFixture = async () => {
+  let destination = "";
+  const handler = createIosCallKitAnswerRouteHandler({
+    getAuthenticatedUserId: () => USER,
+    isActive: () => true,
+    replace: (value) => { destination = value; },
   });
-  const createdClaim = registry.create({...iosEvent(), ...overrides, nativeIdentity, platform, source});
-  const consumedClaim = registry.consume({
-    authenticatedUserId: overrides.authenticatedUserId ?? USER,
-    claimId: createdClaim.claimId,
-    inviteId: overrides.inviteId ?? INVITE,
-    nativeIdentity,
-    platform,
-    source,
-    threadId: overrides.threadId ?? THREAD,
-  });
-  assert.ok(consumedClaim, "policy fixtures must use an attested create-and-consume result");
-  return consumedClaim;
+  await handler({...validProducerEvent, nativeEventGeneration: policyFixtureSerial++});
+  const route = new URL(destination, `https://${configuredUniversalLinkHost}`);
+  const claim = consumeMountedIosNativeCallRoute({action: "answer", authenticatedUserId: USER, authLoading: false, callUuid: CALL, claimId: route.searchParams.get("nativeCallClaim"), inviteId: INVITE, isSignedIn: true, platform: "ios", threadId: THREAD});
+  assert.ok(claim, "policy fixtures must traverse the canonical producer and consumer");
+  return claim;
 };
-const policyInputFixture = (overrides = {}) => ({
-  authority: "trusted_native_claim",
-  callInviteId: INVITE,
-  currentUserId: USER,
-  monotonicNowMs: 100,
-  nativeCallAction: "answer",
-  nativeIdentity: CALL,
-  platform: "ios",
-  threadId: THREAD,
-  trustedNativeClaim: consumedClaimFixture(),
-  ...overrides,
-});
+const policyInputFixture = async (overrides = {}) => {
+  const claim = Object.hasOwn(overrides, "trustedNativeClaim") ? overrides.trustedNativeClaim : await consumedClaimFixture();
+  return {authority: "trusted_native_claim", callInviteId: INVITE, currentUserId: USER, monotonicNowMs: claim?.consumedAtMonotonicMs ?? 0, nativeCallAction: "answer", nativeIdentity: CALL, platform: "ios", threadId: THREAD, trustedNativeClaim: claim, ...overrides};
+};
 const consumedForegroundFixture = () => {
-  const registry = createForegroundAuthenticatedUiCallIntentRegistry({claimIdFactory: () => "d".repeat(64), now: () => 100});
-  const createdIntent = registry.create({action: "open_call", authenticated: true, authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, threadId: THREAD});
-  return registry.consume({authenticatedUserId: USER, claimId: createdIntent.claimId, threadId: THREAD});
+  const createdIntent = createForegroundAuthenticatedUiCallIntent({action: "open_call", authenticated: true, authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, threadId: THREAD});
+  return consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: createdIntent.claimId, isSignedIn: true, threadId: THREAD});
 };
 const creatorCallsiteFinding = (productionSources) => (
   productionCreatorPolicyPasses(productionSources) ? null : true
@@ -648,23 +660,17 @@ const validateProductionGate = async ({code, productionSources}) => {
   ].includes(code)) {
     const policy = await importSourceModule(policySource, code);
     if (code === "IOS_CALL_UUID_WITHOUT_PROVENANCE_ACCEPTED") {
-      report(policy.doesNativeCallActionOwnTransition(policyInputFixture({trustedNativeClaim: null})) === true);
+      report(policy.doesNativeCallActionOwnTransition(await policyInputFixture({trustedNativeClaim: null})) === true);
     } else if (code === "IOS_NATIVE_CLAIM_EXPIRY_MISSING") {
-      report(policy.doesNativeCallActionOwnTransition(policyInputFixture({monotonicNowMs: 30_100})) === true);
+      const fixture = await policyInputFixture();
+      report(policy.doesNativeCallActionOwnTransition({...fixture, monotonicNowMs: fixture.trustedNativeClaim.expiresAtMonotonicMs}) === true);
     } else if (code === "IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED") {
-      report(policy.doesNativeCallActionOwnTransition(policyInputFixture({threadId: OTHER_THREAD})) === true);
+      report(policy.doesNativeCallActionOwnTransition(await policyInputFixture({threadId: OTHER_THREAD})) === true);
     } else if (code === "IOS_NATIVE_CLAIM_STRUCTURAL_FORGERY_ACCEPTED") {
-      const forged = Object.freeze({...consumedClaimFixture()});
-      report(policy.doesNativeCallActionOwnTransition(policyInputFixture({trustedNativeClaim: forged})) === true);
+      const forged = Object.freeze({...await consumedClaimFixture()});
+      report(policy.doesNativeCallActionOwnTransition(await policyInputFixture({trustedNativeClaim: forged})) === true);
     } else if (code === "PLATFORM_PROOF_SCOPE_MISMATCH") {
-      report(policy.doesNativeCallActionOwnTransition(policyInputFixture({
-        nativeIdentity: "b".repeat(64),
-        trustedNativeClaim: consumedClaimFixture({
-          nativeIdentity: "b".repeat(64),
-          platform: "android",
-          source: "android_native_action_store",
-        }),
-      })) === true);
+      report(policy.doesNativeCallActionOwnTransition(await policyInputFixture({platform: "android"})) === true);
     } else {
       const action = code.includes("DECLINE") ? "decline" : code.includes("CONTROL") ? "mute" : "answer";
       report(policy.doesNativeCallActionOwnTransition({
@@ -686,6 +692,11 @@ const validateProductionGate = async ({code, productionSources}) => {
     "IOS_NATIVE_CLAIM_CREATOR_COMPUTED_ACCESS",
     "IOS_NATIVE_CLAIM_CREATOR_CANONICAL_IMPORT_SUBSTITUTED",
     "IOS_FOREGROUND_CREATOR_CANONICAL_IMPORT_SUBSTITUTED",
+    "IOS_NATIVE_CLAIM_FACTORY_ALIAS_IMPORT",
+    "IOS_NATIVE_CLAIM_GENERIC_CONSUMER_ALIAS_IMPORT",
+    "IOS_NATIVE_CLAIM_TRUSTED_CONSUMER_NAMESPACE_ACCESS",
+    "IOS_NATIVE_CLAIM_MOUNTED_CONSUMER_COMPUTED_ACCESS",
+    "IOS_NATIVE_CLAIM_MOUNTED_CONSUMER_CANONICAL_IMPORT_SUBSTITUTED",
   ].includes(code)) {
     report(creatorCallsiteFinding(productionSources));
   } else if (code === "IOS_FOREGROUND_UI_INTENT_STRUCTURAL_FORGERY_ACCEPTED" || code === "IOS_FOREGROUND_UI_OPEN_CALL_BINDING_MISMATCH_ACCEPTED") {
@@ -695,7 +706,7 @@ const validateProductionGate = async ({code, productionSources}) => {
     report(policy.doesForegroundAuthenticatedUiCallIntentOwnAction({
       action: "open_call", activeInviteId: INVITE, activeRoomId: code.includes("MISMATCH") ? OTHER_CALL : ROOM,
       authority: "foreground_authenticated_ui", currentUserId: USER, foregroundUiIntent: candidate,
-      monotonicNowMs: 100, threadId: THREAD,
+      monotonicNowMs: intent.consumedAtMonotonicMs, threadId: THREAD,
     }) === true);
   } else if (code === "IOS_OPEN_CALL_AUTO_ACCEPTED") {
     report(/requestedOpenCall|autoOpenCallRef|requestedCallMode|autoStartCallRef/u.test(threadSource));
@@ -711,6 +722,25 @@ const validateProductionGate = async ({code, productionSources}) => {
     now += 1;
     const second = replayRegistry.consume(consumeInput(createdClaim.claimId));
     report(first !== null && second !== null);
+  } else if (code === "IOS_NATIVE_CLAIM_ACTION_BINDING_MISMATCH_ACCEPTED") {
+    const mutated = await importSourceModule(registrySource, code);
+    const actionRegistry = mutated.createNativeCallTransitionProvenanceRegistry({
+      claimIdFactory: () => CLAIM_ID,
+      now: () => 100,
+    });
+    const createdClaim = actionRegistry.create(iosEvent());
+    report(actionRegistry.consume(consumeInput(createdClaim.claimId, {action: "decline"})) !== null);
+  } else if (code === "IOS_NATIVE_CLAIM_FACTORY_ATTESTATION_EXPOSED") {
+    const mutated = await importSourceModule(registrySource, code);
+    const externalRegistry = mutated.createNativeCallTransitionProvenanceRegistry({claimIdFactory: () => CLAIM_ID, now: () => 100});
+    const createdClaim = externalRegistry.create(iosEvent());
+    const consumedClaim = externalRegistry.consume(consumeInput(createdClaim.claimId));
+    report(mutated.isAttestedNativeCallTransitionClaim(consumedClaim));
+  } else if (code === "IOS_FOREGROUND_UI_FACTORY_ATTESTATION_EXPOSED") {
+    const mutated = await importSourceModule(registrySource, code);
+    const externalRegistry = mutated.createForegroundAuthenticatedUiCallIntentRegistry({claimIdFactory: () => CLAIM_ID, now: () => 100});
+    const createdIntent = externalRegistry.create({action: "open_call", authenticated: true, authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, threadId: THREAD});
+    report(mutated.isAttestedForegroundAuthenticatedUiCallIntent(externalRegistry.consume({authenticatedUserId: USER, claimId: createdIntent.claimId, threadId: THREAD})));
   } else if (code === "IOS_NATIVE_CLAIM_PERSISTENCE_INVALID") {
     report(/AsyncStorage|UserDefaults|SecureStore/u.test(registrySource));
   } else if (code === "IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY") {
@@ -744,7 +774,7 @@ const validateProductionGate = async ({code, productionSources}) => {
     const handler = mutated.createIosCallKitAnswerRouteHandler({getAuthenticatedUserId: () => USER, isActive: () => true, replace: (value) => { destination = value; throw new Error("synthetic"); }});
     await handler({...validProducerEvent, nativeEventGeneration: 99});
     const route = new URL(destination, `https://${configuredUniversalLinkHost}`);
-    report(mutated.consumeTrustedIosCallKitNativeEventClaim({authenticatedUserId: USER, callUuid: CALL, claimId: route.searchParams.get("nativeCallClaim"), inviteId: INVITE, threadId: THREAD}) !== null);
+    report(mutated.consumeTrustedIosCallKitNativeEventClaim({action: "answer", authenticatedUserId: USER, callUuid: CALL, claimId: route.searchParams.get("nativeCallClaim"), inviteId: INVITE, threadId: THREAD}) !== null);
   } else {
     throw new Error(`Unknown production provenance gate: ${code}`);
   }
@@ -773,6 +803,9 @@ const negativeControls = [
   control("IOS_OPEN_CALL_AUTO_ACCEPTED", "app/chat/[threadId].tsx", `${sources["app/chat/[threadId].tsx"]}\nconst requestedOpenCall = true; const autoOpenCallRef = {current:false};\n`),
   replaceControl("IOS_NATIVE_CLAIM_EXPIRY_MISSING", "_lib/communicationCallMediaPolicy.mjs", "    && Number.isFinite(claim.expiresAtMonotonicMs)\n    && monotonicNowMs >= claim.consumedAtMonotonicMs\n    && monotonicNowMs < claim.expiresAtMonotonicMs\n", "    && monotonicNowMs >= claim.consumedAtMonotonicMs\n", "claim expiry"),
   replaceControl("IOS_NATIVE_CLAIM_REPLAY_ACCEPTED", "_lib/nativeCallTransitionProvenance.mjs", "      activeClaims.delete(claimId);\n      activeEventKeys.delete(claim.eventKey);\n", "      // MUTANT: authority remains active.\n", "one-time registry consumption"),
+  replaceControl("IOS_NATIVE_CLAIM_ACTION_BINDING_MISMATCH_ACCEPTED", "_lib/nativeCallTransitionProvenance.mjs", "        expectedAction !== claim.action\n        || expectedPlatform !== claim.platform\n", "        expectedPlatform !== claim.platform\n", "atomic expected-action binding"),
+  replaceControl("IOS_NATIVE_CLAIM_FACTORY_ATTESTATION_EXPOSED", "_lib/nativeCallTransitionProvenance.mjs", "      if (attestationCapability === INTERNAL_NATIVE_CLAIM_ATTESTATION) {\n        attestedNativeClaims.add(consumedClaim);\n      }\n", "      attestedNativeClaims.add(consumedClaim);\n", "internal-only attestation capability"),
+  replaceControl("IOS_FOREGROUND_UI_FACTORY_ATTESTATION_EXPOSED", "_lib/nativeCallTransitionProvenance.mjs", "      if (attestationCapability === INTERNAL_FOREGROUND_INTENT_ATTESTATION) {\n        attestedForegroundIntents.add(consumedIntent);\n      }\n", "      attestedForegroundIntents.add(consumedIntent);\n", "internal-only foreground attestation capability"),
   control("IOS_NATIVE_CLAIM_PERSISTENCE_INVALID", "_lib/nativeCallTransitionProvenance.mjs", `${sources["_lib/nativeCallTransitionProvenance.mjs"]}\nvoid AsyncStorage;\n`),
   replaceControl("IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY", "_lib/nativeCallTransitionProvenance.mjs", "      if (activeEventKeys.has(eventKey) || seenEventKeys.has(eventKey)) {\n        return Object.freeze({status: \"duplicate\"});\n      }", "      if (false) return Object.freeze({status: \"duplicate\"});", "duplicate event tombstone"),
   replaceControl("IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", "    && claim.threadId === threadId\n", "", "thread claim binding"),
@@ -786,13 +819,18 @@ const negativeControls = [
   replaceControl("IOS_FOREGROUND_UI_CLAIM_EXTERNAL_DISCLOSURE", "_lib/nativeCallTransitionProvenance.mjs", '  "foregroundCallClaim",\n', "", "foreground external stripping"),
   replaceControl("IOS_NATIVE_CLAIM_DEBUG_DISCLOSURE", "app/_layout.tsx", "{hideDebugOverlay ? null : <DevDebugOverlay />}", "<DevDebugOverlay />", "debug overlay gating"),
   control("IOS_CALLKIT_COMPLETION_FROM_UNRELATED_CHANNEL", "app/chat/[threadId].tsx", `${sources["app/chat/[threadId].tsx"]}\nfunction unsafe(callChannelState){if(callChannelState === "live") completeIosNativeCallAnswer("unsafe", true);}\n`),
-  replaceControl("IOS_NATIVE_CLAIM_ROUTER_FAILURE_REPLAY", "_lib/nativeCallTransitionProvenance.mjs", "    nativeCallTransitionRegistry.consume({\n      authenticatedUserId,\n      claimId: routed.claimId,\n      inviteId: routed.inviteId,\n      nativeIdentity: routed.callUuid,\n      platform: \"ios\",\n      source: \"ios_callkit_native_event\",\n      threadId: routed.threadId,\n    });\n", "", "router failure discard"),
+  replaceControl("IOS_NATIVE_CLAIM_ROUTER_FAILURE_REPLAY", "_lib/nativeCallTransitionProvenance.mjs", "    nativeCallTransitionRegistry.consume({\n      action: \"answer\",\n      authenticatedUserId,\n      claimId: routed.claimId,\n      inviteId: routed.inviteId,\n      nativeIdentity: routed.callUuid,\n      platform: \"ios\",\n      source: \"ios_callkit_native_event\",\n      threadId: routed.threadId,\n    });\n", "", "router failure discard"),
   control("IOS_NATIVE_CLAIM_CREATOR_CALLSITE_UNEXPECTED", "components/UnsafeNativeClaimCreator.mjs", "import {createIosCallKitAnswerRouteHandler} from '../_lib/nativeCallTransitionProvenance.mjs';\ncreateIosCallKitAnswerRouteHandler({});\n"),
   control("IOS_NATIVE_CLAIM_CREATOR_ALIAS_IMPORT", "components/UnsafeAliasCreator.mjs", "import {createIosCallKitAnswerRouteHandler as aliasCreator} from '../_lib/nativeCallTransitionProvenance.mjs';\naliasCreator({});\n"),
   control("IOS_NATIVE_CLAIM_CREATOR_NAMESPACE_ACCESS", "components/UnsafeNamespaceCreator.mjs", "import * as provenance from '../_lib/nativeCallTransitionProvenance.mjs';\nprovenance.createIosCallKitAnswerRouteHandler({});\n"),
   control("IOS_NATIVE_CLAIM_CREATOR_COMPUTED_ACCESS", "components/UnsafeComputedCreator.mjs", "import * as provenance from '../_lib/nativeCallTransitionProvenance.mjs';\nprovenance['createIosCallKit'+'AnswerRouteHandler']({});\n"),
   control("IOS_NATIVE_CLAIM_CREATOR_CANONICAL_IMPORT_SUBSTITUTED", "app/_layout.tsx", `import {unsafeFactory as createIosCallKitAnswerRouteHandler} from '../_lib/unsafe.mjs';\n${replaceRequired(sources["app/_layout.tsx"], "  createIosCallKitAnswerRouteHandler,\n", "", "iOS creator canonical import")}`),
   control("IOS_FOREGROUND_CREATOR_CANONICAL_IMPORT_SUBSTITUTED", "app/chat/index.tsx", `import {unsafeFactory as createForegroundAuthenticatedUiCallIntent} from '../../_lib/unsafe.mjs';\n${replaceRequired(sources["app/chat/index.tsx"], "import { createForegroundAuthenticatedUiCallIntent } from \"../../_lib/nativeCallTransitionProvenance.mjs\";\n", "", "foreground creator canonical import")}`),
+  control("IOS_NATIVE_CLAIM_FACTORY_ALIAS_IMPORT", "components/UnsafeFactory.mjs", "import {createNativeCallTransitionProvenanceRegistry as unsafe} from '../_lib/nativeCallTransitionProvenance.mjs';\nunsafe();\n"),
+  control("IOS_NATIVE_CLAIM_GENERIC_CONSUMER_ALIAS_IMPORT", "components/UnsafeGenericConsumer.mjs", "import {consumeNativeCallTransitionClaim as unsafe} from '../_lib/nativeCallTransitionProvenance.mjs';\nunsafe({});\n"),
+  control("IOS_NATIVE_CLAIM_TRUSTED_CONSUMER_NAMESPACE_ACCESS", "components/UnsafeConsumer.mjs", "import * as provenance from '../_lib/nativeCallTransitionProvenance.mjs';\nprovenance.consumeTrustedIosCallKitNativeEventClaim({});\n"),
+  control("IOS_NATIVE_CLAIM_MOUNTED_CONSUMER_COMPUTED_ACCESS", "components/UnsafeMountedConsumer.mjs", "import * as provenance from '../_lib/nativeCallTransitionProvenance.mjs';\nprovenance['consumeMountedIos'+'NativeCallRoute']({});\n"),
+  control("IOS_NATIVE_CLAIM_MOUNTED_CONSUMER_CANONICAL_IMPORT_SUBSTITUTED", "app/chat/[threadId].tsx", `import {unsafeConsume as consumeMountedIosNativeCallRoute} from '../../_lib/unsafe.mjs';\n${replaceRequired(sources["app/chat/[threadId].tsx"], "  consumeMountedIosNativeCallRoute,\n", "", "mounted consumer canonical import")}`),
 ];
 
 for (const {code, overrides} of negativeControls.filter(({overrides}) => Object.keys(overrides)[0].endsWith(".mjs"))) {

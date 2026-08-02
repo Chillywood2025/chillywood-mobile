@@ -323,6 +323,7 @@ export default function ChillyChatThreadScreen() {
     if (nativeCallClaimConsumptionRef.current === consumptionKey) return;
     nativeCallClaimConsumptionRef.current = consumptionKey;
     const claim = consumeMountedIosNativeCallRoute({
+      action: "answer",
       authenticatedUserId: currentUserId,
       authLoading,
       callUuid: routeNativeCallUuid,

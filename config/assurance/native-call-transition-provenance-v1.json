@@ -24,14 +24,15 @@
     "claimHandleEncoding": "lowercase_hex",
     "clock": "monotonic_process_clock",
     "deleteBeforeReturn": true,
-    "attestation": "module_private_weakset",
+    "attestation": "module_private_weakset_canonical_registry_only",
     "expiryRevalidatedAtTransitionUse": true,
     "duplicateExtendsTtl": false,
     "seenEventReplay": "bounded_process_lifetime_lru_platform_scoped_clear",
     "platformScopedClear": true,
     "unscopedClear": "denied",
     "persisted": false,
-    "logged": false
+    "logged": false,
+    "consume": "canonical_registry_only_attestation_exact_action_platform_source_user_thread_invite_native_identity_delete_before_return"
   },
   "foregroundUiIntent": {
     "implementation": "_lib/nativeCallTransitionProvenance.mjs",
@@ -42,8 +43,8 @@
     "allowedProducers": ["app/_layout.tsx", "app/chat/index.tsx", "app/profile/[userId].tsx"],
     "actions": ["open_call", "start_voice", "start_video"],
     "bindings": ["authenticatedUserId", "threadId", "action", "exact_inviteId_and_roomId_for_open"],
-    "consume": "mounted_authenticated_thread_delete_before_return",
-    "attestation": "module_private_weakset",
+    "consume": "mounted_authenticated_user_and_thread_delete_before_return_policy_binds_exact_action_and_open_call_invite_room",
+    "attestation": "module_private_weakset_canonical_registry_only",
     "externalRouteCreatable": false,
     "compatibilityRoute": "app/communication/[roomId].tsx_redirects_navigation_only_without_openCall_or_claim"
   },

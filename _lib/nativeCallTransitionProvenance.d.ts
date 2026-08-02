@@ -36,6 +36,7 @@ export type NativeCallTransitionProvenanceRegistry = {
   clear(platform: NativeCallTransitionPlatform): boolean;
   create(input?: Partial<NativeCallTransitionClaimInput> | null): NativeCallTransitionClaimCreation;
   consume(input?: {
+    action: NativeCallTransitionAction;
     authenticatedUserId: string;
     claimId: string;
     inviteId: string;
@@ -72,6 +73,7 @@ export function createIosCallKitAnswerRouteHandler(input?: {
 
 export function consumeNativeCallTransitionClaim(
   input?: {
+    action: NativeCallTransitionAction;
     authenticatedUserId: string;
     claimId: string;
     inviteId: string;
@@ -82,6 +84,7 @@ export function consumeNativeCallTransitionClaim(
   } | null,
 ): NativeCallTransitionClaim | null;
 export function consumeTrustedIosCallKitNativeEventClaim(input?: {
+  action: "answer";
   authenticatedUserId?: string;
   callUuid?: string;
   claimId?: string;
@@ -89,6 +92,7 @@ export function consumeTrustedIosCallKitNativeEventClaim(input?: {
   threadId?: string;
 } | null): NativeCallTransitionClaim | null;
 export function consumeMountedIosNativeCallRoute(input?: {
+  action: "answer";
   authenticatedUserId?: string;
   authLoading?: boolean;
   callUuid?: string;

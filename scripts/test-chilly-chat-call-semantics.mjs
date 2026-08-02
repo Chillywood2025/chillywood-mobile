@@ -537,8 +537,8 @@ for (const nativeCallAction of ["answer", "decline", "end", "mute", "unmute"]) {
 }
 const semanticsRegistry = createNativeCallTransitionProvenanceRegistry({claimIdFactory: () => "a".repeat(64), now: () => 100});
 const semanticsCreation = semanticsRegistry.create({action: "answer", authenticatedUserId: nativeRouteUserId, inviteId: nativeRouteInviteId, nativeEventGeneration: 1, nativeIdentity: "33333333-3333-4333-8333-333333333333", platform: "ios", source: "ios_callkit_native_event", threadId: nativeRouteThreadId});
-const consumedIosAnswerClaim = semanticsRegistry.consume({authenticatedUserId: nativeRouteUserId, claimId: semanticsCreation.claimId, inviteId: nativeRouteInviteId, nativeIdentity: semanticsCreation.nativeIdentity, platform: "ios", source: "ios_callkit_native_event", threadId: nativeRouteThreadId});
-assert.ok(consumedIosAnswerClaim, "semantics proof must use a module-attested create-and-consume result");
+const consumedIosAnswerClaim = semanticsRegistry.consume({action: "answer", authenticatedUserId: nativeRouteUserId, claimId: semanticsCreation.claimId, inviteId: nativeRouteInviteId, nativeIdentity: semanticsCreation.nativeIdentity, platform: "ios", source: "ios_callkit_native_event", threadId: nativeRouteThreadId});
+assert.ok(consumedIosAnswerClaim, "semantics proof creates a structurally valid test-registry claim");
 assert.equal(doesNativeCallActionOwnTransition({
   authority: "trusted_native_claim",
   callInviteId: nativeRouteInviteId,
@@ -549,7 +549,7 @@ assert.equal(doesNativeCallActionOwnTransition({
   platform: "ios",
   threadId: nativeRouteThreadId,
   trustedNativeClaim: consumedIosAnswerClaim,
-}), true, "an exact consumed CallKit claim owns the bounded native Answer request");
+}), false, "an exported test registry cannot manufacture production native-transition attestation");
 assert.equal(doesNativeCallActionOwnTransition({
   callInviteId: "",
   nativeCallAction: "answer",

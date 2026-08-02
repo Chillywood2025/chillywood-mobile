@@ -25,6 +25,26 @@ const trackedProductionSources = Object.fromEntries(trackedProductionPaths.map((
   fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8"),
 ]));
 const PROVENANCE_CREATOR_POLICIES = Object.freeze({
+  consumeNativeCallTransitionClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+  }),
+  createNativeCallTransitionProvenanceRegistry: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  createForegroundAuthenticatedUiCallIntentRegistry: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  consumeTrustedIosCallKitNativeEventClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  consumeMountedIosNativeCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeMountedForegroundAuthenticatedUiCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
   createForegroundAuthenticatedUiCallIntent: Object.freeze({
     "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
     "app/_layout.tsx": Object.freeze({references: 2, specifier: "../_lib/nativeCallTransitionProvenance.mjs"}),
@@ -150,7 +170,12 @@ requireText(rootLayout, 'pathname.split("#", 1)', "Authentication redirects must
 requireText(provenance, "nativeCallClaim: created.claimId", "The canonical CallKit bridge handler must carry only the opaque one-time handle.");
 requireText(provenance, "seenEventKeys", "Native event replay tombstones must survive claim expiry for the bounded process lifetime.");
 requireText(provenance, "attestedNativeClaims", "Consumed native claims must carry module-private attestation.");
+requireText(provenance, "attestationCapability === INTERNAL_NATIVE_CLAIM_ATTESTATION", "Only the canonical internal registry may attest consumed native claims.");
+requireText(provenance, "attestationCapability === INTERNAL_FOREGROUND_INTENT_ATTESTATION", "Only the canonical internal foreground registry may attest consumed UI intents.");
+requireText(provenance, "const expectedAction = normalizeText(expected.action);", "Native claim consumption must normalize a caller-supplied expected action.");
+requireText(provenance, "expectedAction !== claim.action", "Native claim consumption must atomically bind the expected action with the other identities.");
 requireText(provenance, "nativeCallTransitionRegistry.consume({", "Router failure must discard its exact native claim before failing CallKit Answer.");
+if ((provenance.match(/nativeCallTransitionRegistry\.create\(\{/gu) ?? []).length !== 1) failures.push("The private iOS bridge must be the sole canonical native claim creator.");
 rejectText(rootLayout, 'nativeCallAction: "answer"', "CallKit navigation must not carry authoritative action text.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline must use a direct server-authoritative transition.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End must use a direct server-authoritative transition.");
@@ -163,6 +188,7 @@ requireText(chatThread, 'event.type === "audioSessionActivated"', "The chat call
 requireText(chatThread, 'event.type === "applicationActive"', "The chat call screen must restore foreground video after a native answer.");
 requireText(chatThread, 'requestedNativeCallAction === "answer"', "Background audio permission must be scoped to a native Answer action.");
 requireText(chatThread, "consumeMountedIosNativeCallRoute", "The mounted thread must atomically consume the exact native claim after auth readiness.");
+requireText(chatThread, 'action: "answer"', "The mounted CallKit Answer consumer must supply its exact expected action.");
 if (/callChannelState\s*===\s*["']live["'][\s\S]{0,240}completeIosNativeCallAnswer/u.test(chatThread)) failures.push("An unrelated live media channel must never complete a newly routed CallKit claim.");
 requireText(chatThread, 'authority: trustedNativeCallClaim ? "trusted_native_claim" : "none"', "Route values without a consumed claim must have no authority.");
 rejectText(chatThread, "requestedOpenCall", "openCall route text must not open or join call media.");

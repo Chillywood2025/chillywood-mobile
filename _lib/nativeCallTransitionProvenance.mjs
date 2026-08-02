@@ -7,6 +7,8 @@ const MAX_ACTIVE_CLAIMS = 32;
 const MAX_CONSUMED_EVENTS = 64;
 const attestedNativeClaims = new WeakSet();
 const attestedForegroundIntents = new WeakSet();
+const INTERNAL_NATIVE_CLAIM_ATTESTATION = Object.freeze({});
+const INTERNAL_FOREGROUND_INTENT_ATTESTATION = Object.freeze({});
 const SENSITIVE_EXTERNAL_PARAMETERS = [
   "foregroundCallClaim",
   "nativeCallAction",
@@ -96,7 +98,7 @@ export function createNativeCallTransitionProvenanceRegistry({
   maxConsumed = MAX_CONSUMED_EVENTS,
   now = defaultMonotonicNow,
   ttlMs = CLAIM_TTL_MS,
-} = {}) {
+} = {}, attestationCapability = null) {
   const activeClaims = new Map();
   const activeEventKeys = new Map();
   const seenEventKeys = new Map();
@@ -174,6 +176,7 @@ export function createNativeCallTransitionProvenanceRegistry({
       const claimId = normalizeText(expected.claimId);
       const claim = CLAIM_ID_PATTERN.test(claimId) ? activeClaims.get(claimId) : null;
       if (!claim) return null;
+      const expectedAction = normalizeText(expected.action);
       const expectedPlatform = normalizeText(expected.platform);
       const expectedSource = normalizeText(expected.source);
       const expectedAuthenticatedUserId = normalizeAuthenticatedUserId(expected.authenticatedUserId);
@@ -183,7 +186,8 @@ export function createNativeCallTransitionProvenanceRegistry({
         ? normalizeUuid(expected.nativeIdentity)
         : normalizeText(expected.nativeIdentity);
       if (
-        expectedPlatform !== claim.platform
+        expectedAction !== claim.action
+        || expectedPlatform !== claim.platform
         || expectedSource !== claim.source
         || expectedAuthenticatedUserId !== claim.authenticatedUserId
         || expectedThreadId !== claim.threadId
@@ -204,7 +208,9 @@ export function createNativeCallTransitionProvenanceRegistry({
         consumed: true,
         consumedAtMonotonicMs,
       });
-      attestedNativeClaims.add(consumedClaim);
+      if (attestationCapability === INTERNAL_NATIVE_CLAIM_ATTESTATION) {
+        attestedNativeClaims.add(consumedClaim);
+      }
       return consumedClaim;
     },
     inspectCounts() {
@@ -214,7 +220,10 @@ export function createNativeCallTransitionProvenanceRegistry({
   });
 }
 
-const nativeCallTransitionRegistry = createNativeCallTransitionProvenanceRegistry();
+const nativeCallTransitionRegistry = createNativeCallTransitionProvenanceRegistry(
+  undefined,
+  INTERNAL_NATIVE_CLAIM_ATTESTATION,
+);
 
 const registerTrustedIosCallKitNativeEvent = (event) => {
   const authenticatedUserId = normalizeAuthenticatedUserId(event?.authenticatedUserId);
@@ -297,6 +306,7 @@ export const createIosCallKitAnswerRouteHandler = ({
     replace(routed.destination);
   } catch {
     nativeCallTransitionRegistry.consume({
+      action: "answer",
       authenticatedUserId,
       claimId: routed.claimId,
       inviteId: routed.inviteId,
@@ -323,6 +333,7 @@ export const consumeNativeCallTransitionClaim = (expected) => (
 
 export const consumeTrustedIosCallKitNativeEventClaim = (expected) => (
   nativeCallTransitionRegistry.consume({
+    action: expected?.action,
     claimId: expected?.claimId,
     authenticatedUserId: expected?.authenticatedUserId,
     inviteId: expected?.inviteId,
@@ -343,6 +354,7 @@ export const consumeMountedIosNativeCallRoute = (input) => {
     return null;
   }
   return consumeTrustedIosCallKitNativeEventClaim({
+    action: input?.action,
     callUuid: input?.callUuid,
     claimId: input?.claimId,
     authenticatedUserId: input?.authenticatedUserId,
@@ -356,7 +368,7 @@ export function createForegroundAuthenticatedUiCallIntentRegistry({
   maxActive = MAX_ACTIVE_CLAIMS,
   now = defaultMonotonicNow,
   ttlMs = FOREGROUND_INTENT_TTL_MS,
-} = {}) {
+} = {}, attestationCapability = null) {
   const activeIntents = new Map();
 
   const purge = () => {
@@ -432,13 +444,18 @@ export function createForegroundAuthenticatedUiCallIntentRegistry({
       if (!Number.isFinite(consumedAtMonotonicMs)) return null;
       activeIntents.delete(claimId);
       const consumedIntent = Object.freeze({...intent, consumed: true, consumedAtMonotonicMs});
-      attestedForegroundIntents.add(consumedIntent);
+      if (attestationCapability === INTERNAL_FOREGROUND_INTENT_ATTESTATION) {
+        attestedForegroundIntents.add(consumedIntent);
+      }
       return consumedIntent;
     },
   });
 }
 
-const foregroundAuthenticatedUiCallIntentRegistry = createForegroundAuthenticatedUiCallIntentRegistry();
+const foregroundAuthenticatedUiCallIntentRegistry = createForegroundAuthenticatedUiCallIntentRegistry(
+  undefined,
+  INTERNAL_FOREGROUND_INTENT_ATTESTATION,
+);
 
 export const createForegroundAuthenticatedUiCallIntent = (input) => (
   foregroundAuthenticatedUiCallIntentRegistry.create(input)
