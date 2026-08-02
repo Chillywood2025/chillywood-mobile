@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-release-identity-profile-environment-review-v3",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "release-identity-profile-environment",
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "humanApproval": false,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "immutableSourceTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "implementationTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "currentBaseAtReview": "40b1c7ba9de0ab96dddc1442708ecfcaaf05a1d0",
+  "sourceDeltaHash": "bbc41226a0f44d555f07cf22830b382c8d8802b1bbaf0388b448c9275ad72576",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "07bd294b3f216b4fe5aa3995859268ce2c8ab58c7f2b8f66636062df8a8085f4",
+  "scopeStatus": "pass",
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "release-identity-profile-environment",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "focus": "source, resolved EAS profile and environment, runtime and channel, platform, package or bundle, build identity, distribution, target classification, and historical-proof boundaries"
+    },
+    "pullRequestIdentity": {
+      "status": "pass",
+      "number": 143,
+      "state": "open-draft",
+      "remoteHeadMatched": true,
+      "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "immutableSourceTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+      "baseSynchronizationPending": true
+    },
+    "historicalEvidence": {
+      "status": "pass_preserved_additively",
+      "evidence": [
+        {
+          "file": "docs/reviews/pr143-d1-release-identity-profile-environment-review-v1.json",
+          "sha256": "d8ad0f70f597cd15f2fc6fc0c60f30a48b082dd2bbfc8823fa83613081b67214",
+          "reviewedHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+          "classification": "historical-open-findings"
+        },
+        {
+          "file": "docs/reviews/pr143-d1-release-identity-profile-environment-review-v2.json",
+          "sha256": "a0c59cff04dd859a6c93ab870273059601804b0eaefac496ef9202c6d2c484f6",
+          "reviewedHead": "aecff4fd7aa84b53e7a25402d156fc0a945cb9fb",
+          "classification": "historical-corrected-head"
+        }
+      ],
+      "priorEvidenceEditedByV3": false
+    },
+    "sourceIdentityMatrix": {
+      "status": "pass",
+      "targets": [
+        {
+          "targetId": "android-chat-livekit-qa-build-86",
+          "classification": "ACTIVE_INTERNAL_TARGET",
+          "platform": "android",
+          "profile": "android-chat-livekit-qa",
+          "environment": "production",
+          "profileDistribution": "store",
+          "packageIdentifier": "com.chillywood.mobile",
+          "appVersion": "1.0.0",
+          "nativeBuild": "86",
+          "runtimeVersion": "1.0.0-android-chat-call-action-v1",
+          "runtimeBinding": "EAS_PROFILE_ENV:ANDROID_CHAT_LIVEKIT_QA_RUNTIME_VERSION",
+          "channel": "android-chat-livekit-qa",
+          "distribution": "google_play_internal",
+          "releaseIdentity": "HISTORICAL_RECORDED_INPUT"
+        },
+        {
+          "targetId": "ios-qa-build-8",
+          "classification": "ACTIVE_INTERNAL_TARGET",
+          "platform": "ios",
+          "profile": "ios-qa",
+          "environment": "production",
+          "profileDistribution": "store",
+          "packageIdentifier": "com.chillywood.mobile",
+          "appVersion": "1.0.0",
+          "nativeBuild": "8",
+          "runtimeVersion": "1.0.0-iosqa1",
+          "runtimeBinding": "EAS_PROFILE_ENV:IOS_QA_RUNTIME_VERSION",
+          "channel": "ios-qa",
+          "distribution": "testflight_internal",
+          "releaseIdentity": "HISTORICAL_RECORDED_INPUT"
+        },
+        {
+          "targetId": "android-production-build-84-historical",
+          "classification": "HISTORICAL_ARTIFACT",
+          "platform": "android",
+          "profile": "android-production-local-recovery",
+          "environment": "production",
+          "profileDistribution": "store",
+          "packageIdentifier": "com.chillywood.mobile",
+          "appVersion": "1.0.0",
+          "nativeBuild": "84",
+          "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+          "runtimeBinding": "RELEASE_MANIFEST",
+          "channel": "production",
+          "distribution": "google_play_internal",
+          "releaseIdentity": "HISTORICAL_RECORDED_INPUT",
+          "generatedSource": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF"
+        }
+      ],
+      "registeredReleaseManifests": "3/3",
+      "duplicateTargets": 0,
+      "androidIosEvidenceSeparated": true,
+      "independentFinalHeadAssertions": "3/3 identity/profile/environment/runtime/channel/distribution; classifications fail closed; historical identities not current proof"
+    },
+    "priorP1Resolution": {
+      "status": "pass_reconfirmed_at_final_head",
+      "targetAndReleaseIdentityClassification": {
+        "allowedTargetVocabularyValidated": true,
+        "unknownFailClosedTargetRejected": true,
+        "allowedReleaseIdentityVocabularyValidated": true,
+        "currentReleaseIdentityRequiresIndependentArtifactProof": true,
+        "negativeControls": ["TARGET_CLASSIFICATION_INVALID", "TARGET_CLASSIFICATION_UNKNOWN_FAIL_CLOSED", "CURRENT_RELEASE_IDENTITY_UNPROVED"]
+      },
+      "profileRuntimeEnvironment": {
+        "resolvedProfileEnvironmentCompared": true,
+        "resolvedProfileRuntimeKeyAndValueCompared": true,
+        "generationUsesResolvedProfileEnvironment": true,
+        "negativeControl": "PROFILE_RUNTIME_ENV_MISMATCH"
+      },
+      "profileDistribution": {
+        "resolvedProfileDistributionCompared": true,
+        "releaseManifestDistributionComparedSeparately": true,
+        "negativeControl": "PROFILE_DISTRIBUTION_MISMATCH"
+      }
+    },
+    "historicalProofBoundary": {
+      "status": "pass",
+      "releaseIdentities": "3/3 HISTORICAL_RECORDED_INPUT",
+      "currentlyReprovedSignedArtifacts": 0,
+      "currentGeneratedReplayClaimedHistoricalArtifactProof": false,
+      "historicalBuild84SourceBoundSeparately": true,
+      "historicalBuild84EquivalentToCurrentReplay": false,
+      "providerInstalledOrPhysicalProofInferred": false,
+      "nativeCompilationOrReleaseProceedFlags": false
+    },
+    "focusedParityTests": {
+      "status": "pass",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "mandatoryNegativeControls": "8/8",
+      "additionalNegativeControls": "16/16",
+      "negativeControlsTotal": "24/24",
+      "directImportClosure": "42 discovered; 34 native mapped; 8 reviewed JS-only; 0 unclassified",
+      "capabilityParity": "21/21 Android QA; 26/26 iOS QA; 21/21 Android historical current-source replay"
+    },
+    "proofTierBoundary": {
+      "status": "pass_scoped_and_honest",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+      "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "implementationScope": {
+      "status": "pass",
+      "files": "6/15",
+      "additions": 899,
+      "deletions": 8,
+      "netChangedLines": 891,
+      "packageOrWorkflowChanged": false,
+      "releaseProductOrNativeImplementationChanged": false
+    },
+    "staticChecks": {
+      "status": "pass",
+      "contracts": "13/13",
+      "features": 20,
+      "escapedDefects": 25,
+      "plan": "REQUIREMENTS_CLEAR/ARCHITECTURE_CLEAR",
+      "jsonAndSyntax": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "currentTruth": {
+      "status": "BLOCKED_INTERNAL_PENDING_PR_D1_BINDING",
+      "recordedMain": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+      "observedMain": "40b1c7ba9de0ab96dddc1442708ecfcaaf05a1d0",
+      "sourceDefectInferred": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_owned_after_four_current_reviews",
+      "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "eligibleAsReviewLaneProof": false,
+      "formalLevelCGuardExpectedToRemainBlocked": true
+    },
+    "nonInterference": {
+      "implementationFilesEditedByReview": false,
+      "providerContact": false,
+      "buildOrOta": false,
+      "artifactInstalled": false,
+      "publicRelease": false,
+      "databaseOrProviderMutation": false,
+      "reviewPrMergePermitted": false,
+      "generatedNativeDirectoriesCommitted": false,
+      "denoLockStaged": false
+    }
+  },
+  "testResultHash": "841f1f4336ff84a6d30d1e2a6ef84ea408a2f44a2b5d7447e51bdecdacb7d6c0",
+  "reviewLevel": "C",
+  "reviewHead": "556b19c6c36b227c496b6e402984a694388fcbfe",
+  "reviewRef": "codex/first-pass-assurance-pr-d1-review-release-identity",
+  "reviewRefHead": "556b19c6c36b227c496b6e402984a694388fcbfe",
+  "reviewTimestamp": "2026-08-02T09:25:55Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-release-identity-profile-environment",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR_D1_TARGET_AND_RELEASE_IDENTITY_CLASSIFICATIONS_NOT_FAIL_CLOSED",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The final validator still enforces explicit vocabularies, rejects UNKNOWN_FAIL_CLOSED, and requires independent current-artifact proof for CURRENTLY_REPROVED; all related negative controls pass."
+    },
+    {
+      "id": "PR_D1_EAS_RUNTIME_ENVIRONMENT_NOT_BOUND",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The final target contract binds runtime source/key/value, compares resolved EAS profile values, and uses that resolved environment for generation; PROFILE_RUNTIME_ENV_MISMATCH fails closed."
+    },
+    {
+      "id": "PR_D1_EAS_DISTRIBUTION_POLICY_NOT_BOUND",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The final validator compares resolved EAS profile distribution separately from release-manifest distribution; PROFILE_DISTRIBUTION_MISMATCH fails closed."
+    },
+    {
+      "id": "PR_D1_FINAL_DIRECT_IMPORT_CLOSURE_CHANGE_LANE1_NON_INTERFERENCE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The final correction adds random-values native coverage and complete import grammar without changing target identity, profile, environment, runtime, channel, distribution, classification, or historical-proof semantics."
+    }
+  ],
+  "summary": {
+    "status": "pass_source_model_lane",
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0,
+    "mergeAuthorizedByThisReview": false,
+    "reviewPrMustRemainUnmerged": true,
+    "formalBlockers": ["PR_D1_CURRENT_TRUTH_BINDING_PENDING", "PHASE_1_CI_PENDING", "BASE_SYNCHRONIZATION_PENDING"],
+    "exactNextAction": "Coordinator binds the final immutable source in current truth, base-synchronizes PR #143, refreshes all four persistent lanes at the synchronized head, then runs the one exact frozen-head Phase 1 CI."
+  }
+}
