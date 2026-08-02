@@ -137,6 +137,7 @@ const hasAuthLinkLikeParams = (params: Record<string, unknown>) => {
 };
 
 const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
+  "#",
   "access_token",
   "authorization",
   "code",
@@ -144,9 +145,11 @@ const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
   "nativecallaction",
   "nativecallclaim",
   "nativecalluuid",
+  "opencall",
   "password",
   "refresh_token",
   "secret",
+  "startcall",
   "token",
   "token_hash",
 ]);
@@ -162,7 +165,9 @@ const sanitizeRouteAnalyticsParams = (pathname: string, params: Record<string, u
     if (normalizedKey.includes("token") || normalizedKey.includes("password") || normalizedKey.includes("secret")) return;
     if (value == null || Array.isArray(value)) return;
 
-    sanitized[key] = String(value);
+    const normalizedValue = String(value);
+    if (normalizedValue.includes("#")) return;
+    sanitized[key] = normalizedValue;
   });
 
   return sanitized;
@@ -400,7 +405,6 @@ function RouteAnalyticsBridge() {
 const buildIncomingCallPath = (invite: ChillyChatCallInvite) => {
   const params = new URLSearchParams({
     callInviteId: invite.id,
-    openCall: "1",
   });
   return `/chat/${invite.threadId}?${params.toString()}`;
 };
@@ -734,7 +738,7 @@ function IncomingCallNotificationBridge() {
       Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
       return;
     }
-    const params = new URLSearchParams({callInviteId: acceptedInvite.id, openCall: "1"});
+    const params = new URLSearchParams({callInviteId: acceptedInvite.id});
     const path = `/chat/${encodeURIComponent(acceptedInvite.threadId)}?${params.toString()}`;
     cleanupChillyChatCallNotifications({
       callInviteId: acceptedInvite.id,
@@ -956,6 +960,7 @@ function RoomSafeActivityNotificationBridge() {
 
 const serializeRedirectTarget = (pathname: string, params: Record<string, unknown>) => {
   const search = new URLSearchParams();
+  const fragmentFreePathname = pathname.split("#", 1)[0] || "/";
 
   Object.entries(params).forEach(([key, value]) => {
     const normalizedKey = key.toLowerCase();
@@ -965,16 +970,18 @@ const serializeRedirectTarget = (pathname: string, params: Record<string, unknow
     if (Array.isArray(value)) {
       value.forEach((entry) => {
         if (entry == null) return;
+        if (String(entry).includes("#")) return;
         search.append(key, String(entry));
       });
       return;
     }
 
+    if (String(value).includes("#")) return;
     search.append(key, String(value));
   });
 
   const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
+  return query ? `${fragmentFreePathname}?${query}` : fragmentFreePathname;
 };
 
 function FirebaseRuntimeBridge() {
@@ -1137,7 +1144,6 @@ function IosNativeCallsBridge() {
         callInviteId: created.inviteId,
         nativeCallClaim: created.claimId,
         nativeCallUuid: created.nativeIdentity,
-        openCall: "1",
       });
       const destination = `/chat/${encodeURIComponent(created.threadId)}?${params.toString()}`;
       router.replace(destination as Parameters<typeof router.replace>[0]);

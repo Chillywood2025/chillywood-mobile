@@ -311,7 +311,7 @@ export async function startIosNativeCallsReadiness(
     const apnsEnvironment = readApnsEnvironment();
     const readiness = await readIosNativeCallsReadiness();
     const generation = ++voipLifecycleGeneration;
-    clearNativeCallTransitionClaims();
+    clearNativeCallTransitionClaims("ios");
     voipRegistrationActive = false;
     nativeSubscription?.remove();
     nativeSubscription = null;
@@ -374,7 +374,7 @@ export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationSt
     if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
 
     ++voipLifecycleGeneration;
-    clearNativeCallTransitionClaims();
+    clearNativeCallTransitionClaims("ios");
     voipRegistrationActive = false;
     nativeSubscription?.remove();
     nativeSubscription = null;
