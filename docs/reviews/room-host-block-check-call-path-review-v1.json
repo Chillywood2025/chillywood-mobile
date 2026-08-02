@@ -1,0 +1,537 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "room-host-block-check-call-path-review-v1",
+  "reviewVersion": 1,
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "rls-trigger-membership-message-seat-waiting-room-and-backend-call-paths",
+  "reviewLevel": "C",
+  "humanApproval": false,
+  "implementationPrNumber": 75,
+  "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "immutableSourceHead": "a24efd543c5f19290879e7089c1c57768bc03a4d",
+  "synchronizedBranchHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "currentBase": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "baseHead": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "synchronizedTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "implementationTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "canonicalSyntheticTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "synchronizationParents": [
+    "a24efd543c5f19290879e7089c1c57768bc03a4d",
+    "da89d88adb929e8cd9718b31227f79bf243c2395"
+  ],
+  "sourceDeltaHash": "8446093a0e5ff054558f7a8bcbaf73e456d612a76a4a736e36ab011d35db7efb",
+  "sourceDeltaHashMethod": "sha256(trim(git diff --binary --no-renames merge-base immutable-source-head)) and synchronized equivalent",
+  "changedFileHash": "6712e28d6225c1ae597be763f14fc903c0f2d625b352c3385e9fcc14a7469a73",
+  "changedFileHashMethod": "sha256(trim(git diff --name-status -z --no-renames current-base synchronized-head))",
+  "renameAwareChangedFileHash": "e4d65c9275075dfbc8a190f075da701392ca2b97637a845831476003b60b1c17",
+  "migrationSetHash": "93151ccc267c571e4120e5461d4b6b0bd7881ca7f95f61019107122f3e22d882",
+  "configHash": "22cad5f2dead2e6d2b52332d8541f39ea644aee340263066d39c3e59dc21e783",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewRef": "codex/assurance-reconcile-room-host-block-check-review-call-paths",
+  "reviewHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "reviewTimestamp": "2026-08-02T06:24:53Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-4-call-paths-rls-triggers-and-non-regression",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "call-paths-rls-triggers-and-non-regression",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "databaseContactByReview": false,
+      "providerContactByReview": false
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "ordinaryTwoParentImplementationMerge": true,
+      "immutableSourceIsImplementationFirstParent": true,
+      "currentBaseIsImplementationSecondParent": true,
+      "firstParentDistance": 1,
+      "observedTreeEqualsCanonicalSyntheticTree": true,
+      "providerBranchSnapshotMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "reviewBranchContainsOnlyReviewEvidenceBeyondImplementation": true
+    },
+    "scope": {
+      "status": "pass",
+      "features": [
+        "supabase-migrations-rls",
+        "watch-party-live"
+      ],
+      "implementationChangedFiles": 7,
+      "additions": 2123,
+      "deletions": 1,
+      "netChangedLines": 2122,
+      "registeredScopeWaiver": "pr-b3-room-host-authorization-scope-waiver-v1",
+      "fileBudgetMaximum": 8,
+      "lineBudgetMaximum": 2400,
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "secondHighRiskDomain": false,
+      "applicationFilesChanged": false,
+      "edgeFunctionFilesChanged": false,
+      "packageFilesChanged": false,
+      "workflowFilesChanged": false,
+      "unrelatedScopeFound": false
+    },
+    "effectiveDatabaseTopology": {
+      "status": "pass",
+      "effectiveDirectDatabaseCallSites": 3,
+      "callSites": [
+        "watch_party_room_memberships_self_insert_policy",
+        "enforce_watch_party_room_membership_block_guard",
+        "enforce_watch_party_room_messages_abuse_guard"
+      ],
+      "directApplicationRpcCallersFound": 0,
+      "authenticatedDirectRpcContractRetained": true,
+      "serviceRoleDirectRpcContractRetained": true,
+      "triggerFunctionsDirectlyExternallyExecutable": false,
+      "chronology": [
+        "The baseline establishes self and exact-host membership RLS plus active-membership message RLS.",
+        "Wave 4 installs the message trigger; Wave 4.2 installs the block function, membership trigger, and block-aware self-insert policy.",
+        "Wave 5.1 replaces both trigger bodies while preserving block enforcement after account-access checks.",
+        "The deployed B3 predecessor replaces only the block-check body, and the forward correction replaces only that body and its ACL.",
+        "No later migration replaces the membership trigger, message trigger, or block-aware self-insert policy."
+      ],
+      "sourceHashes": {
+        "wave4RoomBlockMigration": "43c188769dff5abd86421d5228b86a0133ca20fcc54fda1f59092ef8555577ed",
+        "wave5AccountAccessMigration": "a976f07f6b278e0d8ed8b0de597e937068b805c9dc6045b99cabdab499a85a79",
+        "forwardCorrection": "0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38"
+      }
+    },
+    "callerMatrix": [
+      {
+        "id": "authenticated-direct-self-contract",
+        "surface": "direct RPC or policy evaluation",
+        "databaseRole": "authenticated",
+        "authRole": "authenticated",
+        "authUid": "nonnull authenticated subject",
+        "partyArgument": "caller-supplied exact party",
+        "actorArgument": "equals auth.uid",
+        "expected": "allow bounded self-check",
+        "directExecuteRequired": true,
+        "evidence": "authenticated ACL plus local cases 9-13"
+      },
+      {
+        "id": "authenticated-direct-exact-host-contract",
+        "surface": "direct RPC and host moderation authorization",
+        "databaseRole": "authenticated",
+        "authRole": "authenticated",
+        "authUid": "nonnull exact room host",
+        "partyArgument": "the exact hosted party",
+        "actorArgument": "another room actor",
+        "expected": "allow only for the exact party host",
+        "directExecuteRequired": true,
+        "evidence": "local cases 14-20"
+      },
+      {
+        "id": "membership-self-insert",
+        "surface": "Party Room, Live Stage, and waiting-room entry",
+        "callMode": "authenticated PostgREST insert; BEFORE trigger then block-aware RLS WITH CHECK",
+        "databaseRole": "authenticated",
+        "authRole": "authenticated",
+        "authUid": "the active app session subject",
+        "partyArgument": "membership.party_id",
+        "actorArgument": "membership.user_id equals auth.uid",
+        "expected": "unblocked self allowed; blocked self denied",
+        "directExecuteRequired": true,
+        "evidence": "_lib/watchParty.ts identity-backed upsert and local cases 30-31, 36-38"
+      },
+      {
+        "id": "membership-self-heartbeat-and-reconnect",
+        "surface": "Party Room and Live Stage heartbeat/AppState recovery",
+        "callMode": "authenticated upsert or update through membership trigger",
+        "databaseRole": "authenticated",
+        "authRole": "authenticated",
+        "authUid": "the active app session subject",
+        "partyArgument": "current room party_id",
+        "actorArgument": "current session membership user_id",
+        "expected": "unblocked self allowed; blocked active/reconnecting update denied",
+        "directExecuteRequired": false,
+        "evidence": "join/touch helpers and local case 32"
+      },
+      {
+        "id": "membership-left-or-removed-cleanup",
+        "surface": "leave and removal cleanup",
+        "callMode": "membership update",
+        "databaseRole": "authenticated or service_role",
+        "authRole": "matching request role",
+        "authUid": "authenticated self for leave; not service authority for backend cleanup",
+        "partyArgument": "membership party_id",
+        "actorArgument": "membership user_id",
+        "expected": "block helper is not invoked for left/removed state; cleanup remains possible under existing RLS or trusted backend authority",
+        "directExecuteRequired": false,
+        "evidence": "Wave 5.1 active/reconnecting condition"
+      },
+      {
+        "id": "host-moderation-membership-update",
+        "surface": "Party Room and Live Stage mute, seat, or remove actions",
+        "callMode": "authenticated membership update through exact-host RLS and membership trigger",
+        "databaseRole": "authenticated",
+        "authRole": "authenticated",
+        "authUid": "exact host of the supplied party",
+        "partyArgument": "moderated room party_id",
+        "actorArgument": "target participant user_id",
+        "expected": "exact host allowed; other-room host and unrelated user denied",
+        "directExecuteRequired": false,
+        "evidence": "setPartyParticipantState host precheck, membership host-update RLS, local cases 16-20 and 36-37"
+      },
+      {
+        "id": "ordinary-room-message",
+        "surface": "Party Room, Live Stage, and player chat",
+        "callMode": "authenticated message insert through active-membership RLS and message trigger",
+        "databaseRole": "authenticated",
+        "authRole": "authenticated",
+        "authUid": "the active app session subject",
+        "partyArgument": "message.party_id",
+        "actorArgument": "message.user_id forced to auth-backed identity by resolveWritableUserId",
+        "expected": "unblocked active member allowed; blocked actor denied",
+        "directExecuteRequired": false,
+        "evidence": "sendPartyMessageRecord and local cases 33-34"
+      },
+      {
+        "id": "durable-seat-request-marker",
+        "surface": "Watch-Party seat request",
+        "callMode": "the same authenticated message insert with the reserved seat-request prefix",
+        "databaseRole": "authenticated",
+        "authRole": "authenticated",
+        "authUid": "requesting participant",
+        "partyArgument": "current room party_id",
+        "actorArgument": "auth-backed requesting participant, not the explicit display argument",
+        "expected": "block check runs before seat-request rate limiting; blocked actor denied",
+        "directExecuteRequired": false,
+        "evidence": "player durable marker path, Wave 5.1 message trigger, local case 35"
+      },
+      {
+        "id": "waiting-room-handoff",
+        "surface": "Live and Party waiting rooms",
+        "callMode": "no direct block-check invocation before navigation; actual entry uses membership self-insert",
+        "databaseRole": "authenticated at entry",
+        "authRole": "authenticated",
+        "authUid": "the signed-in waiting-room user",
+        "partyArgument": "selected exact party",
+        "actorArgument": "auth-backed entry user",
+        "expected": "waiting-room rendering remains unchanged and blocked entry fails at the authoritative membership write",
+        "directExecuteRequired": false,
+        "evidence": "no join helper call in app/watch-party/index.tsx; Party Room and Live Stage call joinPartyRoomSession"
+      },
+      {
+        "id": "service-role-edge-membership-update",
+        "surface": "livekit-token participant-state persistence fallback",
+        "callMode": "authenticated Edge request is validated, then service-role adminClient updates the exact membership and fires the trigger",
+        "databaseRole": "service_role",
+        "authRole": "service_role from the full service JWT claims",
+        "authUid": "not used as fabricated user identity",
+        "partyArgument": "resolved room.roomName",
+        "actorArgument": "validated target participant identity",
+        "expected": "explicit trusted service path allowed and bounded to supplied party and actor",
+        "directExecuteRequired": false,
+        "evidence": "livekit-token exact actor/host precheck, service client creation, and local cases 26-29"
+      },
+      {
+        "id": "service-role-direct-contract",
+        "surface": "trusted backend RPC contract",
+        "databaseRole": "service_role",
+        "authRole": "service_role from full claims",
+        "authUid": "may be null and is not authority",
+        "partyArgument": "explicit exact party",
+        "actorArgument": "explicit exact actor",
+        "expected": "allow only when both invoker and request role are service_role",
+        "directExecuteRequired": true,
+        "evidence": "service_role ACL and local cases 26-29"
+      },
+      {
+        "id": "livekit-token-mint-block-enforcement",
+        "surface": "LiveKit token issuance",
+        "callMode": "independent service-role table predicate, not this function",
+        "databaseRole": "service_role",
+        "authRole": "authenticated request verified before backend lookup",
+        "authUid": "authenticated Edge request user",
+        "partyArgument": "resolved exact room",
+        "actorArgument": "authenticated request user",
+        "expected": "existing exact host/actor block predicate and publication-role resolution remain unchanged",
+        "directExecuteRequired": false,
+        "evidence": "isWatchPartyActorBlockedByHost and resolveEffectiveParticipantRole; B3 changes no Edge source"
+      },
+      {
+        "id": "anon-and-missing-session",
+        "surface": "direct RPC, membership, or message attempt",
+        "databaseRole": "anon",
+        "authRole": "anon",
+        "authUid": "null",
+        "partyArgument": "any",
+        "actorArgument": "any",
+        "expected": "no direct EXECUTE and no membership/message authorization",
+        "directExecuteRequired": false,
+        "evidence": "ACL cases 4-8, anon cases 21 and 38"
+      },
+      {
+        "id": "direct-postgres-no-jwt",
+        "surface": "direct database session",
+        "databaseRole": "postgres",
+        "authRole": "missing",
+        "authUid": "null",
+        "partyArgument": "any",
+        "actorArgument": "any",
+        "expected": "generic denial; owner privilege does not become caller authority",
+        "directExecuteRequired": false,
+        "evidence": "local case 22 and no current product caller"
+      },
+      {
+        "id": "unknown-fabricated-or-other-room-context",
+        "surface": "direct or cross-user attempt",
+        "databaseRole": "unknown or authenticated non-host",
+        "authRole": "missing, fabricated, mismatched, or authenticated",
+        "authUid": "null or not the exact party host",
+        "partyArgument": "different or nonexistent party",
+        "actorArgument": "another actor",
+        "expected": "same generic denial without room or block-state disclosure",
+        "directExecuteRequired": false,
+        "evidence": "local cases 16-25 and 43-44"
+      }
+    ],
+    "wave4AndWave5Preservation": {
+      "status": "pass",
+      "membershipInsertRlsStillRequires": [
+        "nonnull auth.uid",
+        "user_id equals auth.uid",
+        "not blocked by exact room host",
+        "exact room host or open join policy",
+        "unchanged content-access entitlement checks"
+      ],
+      "membershipTriggerOrder": [
+        "account private-feature restriction for active or reconnecting state",
+        "exact room-host block check for active or reconnecting state"
+      ],
+      "messageTriggerOrder": [
+        "account private-feature restriction",
+        "message body validation",
+        "exact room-host block check",
+        "seat-request or room-message rate limit"
+      ],
+      "membershipSelectChanged": false,
+      "membershipHostUpdateRlsChanged": false,
+      "membershipSelfUpdateRlsChanged": false,
+      "messageInsertRlsChanged": false,
+      "accountAccessRestrictionChanged": false,
+      "premiumOrContentAccessChanged": false
+    },
+    "coverage": {
+      "status": "pass",
+      "focusedPgTapFileSha256": "3c34a8b9b69d987d4b396e7bd890410363e9d41a58aa1086eeab1e86a35da069",
+      "focusedPlan": 48,
+      "numberedCasesMapped": 48,
+      "recordedLocalExecution": {
+        "planned": 48,
+        "executed": 48,
+        "passed": 48,
+        "failed": 0,
+        "compatibilityPassed": 4,
+        "totalPassed": 52,
+        "remoteDatabaseMutation": false
+      },
+      "callPathRegressionCases": [
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
+      ],
+      "authorizationAndLeakageCases": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        43,
+        44
+      ],
+      "sourceModelFileSha256": "c9be887023b431998d781604cb676cf57de2b76de333f7652dfb8451845fb2c5",
+      "sourceModelRerun": {
+        "topLevelGroups": 6,
+        "totalAssertions": 14,
+        "passed": 14,
+        "failed": 0
+      },
+      "negativeControls": {
+        "planned": 8,
+        "passed": 8,
+        "mutants": [
+          "null-auth denial removed",
+          "exact-host identity predicate removed",
+          "block exact-party predicate removed",
+          "anon execute restored",
+          "service role inferred from null identity",
+          "search path broadened to public",
+          "unrelated authenticated caller allowed",
+          "host exact-party predicate removed"
+        ]
+      }
+    },
+    "dependencyFreeNonRegression": {
+      "status": "pass",
+      "wave4AbuseRelevantRows": {
+        "passed": 3,
+        "failed": 0,
+        "rows": [
+          "seat request spam",
+          "room creation/join spam",
+          "blocked-user harassment"
+        ],
+        "unrelatedPasswordResetProviderRowExcluded": true
+      },
+      "accountRestrictionGuard": "pass",
+      "liveStageApprovedSeatsGuard": "pass",
+      "liveStageContractGuard": "pass",
+      "contentRightsPolicyGuard": "pass",
+      "assuranceContracts": {
+        "contracts": 13,
+        "features": 20,
+        "escapedDefects": 25,
+        "status": "pass"
+      }
+    },
+    "nonRegression": {
+      "status": "pass",
+      "watchPartyClientSourceSha256": "8864b76647d895ce816965a11755ee56734e7d0b0fc2401862f2eff8bf627e88",
+      "livekitTokenSourceSha256": "4aa1b360115a5e821a15ba4c061875efcd2118f50c640ee0c35543901b241690",
+      "partyRoomSourceSha256": "5ce1ac55e729a5213d4ba7a608eb65eb6ee83e99be12af1aedcb93b80c29f171",
+      "liveStageSourceSha256": "f8932fcc90dca542a7244434ee3436c8761566fd0d88f7d5e348e1d990ae6f15",
+      "playerSourceSha256": "2d4f05f8be6c338839eb4fcc74255b3c1a28cce39a44af438e003a56c99e152f",
+      "appOrEdgeSourceChangedByB3": false,
+      "waitingRoomBehaviorChanged": false,
+      "membershipSemanticsChanged": false,
+      "messageSemanticsChanged": false,
+      "seatRequestSemanticsChanged": false,
+      "hostModerationSemanticsChanged": false,
+      "livekitPublicationAuthorityChanged": false,
+      "premiumOrContentAccessChanged": false,
+      "accountAccessRestrictionChanged": false,
+      "moneyEntitlementRoleRightModerationRankingChanged": false
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "INTEGRATION_CLEAR_LOCAL_ONLY",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE_TO_B3_DATABASE_RECONCILIATION",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE_TO_THIS_NON_RELEASE_REVIEW",
+      "sourceInspectionAcceptedAsDatabaseIntegrationProof": false,
+      "providerOrNativeProofClaimed": false,
+      "signedArtifactProofClaimed": false,
+      "installedOrPhysicalProofClaimed": false,
+      "publicCanaryProofClaimed": false
+    },
+    "phase1Ci": {
+      "status": "pending_post_review_by_owner_mandated_sequence",
+      "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "planned": 13,
+      "reviewLaneAwaitedOrPolled": false,
+      "finding": false,
+      "exactNextAction": "After all four B3 review lanes report P0=0 and P1=0, run one exact 13/13 Phase 1 CI at this frozen synchronized head."
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationSourceEditedByReview": false,
+      "databaseTestRerunByReview": false,
+      "providerContactByReview": false,
+      "remoteDatabaseContactByReview": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "linkedAclMutation": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRightsRolesModerationRankingChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false
+    }
+  },
+  "testResultHash": "0fdc9944a18c0bd2652f0a70abeb45aa6c509ae08a39923550df08bc6c69a27a",
+  "findings": [],
+  "severityCounts": {
+    "P0": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P1": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P2": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P3": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    }
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "PASS_LEVEL_C_CALL_PATHS_RLS_TRIGGERS_AND_NON_REGRESSION",
+    "reviewHeadValidation": "BASE_SYNC_BINDING_CLEAR_PHASE1_CI_SEQUENCED_AFTER_FOUR_REVIEWS",
+    "implementationFilesOnReviewBranch": 0,
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "linkedAclMutation": false,
+    "buildOrOta": false
+  }
+}
