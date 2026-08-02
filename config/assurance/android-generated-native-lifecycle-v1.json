@@ -4,6 +4,8 @@
   "featureId": "eas-build-update-release",
   "objective": "ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
   "scopeWaiver": {
+    "file": "config/assurance/pr-d2a-scope-waiver-v1.json",
+    "contractId": "pr-d2a-scope-waiver-v1",
     "maximumChangedFiles": 20,
     "maximumNetLines": 2500,
     "reason": "Android assurance contracts, disposable test injection, sanitized evidence, and lifecycle instrumentation only",
@@ -81,7 +83,12 @@
     "forbiddenFieldClasses": ["credential", "token", "private_media", "caller_name", "raw_payload"],
     "consumeRule": "ATOMIC_EXACTLY_ONCE",
     "dedupeRule": "SAME_REQUEST_KEY_WITHIN_ORIGINAL_TTL_NO_TTL_EXTENSION",
-    "backupRule": "PENDING_ACTION_PREFERENCES_EXCLUDED_FROM_CLOUD_AND_DEVICE_TRANSFER_BACKUP"
+    "backupRule": "PENDING_ACTION_PREFERENCES_EXCLUDED_FROM_CLOUD_AND_DEVICE_TRANSFER_BACKUP",
+    "backupSharedPreferencesPath": "chilly_chat_native_call_action_v1.xml",
+    "backupAlternatives": [
+      "APPLICATION_ALLOW_BACKUP_FALSE",
+      "LEGACY_FULL_BACKUP_SHARED_PREF_EXCLUSION_PLUS_ANDROID_12_CLOUD_AND_DEVICE_TRANSFER_SHARED_PREF_EXCLUSIONS"
+    ]
   },
   "componentRules": {
     "actionReceiver": {"class": ".ChillyChatCallNotificationActionReceiver", "exported": false, "implicitExternalIntentAllowed": false},
@@ -89,6 +96,29 @@
     "mainActivity": {"class": ".MainActivity", "warmHandler": "onNewIntent", "captureBeforeReact": true, "untrustedExternalNativeActionAllowed": false},
     "pendingIntent": {"immutable": true, "explicitTarget": true},
     "serverAuthority": {"acceptInvite": false, "requestLiveKitToken": false, "activateCamera": false, "activateMicrophone": false, "startMedia": false}
+  },
+  "logging": {
+    "canonicalAllowlist": [
+      "ACTION_CAPTURED",
+      "ACTION_PERSISTED",
+      "ACTION_DEDUPED",
+      "ACTION_EXPIRED",
+      "ACTION_CONSUMED",
+      "ACTION_REPLAY_DENIED",
+      "ACTIVITY_CREATED",
+      "ACTIVITY_NEW_INTENT",
+      "ACTIVITY_RECREATED",
+      "REACT_CONTEXT_UNAVAILABLE",
+      "REACT_CONTEXT_READY",
+      "MODULE_REGISTERED",
+      "LIFECYCLE_CLEAR",
+      "LIFECYCLE_BLOCKED"
+    ],
+    "observedNoncanonical": [
+      {"category": "ACTION_BUFFERED", "classification": "P2_D2B_LOGGING_NORMALIZATION", "retainsRawValues": false}
+    ],
+    "identifierValuesAllowed": false,
+    "rawPayloadAllowed": false
   },
   "requiredGradleTasks": [
     ":app:compileDebugKotlin",
@@ -156,7 +186,7 @@
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
-    "T2_MODEL": "MODEL_CLEAR",
+    "T2_MODEL": "BLOCKED_INTERNAL_NATIVE_TESTS_NOT_COMPILED_OR_EXECUTED",
     "T3_INTEGRATION": "BLOCKED_INTERNAL_PENDING_TEST_RESULT",
     "T4_NATIVE_PROVIDER": "PARTIAL_LOCAL_ANDROID_ONLY",
     "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",

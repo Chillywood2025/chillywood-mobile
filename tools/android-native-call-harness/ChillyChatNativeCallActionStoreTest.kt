@@ -9,6 +9,7 @@ import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -19,6 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 class ChillyChatNativeCallActionStoreTest {
@@ -72,6 +74,7 @@ class ChillyChatNativeCallActionStoreTest {
     assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
     val preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     val originalElapsed = preferences.getLong("created_elapsed_at", 0L)
+    ShadowSystemClock.advanceBy(Duration.ofSeconds(5))
     assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
     assertEquals(originalElapsed, preferences.getLong("created_elapsed_at", -1L))
     assertNotNull(ChillyChatNativeCallActionStore.consume(context))
@@ -92,6 +95,10 @@ class ChillyChatNativeCallActionStoreTest {
   fun consumeReturnsExactlyOnce() {
     assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
     assertNotNull(ChillyChatNativeCallActionStore.consume(context))
+    val preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+    for (field in listOf("schema_version", "thread_id", "call_invite_id", "native_action", "request_key", "created_at", "created_elapsed_at")) {
+      assertFalse("Pending field must be removed after consume: $field", preferences.contains(field))
+    }
     assertNull(ChillyChatNativeCallActionStore.consume(context))
   }
 

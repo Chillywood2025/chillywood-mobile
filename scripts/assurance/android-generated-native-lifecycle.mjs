@@ -14,6 +14,7 @@ const registryPath = "config/assurance/native-capability-registry-v1.json";
 const pluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const unitTemplate = "tools/android-native-call-harness/ChillyChatNativeCallActionStoreTest.kt";
 const instrumentationTemplate = "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt";
+const micInstrumentationTemplate = "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt";
 const digest = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const read = (relative) => fs.readFileSync(path.join(root, relative));
 const readText = (relative) => read(relative).toString("utf8");
@@ -90,13 +91,26 @@ export const validateSourceModel = (state = sourceState(), observedDigest = stat
     "ANDROID_NATIVE_ACTION_SCHEMA_PRIVATE_DATA", "Pending action storage contains a forbidden private field class");
   gate((plugin.match(/add\(ChillyChatCallNotificationPackage\(\)\)/gu) ?? []).length >= 1,
     "ANDROID_REQUIRED_MODULE_REGISTRATION_MISSING", "Generated MainApplication package injection is absent");
+  gate((plugin.match(/PendingIntent\.FLAG_UPDATE_CURRENT or PendingIntent\.FLAG_IMMUTABLE/gu) ?? []).length >= 2,
+    "ANDROID_PENDING_INTENT_SECURITY_INVALID", "Activity and receiver PendingIntents must be immutable");
+  gate(plugin.includes("Intent(context, ChillyChatCallNotificationActionReceiver::class.java)")
+    && plugin.includes("component = launchComponent"), "ANDROID_PENDING_INTENT_TARGET_NOT_EXPLICIT", "PendingIntents must resolve to explicit app components");
+  gate(/"android:exported": "false",\s+"android:name": "\.ChillyChatFirebaseMessagingService"/u.test(plugin),
+    "ANDROID_SERVICE_EXPOSURE_INVALID", "Firebase service must be non-exported");
   gate(observedDigest === state.expectedDigest, "ANDROID_GENERATED_NATIVE_DIGEST_STALE", "Generated source digest differs from the D1 target binding");
+  const logCategories = [...plugin.matchAll(/Log\.i\([^,]+,\s*"([A-Z_]+)"\)/gu)].map((match) => match[1]).sort();
+  const logging = state.contract.logging;
+  const allowed = new Set([...logging.canonicalAllowlist, ...logging.observedNoncanonical.map((item) => item.category)]);
+  gate(logCategories.every((category) => allowed.has(category)), "ANDROID_NATIVE_LOG_CATEGORY_UNCLASSIFIED", "Native log category is not classified");
+  gate(!/Log\.[a-z]+\([^\n]*(?:threadId|inviteId|requestKey|callerName|raw_payload)/iu.test(plugin),
+    "ANDROID_NATIVE_LOG_PRIVATE_VALUE", "Native logs must contain categories only");
   return {
-    sourceAssertions: 10,
+    sourceAssertions: 17,
     serverAuthority: false,
     preacceptMediaAuthority: false,
     expectedGeneratedSourceDigest: state.expectedDigest,
     externalActionOriginRiskRequiresInstrumentation: true,
+    logging: {categories: [...new Set(logCategories)], canonical: logCategories.filter((item) => logging.canonicalAllowlist.includes(item)), noncanonical: logging.observedNoncanonical, rawValuesRetained: false},
   };
 };
 
@@ -160,6 +174,50 @@ const generatedDigest = (temp, modules, paths) => digest(paths.slice().sort().ma
   gate(fs.existsSync(absolute), "GENERATED_NATIVE_SOURCE_MISSING", `Missing generated path ${relative}`);
   return `${relative}\0${digest(normalize(fs.readFileSync(absolute), temp, modules))}\n`;
 }).join(""));
+const manifestAttribute = (manifest, name) => manifest.match(new RegExp(`android:${name}="([^"]+)"`, "u"))?.[1] ?? null;
+const resourcePath = (reference) => reference?.match(/^@xml\/([a-zA-Z0-9_]+)$/u)?.[1]
+  ? `android/app/src/main/res/xml/${reference.slice(5)}.xml` : null;
+const exactSharedPrefExclusion = (xml) => /<exclude\b(?=[^>]*\bdomain="sharedpref")(?=[^>]*\bpath="chilly_chat_native_call_action_v1\.xml")[^>]*\/?\s*>/u.test(xml);
+const section = (xml, tag) => xml.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "u"))?.[1] ?? "";
+export const evaluateBackupPolicy = ({manifest, resources = {}}) => {
+  const allowBackupFalse = manifestAttribute(manifest, "allowBackup") === "false";
+  const legacyReference = manifestAttribute(manifest, "fullBackupContent");
+  const extractionReference = manifestAttribute(manifest, "dataExtractionRules");
+  const legacyPath = resourcePath(legacyReference);
+  const extractionPath = resourcePath(extractionReference);
+  const legacyXml = legacyPath ? resources[legacyPath] : null;
+  const extractionXml = extractionPath ? resources[extractionPath] : null;
+  const legacyExcluded = typeof legacyXml === "string" && exactSharedPrefExclusion(legacyXml);
+  const cloudExcluded = typeof extractionXml === "string" && exactSharedPrefExclusion(section(extractionXml, "cloud-backup"));
+  const deviceTransferExcluded = typeof extractionXml === "string" && exactSharedPrefExclusion(section(extractionXml, "device-transfer"));
+  const clear = allowBackupFalse || (legacyExcluded && cloudExcluded && deviceTransferExcluded);
+  return {
+    clear, allowBackupFalse, legacyReference, extractionReference, legacyPath, extractionPath,
+    legacyExcluded, cloudExcluded, deviceTransferExcluded,
+    missingReferencedResources: [legacyPath && !legacyXml ? legacyPath : null, extractionPath && !extractionXml ? extractionPath : null].filter(Boolean),
+  };
+};
+export const assertBackupPolicyClear = (policy) => gate(policy.clear, "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING",
+  "Generated backup policy does not exclude pending native action state");
+const generatedSecurity = (temp, modules, manifest) => {
+  const references = [resourcePath(manifestAttribute(manifest, "fullBackupContent")), resourcePath(manifestAttribute(manifest, "dataExtractionRules"))].filter(Boolean);
+  const resources = Object.fromEntries(references.filter((relative) => fs.existsSync(path.join(temp, relative)))
+    .map((relative) => [relative, fs.readFileSync(path.join(temp, relative), "utf8")]));
+  const backupPolicy = evaluateBackupPolicy({manifest, resources});
+  const securityPaths = ["android/app/src/main/AndroidManifest.xml", ...Object.keys(resources)].sort();
+  const securityDigest = digest(securityPaths.map((relative) => `${relative}\0${digest(normalize(fs.readFileSync(path.join(temp, relative)), temp, modules))}\n`).join(""));
+  const notifications = fs.readFileSync(path.join(temp, "android/app/src/main/java/com/chillywood/mobile/ChillyChatCallNotifications.kt"), "utf8");
+  const component = (tag, name) => manifest.match(new RegExp(`<${tag}\\b(?=[^>]*android:name="${name.replaceAll(".", "\\.")}")[^>]*>`, "u"))?.[0] ?? "";
+  const receiver = component("receiver", ".ChillyChatCallNotificationActionReceiver");
+  const service = component("service", ".ChillyChatFirebaseMessagingService");
+  const activity = component("activity", ".MainActivity");
+  gate(receiver.includes('android:exported="false"'), "ANDROID_RECEIVER_EXPOSURE_INVALID", "Generated receiver must be non-exported");
+  gate(service.includes('android:exported="false"'), "ANDROID_SERVICE_EXPOSURE_INVALID", "Generated Firebase service must be non-exported");
+  gate(activity.includes('android:exported="true"'), "ANDROID_MAIN_ACTIVITY_EXPORT_CONTRACT_INVALID", "Generated deep-link Activity export marker is missing");
+  gate((notifications.match(/PendingIntent\.FLAG_UPDATE_CURRENT or PendingIntent\.FLAG_IMMUTABLE/gu) ?? []).length >= 2,
+    "ANDROID_PENDING_INTENT_SECURITY_INVALID", "Generated PendingIntents must be immutable");
+  return {backupPolicy, securityDigest, boundPaths: securityPaths, componentAssertions: 4};
+};
 const generateOnce = ({ retain = false } = {}) => {
   const contract = readJson(contractPath);
   const dependencies = dependencySet();
@@ -179,9 +237,8 @@ const generateOnce = ({ retain = false } = {}) => {
     autolinking(temp, dependencies.modules, env);
     const sourceDigest = generatedDigest(temp, dependencies.modules, contract.generatedAuthoritativePaths);
     const manifest = fs.readFileSync(path.join(temp, "android/app/src/main/AndroidManifest.xml"), "utf8");
-    const backupExcluded = /android:allowBackup="false"/u.test(manifest)
-      || (/android:(?:fullBackupContent|dataExtractionRules)=/u.test(manifest) && /chilly_chat_native_call_action_v1/u.test(manifest));
-    const output = { temp, env, modules: dependencies.modules, dependencyEvidence: dependencies.evidence, digest: sourceDigest, backupExcluded };
+    const security = generatedSecurity(temp, dependencies.modules, manifest);
+    const output = { temp, env, modules: dependencies.modules, dependencyEvidence: dependencies.evidence, digest: sourceDigest, security };
     retained = retain;
     return output;
   } finally {
@@ -194,7 +251,14 @@ export const generateThree = () => {
   gate(new Set(digests).size === 1, "GENERATED_ANDROID_NONDETERMINISTIC", "Android generated source differs across three runs");
   const contract = readJson(contractPath);
   validateSourceModel(sourceState(), digests[0]);
-  return { runs: "3/3", digest: digests[0], expected: contract.target.d1GeneratedSourceDigest, backupExcluded: runs.every((item) => item.backupExcluded) };
+  gate(new Set(runs.map((item) => item.security.securityDigest)).size === 1, "GENERATED_ANDROID_SECURITY_EVIDENCE_NONDETERMINISTIC", "Android backup/component evidence differs across three runs");
+  return {
+    runs: "3/3", digest: digests[0], expected: contract.target.d1GeneratedSourceDigest,
+    securityDigest: runs[0].security.securityDigest,
+    securityBoundPaths: runs[0].security.boundPaths,
+    backupPolicy: runs[0].security.backupPolicy,
+    generatedComponentAssertions: runs[0].security.componentAssertions,
+  };
 };
 
 const findSdk = () => {
@@ -268,17 +332,55 @@ const gradleEvidence = (generated) => {
   return { results, sdk, env };
 };
 const adbRun = (serial, args, options = {}) => run("adb", ["-s", serial, ...args], { ...options, timeout: options.timeout ?? 5 * 60 * 1000 });
-const emulatorEvidence = (generated, native) => {
+const scenarioMarkers = Object.freeze({
+  FOREGROUND: "activityCreationCapturesAndConsumesOnce",
+  BACKGROUND: "backgroundActionResumesAndConsumesOnce",
+  ACTIVITY_RECREATION: "recreationRetainsPendingAction",
+  ACTIVITY_DESTROYED_PROCESS_ALIVE: "destroyedActivityRetainsPendingAction",
+  PROCESS_COLD: "consumeColdActionExactlyOnce",
+  REACT_CONTEXT_UNAVAILABLE: "receiverBeforeReactContextRetainsAction",
+  WARM_NEW_INTENT: "warmIntentReusesActivityAndCannotReplay",
+  DECLINE: "declineForegroundAndCold",
+  EXPIRATION: "expiredActionRejectedAndDeleted",
+  MALFORMED_ADVERSARIAL: "explicitReceiverRejectsUnsupportedActionWithoutCrash",
+  EXTERNAL_CUSTOM_SCHEME_ORIGIN: "verifyExternallyLaunchedActionWasNotPersisted",
+  BACKUP_POLICY: "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING",
+});
+export const evaluateScenarioMatrix = (template = readText(instrumentationTemplate), backupPolicyClear = false) => {
+  const required = readJson(contractPath).lifecycleScenarios;
+  const implemented = required.filter((scenario) => scenario === "BACKUP_POLICY" ? backupPolicyClear : template.includes(scenarioMarkers[scenario]));
+  return {required, implemented, missing: required.filter((scenario) => !implemented.includes(scenario)), complete: implemented.length === required.length};
+};
+export const assertCompleteScenarioMatrix = (matrix) => gate(matrix.complete, "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE",
+  `Missing mandatory scenarios: ${matrix.missing.join(",")}`);
+const packagePresent = (serial, packageName) => {
+  const result = adbRun(serial, ["shell", "pm", "path", packageName]);
+  return result.status === 0 && result.stdout.trim().startsWith("package:");
+};
+const emulatorEvidence = (generated, native, installState) => {
+  const scenarioMatrix = evaluateScenarioMatrix(readText(instrumentationTemplate), generated.security.backupPolicy.clear);
+  assertCompleteScenarioMatrix(scenarioMatrix);
   const devices = run("adb", ["devices"]);
   gate(devices.status === 0, "ANDROID_ADB_UNAVAILABLE", "ADB is unavailable");
   const serials = devices.stdout.split("\n").slice(1).map((line) => line.trim().split(/\s+/u)).filter((parts) => parts[1] === "device" && parts[0].startsWith("emulator-")).map((parts) => parts[0]);
   gate(serials.length === 1, "ANDROID_EMULATOR_NOT_EXACTLY_ONE", "Exactly one local Android emulator must be available");
   const serial = serials[0];
+  installState.serial = serial;
+  const appPreexisting = packagePresent(serial, installState.appPackage);
+  const testPreexisting = packagePresent(serial, installState.testPackage);
+  installState.preexistingChecked = true;
+  installState.preexistingNone = !appPreexisting && !testPreexisting;
+  gate(installState.preexistingNone,
+    "ANDROID_EMULATOR_PACKAGE_PREEXISTED", "Target or test package already existed on the selected emulator");
   const appApk = path.join(generated.temp, "android/app/build/outputs/apk/debug/app-debug.apk");
   const testApk = path.join(generated.temp, "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
   gate(fs.existsSync(appApk) && fs.existsSync(testApk), "ANDROID_TEST_APK_MISSING", "Disposable debug/test APKs were not produced");
-  gate(adbRun(serial, ["install", "-r", appApk]).status === 0, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
-  gate(adbRun(serial, ["install", "-r", testApk]).status === 0, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
+  const appInstall = adbRun(serial, ["install", appApk]);
+  installState.installedApp = packagePresent(serial, installState.appPackage);
+  gate(appInstall.status === 0 && installState.installedApp, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
+  const testInstall = adbRun(serial, ["install", testApk]);
+  installState.installedTest = packagePresent(serial, installState.testPackage);
+  gate(testInstall.status === 0 && installState.installedTest, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
   const component = "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner";
   const passingMethods = ["activityCreationCapturesAndConsumesOnce", "warmIntentReusesActivityAndCannotReplay", "recreationRetainsPendingAction", "explicitReceiverRejectsUnsupportedActionWithoutCrash"];
   const methodResults = [];
@@ -295,16 +397,78 @@ const emulatorEvidence = (generated, native) => {
   const external = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#verifyExternallyLaunchedActionWasNotPersisted", component]);
   const rejected = external.status === 0 && !external.stdout.includes("FAILURES!!!");
   if (!rejected) throw new GateError("ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED", "An external custom-scheme Activity launch persisted a trusted native call action", { compiled: true, emulatorReproduced: true, identifiersRecorded: false });
-  return { emulatorCount: 1, serialRecorded: false, methodResults, externalOriginRejected: true, signedArtifactProof: false, physicalDeviceProof: false };
+  gate(methodResults.length === scenarioMatrix.required.length && methodResults.every((item) => item.passed),
+    "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE", "Every mandatory lifecycle scenario must execute and pass");
+  return { emulatorCount: 1, serialRecorded: false, methodResults, scenarioMatrix, externalOriginRejected: true, signedArtifactProof: false, physicalDeviceProof: false };
 };
-const cleanupEmulator = () => {
-  const devices = run("adb", ["devices"]);
-  if (devices.status !== 0) return;
-  for (const line of devices.stdout.split("\n").slice(1)) {
-    const [serial, state] = line.trim().split(/\s+/u);
-    if (state !== "device" || !serial?.startsWith("emulator-")) continue;
-    adbRun(serial, ["uninstall", "com.chillywood.mobile.test"]);
-    adbRun(serial, ["uninstall", "com.chillywood.mobile"]);
+const cleanupSelectedEmulator = (state) => {
+  if (!state.serial) return {attempted: false, verified: true};
+  if (!state.installedTest && !state.installedApp) return {attempted: false, verified: true};
+  if (state.installedTest) gate(adbRun(state.serial, ["uninstall", state.testPackage]).status === 0,
+    "ANDROID_TEST_PACKAGE_CLEANUP_FAILED", "Failed to remove the test package installed by this run");
+  if (state.installedApp) gate(adbRun(state.serial, ["uninstall", state.appPackage]).status === 0,
+    "ANDROID_APP_PACKAGE_CLEANUP_FAILED", "Failed to remove the app package installed by this run");
+  gate(!packagePresent(state.serial, state.testPackage) && !packagePresent(state.serial, state.appPackage),
+    "ANDROID_EMULATOR_PACKAGE_CLEANUP_UNVERIFIED", "Installed packages remain on the selected emulator");
+  return {attempted: state.installedTest || state.installedApp, verified: true};
+};
+
+export const deterministicEvidenceDigest = (value) => {
+  const normalized = clone(value);
+  delete normalized.deterministicEvidenceSha256;
+  for (const task of normalized.gradle?.tasks ?? []) delete task.durationMs;
+  return digest(stable(normalized));
+};
+
+export const runIndependentMicNativeLayer = () => {
+  const generated = generateOnce({retain: true});
+  const installState = {serial: null, appPackage: "com.chillywood.mobile", testPackage: "com.chillywood.mobile.test", preexistingChecked: false, preexistingNone: false, installedApp: false, installedTest: false};
+  try {
+    const sdk = findSdk();
+    const javaHome = process.env.JAVA_HOME;
+    gate(javaHome && fs.existsSync(javaHome), "JAVA_HOME_MISSING", "A local Java runtime is required for Gradle");
+    fs.writeFileSync(path.join(generated.temp, "android/local.properties"), `sdk.dir=${sdk.replaceAll("\\", "\\\\")}\n`, {mode: 0o600});
+    const testTarget = path.join(generated.temp, "android/app/src/androidTest/java/com/chillywood/mobile/ChillyChatMicControlInstrumentationTest.kt");
+    fs.mkdirSync(path.dirname(testTarget), {recursive: true});
+    fs.copyFileSync(path.join(root, micInstrumentationTemplate), testTarget);
+    const gradlePath = path.join(generated.temp, "android/app/build.gradle");
+    fs.appendFileSync(gradlePath, `
+
+android { defaultConfig { testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" } }
+dependencies {
+  androidTestImplementation("androidx.test:core:1.6.1")
+  androidTestImplementation("androidx.test.ext:junit:1.2.1")
+  androidTestImplementation("androidx.test:runner:1.6.2")
+}
+`);
+    const env = {...generated.env, JAVA_HOME: javaHome, ANDROID_HOME: sdk, ANDROID_SDK_ROOT: sdk, GRADLE_USER_HOME: path.join(os.homedir(), ".gradle")};
+    const wrapper = path.join(generated.temp, "android/gradlew");
+    const tasks = [":app:compileDebugKotlin", ":app:compileDebugAndroidTestKotlin", ":app:assembleDebug", ":app:assembleDebugAndroidTest"];
+    const taskResults = tasks.map((task) => {
+      const result = run(wrapper, [task, "--no-daemon", "--console=plain"], {cwd: path.join(generated.temp, "android"), env});
+      gate(result.status === 0, "ANDROID_MIC_NATIVE_COMPILE_FAILED", `${task} failed`);
+      return {task, result: "PASS"};
+    });
+    const devices = run("adb", ["devices"]);
+    gate(devices.status === 0, "ANDROID_ADB_UNAVAILABLE", "ADB is unavailable");
+    const serials = devices.stdout.split("\n").slice(1).map((line) => line.trim().split(/\s+/u)).filter((parts) => parts[1] === "device" && parts[0].startsWith("emulator-")).map((parts) => parts[0]);
+    gate(serials.length === 1, "ANDROID_EMULATOR_NOT_EXACTLY_ONE", "Exactly one local Android emulator must be available");
+    installState.serial = serials[0];
+    installState.preexistingChecked = true;
+    installState.preexistingNone = !packagePresent(installState.serial, installState.appPackage) && !packagePresent(installState.serial, installState.testPackage);
+    gate(installState.preexistingNone, "ANDROID_EMULATOR_PACKAGE_PREEXISTED", "Target or test package already existed on the selected emulator");
+    const appApk = path.join(generated.temp, "android/app/build/outputs/apk/debug/app-debug.apk");
+    const testApk = path.join(generated.temp, "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
+    const appInstall = adbRun(installState.serial, ["install", appApk]); installState.installedApp = packagePresent(installState.serial, installState.appPackage);
+    gate(appInstall.status === 0 && installState.installedApp, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
+    const testInstall = adbRun(installState.serial, ["install", testApk]); installState.installedTest = packagePresent(installState.serial, installState.testPackage);
+    gate(testInstall.status === 0 && installState.installedTest, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
+    const instrumentation = adbRun(installState.serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatMicControlInstrumentationTest", "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner"]);
+    gate(instrumentation.status === 0 && /OK \(4 tests\)/u.test(instrumentation.stdout) && !instrumentation.stdout.includes("FAILURES!!!"),
+      "ANDROID_MIC_NATIVE_INSTRUMENTATION_FAILED", "Native WebRTC mic instrumentation did not pass 4/4");
+    return {status: "ANDROID_MIC_NATIVE_WEBRTC_EMULATOR_CLEAR", generatedSourceDigest: generated.digest, gradle: taskResults, tests: "4/4", emulatorSerialRecorded: false, providerContact: false, physicalProof: false, signedArtifactProof: false};
+  } finally {
+    try { cleanupSelectedEmulator(installState); } finally { fs.rmSync(generated.temp, {recursive: true, force: true}); }
   }
 };
 
@@ -319,25 +483,47 @@ export const evaluate = ({ native = false, emulator = false, fixture } = {}) => 
   const source = validateSourceModel();
   const negativeResults = runNegativeControls();
   const generation = generateThree();
+  if (!generation.backupPolicy.clear) {
+    const blocker = {code: "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING", classification: "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT", compiled: false};
+    const evidence = {
+      schemaVersion: 1, evidenceId: "android-generated-native-lifecycle-evidence-v1", implementationHead: git("rev-parse", "HEAD"), implementationTree: git("rev-parse", "HEAD^{tree}"),
+      targetId: readJson(contractPath).target.targetId, source, generation,
+      gradle: {status: "NOT_RUN_FAIL_CLOSED_BEFORE_TEST_INJECTION"},
+      instrumentation: {status: "NOT_RUN_FAIL_CLOSED_BEFORE_EMULATOR", scenarioMatrix: evaluateScenarioMatrix(readText(instrumentationTemplate), false)},
+      d1SourceCapabilityParity: {required: 21, sourceProvided: 21, sourceMissing: 0},
+      compiledRuntimeCapabilityParity: {provided: "UNKNOWN", missing: "UNKNOWN", status: "BLOCKED_INTERNAL_NOT_INDEPENDENTLY_MEASURED"},
+      negativeControls: {required: 12, passed: negativeResults.length, results: negativeResults}, blocker,
+      status: blocker.classification, proofTiers: readJson(contractPath).proofTiers,
+      nonInterference: {providerContact: false, releaseBuild: false, signedArtifact: false, ota: false, physicalDevice: false, productSourceMutation: false},
+      cleanup: {disposableProjectRemoved: true, debugAndTestApksRemoved: true, emulatorPackagesRemoved: false, selectedEmulatorOnly: true, generatedAndroidCommitted: false, deviceSerialRecorded: false},
+      deterministicNormalization: ["gradle.tasks[].durationMs omitted from deterministic hash"],
+    };
+    evidence.deterministicEvidenceSha256 = deterministicEvidenceDigest(evidence);
+    throw new GateError(blocker.code, "Generated backup policy does not exclude pending native action state", {evidence});
+  }
   let generated;
   let gradle;
   let instrumentation;
   let blocker = null;
+  const installState = {serial: null, appPackage: "com.chillywood.mobile", testPackage: "com.chillywood.mobile.test", preexistingChecked: false, preexistingNone: false, installedApp: false, installedTest: false};
+  let emulatorCleanup = {attempted: false, verified: true};
   try {
     if (native || emulator) {
       generated = generateOnce({ retain: true });
       gradle = gradleEvidence(generated);
-      if (!generation.backupExcluded) blocker = { code: "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING", classification: "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT", compiled: true };
       if (emulator) {
-        try { instrumentation = emulatorEvidence(generated, gradle); } catch (error) {
+        try { instrumentation = emulatorEvidence(generated, gradle, installState); } catch (error) {
           if (error.code === "ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED") blocker = { code: error.code, classification: "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT", ...error.details };
           else throw error;
         }
       }
     }
   } finally {
-    if (emulator) cleanupEmulator();
-    if (generated?.temp) fs.rmSync(generated.temp, { recursive: true, force: true });
+    try {
+      if (emulator) emulatorCleanup = cleanupSelectedEmulator(installState);
+    } finally {
+      if (generated?.temp) fs.rmSync(generated.temp, { recursive: true, force: true });
+    }
   }
   const evidence = {
     schemaVersion: 1,
@@ -349,15 +535,17 @@ export const evaluate = ({ native = false, emulator = false, fixture } = {}) => 
     generation,
     gradle: gradle ? { tasks: gradle.results, localDebugTestCompilationOnly: true } : { status: "NOT_RUN" },
     instrumentation: instrumentation ?? { status: emulator ? "BLOCKED_BY_PRODUCT_DEFECT" : "NOT_RUN", emulatorProofOnly: true, physicalProof: false },
-    capabilityParity: { required: 21, provided: 21, missing: 0, independence: "D1_JS_IMPORT_CLOSURE_VS_COMPILED_GENERATED_PROJECT" },
+    d1SourceCapabilityParity: {required: 21, sourceProvided: 21, sourceMissing: 0},
+    compiledRuntimeCapabilityParity: {provided: "UNKNOWN", missing: "UNKNOWN", status: "BLOCKED_INTERNAL_NOT_INDEPENDENTLY_MEASURED"},
     negativeControls: { required: 12, passed: negativeResults.length, results: negativeResults },
     blocker,
     status: blocker?.classification ?? (emulator ? "ANDROID_EMULATOR_LIFECYCLE_CLEAR" : native ? "ANDROID_NATIVE_COMPILE_CLEAR" : "ANDROID_GENERATED_NATIVE_SOURCE_CLEAR"),
     proofTiers: readJson(contractPath).proofTiers,
     nonInterference: { providerContact: false, releaseBuild: false, signedArtifact: false, ota: false, physicalDevice: false, productSourceMutation: false },
-    cleanup: { disposableProjectRemoved: true, debugAndTestApksRemoved: true, emulatorPackagesRemoved: emulator, generatedAndroidCommitted: false, deviceSerialRecorded: false },
+    cleanup: { disposableProjectRemoved: true, debugAndTestApksRemoved: true, emulatorPackagesRemoved: emulatorCleanup.verified && emulatorCleanup.attempted, selectedEmulatorOnly: true, generatedAndroidCommitted: false, deviceSerialRecorded: false },
+    deterministicNormalization: ["gradle.tasks[].durationMs omitted from deterministic hash"],
   };
-  evidence.deterministicEvidenceSha256 = digest(stable(evidence));
+  evidence.deterministicEvidenceSha256 = deterministicEvidenceDigest(evidence);
   if (blocker) throw new GateError(blocker.code, "D2A reproduced a current generated/product-native defect", { evidence });
   return evidence;
 };

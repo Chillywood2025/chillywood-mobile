@@ -5,6 +5,17 @@
   "objective": "ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
   "startingMain": "ddc5bfa92d8bf70a3374e1dee6983c2bc8cf9874",
   "startingTree": "2c95fb46943e61318dce43a26540f812ca3837e7",
+  "scopeWaiver": {
+    "file": "config/assurance/pr-d2a-scope-waiver-v1.json",
+    "contractId": "pr-d2a-scope-waiver-v1",
+    "ownerAuthorizedMaximumFiles": 20,
+    "ownerAuthorizedMaximumNetLines": 2500,
+    "timeboxHours": 8,
+    "actualFilesFromMain": 11,
+    "actualNetLinesFromMain": 1832,
+    "oneAssuranceDomain": true,
+    "productOrProviderChangeAllowed": false
+  },
   "target": {
     "targetId": "android-chat-livekit-qa-build-86",
     "packageIdentifier": "com.chillywood.mobile",
@@ -18,6 +29,9 @@
     "expectedD1Digest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
     "deterministic": true,
     "authoritativePaths": 22,
+    "securitySupplementDigest": "PENDING_NEXT_AUTHORIZED_GENERATION",
+    "securitySupplementBinding": "MANIFEST_PLUS_EXACT_REFERENCED_FULL_BACKUP_AND_DATA_EXTRACTION_XML",
+    "d1DigestRemainsSeparate": true,
     "generatedDirectoryCommitted": false
   },
   "productDefects": [
@@ -28,7 +42,7 @@
       "generatedPath": "android/app/src/main/AndroidManifest.xml",
       "lifecycleState": "PENDING_NATIVE_ACTION_AT_REST",
       "expected": "The private pending-action preferences file is excluded from cloud backup and device-to-device transfer, or application backup is disabled.",
-      "actual": "The generated application does not disable backup and defines no backup/data-extraction rule excluding chilly_chat_native_call_action_v1.",
+      "actual": "The generated application does not disable backup and the observed manifest declared no fullBackupContent/dataExtractionRules references. The hardened gate now resolves any future @xml references and requires exact sharedpref exclusions for legacy backup, Android 12 cloud backup, and Android 12 device transfer.",
       "effect": "Thread and invite identifiers plus pending Answer/Decline routing state can become eligible for Android backup or transfer outside the intended 45-second lifecycle.",
       "newBinaryRequired": true,
       "evidenceTier": "T1_GENERATED_NATIVE_SOURCE",
@@ -60,25 +74,90 @@
     "releaseOrDistributionBuild": false,
     "signedArtifactProof": false
   },
+  "failClosedOrder": [
+    "GENERATE_AND_BIND_D1_DIGEST_THREE_TIMES",
+    "RESOLVE_AND_BIND_BACKUP_XML_REFERENCES",
+    "FAIL_ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING",
+    "DO_NOT_INJECT_TESTS",
+    "DO_NOT_RUN_GRADLE",
+    "DO_NOT_CONTACT_EMULATOR"
+  ],
+  "scenarioMatrix": {
+    "required": 12,
+    "implementedMarkers": 6,
+    "executed": 0,
+    "status": "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE",
+    "missing": ["BACKGROUND", "ACTIVITY_DESTROYED_PROCESS_ALIVE", "REACT_CONTEXT_UNAVAILABLE", "DECLINE", "EXPIRATION", "BACKUP_POLICY"]
+  },
   "tests": {
-    "contractAssertions": "24/24",
-    "sourceModelAssertions": "10/10",
+    "contractAssertions": "UPDATED_DEPENDENCY_FREE_SUITE",
+    "sourceModelAssertions": "17/17",
     "mandatoryNegativeControls": "12/12",
     "cliFailClosed": "14/14",
     "d1GeneratedDigestContinuity": "3/3",
     "jvmUnit": "BLOCKED_BEFORE_EXECUTION",
     "emulatorLifecycle": "NOT_RUN_AFTER_PRODUCT_DEFECT_STOP"
   },
+  "micControlAddendum": {
+    "contract": "config/assurance/android-chat-call-mic-control-v1.json",
+    "sourceBindings": "8_FILES_PLUS_5_CONTROL_FLOW_SLICES",
+    "layerA": {
+      "sharedUi": "10/10",
+      "liveKit": "20/20",
+      "legacy": "20/20",
+      "negativeControls": "10/10",
+      "deterministic": "3/3",
+      "classification": "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION"
+    },
+    "layerB": {
+      "test": "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt",
+      "classification": "STOPPED_BEFORE_INSTRUMENTATION_AFTER_SOURCE_BOUND_UNEXECUTED_P1_CANDIDATE_DETECTION",
+      "gradleTasks": "4/4_REACHED_LOCAL_DEBUG_APP_INSTALL",
+      "instrumentation": "NOT_RUN",
+      "localDebugApp": "INSTALLED_THEN_REMOVED_AND_VERIFIED",
+      "emulator": "SHUTDOWN_AND_ZERO_CONNECTED",
+      "signedArtifactProof": false,
+      "physicalProof": false
+    },
+    "sourceBoundP1Candidates": [
+      "ANDROID_MIC_LEGACY_ENDED_TRACK_REUSED",
+      "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS",
+      "ANDROID_MIC_LEGACY_CONNECTED_PEER_RENEGOTIATION_SKIPPED",
+      "ANDROID_MIC_LEGACY_MEMBERSHIP_FAILURE_RETURNS_SUCCESS",
+      "ANDROID_MIC_LIVEKIT_MEMBERSHIP_FAILURE_RETURNS_SUCCESS",
+      "ANDROID_MIC_LIVEKIT_BACKGROUND_REJECTION_UNHANDLED",
+      "ANDROID_MIC_LIVEKIT_NATIVE_MUTE_STATE_NOT_RECONCILED",
+      "ANDROID_MIC_LIVEKIT_SPEAKER_OUTSIDE_MEDIA_SERIALIZER"
+    ],
+    "productSourceModified": false,
+    "providerOrRealCallUsed": false
+  },
   "capabilities": {
-    "required": 21,
-    "d1ProvidedSource": 21,
-    "missingAtGeneratedSourceTier": 0,
-    "compiledRegistrationProof": "PARTIAL_APP_KOTLIN_COMPILE_ONLY"
+    "d1SourceParity": {"required": 21, "sourceProvided": 21, "sourceMissing": 0},
+    "compiledRuntimeParity": {"provided": "UNKNOWN", "missing": "UNKNOWN", "status": "BLOCKED_INTERNAL_NOT_INDEPENDENTLY_MEASURED"},
+    "compiledRegistrationProof": "PARTIAL_APP_KOTLIN_COMPILE_ONLY_NOT_CAPABILITY_PARITY"
+  },
+  "logging": {
+    "categoriesOnly": true,
+    "rawIdentifierValuesRetained": false,
+    "canonicalAllowlistEnforced": true,
+    "noncanonical": [{"category": "ACTION_BUFFERED", "classification": "P2_D2B_LOGGING_NORMALIZATION"}]
+  },
+  "determinism": {
+    "durationNormalization": "gradle.tasks[].durationMs omitted from deterministic evidence hash",
+    "unexplainedContentNormalization": false
+  },
+  "emulatorCleanupContract": {
+    "selectedEmulatorOnly": true,
+    "preexistingTargetOrTestPackage": "REFUSE",
+    "uninstallOnlyPackagesInstalledByCurrentRun": true,
+    "verifyRemoval": true,
+    "iterateAcrossConnectedEmulators": false
   },
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR_WITH_BLOCKING_PRODUCT_DEFECT",
-    "T2_MODEL": "MODEL_CLEAR_WITH_PRESERVED_FAILING_TEST",
+    "T2_MODEL": "BLOCKED_INTERNAL_NATIVE_TESTS_NOT_COMPILED_OR_EXECUTED",
     "T3_INTEGRATION": "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT",
     "T4_NATIVE_PROVIDER": "PARTIAL_LOCAL_ANDROID_COMPILE_ONLY",
     "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
@@ -109,7 +188,9 @@
   "cleanup": {
     "disposableProjectsRemoved": true,
     "debugOrTestApksRetained": false,
-    "emulatorPackagesInstalled": false,
+    "emulatorPackagesRemaining": false,
+    "micDebugPackageInstalledThenRemoved": true,
+    "connectedEmulatorsAfterCleanup": 0,
     "emulatorSerialRecorded": false,
     "secretOrPrivateLogRetained": false
   }
