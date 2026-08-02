@@ -34,6 +34,7 @@ import {
   PEOPLE_SEARCH_NO_RESULTS_COPY,
 } from "../../_lib/peopleSearchNormalization";
 import { useSession } from "../../_lib/session";
+import { createForegroundAuthenticatedUiCallIntent } from "../../_lib/nativeCallTransitionProvenance.mjs";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
 
 type InboxErrorState = {
@@ -285,6 +286,18 @@ export default function ChillyChatInboxScreen() {
   );
 
   const openThread = useCallback((thread: ChatThreadSummary, startCall?: "voice" | "video") => {
+    const authenticatedUserId = String(user?.id ?? "").trim();
+    const trustedUiIntent = startCall
+      ? createForegroundAuthenticatedUiCallIntent({
+        action: startCall === "video" ? "start_video" : "start_voice",
+        authenticated: isSignedIn && !authLoading,
+        authenticatedUserId,
+        threadId: thread.threadId,
+      })
+      : null;
+    if (startCall && (trustedUiIntent?.status !== "created" || !trustedUiIntent.claimId)) {
+      Alert.alert("Unable to start call", "Open the chat thread and use its Voice or Video control.");
+    }
     trackEvent("chat_thread_open_requested", {
       surface: "chat-inbox",
       threadId: thread.threadId,
@@ -295,10 +308,12 @@ export default function ChillyChatInboxScreen() {
       pathname: "/chat/[threadId]",
       params: {
         threadId: thread.threadId,
-        ...(startCall ? { startCall } : {}),
+        ...(trustedUiIntent?.status === "created" && trustedUiIntent.claimId
+          ? {foregroundCallClaim: trustedUiIntent.claimId, startCall}
+          : {}),
       },
     });
-  }, [router]);
+  }, [authLoading, isSignedIn, router, user?.id]);
 
   const openProfile = useCallback((thread: ChatThreadSummary) => {
     const otherMember = thread.otherMember;

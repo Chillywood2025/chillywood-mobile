@@ -10,7 +10,7 @@
     "cases": ["answer", "decline", "end", "mute", "unmute", "answer_without_uuid", "answer_with_arbitrary_uuid", "custom_scheme", "direct_router", "open_call_ringing"]
   },
   "authorities": {
-    "foreground_authenticated_ui": "A deliberate in-app control invokes the existing authenticated server transition directly.",
+    "foreground_authenticated_ui": "A deliberate mounted in-app control invokes the transition directly or creates one short-lived user/thread-bound intent for the destination screen; route text never creates this authority.",
     "trusted_native_claim": "A one-time claim was created from a validated platform-native event and consumed with an exact binding.",
     "none": "Routes, URLs, ordinary notifications, and query parameters are navigation-only."
   },
@@ -24,12 +24,29 @@
     "claimHandleEncoding": "lowercase_hex",
     "clock": "monotonic_process_clock",
     "deleteBeforeReturn": true,
+    "attestation": "module_private_weakset_canonical_registry_only",
     "expiryRevalidatedAtTransitionUse": true,
     "duplicateExtendsTtl": false,
+    "seenEventReplay": "bounded_process_lifetime_lru_platform_scoped_clear",
     "platformScopedClear": true,
     "unscopedClear": "denied",
     "persisted": false,
-    "logged": false
+    "logged": false,
+    "consume": "canonical_registry_only_attestation_exact_action_platform_source_user_thread_invite_native_identity_delete_before_return"
+  },
+  "foregroundUiIntent": {
+    "implementation": "_lib/nativeCallTransitionProvenance.mjs",
+    "storage": "memory_only",
+    "ttlMs": 30000,
+    "maxActive": 32,
+    "claimHandleBytes": 32,
+    "allowedProducers": ["app/_layout.tsx", "app/chat/index.tsx", "app/profile/[userId].tsx"],
+    "actions": ["open_call", "start_voice", "start_video"],
+    "bindings": ["authenticatedUserId", "threadId", "action", "exact_inviteId_and_roomId_for_open"],
+    "consume": "mounted_authenticated_user_and_thread_delete_before_return_policy_binds_exact_action_and_open_call_invite_room",
+    "attestation": "module_private_weakset_canonical_registry_only",
+    "externalRouteCreatable": false,
+    "compatibilityRoute": "app/communication/[roomId].tsx_redirects_navigation_only_without_openCall_or_claim"
   },
   "platforms": {
     "ios": {"source": "ios_callkit_native_event", "nativeIdentity": "canonical_callkit_uuid", "enabledProducer": true, "claimActions": ["answer"]},
@@ -47,18 +64,33 @@
   },
   "directNativeEvents": ["declined", "ended", "timeout", "answerFailed", "audioSessionFailed", "providerReset", "remoteEnded", "muted", "unmuted"],
   "externalEntryPoints": ["custom_scheme", "universal_link", "application_link", "Linking.getInitialURL", "Linking.addEventListener", "redirectSystemPath", "direct_router", "ordinary_notification", "foreground_banner", "openCall", "startCall", "url_fragment"],
-  "externalParametersStrippedByNativeIntent": ["nativeCallAction", "nativeCallUuid", "nativeCallClaim", "openCall", "startCall"],
+  "externalParametersStrippedByNativeIntent": ["foregroundCallClaim", "nativeCallAction", "nativeCallUuid", "nativeCallClaim", "openCall", "startCall"],
   "routePolicy": {
-    "openCall": "navigation_only_no_auto_open",
-    "startCall": "navigation_only_no_auto_start",
-    "fragments": "removed_before_external_routing_and_excluded_from_analytics",
-    "foregroundControls": "authenticated_in_thread_controls_remain_distinct_authority"
+    "openCall": "external_text_navigation_only_internal_shortcut_requires_foreground_authenticated_ui_intent",
+    "startCall": "external_text_navigation_only_internal_shortcut_requires_foreground_authenticated_ui_intent",
+    "fragments": "strip_only_native_call_sensitive_keys_and_preserve_non_native_auth_recovery_fields",
+    "foregroundControls": "authenticated_mounted_thread_controls_remain_direct_distinct_authority",
+    "externalSystemPaths": "sanitized_before_router_entry",
+    "safeInternalPaths": "opaque_claim_handles_are_allowed_only_from_allowlisted_in_process_producers",
+    "routerFailure": "exact_created_claim_consumed_before_failure_completion",
+    "debugSurfaces": "suppressed_while_sensitive_claim_handle_is_routed"
   },
   "creatorGuard": {
     "scan": "repository_wide_tracked_production_source",
-    "allowlist": ["app/_layout.tsx"],
-    "exactCallsites": 1,
+    "iosNativeCreatorAllowlist": ["app/_layout.tsx"],
+    "foregroundUiCreatorAllowlist": ["app/_layout.tsx", "app/chat/index.tsx", "app/profile/[userId].tsx"],
+    "exactDirectImportAndCallCounts": true,
+    "aliasNamespaceComputedReferenceDenied": true,
+    "mutants": ["alias_import", "namespace_access", "computed_namespace_access", "canonical_import_substitution"],
+    "canonicalModuleSpecifierRequired": true,
     "unexpectedCallsite": "IOS_NATIVE_CLAIM_CREATOR_CALLSITE_UNEXPECTED"
+  },
+  "localIntegrationHarness": {
+    "classification": "PRODUCTION_WIRED_BRIDGE_AUTH_ROUTER_MOUNTED_THREAD_HARNESS",
+    "stages": ["synthetic_native_bridge_subscription", "production_bridge_handler", "authenticated_readiness", "production_route_builder", "router_replace", "production_mounted_thread_consumer", "ownership_policy"],
+    "externalEntry": ["external_system_sanitizer", "router_navigation", "mounted_thread_denial"],
+    "providerContact": false,
+    "physicalProof": false
   },
   "serverAuthority": ["authenticated_user", "exact_callee", "exact_thread", "exact_invite", "ringing_or_accepted_state", "nonterminal", "fresh_generation", "accepted_before_token", "accepted_before_media"],
   "proofBoundary": {
@@ -76,12 +108,24 @@
   "d2bReconciliation": [
     {"path": "_lib/chillyChatNativeCallRoutes.mjs", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Keep Android payload and navigation parsing; remove the checkpoint's Android-only registry."},
     {"path": "_lib/chillyChatNativeCallRoutes.d.ts", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Point Android claim types to the canonical shared registry."},
-    {"path": "_lib/chillyChatNativeCallRouteBuffer.ts", "classification": "D2B_MANUAL_RECONCILIATION_REQUIRED", "detail": "Register the consumed native-store payload through the shared android_native_action_store producer and clear only the android claim namespace during Android lifecycle invalidation."},
+    {"path": "_lib/chillyChatNativeCallRouteBuffer.ts", "classification": "D2B_MANUAL_RECONCILIATION_REQUIRED", "detail": "After schemaVersion=2 native-store consumption, register requestKey/nativeEventGeneration, store-created time and the authenticated user through the exact-one Android producer; clear only the android namespace during lifecycle invalidation."},
     {"path": "_lib/communicationCallMediaPolicy.mjs", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Retain the reviewed explicit authority and exact consumed-claim policy."},
     {"path": "_lib/communicationCallMediaPolicy.d.ts", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Retain canonical authority and claim types."},
-    {"path": "app/_layout.tsx", "classification": "D2B_MANUAL_RECONCILIATION_REQUIRED", "detail": "Preserve D2C iOS producer and authenticated foreground controls; add only the Android producer drain."},
+    {"path": "_lib/nativeCallTransitionProvenance.mjs", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Use the canonical shared registry and add only an Android producer wrapper for android_native_action_store; do not restore the checkpoint Android-only registry."},
+    {"path": "_lib/nativeCallTransitionProvenance.d.ts", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Extend the canonical platform-scoped declarations for the Android producer wrapper and its exact authenticated-user binding."},
+    {"path": "app/_layout.tsx", "classification": "D2B_MANUAL_RECONCILIATION_REQUIRED", "detail": "Preserve D2C iOS producer and authenticated foreground controls; add the exact-one guarded Android producer only after auth-bound schema-v2 native-store drain."},
+    {"path": "app/chat/[threadId].tsx", "classification": "D2B_MANUAL_RECONCILIATION_REQUIRED", "detail": "Preserve mounted iOS and foreground-UI consumption; consume same-thread warm Android claims directly in the mounted thread without relying on same-destination router replacement or route/query authority."},
     {"path": "plugins/withChillyChatNativeCallNotifications.js", "classification": "D2B_KEEP", "detail": "Android receiver, backup, and schema-v2 correction remains D2B-owned."},
-    {"path": "config/assurance/android-native-call-origin-backup-v1.json", "classification": "D2B_KEEP", "detail": "Android trust-boundary evidence remains D2B-owned."}
+    {"path": "config/assurance/android-native-call-origin-backup-v1.json", "classification": "D2B_KEEP", "detail": "Android trust-boundary evidence remains D2B-owned; reconcile its 15000ms draft JavaScript TTL and 45000ms native store TTL explicitly with the canonical 30000ms shared claim TTL."}
   ],
-  "negativeControls": ["IOS_ROUTE_ONLY_TRANSITION_AUTHORITY", "IOS_CALL_UUID_WITHOUT_PROVENANCE_ACCEPTED", "IOS_EXTERNAL_URL_CREATES_NATIVE_CLAIM", "IOS_INITIAL_URL_CREATES_NATIVE_CLAIM", "IOS_LINKING_EVENT_CREATES_NATIVE_CLAIM", "IOS_QUERY_ONLY_ANSWER_ACCEPTED", "IOS_QUERY_ONLY_DECLINE_ACCEPTED", "IOS_QUERY_ONLY_NATIVE_CONTROL_ACCEPTED", "IOS_OPEN_CALL_AUTO_ACCEPTED", "IOS_NATIVE_CLAIM_EXPIRY_MISSING", "IOS_NATIVE_CLAIM_REPLAY_ACCEPTED", "IOS_NATIVE_CLAIM_PERSISTENCE_INVALID", "IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY", "IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED", "IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "IOS_NATIVE_CLAIM_MEDIA_AUTHORITY_VIOLATION", "PLATFORM_PROOF_SCOPE_MISMATCH", "IOS_NATIVE_CLAIM_DISCLOSURE", "IOS_NATIVE_CLAIM_CREATOR_CALLSITE_UNEXPECTED"]
+  "d2bTtlReconciliation": {
+    "frozenCheckpointJavascriptTtlMs": 15000,
+    "frozenCheckpointNativeStoreTtlMs": 45000,
+    "canonicalSharedClaimTtlMs": 30000,
+    "requiredDecision": "Retain the 45000ms native-store capture window, delete the duplicate 15000ms JavaScript registry, then create one fresh canonical 30000ms memory-only claim from schemaVersion=2 requestKey/nativeEventGeneration and bind the authenticated user; duplicate delivery extends no deadline.",
+    "sameThreadWarmConsumption": "direct_mounted_thread_consume_not_same_destination_replace",
+    "exactAndroidProducerGuard": "required_one_canonical_import_and_callsite",
+    "silentTtlSelection": "denied"
+  },
+  "negativeControls": ["IOS_ROUTE_ONLY_TRANSITION_AUTHORITY", "IOS_CALL_UUID_WITHOUT_PROVENANCE_ACCEPTED", "IOS_EXTERNAL_URL_CREATES_NATIVE_CLAIM", "IOS_INITIAL_URL_CREATES_NATIVE_CLAIM", "IOS_LINKING_EVENT_CREATES_NATIVE_CLAIM", "IOS_QUERY_ONLY_ANSWER_ACCEPTED", "IOS_QUERY_ONLY_DECLINE_ACCEPTED", "IOS_QUERY_ONLY_NATIVE_CONTROL_ACCEPTED", "IOS_OPEN_CALL_AUTO_ACCEPTED", "IOS_NATIVE_CLAIM_EXPIRY_MISSING", "IOS_NATIVE_CLAIM_REPLAY_ACCEPTED", "IOS_NATIVE_CLAIM_PERSISTENCE_INVALID", "IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY", "IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED", "IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "IOS_NATIVE_CLAIM_MEDIA_AUTHORITY_VIOLATION", "PLATFORM_PROOF_SCOPE_MISMATCH", "IOS_NATIVE_CLAIM_DISCLOSURE", "IOS_NATIVE_CLAIM_STRUCTURAL_FORGERY_ACCEPTED", "IOS_FOREGROUND_UI_INTENT_STRUCTURAL_FORGERY_ACCEPTED", "IOS_FOREGROUND_UI_OPEN_CALL_BINDING_MISMATCH_ACCEPTED", "IOS_FOREGROUND_UI_CLAIM_EXTERNAL_DISCLOSURE", "IOS_NATIVE_CLAIM_DEBUG_DISCLOSURE", "IOS_CALLKIT_COMPLETION_FROM_UNRELATED_CHANNEL", "IOS_NATIVE_CLAIM_ROUTER_FAILURE_REPLAY", "IOS_NATIVE_CLAIM_CREATOR_CALLSITE_UNEXPECTED", "IOS_NATIVE_CLAIM_CREATOR_ALIAS_IMPORT", "IOS_NATIVE_CLAIM_CREATOR_NAMESPACE_ACCESS", "IOS_NATIVE_CLAIM_CREATOR_COMPUTED_ACCESS", "IOS_NATIVE_CLAIM_CREATOR_CANONICAL_IMPORT_SUBSTITUTED", "IOS_FOREGROUND_CREATOR_CANONICAL_IMPORT_SUBSTITUTED"]
 }

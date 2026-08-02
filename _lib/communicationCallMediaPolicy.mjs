@@ -1,3 +1,8 @@
+import {
+  isAttestedForegroundAuthenticatedUiCallIntent,
+  isAttestedNativeCallTransitionClaim,
+} from "./nativeCallTransitionProvenance.mjs";
+
 export function canAttemptNativeCallBackgroundAudio(input) {
   return String(input?.appState ?? "") !== "active"
     && input?.allowBackgroundAudio === true
@@ -39,16 +44,20 @@ export function doesNativeCallActionOwnTransition(input) {
       ? "android_native_action_store"
       : "";
   const threadId = String(input?.threadId ?? "").trim().toLowerCase();
+  const currentUserId = String(input?.currentUserId ?? "").trim().toLowerCase();
   const callInviteId = String(input?.callInviteId ?? "").trim();
   const nativeCallAction = String(input?.nativeCallAction ?? "").trim().toLowerCase();
   const nativeIdentity = String(input?.nativeIdentity ?? "").trim().toLowerCase();
   return !!expectedSource
     && threadId.length > 0
+    && currentUserId.length > 0
     && callInviteId.length > 0
     && nativeIdentity.length > 0
+    && isAttestedNativeCallTransitionClaim(claim)
     && Object.isFrozen(claim)
     && claim.platform === platform
     && claim.source === expectedSource
+    && claim.authenticatedUserId === currentUserId
     && claim.threadId === threadId
     && claim.inviteId === callInviteId.toLowerCase()
     && claim.action === nativeCallAction
@@ -60,6 +69,36 @@ export function doesNativeCallActionOwnTransition(input) {
     && monotonicNowMs < claim.expiresAtMonotonicMs
     && Number.isSafeInteger(claim.nativeEventGeneration)
     && claim.nativeEventGeneration > 0;
+}
+
+export function doesForegroundAuthenticatedUiCallIntentOwnAction(input) {
+  if (input?.authority !== "foreground_authenticated_ui") return false;
+  const intent = input?.foregroundUiIntent;
+  const action = String(input?.action ?? "").trim().toLowerCase();
+  const currentUserId = String(input?.currentUserId ?? "").trim().toLowerCase();
+  const threadId = String(input?.threadId ?? "").trim().toLowerCase();
+  const activeInviteId = String(input?.activeInviteId ?? "").trim().toLowerCase();
+  const activeRoomId = String(input?.activeRoomId ?? "").trim().toLowerCase();
+  const monotonicNowMs = Number(input?.monotonicNowMs);
+  return !!intent
+    && intent.consumed === true
+    && isAttestedForegroundAuthenticatedUiCallIntent(intent)
+    && Object.isFrozen(intent)
+    && intent.source === "foreground_authenticated_ui"
+    && intent.action === action
+    && intent.authenticatedUserId === currentUserId
+    && intent.threadId === threadId
+    && (action !== "open_call" || (
+      !!activeInviteId
+      && !!activeRoomId
+      && intent.inviteId === activeInviteId
+      && intent.roomId === activeRoomId
+    ))
+    && Number.isFinite(monotonicNowMs)
+    && Number.isFinite(intent.consumedAtMonotonicMs)
+    && Number.isFinite(intent.expiresAtMonotonicMs)
+    && monotonicNowMs >= intent.consumedAtMonotonicMs
+    && monotonicNowMs < intent.expiresAtMonotonicMs;
 }
 
 export function resolveChillyChatCallParticipantRole(input) {
