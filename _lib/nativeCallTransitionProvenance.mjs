@@ -2,15 +2,25 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const ANDROID_REQUEST_KEY_PATTERN = /^[0-9a-f]{64}$/u;
 const CLAIM_ID_PATTERN = /^[0-9a-f]{64}$/u;
 const CLAIM_TTL_MS = 30_000;
+const FOREGROUND_INTENT_TTL_MS = 30_000;
 const MAX_ACTIVE_CLAIMS = 32;
 const MAX_CONSUMED_EVENTS = 64;
+const attestedNativeClaims = new WeakSet();
+const attestedForegroundIntents = new WeakSet();
+const INTERNAL_NATIVE_CLAIM_ATTESTATION = Object.freeze({});
+const INTERNAL_FOREGROUND_INTENT_ATTESTATION = Object.freeze({});
 const SENSITIVE_EXTERNAL_PARAMETERS = [
+  "foregroundCallClaim",
   "nativeCallAction",
   "nativeCallUuid",
   "nativeCallClaim",
   "openCall",
   "startCall",
 ];
+const SENSITIVE_EXTERNAL_PARAMETER_SET = new Set(
+  SENSITIVE_EXTERNAL_PARAMETERS.map((value) => value.toLowerCase()),
+);
+const FOREGROUND_UI_ACTIONS = new Set(["open_call", "start_video", "start_voice"]);
 
 const SOURCE_POLICIES = Object.freeze({
   android_native_action_store: Object.freeze({
@@ -45,6 +55,7 @@ const normalizeClaimInput = (input) => {
   const sourcePolicy = SOURCE_POLICIES[source];
   const platform = normalizeText(input.platform);
   const action = normalizeText(input.action);
+  const authenticatedUserId = normalizeUuid(input.authenticatedUserId);
   const threadId = normalizeUuid(input.threadId);
   const inviteId = normalizeUuid(input.inviteId);
   const nativeEventGeneration = Number(input.nativeEventGeneration);
@@ -55,6 +66,7 @@ const normalizeClaimInput = (input) => {
     !sourcePolicy
     || platform !== sourcePolicy.platform
     || !sourcePolicy.actions.has(action)
+    || !authenticatedUserId
     || !threadId
     || !inviteId
     || !Number.isSafeInteger(nativeEventGeneration)
@@ -64,12 +76,13 @@ const normalizeClaimInput = (input) => {
   ) {
     return null;
   }
-  return {action, inviteId, nativeEventGeneration, nativeIdentity, platform, source, threadId};
+  return {action, authenticatedUserId, inviteId, nativeEventGeneration, nativeIdentity, platform, source, threadId};
 };
 
 const buildEventKey = (claim) => [
   claim.platform,
   claim.source,
+  claim.authenticatedUserId,
   claim.nativeEventGeneration,
   claim.nativeIdentity,
   claim.threadId,
@@ -77,16 +90,18 @@ const buildEventKey = (claim) => [
   claim.action,
 ].join(":");
 
+const normalizeAuthenticatedUserId = (value) => normalizeUuid(value);
+
 export function createNativeCallTransitionProvenanceRegistry({
   claimIdFactory = createCryptoClaimId,
   maxActive = MAX_ACTIVE_CLAIMS,
   maxConsumed = MAX_CONSUMED_EVENTS,
   now = defaultMonotonicNow,
   ttlMs = CLAIM_TTL_MS,
-} = {}) {
+} = {}, attestationCapability = null) {
   const activeClaims = new Map();
   const activeEventKeys = new Map();
-  const consumedEventKeys = new Map();
+  const seenEventKeys = new Map();
 
   const purge = () => {
     const currentTime = now();
@@ -95,11 +110,6 @@ export function createNativeCallTransitionProvenanceRegistry({
       if (currentTime >= claim.expiresAtMonotonicMs) {
         activeClaims.delete(claimId);
         activeEventKeys.delete(claim.eventKey);
-      }
-    });
-    consumedEventKeys.forEach((consumed, eventKey) => {
-      if (currentTime - consumed.consumedAtMonotonicMs >= ttlMs) {
-        consumedEventKeys.delete(eventKey);
       }
     });
     return true;
@@ -114,8 +124,8 @@ export function createNativeCallTransitionProvenanceRegistry({
         activeClaims.delete(claimId);
         activeEventKeys.delete(claim.eventKey);
       });
-      consumedEventKeys.forEach((consumed, eventKey) => {
-        if (consumed.platform === normalizedPlatform) consumedEventKeys.delete(eventKey);
+      seenEventKeys.forEach((seen, eventKey) => {
+        if (seen.platform === normalizedPlatform) seenEventKeys.delete(eventKey);
       });
       return true;
     },
@@ -124,7 +134,7 @@ export function createNativeCallTransitionProvenanceRegistry({
       const normalized = normalizeClaimInput(input);
       if (!normalized) return Object.freeze({status: "denied"});
       const eventKey = buildEventKey(normalized);
-      if (activeEventKeys.has(eventKey) || consumedEventKeys.has(eventKey)) {
+      if (activeEventKeys.has(eventKey) || seenEventKeys.has(eventKey)) {
         return Object.freeze({status: "duplicate"});
       }
       if (activeClaims.size >= maxActive) return Object.freeze({status: "capacity_denied"});
@@ -144,6 +154,12 @@ export function createNativeCallTransitionProvenanceRegistry({
       });
       activeClaims.set(claimId, claim);
       activeEventKeys.set(eventKey, claimId);
+      seenEventKeys.set(eventKey, Object.freeze({platform: claim.platform}));
+      while (seenEventKeys.size > maxConsumed) {
+        const oldest = seenEventKeys.keys().next().value;
+        if (!oldest) break;
+        seenEventKeys.delete(oldest);
+      }
       return Object.freeze({
         action: claim.action,
         claimId,
@@ -160,16 +176,20 @@ export function createNativeCallTransitionProvenanceRegistry({
       const claimId = normalizeText(expected.claimId);
       const claim = CLAIM_ID_PATTERN.test(claimId) ? activeClaims.get(claimId) : null;
       if (!claim) return null;
+      const expectedAction = normalizeText(expected.action);
       const expectedPlatform = normalizeText(expected.platform);
       const expectedSource = normalizeText(expected.source);
+      const expectedAuthenticatedUserId = normalizeAuthenticatedUserId(expected.authenticatedUserId);
       const expectedThreadId = normalizeUuid(expected.threadId);
       const expectedInviteId = normalizeUuid(expected.inviteId);
       const expectedNativeIdentity = expectedPlatform === "ios"
         ? normalizeUuid(expected.nativeIdentity)
         : normalizeText(expected.nativeIdentity);
       if (
-        expectedPlatform !== claim.platform
+        expectedAction !== claim.action
+        || expectedPlatform !== claim.platform
         || expectedSource !== claim.source
+        || expectedAuthenticatedUserId !== claim.authenticatedUserId
         || expectedThreadId !== claim.threadId
         || expectedInviteId !== claim.inviteId
         || expectedNativeIdentity !== claim.nativeIdentity
@@ -183,33 +203,33 @@ export function createNativeCallTransitionProvenanceRegistry({
       if (!Number.isFinite(consumedAtMonotonicMs)) return null;
       activeClaims.delete(claimId);
       activeEventKeys.delete(claim.eventKey);
-      consumedEventKeys.set(claim.eventKey, Object.freeze({
-        consumedAtMonotonicMs,
-        platform: claim.platform,
-      }));
-      while (consumedEventKeys.size > maxConsumed) {
-        const oldest = consumedEventKeys.keys().next().value;
-        if (!oldest) break;
-        consumedEventKeys.delete(oldest);
-      }
-      return Object.freeze({
+      const consumedClaim = Object.freeze({
         ...claim,
         consumed: true,
         consumedAtMonotonicMs,
       });
+      if (attestationCapability === INTERNAL_NATIVE_CLAIM_ATTESTATION) {
+        attestedNativeClaims.add(consumedClaim);
+      }
+      return consumedClaim;
     },
     inspectCounts() {
       if (!purge()) return Object.freeze({active: 0, consumed: 0});
-      return Object.freeze({active: activeClaims.size, consumed: consumedEventKeys.size});
+      return Object.freeze({active: activeClaims.size, consumed: seenEventKeys.size});
     },
   });
 }
 
-const nativeCallTransitionRegistry = createNativeCallTransitionProvenanceRegistry();
+const nativeCallTransitionRegistry = createNativeCallTransitionProvenanceRegistry(
+  undefined,
+  INTERNAL_NATIVE_CLAIM_ATTESTATION,
+);
 
-export const registerTrustedIosCallKitNativeEvent = (event) => {
+const registerTrustedIosCallKitNativeEvent = (event) => {
+  const authenticatedUserId = normalizeAuthenticatedUserId(event?.authenticatedUserId);
   if (
     event?.authenticated !== true
+    || !authenticatedUserId
     || normalizeText(event?.callType) !== "voice" && normalizeText(event?.callType) !== "video"
     || normalizeText(event?.type) !== "answerrequested"
   ) {
@@ -217,6 +237,7 @@ export const registerTrustedIosCallKitNativeEvent = (event) => {
   }
   return nativeCallTransitionRegistry.create({
     action: "answer",
+    authenticatedUserId,
     inviteId: event?.callInviteId,
     nativeEventGeneration: event?.nativeEventGeneration,
     nativeIdentity: event?.callUuid,
@@ -226,19 +247,246 @@ export const registerTrustedIosCallKitNativeEvent = (event) => {
   });
 };
 
+const buildTrustedIosCallKitAnswerRoute = (event) => {
+  const created = registerTrustedIosCallKitNativeEvent(event);
+  if (
+    created.status !== "created"
+    || !created.claimId
+    || !created.threadId
+    || !created.inviteId
+    || !created.nativeIdentity
+  ) {
+    return Object.freeze({
+      callUuid: normalizeUuid(event?.callUuid),
+      status: created.status,
+    });
+  }
+  const params = new URLSearchParams({
+    callInviteId: created.inviteId,
+    nativeCallClaim: created.claimId,
+    nativeCallUuid: created.nativeIdentity,
+  });
+  return Object.freeze({
+    callUuid: created.nativeIdentity,
+    claimId: created.claimId,
+    destination: `/chat/${encodeURIComponent(created.threadId)}?${params.toString()}`,
+    inviteId: created.inviteId,
+    status: "created",
+    threadId: created.threadId,
+  });
+};
+
+export const createIosCallKitAnswerRouteHandler = ({
+  completeAnswerFailure,
+  getAuthenticatedUserId,
+  isActive,
+  replace,
+} = {}) => async (event) => {
+  if (
+    typeof isActive !== "function"
+    || isActive() !== true
+    || typeof replace !== "function"
+  ) return "inactive";
+  const authenticatedUserId = typeof getAuthenticatedUserId === "function"
+    ? normalizeAuthenticatedUserId(getAuthenticatedUserId())
+    : "";
+  const routed = buildTrustedIosCallKitAnswerRoute({
+    ...event,
+    authenticated: !!authenticatedUserId,
+    authenticatedUserId,
+  });
+  if (routed.status === "duplicate") return "duplicate";
+  if (routed.status !== "created" || !routed.destination) {
+    if (routed.callUuid && typeof completeAnswerFailure === "function") {
+      await Promise.resolve(completeAnswerFailure(routed.callUuid)).catch(() => undefined);
+    }
+    return "denied";
+  }
+  try {
+    replace(routed.destination);
+  } catch {
+    nativeCallTransitionRegistry.consume({
+      action: "answer",
+      authenticatedUserId,
+      claimId: routed.claimId,
+      inviteId: routed.inviteId,
+      nativeIdentity: routed.callUuid,
+      platform: "ios",
+      source: "ios_callkit_native_event",
+      threadId: routed.threadId,
+    });
+    if (routed.callUuid && typeof completeAnswerFailure === "function") {
+      await Promise.resolve(completeAnswerFailure(routed.callUuid)).catch(() => undefined);
+    }
+    return "denied";
+  }
+  return "routed";
+};
+
+export const isAttestedNativeCallTransitionClaim = (value) => (
+  !!value && typeof value === "object" && attestedNativeClaims.has(value)
+);
+
 export const consumeNativeCallTransitionClaim = (expected) => (
   nativeCallTransitionRegistry.consume(expected)
 );
 
 export const consumeTrustedIosCallKitNativeEventClaim = (expected) => (
   nativeCallTransitionRegistry.consume({
+    action: expected?.action,
     claimId: expected?.claimId,
+    authenticatedUserId: expected?.authenticatedUserId,
     inviteId: expected?.inviteId,
     nativeIdentity: expected?.callUuid,
     platform: "ios",
     source: "ios_callkit_native_event",
     threadId: expected?.threadId,
   })
+);
+
+export const consumeMountedIosNativeCallRoute = (input) => {
+  if (
+    input?.platform !== "ios"
+    || input?.authLoading === true
+    || input?.isSignedIn !== true
+    || !normalizeAuthenticatedUserId(input?.authenticatedUserId)
+  ) {
+    return null;
+  }
+  return consumeTrustedIosCallKitNativeEventClaim({
+    action: input?.action,
+    callUuid: input?.callUuid,
+    claimId: input?.claimId,
+    authenticatedUserId: input?.authenticatedUserId,
+    inviteId: input?.inviteId,
+    threadId: input?.threadId,
+  });
+};
+
+export function createForegroundAuthenticatedUiCallIntentRegistry({
+  claimIdFactory = createCryptoClaimId,
+  maxActive = MAX_ACTIVE_CLAIMS,
+  now = defaultMonotonicNow,
+  ttlMs = FOREGROUND_INTENT_TTL_MS,
+} = {}, attestationCapability = null) {
+  const activeIntents = new Map();
+
+  const purge = () => {
+    const currentTime = now();
+    if (!Number.isFinite(currentTime)) return false;
+    activeIntents.forEach((intent, claimId) => {
+      if (currentTime >= intent.expiresAtMonotonicMs) activeIntents.delete(claimId);
+    });
+    return true;
+  };
+
+  return Object.freeze({
+    create(input) {
+      if (!purge() || input?.authenticated !== true) return Object.freeze({status: "denied"});
+      const authenticatedUserId = normalizeAuthenticatedUserId(input?.authenticatedUserId);
+      const action = normalizeText(input?.action);
+      const threadId = normalizeUuid(input?.threadId);
+      const inviteId = normalizeUuid(input?.inviteId);
+      const roomId = normalizeUuid(input?.roomId);
+      if (
+        !authenticatedUserId
+        || !FOREGROUND_UI_ACTIONS.has(action)
+        || !threadId
+        || (action === "open_call" && (!inviteId || !roomId))
+        || (action !== "open_call" && (inviteId || roomId))
+        || activeIntents.size >= maxActive
+      ) {
+        return Object.freeze({status: "denied"});
+      }
+      const claimId = normalizeText(claimIdFactory());
+      const createdAtMonotonicMs = now();
+      if (
+        !CLAIM_ID_PATTERN.test(claimId)
+        || activeIntents.has(claimId)
+        || !Number.isFinite(createdAtMonotonicMs)
+      ) {
+        return Object.freeze({status: "denied"});
+      }
+      const intent = Object.freeze({
+        action,
+        authenticatedUserId,
+        claimId,
+        consumed: false,
+        createdAtMonotonicMs,
+        expiresAtMonotonicMs: createdAtMonotonicMs + ttlMs,
+        inviteId,
+        roomId,
+        source: "foreground_authenticated_ui",
+        threadId,
+      });
+      activeIntents.set(claimId, intent);
+      return Object.freeze({
+        action,
+        claimId,
+        inviteId,
+        roomId,
+        status: "created",
+        threadId,
+      });
+    },
+    consume(expected) {
+      if (!purge()) return null;
+      const claimId = normalizeText(expected?.claimId);
+      const intent = CLAIM_ID_PATTERN.test(claimId) ? activeIntents.get(claimId) : null;
+      if (
+        !intent
+        || normalizeAuthenticatedUserId(expected?.authenticatedUserId) !== intent.authenticatedUserId
+        || normalizeUuid(expected?.threadId) !== intent.threadId
+      ) {
+        return null;
+      }
+      const consumedAtMonotonicMs = now();
+      if (!Number.isFinite(consumedAtMonotonicMs)) return null;
+      activeIntents.delete(claimId);
+      const consumedIntent = Object.freeze({...intent, consumed: true, consumedAtMonotonicMs});
+      if (attestationCapability === INTERNAL_FOREGROUND_INTENT_ATTESTATION) {
+        attestedForegroundIntents.add(consumedIntent);
+      }
+      return consumedIntent;
+    },
+  });
+}
+
+const foregroundAuthenticatedUiCallIntentRegistry = createForegroundAuthenticatedUiCallIntentRegistry(
+  undefined,
+  INTERNAL_FOREGROUND_INTENT_ATTESTATION,
+);
+
+export const createForegroundAuthenticatedUiCallIntent = (input) => (
+  foregroundAuthenticatedUiCallIntentRegistry.create(input)
+);
+
+export const consumeMountedForegroundAuthenticatedUiCallRoute = (input) => {
+  if (
+    input?.authLoading === true
+    || input?.isSignedIn !== true
+    || !normalizeAuthenticatedUserId(input?.authenticatedUserId)
+  ) {
+    return null;
+  }
+  return foregroundAuthenticatedUiCallIntentRegistry.consume({
+    authenticatedUserId: input?.authenticatedUserId,
+    claimId: input?.claimId,
+    threadId: input?.threadId,
+  });
+};
+
+export const isAttestedForegroundAuthenticatedUiCallIntent = (value) => (
+  !!value && typeof value === "object" && attestedForegroundIntents.has(value)
+);
+
+export const containsSensitiveNativeCallClaimRouteParams = (params) => (
+  !!params
+  && typeof params === "object"
+  && !Array.isArray(params)
+  && Object.keys(params).some((key) => (
+    key.toLowerCase() === "nativecallclaim" || key.toLowerCase() === "foregroundcallclaim"
+  ))
 );
 
 export const clearNativeCallTransitionClaims = (platform) => {
@@ -251,8 +499,19 @@ export const sanitizeExternalIosNativeCallPath = (value) => {
   const absolute = /^[a-z][a-z0-9+.-]*:/iu.test(normalized);
   try {
     const parsed = new URL(normalized, "https://native-intent.invalid");
-    SENSITIVE_EXTERNAL_PARAMETERS.forEach((parameter) => parsed.searchParams.delete(parameter));
-    parsed.hash = "";
+    [...parsed.searchParams.keys()].forEach((parameter) => {
+      if (SENSITIVE_EXTERNAL_PARAMETER_SET.has(parameter.toLowerCase())) {
+        parsed.searchParams.delete(parameter);
+      }
+    });
+    const fragmentParameters = new URLSearchParams(parsed.hash.replace(/^#/u, ""));
+    [...fragmentParameters.keys()].forEach((parameter) => {
+      if (SENSITIVE_EXTERNAL_PARAMETER_SET.has(parameter.toLowerCase())) {
+        fragmentParameters.delete(parameter);
+      }
+    });
+    const safeFragment = fragmentParameters.toString();
+    parsed.hash = safeFragment ? `#${safeFragment}` : "";
     if (absolute) return parsed.toString();
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
@@ -266,4 +525,5 @@ export const nativeCallTransitionProvenancePolicy = Object.freeze({
   maxActive: MAX_ACTIVE_CLAIMS,
   maxConsumed: MAX_CONSUMED_EVENTS,
   ttlMs: CLAIM_TTL_MS,
+  foregroundIntentTtlMs: FOREGROUND_INTENT_TTL_MS,
 });
