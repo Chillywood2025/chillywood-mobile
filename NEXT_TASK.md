@@ -2,9 +2,9 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Merge this bounded current-truth synchronization, then merge current main normally into corrected B1 source 4425554e without changing its implementation and verify the canonical synchronized tree.
-2. Preserve B1's passed behavioral gates (28/28 pgTAP, 19/19 concurrency, and corrected predecessor 23/23), refresh linked no-apply and the same four Level C reviews additively, then run one exact full CI before merge; do not deploy the forward correction.
-3. Continue the existing B2 RevenueCat transfer and B3 room-host block-check successors in order, with exact reviews and applicable CI before merge and no provider mutation.
+1. Merge this bounded post-B1 current-truth synchronization after persistent Level A review and one exact CI; do not deploy the B1 forward correction.
+2. Continue preserved B2 successor f30d37a1 from its existing worktree: revalidate source, bind its immutable successor once in current truth, base-synchronize normally, run local behavior and linked no-apply, reuse exact reviews, and require one 13/13 CI before merge without RevenueCat mutation.
+3. Then continue preserved B3 successor b2cd9318 independently with the same immutable-source, current-truth, base-sync, local behavior, no-apply, review, and CI sequence; do not combine B2 and B3.
 4. After B1, B2, and B3 are reconciled and merged, begin PR D native/provider/runtime/artifact assurance without a production build, OTA, provider mutation, or product behavior change.
 5. Keep PR E blocked until PRs C and D are merged; keep PR F blocked until PR E merges.
 6. Keep PR #52 frozen and unmerged and PR #53 stale, review-only, and unmerged until bounded reconciliation safely preserves all unique source.
