@@ -1,8 +1,9 @@
 # LiveKit Experience Sentinel
 
 Status: protected Level 0/1 source surface registered; Android and iOS
-authorization/finalization source boundary implemented; live installed-product
-canaries not yet run.
+authorization/finalization source boundary implemented; the deployed platform
+source-identity binding is now represented exactly in Git; zero formal
+installed-product sentinel runs have occurred.
 
 Registered switch:
 
@@ -40,6 +41,29 @@ Platform activation is a three-step Owner path:
 
 The Android and iOS visual switches are outside this path. The shared visual and
 shared LiveKit switches remain off, and recurring schedules remain off.
+
+## Git-only source reconciliation
+
+Migration
+`20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql`
+records the exact immutable version and statement body already present in the
+remote migration ledger. This reconciliation does not apply or rerun the
+migration, change a switch or schedule, resume activation, create a build or
+OTA, call LiveKit, or create installed/physical evidence.
+
+The deployed migration binds preflight to recorded internal identities. The
+remote-unapplied forward successor
+`20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql`
+adds an immutable two-platform manifest and requires an enabled final outcome to
+join its authorization and receipt to the exact final source/tree/deployment,
+delivered source hash, update, runtime, channel, and artifact. Static source
+proof passes. The historical 14/14 predicate and predecessor-head 27/27 results remain history. With pinned CLI 2.109.1, a clean local reset materialized through
+the successor and its exact two-row manifest; a later Storage readiness warning
+was non-source. Current-head pgTAP passed 28/28 in 47s after two deterministic
+test-only corrections, and concurrency passed 19/19 in 7s after one readback
+alias correction. Cleanup retained zero receipts, authorizations, or outcomes.
+Neither T1 nor T3 can substitute for signed-artifact, installed, physical, or
+public-canary proof; no remote database or provider state was mutated.
 
 Initial authority:
 
