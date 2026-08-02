@@ -240,12 +240,26 @@ select has_function(
 );
 select ok(
   pg_get_functiondef(
-    'public.governance_prepare_livekit_platform_preflight(public.cognitive_platform,text,text,text,text,text,text,text,text,text,text,text,interval)'::regprocedure
-  ) like '%019f9c11-33c1-7d23-a0c0-8029c62e0ea4%'
+    'public.cognitive_bind_livekit_platform_identity_v2()'::regprocedure
+  ) like '%e3379ac9-61f0-40db-a014-81975be123e5%'
   and pg_get_functiondef(
-    'public.governance_prepare_livekit_platform_preflight(public.cognitive_platform,text,text,text,text,text,text,text,text,text,text,text,interval)'::regprocedure
-  ) like '%019f9c13-9f6d-7c52-9cee-71265b8fd565%',
-  'preflight binds the exact Android and iOS installed updates'
+    'public.cognitive_bind_livekit_platform_identity_v2()'::regprocedure
+  ) like '%019fb099-f7c3-7130-97aa-a4bb1c49792f%'
+  and (
+    select pg_get_constraintdef(oid) like '%build_number = ''86''%'
+      and pg_get_constraintdef(oid) like
+        '%1.0.0-android-chat-call-action-v1%'
+      and pg_get_constraintdef(oid) like
+        '%fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44%'
+      and pg_get_constraintdef(oid) like
+        '%24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8%'
+    from pg_constraint
+    where conrelid =
+      'public.cognitive_livekit_platform_preflight_receipts'::regclass
+      and conname =
+        'cognitive_livekit_platform_preflight_identity_v2_check'
+  ),
+  'preflight binds the exact current Android and iOS installed identities'
 );
 select ok(
   pg_get_functiondef(
