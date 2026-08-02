@@ -11,6 +11,7 @@ const root = process.cwd();
 const contractPath = "config/assurance/android-generated-native-lifecycle-v1.json";
 const d1ContractPath = "config/assurance/release-target-parity-v1.json";
 const registryPath = "config/assurance/native-capability-registry-v1.json";
+const reportPath = "docs/assurance/pr-d2a-android-generated-native-lifecycle-report-v1.json";
 const pluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const unitTemplate = "tools/android-native-call-harness/ChillyChatNativeCallActionStoreTest.kt";
 const instrumentationTemplate = "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt";
@@ -126,16 +127,66 @@ export const runNegativeControls = () => {
   });
 };
 
-const dependencySet = () => {
-  const packageHash = digest(read("package.json"));
-  const lockHash = digest(read("package-lock.json"));
+export const evaluateD1SourceCapabilityParity = ({
+  d1 = readJson(d1ContractPath), registry = readJson(registryPath), contract = readJson(contractPath), sourceReader = readText,
+} = {}) => {
+  const target = d1.targets.find((entry) => entry.targetId === contract.target.targetId);
+  gate(target, "ANDROID_D1_CAPABILITY_TARGET_MISSING", "D1 target is absent");
+  const required = [...new Set(target.requiredCapabilities)].sort();
+  const contractRequired = [...new Set(contract.requiredCapabilities)].sort();
+  gate(stable(required) === stable(contractRequired), "ANDROID_D1_CAPABILITY_CONTRACT_DRIFT", "D2A required capabilities differ from the D1 target");
+  const applicable = registry.capabilities.filter((capability) => capability.platform === "android"
+    && capability.targetApplicability.includes(target.targetId));
+  const sourceProvided = applicable.filter((capability) => capability.providedBy.length > 0 && capability.providedBy.every((evidence) => {
+    let content; try { content = sourceReader(evidence.path); } catch { return false; }
+    return evidence.includes.every((marker) => content.includes(marker));
+  })).map(({capabilityId}) => capabilityId).sort();
+  const missing = required.filter((capability) => !sourceProvided.includes(capability));
+  const extra = sourceProvided.filter((capability) => !required.includes(capability));
+  gate(missing.length === 0, "ANDROID_D1_SOURCE_CAPABILITY_MISSING", `Missing ${missing.length} required source capabilities`);
+  return {required: required.length, sourceProvided: sourceProvided.length, sourceMissing: missing.length, requiredCapabilities: required,
+    sourceProvidedCapabilities: sourceProvided, missingCapabilities: missing, extraCapabilities: extra,
+    derivation: {required: d1ContractPath, sourceProvided: registryPath, independent: true}, setDigest: digest(stable({required, sourceProvided}))};
+};
+
+export const validateInstalledDirectPackageSet = ({modules, packageJson, lock, relevantNames = null, installedPackageReader = (name) => JSON.parse(fs.readFileSync(path.join(modules, name, "package.json"), "utf8"))}) => {
+  const declared = {...(packageJson.dependencies ?? {}), ...(packageJson.devDependencies ?? {})};
+  const lockedRoot = {...(lock.packages?.[""]?.dependencies ?? {}), ...(lock.packages?.[""]?.devDependencies ?? {})};
+  gate(stable(declared) === stable(lockedRoot), "DEPENDENCY_LOCK_ROOT_MISMATCH", "Direct dependency declarations differ from the lock root");
+  const identities = [];
+  const selected = (relevantNames ?? Object.keys(declared)).filter((name) => Object.hasOwn(declared, name)).sort();
+  gate(selected.length > 0, "DEPENDENCY_RELEVANT_SET_EMPTY", "No relevant direct packages were selected");
+  for (const name of selected) {
+    const locked = lock.packages?.[`node_modules/${name}`];
+    gate(typeof locked?.version === "string", "DEPENDENCY_LOCK_IDENTITY_MISSING", `Locked direct package identity is missing for ${name}`);
+    let installed; try { installed = installedPackageReader(name); } catch {
+      throw new GateError("DEPENDENCY_INSTALLED_IDENTITY_MISSING", `Installed direct package identity is missing for ${name}`);
+    }
+    gate(installed.name === name && installed.version === locked.version, "DEPENDENCY_INSTALLED_VERSION_MISMATCH", `Installed direct package identity differs for ${name}`);
+    identities.push(`${name}@${locked.version}`);
+  }
+  return {directPackageCount: identities.length, identityDigest: digest(identities.join("\n")), versionsMatched: identities.length, pathsRecorded: false};
+};
+
+export const resolveDependencySet = () => {
+  const packageBytes = read("package.json"); const lockBytes = read("package-lock.json");
+  const packageHash = digest(packageBytes); const lockHash = digest(lockBytes);
+  const packageJson = JSON.parse(packageBytes); const lock = JSON.parse(lockBytes);
+  const targetId = readJson(contractPath).target.targetId;
+  const declaredNames = new Set([...Object.keys(packageJson.dependencies ?? {}), ...Object.keys(packageJson.devDependencies ?? {})]);
+  const relevantNames = [...new Set(readJson(registryPath).capabilities.filter((capability) => capability.platform === "android"
+    && capability.targetApplicability.includes(targetId)).flatMap((capability) => capability.providedBy.flatMap((evidence) => evidence.includes))
+    .filter((marker) => marker.startsWith("node_modules/")).map((marker) => {
+      const parts = marker.slice("node_modules/".length).split("/"); return parts[0].startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+    }).filter((name) => declaredNames.has(name)))].sort();
   const candidates = git("worktree", "list", "--porcelain").split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9));
   for (const candidate of candidates) {
     const modules = path.join(candidate, "node_modules");
     if (!fs.existsSync(modules)) continue;
     if (!fs.existsSync(path.join(candidate, "package.json")) || !fs.existsSync(path.join(candidate, "package-lock.json"))) continue;
     if (digest(fs.readFileSync(path.join(candidate, "package.json"))) !== packageHash || digest(fs.readFileSync(path.join(candidate, "package-lock.json"))) !== lockHash) continue;
-    return { modules, evidence: { packageSha256: packageHash, lockSha256: lockHash, status: "EXACT_LOCKED_DEPENDENCY_SET" } };
+    const direct = validateInstalledDirectPackageSet({modules, packageJson, lock, relevantNames});
+    return { modules, evidence: { packageSha256: packageHash, lockSha256: lockHash, ...direct, status: "EXACT_LOCKED_DIRECT_PACKAGE_IDENTITIES" } };
   }
   throw new GateError("DEPENDENCY_SET_MISMATCH", "No exact installed dependency set is available");
 };
@@ -174,15 +225,17 @@ const generatedDigest = (temp, modules, paths) => digest(paths.slice().sort().ma
   gate(fs.existsSync(absolute), "GENERATED_NATIVE_SOURCE_MISSING", `Missing generated path ${relative}`);
   return `${relative}\0${digest(normalize(fs.readFileSync(absolute), temp, modules))}\n`;
 }).join(""));
-const manifestAttribute = (manifest, name) => manifest.match(new RegExp(`android:${name}="([^"]+)"`, "u"))?.[1] ?? null;
+const stripXmlComments = (xml) => xml.replace(/<!--[\s\S]*?-->/gu, "");
+const startTag = (xml, tag) => stripXmlComments(xml).match(new RegExp(`<${tag}\\b[^>]*>`, "u"))?.[0] ?? "";
+const manifestApplicationAttribute = (manifest, name) => startTag(manifest, "application").match(new RegExp(`android:${name}="([^"]+)"`, "u"))?.[1] ?? null;
 const resourcePath = (reference) => reference?.match(/^@xml\/([a-zA-Z0-9_]+)$/u)?.[1]
   ? `android/app/src/main/res/xml/${reference.slice(5)}.xml` : null;
-const exactSharedPrefExclusion = (xml) => /<exclude\b(?=[^>]*\bdomain="sharedpref")(?=[^>]*\bpath="chilly_chat_native_call_action_v1\.xml")[^>]*\/?\s*>/u.test(xml);
-const section = (xml, tag) => xml.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "u"))?.[1] ?? "";
+const exactSharedPrefExclusion = (xml) => /<exclude\b(?=[^>]*\bdomain="sharedpref")(?=[^>]*\bpath="chilly_chat_native_call_action_v1\.xml")[^>]*\/?\s*>/u.test(stripXmlComments(xml));
+const section = (xml, tag) => stripXmlComments(xml).match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "u"))?.[1] ?? "";
 export const evaluateBackupPolicy = ({manifest, resources = {}}) => {
-  const allowBackupFalse = manifestAttribute(manifest, "allowBackup") === "false";
-  const legacyReference = manifestAttribute(manifest, "fullBackupContent");
-  const extractionReference = manifestAttribute(manifest, "dataExtractionRules");
+  const allowBackupFalse = manifestApplicationAttribute(manifest, "allowBackup") === "false";
+  const legacyReference = manifestApplicationAttribute(manifest, "fullBackupContent");
+  const extractionReference = manifestApplicationAttribute(manifest, "dataExtractionRules");
   const legacyPath = resourcePath(legacyReference);
   const extractionPath = resourcePath(extractionReference);
   const legacyXml = legacyPath ? resources[legacyPath] : null;
@@ -200,14 +253,14 @@ export const evaluateBackupPolicy = ({manifest, resources = {}}) => {
 export const assertBackupPolicyClear = (policy) => gate(policy.clear, "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING",
   "Generated backup policy does not exclude pending native action state");
 const generatedSecurity = (temp, modules, manifest) => {
-  const references = [resourcePath(manifestAttribute(manifest, "fullBackupContent")), resourcePath(manifestAttribute(manifest, "dataExtractionRules"))].filter(Boolean);
+  const references = [resourcePath(manifestApplicationAttribute(manifest, "fullBackupContent")), resourcePath(manifestApplicationAttribute(manifest, "dataExtractionRules"))].filter(Boolean);
   const resources = Object.fromEntries(references.filter((relative) => fs.existsSync(path.join(temp, relative)))
     .map((relative) => [relative, fs.readFileSync(path.join(temp, relative), "utf8")]));
   const backupPolicy = evaluateBackupPolicy({manifest, resources});
   const securityPaths = ["android/app/src/main/AndroidManifest.xml", ...Object.keys(resources)].sort();
   const securityDigest = digest(securityPaths.map((relative) => `${relative}\0${digest(normalize(fs.readFileSync(path.join(temp, relative)), temp, modules))}\n`).join(""));
   const notifications = fs.readFileSync(path.join(temp, "android/app/src/main/java/com/chillywood/mobile/ChillyChatCallNotifications.kt"), "utf8");
-  const component = (tag, name) => manifest.match(new RegExp(`<${tag}\\b(?=[^>]*android:name="${name.replaceAll(".", "\\.")}")[^>]*>`, "u"))?.[0] ?? "";
+  const component = (tag, name) => stripXmlComments(manifest).match(new RegExp(`<${tag}\\b(?=[^>]*android:name="${name.replaceAll(".", "\\.")}")[^>]*>`, "u"))?.[0] ?? "";
   const receiver = component("receiver", ".ChillyChatCallNotificationActionReceiver");
   const service = component("service", ".ChillyChatFirebaseMessagingService");
   const activity = component("activity", ".MainActivity");
@@ -220,7 +273,7 @@ const generatedSecurity = (temp, modules, manifest) => {
 };
 const generateOnce = ({ retain = false } = {}) => {
   const contract = readJson(contractPath);
-  const dependencies = dependencySet();
+  const dependencies = resolveDependencySet();
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-pr-d2a-"));
   fs.chmodSync(temp, 0o700);
   let retained = false;
@@ -337,7 +390,7 @@ const scenarioMarkers = Object.freeze({
   BACKGROUND: "backgroundActionResumesAndConsumesOnce",
   ACTIVITY_RECREATION: "recreationRetainsPendingAction",
   ACTIVITY_DESTROYED_PROCESS_ALIVE: "destroyedActivityRetainsPendingAction",
-  PROCESS_COLD: "consumeColdActionExactlyOnce",
+  PROCESS_COLD: null,
   REACT_CONTEXT_UNAVAILABLE: "receiverBeforeReactContextRetainsAction",
   WARM_NEW_INTENT: "warmIntentReusesActivityAndCannotReplay",
   DECLINE: "declineForegroundAndCold",
@@ -348,11 +401,17 @@ const scenarioMarkers = Object.freeze({
 });
 export const evaluateScenarioMatrix = (template = readText(instrumentationTemplate), backupPolicyClear = false) => {
   const required = readJson(contractPath).lifecycleScenarios;
-  const implemented = required.filter((scenario) => scenario === "BACKUP_POLICY" ? backupPolicyClear : template.includes(scenarioMarkers[scenario]));
+  const implemented = required.filter((scenario) => scenario === "BACKUP_POLICY" ? backupPolicyClear
+    : typeof scenarioMarkers[scenario] === "string" && template.includes(scenarioMarkers[scenario]));
   return {required, implemented, missing: required.filter((scenario) => !implemented.includes(scenario)), complete: implemented.length === required.length};
 };
 export const assertCompleteScenarioMatrix = (matrix) => gate(matrix.complete, "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE",
   `Missing mandatory scenarios: ${matrix.missing.join(",")}`);
+export const assertNativeEntryPreflight = ({report = readJson(reportPath), template = readText(instrumentationTemplate), backupPolicyClear = false} = {}) => {
+  const confirmedBackupDefect = report.productDefects?.some(({code}) => code === "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING");
+  gate(!confirmedBackupDefect, "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING", "Confirmed generated backup defect blocks native compilation and installation");
+  const matrix = evaluateScenarioMatrix(template, backupPolicyClear); assertCompleteScenarioMatrix(matrix); return matrix;
+};
 const packagePresent = (serial, packageName) => {
   const result = adbRun(serial, ["shell", "pm", "path", packageName]);
   return result.status === 0 && result.stdout.trim().startsWith("package:");
@@ -376,11 +435,13 @@ const emulatorEvidence = (generated, native, installState) => {
   const testApk = path.join(generated.temp, "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
   gate(fs.existsSync(appApk) && fs.existsSync(testApk), "ANDROID_TEST_APK_MISSING", "Disposable debug/test APKs were not produced");
   const appInstall = adbRun(serial, ["install", appApk]);
-  installState.installedApp = packagePresent(serial, installState.appPackage);
-  gate(appInstall.status === 0 && installState.installedApp, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
+  installState.installedApp = appInstall.status === 0;
+  const appVerified = installState.installedApp && packagePresent(serial, installState.appPackage);
+  gate(appVerified, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
   const testInstall = adbRun(serial, ["install", testApk]);
-  installState.installedTest = packagePresent(serial, installState.testPackage);
-  gate(testInstall.status === 0 && installState.installedTest, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
+  installState.installedTest = testInstall.status === 0;
+  const testVerified = installState.installedTest && packagePresent(serial, installState.testPackage);
+  gate(testVerified, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
   const component = "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner";
   const passingMethods = ["activityCreationCapturesAndConsumesOnce", "warmIntentReusesActivityAndCannotReplay", "recreationRetainsPendingAction", "explicitReceiverRejectsUnsupportedActionWithoutCrash"];
   const methodResults = [];
@@ -397,8 +458,6 @@ const emulatorEvidence = (generated, native, installState) => {
   const external = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#verifyExternallyLaunchedActionWasNotPersisted", component]);
   const rejected = external.status === 0 && !external.stdout.includes("FAILURES!!!");
   if (!rejected) throw new GateError("ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED", "An external custom-scheme Activity launch persisted a trusted native call action", { compiled: true, emulatorReproduced: true, identifiersRecorded: false });
-  gate(methodResults.length === scenarioMatrix.required.length && methodResults.every((item) => item.passed),
-    "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE", "Every mandatory lifecycle scenario must execute and pass");
   return { emulatorCount: 1, serialRecorded: false, methodResults, scenarioMatrix, externalOriginRejected: true, signedArtifactProof: false, physicalDeviceProof: false };
 };
 const cleanupSelectedEmulator = (state) => {
@@ -421,6 +480,7 @@ export const deterministicEvidenceDigest = (value) => {
 };
 
 export const runIndependentMicNativeLayer = () => {
+  assertNativeEntryPreflight();
   const generated = generateOnce({retain: true});
   const installState = {serial: null, appPackage: "com.chillywood.mobile", testPackage: "com.chillywood.mobile.test", preexistingChecked: false, preexistingNone: false, installedApp: false, installedTest: false};
   try {
@@ -459,10 +519,12 @@ dependencies {
     gate(installState.preexistingNone, "ANDROID_EMULATOR_PACKAGE_PREEXISTED", "Target or test package already existed on the selected emulator");
     const appApk = path.join(generated.temp, "android/app/build/outputs/apk/debug/app-debug.apk");
     const testApk = path.join(generated.temp, "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
-    const appInstall = adbRun(installState.serial, ["install", appApk]); installState.installedApp = packagePresent(installState.serial, installState.appPackage);
-    gate(appInstall.status === 0 && installState.installedApp, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
-    const testInstall = adbRun(installState.serial, ["install", testApk]); installState.installedTest = packagePresent(installState.serial, installState.testPackage);
-    gate(testInstall.status === 0 && installState.installedTest, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
+    const appInstall = adbRun(installState.serial, ["install", appApk]); installState.installedApp = appInstall.status === 0;
+    const appVerified = installState.installedApp && packagePresent(installState.serial, installState.appPackage);
+    gate(appVerified, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
+    const testInstall = adbRun(installState.serial, ["install", testApk]); installState.installedTest = testInstall.status === 0;
+    const testVerified = installState.installedTest && packagePresent(installState.serial, installState.testPackage);
+    gate(testVerified, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
     const instrumentation = adbRun(installState.serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatMicControlInstrumentationTest", "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner"]);
     gate(instrumentation.status === 0 && /OK \(4 tests\)/u.test(instrumentation.stdout) && !instrumentation.stdout.includes("FAILURES!!!"),
       "ANDROID_MIC_NATIVE_INSTRUMENTATION_FAILED", "Native WebRTC mic instrumentation did not pass 4/4");
@@ -481,6 +543,7 @@ export const evaluate = ({ native = false, emulator = false, fixture } = {}) => 
     throw new GateError("NEGATIVE_FIXTURE_DID_NOT_FAIL", `${fixture} was accepted`);
   }
   const source = validateSourceModel();
+  const sourceCapabilityParity = evaluateD1SourceCapabilityParity();
   const negativeResults = runNegativeControls();
   const generation = generateThree();
   if (!generation.backupPolicy.clear) {
@@ -490,7 +553,7 @@ export const evaluate = ({ native = false, emulator = false, fixture } = {}) => 
       targetId: readJson(contractPath).target.targetId, source, generation,
       gradle: {status: "NOT_RUN_FAIL_CLOSED_BEFORE_TEST_INJECTION"},
       instrumentation: {status: "NOT_RUN_FAIL_CLOSED_BEFORE_EMULATOR", scenarioMatrix: evaluateScenarioMatrix(readText(instrumentationTemplate), false)},
-      d1SourceCapabilityParity: {required: 21, sourceProvided: 21, sourceMissing: 0},
+      d1SourceCapabilityParity: sourceCapabilityParity,
       compiledRuntimeCapabilityParity: {provided: "UNKNOWN", missing: "UNKNOWN", status: "BLOCKED_INTERNAL_NOT_INDEPENDENTLY_MEASURED"},
       negativeControls: {required: 12, passed: negativeResults.length, results: negativeResults}, blocker,
       status: blocker.classification, proofTiers: readJson(contractPath).proofTiers,
@@ -535,7 +598,7 @@ export const evaluate = ({ native = false, emulator = false, fixture } = {}) => 
     generation,
     gradle: gradle ? { tasks: gradle.results, localDebugTestCompilationOnly: true } : { status: "NOT_RUN" },
     instrumentation: instrumentation ?? { status: emulator ? "BLOCKED_BY_PRODUCT_DEFECT" : "NOT_RUN", emulatorProofOnly: true, physicalProof: false },
-    d1SourceCapabilityParity: {required: 21, sourceProvided: 21, sourceMissing: 0},
+    d1SourceCapabilityParity: sourceCapabilityParity,
     compiledRuntimeCapabilityParity: {provided: "UNKNOWN", missing: "UNKNOWN", status: "BLOCKED_INTERNAL_NOT_INDEPENDENTLY_MEASURED"},
     negativeControls: { required: 12, passed: negativeResults.length, results: negativeResults },
     blocker,

@@ -12,7 +12,7 @@
     "ownerAuthorizedMaximumNetLines": 2500,
     "timeboxHours": 8,
     "actualFilesFromMain": 11,
-    "actualNetLinesFromMain": 1832,
+    "actualNetLinesFromMain": 1942,
     "oneAssuranceDomain": true,
     "productOrProviderChangeAllowed": false
   },
@@ -33,6 +33,12 @@
     "securitySupplementBinding": "MANIFEST_PLUS_EXACT_REFERENCED_FULL_BACKUP_AND_DATA_EXTRACTION_XML",
     "d1DigestRemainsSeparate": true,
     "generatedDirectoryCommitted": false
+  },
+  "dependencySet": {
+    "classification": "EXACT_LOCKED_DIRECT_PACKAGE_IDENTITIES",
+    "inputs": ["package.json", "package-lock.json", "installed direct package metadata"],
+    "identityAndVersionComparison": true,
+    "packagePathsRecorded": false
   },
   "productDefects": [
     {
@@ -84,10 +90,10 @@
   ],
   "scenarioMatrix": {
     "required": 12,
-    "implementedMarkers": 6,
+    "implementedMarkers": 5,
     "executed": 0,
     "status": "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE",
-    "missing": ["BACKGROUND", "ACTIVITY_DESTROYED_PROCESS_ALIVE", "REACT_CONTEXT_UNAVAILABLE", "DECLINE", "EXPIRATION", "BACKUP_POLICY"]
+    "missing": ["BACKGROUND", "ACTIVITY_DESTROYED_PROCESS_ALIVE", "PROCESS_COLD", "REACT_CONTEXT_UNAVAILABLE", "DECLINE", "EXPIRATION", "BACKUP_POLICY"]
   },
   "tests": {
     "contractAssertions": "UPDATED_DEPENDENCY_FREE_SUITE",
@@ -95,6 +101,7 @@
     "mandatoryNegativeControls": "12/12",
     "cliFailClosed": "14/14",
     "d1GeneratedDigestContinuity": "3/3",
+    "backupPolicyFixtures": "13/13",
     "jvmUnit": "BLOCKED_BEFORE_EXECUTION",
     "emulatorLifecycle": "NOT_RUN_AFTER_PRODUCT_DEFECT_STOP"
   },
@@ -112,7 +119,8 @@
     "layerB": {
       "test": "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt",
       "classification": "STOPPED_BEFORE_INSTRUMENTATION_AFTER_SOURCE_BOUND_UNEXECUTED_P1_CANDIDATE_DETECTION",
-      "gradleTasks": "4/4_REACHED_LOCAL_DEBUG_APP_INSTALL",
+      "gradleTasks": "NO_PER_TASK_RESULTS_OR_HASHES_RETAINED",
+      "compileObservation": "A disposable local debug app installation was observed before stop; this is not task-by-task compile proof.",
       "instrumentation": "NOT_RUN",
       "localDebugApp": "INSTALLED_THEN_REMOVED_AND_VERIFIED",
       "emulator": "SHUTDOWN_AND_ZERO_CONNECTED",
@@ -133,7 +141,7 @@
     "providerOrRealCallUsed": false
   },
   "capabilities": {
-    "d1SourceParity": {"required": 21, "sourceProvided": 21, "sourceMissing": 0},
+    "d1SourceParity": {"required": 21, "sourceProvided": 21, "sourceMissing": 0, "derivation": "D1 target requirements compared with independently evaluated registry providedBy source evidence"},
     "compiledRuntimeParity": {"provided": "UNKNOWN", "missing": "UNKNOWN", "status": "BLOCKED_INTERNAL_NOT_INDEPENDENTLY_MEASURED"},
     "compiledRegistrationProof": "PARTIAL_APP_KOTLIN_COMPILE_ONLY_NOT_CAPABILITY_PARITY"
   },

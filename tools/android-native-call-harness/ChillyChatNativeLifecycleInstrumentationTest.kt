@@ -100,10 +100,4 @@ class ChillyChatNativeLifecycleInstrumentationTest {
       )
     }
   }
-
-  @Test
-  fun consumeColdActionExactlyOnce() {
-    assertNotNull(ChillyChatNativeCallActionStore.consume(context))
-    assertNull(ChillyChatNativeCallActionStore.consume(context))
-  }
 }

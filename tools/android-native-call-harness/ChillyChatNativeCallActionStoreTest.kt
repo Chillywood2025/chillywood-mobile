@@ -77,6 +77,10 @@ class ChillyChatNativeCallActionStoreTest {
     ShadowSystemClock.advanceBy(Duration.ofSeconds(5))
     assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
     assertEquals(originalElapsed, preferences.getLong("created_elapsed_at", -1L))
+    ShadowSystemClock.advanceBy(Duration.ofSeconds(41))
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
+    assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
     assertNotNull(ChillyChatNativeCallActionStore.consume(context))
     assertFalse(ChillyChatNativeCallActionStore.capture(context, intent()))
   }

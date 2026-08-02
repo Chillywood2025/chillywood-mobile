@@ -6,11 +6,15 @@ import { spawnSync } from "node:child_process";
 import {
   assertBackupPolicyClear,
   assertCompleteScenarioMatrix,
+  assertNativeEntryPreflight,
   deterministicEvidenceDigest,
   evaluateBackupPolicy,
+  evaluateD1SourceCapabilityParity,
   evaluateScenarioMatrix,
   fixtureIds,
+  resolveDependencySet,
   runNegativeControls,
+  validateInstalledDirectPackageSet,
   validateSourceModel,
 } from "../../scripts/assurance/android-generated-native-lifecycle.mjs";
 
@@ -24,6 +28,7 @@ assert.equal(contract.target.platform, "android");
 assert.equal(contract.scopeWaiver.maximumChangedFiles, 20);
 assert.equal(contract.scopeWaiver.maximumNetLines, 2500);
 assert.equal(contract.scopeWaiver.productBehaviorChangesAllowed, false);
+assert.equal(contract.proofTiers.T1_SOURCE, "SOURCE_CLEAR_WITH_BLOCKING_PRODUCT_DEFECT");
 assert.equal(contract.scopeWaiver.file, "config/assurance/pr-d2a-scope-waiver-v1.json");
 assert.equal(contract.scopeWaiver.contractId, scopeWaiver.contractId);
 assert.equal(scopeWaiver.secondHighRiskDomain, false);
@@ -75,12 +80,42 @@ assert.equal(evaluateBackupPolicy({manifest: manifestWithRules, resources: {...r
 assert.equal(evaluateBackupPolicy({manifest: manifestWithRules, resources: {...ruleResources, "android/app/src/main/res/xml/data_extraction_rules.xml": '<data-extraction-rules><cloud-backup /></data-extraction-rules>'}}).clear, false);
 assert.equal(evaluateBackupPolicy({manifest: manifestWithRules, resources: {}}).missingReferencedResources.length, 2);
 assert.equal(evaluateBackupPolicy({manifest: '<manifest><application android:allowBackup="true" /></manifest>'}).clear, false);
+assert.equal(evaluateBackupPolicy({manifest: '<manifest><uses-sdk android:allowBackup="false"/><application android:allowBackup="true" /></manifest>'}).clear, false);
+assert.equal(evaluateBackupPolicy({manifest: '<manifest><!-- <application android:allowBackup="false"/> --><application android:allowBackup="true" /></manifest>'}).clear, false);
+assert.equal(evaluateBackupPolicy({manifest: '<manifest><!-- <application android:fullBackupContent="@xml/backup_rules" android:dataExtractionRules="@xml/data_extraction_rules"/> --><application android:allowBackup="true" /></manifest>', resources: ruleResources}).clear, false);
+assert.equal(evaluateBackupPolicy({manifest: manifestWithRules, resources: {...ruleResources,
+  "android/app/src/main/res/xml/backup_rules.xml": '<full-backup-content><!-- <exclude domain="sharedpref" path="chilly_chat_native_call_action_v1.xml" /> --></full-backup-content>'}}).clear, false);
+assert.equal(evaluateBackupPolicy({manifest: manifestWithRules, resources: {...ruleResources,
+  "android/app/src/main/res/xml/data_extraction_rules.xml": '<data-extraction-rules><cloud-backup><!-- <exclude domain="sharedpref" path="chilly_chat_native_call_action_v1.xml" /> --></cloud-backup><device-transfer><!-- <exclude domain="sharedpref" path="chilly_chat_native_call_action_v1.xml" /> --></device-transfer></data-extraction-rules>'}}).clear, false);
 assert.throws(() => assertBackupPolicyClear({clear: false}), (error) => error.code === "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING");
+
+const capabilityParity = evaluateD1SourceCapabilityParity();
+assert.equal(capabilityParity.required, contract.requiredCapabilities.length);
+assert.equal(capabilityParity.sourceProvided, contract.requiredCapabilities.length);
+assert.equal(capabilityParity.sourceMissing, 0);
+assert.equal(capabilityParity.derivation.independent, true);
+const registryFixture = JSON.parse(fs.readFileSync("config/assurance/native-capability-registry-v1.json", "utf8"));
+registryFixture.capabilities.find(({capabilityId}) => capabilityId === contract.requiredCapabilities[0]).providedBy[0].includes = ["__missing_capability_marker__"];
+assert.throws(() => evaluateD1SourceCapabilityParity({registry: registryFixture}), (error) => error.code === "ANDROID_D1_SOURCE_CAPABILITY_MISSING");
+const directPackageFixture = {dependencies: {alpha: "^1.0.0"}, devDependencies: {beta: "2.0.0"}};
+const directLockFixture = {packages: {"": {dependencies: {alpha: "^1.0.0"}, devDependencies: {beta: "2.0.0"}},
+  "node_modules/alpha": {version: "1.2.3"}, "node_modules/beta": {version: "2.0.0"}}};
+const installed = {alpha: {name: "alpha", version: "1.2.3"}, beta: {name: "beta", version: "2.0.0"}};
+assert.equal(validateInstalledDirectPackageSet({modules: "unused", packageJson: directPackageFixture, lock: directLockFixture, installedPackageReader: (name) => installed[name]}).versionsMatched, 2);
+assert.throws(() => validateInstalledDirectPackageSet({modules: "unused", packageJson: directPackageFixture, lock: directLockFixture,
+  installedPackageReader: (name) => name === "alpha" ? {name, version: "0.0.0"} : installed[name]}), (error) => error.code === "DEPENDENCY_INSTALLED_VERSION_MISMATCH");
+const dependencyEvidence = resolveDependencySet().evidence;
+assert.equal(dependencyEvidence.status, "EXACT_LOCKED_DIRECT_PACKAGE_IDENTITIES");
+assert.ok(dependencyEvidence.directPackageCount > 0);
+assert.equal(dependencyEvidence.directPackageCount, dependencyEvidence.versionsMatched);
+assert.equal(dependencyEvidence.pathsRecorded, false);
 
 const scenarioMatrix = evaluateScenarioMatrix();
 assert.equal(scenarioMatrix.complete, false);
-assert.deepEqual(scenarioMatrix.missing, ["BACKGROUND", "ACTIVITY_DESTROYED_PROCESS_ALIVE", "REACT_CONTEXT_UNAVAILABLE", "DECLINE", "EXPIRATION", "BACKUP_POLICY"]);
+assert.deepEqual(scenarioMatrix.missing, ["BACKGROUND", "ACTIVITY_DESTROYED_PROCESS_ALIVE", "PROCESS_COLD", "REACT_CONTEXT_UNAVAILABLE", "DECLINE", "EXPIRATION", "BACKUP_POLICY"]);
 assert.throws(() => assertCompleteScenarioMatrix(scenarioMatrix), (error) => error.code === "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE");
+assert.throws(() => assertNativeEntryPreflight(), (error) => error.code === "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING");
+assert.throws(() => assertNativeEntryPreflight({report: {...report, productDefects: []}}), (error) => error.code === "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE");
 const evidenceA = {gradle: {tasks: [{task: "compile", passed: true, durationMs: 1}]}, value: "same"};
 const evidenceB = {gradle: {tasks: [{task: "compile", passed: true, durationMs: 9999}]}, value: "same"};
 assert.equal(deterministicEvidenceDigest(evidenceA), deterministicEvidenceDigest(evidenceB));
@@ -117,12 +152,13 @@ assert.match(unitTemplate, /duplicateDoesNotExtendOriginalTtlAndReplayIsDenied/u
 const duplicateTest = unitTemplate.slice(unitTemplate.indexOf("fun duplicateDoesNotExtendOriginalTtlAndReplayIsDenied"), unitTemplate.indexOf("fun expiredActionIsDeletedAndDenied"));
 assert.ok(duplicateTest.indexOf("ShadowSystemClock.advanceBy") > duplicateTest.indexOf("originalElapsed"));
 assert.ok(duplicateTest.lastIndexOf("capture(context, intent())") > duplicateTest.indexOf("ShadowSystemClock.advanceBy"));
+assert.match(duplicateTest, /Duration\.ofSeconds\(41\)[\s\S]*assertNull\(ChillyChatNativeCallActionStore\.consume\(context\)\)/u);
 const consumeTest = unitTemplate.slice(unitTemplate.indexOf("fun consumeReturnsExactlyOnce"), unitTemplate.indexOf("fun concurrentConsumeHasOneWinner"));
 assert.match(consumeTest, /for \(field in listOf\("schema_version", "thread_id", "call_invite_id", "native_action", "request_key", "created_at", "created_elapsed_at"\)\)/u);
 assert.match(consumeTest, /assertFalse\("Pending field must be removed after consume: \$field", preferences\.contains\(field\)\)/u);
 assert.match(instrumentationTemplate, /verifyExternallyLaunchedActionWasNotPersisted/u);
 assert.match(instrumentationTemplate, /An external custom-scheme launch must not establish trusted native call action state/u);
-const externalTest = instrumentationTemplate.slice(instrumentationTemplate.indexOf("fun verifyExternallyLaunchedActionWasNotPersisted"), instrumentationTemplate.indexOf("fun consumeColdActionExactlyOnce"));
+const externalTest = instrumentationTemplate.slice(instrumentationTemplate.indexOf("fun verifyExternallyLaunchedActionWasNotPersisted"));
 assert.ok(externalTest.indexOf("Intent.ACTION_VIEW") >= 0);
 assert.ok(externalTest.indexOf("chillywoodmobile://chat/") > externalTest.indexOf("Intent.ACTION_VIEW"));
 assert.ok(externalTest.indexOf("ActivityScenario.launch<MainActivity>(externalIntent)") > externalTest.indexOf("chillywoodmobile://chat/"));
@@ -131,6 +167,9 @@ assert.ok(externalTest.indexOf("readStatus(context)") > externalTest.indexOf("wa
 assert.ok(runner.indexOf("if (!generation.backupPolicy.clear)") < runner.indexOf("generateOnce({ retain: true })"));
 assert.ok(runner.indexOf("ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING") < runner.indexOf("gradleEvidence(generated)"));
 assert.match(runner, /ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE/u);
+assert.doesNotMatch(instrumentationTemplate, /fun consumeColdActionExactlyOnce/u);
+assert.ok(runner.indexOf("assertCompleteScenarioMatrix(scenarioMatrix)") < runner.indexOf("const passingMethods"));
+assert.ok(runner.indexOf("assertNativeEntryPreflight();") < runner.indexOf("const generated = generateOnce({retain: true})"));
 assert.match(runner, /ANDROID_EMULATOR_PACKAGE_PREEXISTED/u);
 assert.match(runner, /cleanupSelectedEmulator\(installState\)/u);
 assert.doesNotMatch(runner, /const cleanupEmulator/u);
@@ -139,6 +178,8 @@ assert.doesNotMatch(runner, /\["install", "-r"/u);
 assert.match(runner, /if \(!state\.installedTest && !state\.installedApp\) return \{attempted: false, verified: true\}/u);
 assert.match(runner, /if \(state\.installedTest\)[\s\S]{0,180}\["uninstall", state\.testPackage\]/u);
 assert.match(runner, /if \(state\.installedApp\)[\s\S]{0,180}\["uninstall", state\.appPackage\]/u);
+assert.match(runner, /installedApp = appInstall\.status === 0[\s\S]{0,150}packagePresent/u);
+assert.match(runner, /installedTest = testInstall\.status === 0[\s\S]{0,150}packagePresent/u);
 assert.equal(report.classification, "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT");
 assert.equal(report.generatedSource.runs, "3/3");
 assert.equal(report.generatedSource.observedDigest, contract.target.d1GeneratedSourceDigest);
@@ -159,4 +200,4 @@ assert.equal(report.nonInterference.providerContact, false);
 assert.equal(report.cleanup.disposableProjectsRemoved, true);
 assert.equal(report.cleanup.debugOrTestApksRetained, false);
 
-console.log("android generated-native lifecycle source/model tests passed (hardened contract/report assertions; source 17/17; negative controls 12/12; CLI fail-closed 14/14; backup fixtures 8/8).");
+console.log("android generated-native lifecycle source/model tests passed (hardened contract/report assertions; source 17/17; negative controls 12/12; CLI fail-closed 14/14; backup fixtures 13/13; capability and dependency identities fail closed).");
