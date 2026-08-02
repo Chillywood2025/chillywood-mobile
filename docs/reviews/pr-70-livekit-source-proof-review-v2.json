@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-70-livekit-source-proof-review-v2",
+  "reviewType": "isolated-automated-review-lane",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "immutableSourceHead": "3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73",
+  "synchronizedBranchHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+  "currentBase": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+  "synchronizedTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "canonicalSyntheticTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "sourceDeltaHash": "553172beaff237585272979db17e4ec36ed61f875a622cc1c6177dbfcc433f46",
+  "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+  "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+  "implementationTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "baseHead": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+  "configHash": "1261812056afb1d7fd982c9a43bc36d9b3ee27cfe41cd18adb116f14e58f5d9d",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "source-identity-and-invariants",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "databaseContact": false,
+      "providerContact": false
+    },
+    "baseSynchronization": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "immutableSourceIsFirstParent": true,
+      "currentBaseIsSecondParent": true,
+      "canonicalTreeMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedFileSetEquivalent": true
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 10,
+      "additions": 2517,
+      "deletions": 17,
+      "netChangedLines": 2500,
+      "approvedScope": "LiveKit/database source-binding",
+      "scopeWaiver": "pr-b1-livekit-source-cross-binding-scope-waiver-v1"
+    },
+    "sourceIdentityAndInvariants": {
+      "status": "pass",
+      "preflightFinalSourceCommitBound": true,
+      "preflightFinalSourceTreeBound": true,
+      "authorizationReceiptTupleBound": true,
+      "finalizationAuthorizationReceiptTupleBound": true,
+      "sourceBuildHashBound": true,
+      "runtimeIdentityHashBound": true,
+      "internalUpdateIdBound": true,
+      "installedArtifactHashBound": true,
+      "androidIosIdentitySeparation": true,
+      "parentAndDivergedSourceDenied": true,
+      "staleReceiptDenied": true,
+      "authorizationReplayDenied": true,
+      "enabledOutcomeReplayDenied": true,
+      "validExactAndroidAccepted": true,
+      "validExactIosAccepted": true,
+      "proofSubstitutionAccepted": false
+    },
+    "deployedMigrationImmutability": {
+      "status": "pass",
+      "deployedVersion": "20260730142519",
+      "deployedSourceSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "successorVersion": "20260730230022",
+      "successorSourceSha256": "9408ac9896751a4f4ad798ad2644e805e2c42a10c374e24667c66aa624701011",
+      "forwardOnly": true,
+      "migrationAppliedByReviewLane": false
+    },
+    "focusedSourceContract": {
+      "status": "pass",
+      "command": "node --test tests/assurance/reconciliation/livekit-final-source-identity-cross-binding.test.mjs",
+      "passed": 4,
+      "failed": 0,
+      "databaseContact": false
+    },
+    "migrationReadbackGuard": {
+      "status": "pass",
+      "command": "npm run guard:chilly-chat-livekit-migration-readback"
+    },
+    "assuranceContracts": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "localBehavioralEvidence": {
+      "status": "pass_recorded_at_exact_immutable_source",
+      "rerunByThisReviewLane": false,
+      "pgTapPassed": 28,
+      "pgTapFailed": 0,
+      "concurrencyPassed": 19,
+      "concurrencyFailed": 0,
+      "proofBoundary": "T3 sanitized local database integration only"
+    },
+    "proofTierHonesty": {
+      "status": "pass",
+      "t1Source": "SOURCE_CLEAR",
+      "t3LocalIntegration": "INTEGRATION_CLEAR",
+      "t4ProviderNativeClaimed": false,
+      "t5SignedArtifactClaimed": false,
+      "t6InstalledPhysicalClaimed": false,
+      "t7PublicCanaryClaimed": false
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending_after_current_reviews",
+      "implementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+      "eligibleAsThisLaneProof": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "providerMutation": false,
+      "databaseMutationByReviewLane": false,
+      "migrationDeployment": false,
+      "switchOrScheduleChanged": false,
+      "buildOrOta": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false
+    },
+    "gitDiffCheck": "pass"
+  },
+  "testResultHash": "87405b760fca64c26c4688ac295284da812ab2e67d7803858f3d67cc47f8ab24",
+  "reviewLevel": "C",
+  "reviewHead": "73112b3c9a014f843b63d886c9b03cf14cce0df0",
+  "reviewTimestamp": "2026-08-02T00:54:20Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-source-identity-and-invariants",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "findings": [
+    {
+      "id": "LIVEKIT_FINAL_SOURCE_IDENTITY_CROSS_BINDING_MISSING",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The forward-only 20260730230022 successor joins finalization to the immutable authorization and receipt tuple and the exact per-platform source, tree, update, runtime, artifact, source-build, and runtime-identity fields; the deployed predecessor remains byte-identical."
+    },
+    {
+      "id": "LIVEKIT_T3_MATERIALIZATION_PROOF_SUBSTITUTION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Exact-head local behavioral evidence records 28/28 pgTAP and 19/19 concurrency with positive Android/iOS witnesses and negative stale, mismatched, cross-platform, and replay witnesses. This lane verified the non-vacuous checked-in fixtures without reusing source introspection as database execution."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "historicalEvidencePreserved": true,
+    "implementationFilesOnReviewBranch": 0,
+    "reviewDisposition": "clear-source-identity-and-invariants-pending-coordinator-full-ci",
+    "mergePermitted": false
+  }
+}
