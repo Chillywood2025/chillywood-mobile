@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-artifact-rollback-proof-strength-review-v5",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH_REVIEW_HASH_CORRECTION",
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "implementationTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "baseHead": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseTree": "37ca0beab2536600301532df9f46b7154fc33fa0",
+  "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a8953b3ee5d856490a461e367729492d1bcf5d799748251e03c565601a4ececa",
+  "reviewLevel": "C",
+  "reviewHead": "42eb2d27c4edcd19be6f185193a6e92d0c1a266c",
+  "reviewTree": "2cf6b4b6c59c6421da253b4bc1aa85ec5034010d",
+  "reviewTimestamp": "2026-08-02T09:59:10Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "lane": "ARTIFACT_ROLLBACK_PROOF_STRENGTH",
+  "priorEvidence": [
+    {
+      "version": "v1",
+      "sha256": "6f194aa8c5146ff578611e2d684b55d433612565f316d1465478fa86fcc6af68"
+    },
+    {
+      "version": "v2",
+      "sha256": "d14503c0bd53df3e214981d394ed17f41167ffe48857bb1cb43727dcf3c794e4"
+    },
+    {
+      "version": "v3",
+      "sha256": "61ea4964de9a0641a3585747abe3b547e06b5132dc25f40118b6630459a086b1"
+    },
+    {
+      "version": "v4",
+      "sha256": "88be9b04f3c1282339bfa088222cac57a82b219f6515ee1cc49e056da053d234"
+    }
+  ],
+  "baseSynchronization": {
+    "status": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+    "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+    "firstParent": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+    "secondParentMain": "12985e2ad505ca813611c64b793345f069dc5515",
+    "canonicalTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+    "sourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+    "sourceDeltaHashAlgorithm": "SHA256_GIT_HELPER_TRIMMED_GIT_DIFF_BINARY",
+    "rawGitDiffWithTerminalNewlineArtifactHash": "cb9c89c217f960f75befd86c5a3d02a732246cab2354e12bed4de1bad4bc5c75",
+    "rawGitDiffWithTerminalNewlineArtifactHashAlgorithm": "SHA256_RAW_GIT_DIFF_BINARY_WITH_TERMINAL_NEWLINE",
+    "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+    "sourceByteEquivalentToImmutableHead": true,
+    "sourcePathCount": 6
+  },
+  "reviewResult": {
+    "capabilityClosure": {
+      "android-chat-livekit-qa-build-86": "21/21",
+      "ios-qa-build-8": "26/26",
+      "android-production-build-84-current-replay": "21/21",
+      "missingCapabilities": 0
+    },
+    "signedIdentities": "3/3_HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED",
+    "historicalBuild84Source": "8c426f4e74de61de7d4529d32d124744833912dc",
+    "historicalArtifactEquivalentToCurrentReplay": false,
+    "rollback": "3/3_INCOMPATIBLE_AND_REJECTED",
+    "proofSubstitution": {
+      "providerClaim": false,
+      "signedArtifactClaim": false,
+      "installedPhysicalClaim": false,
+      "publicCanaryClaim": false
+    },
+    "proofTiers": {
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+      "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "mayProceed": {
+      "nativeCompilation": false,
+      "signedArtifactInspection": false,
+      "updatePublication": false,
+      "release": false
+    },
+    "p0": 0,
+    "p1": 0
+  },
+  "testResults": {
+    "coordinatorPostSyncFocused": {
+      "status": "pass",
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "24/24",
+      "heavyGenerationRerunByThisLane": false
+    },
+    "phase1CiCanceledBeforeReview": {
+      "runId": 30742530172,
+      "attempt": 1,
+      "status": "canceled",
+      "acceptedAsProof": false
+    },
+    "phase1Ci": {
+      "status": "pending",
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "reason": "Exact post-review rerun is pending"
+    }
+  },
+  "testResultHash": "d5d0a5e4d4e1287cc323503ad3e944b32c642a802b5cf3427d9b893703cec7bb",
+  "findings": [
+    {
+      "id": "PRD1-LATER-T3-INTEGRATION",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-D2-D3"
+    },
+    {
+      "id": "PRD1-LATER-T4-T6-CURRENT-PROOF",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "later-owner-authorized-native-provider-artifact-lanes"
+    },
+    {
+      "id": "PRD1-LATER-T7-PUBLIC-CANARY",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-F-or-later-explicit-release-authorization"
+    }
+  ],
+  "formalGuardExpectation": {
+    "status": "BLOCKED_PENDING_PHASE1_CI_ONLY",
+    "mergePermitted": false
+  },
+  "nonInterference": {
+    "implementationChanged": false,
+    "providerContact": false,
+    "build": false,
+    "ota": false,
+    "install": false,
+    "release": false,
+    "reviewOnlyNeverMerge": true
+  }
+}
