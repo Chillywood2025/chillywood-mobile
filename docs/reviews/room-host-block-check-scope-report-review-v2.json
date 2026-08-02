@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "room-host-block-check-scope-report-review-v2",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "humanApproval": false,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 75,
+  "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
+  "immutableSourceHead": "a24efd543c5f19290879e7089c1c57768bc03a4d",
+  "immutableSourceTree": "7e473537accb4b2fd9a7ac1c6097ed46fa562a53",
+  "synchronizedBranchHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "currentBase": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "baseHead": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "synchronizedTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "implementationTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "canonicalSyntheticTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "synchronizationParents": [
+    "a24efd543c5f19290879e7089c1c57768bc03a4d",
+    "da89d88adb929e8cd9718b31227f79bf243c2395"
+  ],
+  "sourceDeltaHash": "8446093a0e5ff054558f7a8bcbaf73e456d612a76a4a736e36ab011d35db7efb",
+  "changedFileHash": "6712e28d6225c1ae597be763f14fc903c0f2d625b352c3385e9fcc14a7469a73",
+  "migrationSetHash": "93151ccc267c571e4120e5461d4b6b0bd7881ca7f95f61019107122f3e22d882",
+  "configHash": "22cad5f2dead2e6d2b52332d8541f39ea644aee340263066d39c3e59dc21e783",
+  "scopeStatus": "pass",
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "architecture-state",
+      "focus": "one database/RLS room-host authorization domain, exact scope-waiver accounting, caller and non-interference review, proof-tier honesty, current-truth binding, and canonical base synchronization",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "humanApproval": false
+    },
+    "pullRequestIdentity": {
+      "status": "pass",
+      "number": 75,
+      "branch": "codex/assurance-reconcile-room-host-block-check",
+      "immutableSourceHead": "a24efd543c5f19290879e7089c1c57768bc03a4d",
+      "immutableSourceTree": "7e473537accb4b2fd9a7ac1c6097ed46fa562a53",
+      "synchronizedHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "synchronizedTree": "2405577c7215140a3d731bff7b53012997a4d635",
+      "baseHead": "da89d88adb929e8cd9718b31227f79bf243c2395"
+    },
+    "historicalEvidence": {
+      "status": "pass",
+      "preservedFile": "docs/reviews/room-host-block-check-scope-report-review.json",
+      "preservedRawSha256": "5584ab1ad9a0d6a4970aaf1d22233b88b16f6d9882341759705a7230300da288",
+      "preservedReviewedHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+      "successorEvidenceIsAdditive": true
+    },
+    "currentTruthBinding": {
+      "status": "pass_immutable_source_binding",
+      "implementationPr": 75,
+      "bindingPullRequest": 140,
+      "bindingSourceCommit": "4a3ccafe3416c71338627c4f0fe05209c2243460",
+      "bindingMergeCommit": "da89d88adb929e8cd9718b31227f79bf243c2395",
+      "bindingMergeTree": "ae8dff2ac8e42339e1a99eaf7be92606b04174ae",
+      "bindingMergeParents": [
+        "483175fc1b3784fdc4db670c1aea2311d5d80e4f",
+        "4a3ccafe3416c71338627c4f0fe05209c2243460"
+      ],
+      "bindingScope": [
+        "config/assurance/current-truth-v1.json",
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md"
+      ],
+      "recordedImmutableSourceHead": "a24efd543c5f19290879e7089c1c57768bc03a4d",
+      "recordedImmutableSourceTree": "7e473537accb4b2fd9a7ac1c6097ed46fa562a53",
+      "recordedSourceDeltaSha256": "fb8477cdc5f09b16e20b887c6e85df2b00849304212e6b34222b550287c2acb2",
+      "recordedChangedFileSha256": "c9d6856c16e149b9ee118f8204f0ca9e21e8328deecde66b9e6cc36d75faa12a",
+      "recordedMigrationSetSha256": "57b02a157ad0a58830d080928ab9812b3b72777420ead3dba895d7fcfd693003",
+      "recordedTestResultSha256": "f8674a8be1773e6ba7dbcd982ab4f26653f203b372bf7b43ec8eba52e586cab5",
+      "recordedCurrentTruthFileSha256": "7f2f3eaf261ab947b14e885ff960f31e67c26ae114ec8b28ef461e42c633dae4",
+      "synchronizedHeadBinding": "accepted only through the guard-recognized normal base-synchronization evidence in this successor review; the immutable-source record is intentionally not rewritten by this review lane",
+      "preEvidenceGuardState": "expected_fail_closed_until_at_least_one_fresh_base_sync_review_manifest_is_pushed"
+    },
+    "baseSynchronization": {
+      "status": "pass",
+      "method": "normal-history-preserving-no-ff-merge",
+      "immutableSourceIsAncestor": true,
+      "firstParentDistance": 1,
+      "parents": [
+        "a24efd543c5f19290879e7089c1c57768bc03a4d",
+        "da89d88adb929e8cd9718b31227f79bf243c2395"
+      ],
+      "firstParentExact": true,
+      "secondParentExact": true,
+      "mergeConflict": false,
+      "observedTree": "2405577c7215140a3d731bff7b53012997a4d635",
+      "canonicalSyntheticTree": "2405577c7215140a3d731bff7b53012997a4d635",
+      "treeEquivalent": true,
+      "sourceDeltaHashAlgorithm": "sha256-of-trimmed-git-diff-binary-no-renames-currentBase-to-synchronizedHead",
+      "sourceDeltaHash": "8446093a0e5ff054558f7a8bcbaf73e456d612a76a4a736e36ab011d35db7efb",
+      "changedFileHashAlgorithm": "sha256-of-trimmed-git-diff-name-status-z-no-renames-currentBase-to-synchronizedHead",
+      "changedFileHash": "6712e28d6225c1ae597be763f14fc903c0f2d625b352c3385e9fcc14a7469a73",
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true
+    },
+    "scope": {
+      "status": "pass",
+      "waiver": "config/assurance/pr-b3-room-host-authorization-scope-waiver-v1.json",
+      "objectiveDomain": "database/RLS room-host participant block-check authorization",
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "supportingDomains": [
+        "CI-test-infrastructure",
+        "documentation-metadata"
+      ],
+      "secondHighRiskDomain": false,
+      "logicalFiles": 7,
+      "guardPathsWithRenameDetectionDisabled": 8,
+      "waivedMaximumFiles": 8,
+      "additions": 2123,
+      "deletions": 1,
+      "netChangedLines": 2122,
+      "waivedMaximumNetLines": 2400,
+      "withinWaiver": true,
+      "logicalChangedPaths": [
+        "config/assurance/pr-b3-room-host-authorization-scope-waiver-v1.json",
+        "docs/assurance/reconciliation/b3-room-host-block-check.json",
+        "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql -> supabase/migrations/20260730161737_allow_room_host_participant_block_check.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql",
+        "supabase/tests/room_host_participant_block_check_test.sql",
+        "supabase/tests/watch_party_room_host_block_check_test.sql",
+        "tests/assurance/reconciliation/room-host-source-parity.test.mjs"
+      ],
+      "prohibitedImplementationPaths": [],
+      "applicationProductSourceChanged": false,
+      "nativeOrGeneratedSourceChanged": false,
+      "packageOrLockfileChanged": false,
+      "workflowChanged": false,
+      "currentTruthFilesChangedByImplementation": false
+    },
+    "migrationIdentity": {
+      "status": "pass",
+      "deployedPredecessor": {
+        "version": "20260730161737",
+        "name": "allow_room_host_participant_block_check",
+        "rawSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+        "classification": "REMOTE_AND_SOURCE_MATCH",
+        "rewritten": false
+      },
+      "removedCandidate": {
+        "version": "20260725224000",
+        "classificationBeforeRemoval": "SOURCE_ONLY",
+        "sourcePresentAtSynchronizedHead": false,
+        "remotePresent": false
+      },
+      "forwardCorrection": {
+        "version": "20260730230031",
+        "name": "room_host_block_check_fail_closed_authority",
+        "rawSha256": "0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38",
+        "classification": "SOURCE_ONLY_FORWARD_CORRECTION",
+        "deployed": false
+      }
+    },
+    "callerAudit": {
+      "status": "pass",
+      "directCurrentDatabaseCallSites": 3,
+      "directExternalRpcCallersFound": 0,
+      "edgeFunctionDirectFunctionCallersFound": 0,
+      "callSites": [
+        {
+          "caller": "watch_party_room_memberships_self_insert_policy",
+          "kind": "RLS-with-check",
+          "effectiveContext": "authenticated JWT with nonnull auth.uid and actor argument fixed to auth.uid",
+          "expectedResult": "self block check succeeds; blocked self is denied membership; cross-user and anon inserts remain denied by RLS",
+          "preserved": true
+        },
+        {
+          "caller": "enforce_watch_party_room_membership_block_guard",
+          "kind": "before-insert-or-update-trigger",
+          "effectiveContext": "original PostgREST SET ROLE plus full JWT claims remain visible through the SECURITY DEFINER trigger; authenticated self, exact host, or explicit service_role only",
+          "expectedResult": "active and reconnecting membership writes remain block-enforced and exact-room scoped",
+          "preserved": true
+        },
+        {
+          "caller": "enforce_watch_party_room_messages_abuse_guard",
+          "kind": "before-insert-trigger",
+          "effectiveContext": "authenticated self message writer or explicit service_role backend context",
+          "expectedResult": "ordinary messages and durable seat-request markers remain block-enforced before rate limiting",
+          "preserved": true
+        }
+      ],
+      "applicationAndBackendPaths": [
+        {
+          "surface": "Watch-Party waiting room, Party Room, and Live Stage join/reconnect",
+          "path": "_lib/watchParty.ts upsertMembership",
+          "databasePath": "membership RLS plus membership block trigger",
+          "authority": "authenticated self"
+        },
+        {
+          "surface": "room chat and seat-request marker",
+          "path": "_lib/watchParty.ts sendPartyMessageRecord",
+          "databasePath": "message RLS plus message abuse/block trigger",
+          "authority": "authenticated self"
+        },
+        {
+          "surface": "host Live Stage moderation membership update",
+          "path": "supabase/functions/livekit-token/index.ts adminClient membership update",
+          "databasePath": "membership block trigger",
+          "authority": "explicit service_role PostgREST role and full service-role JWT"
+        },
+        {
+          "surface": "local and separately authorized proof fixtures",
+          "path": "scripts using authenticated clients or admin service clients",
+          "databasePath": "membership/message policies and triggers",
+          "authority": "authenticated self or explicit service_role; direct postgres no-JWT is not an accepted substitute"
+        }
+      ],
+      "readOnlyNonCallers": [
+        "LiveKit membership reads",
+        "media-storage message existence reads",
+        "Realtime membership and message subscriptions"
+      ],
+      "newInternalWrapperRequired": false
+    },
+    "authorizationAndAclNonInterference": {
+      "status": "pass",
+      "authenticatedSelfPreserved": true,
+      "exactRoomHostPreserved": true,
+      "hostOfOtherRoomDenied": true,
+      "unrelatedAuthenticatedDenied": true,
+      "anonDenied": true,
+      "nullAuthDenied": true,
+      "nullAuthNotInferredAsServiceRole": true,
+      "serviceRoleContract": "invoker database role and signed full-claims request role must both equal service_role",
+      "directPostgresNoJwtDenied": true,
+      "genericDenialClassPreservesRoomAndActorSecrecy": true,
+      "searchPath": "",
+      "allMutableObjectsSchemaQualified": true,
+      "finalExplicitNonOwnerExecuteGrantees": [
+        "authenticated",
+        "service_role"
+      ],
+      "membershipEnforcementPreserved": true,
+      "messageEnforcementPreserved": true,
+      "waitingRoomEnforcementPreserved": true,
+      "seatRequestEnforcementPreserved": true,
+      "exactRoomScopePreserved": true
+    },
+    "productNonInterference": {
+      "status": "pass",
+      "liveKitPublicationAuthorityChanged": false,
+      "liveKitTokenOrProviderSourceChanged": false,
+      "premiumOrContentAccessSemanticsChanged": false,
+      "moneyRevenueCatOrEntitlementSemanticsChanged": false,
+      "moderationRankingUserRoleOrRoomOwnershipChanged": false,
+      "nativePluginBuildOrOtaChanged": false,
+      "packageOrWorkflowChanged": false,
+      "roomMembershipMessageOrBlockRowsChangedRemotely": false,
+      "providerStateChanged": false
+    },
+    "proofTierStatus": {
+      "status": "pass_scoped_and_honest",
+      "scope": "B3 source reconciliation and undeployed forward correction only",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "INTEGRATION_CLEAR_LOCAL_ONLY",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE_TO_B3_PR",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE_TO_B3_PR",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE_TO_B3_PR",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE_TO_B3_PR",
+      "wholeFeatureWatchPartyHigherTierRequirementsWaived": false,
+      "wholeFeatureInstalledOrProviderClaimMade": false,
+      "deploymentClaimMade": false,
+      "sourceInspectionSubstitutedForDatabaseAuthorization": false,
+      "localIntegrationSubstitutedForDeployment": false
+    },
+    "sourceAndLocalEvidence": {
+      "status": "pass_preserved_coordinator_evidence",
+      "reviewLaneReranDatabase": false,
+      "sourceAssertions": "14/14",
+      "sourceRuns": 3,
+      "sourceRunsIdentical": true,
+      "sourceOutputSha256": "656362fab7149b791b9940333bce3c500437d55bfa584cc1f50b747288c722b0",
+      "positiveAuthorizationModelCases": "11/11",
+      "negativeControls": "8/8",
+      "focusedLocalPgTap": "48/48",
+      "compatibilityLocalPgTap": "4/4",
+      "localPersistentMutation": false,
+      "testResultSha256": "f8674a8be1773e6ba7dbcd982ab4f26653f203b372bf7b43ec8eba52e586cab5"
+    },
+    "linkedNoApplyEvidence": {
+      "status": "pass_preserved_not_rerun_by_this_lane",
+      "classification": "PASS_NO_APPLY",
+      "assembledHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "pendingMigrations": [
+        "20260730170000_revenuecat_transfer_authoritative_ordering",
+        "20260730230022_cognitive_livekit_final_source_identity_cross_binding",
+        "20260730230031_room_host_block_check_fail_closed_authority"
+      ],
+      "applyOccurred": false,
+      "deploymentClaimMade": false,
+      "providerMutationClaimMade": false,
+      "scopeNote": "This lane reviewed the preserved no-apply record for proof honesty; database parity lane #77 owns final synchronized-head planning acceptance."
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_owned_after_all_four_reviews",
+      "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "eligibleAsReviewLaneProof": false,
+      "sourceDefectInferredFromPendingCi": false
+    },
+    "staticChecks": {
+      "status": "pass",
+      "contracts": "13/13",
+      "features": 20,
+      "escapedDefects": 25,
+      "supabaseMigrationsRlsPlan": "REQUIREMENTS_CLEAR/ARCHITECTURE_CLEAR",
+      "watchPartyLivePlan": "REQUIREMENTS_CLEAR/ARCHITECTURE_CLEAR",
+      "sourceGuardRuns": "3/3",
+      "sourceAssertionsPerRun": "14/14",
+      "jsonParse": "3/3",
+      "gitDiffCheck": "pass",
+      "prohibitedImplementationPathScan": "pass",
+      "correctionNonInterferenceTermScan": "pass",
+      "denoLockStatus": "untracked-and-unstaged",
+      "databaseTestsRunByReview": false,
+      "remoteReadbackRunByReview": false,
+      "providerContact": false,
+      "fullCiRunByReview": false
+    },
+    "reviewContractHashes": {
+      "guardNoRenamesChangedFileHash": "6712e28d6225c1ae597be763f14fc903c0f2d625b352c3385e9fcc14a7469a73",
+      "genericReviewHeadRenameAwareChangedFileHash": "e4d65c9275075dfbc8a190f075da701392ca2b97637a845831476003b60b1c17",
+      "renameAwareMigrationSetHash": "93151ccc267c571e4120e5461d4b6b0bd7881ca7f95f61019107122f3e22d882",
+      "noRenamesMigrationSetHash": "3cb26539d0b8dd57b32dba8b838703d01b8b40d0fd48c3a95276a5f8574c16bd",
+      "configTreeHash": "22cad5f2dead2e6d2b52332d8541f39ea644aee340263066d39c3e59dc21e783",
+      "reasonForTopLevelChangedFileHash": "The current-truth base-synchronization guard requires the --no-renames hash so the removed SOURCE_ONLY path and exact deployed path remain independently visible."
+    },
+    "nonInterference": {
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "databaseResetByReview": false,
+      "remoteReadbackByReview": false,
+      "buildOrOta": false,
+      "publicRelease": false,
+      "moneyEntitlementRightsRolesOrModerationStateChanged": false,
+      "switchOrScheduleChanged": false,
+      "liveKitActivationResumed": false,
+      "unrelatedProductSourceChanged": false,
+      "implementationFilesEditedByReview": false,
+      "historicalReviewEvidenceEdited": false,
+      "privateEvidenceCommitted": false,
+      "denoLockStaged": false
+    }
+  },
+  "testResultHash": "86dae26450e7a4d5dbf45c3e3944533dd321c1d719a03e2b62bf11f7b00e3ab2",
+  "reviewLevel": "C",
+  "reviewHead": "025e83e5ad4a8a5acd9c7c4fe1f9e33eab4b2fe1",
+  "reviewRef": "codex/assurance-reconcile-room-host-block-check-review-scope-report",
+  "reviewRefHead": "025e83e5ad4a8a5acd9c7c4fe1f9e33eab4b2fe1",
+  "reviewTimestamp": "2026-08-02T06:20:23Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-3-architecture-scope-proof-strength",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The confirmed SOURCE_ONLY 20260725224000 candidate is absent, the deployed 20260730161737 body remains exact, and the preserved assembled successor dry-run reports exactly the B1, B2, and B3 forward corrections with no apply."
+    },
+    {
+      "id": "B3_RECONCILIATION_REPORT_NOT_EXACT_HEAD_BOUND",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Current-truth PR #140 binds immutable B3 source a24efd543c5f19290879e7089c1c57768bc03a4d and its evidence hashes; this review binds the canonical synchronized successor 463c9160c403e466555702e1c9cc4cd4a8a53cc9 without creating a self-referential implementation edit."
+    },
+    {
+      "id": "B3_REMOTE_EVIDENCE_AND_NORMALIZER_LINEAGE_AMBIGUOUS",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The successor reconciliation distinguishes raw, repository-normalized, and lower-whitespace hashes and records the preserved read-only ledger classification for both predecessor versions."
+    },
+    {
+      "id": "B3_FEATURE_TIER_APPLICABILITY_UNSCOPED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The successor report scopes T1 through T3 to the B3 database/RLS correction, makes T3 local-only, and explicitly makes no T4 through T7 provider, artifact, installed, deployment, or public-canary claim."
+    }
+  ],
+  "summary": {
+    "status": "pass",
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0,
+    "mergeAuthorizedByThisReview": false,
+    "reviewPrMustRemainUnmerged": true,
+    "exactNextAction": "Coordinator pushes this additive review evidence, collects the other three exact synchronized-head Level C lanes, then runs the one frozen-head Phase 1 CI. Do not deploy B3."
+  }
+}
