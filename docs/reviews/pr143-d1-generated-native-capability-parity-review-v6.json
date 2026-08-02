@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-generated-native-capability-parity-review-v6",
+  "reviewVersion": 6,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "generated-native-source-and-required-provided-capability-parity",
+  "reviewLevel": "C",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "historicalEvidencePreserved": ["v1", "v2", "v3", "v4", "v5"],
+  "priorEvidenceState": "historical-pre-final-ci-binding",
+  "humanApproval": false,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "synchronizedBranchHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "currentBase": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseHead": "12985e2ad505ca813611c64b793345f069dc5515",
+  "synchronizedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "implementationTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "canonicalSyntheticTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "sourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+  "sourceDeltaHashMethod": "sha256(git-helper-trimmed git diff --binary --no-renames currentBase synchronizedBranchHead)",
+  "rawSourceDeltaArtifactHash": "cb9c89c217f960f75befd86c5a3d02a732246cab2354e12bed4de1bad4bc5c75",
+  "rawSourceDeltaArtifactHashMethod": "sha256(raw git diff --binary --no-renames currentBase synchronizedBranchHead including terminal newline)",
+  "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+  "changedFileHashMethod": "sha256(git-helper-trimmed git diff --name-status -z --no-renames currentBase synchronizedBranchHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a8953b3ee5d856490a461e367729492d1bcf5d799748251e03c565601a4ececa",
+  "testResultHash": "7dac4368bf3a551f52b119855bb4cd0a4b5853c182fed80a16a1749a95d1b5c9",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewRef": "codex/first-pass-assurance-pr-d1-review-generated-native-capability",
+  "reviewRefHead": "2d30f6d9c84f02b5ff2390b7e6e6a9b60f2f57fd",
+  "reviewHead": "2d30f6d9c84f02b5ff2390b7e6e6a9b60f2f57fd",
+  "reviewTimestamp": "2026-08-02T10:07:15Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-generated-native-and-capability-parity",
+    "additive-v6-final-ci-bound",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 2},
+  "testResults": {
+    "exactSynchronization": {
+      "status": "pass",
+      "sourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "synchronizedHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "parents": [
+        "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+        "12985e2ad505ca813611c64b793345f069dc5515"
+      ],
+      "canonicalTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true
+    },
+    "hashSemantics": {
+      "status": "pass",
+      "guardConsumedTrimmedSourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+      "rawTerminalNewlineArtifactHash": "cb9c89c217f960f75befd86c5a3d02a732246cab2354e12bed4de1bad4bc5c75",
+      "algorithmsExplicitlySeparated": true
+    },
+    "postSynchronizationFocusedTests": {
+      "status": "pass",
+      "provenance": "COORDINATOR_EXACT_POST_SYNCHRONIZATION_OFFLINE_TEST_RESULT",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "24/24"
+    },
+    "directImportClosure": {
+      "status": "pass",
+      "fiveGrammars": true,
+      "discovered": 42,
+      "nativeMapped": 34,
+      "reviewedJsOnly": 8,
+      "unclassified": 0
+    },
+    "targetCapabilityParity": {
+      "status": "pass",
+      "androidChatLivekitQaBuild86": "21/21",
+      "iosQaBuild8": "26/26",
+      "androidProductionBuild84HistoricalCurrentReplay": "21/21",
+      "missingCapabilities": 0
+    },
+    "phase1Ci": {
+      "status": "pass",
+      "runId": 30742530172,
+      "attempt": 2,
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "workflowStatus": "completed",
+      "conclusion": "success",
+      "jobsPassed": 13,
+      "jobsTotal": 13,
+      "completedAt": "2026-08-02T10:06:28Z",
+      "providerReadback": "GITHUB_ACTIONS_READ_ONLY"
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationEditedByReviewer": false,
+      "providerMutation": false,
+      "buildPerformed": false,
+      "otaPublished": false,
+      "artifactInstalled": false,
+      "reviewOnlyPrMergePermitted": false
+    }
+  },
+  "findings": [
+    {"id": "PRD1_REQUIRED_CAPABILITY_CATALOG_NOT_CLOSED", "severity": "P1", "status": "resolved"},
+    {"id": "PRD1_GENERATED_PROVIDED_EVIDENCE_INCOMPLETE", "severity": "P1", "status": "resolved"},
+    {"id": "PRD1_HISTORICAL_TARGET_DIGEST_SOURCE_CROSS_BOUND", "severity": "P1", "status": "resolved"},
+    {
+      "id": "PRD2_ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-ANDROID-GENERATED-NATIVE-LIFECYCLE-INSTRUMENTATION"
+    },
+    {
+      "id": "PRD2_IOS_NATIVE_CALL_XCTEST_GENERATED_PLUGIN_CONTRACT",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-IOS-NATIVE-CALL-XCTEST-GENERATED-PLUGIN-CONTRACT"
+    }
+  ],
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2,
+    "mergeGate": "PASS_LEVEL_C_LANE_2_SYNCHRONIZED_HEAD_AND_EXACT_CI",
+    "phase1Ci": "PASS_13_OF_13_RUN_30742530172_ATTEMPT_2",
+    "reviewDisposition": "FINAL_CURRENT_REVIEW_EVIDENCE; PRESERVE_V1_V2_V3_V4_V5_V6; NEVER_MERGE_REVIEW_BRANCH"
+  }
+}
