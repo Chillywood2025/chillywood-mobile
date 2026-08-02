@@ -52,18 +52,18 @@ migration, change a switch or schedule, resume activation, create a build or
 OTA, call LiveKit, or create installed/physical evidence.
 
 The deployed migration binds preflight to recorded internal identities. The
-unapplied forward successor
+remote-unapplied forward successor
 `20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql`
 adds an immutable two-platform manifest and requires an enabled final outcome to
 join its authorization and receipt to the exact final source/tree/deployment,
 delivered source hash, update, runtime, channel, and artifact. Static source
-proof passes. The historical 14/14 pgTAP result covered only the predicate; it
-does not clear T3. The remediated 28-test suite must transactionally execute the
-actual enabled v3 outcome trigger, including one-field lineage/run mismatches,
-before T3 may clear. Its source now restores a provider-backed Premium fixture,
-but the fresh local database run has not executed; no current-head T3 pass is claimed.
+proof passes. The historical 14/14 predicate and predecessor-head 27/27 results remain history. With pinned CLI 2.109.1, a clean local reset materialized through
+the successor and its exact two-row manifest; a later Storage readiness warning
+was non-source. Current-head pgTAP passed 28/28 in 47s after two deterministic
+test-only corrections, and concurrency passed 19/19 in 7s after one readback
+alias correction. Cleanup retained zero receipts, authorizations, or outcomes.
 Neither T1 nor T3 can substitute for signed-artifact, installed, physical, or
-public-canary proof.
+public-canary proof; no remote database or provider state was mutated.
 
 Initial authority:
 

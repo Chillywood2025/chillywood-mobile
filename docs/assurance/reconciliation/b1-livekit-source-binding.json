@@ -58,7 +58,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "NOT_APPLICABLE",
-    "T3_INTEGRATION": "NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -96,14 +96,14 @@
     },
     "successorBehavioralPgTap": {
       "file": "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql",
-      "status": "NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE",
-      "plannedTests": 28, "executedTests": 0,
-      "passedTests": 0, "failedTests": 0,
-      "detail": "The predecessor-head 27/27 rollback-only run remains historical evidence. The current 28-row pgTAP plus 19-witness governance/concurrency matrix has not executed because the local Supabase/PostgreSQL stack was unavailable before any assertion; this is not a source, provider, or current-truth failure.",
-      "proofBoundary": "No current-head T3 claim until fresh local execution passes; source checks and historical sanitized provider fixtures cannot substitute for current database, T4 provider, native, signed-artifact, installed, physical, or public-canary proof.",
-      "attempts": 0, "elapsedSeconds": 0, "migrationParsedCompletely": false,
-      "failureCodes": ["permission_denied_session_replication_role", "livekit_sandbox_premium_proof_rejected", "local_pgtap_missing", "local_predecessor_schema_missing", "sanitizer_cpu_path_unbounded"],
-      "historicalFocusedTestSha256": "54c7b7cec9ad366ef8b65a74447ea4316a2723ddb469f43923bf1472ea0985ba",
+      "status": "INTEGRATION_CLEAR",
+      "plannedTests": 28, "executedTests": 28,
+      "passedTests": 28, "failedTests": 0,
+      "detail": "The initial NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE classification and predecessor-head 27/27 rollback-only pass remain historical. With pinned CLI 2.109.1, a clean local reset materialized through 20260730230022 with the exact two-row manifest; its later Storage readiness warning was non-source and occurred after database materialization. Current-head pgTAP passed 28/28 in 47s after deterministic enum-type and truncated-constraint-name test corrections, and concurrency passed 19/19 in 7s with the supported local container override after one reserved-alias readback correction. Cleanup retained zero receipts, authorizations, or outcomes.",
+      "proofBoundary": "T3 is clear only for sanitized local database integration; no remote/provider mutation occurred, and this does not claim T4 provider/native, signed-artifact, installed, physical, or public-canary proof.",
+      "attempts": 3, "elapsedSeconds": 47, "migrationParsedCompletely": true,
+      "failureCodes": ["permission_denied_session_replication_role", "livekit_sandbox_premium_proof_rejected", "local_pgtap_missing", "local_predecessor_schema_missing", "sanitizer_cpu_path_unbounded", "NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE", "case_type_mismatch", "constraint_name_truncation", "reserved_alias_syntax"],
+      "focusedTestSha256": "5af016399979fe5cc7b5d96a49b716b3bf903c2af3c2271367096fdcb237fcca", "historicalFocusedTestSha256": "54c7b7cec9ad366ef8b65a74447ea4316a2723ddb469f43923bf1472ea0985ba",
       "sourceOrSchemaSubstitutionAccepted": false
     },
     "remoteDryRun": {"status": "PASS_NO_APPLY", "performed": true, "mode": "assembled-linked-read-only", "assembledHead": "24237254fba83534018c3dca5e986d5c4f73ba66", "assembledTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880", "components": {"B0": "860ee2b", "B1": "7e39e49f", "B2": "fdc04d5", "B3": "67edc2b"}, "cliVersion": "2.110.0", "remoteDeployedHistory": "ALIGNED", "pendingForwardCorrections": ["20260730170000", "20260730230022", "20260730230031"], "seeds": [], "roles": [], "unlinkedImmediately": true, "migrationApplied": false, "providerMutation": false},
@@ -113,7 +113,7 @@
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
     "Exact-head review remains coordinator-owned and pending.",
-    "Fresh local database execution is pending; the feature still has zero formal installed LiveKit sentinel runs."
+    "T3 local integration is clear; the feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {
     "remoteMigrationApplied": false,
