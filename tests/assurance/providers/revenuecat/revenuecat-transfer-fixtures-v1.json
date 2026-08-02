@@ -113,5 +113,117 @@
       "expectedStage": "environment-rejection",
       "resolverExpectation": "identities_resolved"
     }
+  ],
+  "orderingSchedules": [
+    {
+      "id": "newer-renewal-then-delayed-transfer",
+      "operations": [
+        { "kind": "lifecycle", "user": "source", "eventId": "renewal-new", "occurredAt": 300 },
+        { "kind": "transfer", "eventId": "transfer-old", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["lifecycle_applied", "transfer_event_stale"],
+      "expectedOwner": "source"
+    },
+    {
+      "id": "older-renewal-then-newer-transfer",
+      "operations": [
+        { "kind": "lifecycle", "user": "source", "eventId": "renewal-old", "occurredAt": 100 },
+        { "kind": "transfer", "eventId": "transfer-new", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["lifecycle_applied", "transfer_applied"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "older-transfer-then-newer-renewal",
+      "operations": [
+        { "kind": "transfer", "eventId": "transfer-old", "occurredAt": 200 },
+        { "kind": "lifecycle", "user": "target", "eventId": "renewal-new", "occurredAt": 300 }
+      ],
+      "expectedOutcomes": ["transfer_applied", "lifecycle_applied"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "duplicate-after-newer-renewal",
+      "operations": [
+        { "kind": "transfer", "eventId": "transfer-once", "occurredAt": 200 },
+        { "kind": "lifecycle", "user": "target", "eventId": "renewal-new", "occurredAt": 300 },
+        { "kind": "transfer", "eventId": "transfer-once", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["transfer_applied", "lifecycle_applied", "duplicate_ignored"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "newer-transfer-before-waiting-older-source-renewal",
+      "operations": [
+        { "kind": "transfer", "eventId": "transfer-new", "occurredAt": 300 },
+        { "kind": "lifecycle", "user": "source", "eventId": "renewal-old", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["transfer_applied", "revenuecat_event_stale"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "newer-transfer-before-waiting-older-target-renewal",
+      "operations": [
+        { "kind": "transfer", "eventId": "transfer-new", "occurredAt": 300 },
+        { "kind": "lifecycle", "user": "target", "eventId": "renewal-old", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["transfer_applied", "revenuecat_event_stale"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "newer-transfer-before-waiting-older-refund",
+      "operations": [
+        { "kind": "transfer", "eventId": "transfer-new", "occurredAt": 300 },
+        { "kind": "lifecycle", "user": "target", "eventId": "refund-old", "occurredAt": 200 }
+      ],
+      "expectedOutcomes": ["transfer_applied", "revenuecat_event_stale"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "ordinary-duplicate-after-newer-transfer",
+      "operations": [
+        { "kind": "lifecycle", "user": "source", "eventId": "renewal-once", "occurredAt": 100 },
+        { "kind": "transfer", "eventId": "transfer-new", "occurredAt": 200 },
+        { "kind": "lifecycle", "user": "source", "eventId": "renewal-once", "occurredAt": 100 }
+      ],
+      "expectedOutcomes": ["lifecycle_applied", "transfer_applied", "duplicate_ignored"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "equal-renewal-before-transfer",
+      "operations": [
+        {"kind": "lifecycle", "eventType": "renewal", "user": "source", "eventId": "equal-renewal-a", "occurredAt": 400},
+        {"kind": "transfer", "eventType": "transfer", "eventId": "equal-transfer-a", "occurredAt": 400}
+      ],
+      "expectedOutcomes": ["lifecycle_applied", "transfer_applied"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "equal-transfer-before-renewal",
+      "operations": [
+        {"kind": "transfer", "eventType": "transfer", "eventId": "equal-transfer-b", "occurredAt": 400},
+        {"kind": "lifecycle", "eventType": "renewal", "user": "source", "eventId": "equal-renewal-b", "occurredAt": 400}
+      ],
+      "expectedOutcomes": ["transfer_applied", "revenuecat_event_stale"],
+      "expectedOwner": "target"
+    },
+    {
+      "id": "equal-refund-before-transfer",
+      "operations": [
+        {"kind": "lifecycle", "eventType": "refund", "user": "source", "eventId": "equal-refund-c", "occurredAt": 400},
+        {"kind": "transfer", "eventType": "transfer", "eventId": "equal-transfer-c", "occurredAt": 400}
+      ],
+      "expectedOutcomes": ["lifecycle_applied", "transfer_event_stale"],
+      "expectedOwner": "source"
+    },
+    {
+      "id": "equal-transfer-before-refund",
+      "operations": [
+        {"kind": "transfer", "eventType": "transfer", "eventId": "equal-transfer-d", "occurredAt": 400},
+        {"kind": "lifecycle", "eventType": "refund", "user": "target", "eventId": "equal-refund-d", "occurredAt": 400}
+      ],
+      "expectedOutcomes": ["transfer_applied", "lifecycle_applied"],
+      "expectedOwner": "target"
+    }
   ]
 }

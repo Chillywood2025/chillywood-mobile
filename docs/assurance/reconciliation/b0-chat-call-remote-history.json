@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "reportId": "b0-chat-call-remote-history",
+  "featureId": "chilly-chat-call-lifecycle",
+  "objective": "Represent five exact deployed Chat Call migration versions in Git and retire only four confirmed undeployed version-mismatch candidates.",
+  "nonGoals": [
+    "change Chat Call, LiveKit, native, provider, or database behavior",
+    "deploy, reapply, repair, link, or pull migration history",
+    "change current truth, packages, workflows, builds, OTA, switches, schedules, rights, roles, auth, RLS, money, or entitlements"
+  ],
+  "risk": "C",
+  "initialBaseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "mainSynchronizationMerge": "91d3736af8a96d4830992ec8110938aa1ed36779",
+  "remoteSnapshot": {
+    "migrationHead": "20260730161737",
+    "mode": "coordinator-supplied-prior-read-only-list-and-statement-hashes",
+    "newProviderReadback": false,
+    "coordinatorLiveReadbackOccurred": true,
+    "readbackMode": "coordinator-linked-db-push-dry-run-no-apply",
+    "providerMutation": false,
+    "databaseMutation": false,
+    "candidateAbsenceConfirmed": true
+  },
+  "retiredCandidates": [
+    {
+      "version": "20260728143000",
+      "name": "chilly_chat_livekit_media_rollout",
+      "path": "supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql",
+      "remotePresent": false,
+      "rawSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0",
+      "classification": "VERSION_MISMATCH"
+    },
+    {
+      "version": "20260729185000",
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "path": "supabase/migrations/20260729185000_chilly_chat_active_thread_clear_race_guard.sql",
+      "remotePresent": false,
+      "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "classification": "VERSION_MISMATCH_DUPLICATE_REMOTE_BODY"
+    },
+    {
+      "version": "20260730032500",
+      "name": "chilly_chat_authoritative_busy_begin",
+      "path": "supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+      "remotePresent": false,
+      "rawSha256": "07a192dcce590748f4abe06d8bf494a4baf666ce917387bfdfe8bbc54e2156a0",
+      "classification": "VERSION_MISMATCH_AND_BODY_MISMATCH"
+    },
+    {
+      "version": "20260730040000",
+      "name": "chilly_chat_busy_active_thread_guard",
+      "path": "supabase/migrations/20260730040000_chilly_chat_busy_active_thread_guard.sql",
+      "remotePresent": false,
+      "rawSha256": "79fcdb34fe5575dcc461900c9b146fb60d6b825162742c39d7ac172338bdd948",
+      "classification": "VERSION_MISMATCH"
+    }
+  ],
+  "deployedMigrations": [
+    {
+      "version": "20260728141417",
+      "name": "chilly_chat_livekit_media_rollout",
+      "path": "supabase/migrations/20260728141417_chilly_chat_livekit_media_rollout.sql",
+      "rawSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0",
+      "byteCount": 8550,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260729175447",
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "path": "supabase/migrations/20260729175447_chilly_chat_active_thread_clear_race_guard.sql",
+      "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "byteCount": 1770,
+      "remoteDeploymentSequence": 1,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260729204336",
+      "name": "chilly_chat_active_thread_clear_race_guard",
+      "path": "supabase/migrations/20260729204336_chilly_chat_active_thread_clear_race_guard.sql",
+      "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e",
+      "byteCount": 1770,
+      "remoteDeploymentSequence": 2,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260730034533",
+      "name": "chilly_chat_authoritative_busy_begin",
+      "path": "supabase/migrations/20260730034533_chilly_chat_authoritative_busy_begin.sql",
+      "rawSha256": "018ebe4cbb7f0346fce34aa2d47ca9b675004dcbfd9b677c945b0c0a08f4a429",
+      "byteCount": 8243,
+      "sourceProvenance": "git:e4589c1bd3d80e84cff96794e9895f3683d37696:supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql",
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    },
+    {
+      "version": "20260730040727",
+      "name": "chilly_chat_busy_active_thread_guard",
+      "path": "supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql",
+      "rawSha256": "79fcdb34fe5575dcc461900c9b146fb60d6b825162742c39d7ac172338bdd948",
+      "byteCount": 8555,
+      "classification": "REMOTE_AND_SOURCE_MATCH"
+    }
+  ],
+  "duplicateDeployment": {
+    "versions": [
+      "20260729175447",
+      "20260729204336"
+    ],
+    "name": "chilly_chat_active_thread_clear_race_guard",
+    "identicalRawBody": true,
+    "rawSha256": "d1da4798a9398e850ef300007ac7471e4590203d6d0304688809498f0e1f452e"
+  },
+  "focusedValidation": {
+    "staticTests": {
+      "passed": 5,
+      "failed": 0
+    },
+    "existingReadbackGuard": "SOURCE_CLEAR",
+    "contracts": "SOURCE_CLEAR",
+    "scope": "SOURCE_CLEAR",
+    "deterministicOutput": {
+      "runs": 3,
+      "normalizedSha256": "3b98e6d33bf2cb0633d450a7d77f86ae85c11c2cc6be9070887bbd96fe56ee28"
+    },
+    "assembledLinkedDryRun": {
+      "status": "PASS_NO_APPLY",
+      "command": "supabase db push --dry-run",
+      "supabaseCliVersion": "2.110.0",
+      "assembledBranchHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "assembledBranchTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+      "componentB0Head": "860ee2b80a9f215497128785b199add8418e66ee",
+      "remoteHistorySourceAligned": true,
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "seedFiles": [],
+      "roleFiles": [],
+      "linkLifecycle": "linked-for-one-final-read-only-dry-run-and-immediately-unlinked",
+      "remoteMutation": false,
+      "providerMutation": false
+    }
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "NOT_APPLICABLE",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION_REASON": "The linked no-apply dry-run proves remote history/source planning, not migration execution or database behavior.",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "proofLimits": [
+    "The static hash gate proves only exact Git source parity with the prior read-only migration snapshot.",
+    "It does not prove execution, installed behavior, native behavior, provider behavior, or release readiness.",
+    "The merged metadata prerequisite classifies the migration-readback manifest as CI/test supporting evidence without weakening general release-path classification.",
+    "The coordinator-controlled assembled linked no-apply dry-run passed with exactly three forward-only files pending.",
+    "That dry-run does not substitute for migration execution or database-behavior proof; fresh exact-head review remains required."
+  ],
+  "resolvedPrerequisites": [
+    {
+      "id": "ASSURANCE_B0_READBACK_MANIFEST_SCOPE_CLASSIFICATION",
+      "status": "SOURCE_CLEAR",
+      "resolution": "PR #113 moved the manifest to config/assurance with history preserved; current main was merged normally and the scope guard now reports only database-RLS as high risk."
+    },
+    {
+      "id": "ASSURANCE_B0_ASSEMBLED_LINKED_DRY_RUN",
+      "status": "SOURCE_CLEAR",
+      "resolution": "The final assembled linked dry-run passed without apply, proved remote history/source alignment, reported exactly three forward-only files, and immediately unlinked."
+    }
+  ],
+  "resolvedHistoricalFindings": [
+    {
+      "id": "ASSURANCE_B0_FIRST_DRY_RUN_B3_SOURCE_ONLY_CANDIDATE",
+      "status": "SUPERSEDED",
+      "resolution": "The first dry-run surfaced the B3 forward-correction source-only candidate before the final assembled source was frozen. The final assembled dry-run includes it as an expected pending forward file; it is historical resolved evidence and not a B0 failure."
+    }
+  ],
+  "unresolvedInternalBlockers": [],
+  "rollback": "Before merge, abandon this Git-only branch. After merge, correct any new source-history finding with another bounded Git-only change; never rewrite or reapply a deployed remote migration.",
+  "emergencyStop": "Do not deploy, repair migration history, or contact a provider from this lane.",
+  "finalPermittedNextAction": "Require fresh exact-head review of the passed assembled linked no-apply dry-run before merging this Git-only history reconciliation.",
+  "claimedFeatureCompletion": false
+}
