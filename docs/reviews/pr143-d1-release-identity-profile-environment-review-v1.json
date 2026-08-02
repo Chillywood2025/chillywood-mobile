@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-release-identity-profile-environment-review-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "release-identity-profile-environment",
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "humanApproval": false,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "immutableSourceTree": "ededbd397c870e818d4b00a1325e8811ba3eac4c",
+  "implementationHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "implementationTree": "ededbd397c870e818d4b00a1325e8811ba3eac4c",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "currentBaseAtReview": "40b1c7ba9de0ab96dddc1442708ecfcaaf05a1d0",
+  "sourceDeltaHash": "709f1f5115e877f4dbd49af493ca4911bb00478b09971f0df8da29039efa8cfd",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "0cf1443cf10de447fdccf312eedf3f53409898f149a0d50a0301c65dd2abb991",
+  "scopeStatus": "pass",
+  "criticalFindingCounts": {"P0": 0, "P1": 3, "P2": 1, "P3": 0},
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "release-identity-profile-environment",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "focus": "source, EAS profile, environment, platform, package or bundle, version, native build, runtime, channel, distribution, target classification, and historical-proof boundaries"
+    },
+    "pullRequestIdentity": {
+      "status": "pass",
+      "number": 143,
+      "state": "open-draft",
+      "immutableSourceHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+      "immutableSourceTree": "ededbd397c870e818d4b00a1325e8811ba3eac4c",
+      "remoteHeadMatched": true,
+      "baseSynchronizationPending": true
+    },
+    "sourceIdentityMatrix": {
+      "status": "pass_current_static_values",
+      "targets": [
+        {
+          "targetId": "android-chat-livekit-qa-build-86",
+          "classification": "ACTIVE_INTERNAL_TARGET",
+          "platform": "android",
+          "profile": "android-chat-livekit-qa",
+          "environment": "production",
+          "packageIdentifier": "com.chillywood.mobile",
+          "appVersion": "1.0.0",
+          "nativeBuild": "86",
+          "runtimeVersion": "1.0.0-android-chat-call-action-v1",
+          "channel": "android-chat-livekit-qa",
+          "distribution": "google_play_internal",
+          "releaseIdentity": "HISTORICAL_RECORDED_INPUT"
+        },
+        {
+          "targetId": "ios-qa-build-8",
+          "classification": "ACTIVE_INTERNAL_TARGET",
+          "platform": "ios",
+          "profile": "ios-qa",
+          "environment": "production",
+          "packageIdentifier": "com.chillywood.mobile",
+          "appVersion": "1.0.0",
+          "nativeBuild": "8",
+          "runtimeVersion": "1.0.0-iosqa1",
+          "channel": "ios-qa",
+          "distribution": "testflight_internal",
+          "releaseIdentity": "HISTORICAL_RECORDED_INPUT"
+        },
+        {
+          "targetId": "android-production-build-84-historical",
+          "classification": "HISTORICAL_ARTIFACT",
+          "platform": "android",
+          "profile": "android-production-local-recovery",
+          "environment": "production",
+          "packageIdentifier": "com.chillywood.mobile",
+          "appVersion": "1.0.0",
+          "nativeBuild": "84",
+          "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+          "channel": "production",
+          "distribution": "google_play_internal",
+          "releaseIdentity": "HISTORICAL_RECORDED_INPUT"
+        }
+      ],
+      "registeredReleaseManifests": "3/3",
+      "duplicateTargets": 0,
+      "androidIosEvidenceSeparated": true,
+      "independentStaticAssertions": "3/3 targets"
+    },
+    "currentSourceParity": {
+      "status": "pass",
+      "manifestPlatformPackageVersionBuildRuntimeChannelDistribution": "3/3",
+      "appPackageOrBundleAndVersion": "3/3",
+      "easEnvironment": "3/3",
+      "observedQaRuntimeEnvironmentValues": "2/2",
+      "observedStoreDistributionProfiles": "3/3",
+      "note": "The checked-in values agree today; the open P1 findings concern missing fail-closed validator bindings under drift."
+    },
+    "proofTierBoundary": {
+      "status": "pass_static_claims_honest",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR_SUBJECT_TO_OPEN_P1_GAPS",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+      "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL",
+      "historicalProviderOrInstalledEvidenceClaimedCurrent": false,
+      "proceedFlagsAllFalse": true
+    },
+    "failClosedCoverageAudit": {
+      "status": "fail_open_model_paths_found",
+      "targetClassificationValidatorUsages": 0,
+      "releaseIdentityClassificationValidatorUsages": 0,
+      "resolvedProfileRuntimeEnvironmentComparisons": 0,
+      "resolvedProfileDistributionComparisons": 0,
+      "currentStaticValuesMaskTheDriftCases": true
+    },
+    "focusedParityTests": {
+      "status": "pass_but_missing_lane_negative_controls",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "existingNegativeControls": "14/14",
+      "missingNegativeControls": [
+        "unknown target classification rejected",
+        "unproved release identity classification rejected",
+        "EAS profile runtime environment drift rejected",
+        "EAS profile distribution drift rejected"
+      ]
+    },
+    "staticChecks": {
+      "status": "pass",
+      "contracts": "13/13",
+      "features": 20,
+      "escapedDefects": 25,
+      "plan": "REQUIREMENTS_CLEAR/ARCHITECTURE_CLEAR",
+      "scope": "6/15 files and 646/1200 net lines",
+      "jsonAndSyntax": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "currentTruth": {
+      "status": "expected_stale_pending_pr_d1_binding",
+      "recordedMain": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+      "observedMain": "40b1c7ba9de0ab96dddc1442708ecfcaaf05a1d0",
+      "treatedAsSourceFailure": false
+    },
+    "phase1Ci": {
+      "status": "pending_coordinator_owned_after_four_current_reviews",
+      "implementationHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+      "eligibleAsReviewLaneProof": false,
+      "formalLevelCGuardExpectedToRemainBlocked": true
+    },
+    "nonInterference": {
+      "implementationFilesEdited": false,
+      "providerContact": false,
+      "buildOrOta": false,
+      "artifactInstalled": false,
+      "publicRelease": false,
+      "databaseOrProviderMutation": false,
+      "reviewPrMergePermitted": false,
+      "generatedNativeDirectoriesCommitted": false,
+      "denoLockStaged": false
+    }
+  },
+  "testResultHash": "85cde866d0abbb511b75fc17cf857b1034d6926af46ee8c4242f6b5f5c0a5578",
+  "reviewLevel": "C",
+  "reviewHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "reviewRef": "codex/first-pass-assurance-pr-d1-review-release-identity",
+  "reviewRefHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "reviewTimestamp": "2026-08-02T08:44:02Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-release-identity-profile-environment",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR_D1_TARGET_AND_RELEASE_IDENTITY_CLASSIFICATIONS_NOT_FAIL_CLOSED",
+      "severity": "P1",
+      "status": "open",
+      "evidence": "validateCatalog checks target IDs and manifest coverage but never validates target.classification or releaseIdentityClassification against the contract vocabularies; each value is used only when copied into output.",
+      "requiredResolution": "Validate both classification vocabularies, reject unclassified and unproved states, and add negative controls for an unknown target classification and an unproved signed-identity classification."
+    },
+    {
+      "id": "PR_D1_EAS_RUNTIME_ENVIRONMENT_NOT_BOUND",
+      "severity": "P1",
+      "status": "open",
+      "evidence": "validateTargetSource checks target and manifest runtime plus resolved channel, but never compares the resolved EAS profile runtime environment variable; generationEnv injects the contract runtime directly, so eas.json runtime drift is hidden.",
+      "requiredResolution": "Declare the exact profile runtime environment key per applicable target, compare the resolved profile value to target.runtimeVersion, and add Android/iOS drift controls."
+    },
+    {
+      "id": "PR_D1_EAS_DISTRIBUTION_POLICY_NOT_BOUND",
+      "severity": "P1",
+      "status": "open",
+      "evidence": "validateTargetSource compares the release manifest distributionSource to the contract but never validates resolved EAS profile distribution or its mapping to google_play_internal/testflight_internal.",
+      "requiredResolution": "Bind the expected EAS distribution and platform distribution policy for each target and add a profile-distribution drift control."
+    },
+    {
+      "id": "PR_D1_INVENTORY_FREEZE_LABEL_STALE",
+      "severity": "P2",
+      "status": "open_assigned_to_current_truth_binding",
+      "evidence": "The implementation inventory still says OFFLINE_PARITY_IMPLEMENTED_T0_T2_PENDING_IMMUTABLE_FREEZE although d1de3e20 is the frozen source reviewed here.",
+      "requiredResolution": "Record the immutable source externally in the current-truth binding or update this label only if a source correction already requires refreezing; do not create a self-referential head field."
+    }
+  ],
+  "summary": {
+    "status": "changes_required",
+    "P0": 0,
+    "P1": 3,
+    "P2": 1,
+    "P3": 0,
+    "mergeAuthorizedByThisReview": false,
+    "reviewPrMustRemainUnmerged": true,
+    "exactNextAction": "Correct and refreeze PR D1, then update this persistent lane additively at the new exact head before base synchronization or full CI."
+  }
+}
