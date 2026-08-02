@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-b2-revenuecat-reconciliation-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Preserve exact deployed RevenueCat transfer source and add the forward-only authority-ordering correction required by exact-head review.",
+  "exactReason": "The exact deployed-source reconciliation predecessor was 1,178 net lines. Clearing the exact-head P1 set requires the merged (time, rank, event-id) authority tuple on transfer and ordinary lifecycle paths, canonical digest validation, all-grant owner/conflict checks, non-vacuous two-failpoint rollback witnesses, and a deterministic multi-session advisory-lock barrier harness; deployed migrations remain immutable and no second high-risk domain is added.",
+  "reviewer": "persistent-four-lane-exact-head-review-set",
+  "mandatingReviewEvidence": [
+    "PR #71",
+    "PR #72",
+    "PR #73",
+    "fourth independent ordering/concurrency review lane required before merge"
+  ],
+  "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
+  "supportingDomains": [
+    "RevenueCat-Premium",
+    "database-RLS",
+    "CI-test-infrastructure"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 4,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 12
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 3300
+  },
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "LiveKit source, activation, sentinel, or provider state",
+    "room-host participant block-check source",
+    "production provider calls, purchases, entitlements, money, or payouts",
+    "live database mutation or migration deployment",
+    "app product or native source",
+    "build, OTA, release, or store track",
+    "GitHub workflow or package dependency",
+    "current-truth files or guards"
+  ]
+}

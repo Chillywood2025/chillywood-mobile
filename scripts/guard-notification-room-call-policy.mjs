@@ -26,7 +26,8 @@ const chillyChatCalls = read("_lib/chillyChatCalls.ts");
 const chillyChatCallSoundAssets = read("_lib/chillyChatCallSoundAssets.ts");
 const chillyChatNativeCallRouteBuffer = read("_lib/chillyChatNativeCallRouteBuffer.ts");
 const chillyChatNativeCallRoutes = read("_lib/chillyChatNativeCallRoutes.mjs");
-const authoritativeBusyBegin = read("supabase/migrations/20260730032500_chilly_chat_authoritative_busy_begin.sql");
+const authoritativeBusyBegin = read("supabase/migrations/20260730034533_chilly_chat_authoritative_busy_begin.sql");
+const busyActiveThreadGuard = read("supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql");
 const nativeCallPlugin = read("plugins/withChillyChatNativeCallNotifications.js");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
@@ -175,7 +176,7 @@ assertIncludes(chatThread, "dismissPresentedChillyChatCallNotifications", "nativ
 assertIncludes(chatThread, 'result.invite?.status === "busy"', "an authoritative busy result must not open a second media panel");
 assertIncludes(chatThread, "No media was started", "the caller must receive an honest no-media busy result");
 assertIncludes(authoritativeBusyBegin, 'invite."status" = \'accepted\'', "busy authority must require an accepted established invite");
-assertIncludes(authoritativeBusyBegin, 'established_thread."active_communication_room_id"', "busy authority must reject historical rooms that are no longer authoritative on their thread");
+assertIncludes(busyActiveThreadGuard, 'established_thread."active_communication_room_id"', "busy authority must reject historical rooms that are no longer authoritative on their thread");
 assertIncludes(authoritativeBusyBegin, 'active_room."status" = \'active\'', "busy authority must require the established room to remain active");
 assertIncludes(authoritativeBusyBegin, "'busy'", "busy authority must terminate the overlap before delivery");
 assertIncludes(authoritativeBusyBegin, '"delivery_status" = \'skipped\'', "busy authority must explicitly skip the terminal delivery");

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-b3-room-host-authorization-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Complete the B3 room-host participant block-check authorization, ACL, local behavior, and anti-vacuity proof as one database/RLS domain.",
+  "exactReason": "The owner-mandated 48-case role, ACL, RLS, trigger, leakage, and immutability matrix plus eight deterministic negative controls exceed 1,200 net lines. The work remains bounded to one room-host database/RLS authorization domain and its focused tests and reconciliation evidence.",
+  "reviewer": "b3-four-lane-level-c-exact-head-review-set",
+  "mandatingReviewEvidence": [
+    "PR #77",
+    "PR #78",
+    "PR #79",
+    "fourth call-path review lane"
+  ],
+  "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
+  "supportingDomains": [
+    "CI-test-infrastructure",
+    "documentation-metadata"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 8
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 2400
+  },
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "application product source",
+    "LiveKit publication or provider behavior",
+    "Premium, money, entitlement, role, moderation, or ranking behavior",
+    "remote database migration, ACL, or row mutation",
+    "native source, plugin, generated directory, build, or OTA",
+    "package.json or package-lock.json",
+    "GitHub workflow",
+    "current-truth files"
+  ]
+}

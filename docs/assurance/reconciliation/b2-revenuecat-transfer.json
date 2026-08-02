@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "reportId": "b2-revenuecat-transfer-reconciliation",
+  "featureId": "revenuecat-premium",
+  "objective": "Align Git with the exact deployed RevenueCat transfer migrations and add a forward-only authoritative-ordering correction without deployment.",
+  "nonGoals": [
+    "deploy or reapply a migration",
+    "call or mutate RevenueCat",
+    "change an entitlement, money, rights, roles, auth, or RLS",
+    "resume LiveKit activation",
+    "claim provider-backed purchase, installed, physical, or release proof"
+  ],
+  "risk": "C",
+  "initialBaseHead": "83800a68b426e94aaabca17b5d1f1d62a7783754",
+  "baseHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+  "mainSynchronizationMerge": "ce5a91f27f2368857a69a701c40c3cb7142719ca",
+  "stoppedImplementation": {
+    "pr": 52,
+    "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+    "reviewStatus": "REVIEW_MISSING"
+  },
+  "remoteSnapshot": {
+    "mode": "read-only-coordinator-supplied",
+    "coordinatorLiveReadbackOccurred": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationHead": "20260730161737"
+  },
+  "migrations": [
+    {
+      "version": "20260730153724",
+      "name": "revenuecat_verified_transfer_reconciliation",
+      "file": "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql",
+      "remoteRawSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "remoteNormalizedSha256": "4c21b9fe436e9ac2078e630165059e8258e26c2156eadff9757bf27644443795",
+      "sourceRawSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "classification": "REMOTE_AND_SOURCE_MATCH",
+      "stoppedSourceVersion": "20260730152710",
+      "stoppedClassification": "VERSION_MISMATCH"
+    },
+    {
+      "version": "20260730154416",
+      "name": "allow_expired_revenuecat_transfer_target_reconciliation",
+      "file": "supabase/migrations/20260730154416_allow_expired_revenuecat_transfer_target_reconciliation.sql",
+      "remoteRawSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "remoteNormalizedSha256": "b3f010a409f4bf4cc73e6271d280cb8222f779a525bdb88bd4f9784b0f1347c5",
+      "sourceRawSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "classification": "REMOTE_AND_SOURCE_MATCH",
+      "stoppedSourceVersion": "20260730160000",
+      "stoppedClassification": "VERSION_MISMATCH"
+    },
+    {"version": "20260730170000", "name": "revenuecat_transfer_authoritative_ordering", "file": "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql", "classification": "SOURCE_ONLY_FORWARD_CORRECTION", "deployed": false}
+  ],
+  "sourceClassifications": [
+    {"path": "supabase/functions/revenuecat-webhook/index.ts", "classification": "FUNCTION_SOURCE_PENDING", "resolution": "INCLUDED_IN_B2"},
+    {"path": "supabase/functions/revenuecat-webhook/store-policy.mjs", "classification": "FUNCTION_SOURCE_PENDING", "resolution": "INCLUDED_IN_B2"},
+    {"path": "supabase/functions/revenuecat-webhook/store-policy.test.mjs", "classification": "SOURCE_ONLY", "resolution": "INCLUDED_IN_B2"},
+    {"path": "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql", "classification": "SOURCE_ONLY", "resolution": "INCLUDED_IN_B2"}
+  ],
+  "focusedValidation": {
+    "nodeTests": {"status": "SOURCE_CLEAR", "passed": 22, "failed": 0},
+    "deterministicNodeOutput": {"status": "HISTORICAL_STALE", "runs": 3, "normalizedSha256": "bceb38a2ee1b7b788ffda0788b36ab180e500fffdb17e60320fd6a12f39de21a"},
+    "denoCheck": "SOURCE_CLEAR",
+    "migrationRawHashes": "SOURCE_CLEAR",
+    "scope": "SOURCE_CLEAR",
+    "databasePgTap": {"status": "HISTORICAL_STALE", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
+    "successorPgTap": {
+      "status": "HISTORICAL_STALE",
+      "planned": 69,
+      "executed": 69,
+      "passed": 69,
+      "failed": 0,
+      "mode": "one-outer-rollback-only-local-transaction",
+      "implementationHead": "ea98a826b2f89fcb2ec6ae2eddfb884d0afb1619",
+      "deployedTransferSourceSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "deployedExpiredTargetSourceSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "orderingCorrectionSha256": "6853c6003f79ff04e7210bff77ddb17befacadbcf2f23ce972152c14a4e5ecac",
+      "focusedTestSha256": "af1cd31b9c0b981a2bd4808bb0b0491d6dbe0d7e77504f0847586fdfd7975f0c",
+      "outerTransaction": "ROLLBACK",
+      "postRollbackPgTapExtensionCount": 0,
+      "postRollbackOrderingInternalFunctionCount": 0,
+      "postRollbackPublicWrappersReferenceOrdering": 0,
+      "persistentDatabaseMutation": false,
+      "providerContact": false
+    },
+    "orderingSchedules": {"status": "HISTORICAL_STALE", "passed": 8, "failed": 0, "antiVacuityControls": 1, "deterministic": true},
+    "remoteDryRun": {
+      "status": "HISTORICAL_STALE",
+      "command": "supabase db push --dry-run",
+      "supabaseCliVersion": "2.110.0",
+      "assembledBranchHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
+      "assembledBranchTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880",
+      "componentHeads": {
+        "B0": "860ee2b80a9f215497128785b199add8418e66ee",
+        "B1": "7e39e49f2dc176fee29e78128443190638545ced",
+        "B2": "fdc04d5cfb02cfc34e408a11db265d55ce0dfdb6",
+        "B3": "67edc2b766e89b28b16962062ea7c7eb2c0d2565"
+      },
+      "remoteHistorySourceAligned": true,
+      "pendingForwardFiles": [
+        "supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "seedFiles": [],
+      "roleFiles": [],
+      "linkLifecycle": "linked-for-one-final-read-only-dry-run-and-immediately-unlinked",
+      "applied": false,
+      "remoteMutation": false,
+      "providerMutation": false
+    },
+    "currentRequiredGates": {
+      "localPgTap": {"status": "PASS", "planned": 120, "executed": 120, "passed": 120, "failed": 0, "durationSeconds": 10.54, "sourceSha256": "45b80ed97d501986fae0ecc0b340a88b59e7941d427318f924e7f1a47298fff8", "mode": "local-only", "providerContact": false, "remoteMutation": false, "persistentDatabaseMutation": false},
+      "concurrency": {"status": "PASS", "plannedRaces": 10, "executed": 10, "passed": 10, "failed": 0, "durationSeconds": 14.15, "sourceSha256": "5a6ecb084ad57fcaf706ad8837417dae8a9afd8e94d78f82126e410fac6afea2", "cleanup": {"fixtureUsers": 0, "fixtureTransfers": 0, "b2Backends": 0, "fixturePayableRows": 0, "fixtureAuthorityRows": 0}, "mode": "local-only", "providerContact": false, "remoteMutation": false, "persistentDatabaseMutation": false},
+      "linkedDirectNoApply": {"status": "PENDING_NOT_EXECUTED", "applied": false},
+      "linkedAssembledNoApply": {"status": "PENDING_NOT_EXECUTED", "applied": false}
+    }
+  },
+  "fixtureCoverage": [
+    "success",
+    "invalid_signature",
+    "duplicate",
+    "delayed",
+    "out_of_order",
+    "missing_field",
+    "unknown_type",
+    "retry",
+    "partial_failure",
+    "provider_timeout",
+    "environment_mismatch"
+  ],
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR_LOCAL_DB",
+    "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "proofLimits": [
+    "The fixture corpus proves only deterministic sanitized source contracts.",
+    "The prior 69/69 pgTAP record remains historical stale; current local-only integration passed pgTAP 120/120 and deterministic concurrency 10/10 with zero fixture users, transfer rows, B2 backends, payable rows, or authority rows after cleanup, without provider, remote, or persistent database mutation.",
+    "The prior assembled linked no-apply result is historical stale evidence; both current direct and assembled linked dry-runs remain pending and unapplied.",
+    "The database wrapper proves only the exact existing iOS/App Store/revenuecat_app_store sandbox mapping and provider-backed grant join; signature and provider verification remain at the Edge boundary, and local integration or dry-run results do not substitute for provider-backed proof.",
+    "No provider, installed, physical, signed-artifact, or release behavior is claimed."
+  ],
+  "rollback": "Retain immutable deployed migration source. The forward correction remains undeployed; any future deployed correction requires another forward-only successor rather than rewriting migration history.",
+  "emergencyStop": "Do not deploy the webhook or mutate provider state; route any future provider action to Money Flow Control under separate authorization.",
+  "finalPermittedNextAction": "Freeze, commit, and push the immutable source; bind current truth once, base-synchronize normally, then run direct and assembled linked no-apply planning before exact review and CI.",
+  "claimedFeatureCompletion": false
+}
