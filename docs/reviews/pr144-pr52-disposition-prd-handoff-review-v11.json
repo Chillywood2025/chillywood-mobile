@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr144-pr52-disposition-prd-handoff-review-v11",
+  "reviewVersion": 11,
+  "reviewLabel": "PR52 disposition and bounded PR D handoff current-truth Level A review",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLevel": "A",
+  "reviewerLanes": [
+    "independent"
+  ],
+  "reviewTimestamp": "2026-08-02T06:53:44Z",
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-b0-guard-review",
+  "reviewHead": "6872fa295e5556f72c530f649dce88cc30da7669",
+  "reviewTree": "948d71c58d04568548f14c09ac44624cba2295ea",
+  "reviewEvidenceParentHead": "6872fa295e5556f72c530f649dce88cc30da7669",
+  "historicalEvidencePreserved": [
+    "v1",
+    "v2",
+    "v3",
+    "v4",
+    "v5",
+    "v6",
+    "v7",
+    "v8",
+    "v9",
+    "v10"
+  ],
+  "historicalEvidenceHashes": {
+    "v1": "9f9b70bdeabd042309991b3c364db3f6c3e051fab4ab5d282234bc6b05f1d2ba",
+    "v2": "29d6d7b5743a3b22bceb3a783f73eea2dca0b98eb6e5590a095510765549f577",
+    "v3": "50667d8900c12b70bfe94ded74d5cb58ad64905d112ea79a610053d641ed8398",
+    "v4": "bb1658e24e30d888d12c49e0e8f1eaabc51e49ca320d9a4c4966c35e0bb89a43",
+    "v5": "d8890af8a6188dbebdbfda9ff50149a9e25168d30b033b1b4c5a3c4da5859409",
+    "v6": "d3dbcf54ee4dc7823818eb1acfb57a1e4efd8196f697e290a33103c8bc61c4bb",
+    "v7": "494acffbd4e92e97fccaff923ed8cfb227b99e840e26f3f5fdf9ce089710b3e9",
+    "v8": "961fc5e005574d2bd87eab7dc7d0f9ef22b43cd84f4a00e9be7eb41059bdd340",
+    "v9": "77bf53052b8eca9679b5b66a928e7537ead462e2b1578754d976f59c4380a1a6",
+    "v10": "b262f78f3c0d236631a7e1ffcd5aecacf50541acc2a29be7107f29f17aa5c3ba"
+  },
+  "implementationPrNumber": 144,
+  "implementationPrState": "open",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-b0-guard",
+  "implementationHead": "217d46117a8f5fc6b10a7c10a5481d50b354535f",
+  "implementationTree": "a569abc5ff016f04e7371c296d5cf10a92a5729e",
+  "baseHead": "62d4b526675e5a10177d37c53670709d63062293",
+  "baseTree": "206bac373c166d523a4020731aa44be7b909dc84",
+  "mergeBase": "62d4b526675e5a10177d37c53670709d63062293",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
+  "changedNameHash": "246863974b7dc9633ab1448d13e918aad1577b7c34c324d1a1b0805c9330d465",
+  "changedNameHashMethod": "sha256(git diff --name-only -z baseHead implementationHead)",
+  "implementationDiffHash": "b682d91e2389599a68054c6a3c722b31f71fa629b0f8ddcc10dceaf2c2687707",
+  "implementationDiffHashMethod": "sha256(git diff --binary --no-renames baseHead implementationHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "migrationSetHashMethod": "sha256(git diff --name-only baseHead implementationHead -- supabase/migrations; empty set)",
+  "configHash": "c20a152514e99010fdd21bc37178b87d5d018127499f8ac900be094fd5a9e3b3",
+  "configHashMethod": "sha256(git ls-tree -r implementationHead config/assurance)",
+  "currentTruthRecordHash": "e1b0fa10884fdc11a4bfe876f66086c27ab7d2bae949f01d6c8ba95a944b2492",
+  "artifactHashes": {
+    "CURRENT_STATE.md": "df6fd76190bd8463ceaed0ab89f1c1d4fb4449c4b3267fc6b861f89b701de085",
+    "NEXT_TASK.md": "7b8c1e11ebcb856f5353053ec7f3a1398b40475e6afe2221402f415cc9440951"
+  },
+  "testResults": {
+    "exactImplementationBinding": {
+      "status": "SOURCE_CLEAR",
+      "prNumber": 144,
+      "head": "217d46117a8f5fc6b10a7c10a5481d50b354535f",
+      "tree": "a569abc5ff016f04e7371c296d5cf10a92a5729e",
+      "base": "62d4b526675e5a10177d37c53670709d63062293",
+      "providerBranchHead": "217d46117a8f5fc6b10a7c10a5481d50b354535f",
+      "providerBranchMatches": true
+    },
+    "historyPreservingReviewReuse": {
+      "status": "SOURCE_CLEAR",
+      "previousReviewHead": "e409d1257f0db1b552f3ed0ba682a3e8fdfab0f6",
+      "normalMergeCommit": "6872fa295e5556f72c530f649dce88cc30da7669",
+      "mergeParents": [
+        "e409d1257f0db1b552f3ed0ba682a3e8fdfab0f6",
+        "217d46117a8f5fc6b10a7c10a5481d50b354535f"
+      ],
+      "reviewLineageIsFirstParent": true,
+      "implementationHeadIsSecondParent": true,
+      "mergeConflict": false,
+      "canonicalMergeTree": "948d71c58d04568548f14c09ac44624cba2295ea",
+      "historicalEvidenceV1ThroughV10PreservedByteForByte": true,
+      "v11EvidenceStatus": "current"
+    },
+    "allowedFileScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "additions": 28,
+      "deletions": 22,
+      "netChangedLines": 6,
+      "paths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "maximumFiles": 15,
+      "maximumNetChangedLines": 1200,
+      "highRiskDomains": []
+    },
+    "pr52Disposition": {
+      "status": "SOURCE_CLEAR",
+      "number": 52,
+      "branch": "codex/cognitive-level01-livekit-sentinel-live-activation",
+      "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+      "remoteRefMatches": true,
+      "state": "closed-unmerged",
+      "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained",
+      "changedPathsClassified": "15/15",
+      "hunksClassified": "34/34",
+      "unresolvedRequiredSource": 0,
+      "branchRetained": true,
+      "merged": false
+    },
+    "pr53Disposition": {
+      "status": "SOURCE_CLEAR",
+      "number": 53,
+      "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review",
+      "head": "4ce691197be7438a12877725cc75810d4080e10a",
+      "remoteRefMatches": true,
+      "reviewedImplementationHead": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+      "currentEvidenceVersion": "coverage-v1",
+      "state": "closed-unmerged",
+      "disposition": "stale-review-and-supersession-matrix-complete-branch-retained-never-merge",
+      "branchRetained": true,
+      "merged": false
+    },
+    "pr143BoundedHandoff": {
+      "status": "SOURCE_CLEAR",
+      "number": 143,
+      "branch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+      "worktree": "/Users/loverslane/chillywood-assurance-worktrees/d-native-provider-runtime-artifact",
+      "head": "165533d50a58947140982f1a5dbe3fd13add30a5",
+      "tree": "d76676e7ddff74c09ffa4bc2994153772b69b73a",
+      "remoteRefMatches": true,
+      "localWorktreeMatches": true,
+      "localWorktreeClean": true,
+      "inventorySha256": "0bc1e8e6f16cd6bc391ab93380742090ada68c7adbcd307f486b3dc977ab0582",
+      "state": "open-draft-read-only-inventory",
+      "firstObjective": "offline-deterministic-fail-closed-T0-T1-T2-parity-map-and-eight-negative-controls",
+      "buildAuthorized": false,
+      "otaAuthorized": false,
+      "providerContactAuthorized": false,
+      "providerMutationAuthorized": false,
+      "signedInstalledPhysicalOrPublicProofClaimed": false
+    },
+    "pendingCorrectionLedger": {
+      "status": "SOURCE_CLEAR",
+      "entries": [
+        {
+          "program": "B2",
+          "version": "20260730170000",
+          "deployed": false
+        },
+        {
+          "program": "B1",
+          "version": "20260730230022",
+          "deployed": false
+        },
+        {
+          "program": "B3",
+          "version": "20260730230031",
+          "deployed": false
+        }
+      ],
+      "deploymentClaimed": false
+    },
+    "generatedDocuments": {
+      "status": "SOURCE_CLEAR",
+      "authoritativeRecord": "config/assurance/current-truth-v1.json",
+      "exactlyRenderedFromAuthoritativeRecord": true,
+      "deterministicRuns": 3,
+      "driftFindings": 0,
+      "outputSha256": "ec492c61b5d4ff2f1ecd7d4ad4e8303e33e2797fe2769ca90437a9f6d9d5e40a"
+    },
+    "currentTruth": {
+      "status": "SOURCE_CLEAR",
+      "mode": "offline",
+      "recordedMain": "62d4b526675e5a10177d37c53670709d63062293",
+      "observedMain": "62d4b526675e5a10177d37c53670709d63062293",
+      "pr143Binding": "EXACT_SOURCE_HEAD",
+      "findingCount": 0
+    },
+    "contractValidation": {
+      "status": "SOURCE_CLEAR",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25
+    },
+    "currentTruthTests": {
+      "status": "SOURCE_CLEAR",
+      "syncCases": 9,
+      "headBindingFailClosedCases": 25,
+      "headBindingRegressionSuitePassed": true,
+      "headBindingExternalDeterministicRuns": 3,
+      "headBindingExternalOutputSha256": "eb4bd64f7014f7d42e9d358035802242741b974e8dfcd37c59f9c21ce29d781e",
+      "headBindingInternalDeterministicRuns": 3,
+      "headBindingInternalOutputSha256": "c45b995f5d45366e92912199ccf505c99d1c46155e2e0e0f972647d3e04b48cb"
+    },
+    "semanticBindingAssertions": {
+      "status": "SOURCE_CLEAR",
+      "passed": 46,
+      "total": 46
+    },
+    "featurePlan": {
+      "status": "SOURCE_CLEAR",
+      "featureId": "eas-build-update-release",
+      "requirements": "REQUIREMENTS_CLEAR",
+      "architecture": "ARCHITECTURE_CLEAR",
+      "firstObjectiveDoesNotAuthorizeRiskDOperations": true
+    },
+    "phase1Ci": {
+      "status": "coordinator_owned_in_progress_at_review_time",
+      "implementationHead": "217d46117a8f5fc6b10a7c10a5481d50b354535f",
+      "completedJobsObservedFromCoordinator": 11,
+      "totalJobs": 13,
+      "finalResult": null,
+      "reviewDoesNotSubstituteForCi": true,
+      "failureWaived": false
+    },
+    "diffCheck": {
+      "status": "SOURCE_CLEAR"
+    },
+    "privacyAndSecretScan": {
+      "status": "SOURCE_CLEAR",
+      "addedLineScanPassed": true,
+      "newPrivateEvidence": false,
+      "newSecretMaterial": false,
+      "newDeviceIdentifiers": false
+    },
+    "safetyAndProviderInvariance": {
+      "status": "SOURCE_CLEAR",
+      "remoteMigrationHead": "20260730161737",
+      "b1B2B3ForwardCorrectionsDeployed": false,
+      "userDerivedMemory": "off",
+      "level2Repair": "off",
+      "enabledScheduleCount": 0
+    },
+    "nonInterference": {
+      "status": "SOURCE_CLEAR",
+      "productSourceChanged": false,
+      "providerRead": false,
+      "providerWrite": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "aclMutation": false,
+      "nativeChange": false,
+      "buildOrOta": false,
+      "workflowChange": false,
+      "packageOrLockfileChange": false,
+      "currentTruthImplementationChangedByReview": false,
+      "denoLockChanged": false
+    }
+  },
+  "testResultHash": "a233c54535aba2f39f3f3b1515c3d1f39bd6252a0dff5a158983756449ade78e",
+  "testResultHashMethod": "sha256(stableJson(testResults))",
+  "findings": [],
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "openSeverityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "reviewOnly": true,
+  "disposition": "LANE_CLEAR_P0_P1_P2_P3_ZERO_PR52_PR53_CLOSED_RETAINED_PR143_BOUNDED_HANDOFF_VERIFIED"
+}
