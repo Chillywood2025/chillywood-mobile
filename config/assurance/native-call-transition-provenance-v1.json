@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "contractId": "native-call-transition-provenance-v1",
+  "featureId": "chilly-chat-call-lifecycle",
+  "objective": "Make route values navigation-only and require a consumed platform-scoped native claim before a native call transition can be requested.",
+  "target": "ios-qa-build-8",
+  "preFixFinding": {
+    "id": "IOS_NATIVE_ACTION_ROUTE_PROVENANCE_MISSING",
+    "status": "CONFIRMED_P1",
+    "cases": ["answer", "decline", "end", "mute", "unmute", "answer_without_uuid", "answer_with_arbitrary_uuid", "custom_scheme", "direct_router", "open_call_ringing"]
+  },
+  "authorities": {
+    "foreground_authenticated_ui": "A deliberate in-app control invokes the existing authenticated server transition directly.",
+    "trusted_native_claim": "A one-time claim was created from a validated platform-native event and consumed with an exact binding.",
+    "none": "Routes, URLs, ordinary notifications, and query parameters are navigation-only."
+  },
+  "registry": {
+    "implementation": "_lib/nativeCallTransitionProvenance.mjs",
+    "storage": "memory_only",
+    "ttlMs": 30000,
+    "maxActive": 32,
+    "maxConsumed": 64,
+    "claimHandleBytes": 32,
+    "claimHandleEncoding": "lowercase_hex",
+    "clock": "monotonic_process_clock",
+    "deleteBeforeReturn": true,
+    "duplicateExtendsTtl": false,
+    "persisted": false,
+    "logged": false
+  },
+  "platforms": {
+    "ios": {"source": "ios_callkit_native_event", "nativeIdentity": "canonical_callkit_uuid", "enabledProducer": true, "claimActions": ["answer"]},
+    "android": {"source": "android_native_action_store", "nativeIdentity": "native_store_request_key", "enabledProducer": false, "owner": "D2B", "claimActions": ["answer", "decline"]}
+  },
+  "actionVocabulary": ["answer", "decline", "end", "mute", "unmute"],
+  "claimFields": ["claimId", "platform", "source", "nativeEventGeneration", "nativeIdentity", "threadId", "inviteId", "action", "createdAtMonotonicMs", "expiresAtMonotonicMs", "consumed"],
+  "iosProducer": {
+    "event": "answerRequested",
+    "creatorCallsite": "app/_layout.tsx:IosNativeCallsBridge",
+    "nativeBridge": "_lib/iosNativeCalls.ts",
+    "validation": ["ios_platform", "exact_event_type", "canonical_call_uuid", "canonical_invite_uuid", "canonical_thread_uuid", "positive_native_event_generation", "runtime_and_build_gate", "authenticated_session"],
+    "routeParameters": ["callInviteId", "nativeCallUuid", "nativeCallClaim", "openCall"],
+    "forbiddenRouteAuthority": ["nativeCallAction", "nativeCallUuid_without_claim", "openCall", "startCall"]
+  },
+  "directNativeEvents": ["declined", "ended", "timeout", "answerFailed", "audioSessionFailed", "providerReset", "remoteEnded", "muted", "unmuted"],
+  "externalEntryPoints": ["custom_scheme", "universal_link", "application_link", "Linking.getInitialURL", "Linking.addEventListener", "redirectSystemPath", "direct_router", "ordinary_notification", "foreground_banner", "openCall"],
+  "externalParametersStrippedByNativeIntent": ["nativeCallAction", "nativeCallUuid", "nativeCallClaim", "openCall", "startCall"],
+  "serverAuthority": ["authenticated_user", "exact_callee", "exact_thread", "exact_invite", "ringing_or_accepted_state", "nonterminal", "fresh_generation", "accepted_before_token", "accepted_before_media"],
+  "proofBoundary": {
+    "mayClear": ["IOS_NATIVE_ROUTE_PROVENANCE_SOURCE_CLEAR", "IOS_NATIVE_ROUTE_PROVENANCE_MODEL_CLEAR", "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION_CLEAR", "IOS_EXTERNAL_URL_TRANSITION_DENIAL_CLEAR", "IOS_CALLKIT_EVENT_CLAIM_CLEAR"],
+    "mustRemainBlocked": ["IOS_PUSHKIT_PROVIDER_CLEAR", "IOS_APNS_DELIVERY_CLEAR", "IOS_PHYSICAL_CALLKIT_UI_CLEAR", "IOS_SIGNED_ARTIFACT_CLEAR", "IOS_TESTFLIGHT_FIX_DELIVERED", "PUBLIC_CANARY_CLEAR"],
+    "delivery": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "architectureCompatibility": "IOS_OTA_COMPATIBLE_SOURCE_CHANGE_NOT_PUBLISHED"
+  },
+  "impactGraph": {
+    "nodes": ["native_callkit_coordinator", "native_event_emitter", "pending_native_event_storage", "ios_native_calls_facade", "ios_native_calls_bridge", "route_parser", "root_linking_listeners", "expo_native_intent", "chat_thread_route", "transition_ownership_policy", "foreground_answer", "foreground_decline", "native_mute_subscriber", "terminal_native_event_settlement", "server_invite_transition", "livekit_token_gate", "media_activation_gate", "d2b_shared_provenance_draft", "d2a_lifecycle_tests"],
+    "edges": ["emits", "persists", "drains", "creates_claim", "routes_to", "parses", "consumes_claim", "owns_transition", "updates_invite", "completes_callkit_answer", "enables_token", "activates_media", "terminates", "covered_by_test"],
+    "highRiskOwned": true,
+    "unownedHighRiskPaths": []
+  },
+  "d2bReconciliation": [
+    {"path": "_lib/chillyChatNativeCallRoutes.mjs", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Keep Android payload and navigation parsing; remove the checkpoint's Android-only registry."},
+    {"path": "_lib/chillyChatNativeCallRoutes.d.ts", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Point Android claim types to the canonical shared registry."},
+    {"path": "_lib/chillyChatNativeCallRouteBuffer.ts", "classification": "D2B_MANUAL_RECONCILIATION_REQUIRED", "detail": "Register the consumed native-store payload through the shared android_native_action_store producer."},
+    {"path": "_lib/communicationCallMediaPolicy.mjs", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Retain the reviewed explicit authority and exact consumed-claim policy."},
+    {"path": "_lib/communicationCallMediaPolicy.d.ts", "classification": "D2B_REPLACE_WITH_D2C_SHARED", "detail": "Retain canonical authority and claim types."},
+    {"path": "app/_layout.tsx", "classification": "D2B_MANUAL_RECONCILIATION_REQUIRED", "detail": "Preserve D2C iOS producer and authenticated foreground controls; add only the Android producer drain."},
+    {"path": "plugins/withChillyChatNativeCallNotifications.js", "classification": "D2B_KEEP", "detail": "Android receiver, backup, and schema-v2 correction remains D2B-owned."},
+    {"path": "config/assurance/android-native-call-origin-backup-v1.json", "classification": "D2B_KEEP", "detail": "Android trust-boundary evidence remains D2B-owned."}
+  ],
+  "negativeControls": ["IOS_ROUTE_ONLY_TRANSITION_AUTHORITY", "IOS_CALL_UUID_WITHOUT_PROVENANCE_ACCEPTED", "IOS_EXTERNAL_URL_CREATES_NATIVE_CLAIM", "IOS_INITIAL_URL_CREATES_NATIVE_CLAIM", "IOS_LINKING_EVENT_CREATES_NATIVE_CLAIM", "IOS_QUERY_ONLY_ANSWER_ACCEPTED", "IOS_QUERY_ONLY_DECLINE_ACCEPTED", "IOS_QUERY_ONLY_NATIVE_CONTROL_ACCEPTED", "IOS_OPEN_CALL_AUTO_ACCEPTED", "IOS_NATIVE_CLAIM_EXPIRY_MISSING", "IOS_NATIVE_CLAIM_REPLAY_ACCEPTED", "IOS_NATIVE_CLAIM_PERSISTENCE_INVALID", "IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY", "IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED", "IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "IOS_NATIVE_CLAIM_MEDIA_AUTHORITY_VIOLATION", "PLATFORM_PROOF_SCOPE_MISMATCH", "IOS_NATIVE_CLAIM_DISCLOSURE"]
+}

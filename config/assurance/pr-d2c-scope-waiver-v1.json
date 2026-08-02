@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-d2c-ios-native-route-provenance-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Require one-time iOS CallKit provenance for route-driven native call transitions and establish the shared platform-scoped claim contract used later by D2B.",
+  "exactReason": "The owner-mandated 30-case route-denial matrix, 20-case trusted matrix, 18 negative controls, shared registry, source guards, and D2B reconciliation evidence exceed the default line budget while remaining one native-call provenance domain.",
+  "reviewer": "d2c-four-lane-level-c-exact-head-review-set",
+  "supportingDomains": ["CI-test-infrastructure", "documentation-metadata"],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {"default": 15, "waivedMaximum": 18},
+  "lineBudget": {"default": 1200, "waivedMaximum": 2200},
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": ["Android product implementation", "Swift/native interface change", "native media behavior", "provider contact", "release or OTA", "database mutation", "package or workflow change", "current-truth files"]
+}

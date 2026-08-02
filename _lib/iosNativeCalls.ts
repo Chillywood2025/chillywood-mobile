@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 import NativeCallsModule, {
   type NativeCallEvent,
 } from "../modules/chillywood-native-calls";
+import { clearNativeCallTransitionClaims } from "./nativeCallTransitionProvenance.mjs";
 import { supabase } from "./supabase";
 
 export type IosNativeCallsDisabledReason =
@@ -21,7 +22,10 @@ export type IosNativeCallsReadiness = {
   runtimeEnabled: boolean;
 };
 
-export type SanitizedNativeCallEvent = Omit<NativeCallEvent, "token">;
+export type SanitizedNativeCallEvent = Omit<NativeCallEvent, "token"> & {
+  nativeEventGeneration: number;
+  platform: "ios";
+};
 export type IosNativeCallEventListener = (event: SanitizedNativeCallEvent) => void;
 
 export type IosVoipRegistrationState = {
@@ -131,9 +135,12 @@ export async function readIosNativeCallsReadiness(): Promise<IosNativeCallsReadi
   };
 }
 
-const sanitizeNativeEvent = (event: NativeCallEvent): SanitizedNativeCallEvent => {
+const sanitizeNativeEvent = (
+  event: NativeCallEvent,
+  nativeEventGeneration: number,
+): SanitizedNativeCallEvent => {
   const { token: _token, ...sanitized } = event;
-  return sanitized;
+  return {...sanitized, nativeEventGeneration, platform: "ios"};
 };
 
 const enqueueVoipTokenLifecycle = (task: () => Promise<void>) => {
@@ -266,7 +273,7 @@ const handleNativeEvent = (event: NativeCallEvent, generation: number) => {
     enqueueVoipTokenInvalidation(generation);
   }
 
-  const sanitizedEvent = sanitizeNativeEvent(event);
+  const sanitizedEvent = sanitizeNativeEvent(event, generation);
   updateNativePresentationOwnership(sanitizedEvent);
   eventListener?.(sanitizedEvent);
   nativeEventSubscribers.forEach((subscriber) => {
@@ -304,6 +311,7 @@ export async function startIosNativeCallsReadiness(
     const apnsEnvironment = readApnsEnvironment();
     const readiness = await readIosNativeCallsReadiness();
     const generation = ++voipLifecycleGeneration;
+    clearNativeCallTransitionClaims();
     voipRegistrationActive = false;
     nativeSubscription?.remove();
     nativeSubscription = null;
@@ -366,6 +374,7 @@ export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationSt
     if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
 
     ++voipLifecycleGeneration;
+    clearNativeCallTransitionClaims();
     voipRegistrationActive = false;
     nativeSubscription?.remove();
     nativeSubscription = null;

@@ -529,10 +529,29 @@ assert.equal(resolveIncomingCallRoomJoinAction({
 }), "blocked", "missing or mismatched invite evidence cannot open callee media");
 for (const nativeCallAction of ["answer", "decline", "end", "mute", "unmute"]) {
   assert.equal(doesNativeCallActionOwnTransition({
-    callInviteId: "INVITE-ID",
+    callInviteId: nativeRouteInviteId,
     nativeCallAction,
-  }), true, `${nativeCallAction}: an invite-scoped native action owns the authoritative transition`);
+  }), false, `${nativeCallAction}: route values alone never own a native transition`);
 }
+const consumedIosAnswerClaim = Object.freeze({
+  action: "answer",
+  consumed: true,
+  inviteId: nativeRouteInviteId,
+  nativeEventGeneration: 1,
+  nativeIdentity: "33333333-3333-4333-8333-333333333333",
+  platform: "ios",
+  source: "ios_callkit_native_event",
+  threadId: nativeRouteThreadId,
+});
+assert.equal(doesNativeCallActionOwnTransition({
+  authority: "trusted_native_claim",
+  callInviteId: nativeRouteInviteId,
+  nativeCallAction: "answer",
+  nativeIdentity: consumedIosAnswerClaim.nativeIdentity,
+  platform: "ios",
+  threadId: nativeRouteThreadId,
+  trustedNativeClaim: consumedIosAnswerClaim,
+}), true, "an exact consumed CallKit claim owns the bounded native Answer request");
 assert.equal(doesNativeCallActionOwnTransition({
   callInviteId: "",
   nativeCallAction: "answer",
@@ -894,16 +913,18 @@ assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting 
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
-assert.match(rootLayoutSource, /params\.set\("nativeCallAction", "answer"\)/u, "foreground Answer uses the durable callee accept route");
+assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
+assert.match(rootLayoutSource, /registerTrustedIosCallKitNativeEvent/u, "CallKit Answer creates one canonical in-memory provenance claim");
+assert.match(rootLayoutSource, /await updateChillyChatCallInviteStatus[\s\S]{0,500}status:\s*"accepted"/u, "foreground Answer requests the server-authoritative transition directly");
 assert.match(
   chatThreadSource,
-  /const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition\(\{[\s\S]{0,180}requestedCallInviteId[\s\S]{0,180}requestedNativeCallAction[\s\S]{0,80}\}\)/u,
+  /const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition\(\{[\s\S]{0,220}authority: trustedNativeCallClaim[\s\S]{0,400}trustedNativeClaim: trustedNativeCallClaim/u,
   "the chat thread must use the tested native-transition ownership policy",
 );
 assert.match(
   chatThreadSource,
-  /!requestedOpenCall[\s\S]{0,120}\|\| requestedNativeCallOwnsTransition[\s\S]{0,520}void handleJoinOrCloseCall\(requestedCallInviteId\)/u,
-  "openCall compatibility routing must stay inert while a native action is settling",
+  /!requestedOpenCall[\s\S]{0,120}\|\| requestedNativeCallOwnsTransition[\s\S]{0,620}void handleJoinOrCloseCall\(requestedCallInviteId, false\)/u,
+  "openCall compatibility routing must stay inert while a native action settles and cannot accept a ringing invite",
 );
 assert.match(
   chatThreadSource,

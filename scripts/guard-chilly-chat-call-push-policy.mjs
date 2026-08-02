@@ -191,7 +191,8 @@ if (!chatThread.includes("incomingCallInvite") || !chatThread.includes("handleAc
 }
 
 for (const requiredNativeActionGuard of [
-  "nativeCallAction",
+  "trustedNativeCallClaim",
+  "consumeTrustedIosCallKitNativeEventClaim",
   "requestedCallInviteId",
   "readChillyChatCallInvite(requestedCallInviteId)",
   "invite.threadId !== threadId",

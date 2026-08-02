@@ -69,6 +69,7 @@ import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
 import {
+  completeIosNativeCallAnswer,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
   reportIosNativeCallRemoteEnd,
@@ -77,6 +78,10 @@ import {
   subscribeToIosNativeCallPresentation,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
+import {
+  registerTrustedIosCallKitNativeEvent,
+  sanitizeExternalIosNativeCallPath,
+} from "../_lib/nativeCallTransitionProvenance.mjs";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
@@ -136,6 +141,9 @@ const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
   "authorization",
   "code",
   "code_verifier",
+  "nativecallaction",
+  "nativecallclaim",
+  "nativecalluuid",
   "password",
   "refresh_token",
   "secret",
@@ -310,7 +318,10 @@ function RouteAnalyticsBridge() {
     void clearApplicationNotificationBadge();
     void refreshPushIfAllowed();
     const subscription = subscribeToNotificationResponses((path) => {
-      router.push(path as Parameters<typeof router.push>[0]);
+      const safePath = Platform.OS === "ios"
+        ? sanitizeExternalIosNativeCallPath(path)
+        : path;
+      router.push(safePath as Parameters<typeof router.push>[0]);
     });
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") return;
@@ -396,16 +407,6 @@ const buildIncomingCallPath = (invite: ChillyChatCallInvite) => {
 
 type IncomingCallAlert = ForegroundNotificationAlert & {
   invite?: ChillyChatCallInvite | null;
-};
-
-const buildIncomingCallAnswerPath = (alert: IncomingCallAlert) => {
-  const [routePath, query = ""] = String(alert.path ?? "").trim().split("?");
-  const params = new URLSearchParams(query);
-  const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
-  if (inviteId) params.set("callInviteId", inviteId);
-  params.set("nativeCallAction", "answer");
-  params.set("openCall", "1");
-  return `${routePath || "/chat"}?${params.toString()}`;
 };
 
 const ROOM_SAFE_CALL_PATH_PREFIXES = [
@@ -706,13 +707,40 @@ function IncomingCallNotificationBridge() {
     });
   };
 
-  const openCall = () => {
-    const path = buildIncomingCallAnswerPath(alert);
+  const openCall = async () => {
+    const actorUserId = String(user?.id ?? "").trim();
+    const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
+    const invite = inviteId
+      ? await readChillyChatCallInvite(inviteId).catch(() => null)
+      : null;
+    if (
+      !actorUserId
+      || !invite
+      || invite.calleeUserId !== actorUserId
+      || invite.callerUserId === actorUserId
+      || (invite.status !== "ringing" && invite.status !== "accepted")
+    ) {
+      Alert.alert("Call unavailable", "This Chi'lly Chat call can no longer be answered.");
+      return;
+    }
+    const acceptedInvite = invite.status === "accepted"
+      ? invite
+      : await updateChillyChatCallInviteStatus({
+        actorUserId,
+        invite,
+        status: "accepted",
+      }).catch(() => null);
+    if (!acceptedInvite || acceptedInvite.status !== "accepted") {
+      Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
+      return;
+    }
+    const params = new URLSearchParams({callInviteId: acceptedInvite.id, openCall: "1"});
+    const path = `/chat/${encodeURIComponent(acceptedInvite.threadId)}?${params.toString()}`;
     cleanupChillyChatCallNotifications({
-      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
+      callInviteId: acceptedInvite.id,
       path,
       presentedNotificationId: alert.presentedNotificationId ?? null,
-      threadId: alert.invite?.threadId ?? null,
+      threadId: acceptedInvite.threadId,
     });
     clearAlert();
     router.push(path as Parameters<typeof router.push>[0]);
@@ -771,7 +799,7 @@ function IncomingCallNotificationBridge() {
         : "Answering will leave or pause your current room media session. Returning will re-check your room access.",
       [
         { text: "Stay", style: "cancel" },
-        { text: "Leave room and answer", style: "destructive", onPress: openCall },
+        { text: "Leave room and answer", style: "destructive", onPress: () => { void openCall(); } },
       ],
     );
   };
@@ -860,7 +888,7 @@ function IncomingCallNotificationBridge() {
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.88}
-            onPress={openCall}
+            onPress={() => { void openCall(); }}
             style={[styles.incomingCallButton, styles.incomingCallPrimaryButton]}
             testID="app-wide-incoming-call-answer"
             accessibilityLabel="Answer incoming Chi'lly Chat call"
@@ -1088,14 +1116,30 @@ function IosNativeCallsBridge() {
       void reconcileInvite();
     };
 
-    const routeNativeAnswer = (event: SanitizedNativeCallEvent) => {
-      const threadId = String(event.threadId ?? "").trim();
-      const callInviteId = String(event.callInviteId ?? "").trim();
-      if (!threadId || !callInviteId) return;
-      const callUuid = String(event.callUuid ?? "").trim();
-      const params = new URLSearchParams({ callInviteId, nativeCallAction: "answer" });
-      if (callUuid) params.set("nativeCallUuid", callUuid);
-      const destination = `/chat/${encodeURIComponent(threadId)}?${params.toString()}`;
+    const routeNativeAnswer = async (event: SanitizedNativeCallEvent) => {
+      const created = registerTrustedIosCallKitNativeEvent({
+        ...event,
+        authenticated: isSignedIn && !!currentUserId,
+      });
+      if (created.status === "duplicate") return;
+      if (
+        created.status !== "created"
+        || !created.claimId
+        || !created.threadId
+        || !created.inviteId
+        || !created.nativeIdentity
+      ) {
+        const callUuid = String(event.callUuid ?? "").trim();
+        if (callUuid) await completeIosNativeCallAnswer(callUuid, false);
+        return;
+      }
+      const params = new URLSearchParams({
+        callInviteId: created.inviteId,
+        nativeCallClaim: created.claimId,
+        nativeCallUuid: created.nativeIdentity,
+        openCall: "1",
+      });
+      const destination = `/chat/${encodeURIComponent(created.threadId)}?${params.toString()}`;
       router.replace(destination as Parameters<typeof router.replace>[0]);
     };
 
@@ -1179,7 +1223,7 @@ function IosNativeCallsBridge() {
         return;
       }
       if (event.type === "answerRequested") {
-        routeNativeAnswer(event);
+        await routeNativeAnswer(event);
         return;
       }
       if (event.type === "declined") {

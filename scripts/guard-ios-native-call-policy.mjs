@@ -18,6 +18,8 @@ const rootLayout = read("app/_layout.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const communicationSession = read("hooks/use-communication-room-session.ts");
 const nativeMediaPolicy = read("_lib/communicationCallMediaPolicy.mjs");
+const provenance = read("_lib/nativeCallTransitionProvenance.mjs");
+const nativeIntent = read("app/+native-intent.tsx");
 const settings = read("app/settings.tsx");
 const callInvites = read("_lib/chillyChatCalls.ts");
 const easConfig = JSON.parse(read("eas.json"));
@@ -69,9 +71,13 @@ requireText(facade, "revokeIosVoipRegistration", "The JS facade must revoke on l
 requireText(facade, "dispatchIosVoipIncomingCall", "The JS facade must expose incoming-only PushKit dispatch.");
 requireText(facade, "const { token: _token", "Native events exposed to application listeners must omit raw tokens.");
 requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers must receive sanitized audio-session and application-state events.");
+requireText(facade, "nativeEventGeneration", "Native and cold-start events must bind the current JavaScript readiness generation.");
+requireText(facade, "clearNativeCallTransitionClaims", "Account and readiness lifecycle changes must clear in-memory native claims.");
 rejectText(facade, "console.", "The native-call facade must never log PushKit tokens or provider responses.");
 requireText(rootLayout, "startIosNativeCallsReadiness", "Authenticated runtime must wire the native-call bridge.");
-requireText(rootLayout, 'nativeCallAction: "answer"', "Sanitized CallKit Answer must use the existing authorized chat route.");
+requireText(rootLayout, "registerTrustedIosCallKitNativeEvent", "CallKit Answer must create a bounded claim through the canonical registry.");
+requireText(rootLayout, "nativeCallClaim: created.claimId", "CallKit navigation must carry only the opaque one-time handle.");
+rejectText(rootLayout, 'nativeCallAction: "answer"', "CallKit navigation must not carry authoritative action text.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline must use a direct server-authoritative transition.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End must use a direct server-authoritative transition.");
 requireText(rootLayout, "router.replace(destination", "CallKit Answer must replace the current route for deterministic cold-start recovery.");
@@ -82,6 +88,20 @@ requireText(chatThread, "subscribeToIosNativeCallEvents", "The chat call screen 
 requireText(chatThread, 'event.type === "audioSessionActivated"', "The chat call screen must react to CallKit AVAudioSession activation.");
 requireText(chatThread, 'event.type === "applicationActive"', "The chat call screen must restore foreground video after a native answer.");
 requireText(chatThread, 'requestedNativeCallAction === "answer"', "Background audio permission must be scoped to a native Answer action.");
+requireText(chatThread, "consumeTrustedIosCallKitNativeEventClaim", "The thread must atomically consume the exact native claim before transition work.");
+requireText(chatThread, 'authority: trustedNativeCallClaim ? "trusted_native_claim" : "none"', "Route values without a consumed claim must have no authority.");
+requireText(chatThread, "handleJoinOrCloseCall(requestedCallInviteId, false)", "openCall navigation must not accept a ringing invite.");
+rejectText(chatThread, "nativeCallAction: nativeCallActionParam", "The thread must not read route action text as native authority.");
+requireText(nativeIntent, "sanitizeExternalIosNativeCallPath(path)", "iOS system paths must strip native action, UUID, claim, openCall, and startCall parameters.");
+for (const marker of ["memory_only", "ttlMs", "maxActive", "maxConsumed"]) {
+  requireText(read("config/assurance/native-call-transition-provenance-v1.json"), marker, `The provenance contract must bind ${marker}.`);
+}
+for (const forbidden of ["AsyncStorage", "UserDefaults", "SecureStore", "Math.random", "console."]) {
+  rejectText(provenance, forbidden, `The in-memory claim registry must not contain ${forbidden}.`);
+}
+if ((rootLayout.match(/registerTrustedIosCallKitNativeEvent\(/gu) ?? []).length !== 1) {
+  failures.push("Exactly one production iOS claim creator callsite is permitted.");
+}
 requireText(communicationSession, "shouldPreserveNativeCallBackgroundAudio", "CallKit background audio must survive transient inactive/background AppState changes.");
 requireText(communicationSession, 'channelStateRef.current = "live"', "An existing subscribed call channel must recover to live after foregrounding.");
 requireText(communicationSession, "restoreLocalMediaAfterForeground", "Foreground recovery must restore the requested microphone and camera tracks.");

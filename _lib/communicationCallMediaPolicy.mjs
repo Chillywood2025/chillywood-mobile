@@ -28,10 +28,32 @@ export function resolveIncomingCallRoomJoinAction(input) {
 }
 
 export function doesNativeCallActionOwnTransition(input) {
+  if (input?.authority !== "trusted_native_claim") return false;
+  const claim = input?.trustedNativeClaim;
+  if (!claim || claim.consumed !== true) return false;
+  const platform = String(input?.platform ?? "").trim().toLowerCase();
+  const expectedSource = platform === "ios"
+    ? "ios_callkit_native_event"
+    : platform === "android"
+      ? "android_native_action_store"
+      : "";
+  const threadId = String(input?.threadId ?? "").trim().toLowerCase();
   const callInviteId = String(input?.callInviteId ?? "").trim();
   const nativeCallAction = String(input?.nativeCallAction ?? "").trim().toLowerCase();
-  return callInviteId.length > 0
-    && ["answer", "decline", "end", "mute", "unmute"].includes(nativeCallAction);
+  const nativeIdentity = String(input?.nativeIdentity ?? "").trim().toLowerCase();
+  return !!expectedSource
+    && threadId.length > 0
+    && callInviteId.length > 0
+    && nativeIdentity.length > 0
+    && Object.isFrozen(claim)
+    && claim.platform === platform
+    && claim.source === expectedSource
+    && claim.threadId === threadId
+    && claim.inviteId === callInviteId.toLowerCase()
+    && claim.action === nativeCallAction
+    && claim.nativeIdentity === nativeIdentity
+    && Number.isSafeInteger(claim.nativeEventGeneration)
+    && claim.nativeEventGeneration > 0;
 }
 
 export function resolveChillyChatCallParticipantRole(input) {

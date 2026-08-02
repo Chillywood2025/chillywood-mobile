@@ -33,8 +33,23 @@ export function resolveIncomingCallRoomJoinAction(input: {
   inviteStatus?: string | null;
 }): "host" | "accept" | "resume" | "blocked";
 export function doesNativeCallActionOwnTransition(input: {
+  authority?: "foreground_authenticated_ui" | "none" | "trusted_native_claim";
   callInviteId?: string | null;
+  nativeIdentity?: string | null;
   nativeCallAction?: string | null;
+  platform?: string | null;
+  threadId?: string | null;
+  trustedNativeClaim?: {
+    action?: string;
+    consumed?: boolean;
+    expiresAtMonotonicMs?: number;
+    inviteId?: string;
+    nativeEventGeneration?: number;
+    nativeIdentity?: string;
+    platform?: string;
+    source?: string;
+    threadId?: string;
+  } | null;
 }): boolean;
 export function resolveIosChatCallAudioRoute(callType?: string | null): "speaker" | "receiver";
 export function shouldActivateAcceptedChatCallMedia(input: { roomId?: string | null; inviteStatus?: string | null }): boolean;
