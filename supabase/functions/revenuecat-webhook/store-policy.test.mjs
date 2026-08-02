@@ -5,8 +5,10 @@ import test from "node:test";
 import {
   canReconcileExistingProviderEventIntent,
   isTerminalRevenueCatLifecycleEvent,
+  isVerifiedRevenueCatTransferPolicy,
   isValidPremiumStoreProductResolution,
   resolveRevenueCatTransferUsers,
+  resolveRevenueCatStorePolicy,
   shouldProcessRevenueCatAppStoreEvent,
 } from "./store-policy.mjs";
 
@@ -202,6 +204,25 @@ test("TRANSFER fails closed for missing, ambiguous, malformed, or replay-to-self
   }), null);
 });
 
+test("TRANSFER permits only exact App Store sandbox policy", () => {
+  assert.equal(isVerifiedRevenueCatTransferPolicy(
+    resolveRevenueCatStorePolicy("APP_STORE"),
+    "sandbox",
+  ), true);
+  assert.equal(isVerifiedRevenueCatTransferPolicy(
+    resolveRevenueCatStorePolicy("MAC_APP_STORE"),
+    "sandbox",
+  ), false);
+  assert.equal(isVerifiedRevenueCatTransferPolicy(
+    resolveRevenueCatStorePolicy("PLAY_STORE"),
+    "sandbox",
+  ), false);
+  assert.equal(isVerifiedRevenueCatTransferPolicy(
+    resolveRevenueCatStorePolicy("APP_STORE"),
+    "production",
+  ), false);
+});
+
 test("verified TRANSFER handling runs before the generic non-Premium path and uses the atomic RPC", () => {
   const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
   const transferWriter = source.indexOf("const writePremiumTransferFromRevenueCatEvent");
@@ -215,6 +236,8 @@ test("verified TRANSFER handling runs before the generic non-Premium path and us
   assert.ok(server > transferRpc);
   assert.ok(transferBranch > server);
   assert.ok(genericNonPremiumBranch > transferBranch);
+  assert.match(source, /isVerifiedRevenueCatTransferPolicy\(storePolicy, environment\)/u);
+  assert.match(source, /transfer is limited to verified sandbox App Store events/u);
 });
 
 test("Premium store mapping validation runs before the entitlement mutation", () => {

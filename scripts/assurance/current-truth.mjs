@@ -1,6 +1,104 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-import { args, emit, git, providerMode, readJson, readText, rel, renderCurrentState, renderNextTask, verifyCurrentTruthSynchronization } from "./lib.mjs";
+import {
+  args,
+  baseSynchronizationFirstParentDistance,
+  emit,
+  git,
+  implementationRemoteRef,
+  isValidGitBranchName,
+  providerMode,
+  readJson,
+  readText,
+  rel,
+  renderCurrentState,
+  renderNextTask,
+  sha256,
+  verifyCurrentTruthHeadBindings,
+  verifyProviderImplementationSnapshot,
+  verifyCurrentTruthSynchronization
+} from "./lib.mjs";
+
+function safeGit(gitArgs, fallback = null) {
+  try {
+    return git(gitArgs);
+  } catch {
+    return fallback;
+  }
+}
+
+function splitNullTerminated(value) {
+  return typeof value === "string" ? value.split("\0").filter(Boolean) : [];
+}
+
+function collectBaseSynchronizationReviewEvidence(reviewEntries) {
+  const evidence = [];
+  for (const review of Array.isArray(reviewEntries) ? reviewEntries : []) {
+    if (!isValidGitBranchName(review?.branch)
+      || (review?.disposition !== "never-merge" && !String(review?.disposition ?? "").includes("never-merge"))) continue;
+    const reviewRef = implementationRemoteRef(review.branch);
+    const reviewRefHead = safeGit(["show-ref", "--verify", "--hash", reviewRef]);
+    if (!reviewRefHead) continue;
+    const files = safeGit(["ls-tree", "-r", "--name-only", reviewRef, "--", "docs/reviews", "config/assurance/reviews"], "")
+      .split(/\r?\n/gu)
+      .filter((file) => file.endsWith(".json"));
+    for (const file of files) {
+      try {
+        const manifest = JSON.parse(git(["show", `${reviewRef}:${file}`]));
+        if (manifest?.classification !== "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH") continue;
+        evidence.push({ ...manifest, reviewRef, reviewRefHead });
+      } catch {
+        // A malformed candidate is ignored and the minimum-evidence gate fails closed.
+      }
+    }
+  }
+  return evidence;
+}
+
+function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEvidence }) {
+  const parents = safeGit(["show", "-s", "--format=%P", observedHead], "").split(/\s+/u).filter(Boolean);
+  const commitDistance = baseSynchronizationFirstParentDistance(entry.head, observedHead);
+  const observedTree = safeGit(["rev-parse", `${observedHead}^{tree}`]);
+  const mergeBase = safeGit(["merge-base", entry.head, currentMain]);
+  let sourceIsAncestor = false;
+  try {
+    git(["merge-base", "--is-ancestor", entry.head, observedHead]);
+    sourceIsAncestor = true;
+  } catch {
+    sourceIsAncestor = false;
+  }
+  let canonicalTree = null;
+  let mergeConflict = true;
+  try {
+    canonicalTree = git(["merge-tree", "--write-tree", entry.head, currentMain]);
+    mergeConflict = !/^[0-9a-f]{40}$/u.test(canonicalTree);
+  } catch {
+    canonicalTree = null;
+    mergeConflict = true;
+  }
+  const reviewedSourceDelta = mergeBase ? safeGit(["diff", "--binary", "--no-renames", mergeBase, entry.head]) : null;
+  const synchronizedSourceDelta = safeGit(["diff", "--binary", "--no-renames", currentMain, observedHead]);
+  const reviewedChangedFileBytes = mergeBase ? safeGit(["diff", "--name-status", "-z", "--no-renames", mergeBase, entry.head]) : null;
+  const synchronizedChangedFileBytes = safeGit(["diff", "--name-status", "-z", "--no-renames", currentMain, observedHead]);
+  const reviewedChangedPaths = mergeBase ? splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", mergeBase, entry.head], "")) : null;
+  const synchronizedChangedPaths = splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", currentMain, observedHead], ""));
+  return {
+    sourceIsAncestor,
+    commitDistance,
+    parents,
+    observedTree,
+    canonicalTree,
+    mergeConflict,
+    reviewedSourceDeltaHash: reviewedSourceDelta === null ? null : sha256(reviewedSourceDelta),
+    synchronizedSourceDeltaHash: synchronizedSourceDelta === null ? null : sha256(synchronizedSourceDelta),
+    reviewedChangedFileHash: reviewedChangedFileBytes === null ? null : sha256(reviewedChangedFileBytes),
+    synchronizedChangedFileHash: synchronizedChangedFileBytes === null ? null : sha256(synchronizedChangedFileBytes),
+    reviewedChangedPaths,
+    synchronizedChangedPaths,
+    providerHead: observedHead,
+    reviewEvidence
+  };
+}
 
 const options = args();
 if (options.dogfood) {
@@ -36,6 +134,47 @@ if (mode) {
   const head = git(["rev-parse", "HEAD"]);
   const mergeBase = git(["merge-base", "HEAD", "origin/main"]);
   const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
+  const now = options.now ? new Date(options.now) : new Date();
+  const observedImplementationRefs = {};
+  const implementationEntries = Array.isArray(record.openImplementationPrs) ? record.openImplementationPrs : [];
+  for (const entry of implementationEntries) {
+    if (!isValidGitBranchName(entry?.branch)) continue;
+    const ref = implementationRemoteRef(entry.branch);
+    try {
+      observedImplementationRefs[ref] = git(["show-ref", "--verify", "--hash", ref]);
+    } catch {
+      observedImplementationRefs[ref] = null;
+    }
+  }
+  const baseSynchronizationReviewEvidence = collectBaseSynchronizationReviewEvidence(record.openReviewOnlyPrs);
+  const baseSynchronizations = {};
+  for (const entry of implementationEntries) {
+    if (!isValidGitBranchName(entry?.branch)) continue;
+    const ref = implementationRemoteRef(entry.branch);
+    const observedHead = observedImplementationRefs[ref];
+    if (!observedHead || observedHead === entry.head) continue;
+    baseSynchronizations[ref] = inspectBaseSynchronization({
+      entry,
+      observedHead,
+      currentMain: remoteMain,
+      reviewEvidence: baseSynchronizationReviewEvidence
+    });
+  }
+  const explicitImplementationBranch = typeof options.implementationBranch === "string" ? options.implementationBranch : "";
+  const explicitImplementationHead = typeof options.implementationHead === "string" ? options.implementationHead : "";
+  const headBindings = verifyCurrentTruthHeadBindings({
+    openImplementationPrs: record.openImplementationPrs,
+    observedRefs: observedImplementationRefs,
+    branch,
+    head,
+    remoteMain,
+    explicitBranch: explicitImplementationBranch,
+    explicitHead: explicitImplementationHead,
+    baseSynchronizations,
+    minimumBaseSynchronizationReviewEvidence: currentTruthContract.implementationHeadBinding.baseSynchronization.minimumReviewEvidence,
+    baseSynchronizationReviewFreshnessHours: currentTruthContract.implementationHeadBinding.baseSynchronization.reviewFreshnessHours,
+    evaluationTime: now
+  });
   const mainParents = git(["show", "-s", "--format=%P", remoteMain]).split(/\s+/u).filter(Boolean);
   const mainChangedPaths = mainParents.length
     ? git(["diff", "--name-only", mainParents[0], remoteMain]).split(/\r?\n/gu).filter(Boolean)
@@ -49,10 +188,12 @@ if (mode) {
     allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
     bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge
   });
-  const mainMatches = synchronization.ok && (branch === "main" || mergeBase === remoteMain);
-  const now = options.now ? new Date(options.now) : new Date();
+  const claimsMain = (branch || explicitImplementationBranch) === "main";
+  const explicitMainMatches = explicitImplementationBranch !== "main" || explicitImplementationHead === remoteMain;
+  const mainMatches = synchronization.ok && (claimsMain ? head === remoteMain && explicitMainMatches : mergeBase === remoteMain);
   const freshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
-  const findings = [];
+  const findings = [...headBindings.findings];
+  let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!freshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
   for (const [file, expected] of Object.entries(expectedDocs)) {
@@ -60,16 +201,34 @@ if (mode) {
   }
   if (record.latestMergedImplementationPr.state !== "merged") findings.push({ id: "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE", status: "BLOCKED_INTERNAL" });
   if (mode === "read-only") {
-    const snapshot = readJson(options.providerSnapshot ?? options.snapshot);
-    if (snapshot.mainSha !== undefined && snapshot.mainSha !== remoteMain) {
-      findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAINSHA_STALE", status: "BLOCKED_INTERNAL" });
-    }
-    for (const key of ["latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
-      if (snapshot[key] !== undefined && JSON.stringify(snapshot[key]) !== JSON.stringify(record[key])) findings.push({ id: `ASSURANCE_CURRENT_TRUTH_${key.toUpperCase()}_STALE`, status: "BLOCKED_INTERNAL" });
+    try {
+      const snapshot = readJson(options.providerSnapshot ?? options.snapshot);
+      if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+        const finding = { id: "ASSURANCE_PROVIDER_SNAPSHOT_ROOT_MALFORMED", status: "BLOCKED_INTERNAL" };
+        providerImplementationSnapshot = { ok: false, findings: [finding], record: [], snapshot: [] };
+        findings.push(finding);
+      } else {
+        providerImplementationSnapshot = verifyProviderImplementationSnapshot(
+          record.openImplementationPrs,
+          snapshot.openImplementationPrs,
+          headBindings.acceptedBaseSynchronizations
+        );
+        findings.push(...providerImplementationSnapshot.findings);
+        if (snapshot.mainSha !== undefined && snapshot.mainSha !== remoteMain) {
+          findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAINSHA_STALE", status: "BLOCKED_INTERNAL" });
+        }
+        for (const key of ["latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
+          if (snapshot[key] !== undefined && JSON.stringify(snapshot[key]) !== JSON.stringify(record[key])) findings.push({ id: `ASSURANCE_CURRENT_TRUTH_${key.toUpperCase()}_STALE`, status: "BLOCKED_INTERNAL" });
+        }
+      }
+    } catch {
+      const finding = { id: "ASSURANCE_PROVIDER_SNAPSHOT_READ_FAILED", status: "BLOCKED_INTERNAL" };
+      providerImplementationSnapshot = { ok: false, findings: [finding], record: [], snapshot: [] };
+      findings.push(finding);
     }
   }
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
-    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), synchronization, findings
+    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
   }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — main ${record.mainSha.slice(0, 8)}, remote migration ${record.remoteMigrationHead}, deadline ${record.freshnessDeadline}`]);
 }

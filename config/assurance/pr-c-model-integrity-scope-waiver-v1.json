@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-c-model-integrity-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Correct review-mandated integrity gaps in the existing PR C state, property, concurrency, escaped-defect, and replay contracts.",
+  "exactReason": "Review-mandated single-domain integrity correction beyond 1,200 net lines; the correction stays within Lane C assurance source and focused tests and does not add a second high-risk domain.",
+  "reviewer": "successor-four-lane-exact-head-review-set",
+  "mandatingReviewEvidence": [
+    "PR #99",
+    "PR #100",
+    "PR #101",
+    "PR #102"
+  ],
+  "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
+  "supportingDomains": [
+    "CI-test-infrastructure"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 4,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 12
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 1600
+  },
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "app product source",
+    "provider source or state",
+    "Supabase database source, migration, or state",
+    "native source, plugin, generated directory, or build",
+    "GitHub workflow",
+    "package.json or package-lock.json",
+    "current-truth record, documents, or guards",
+    "impact planner or test-impact map"
+  ]
+}

@@ -114,6 +114,13 @@ export function resolveRevenueCatTransferUsers(event) {
   });
 }
 
+export function isVerifiedRevenueCatTransferPolicy(storePolicy, environmentValue) {
+  if (!storePolicy || typeof storePolicy !== "object") return false;
+  return normalizeText(storePolicy.provider) === REVENUECAT_PROVIDERS.APP_STORE
+    && normalizeText(storePolicy.rawStore).toUpperCase() === REVENUECAT_STORES.APP_STORE
+    && normalizeText(environmentValue).toLowerCase() === "sandbox";
+}
+
 export function canReconcileExistingProviderEventIntent(
   intent,
   providerEventIdValue,
