@@ -19,6 +19,10 @@ const ids = {
   androidTask: uuid(),
   iosTask: uuid(),
   baseline: uuid(),
+  canaryA: uuid(),
+  canaryB: uuid(),
+  providerEventA: uuid(),
+  providerEventB: uuid(),
   androidCollect: uuid(),
   androidIssue: uuid(),
   androidConsume: uuid(),
@@ -30,16 +34,38 @@ const ids = {
   androidReceiptA: null,
   androidReceiptB: null,
   iosReceipt: null,
+  expiredReceipt: null,
   baselineApproval: uuid(),
   baselineExecution: uuid(),
 };
 const collectorAssertion = hash();
 const triageAssertion = hash();
 const evaluatorAssertion = hash();
-const sourceCommit = "a".repeat(40);
-const sourceTree = "b".repeat(40);
+const sourceCommit = "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6";
+const sourceTree = "1abcd5e765a0dcac4ef0b40a2a90efb06f508fec";
+const deploymentHash =
+  "7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0";
+const platformIdentity = {
+  android: {
+    artifactHash:
+      "fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44",
+    rollbackHash:
+      "0fbe0c0d5bf2fe593b23f8970fe03e85c2e32e9195ec93ac9533d254b9014759",
+  },
+  ios: {
+    artifactHash:
+      "24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8",
+    rollbackHash:
+      "37d14e930e6787973866b0a5f38c28e1484dac0cb187f4ecb5de363147528e48",
+  },
+};
 const h = Array.from({ length: 12 }, hash);
 let stage = "setup";
+const behavioralWitnesses = [
+  "exact_android_preflight", "exact_ios_preflight", "expired_receipt_open_denied", "android_parent_source_commit_denied", "android_diverged_source_commit_denied", "ios_parent_source_commit_denied", "cross_platform_artifact_denied",
+  "non_bound_tree_denied", "non_bound_deployment_denied", "concurrent_android_single_winner", "android_switch_isolation", "android_receipt_authorization_tuple_equivalent", "authorization_replay_denied",
+  "android_authorization_rollback", "ios_receipt_authorization_tuple_equivalent", "expired_authorization_rollback", "final_outcome_totals", "visual_switches_unchanged", "schedules_unchanged",
+];
 
 const psqlArgs = [
   "exec", "-i", container, "psql", "-X", "-q", "-A", "-t",
@@ -152,8 +178,31 @@ end
 $cleanup$;
 delete from public.cognitive_projects
 where id=${literal(ids.project)}::uuid;
+delete from public.access_grants
+where provider_event_id in (
+  ${literal(ids.providerEventA)}::uuid,
+  ${literal(ids.providerEventB)}::uuid
+);
+delete from public.user_entitlements
+where user_id in (${literal(ids.canaryA)},${literal(ids.canaryB)});
+delete from public.provider_events
+where id in (
+  ${literal(ids.providerEventA)}::uuid,
+  ${literal(ids.providerEventB)}::uuid
+);
+delete from public.chat_call_livekit_canary_users
+where user_id in (
+  ${literal(ids.canaryA)}::uuid,
+  ${literal(ids.canaryB)}::uuid
+);
 delete from public.platform_role_memberships
 where user_id=${literal(ids.owner)};
+delete from auth.users
+where id in (
+  ${literal(ids.owner)}::uuid,
+  ${literal(ids.canaryA)}::uuid,
+  ${literal(ids.canaryB)}::uuid
+);
 ${restoreEvaluator}
 ${restoreEmergency}
 commit;
@@ -240,8 +289,69 @@ const capabilityRows = (task, platform, collect, issue, consume, triage) => `
 const setup = admin(`
 begin;
 set local session_replication_role=replica;
+insert into auth.users(id,is_sso_user,is_anonymous)
+values
+  (${literal(ids.owner)}::uuid,false,false),
+  (${literal(ids.canaryA)}::uuid,false,false),
+  (${literal(ids.canaryB)}::uuid,false,false);
 insert into public.platform_role_memberships(user_id,email,role,status)
 values (${literal(ids.owner)}::uuid,null,'owner','active');
+insert into public.chat_call_livekit_canary_users(
+  user_id,enabled,enrolled_by
+) values
+  (
+    ${literal(ids.canaryA)}::uuid,true,
+    ${literal(ids.owner)}::uuid
+  ),
+  (
+    ${literal(ids.canaryB)}::uuid,true,
+    ${literal(ids.owner)}::uuid
+  );
+insert into public.provider_events(
+  id,provider_event_id,provider,user_id,app_user_id,environment,
+  event_type,status,idempotency_key,raw_payload_hash
+) values
+  (
+    ${literal(ids.providerEventA)}::uuid,'b1-livekit-canary-a',
+    'revenuecat',${literal(ids.canaryA)}::uuid,
+    ${literal(ids.canaryA)},'sandbox','INITIAL_PURCHASE','processed',
+    'b1-livekit-canary-a',${literal(h[3])}
+  ),
+  (
+    ${literal(ids.providerEventB)}::uuid,'b1-livekit-canary-b',
+    'revenuecat',${literal(ids.canaryB)}::uuid,
+    ${literal(ids.canaryB)},'sandbox','INITIAL_PURCHASE','processed',
+    'b1-livekit-canary-b',${literal(h[4])}
+  );
+insert into public.user_entitlements(
+  user_id,entitlement_key,status,source,starts_at,expires_at,metadata
+) values
+  (
+    ${literal(ids.canaryA)},'premium','active','revenuecat',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+    '{"environment":"sandbox","sandbox":true}'::jsonb
+  ),
+  (
+    ${literal(ids.canaryB)},'premium','active','revenuecat',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour',
+    '{"environment":"sandbox","sandbox":true}'::jsonb
+  );
+insert into public.access_grants(
+  user_id,grant_type,source_type,source_id,provider,provider_event_id,
+  environment,status,starts_at,expires_at
+) values
+  (
+    ${literal(ids.canaryA)}::uuid,'premium','provider_event',
+    ${literal(ids.providerEventA)}::uuid,'revenuecat',
+    ${literal(ids.providerEventA)}::uuid,'sandbox','sandbox_only',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour'
+  ),
+  (
+    ${literal(ids.canaryB)}::uuid,'premium','provider_event',
+    ${literal(ids.providerEventB)}::uuid,'revenuecat',
+    ${literal(ids.providerEventB)}::uuid,'sandbox','sandbox_only',
+    transaction_timestamp(),transaction_timestamp()+interval '1 hour'
+  );
 insert into public.cognitive_projects(
   id,repository_full_name,source_state,activation_state,
   scheduler_state,production_authority
@@ -397,19 +507,30 @@ assert.equal(
   0,
   `platform authorization fixture setup failed: ${setupDiagnostic}`,
 );
-const prepareReceipt = (platform) => {
+const sandboxPremiumProof = readJson(`
+select public.cognitive_livekit_sandbox_premium_proof_v1()::text;
+`);
+assert.equal(sandboxPremiumProof.eligible, true);
+assert.equal(sandboxPremiumProof.qualifiedRevenueCatSandboxRowCount, 2);
+assert.match(sandboxPremiumProof.proofHash, /^[a-f0-9]{64}$/u);
+const prepareReceipt = (platform, validity = "10 minutes", overrides = {}, rejected = false) => {
+  const identity = { ...platformIdentity[platform], ...overrides };
   const result = admin(ownerSql(`
 select (
   public.governance_prepare_livekit_platform_preflight(
     ${literal(platform)}::public.cognitive_platform,
-    ${literal(hash())},${literal(hash())},${literal(hash())},
+    ${literal(identity.artifactHash)},
+    ${literal(sandboxPremiumProof.proofHash)},${literal(hash())},
     ${literal(collectorAssertion)},${literal(evaluatorAssertion)},
-    ${literal(sourceCommit)},${literal(sourceTree)},${literal(hash())},
-    ${literal(hash())},${literal(hash())},${literal(hash())},
-    interval '10 minutes'
+    ${literal(identity.sourceCommit ?? sourceCommit)},
+    ${literal(identity.sourceTree ?? sourceTree)},${literal(hash())},
+    ${literal(hash())},${literal(identity.deploymentHash ?? deploymentHash)},
+    ${literal(identity.rollbackHash)},
+    interval ${literal(validity)}
   )
 )->>'preflightReceiptId';
-`), true);
+  `), true);
+  if (rejected) return result;
   const receiptId = result.stdout.trim().split("\n").at(-1);
   assert.equal(result.status, 0);
   assert.match(receiptId, /^[a-f0-9-]{36}$/u);
@@ -418,8 +539,55 @@ select (
 ids.androidReceiptA = prepareReceipt("android");
 ids.androidReceiptB = prepareReceipt("android");
 ids.iosReceipt = prepareReceipt("ios");
+ids.expiredReceipt = prepareReceipt("ios", "1 millisecond");
+for (const [name, platform, overrides] of [
+  ["android_parent_source_commit_denied", "android", { sourceCommit: "268f5d7e93e2cc5044286a956f870fe35dbf2638" }],
+  ["android_diverged_source_commit_denied", "android", { sourceCommit: "00acb77770ee5c04ab7bbd5aab64cbb93a7d442f" }],
+  ["ios_parent_source_commit_denied", "ios", { sourceCommit: "81039cad0daf601594381d8f35b80f916e5795a2" }],
+  ["cross_platform_artifact_denied", "ios", { artifactHash: platformIdentity.android.artifactHash }],
+  ["non_bound_tree_denied", "android", { sourceTree: "b94c388e78d6b87669f4063927b568246c23589a" }],
+  ["non_bound_deployment_denied", "ios", { deploymentHash: hash() }],
+]) {
+  assert.notEqual(prepareReceipt(platform, "10 minutes", overrides, true).status, 0, name);
+}
 
 try {
+  stage = "exact_platform_preflight_readback";
+  const preflightReadback = admin(`
+select case when (
+  select count(*)=4
+    and count(*) filter (where receipt.target_platform='android')=2
+    and count(*) filter (where receipt.target_platform='ios')=2
+  from public.cognitive_livekit_platform_preflight_receipts receipt
+  join public.cognitive_livekit_final_source_identity_bindings binding
+    on binding.target_platform=receipt.target_platform
+  where receipt.id in (
+    ${literal(ids.androidReceiptA)}::uuid,
+    ${literal(ids.androidReceiptB)}::uuid,
+    ${literal(ids.iosReceipt)}::uuid,
+    ${literal(ids.expiredReceipt)}::uuid
+  )
+    and public.cognitive_livekit_final_source_identity_matches_v3(
+      receipt.target_platform,receipt.source_commit,receipt.source_tree_hash,
+      receipt.deployment_hash,receipt.application_identifier,
+      receipt.distribution,receipt.build_number,receipt.runtime_version,
+      receipt.channel,receipt.internal_update_id,receipt.installed_artifact_hash,
+      binding.expected_source_build_hash,binding.expected_runtime_identity_hash
+    )
+) then 'MATCH' else 'MISMATCH' end;
+`, true);
+  assert.equal(preflightReadback.status, 0);
+  assert.equal(preflightReadback.stdout.trim(), "MATCH");
+
+  stage = "expired_receipt_open_denial";
+  await delay(25);
+  const expiredOpen = await session(ownerSql(`
+select public.governance_open_livekit_platform_canary(
+  ${literal(ids.expiredReceipt)}::uuid,interval '5 minutes'
+);
+`));
+  assert.notEqual(expiredOpen.code, 0);
+
   stage = "concurrent_android_open";
   const openA = ownerSql(`
 select public.governance_open_livekit_platform_canary(
@@ -521,13 +689,29 @@ select case when
       and switch_key='cognitive_visual_experience_sentinel_enabled'
       and enabled
   )
+  and not exists (
+    select 1 from public.cognitive_level01_schedule_definitions
+    where project_id=${literal(ids.project)}::uuid and enabled
+  )
+  and (
+    select count(*)=2
+    from public.cognitive_livekit_platform_canary_authorizations authz
+    join public.cognitive_livekit_platform_preflight_receipts receipt
+      on receipt.id=authz.preflight_receipt_id
+    where (authz.shared_task_id,authz.target_task_id,authz.project_id,
+      authz.shared_platform,authz.target_platform,authz.environment,authz.owner_user_id,
+      authz.baseline_version_id,authz.source_commit,authz.source_tree_hash,
+      authz.independent_review_hash,authz.tests_hash,authz.deployment_hash,authz.rollback_hash)
+    is not distinct from (receipt.shared_task_id,receipt.target_task_id,receipt.project_id,receipt.shared_platform,receipt.target_platform,receipt.environment,receipt.owner_user_id,receipt.baseline_version_id,receipt.source_commit,
+      receipt.source_tree_hash,receipt.independent_review_hash,receipt.tests_hash,receipt.deployment_hash,receipt.rollback_hash)
+  )
   then 'MATCH' else 'MISMATCH' end;
 `, true);
   assert.equal(finalReadback.status, 0);
   assert.equal(finalReadback.stdout.trim(), "MATCH");
-
+  assert.equal(new Set(behavioralWitnesses).size, 19);
   process.stdout.write(
-    "cognitive LiveKit platform authorization concurrency: 7/7\n",
+    "cognitive LiveKit platform authorization concurrency: 19/19\n",
   );
   cleanup();
 } catch (error) {
