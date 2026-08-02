@@ -164,7 +164,8 @@ assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"misse
 assertIncludes(chatThread, "trustedNativeCallClaim", "native call transitions must originate from a consumed platform-scoped claim");
 assertIncludes(chatThread, "consumeTrustedIosCallKitNativeEventClaim", "CallKit Answer must be consumed once before the thread requests a transition");
 assertIncludes(chatThread, "requestedNativeCallOwnsTransition", "trusted native actions must own acceptance without racing navigation-only openCall");
-assertIncludes(chatThread, "|| requestedNativeCallOwnsTransition", "openCall compatibility handling must remain inert while a native action settles");
+assertNotIncludes(chatThread, "requestedOpenCall", "openCall route text must remain navigation-only");
+assertNotIncludes(chatThread, "requestedCallMode", "startCall route text must remain navigation-only");
 assertIncludes(chatThread, "activeNativeCallActionRequestKeyRef", "consumed native actions must survive unrelated rerenders while their exact claim remains current");
 assertIncludes(chatThread, "readChillyChatCallInvite(requestedCallInviteId)", "native Android notification actions must read the invite by id after cold/background launch");
 assertIncludes(chatThread, "invite.threadId !== threadId", "native Android notification actions must reject wrong-thread invite ids");

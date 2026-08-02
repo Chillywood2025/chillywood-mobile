@@ -97,17 +97,27 @@ export function createNativeCallTransitionProvenanceRegistry({
         activeEventKeys.delete(claim.eventKey);
       }
     });
-    consumedEventKeys.forEach((consumedAt, eventKey) => {
-      if (currentTime - consumedAt >= ttlMs) consumedEventKeys.delete(eventKey);
+    consumedEventKeys.forEach((consumed, eventKey) => {
+      if (currentTime - consumed.consumedAtMonotonicMs >= ttlMs) {
+        consumedEventKeys.delete(eventKey);
+      }
     });
     return true;
   };
 
   return Object.freeze({
-    clear() {
-      activeClaims.clear();
-      activeEventKeys.clear();
-      consumedEventKeys.clear();
+    clear(platform) {
+      const normalizedPlatform = normalizeText(platform);
+      if (normalizedPlatform !== "ios" && normalizedPlatform !== "android") return false;
+      activeClaims.forEach((claim, claimId) => {
+        if (claim.platform !== normalizedPlatform) return;
+        activeClaims.delete(claimId);
+        activeEventKeys.delete(claim.eventKey);
+      });
+      consumedEventKeys.forEach((consumed, eventKey) => {
+        if (consumed.platform === normalizedPlatform) consumedEventKeys.delete(eventKey);
+      });
+      return true;
     },
     create(input) {
       if (!purge()) return Object.freeze({status: "denied"});
@@ -173,7 +183,10 @@ export function createNativeCallTransitionProvenanceRegistry({
       if (!Number.isFinite(consumedAtMonotonicMs)) return null;
       activeClaims.delete(claimId);
       activeEventKeys.delete(claim.eventKey);
-      consumedEventKeys.set(claim.eventKey, consumedAtMonotonicMs);
+      consumedEventKeys.set(claim.eventKey, Object.freeze({
+        consumedAtMonotonicMs,
+        platform: claim.platform,
+      }));
       while (consumedEventKeys.size > maxConsumed) {
         const oldest = consumedEventKeys.keys().next().value;
         if (!oldest) break;
@@ -228,8 +241,8 @@ export const consumeTrustedIosCallKitNativeEventClaim = (expected) => (
   })
 );
 
-export const clearNativeCallTransitionClaims = () => {
-  nativeCallTransitionRegistry.clear();
+export const clearNativeCallTransitionClaims = (platform) => {
+  return nativeCallTransitionRegistry.clear(platform);
 };
 
 export const sanitizeExternalIosNativeCallPath = (value) => {
@@ -239,10 +252,11 @@ export const sanitizeExternalIosNativeCallPath = (value) => {
   try {
     const parsed = new URL(normalized, "https://native-intent.invalid");
     SENSITIVE_EXTERNAL_PARAMETERS.forEach((parameter) => parsed.searchParams.delete(parameter));
+    parsed.hash = "";
     if (absolute) return parsed.toString();
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
-    const [path] = normalized.split("?");
+    const [path] = normalized.split(/[?#]/u);
     return path ?? "";
   }
 };

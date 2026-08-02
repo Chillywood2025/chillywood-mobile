@@ -31,6 +31,7 @@ export function doesNativeCallActionOwnTransition(input) {
   if (input?.authority !== "trusted_native_claim") return false;
   const claim = input?.trustedNativeClaim;
   if (!claim || claim.consumed !== true) return false;
+  const monotonicNowMs = Number(input?.monotonicNowMs);
   const platform = String(input?.platform ?? "").trim().toLowerCase();
   const expectedSource = platform === "ios"
     ? "ios_callkit_native_event"
@@ -52,6 +53,11 @@ export function doesNativeCallActionOwnTransition(input) {
     && claim.inviteId === callInviteId.toLowerCase()
     && claim.action === nativeCallAction
     && claim.nativeIdentity === nativeIdentity
+    && Number.isFinite(monotonicNowMs)
+    && Number.isFinite(claim.consumedAtMonotonicMs)
+    && Number.isFinite(claim.expiresAtMonotonicMs)
+    && monotonicNowMs >= claim.consumedAtMonotonicMs
+    && monotonicNowMs < claim.expiresAtMonotonicMs
     && Number.isSafeInteger(claim.nativeEventGeneration)
     && claim.nativeEventGeneration > 0;
 }
