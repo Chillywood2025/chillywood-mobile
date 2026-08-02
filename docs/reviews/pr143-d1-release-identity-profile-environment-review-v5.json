@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-release-identity-profile-environment-review-v5",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "release-identity-profile-environment",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "humanApproval": false,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "immutableSourceTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "synchronizedBranchHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "currentBase": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseHead": "12985e2ad505ca813611c64b793345f069dc5515",
+  "synchronizedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "implementationTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "canonicalSyntheticTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "synchronizationParents": [
+    "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+    "12985e2ad505ca813611c64b793345f069dc5515"
+  ],
+  "sourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+  "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a8953b3ee5d856490a461e367729492d1bcf5d799748251e03c565601a4ececa",
+  "scopeStatus": "pass",
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "release-identity-profile-environment",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "focus": "canonical base synchronization, exact source-delta hash semantics, release identity, EAS profile/environment/runtime/channel/distribution, classification, and historical-proof boundaries"
+    },
+    "pullRequestIdentity": {
+      "status": "pass",
+      "number": 143,
+      "state": "open-draft",
+      "remoteHeadMatched": true,
+      "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "synchronizedHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "synchronizedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+      "currentBase": "12985e2ad505ca813611c64b793345f069dc5515"
+    },
+    "historicalEvidence": {
+      "status": "pass_preserved_byte_for_byte",
+      "evidence": [
+        {"version": "v1", "sha256": "d8ad0f70f597cd15f2fc6fc0c60f30a48b082dd2bbfc8823fa83613081b67214"},
+        {"version": "v2", "sha256": "a0c59cff04dd859a6c93ab870273059601804b0eaefac496ef9202c6d2c484f6"},
+        {"version": "v3", "sha256": "33ee4f5bc295106c0fd1d8579102072715957903a267dbaabea3a477cf71b42a"},
+        {"version": "v4", "sha256": "724d0a7840f63ff4ce5c2e6dd745d3aeeaa6faae9356800b1c4975273f798e7f", "classification": "historical-pre-hash-semantics-correction"}
+      ],
+      "priorEvidenceEditedByV5": false
+    },
+    "baseSynchronization": {
+      "status": "pass",
+      "method": "normal-history-preserving-no-ff-merge",
+      "immutableSourceIsAncestor": true,
+      "firstParentDistance": 1,
+      "parents": [
+        "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+        "12985e2ad505ca813611c64b793345f069dc5515"
+      ],
+      "firstParentExact": true,
+      "secondParentExact": true,
+      "mergeConflict": false,
+      "observedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+      "canonicalSyntheticTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+      "treeEquivalent": true,
+      "guardConsumedSourceDeltaHashAlgorithm": "sha256-of-git-helper-trimmed-git-diff-binary-no-renames-currentBase-to-synchronizedHead",
+      "guardConsumedSourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+      "rawDiffArtifactHashAlgorithm": "sha256-of-raw-git-diff-binary-no-renames-with-terminal-newline",
+      "rawDiffArtifactHash": "cb9c89c217f960f75befd86c5a3d02a732246cab2354e12bed4de1bad4bc5c75",
+      "hashesIntentionallyDistinct": true,
+      "changedFileHashAlgorithm": "sha256-of-git-diff-name-status-z-no-renames",
+      "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "changedPaths": [
+        "config/assurance/native-capability-registry-v1.json",
+        "config/assurance/release-target-parity-v1.json",
+        "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
+        "docs/assurance/pr-d1-offline-parity-report-v1.json",
+        "scripts/assurance/release-parity.mjs",
+        "tests/assurance/release-parity.test.mjs"
+      ]
+    },
+    "laneAssertions": {
+      "status": "pass_preserved_from_synchronized_v4",
+      "targets": "3/3",
+      "identityProfileEnvironmentRuntimeChannelDistribution": "3/3",
+      "targetAndReleaseIdentityClassificationFailClosed": true,
+      "historicalReleaseIdentitiesNotCurrentProof": true,
+      "androidIosEvidenceSeparated": true,
+      "currentGeneratedReplayClaimedHistoricalArtifactProof": false
+    },
+    "coordinatorPostSynchronizationEvidence": {
+      "status": "pass_preserved_not_rerun_by_lane",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "24/24",
+      "duplicateHeavyGenerationRunByLane": false
+    },
+    "proofTierBoundary": {
+      "status": "pass_scoped_and_honest",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+      "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "phase1Ci": {
+      "status": "canceled_pre_review_rerun_pending",
+      "runId": 30742530172,
+      "attempt": 1,
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "eligibleAsReviewLaneProof": false,
+      "formalLevelCGuardExpectedToRemainBlocked": true
+    },
+    "nonInterference": {
+      "implementationFilesEditedByReview": false,
+      "providerContact": false,
+      "buildOrOta": false,
+      "artifactInstalled": false,
+      "publicRelease": false,
+      "databaseOrProviderMutation": false,
+      "reviewPrMergePermitted": false,
+      "generatedNativeDirectoriesCommitted": false,
+      "denoLockStaged": false
+    }
+  },
+  "testResultHash": "81cf4326fde90352ee3f9cef9c8b0b2cbfa02cb63bb27d189f26dd1315c586f3",
+  "reviewLevel": "C",
+  "reviewHead": "0a976381a9da853fd2f57f140ca1f77968b72f43",
+  "reviewRef": "codex/first-pass-assurance-pr-d1-review-release-identity",
+  "reviewRefHead": "0a976381a9da853fd2f57f140ca1f77968b72f43",
+  "reviewTimestamp": "2026-08-02T09:56:56Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-release-identity-profile-environment",
+    "separate-clean-worktree"
+  ],
+  "findings": [
+    {
+      "id": "PR_D1_V4_SOURCE_DELTA_HASH_ALGORITHM_AMBIGUOUS",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "v5 binds the current-truth guard-consumed git-helper-trimmed hash fafb0cd3 separately from the preserved raw diff artifact hash cb9c89c2 and labels both algorithms."
+    },
+    {
+      "id": "PR_D1_LANE1_SYNCHRONIZED_AUTHORITY",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Canonical synchronization and all identity/profile/environment/runtime/channel/distribution/classification/historical-proof assertions remain unchanged from v4 with P0=0/P1=0."
+    }
+  ],
+  "summary": {
+    "status": "pass_synchronized_source_model_lane",
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0,
+    "mergeAuthorizedByThisReview": false,
+    "reviewPrMustRemainUnmerged": true,
+    "formalBlockers": ["PHASE_1_CI_RERUN_PENDING"],
+    "exactNextAction": "Coordinator confirms current-truth synchronization acceptance using the trimmed source-delta hash, collects all four lanes, and reruns exact Phase 1 CI run 30742530172; never merge this review PR."
+  }
+}
