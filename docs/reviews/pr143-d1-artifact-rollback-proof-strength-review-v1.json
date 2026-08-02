@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-artifact-rollback-proof-strength-review-v1",
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "implementationHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "implementationTree": "ededbd397c870e818d4b00a1325e8811ba3eac4c",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "baseTree": "d76676e7ddff74c09ffa4bc2994153772b69b73a",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "0cf1443cf10de447fdccf312eedf3f53409898f149a0d50a0301c65dd2abb991",
+  "reviewLevel": "C",
+  "reviewHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "reviewTimestamp": "2026-08-02T08:41:01Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "lane": "ARTIFACT_ROLLBACK_PROOF_STRENGTH",
+  "scope": {
+    "changedFiles": 6,
+    "insertions": 651,
+    "deletions": 5,
+    "implementationFilesModified": false,
+    "evidenceFileOnly": true
+  },
+  "artifactHashes": {
+    "staticContract": "2aac96f3198cf3aba101e038413464e6f2a4021fe1f77529aba8c3aaae5dbc1c",
+    "capabilityRegistry": "7869bcc6c6c8796d6675eaeeba4dfb345d8e84e667e14183df7e1fbfbf33fb2a",
+    "validator": "422719f5679db04a3b630fbf130021715a05b725ee5f15588c411208cea3308f",
+    "modelTest": "032162446d83d2d3f8a30cccb4eaca969cff25c2f048f20bb0615fea0caa41dd",
+    "offlineReport": "972c64eb7b7f1ffe9b9766b079f883dadf83fcb0b06ddd3f853eef28a409979d"
+  },
+  "reviewResult": {
+    "signedIdentity": {
+      "android-chat-livekit-qa-build-86": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED",
+      "ios-qa-build-8": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED",
+      "android-production-build-84-historical": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED"
+    },
+    "rollback": {
+      "android-chat-livekit-qa-build-86": "ROLLBACK_INCOMPATIBLE_MISSING_BUILD_85_ARTIFACT_IDENTITY",
+      "ios-qa-build-8": "ROLLBACK_INCOMPATIBLE_IDENTITY_MISSING",
+      "android-production-build-84-historical": "ROLLBACK_INCOMPATIBLE_BUILD_80_LACKS_IMAGE_MANIPULATOR"
+    },
+    "proofSubstitution": "REJECTED_BY_MODEL_AND_NEGATIVE_CONTROL",
+    "proofTiers": {
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+      "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "mayProceed": {
+      "nativeCompilation": false,
+      "signedArtifactInspection": false,
+      "updatePublication": false,
+      "release": false
+    },
+    "p0": 0,
+    "p1": 0
+  },
+  "testResults": {
+    "focusedArtifactRollbackModel": {
+      "status": "pass",
+      "command": "node tests/assurance/release-parity.test.mjs",
+      "targets": "3/3",
+      "historicalIdentityNotReproved": "3/3",
+      "rollbackRejected": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "14/14",
+      "signedIdentitySubstitutionControl": "SIGNED_ARTIFACT_PROOF_MISSING",
+      "providerInstalledSubstitutionControl": "PROOF_SUBSTITUTION_REJECTED",
+      "networkAccess": false,
+      "providerContact": false,
+      "buildPerformed": false,
+      "otaPublished": false
+    },
+    "phase1Ci": {
+      "status": "pending",
+      "implementationHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+      "reason": "Coordinator-owned full CI awaits all four Level C lanes and base synchronization"
+    }
+  },
+  "testResultHash": "60f3c1de896ba7769c10445206e2eda823635304b2fd557b7a098f7d6a216669",
+  "findings": [
+    {
+      "id": "PRD1-LATER-T3-INTEGRATION",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-D2-D3",
+      "summary": "Native integration and lifecycle instrumentation remain blocked and are not required for PR D1 T0-T2 correctness."
+    },
+    {
+      "id": "PRD1-LATER-T4-T6-CURRENT-PROOF",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "later-owner-authorized-native-provider-artifact-lanes",
+      "summary": "Current provider, signed-artifact, and installed-physical proof remains deliberately unproved."
+    },
+    {
+      "id": "PRD1-LATER-T7-PUBLIC-CANARY",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-F-or-later-explicit-release-authorization",
+      "summary": "Public canary proof remains blocked and no public action is authorized."
+    }
+  ],
+  "formalGuardExpectation": {
+    "status": "BLOCKED_PENDING_PHASE1_CI_ONLY",
+    "mergePermitted": false
+  },
+  "nonInterference": {
+    "implementationChanged": false,
+    "providerContact": false,
+    "build": false,
+    "ota": false,
+    "install": false,
+    "release": false,
+    "reviewOnlyNeverMerge": true
+  }
+}
