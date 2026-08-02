@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-artifact-rollback-proof-strength-review-v3",
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "implementationTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "baseTree": "d76676e7ddff74c09ffa4bc2994153772b69b73a",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "07bd294b3f216b4fe5aa3995859268ce2c8ab58c7f2b8f66636062df8a8085f4",
+  "reviewLevel": "C",
+  "reviewHead": "4af410c240d511a5d978fc45f6a0a1102f48fd79",
+  "reviewTree": "b00797ef98b0b2e6eb0f11f438678540eb9951a8",
+  "reviewTimestamp": "2026-08-02T09:26:07Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "lane": "ARTIFACT_ROLLBACK_PROOF_STRENGTH",
+  "priorEvidence": [
+    {
+      "path": "docs/reviews/pr143-d1-artifact-rollback-proof-strength-review-v1.json",
+      "sha256": "6f194aa8c5146ff578611e2d684b55d433612565f316d1465478fa86fcc6af68",
+      "status": "HISTORICAL_PRESERVED"
+    },
+    {
+      "path": "docs/reviews/pr143-d1-artifact-rollback-proof-strength-review-v2.json",
+      "sha256": "d14503c0bd53df3e214981d394ed17f41167ffe48857bb1cb43727dcf3c794e4",
+      "status": "HISTORICAL_PRESERVED"
+    }
+  ],
+  "artifactHashes": {
+    "staticContract": "be042630c00addc1bb1de4689694c77b6612f2a29c3342b1b2d211f31b4e54d6",
+    "capabilityRegistry": "c13e3a4848dd509f828692e836481dac7c7b8b3ac4586666c1f433bf49f66328",
+    "validator": "19b10362ad03f4052bf562d4432e6ca3782ffe4eb88f2ca78ee5ada87600bb95",
+    "modelTest": "e5ab60f8c77ae818d193b504f9122ff45869627282d0926161cc44e0d8c648fb",
+    "offlineReport": "cd905a4141654ac41a7ec664e452098f2665e8997ca5dc0bd08e5c2cedaaab5a"
+  },
+  "reviewResult": {
+    "capabilityClosure": {
+      "android-chat-livekit-qa-build-86": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_21_OF_21",
+      "ios-qa-build-8": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_26_OF_26",
+      "android-production-build-84-historical": "PASS_CURRENT_SOURCE_REPLAY_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_21_OF_21",
+      "missingCapabilities": 0
+    },
+    "signedIdentity": {
+      "android-chat-livekit-qa-build-86": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED",
+      "ios-qa-build-8": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED",
+      "android-production-build-84-historical": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED"
+    },
+    "historicalCurrentSeparation": {
+      "historicalBuild84Source": "8c426f4e74de61de7d4529d32d124744833912dc",
+      "currentReplayClassification": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF",
+      "currentReplayDigest": "1f4391e2a6df0c9266db66b7f2615984e9370163827426593077cbb53d9ef2c4",
+      "historicalArtifactEquivalentToCurrentReplay": false,
+      "substitutionControl": "HISTORICAL_SOURCE_SUBSTITUTION_REJECTED"
+    },
+    "rollback": {
+      "android-chat-livekit-qa-build-86": "ROLLBACK_INCOMPATIBLE_MISSING_BUILD_85_ARTIFACT_IDENTITY",
+      "ios-qa-build-8": "ROLLBACK_INCOMPATIBLE_IDENTITY_MISSING",
+      "android-production-build-84-historical": "ROLLBACK_INCOMPATIBLE_BUILD_80_MISSING_21_REQUIRED_CAPABILITIES"
+    },
+    "proofSubstitution": {
+      "signedArtifactFromHistoricalInput": "SIGNED_ARTIFACT_PROOF_MISSING",
+      "providerOrInstalledFromSource": "PROOF_SUBSTITUTION_REJECTED",
+      "providerClaim": false,
+      "signedArtifactClaim": false,
+      "installedPhysicalClaim": false,
+      "publicCanaryClaim": false
+    },
+    "proofTiers": {
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+      "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "mayProceed": {
+      "nativeCompilation": false,
+      "signedArtifactInspection": false,
+      "updatePublication": false,
+      "release": false
+    },
+    "p0": 0,
+    "p1": 0
+  },
+  "testResults": {
+    "sourceModelReadback": {
+      "status": "pass",
+      "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "targets": "3/3",
+      "capabilityParity": "3/3",
+      "androidCapabilityClosure": "21/21",
+      "iosCapabilityClosure": "26/26",
+      "historicalIdentityNotReproved": "3/3",
+      "rollbackRejected": "3/3",
+      "generatedSourceRecordedByCoordinatorLane2": "9/9",
+      "deterministicEvidenceRecordedByCoordinatorLane2": "3/3",
+      "negativeControlsRecordedByImmutableReport": "24/24",
+      "directImportClosure": "42_DISCOVERED_34_NATIVE_MAPPED_8_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
+      "duplicateGenerationAttempt": "STOPPED_ON_COORDINATOR_DIRECTION_NOT_COUNTED",
+      "networkAccess": false,
+      "providerContact": false,
+      "buildPerformed": false,
+      "otaPublished": false
+    },
+    "phase1Ci": {
+      "status": "pending",
+      "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "reason": "Coordinator-owned full CI awaits all current Level C lanes and base synchronization"
+    }
+  },
+  "testResultHash": "904ac3d7309df4adcab585c0e6b78ed26a1b4427fadf4c942d6122e0a8561a2d",
+  "findings": [
+    {
+      "id": "PRD1-LATER-T3-INTEGRATION",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-D2-D3",
+      "summary": "Native integration and lifecycle instrumentation remain blocked outside PR D1 T0-T2 correctness."
+    },
+    {
+      "id": "PRD1-LATER-T4-T6-CURRENT-PROOF",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "later-owner-authorized-native-provider-artifact-lanes",
+      "summary": "Current provider, signed-artifact, and installed-physical proof remains deliberately unproved."
+    },
+    {
+      "id": "PRD1-LATER-T7-PUBLIC-CANARY",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-F-or-later-explicit-release-authorization",
+      "summary": "Public canary proof remains blocked and no public action is authorized."
+    }
+  ],
+  "blockers": [
+    "BASE_SYNCHRONIZATION_PENDING",
+    "PHASE1_CI_PENDING",
+    "T3_INTEGRATION_BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER_BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT_HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL_HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY_BLOCKED_EXTERNAL"
+  ],
+  "formalGuardExpectation": {
+    "status": "BLOCKED_PENDING_PHASE1_CI_ONLY",
+    "mergePermitted": false
+  },
+  "nonInterference": {
+    "implementationChanged": false,
+    "providerContact": false,
+    "build": false,
+    "ota": false,
+    "install": false,
+    "release": false,
+    "reviewOnlyNeverMerge": true
+  }
+}
