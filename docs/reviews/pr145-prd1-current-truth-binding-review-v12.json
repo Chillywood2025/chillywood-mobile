@@ -8,7 +8,7 @@
   "reviewerLanes": ["independent"],
   "reviewTimestamp": "2026-08-02T08:24:43Z",
   "reviewBranch": "codex/first-pass-assurance-current-truth-after-b0-guard-review",
-  "reviewHead": "94092b3ae89fa37fa463894bc85bf689411651c7",
+  "reviewHead": "41702f25ce5886280c2530f2d09162a0e580c7b1",
   "reviewTree": "552ab961ad0aba6cee4f032e365553390d77583f",
   "reviewEvidenceParentHead": "94092b3ae89fa37fa463894bc85bf689411651c7",
   "historicalEvidencePreserved": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"],
