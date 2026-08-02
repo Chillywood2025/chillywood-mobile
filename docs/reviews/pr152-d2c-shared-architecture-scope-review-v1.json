@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr152-d2c-shared-architecture-scope-review-v1",
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewLane": "shared-architecture-scope-d2b-compatibility",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "humanApproval": false,
+  "classification": "HISTORICAL_REJECTED_BASE_SYNCHRONIZED_IMPLEMENTATION_HEAD",
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "immutableSourceHead": "fa64edaef14e4a29225a377136b5ede504be20f0",
+  "immutableSourceTree": "9e878fab6d30d60649d030f7c6b0627d37fe5020",
+  "synchronizedBranchHead": "e0d5158b8b2862e218b76ceb915a90172183ca5e",
+  "implementationHead": "e0d5158b8b2862e218b76ceb915a90172183ca5e",
+  "synchronizedTree": "db6e45ecb658c67967fbd8bd43124547cd591f4b",
+  "implementationTree": "db6e45ecb658c67967fbd8bd43124547cd591f4b",
+  "canonicalSyntheticTree": "db6e45ecb658c67967fbd8bd43124547cd591f4b",
+  "currentBase": "e7712926d59eb379475834351fbbf48e74a32e98",
+  "baseHead": "e7712926d59eb379475834351fbbf48e74a32e98",
+  "baseTree": "f2ecd8eaf7f5a4441916ba569948b642c38f19d3",
+  "synchronizationParents": [
+    "fa64edaef14e4a29225a377136b5ede504be20f0",
+    "e7712926d59eb379475834351fbbf48e74a32e98"
+  ],
+  "reviewHead": "e0d5158b8b2862e218b76ceb915a90172183ca5e",
+  "sourceDeltaHash": "617d6ea57f44760753c35ed0675c75ff12c14d0c6a409574586eded89f5457f5",
+  "changedFileHash": "594eefe2b6a8c2fab9930597ea640ac8d8d9198e15b34c34b0c04e8bbd6ba82a",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "4386705ece1505e542d10fc37e38095fb7b145c8ec12b65622d01e91b0d715d2",
+  "testResultHash": "02e0f532842928fa372f3d63633bb94e7cba389ef0cd4e988b9abbfc60daf355",
+  "changedPaths": [
+    "_lib/communicationCallMediaPolicy.d.ts",
+    "_lib/communicationCallMediaPolicy.mjs",
+    "_lib/iosNativeCalls.ts",
+    "_lib/nativeCallTransitionProvenance.d.ts",
+    "_lib/nativeCallTransitionProvenance.mjs",
+    "app/+native-intent.tsx",
+    "app/_layout.tsx",
+    "app/chat/[threadId].tsx",
+    "config/assurance/native-call-transition-provenance-v1.json",
+    "config/assurance/pr-d2c-scope-waiver-v1.json",
+    "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json",
+    "scripts/guard-chilly-chat-call-push-policy.mjs",
+    "scripts/guard-ios-native-call-policy.mjs",
+    "scripts/guard-notification-room-call-policy.mjs",
+    "scripts/test-chilly-chat-call-semantics.mjs",
+    "scripts/test-ios-native-call-route-provenance.mjs"
+  ],
+  "scope": {
+    "status": "PASS",
+    "objectiveDomain": "native-call-transition-provenance",
+    "changedFiles": 16,
+    "maximumFiles": 18,
+    "additions": 1009,
+    "deletions": 55,
+    "netChangedLines": 954,
+    "maximumNetChangedLines": 2200,
+    "scopeWaiver": "config/assurance/pr-d2c-scope-waiver-v1.json",
+    "oneHighRiskDomain": true,
+    "androidProductImplementationChanged": false,
+    "swiftOrNativeInterfaceChanged": false,
+    "nativeMediaBehaviorChanged": false,
+    "packageManifestOrLockChanged": false,
+    "workflowChanged": false,
+    "generatedAndroidOrIosCommitted": false
+  },
+  "synchronizationReview": {
+    "status": "PASS",
+    "immutableSourceIsFirstParent": true,
+    "exactMainIsSecondParent": true,
+    "canonicalTreeMatches": true,
+    "sourceDeltaEquivalent": true,
+    "changedPathsEquivalent": true,
+    "manualResolution": false
+  },
+  "architectureReview": {
+    "canonicalSharedRegistryPresent": true,
+    "currentMergedCompetingRegistryPresent": false,
+    "iosProducerEnabled": true,
+    "androidProducerEnabled": false,
+    "frozenD2bDuplicateRegistryIdentified": true,
+    "d2bDuplicateRegistryDisposition": "REPLACE_WITH_D2C_SHARED",
+    "d2bFrozenHead": "44741942afb8062d9348e555b7d29a5dc9c2ca3a",
+    "d2bFrozenTree": "6bdc50191f6756271ccb050fa94d3045d6e9fa3e",
+    "d2bReconciliationPlanPresent": true,
+    "platformScopedLifecycleClear": false,
+    "repositoryWideSoleIosCreatorGuard": false
+  },
+  "focusedEvidence": {
+    "preFixReproductions": "10/10",
+    "trustedPositive": "22/22",
+    "producerDenials": "8/8",
+    "routeDenials": "30/30",
+    "reportedNegativeControls": "18/18",
+    "negativeControlAssessment": "REJECTED_AS_NOT_BOUND_TO_PRODUCTION_MUTANTS",
+    "generatedIosDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+    "generatedIosDeterminism": "3/3",
+    "capabilityParity": "26/26",
+    "missingCapabilities": 0,
+    "proofStrengthSubstitutions": 0
+  },
+  "equivalentIntegrationDecision": {
+    "decision": "ACCEPTED_FOR_EXACT_E0D5158_HEAD_ONLY",
+    "tier": "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION_CLEAR",
+    "basis": [
+      "unsigned Debug iphonesimulator compilation passed at the immutable source",
+      "the synchronized implementation source delta is byte-equivalent",
+      "the generated iOS source digest remained exact in three post-synchronization runs",
+      "the exact native-bridge and route integration harness passed three of three"
+    ],
+    "postSynchronizationXcodeResult": "TIMEBOXED_NOT_PASS",
+    "postSynchronizationXcodeTimeboxInvalidatesEquivalentEvidence": false,
+    "doesNotProve": [
+      "simulator-installed end-user behavior",
+      "physical CallKit behavior",
+      "PushKit or APNs provider delivery",
+      "signed artifact",
+      "TestFlight delivery",
+      "public release"
+    ],
+    "transferToCorrectedHead": false,
+    "correctedHeadRequirement": "rerun focused compile integration and deterministic evidence"
+  },
+  "findings": [
+    {
+      "severity": "P1",
+      "id": "IOS_CONSUMED_NATIVE_CLAIM_EXPIRY_NOT_ENFORCED_AT_TRANSITION",
+      "path": "_lib/communicationCallMediaPolicy.mjs",
+      "finding": "The exact-head ownership policy validates a consumed claim's binding and generation but does not compare a current monotonic time with expiresAtMonotonicMs. The thread retains the consumed claim while asynchronous invite hydration runs, so transition authority can survive beyond the contract's 30-second TTL.",
+      "requiredCorrection": "Require a finite monotonic time within the claim's consumed-at and expiry bounds both when ownership is derived and immediately before the transition request; add an executable delayed-consumption regression."
+    },
+    {
+      "severity": "P1",
+      "id": "D2C_MANDATORY_NEGATIVE_CONTROLS_NOT_PRODUCTION_BOUND",
+      "path": "scripts/test-ios-native-call-route-provenance.mjs",
+      "finding": "The reported 18/18 matrix toggles fields on an independent mutationDefaults object and maps them to error strings. Most fixture defaults are not derived from production source or executed variants, so production regressions can leave the 18/18 result green.",
+      "requiredCorrection": "Bind every mandatory control to an executable production variant, source mutant, or focused guard whose result actually changes when the reviewed implementation is weakened."
+    },
+    {
+      "severity": "P1",
+      "id": "SHARED_PROVENANCE_PLATFORM_LIFECYCLE_CLEAR_NOT_ISOLATED",
+      "path": "_lib/iosNativeCalls.ts",
+      "finding": "The iOS readiness lifecycle calls clearNativeCallTransitionClaims(), which clears all platform claims. IosNativeCallsBridge is mounted on Android and startIosNativeCallsReadiness reaches this clear after not-iOS readiness resolution, so the future D2B Android producer can lose a trusted native-store claim during startup.",
+      "requiredCorrection": "Make lifecycle clearing platform-scoped or prevent iOS readiness from mutating the registry on Android, add an Android-claim-survives-iOS-readiness regression, and include the callsite in the D2B reconciliation plan."
+    },
+    {
+      "severity": "P1",
+      "id": "IOS_TRUSTED_CLAIM_CREATOR_GUARD_NOT_REPOSITORY_WIDE",
+      "path": "scripts/guard-ios-native-call-policy.mjs",
+      "finding": "The sole-producer guard counts registerTrustedIosCallKitNativeEvent calls only inside app/_layout.tsx. Another production file can import and call the exported producer without failing the guard.",
+      "requiredCorrection": "Scan tracked production source repository-wide with an exact creator allowlist and prove an additional creator callsite fails the gate."
+    },
+    {
+      "severity": "P2",
+      "id": "IOS_PENDING_NATIVE_EVENT_DURABLE_TIMESTAMP_GENERATION_DEFERRED",
+      "assignedSuccessor": "D3",
+      "finding": "Native pending events do not yet carry a durable native timestamp and generation suitable for stronger process-recovery attestation."
+    },
+    {
+      "severity": "P2",
+      "id": "IOS_CALLKIT_COMPLETION_RESULT_ATTESTATION_DEFERRED",
+      "assignedSuccessor": "D3",
+      "finding": "The native completion result is not independently attested beyond the current bridge return path."
+    },
+    {
+      "severity": "P2",
+      "id": "IOS_AUDIO_EVENT_NATIVE_IDENTITY_SCOPE_DEFERRED",
+      "assignedSuccessor": "D3",
+      "finding": "The existing audioSessionActivated path is not fully scoped to one native call UUID."
+    }
+  ],
+  "findingCounts": {"P0": 0, "P1": 4, "P2": 3, "P3": 0},
+  "criticalFindingCounts": {"P0": 0, "P1": 4},
+  "waivedFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "proofTiersAtReviewedHead": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "BLOCKED_INTERNAL_OPEN_P1",
+    "T2_MODEL": "BLOCKED_INTERNAL_OPEN_P1",
+    "T3_INTEGRATION": "LOCAL_EQUIVALENT_INTEGRATION_ACCEPTED_EXACT_HEAD_ONLY",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "T6_INSTALLED_PHYSICAL": "INSTALLED_PROOF_MISSING",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "reviewLevel": "C",
+  "reviewTimestamp": "2026-08-02T18:55:00Z",
+  "reviewerLanes": [
+    "shared-platform-provenance-architecture",
+    "d2b-reconciliation-compatibility",
+    "scope-determinism-negative-controls",
+    "proof-strength-and-secret-boundary",
+    "isolated-automated-review",
+    "implementation-agent-not-sole-reviewer"
+  ],
+  "nonInterference": {
+    "implementationEditedByReview": false,
+    "providerContactOrMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "artifactInstalled": false,
+    "physicalDeviceUsed": false,
+    "publicRelease": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRoleRightAuthRlsChanged": false,
+    "generatedAndroidOrIosCommittedByReview": false,
+    "denoLockTouched": false
+  },
+  "summary": {
+    "laneResult": "P0_0_P1_4_P2_3_REJECT",
+    "implementationMergeRecommendation": "DO_NOT_MERGE_CORRECT_ALL_FOUR_P1_FINDINGS_REFREEZE_RERUN_AND_REREVIEW",
+    "evidenceState": "HISTORICAL_EXACT_HEAD_REJECTION",
+    "reviewPrDisposition": "remain-draft-never-merge",
+    "noP1Waived": true
+  }
+}
