@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(28);
 select has_table(
   'public',
   'cognitive_livekit_final_source_identity_bindings',
@@ -150,36 +150,6 @@ select ok(
   ),
   'the trigger function is not directly application-executable'
 );
-select is(
-  public.cognitive_livekit_final_source_identity_matches_v3(
-    'android','fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
-    '1abcd5e765a0dcac4ef0b40a2a90efb06f508fec',
-    '7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0',
-    'com.chillywood.mobile','google_play_internal_testing','86',
-    '1.0.0-android-chat-call-action-v1','android-chat-livekit-qa',
-    'e3379ac9-61f0-40db-a014-81975be123e5',
-    'fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44',
-    'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050',
-    '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0'
-  ),
-  true,
-  'the exact Android receipt, artifact, source, and runtime match'
-);
-select is(
-  public.cognitive_livekit_final_source_identity_matches_v3(
-    'ios','fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
-    '1abcd5e765a0dcac4ef0b40a2a90efb06f508fec',
-    '7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0',
-    'com.chillywood.mobile','internal_testflight','8',
-    '1.0.0-iosqa1','ios-qa',
-    '019fb099-f7c3-7130-97aa-a4bb1c49792f',
-    '24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8',
-    '73792a29b2de5445bc7fc718abd6463d812ffec6b566b00ab930045a32d266cb',
-    '17d0bf8d12eed354ab5784cc94a3373620c4a9dc09b9aeda81bdb13103351bcf'
-  ),
-  true,
-  'the exact iOS receipt, artifact, source, and runtime match'
-);
 select ok(
   not exists (
     select 1
@@ -194,38 +164,49 @@ select ok(
   ),
   'each run source hash is derived from its delivered source commit'
 );
-create function pg_temp.livekit_v3_mutation_is_rejected(p_field text)
+create function pg_temp.livekit_v3_mutation_is_rejected(
+  p_field text,
+  p_manifest_platform public.cognitive_platform default 'android',
+  p_identity_platform public.cognitive_platform default 'android',
+  p_source_build_hash text default null
+)
 returns boolean
 language sql
 stable
 as $$
   select not public.cognitive_livekit_final_source_identity_matches_v3(
-    case when p_field = 'platform' then 'ios'::public.cognitive_platform
-      else 'android'::public.cognitive_platform end,
+    case when p_field = 'platform'
+      then case p_manifest_platform when 'android' then 'ios' else 'android' end
+      else p_manifest_platform end,
     case when p_field = 'commit' then repeat('a',40)
-      else 'fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6' end,
+      else binding.final_source_commit end,
     case when p_field = 'tree' then repeat('b',40)
-      else '1abcd5e765a0dcac4ef0b40a2a90efb06f508fec' end,
+      else binding.final_source_tree_hash end,
     case when p_field = 'deployment' then repeat('0',64)
-      else '7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0' end,
+      else binding.final_deployment_hash end,
     case when p_field = 'app' then 'com.example.invalid'
-      else 'com.chillywood.mobile' end,
-    case when p_field = 'distribution' then 'internal_testflight'
-      else 'google_play_internal_testing' end,
-    case when p_field = 'build' then '87' else '86' end,
+      else binding.application_identifier end,
+    case when p_field = 'distribution' then 'invalid_distribution'
+      else binding.distribution end,
+    case when p_field = 'build' then 'invalid' else binding.build_number end,
     case when p_field = 'runtime' then 'wrong-runtime'
-      else '1.0.0-android-chat-call-action-v1' end,
-    case when p_field = 'channel' then 'wrong-channel'
-      else 'android-chat-livekit-qa' end,
+      else binding.runtime_version end,
+    case when p_field = 'channel' then 'wrong-channel' else binding.channel end,
     case when p_field = 'update' then '00000000-0000-0000-0000-000000000000'::uuid
-      else 'e3379ac9-61f0-40db-a014-81975be123e5'::uuid end,
+      else binding.internal_update_id end,
     case when p_field = 'artifact' then repeat('0',64)
-      else 'fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44' end,
-    case when p_field = 'source' then repeat('0',64)
-      else 'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050' end,
+      else binding.installed_artifact_hash end,
+    coalesce(
+      p_source_build_hash,
+      case when p_field = 'source' then repeat('0',64)
+        else binding.expected_source_build_hash
+      end
+    ),
     case when p_field = 'runtime_hash' then repeat('0',64)
-      else '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0' end
-  );
+      else binding.expected_runtime_identity_hash end
+  )
+  from public.cognitive_livekit_final_source_identity_bindings binding
+  where binding.target_platform = p_identity_platform;
 $$;
 with negative_cases(field_name) as (
   values ('platform'),('commit'),('tree'),('deployment'),('app'),
@@ -238,76 +219,6 @@ select is(
   13,
   'every receipt, artifact, source, and runtime comparator fails alone'
 );
-with definition as (
-  select pg_get_functiondef(
-    'public.cognitive_livekit_final_source_identity_matches_v3(public.cognitive_platform,text,text,text,text,text,text,text,text,uuid,text,text,text)'::regprocedure
-  ) as body
-), comparators(fragment) as (
-  values
-    ('binding.target_platform = p_target_platform'),
-    ('binding.final_source_commit = p_final_source_commit'),
-    ('binding.final_source_tree_hash = p_final_source_tree_hash'),
-    ('binding.final_deployment_hash = p_final_deployment_hash'),
-    ('binding.application_identifier = p_application_identifier'),
-    ('binding.distribution = p_distribution'),
-    ('binding.build_number = p_build_number'),
-    ('binding.runtime_version = p_runtime_version'),
-    ('binding.channel = p_channel'),
-    ('binding.internal_update_id = p_internal_update_id'),
-    ('binding.installed_artifact_hash = p_installed_artifact_hash'),
-    ('binding.expected_source_build_hash = p_source_build_hash'),
-    ('binding.expected_runtime_identity_hash = p_runtime_identity_hash')
-)
-select is(
-  (select count(*)::integer from definition,comparators
-   where position(comparators.fragment in definition.body) > 0),
-  13,
-  'the predicate source contains all thirteen exact comparators'
-);
-with definition as (
-  select pg_get_functiondef(
-    'public.cognitive_require_livekit_platform_run_identity_v3()'::regprocedure
-  ) as body
-), shared_columns(column_name) as (
-  values
-    ('shared_task_id'),('target_task_id'),('project_id'),('shared_platform'),
-    ('target_platform'),('environment'),('owner_user_id'),
-    ('baseline_version_id'),('source_commit'),('source_tree_hash'),
-    ('independent_review_hash'),('tests_hash'),('deployment_hash'),
-    ('rollback_hash')
-)
-select is(
-  (select count(*)::integer from definition,shared_columns
-   where position(
-     'authorization_value.' || shared_columns.column_name ||
-     ' is distinct from receipt_value.' || shared_columns.column_name
-     in definition.body
-   ) > 0),
-  14,
-  'finalization binds every shared authorization field to its receipt'
-);
-with definition as (
-  select pg_get_functiondef(
-    'public.cognitive_require_livekit_platform_run_identity_v3()'::regprocedure
-  ) as body
-), comparators(fragment) as (
-  values
-    ('run.source_build_hash is distinct from binding_value.expected_source_build_hash'),
-    ('run.runtime_identity_hash is distinct from binding_value.expected_runtime_identity_hash'),
-    ('binding.internal_update_id = receipt_value.internal_update_id'),
-    ('binding.installed_artifact_hash = receipt_value.installed_artifact_hash')
-)
-select ok(
-  (select count(*) from definition,comparators
-   where position(comparators.fragment in definition.body) > 0) = 4
-  and position(
-    'case receipt_value.target_platform'
-    in pg_get_functiondef(
-      'public.cognitive_require_livekit_platform_run_identity_v3()'::regprocedure
-    )
-  ) = 0,
-  'enabled runs use the selected immutable manifest row without duplicated platform constants'
-);
 select is(
   (
     select count(*)::integer
@@ -316,110 +227,71 @@ select is(
   0,
   'the correction creates no activation outcome'
 );
-create function pg_temp.sha256(p_value text)
-returns text language sql immutable
-as $$
-  select encode(
-    extensions.digest(convert_to(p_value,'UTF8'),'sha256'),
-    'hex'
-  );
+create function pg_temp.sha256(p_value text) returns text language sql immutable as $$
+  select encode(extensions.digest(convert_to(p_value,'UTF8'),'sha256'),'hex');
 $$;
-insert into auth.users(id,is_sso_user,is_anonymous) values
-  ('61000000-0000-0000-0000-000000000001',false,false),
-  ('61000000-0000-0000-0000-000000000002',false,false);
-insert into public.chat_call_livekit_canary_users(
-  user_id,enabled,enrolled_by
-) values
-  (
-    '61000000-0000-0000-0000-000000000001',true,
-    '61000000-0000-0000-0000-000000000001'
-  ),
-  (
-    '61000000-0000-0000-0000-000000000002',true,
-    '61000000-0000-0000-0000-000000000001'
-  );
-insert into public.provider_events(
-  id,provider_event_id,provider,user_id,app_user_id,environment,
-  event_type,status,idempotency_key,raw_payload_hash
-) values
-  (
-    '62000000-0000-0000-0000-000000000001','b1-sandbox-premium-a',
-    'revenuecat','61000000-0000-0000-0000-000000000001',
-    '61000000-0000-0000-0000-000000000001','sandbox',
-    'INITIAL_PURCHASE','processed','b1-sandbox-premium-a',
-    pg_temp.sha256('b1-sanitized-revenuecat-a')
-  ),
-  (
-    '62000000-0000-0000-0000-000000000002','b1-sandbox-premium-b',
-    'revenuecat','61000000-0000-0000-0000-000000000002',
-    '61000000-0000-0000-0000-000000000002','sandbox',
-    'INITIAL_PURCHASE','processed','b1-sandbox-premium-b',
-    pg_temp.sha256('b1-sanitized-revenuecat-b')
-  );
-insert into public.user_entitlements(
-  user_id,entitlement_key,status,source,starts_at,expires_at,metadata
-) values
-  (
-    '61000000-0000-0000-0000-000000000001','premium','active',
-    'revenuecat',transaction_timestamp(),
-    transaction_timestamp() + interval '1 hour',
-    '{"environment":"sandbox","sandbox":true}'::jsonb
-  ),
-  (
-    '61000000-0000-0000-0000-000000000002','premium','active',
-    'revenuecat',transaction_timestamp(),
-    transaction_timestamp() + interval '1 hour',
-    '{"environment":"sandbox","sandbox":true}'::jsonb
-  );
-insert into public.access_grants(
-  user_id,grant_type,source_type,source_id,provider,provider_event_id,
-  environment,status,starts_at,expires_at
-) values
-  (
-    '61000000-0000-0000-0000-000000000001','premium','provider_event',
-    '62000000-0000-0000-0000-000000000001','revenuecat',
-    '62000000-0000-0000-0000-000000000001','sandbox','sandbox_only',
-    transaction_timestamp(),transaction_timestamp() + interval '1 hour'
-  ),
-  (
-    '61000000-0000-0000-0000-000000000002','premium','provider_event',
-    '62000000-0000-0000-0000-000000000002','revenuecat',
-    '62000000-0000-0000-0000-000000000002','sandbox','sandbox_only',
-    transaction_timestamp(),transaction_timestamp() + interval '1 hour'
-  );
-create temporary table b1_sandbox_premium_proof(proof jsonb not null)
-on commit drop;
-insert into b1_sandbox_premium_proof
-select public.cognitive_livekit_sandbox_premium_proof_v1();
-do $$
-declare proof_value jsonb;
-begin
-  select proof into proof_value from b1_sandbox_premium_proof;
-  if proof_value->>'eligible' <> 'true'
-     or (proof_value->>'canaryCount')::integer <> 2
-     or (proof_value->>'activeRoleMembershipCount')::integer <> 0
-     or (proof_value->>'activeManualGrantCount')::integer <> 0
-     or (proof_value->>'qualifiedRevenueCatSandboxRowCount')::integer <> 2
-     or (proof_value->>'qualifiedPremiumUserCount')::integer <> 2 then
-    raise exception 'sanitized_sandbox_premium_fixture_rejected'
-      using errcode = 'P0001';
-  end if;
-end;
-$$;
-insert into public.cognitive_projects (
-  id,repository_full_name,source_state,activation_state,
-  scheduler_state,production_authority
-) values (
+create temporary table b1_canaries(user_id uuid,event_id uuid,suffix text) on commit drop;
+insert into b1_canaries values
+  ('61000000-0000-0000-0000-000000000001','62000000-0000-0000-0000-000000000001','a'),
+  ('61000000-0000-0000-0000-000000000002','62000000-0000-0000-0000-000000000002','b');
+insert into auth.users(id,is_sso_user,is_anonymous)
+select user_id,false,false from b1_canaries;
+insert into public.chat_call_livekit_canary_users(user_id,enabled,enrolled_by)
+select user_id,true,'61000000-0000-0000-0000-000000000001' from b1_canaries;
+insert into public.provider_events(id,provider_event_id,provider,user_id,app_user_id,
+  environment,event_type,status,idempotency_key,raw_payload_hash)
+select event_id,'b1-sandbox-premium-' || suffix,'revenuecat',user_id,
+  user_id::text,'sandbox','INITIAL_PURCHASE','processed',
+  'b1-sandbox-premium-' || suffix,pg_temp.sha256('b1-provider-' || suffix)
+from b1_canaries;
+insert into public.user_entitlements(user_id,entitlement_key,status,source,
+  starts_at,expires_at,metadata)
+select user_id,'premium','active','revenuecat',transaction_timestamp(),
+  transaction_timestamp() + interval '1 hour',
+  '{"environment":"sandbox","sandbox":true}'::jsonb from b1_canaries;
+insert into public.access_grants(user_id,grant_type,source_type,source_id,provider,
+  provider_event_id,environment,status,starts_at,expires_at)
+select user_id,'premium','provider_event',event_id,'revenuecat',event_id,
+  'sandbox','sandbox_only',transaction_timestamp(),
+  transaction_timestamp() + interval '1 hour' from b1_canaries;
+create temporary table b1_sandbox_premium_proof on commit drop as
+  select public.cognitive_livekit_sandbox_premium_proof_v1() proof;
+select ok(
+  (select proof->>'eligible' = 'true' and
+    (proof->>'qualifiedRevenueCatSandboxRowCount')::integer = 2 and
+    (proof->>'qualifiedPremiumUserCount')::integer = 2 from b1_sandbox_premium_proof),
+  'preflight uses a provider-backed sanitized sandbox Premium proof'
+);
+create temporary table b1_livekit_platform_state(
+  platform public.cognitive_platform primary key,task_id uuid not null,capability_prefix text not null,
+  receipt_id uuid not null,authorization_id uuid not null,distribution text not null,build_number text not null,
+  runtime_version text not null,channel text not null,update_id uuid not null,artifact_hash text not null,receipt_hash text not null,
+  rollback_hash text not null,runtime_identity_hash text not null,source_build_hash text not null
+) on commit drop;
+insert into b1_livekit_platform_state values
+  ('android','40000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-',
+   '10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','google_play_internal_testing',
+   '86','1.0.0-android-chat-call-action-v1','android-chat-livekit-qa','e3379ac9-61f0-40db-a014-81975be123e5',
+   'fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44',
+   '0fbe0c0d5bf2fe593b23f8970fe03e85c2e32e9195ec93ac9533d254b9014759',repeat('7',64),
+   '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0',
+   'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050'),
+  ('ios','40000000-0000-0000-0000-000000000002','81000000-0000-0000-0000-',
+   '10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','internal_testflight',
+   '8','1.0.0-iosqa1','ios-qa','019fb099-f7c3-7130-97aa-a4bb1c49792f',
+   '24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8',
+   '37d14e930e6787973866b0a5f38c28e1484dac0cb187f4ecb5de363147528e48',repeat('9',64),
+   '17d0bf8d12eed354ab5784cc94a3373620c4a9dc09b9aeda81bdb13103351bcf',
+   '73792a29b2de5445bc7fc718abd6463d812ffec6b566b00ab930045a32d266cb');
+insert into public.cognitive_projects(id,repository_full_name,source_state,
+  activation_state,scheduler_state,production_authority) values (
   '50000000-0000-0000-0000-000000000001',
   'Chillywood2025/chillywood-mobile',
   'collective_governance_source_complete_not_deployed',
   'off','none',false
 );
-insert into public.intelligence_tasks (
-  id,project_id,platform,environment,repository_full_name,branch_name,
-  task_key,objective_hash,actor_identity,deadman_at
-) values
-(
+insert into public.intelligence_tasks(id,project_id,platform,environment,
+  repository_full_name,branch_name,task_key,objective_hash,actor_identity,deadman_at) values (
   '30000000-0000-0000-0000-000000000001',
   '50000000-0000-0000-0000-000000000001',
   'shared','production','Chillywood2025/chillywood-mobile',
@@ -427,16 +299,18 @@ insert into public.intelligence_tasks (
   'assurance-livekit-v3-shared-fixture',repeat('1',64),
   'assurance-livekit-v3-trigger-contract',
   transaction_timestamp() + interval '1 day'
-),
-(
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001',
-  'android','production','Chillywood2025/chillywood-mobile',
-  'codex/assurance-livekit-v3-trigger-contract',
-  'assurance-livekit-v3-android-fixture',repeat('2',64),
+);
+insert into public.intelligence_tasks (
+  id,project_id,platform,environment,repository_full_name,branch_name,
+  task_key,objective_hash,actor_identity,deadman_at
+)
+select task_id,'50000000-0000-0000-0000-000000000001',platform,'production',
+  'Chillywood2025/chillywood-mobile','codex/assurance-livekit-v3-trigger-contract',
+  'assurance-livekit-v3-' || platform || '-fixture',
+  repeat(case platform when 'android' then '2' else '8' end,64),
   'assurance-livekit-v3-trigger-contract',
   transaction_timestamp() + interval '1 day'
-);
+from b1_livekit_platform_state;
 insert into public.product_experience_baseline_versions (
   id,task_id,project_id,platform,environment,baseline_key,
   baseline_version,baseline_hash
@@ -449,43 +323,20 @@ insert into public.product_experience_baseline_versions (
 insert into public.cognitive_product_quality_service_capabilities (
   id,service_identity,operation,task_id,project_id,platform,environment,
   assertion_hash,allowed_sentinel_keys,registered_by,expires_at
-) values
-(
-  '80000000-0000-0000-0000-000000000001',
-  'cognitive_livekit_experience_collector','collect_livekit_sentinel_run',
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android','production',
-  repeat('4',64),array['livekit_experience_sentinel'],
-  '60000000-0000-0000-0000-000000000001',
-  transaction_timestamp() + interval '1 hour'
-),
-(
-  '80000000-0000-0000-0000-000000000002',
-  'cognitive_livekit_experience_collector','issue_livekit_failure_fixture',
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android','production',
-  repeat('5',64),array['livekit_experience_sentinel'],
-  '60000000-0000-0000-0000-000000000001',
-  transaction_timestamp() + interval '1 hour'
-),
-(
-  '80000000-0000-0000-0000-000000000003',
-  'cognitive_livekit_experience_collector','consume_livekit_failure_fixture',
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android','production',
-  repeat('6',64),array['livekit_experience_sentinel'],
-  '60000000-0000-0000-0000-000000000001',
-  transaction_timestamp() + interval '1 hour'
-),
-(
-  '80000000-0000-0000-0000-000000000004',
-  'cognitive_product_quality_triage','triage_product_quality',
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android','production',
-  repeat('7',64),'{}'::text[],
-  '60000000-0000-0000-0000-000000000001',
-  transaction_timestamp() + interval '1 hour'
-);
+)
+select (state.capability_prefix || lpad(operation.ordinal::text,12,'0'))::uuid,
+  operation.service_identity,operation.operation,state.task_id,
+  '50000000-0000-0000-0000-000000000001',state.platform,'production',
+  repeat(operation.assertion_digit,64),case when operation.ordinal < 4
+    then array['livekit_experience_sentinel'] else '{}'::text[] end,
+  '60000000-0000-0000-0000-000000000001',transaction_timestamp() + interval '1 hour'
+from b1_livekit_platform_state state
+cross join (values
+  (1,'cognitive_livekit_experience_collector','collect_livekit_sentinel_run','4'),
+  (2,'cognitive_livekit_experience_collector','issue_livekit_failure_fixture','5'),
+  (3,'cognitive_livekit_experience_collector','consume_livekit_failure_fixture','6'),
+  (4,'cognitive_product_quality_triage','triage_product_quality','7')
+) operation(ordinal,service_identity,operation,assertion_digit);
 insert into public.cognitive_livekit_platform_preflight_receipts (
   id,shared_task_id,target_task_id,project_id,target_platform,owner_user_id,
   baseline_version_id,collect_capability_id,issue_capability_id,
@@ -499,35 +350,26 @@ insert into public.cognitive_livekit_platform_preflight_receipts (
   independent_review_hash,tests_hash,deployment_hash,rollback_hash,
   receipt_hash,created_at,expires_at
 )
-values (
-  '10000000-0000-0000-0000-000000000001',
-  '30000000-0000-0000-0000-000000000001',
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android',
-  '60000000-0000-0000-0000-000000000001',
-  '70000000-0000-0000-0000-000000000001',
-  '80000000-0000-0000-0000-000000000001',
-  '80000000-0000-0000-0000-000000000002',
-  '80000000-0000-0000-0000-000000000003',
-  '80000000-0000-0000-0000-000000000004',
-  repeat('1',64),repeat('2',64),
-  'com.chillywood.mobile','google_play_internal_testing','1.0.0','86',
-  '1.0.0-android-chat-call-action-v1','android-chat-livekit-qa',
-  'e3379ac9-61f0-40db-a014-81975be123e5',
-  'fba73b6e57c6d945ba598de207c5474475f696572c9ffbac8f6d2f908b036c44',
+select receipt_id,'30000000-0000-0000-0000-000000000001',task_id,
+  '50000000-0000-0000-0000-000000000001',platform,
+  '60000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000001',
+  (capability_prefix || '000000000001')::uuid,(capability_prefix || '000000000002')::uuid,
+  (capability_prefix || '000000000003')::uuid,(capability_prefix || '000000000004')::uuid,
+  repeat('1',64),repeat('2',64),'com.chillywood.mobile',distribution,'1.0.0',
+  build_number,runtime_version,channel,update_id,artifact_hash,
   (select proof->>'proofHash' from b1_sandbox_premium_proof),
-  'store_sandbox_revenuecat_backend_installed_v1',
-  true,true,true,repeat('4',64),
+  'store_sandbox_revenuecat_backend_installed_v1',true,true,true,repeat('4',64),
   'fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
-  '1abcd5e765a0dcac4ef0b40a2a90efb06f508fec',
-  repeat('5',64),repeat('6',64),
+  '1abcd5e765a0dcac4ef0b40a2a90efb06f508fec',repeat('5',64),repeat('6',64),
   '7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0',
-  '0fbe0c0d5bf2fe593b23f8970fe03e85c2e32e9195ec93ac9533d254b9014759',
-  repeat('7',64),
-  transaction_timestamp() - interval '2 minutes',
+  receipt_hash,rollback_hash,transaction_timestamp() - interval '2 minutes',
   transaction_timestamp() + interval '8 minutes'
-);
-create function pg_temp.insert_enabled_outcome(p_authorization_id uuid)
+from b1_livekit_platform_state;
+create function pg_temp.insert_enabled_outcome(
+  p_outcome_id uuid,
+  p_authorization_id uuid,
+  p_platform public.cognitive_platform
+)
 returns void
 language sql
 as $$
@@ -539,13 +381,16 @@ as $$
     open_finding_count,canary_receipt_hash,
     emergency_stop_receipt_hash,principal_rollback_receipt_hash,outcome_hash
   ) values (
-    'a0000000-0000-0000-0000-000000000001',p_authorization_id,
+    p_outcome_id,p_authorization_id,
     '30000000-0000-0000-0000-000000000001',
-    '40000000-0000-0000-0000-000000000001',
-    '50000000-0000-0000-0000-000000000001','android',
+    case p_platform when 'android'
+      then '40000000-0000-0000-0000-000000000001'::uuid
+      else '40000000-0000-0000-0000-000000000002'::uuid end,
+    '50000000-0000-0000-0000-000000000001',p_platform,
     '60000000-0000-0000-0000-000000000001',
     true,9,0,0,0,0,0,
-    repeat('a',64),repeat('b',64),repeat('c',64),repeat('d',64)
+    repeat('a',64),repeat('b',64),repeat('c',64),
+    pg_temp.sha256('outcome|' || p_outcome_id::text)
   );
 $$;
 create function pg_temp.livekit_v3_rejects_new_authorization(
@@ -587,7 +432,12 @@ begin
       transaction_timestamp() - interval '1 minute',
       transaction_timestamp() + interval '19 minutes'
     );
-    perform pg_temp.insert_enabled_outcome(authorization_id_value);
+    perform pg_temp.insert_enabled_outcome(
+      case p_mutation when 'authorization_source_commit'
+        then 'a1000000-0000-0000-0000-000000000001'::uuid
+        else 'a1000000-0000-0000-0000-000000000002'::uuid end,
+      authorization_id_value,'android'
+    );
     raise exception 'negative_control_was_not_rejected'
       using errcode = 'ZX001';
   exception when sqlstate 'P0001' then
@@ -614,47 +464,40 @@ insert into public.cognitive_livekit_platform_canary_authorizations (
   source_tree_hash,independent_review_hash,tests_hash,deployment_hash,
   rollback_hash,authorization_hash,opened_at,expires_at
 )
-values (
-  '20000000-0000-0000-0000-000000000001',
-  '10000000-0000-0000-0000-000000000001',
-  '30000000-0000-0000-0000-000000000001',
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android',
-  '60000000-0000-0000-0000-000000000001',
-  '70000000-0000-0000-0000-000000000001',
+select authorization_id,receipt_id,'30000000-0000-0000-0000-000000000001',
+  task_id,'50000000-0000-0000-0000-000000000001',platform,
+  '60000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000001',
   'fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
   '1abcd5e765a0dcac4ef0b40a2a90efb06f508fec',
   repeat('5',64),repeat('6',64),
   '7651ae1756b9b760ed7a710ca52b9d51748e353e77205248239b19f6f786c1e0',
-  '0fbe0c0d5bf2fe593b23f8970fe03e85c2e32e9195ec93ac9533d254b9014759',
-  repeat('8',64),
+  receipt_hash,repeat(case platform when 'android' then '8' else '9' end,64),
   transaction_timestamp() - interval '1 minute',
   transaction_timestamp() + interval '19 minutes'
-);
+from b1_livekit_platform_state;
 insert into public.cognitive_governance_switches (
   task_id,project_id,platform,environment,switch_key,enabled,
   policy_version,enabled_by,enabled_at,updated_at
-) values (
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001',
-  'android','production','cognitive_livekit_experience_sentinel_enabled',
-  true,'provider-independent-android-livekit-canary-v1',
+) select task_id,'50000000-0000-0000-0000-000000000001',platform,'production',
+  'cognitive_livekit_experience_sentinel_enabled',true,
+  'provider-independent-' || platform || '-livekit-canary-v1',
   '60000000-0000-0000-0000-000000000001',
   transaction_timestamp(),transaction_timestamp()
-);
+from b1_livekit_platform_state;
 create temporary table b1_livekit_fixture_state on commit drop as
 with routes(route_or_surface,ordinal) as (
   values ('live-stage',2),('watch-party-live',5),('chat-call',8)
 ), fixture as (
-  select route_or_surface,ordinal,
-    pg_temp.sha256('fixture|' || route_or_surface) fixture_id,
-    pg_temp.sha256('attestation|' || route_or_surface) attestation_hash,
-    'cognitive-test-b1-' || replace(route_or_surface,'-','') room_name,
-    pg_temp.sha256('correlation|' || route_or_surface) correlation_hash,
+  select platform_state.*,route_or_surface,ordinal,
+    pg_temp.sha256('fixture|' || platform || '|' || route_or_surface) fixture_id,
+    pg_temp.sha256('attestation|' || platform || '|' || route_or_surface) attestation_hash,
+    'cognitive-test-b1-' || platform || '-' || replace(route_or_surface,'-','') room_name,
+    pg_temp.sha256('correlation|' || platform || '|' || route_or_surface) correlation_hash,
     pg_temp.sha256(
-      'evidence|' || route_or_surface || '|bounded_failure_fixture'
+      'evidence|' || platform || '|' || route_or_surface ||
+      '|bounded_failure_fixture'
     ) evidence_hash,
-    pg_temp.sha256('idempotency|' || ordinal) idempotency_hash,
+    pg_temp.sha256('idempotency|' || platform || '|' || ordinal) idempotency_hash,
     date_trunc('milliseconds',
       transaction_timestamp() - interval '5 seconds'
     ) observation_started_at,
@@ -664,7 +507,7 @@ with routes(route_or_surface,ordinal) as (
     transaction_timestamp() - interval '20 seconds' issued_at,
     transaction_timestamp() + interval '100 seconds' expires_at,
     transaction_timestamp() claimed_at
-  from routes
+  from routes cross join b1_livekit_platform_state platform_state
 )
 select fixture.*,
   public.product_experience_livekit_synthetic_room_hash(room_name) room_hash
@@ -675,23 +518,22 @@ insert into public.product_experience_livekit_failure_fixture_issuances(
   fixture_attestation_hash,synthetic_room_name,synthetic_room_name_hash,
   room_run_correlation_hash,issued_at,expires_at,issuance_hash
 )
-select fixture_id,
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android','production',
+select fixture_id,task_id,
+  '50000000-0000-0000-0000-000000000001',platform,'production',
   'cognitive_livekit_experience_collector',
   'fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
-  '80000000-0000-0000-0000-000000000002',
+  (capability_prefix || '000000000002')::uuid,
   'controlled_test_endpoint_timeout',
   public.product_experience_livekit_failure_fixture_condition(
     'controlled_test_endpoint_timeout'
   ),
   attestation_hash,room_name,room_hash,correlation_hash,issued_at,expires_at,
   public.product_experience_livekit_fixture_issuance_hash(
-    fixture_id,'40000000-0000-0000-0000-000000000001',
-    '50000000-0000-0000-0000-000000000001','android','production',
+    fixture_id,task_id,
+    '50000000-0000-0000-0000-000000000001',platform,'production',
     'cognitive_livekit_experience_collector',
     'fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
-    '80000000-0000-0000-0000-000000000002',
+    (capability_prefix || '000000000002')::uuid,
     'controlled_test_endpoint_timeout',
     public.product_experience_livekit_failure_fixture_condition(
       'controlled_test_endpoint_timeout'
@@ -707,29 +549,27 @@ insert into public.product_experience_livekit_failure_fixture_consumptions(
   collection_idempotency_hash,observation_started_at,
   observation_finished_at,claimed_at,consumption_hash
 )
-select fixture_id,
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android','production',
+select fixture_id,task_id,
+  '50000000-0000-0000-0000-000000000001',platform,'production',
   'cognitive_livekit_experience_collector',
   'fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
   attestation_hash,room_name,room_hash,correlation_hash,route_or_surface,
-  '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0',
-  'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050',
+  runtime_identity_hash,source_build_hash,
   evidence_hash,idempotency_hash,observation_started_at,
   observation_finished_at,claimed_at,
   public.product_experience_livekit_fixture_consumption_hash(
-    fixture_id,'40000000-0000-0000-0000-000000000001',
-    '50000000-0000-0000-0000-000000000001','android','production',
+    fixture_id,task_id,
+    '50000000-0000-0000-0000-000000000001',platform,'production',
     'cognitive_livekit_experience_collector',
     'fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6',
     attestation_hash,room_name,room_hash,correlation_hash,route_or_surface,
-    '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0',
-    'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050',
+    runtime_identity_hash,source_build_hash,
     evidence_hash,idempotency_hash,observation_started_at,
     observation_finished_at,claimed_at
   )
 from b1_livekit_fixture_state;
 create function pg_temp.livekit_metric(
+  p_platform public.cognitive_platform,
   p_route text,
   p_scenario text
 )
@@ -742,7 +582,7 @@ declare
   healthy boolean := p_scenario <> 'bounded_failure_fixture';
   recovering boolean := p_scenario = 'background_foreground_recovery';
   evidence_hash_value text :=
-    pg_temp.sha256('evidence|' || p_route || '|' || p_scenario);
+    pg_temp.sha256('evidence|' || p_platform || '|' || p_route || '|' || p_scenario);
   metrics jsonb;
 begin
   metrics := jsonb_build_object(
@@ -783,7 +623,7 @@ begin
     );
   end if;
   select * into fixture from b1_livekit_fixture_state
-  where route_or_surface = p_route;
+  where platform = p_platform and route_or_surface = p_route;
   metrics := metrics || jsonb_build_object(
     'headlessObservationStartedAt',to_char(
       fixture.observation_started_at at time zone 'UTC',
@@ -794,7 +634,7 @@ begin
       'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
     ),
     'headlessParticipantIdentityHash',
-      pg_temp.sha256('headless|' || p_route),
+      pg_temp.sha256('headless|' || p_platform || '|' || p_route),
     'installedObservationStartedAt',to_char(
       (fixture.observation_started_at + interval '2 seconds') at time zone 'UTC',
       'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
@@ -804,12 +644,10 @@ begin
       'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
     ),
     'installedParticipantIdentityHash',
-      pg_temp.sha256('installed|' || p_route),
+      pg_temp.sha256('installed|' || p_platform || '|' || p_route),
     'installedRoomRunCorrelationHash',fixture.correlation_hash,
-    'installedRuntimeIdentityHash',
-      '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0',
-    'installedSourceBuildHash',
-      'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050',
+    'installedRuntimeIdentityHash',fixture.runtime_identity_hash,
+    'installedSourceBuildHash',fixture.source_build_hash,
     'participantIdentityDistinct',true,
     'roomRunCorrelationHash',fixture.correlation_hash,
     'tokenClaimsValidated',true
@@ -858,37 +696,41 @@ insert into public.product_experience_sentinel_runs(
   evaluation_expires_at
 )
 select (
-    '90000000-0000-0000-0000-' || lpad(ordinal::text,12,'0')
+    case platform_state.platform when 'android'
+      then '90000000-0000-0000-0000-' else '92000000-0000-0000-0000-' end ||
+    lpad(ordinal::text,12,'0')
   )::uuid,
-  '40000000-0000-0000-0000-000000000001',
-  '50000000-0000-0000-0000-000000000001','android','production',
+  platform_state.task_id,
+  '50000000-0000-0000-0000-000000000001',platform_state.platform,'production',
   'livekit_experience_sentinel',route_or_surface,
-  '5df93c17fa23805618391c54fb57ffd8da073083fd5de30a3814006562c365e0',
-  pg_temp.sha256('evidence|' || route_or_surface || '|' || scenario_type),
-  pg_temp.livekit_metric(route_or_surface,scenario_type),
+  platform_state.runtime_identity_hash,
+  pg_temp.sha256(
+    'evidence|' || platform_state.platform || '|' || route_or_surface || '|' || scenario_type
+  ),
+  pg_temp.livekit_metric(platform_state.platform,route_or_surface,scenario_type),
   case when scenario_type = 'bounded_failure_fixture'
     then 'failed' else 'blocked' end,
   case when scenario_type = 'bounded_failure_fixture'
     then 'installed_ui_observed' else 'source_only' end,
-  '80000000-0000-0000-0000-000000000001',
-  pg_temp.sha256('idempotency|' || ordinal),
-  'd890810f04d3f3228113a9c3cfaa3ca6b285dd4eb4ceee61db4a5577ede9a050',
+  (platform_state.capability_prefix || '000000000001')::uuid,
+  pg_temp.sha256('idempotency|' || platform_state.platform || '|' || ordinal),
+  platform_state.source_build_hash,
   coalesce(
     (select observation_started_at from b1_livekit_fixture_state
-     where b1_livekit_fixture_state.route_or_surface =
-       combinations.route_or_surface
+     where b1_livekit_fixture_state.platform = platform_state.platform
+       and b1_livekit_fixture_state.route_or_surface = combinations.route_or_surface
        and scenario_type = 'bounded_failure_fixture'),
     transaction_timestamp() - interval '30 seconds'
   ),
   coalesce(
     (select observation_finished_at from b1_livekit_fixture_state
-     where b1_livekit_fixture_state.route_or_surface =
-       combinations.route_or_surface
+     where b1_livekit_fixture_state.platform = platform_state.platform
+       and b1_livekit_fixture_state.route_or_surface = combinations.route_or_surface
        and scenario_type = 'bounded_failure_fixture'),
     transaction_timestamp()
   ),
   transaction_timestamp() + interval '1 hour'
-from combinations;
+from combinations cross join b1_livekit_platform_state platform_state;
 create function pg_temp.livekit_v3_rejects_new_run(p_mutation text)
 returns boolean
 language plpgsql
@@ -918,7 +760,7 @@ begin
       end,
       pg_temp.sha256('negative-evidence|' || p_mutation),
       jsonb_set(
-        pg_temp.livekit_metric('live-stage','success_baseline'),
+        pg_temp.livekit_metric('android','live-stage','success_baseline'),
         '{evidenceHashes}',
         jsonb_build_array(pg_temp.sha256('negative-evidence|' || p_mutation))
       ),
@@ -933,7 +775,10 @@ begin
       transaction_timestamp(),transaction_timestamp() + interval '1 hour'
     );
     perform pg_temp.insert_enabled_outcome(
-      '20000000-0000-0000-0000-000000000001'
+      case p_mutation when 'run_source_build_hash'
+        then 'a2000000-0000-0000-0000-000000000001'::uuid
+        else 'a2000000-0000-0000-0000-000000000002'::uuid end,
+      '20000000-0000-0000-0000-000000000001','android'
     );
     raise exception 'negative_control_was_not_rejected'
       using errcode = 'ZX001';
@@ -979,7 +824,8 @@ select is(
 );
 select lives_ok(
   $$select pg_temp.insert_enabled_outcome(
-    '20000000-0000-0000-0000-000000000001'
+    'a0000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001','android'
   )$$,
   'the actual enabled v3 finalization trigger accepts one exact tuple'
 );
@@ -992,6 +838,76 @@ select is(
   ),
   1,
   'the positive enabled outcome is inserted exactly once in the transaction'
+);
+create temporary table b1_match_predicate_witness(name text,passed boolean) on commit drop;
+insert into b1_match_predicate_witness values
+  ('predicate denies Android parent delivered commit',pg_temp.livekit_v3_mutation_is_rejected(
+    'explicit_source','android','android',pg_temp.sha256('268f5d7e93e2cc5044286a956f870fe35dbf2638'))),
+  ('predicate denies Android diverged commit',pg_temp.livekit_v3_mutation_is_rejected(
+    'explicit_source','android','android',pg_temp.sha256('00acb77770ee5c04ab7bbd5aab64cbb93a7d442f'))),
+  ('predicate denies iOS parent delivered commit',pg_temp.livekit_v3_mutation_is_rejected(
+    'explicit_source','ios','ios',pg_temp.sha256('81039cad0daf601594381d8f35b80f916e5795a2'))),
+  ('predicate denies iOS diverged commit',pg_temp.livekit_v3_mutation_is_rejected(
+    'explicit_source','ios','ios',pg_temp.sha256('00acb77770ee5c04ab7bbd5aab64cbb93a7d442f'))),
+  ('predicate denies Android identity for iOS',pg_temp.livekit_v3_mutation_is_rejected('none','ios','android')),
+  ('predicate denies iOS identity for Android',pg_temp.livekit_v3_mutation_is_rejected('none','android','ios')),
+  ('predicate denies runtime mismatch',pg_temp.livekit_v3_mutation_is_rejected('runtime')),
+  ('predicate denies update mismatch',pg_temp.livekit_v3_mutation_is_rejected('update')),
+  ('predicate denies artifact mismatch',pg_temp.livekit_v3_mutation_is_rejected('artifact')),
+  ('predicate denies final receipt tree mismatch',pg_temp.livekit_v3_mutation_is_rejected('tree'));
+select is((select count(*)::integer from b1_match_predicate_witness where passed),10,
+  'the immutable match predicate denies all ten named non-bound identity rows');
+create function pg_temp.livekit_enabled_replay_denied(
+  p_outcome_id uuid,
+  p_authorization_id uuid,
+  p_platform public.cognitive_platform
+)
+returns boolean
+language plpgsql
+as $$
+declare violated_constraint text;
+begin
+  begin
+    perform pg_temp.insert_enabled_outcome(
+      p_outcome_id,p_authorization_id,p_platform
+    );
+    return false;
+  exception when unique_violation then
+    get stacked diagnostics violated_constraint = constraint_name;
+    return violated_constraint =
+      'cognitive_livekit_platform_activation_outcomes_authorization_id_key';
+  end;
+end;
+$$;
+select is(
+  pg_temp.livekit_enabled_replay_denied(
+    'a3000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001','android'
+  ),true,
+  'replayed exact Android enabled finalization is denied'
+);
+select lives_ok(
+  $$select pg_temp.insert_enabled_outcome(
+    'a0000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000002','ios'
+  )$$,
+  'the actual enabled v3 finalization trigger accepts exact iOS evidence'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.cognitive_livekit_platform_activation_outcomes
+    where id = 'a0000000-0000-0000-0000-000000000002'
+      and target_platform = 'ios' and enabled
+  ),1,
+  'the valid exact iOS enabled outcome is inserted once'
+);
+select is(
+  pg_temp.livekit_enabled_replay_denied(
+    'a3000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000002','ios'
+  ),true,
+  'replayed exact iOS enabled finalization is denied'
 );
 select * from finish();
 rollback;

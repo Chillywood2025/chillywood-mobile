@@ -34,6 +34,7 @@ const ids = {
   androidReceiptA: null,
   androidReceiptB: null,
   iosReceipt: null,
+  expiredReceipt: null,
   baselineApproval: uuid(),
   baselineExecution: uuid(),
 };
@@ -60,6 +61,11 @@ const platformIdentity = {
 };
 const h = Array.from({ length: 12 }, hash);
 let stage = "setup";
+const behavioralWitnesses = [
+  "exact_android_preflight", "exact_ios_preflight", "expired_receipt_open_denied", "android_parent_source_commit_denied", "android_diverged_source_commit_denied", "ios_parent_source_commit_denied", "cross_platform_artifact_denied",
+  "non_bound_tree_denied", "non_bound_deployment_denied", "concurrent_android_single_winner", "android_switch_isolation", "android_receipt_authorization_tuple_equivalent", "authorization_replay_denied",
+  "android_authorization_rollback", "ios_receipt_authorization_tuple_equivalent", "expired_authorization_rollback", "final_outcome_totals", "visual_switches_unchanged", "schedules_unchanged",
+];
 
 const psqlArgs = [
   "exec", "-i", container, "psql", "-X", "-q", "-A", "-t",
@@ -505,9 +511,10 @@ const sandboxPremiumProof = readJson(`
 select public.cognitive_livekit_sandbox_premium_proof_v1()::text;
 `);
 assert.equal(sandboxPremiumProof.eligible, true);
+assert.equal(sandboxPremiumProof.qualifiedRevenueCatSandboxRowCount, 2);
 assert.match(sandboxPremiumProof.proofHash, /^[a-f0-9]{64}$/u);
-const prepareReceipt = (platform) => {
-  const identity = platformIdentity[platform];
+const prepareReceipt = (platform, validity = "10 minutes", overrides = {}, rejected = false) => {
+  const identity = { ...platformIdentity[platform], ...overrides };
   const result = admin(ownerSql(`
 select (
   public.governance_prepare_livekit_platform_preflight(
@@ -515,13 +522,15 @@ select (
     ${literal(identity.artifactHash)},
     ${literal(sandboxPremiumProof.proofHash)},${literal(hash())},
     ${literal(collectorAssertion)},${literal(evaluatorAssertion)},
-    ${literal(sourceCommit)},${literal(sourceTree)},${literal(hash())},
-    ${literal(hash())},${literal(deploymentHash)},
+    ${literal(identity.sourceCommit ?? sourceCommit)},
+    ${literal(identity.sourceTree ?? sourceTree)},${literal(hash())},
+    ${literal(hash())},${literal(identity.deploymentHash ?? deploymentHash)},
     ${literal(identity.rollbackHash)},
-    interval '10 minutes'
+    interval ${literal(validity)}
   )
 )->>'preflightReceiptId';
-`), true);
+  `), true);
+  if (rejected) return result;
   const receiptId = result.stdout.trim().split("\n").at(-1);
   assert.equal(result.status, 0);
   assert.match(receiptId, /^[a-f0-9-]{36}$/u);
@@ -530,8 +539,55 @@ select (
 ids.androidReceiptA = prepareReceipt("android");
 ids.androidReceiptB = prepareReceipt("android");
 ids.iosReceipt = prepareReceipt("ios");
+ids.expiredReceipt = prepareReceipt("ios", "1 millisecond");
+for (const [name, platform, overrides] of [
+  ["android_parent_source_commit_denied", "android", { sourceCommit: "268f5d7e93e2cc5044286a956f870fe35dbf2638" }],
+  ["android_diverged_source_commit_denied", "android", { sourceCommit: "00acb77770ee5c04ab7bbd5aab64cbb93a7d442f" }],
+  ["ios_parent_source_commit_denied", "ios", { sourceCommit: "81039cad0daf601594381d8f35b80f916e5795a2" }],
+  ["cross_platform_artifact_denied", "ios", { artifactHash: platformIdentity.android.artifactHash }],
+  ["non_bound_tree_denied", "android", { sourceTree: "b94c388e78d6b87669f4063927b568246c23589a" }],
+  ["non_bound_deployment_denied", "ios", { deploymentHash: hash() }],
+]) {
+  assert.notEqual(prepareReceipt(platform, "10 minutes", overrides, true).status, 0, name);
+}
 
 try {
+  stage = "exact_platform_preflight_readback";
+  const preflightReadback = admin(`
+select case when (
+  select count(*)=4
+    and count(*) filter (where receipt.target_platform='android')=2
+    and count(*) filter (where receipt.target_platform='ios')=2
+  from public.cognitive_livekit_platform_preflight_receipts receipt
+  join public.cognitive_livekit_final_source_identity_bindings binding
+    on binding.target_platform=receipt.target_platform
+  where receipt.id in (
+    ${literal(ids.androidReceiptA)}::uuid,
+    ${literal(ids.androidReceiptB)}::uuid,
+    ${literal(ids.iosReceipt)}::uuid,
+    ${literal(ids.expiredReceipt)}::uuid
+  )
+    and public.cognitive_livekit_final_source_identity_matches_v3(
+      receipt.target_platform,receipt.source_commit,receipt.source_tree_hash,
+      receipt.deployment_hash,receipt.application_identifier,
+      receipt.distribution,receipt.build_number,receipt.runtime_version,
+      receipt.channel,receipt.internal_update_id,receipt.installed_artifact_hash,
+      binding.expected_source_build_hash,binding.expected_runtime_identity_hash
+    )
+) then 'MATCH' else 'MISMATCH' end;
+`, true);
+  assert.equal(preflightReadback.status, 0);
+  assert.equal(preflightReadback.stdout.trim(), "MATCH");
+
+  stage = "expired_receipt_open_denial";
+  await delay(25);
+  const expiredOpen = await session(ownerSql(`
+select public.governance_open_livekit_platform_canary(
+  ${literal(ids.expiredReceipt)}::uuid,interval '5 minutes'
+);
+`));
+  assert.notEqual(expiredOpen.code, 0);
+
   stage = "concurrent_android_open";
   const openA = ownerSql(`
 select public.governance_open_livekit_platform_canary(
@@ -633,13 +689,29 @@ select case when
       and switch_key='cognitive_visual_experience_sentinel_enabled'
       and enabled
   )
+  and not exists (
+    select 1 from public.cognitive_level01_schedule_definitions
+    where project_id=${literal(ids.project)}::uuid and enabled
+  )
+  and (
+    select count(*)=2
+    from public.cognitive_livekit_platform_canary_authorizations authorization
+    join public.cognitive_livekit_platform_preflight_receipts receipt
+      on receipt.id=authorization.preflight_receipt_id
+    where (authorization.shared_task_id,authorization.target_task_id,authorization.project_id,
+      authorization.shared_platform,authorization.target_platform,authorization.environment,authorization.owner_user_id,
+      authorization.baseline_version_id,authorization.source_commit,authorization.source_tree_hash,
+      authorization.independent_review_hash,authorization.tests_hash,authorization.deployment_hash,authorization.rollback_hash)
+    is not distinct from (receipt.shared_task_id,receipt.target_task_id,receipt.project_id,receipt.shared_platform,receipt.target_platform,receipt.environment,receipt.owner_user_id,receipt.baseline_version_id,receipt.source_commit,
+      receipt.source_tree_hash,receipt.independent_review_hash,receipt.tests_hash,receipt.deployment_hash,receipt.rollback_hash)
+  )
   then 'MATCH' else 'MISMATCH' end;
 `, true);
   assert.equal(finalReadback.status, 0);
   assert.equal(finalReadback.stdout.trim(), "MATCH");
-
+  assert.equal(new Set(behavioralWitnesses).size, 19);
   process.stdout.write(
-    "cognitive LiveKit platform authorization concurrency: 7/7\n",
+    "cognitive LiveKit platform authorization concurrency: 19/19\n",
   );
   cleanup();
 } catch (error) {

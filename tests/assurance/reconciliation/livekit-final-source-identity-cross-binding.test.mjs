@@ -94,9 +94,15 @@ test("enabled finalization joins authorization, receipt, and run identities", ()
   }
   assert.doesNotMatch(migration, /case receipt_value\.target_platform/u);
   for (const required of [
-    "select plan(27)", "authorization_source_commit",
+    "select plan(28)", "authorization_source_commit",
     "authorization_tests_hash", "run_source_build_hash",
     "run_runtime_identity_hash", "the actual enabled v3 finalization trigger accepts one exact tuple",
+    "predicate denies Android parent delivered commit", "predicate denies Android diverged commit",
+    "predicate denies iOS parent delivered commit", "predicate denies iOS diverged commit",
+    "predicate denies Android identity for iOS", "predicate denies iOS identity for Android",
+    "predicate denies runtime mismatch", "predicate denies update mismatch", "predicate denies artifact mismatch",
+    "predicate denies final receipt tree mismatch", "the actual enabled v3 finalization trigger accepts exact iOS evidence",
+    "replayed exact Android enabled finalization is denied", "replayed exact iOS enabled finalization is denied",
   ]) {
     assert.ok(pgTap.includes(required), required);
   }
@@ -118,7 +124,6 @@ test("enabled finalization joins authorization, receipt, and run identities", ()
   assert.doesNotMatch(pgTap, /disable trigger|enable trigger/u);
   assert.doesNotMatch(pgTap, /update public\.(?:cognitive_livekit_platform_canary_authorizations|product_experience_sentinel_runs)/u);
   for (const required of [
-    "cognitive_livekit_sandbox_premium_proof_v1", "qualifiedRevenueCatSandboxRowCount",
     "product_experience_livekit_fixture_issuance_hash", "livekit_metric", "assuranceFixtureStatus", "assuranceFixtureState",
   ]) assert.ok(pgTap.includes(required), required);
   assert.match(migration, /drop trigger if exists cognitive_livekit_platform_run_identity_v2/u);
@@ -128,10 +133,17 @@ test("the concurrency fixture uses frozen receipt identity and provider proof", 
   for (const required of [
     common.finalSourceCommit, common.finalSourceTree, common.deploymentHash,
     bindings.android.artifactHash, bindings.ios.artifactHash,
-    "cognitive_livekit_sandbox_premium_proof_v1",
+    "cognitive_livekit_sandbox_premium_proof_v1", "qualifiedRevenueCatSandboxRowCount",
+    "exact_android_preflight", "exact_ios_preflight", "expired_receipt_open_denied",
+    "android_parent_source_commit_denied", "android_diverged_source_commit_denied", "ios_parent_source_commit_denied",
+    "cross_platform_artifact_denied", "non_bound_tree_denied", "non_bound_deployment_denied",
+    "concurrent_android_single_winner", "android_switch_isolation", "android_receipt_authorization_tuple_equivalent",
+    "authorization_replay_denied", "android_authorization_rollback", "ios_receipt_authorization_tuple_equivalent",
+    "expired_authorization_rollback", "final_outcome_totals", "visual_switches_unchanged", "schedules_unchanged",
   ]) {
     assert.ok(concurrency.includes(required), required);
   }
   assert.doesNotMatch(concurrency, /const sourceCommit = "a"\.repeat\(40\)/u);
   assert.doesNotMatch(concurrency, /const sourceTree = "b"\.repeat\(40\)/u);
+  assert.match(concurrency, /prepareReceipt\("ios", "1 millisecond"\)/u);
 });

@@ -58,10 +58,10 @@ adds an immutable two-platform manifest and requires an enabled final outcome to
 join its authorization and receipt to the exact final source/tree/deployment,
 delivered source hash, update, runtime, channel, and artifact. Static source
 proof passes. The historical 14/14 pgTAP result covered only the predicate; it
-does not clear T3. The remediated 27-test suite must transactionally execute the
+does not clear T3. The remediated 28-test suite must transactionally execute the
 actual enabled v3 outcome trigger, including one-field lineage/run mismatches,
-before T3 may clear. Its local sanitized fixture is currently blocked by the
-existing v2 provider-backed Premium preflight proof; no T3 pass is claimed.
+before T3 may clear. Its source now restores a provider-backed Premium fixture,
+but the fresh local database run has not executed; no current-head T3 pass is claimed.
 Neither T1 nor T3 can substitute for signed-artifact, installed, physical, or
 public-canary proof.
 
