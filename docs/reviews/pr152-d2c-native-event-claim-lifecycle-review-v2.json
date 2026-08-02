@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr152-d2c-native-event-claim-lifecycle-review-v2",
+  "reviewVersion": 2,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "native-event-and-claim-lifecycle",
+  "reviewLevel": "C",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "reviewTimestamp": "2026-08-02T19:39:44Z",
+  "reviewBranch": "codex/first-pass-assurance-d2c-review-native-event-claim",
+  "reviewRef": "codex/first-pass-assurance-d2c-review-native-event-claim",
+  "reviewRefHead": "faf55ffc5096ec9bfdd6b78e3da9b4e424529e90",
+  "reviewEvidenceParentHead": "faf55ffc5096ec9bfdd6b78e3da9b4e424529e90",
+  "historicalEvidencePreserved": ["v1"],
+  "historicalEvidenceHashes": {
+    "v1": "9d0aa0dc01597e6a9449629349d492b214fa9002b20100e76d3616dc17687b5d"
+  },
+  "humanApproval": false,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "immutableSourceHead": "72e9833200caca80b56ae7441511cb5320b051ae",
+  "immutableSourceTree": "d981ffd5425f731cef07fee7aa5fa2852eb89190",
+  "synchronizedBranchHead": "60bb4196860e092f50dcb2e2db821603809f1daa",
+  "synchronizedTree": "ffd57f61c5fee6b36d1b877e9207f3c3a6744107",
+  "implementationHead": "60bb4196860e092f50dcb2e2db821603809f1daa",
+  "implementationTree": "ffd57f61c5fee6b36d1b877e9207f3c3a6744107",
+  "currentBase": "d4e9df79fd724c432509b1e319538ed34cb656f5",
+  "baseHead": "d4e9df79fd724c432509b1e319538ed34cb656f5",
+  "baseTree": "5084541eb776d11581bbe53e841abbf0f189749a",
+  "mergeParents": [
+    "72e9833200caca80b56ae7441511cb5320b051ae",
+    "d4e9df79fd724c432509b1e319538ed34cb656f5"
+  ],
+  "canonicalSyntheticTree": "ffd57f61c5fee6b36d1b877e9207f3c3a6744107",
+  "sourceDeltaHash": "506002417493181a2c5aed5bc9307e4a811d9950831b1d53404078dbea3fe63c",
+  "sourceDeltaHashMethod": "sha256(raw git diff --binary --no-renames currentBase synchronizedBranchHead including terminal newline)",
+  "changedFileHash": "2765502c9d1b2ab15b75e1c8345a82817682722aa1a40554b8561b08f5f32780",
+  "changedFileHashMethod": "sha256(raw git diff --name-only currentBase synchronizedBranchHead including terminal newline)",
+  "rawNameStatusHash": "f1fa9ec50c8bd60e2229b7f91177527272a9a88d393f383d19e943c7a67872f7",
+  "rawNameStatusHashMethod": "sha256(git diff --name-status -z --no-renames currentBase synchronizedBranchHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "6a5790ca4fe52c1685a232eaad94f0ce14f8afa56e9d356a447c96d17fe3162c",
+  "provenanceContractHash": "548a99ee8fe452ed9532368efe1cae9d3f492ebb1aa14d0ec8a0611141f3d84d",
+  "claimRegistryHash": "b6757a5f3627b86fca873cfe81a95717893c55f98ce21de8adab548b83c258b3",
+  "implementationReportHash": "f90fa546f05f38283c3308803015ae1f16f2f971f10effba1affdcf5f6a10311",
+  "testResultHash": "fe013af250666a4477af3ee85c8ecb6902387055f9fab233151a20d6f8cf065d",
+  "testResultHashMethod": "sha256(labeled focused-3-of-3, platform-scoped-consumed-clear, generated-source-3-of-3, immutable-compile, and local-integration classifications)",
+  "scopeStatus": "pass",
+  "scope": {
+    "changedFiles": 17,
+    "additions": 1462,
+    "deletions": 128,
+    "netChangedLines": 1334,
+    "authorizedWaiverMaximumFiles": 18,
+    "authorizedWaiverMaximumLines": 2200,
+    "implementationSourceChangedByReviewer": false
+  },
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 2, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 2, "P3": 0},
+  "testResults": {
+    "exactSynchronization": {
+      "status": "pass",
+      "sourceIsAncestor": true,
+      "firstParentDistance": 1,
+      "firstParentImmutableSource": true,
+      "secondParentCurrentMain": true,
+      "canonicalMergeConflict": false,
+      "canonicalTree": "ffd57f61c5fee6b36d1b877e9207f3c3a6744107",
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "providerBranchMatches": true
+    },
+    "trustedNativeEventSource": {
+      "status": "pass",
+      "event": "answerRequested",
+      "nativeBridge": "_lib/iosNativeCalls.ts",
+      "soleProductionCreator": "app/_layout.tsx:IosNativeCallsBridge",
+      "repositoryWideTrackedProductionCreatorCallsites": "1/1_ALLOWLISTED",
+      "requiredGates": [
+        "ios_platform",
+        "exact_answer_requested_type",
+        "canonical_call_uuid",
+        "canonical_invite_uuid",
+        "canonical_thread_uuid",
+        "positive_readiness_generation",
+        "build_and_runtime_readiness",
+        "authenticated_session"
+      ]
+    },
+    "coldStartPendingEvents": {
+      "status": "pass",
+      "pendingNativeEventsDrainThroughSameGenerationScopedHandler": true,
+      "sanitizedTokenFreeEvent": true,
+      "currentReadinessGenerationBound": true,
+      "iosClaimsClearedAtReadinessAndAccountLifecycle": true,
+      "nativePendingEventOriginTimestampOrGeneration": "ASSIGNED_D3_P2"
+    },
+    "claimLifecycle": {
+      "status": "pass",
+      "storage": "memory_only",
+      "claimHandle": "crypto_32_byte_lowercase_hex",
+      "ttlMs": 30000,
+      "maxActive": 32,
+      "maxConsumed": 64,
+      "deleteBeforeReturn": true,
+      "secondConsumeDenied": true,
+      "expiryCheckedAtConsume": true,
+      "originalExpiryRevalidatedBeforeTransitionUse": true,
+      "expiredAtOrAfterBoundaryDenied": true,
+      "exactPlatformSourceThreadInviteActionAndNativeIdentityBinding": true,
+      "duplicateActiveOrConsumedEventDenied": true,
+      "duplicateExtendsTtl": false,
+      "persistedOrLogged": false
+    },
+    "platformScopedClear": {
+      "status": "pass",
+      "unscopedClearDenied": true,
+      "invalidPlatformClearDenied": true,
+      "iosClearRemovesOnlyIosActiveAndConsumedState": true,
+      "androidActiveStateSurvivesIosClear": true,
+      "androidConsumedReplayStateSurvivesIosClear": true,
+      "independentConsumedEntryExercise": "PLATFORM_SCOPED_CONSUMED_CLEAR_PASS",
+      "d2bContract": "ANDROID_LIFECYCLE_MUST_CLEAR_ANDROID_ONLY"
+    },
+    "callKitCompletionOrdering": {
+      "status": "pass",
+      "serverAcceptanceOrAcceptedReadbackPrecedesPositiveCompletion": true,
+      "nativeClaimCreationIssuesTokenOrStartsMedia": false,
+      "tokenAndMediaRemainAcceptedOnly": true,
+      "expiredClaimFailsNativeAnswerBeforeServerTransition": true,
+      "negativeCompletionRemainsBounded": true,
+      "nativeCompletionResultAttestation": "ASSIGNED_D3_P2"
+    },
+    "focusedExecutableEvidence": {
+      "status": "pass",
+      "runs": "3/3_BYTE_IDENTICAL",
+      "combinedStdoutSha256": "e58885b964784ae332e1c16e7de10acb2bb8a996f41c7e5d07c0137604efb942",
+      "preFixReproductions": "10/10",
+      "trustedPositives": "31/31",
+      "producerDenials": "8/8",
+      "routeDenials": "30/30",
+      "negativeControls": "19/19_EXECUTABLE_PRODUCTION_SOURCE_MUTANTS",
+      "unexpectedCreatorMutantDenied": true,
+      "iosNativeCallPolicyGuard": "PASS",
+      "notificationRoomCallPolicyGuard": "PASS",
+      "chatCallPushPolicyGuard": "PASS",
+      "gitDiffCheck": "PASS"
+    },
+    "boundedEquivalentIntegrationAcceptance": {
+      "status": "accepted",
+      "classification": "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION_CLEAR_EQUIVALENT_HARNESS",
+      "basis": [
+        "exact_production_registry_route_consumer_and_ownership_functions_executed_3_of_3",
+        "repository_wide_creator_guard_binds_the_root_bridge_as_the_only_producer",
+        "late_expiry_and_platform_scoped_clear_execute_against_current_production_modules",
+        "immutable_unsigned_simulator_compile_passed",
+        "corrected_d2c_does_not_change_swift_plugin_or_generated_ios_source",
+        "post_sync_generated_ios_digest_is_stable_3_of_3"
+      ],
+      "immutableUnsignedSimulatorCompile": "PASS_DEBUG_IPHONESIMULATOR_26_5_NO_SIGNING",
+      "immutableCompileLogSha256": "c4d451089864f559e9cb52be040cc3bf046d1407f442b8812179897704a6b41b",
+      "generatedIosDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+      "postSyncGeneratedParity": "3/3",
+      "simulatorAppExecutionClaimed": false,
+      "physicalDeviceOrProviderProofClaimed": false,
+      "signedArtifactOrDeliveryProofClaimed": false
+    },
+    "currentTruthReadback": {
+      "statusBeforeV2": "EXPECTED_BASE_SYNC_REVIEW_EVIDENCE_MISSING_AND_RECORDED_IMMUTABLE_HEAD_PENDING_ACCEPTANCE",
+      "v2ProvidesExactMatchingBaseSynchronizationEvidence": true,
+      "implementationHeadInCurrentTruthRemainsImmutableSourceByDesign": true
+    },
+    "phase1Ci": {
+      "status": "PENDING_AFTER_ALL_FOUR_CURRENT_LEVEL_C_REVIEWS",
+      "acceptedAsProofByThisEvidence": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationChanged": false,
+      "providerContact": false,
+      "physicalDevice": false,
+      "easBuild": false,
+      "testFlightUpload": false,
+      "otaPublished": false,
+      "databaseMutation": false,
+      "reviewOnlyPrMayMerge": false
+    }
+  },
+  "findings": [
+    {
+      "id": "D3_NATIVE_PENDING_EVENT_ORIGIN_GENERATION_ATTESTATION",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PRD2_IOS_NATIVE_CALL_XCTEST_GENERATED_PLUGIN_CONTRACT",
+      "detail": "Persisted native pending events do not yet expose a native-origin timestamp or event generation; D2C binds the current JavaScript readiness generation and drains native events once."
+    },
+    {
+      "id": "D3_CALLKIT_COMPLETION_RESULT_ATTESTATION",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PRD2_IOS_NATIVE_CALL_XCTEST_GENERATED_PLUGIN_CONTRACT",
+      "detail": "The JavaScript completion wrapper observes native method resolution after main-queue scheduling, not a returned CallKit action-fulfillment result; D2C ordering remains server-authoritative."
+    }
+  ],
+  "proofBoundary": {
+    "source": "IOS_NATIVE_ROUTE_PROVENANCE_SOURCE_CLEAR",
+    "model": "IOS_NATIVE_ROUTE_PROVENANCE_MODEL_CLEAR",
+    "localIntegration": "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION_CLEAR_EQUIVALENT_HARNESS",
+    "pushKitProvider": "BLOCKED_EXTERNAL",
+    "apnsDelivery": "BLOCKED_EXTERNAL",
+    "physicalCallKitUi": "BLOCKED_EXTERNAL",
+    "signedArtifact": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "testFlightDelivery": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "publicCanary": "BLOCKED_EXTERNAL"
+  },
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2,
+    "P3": 0,
+    "failureWaived": false,
+    "laneMergeGate": "PASS_LEVEL_C_LANE_1_P0_P1_ZERO_EQUIVALENT_LOCAL_INTEGRATION_ACCEPTED",
+    "implementationMergeAuthorizedByThisReviewAlone": false,
+    "reviewDisposition": "V1_HISTORICAL; V2_CURRENT; REVIEW_BRANCH_NEVER_MERGES"
+  }
+}
