@@ -13,10 +13,16 @@ const reportPath =
   "docs/assurance/reconciliation/b3-room-host-block-check.json";
 const staticContractPath =
   "tests/assurance/reconciliation/room-host-source-parity.test.mjs";
+const focusedTestPath =
+  "supabase/tests/room_host_participant_block_check_test.sql";
+const compatibilityTestPath =
+  "supabase/tests/watch_party_room_host_block_check_test.sql";
+const scopeWaiverPath =
+  "config/assurance/pr-b3-room-host-authorization-scope-waiver-v1.json";
 const deployedSha256 =
   "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765";
 const forwardCorrectionSha256 =
-  "4aea3d852682f921c13aa382f7afe59c971999793472f1654c0d74f3c7376127";
+  "0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38";
 
 const sha256 = (value) =>
   createHash("sha256").update(value).digest("hex");
@@ -29,15 +35,114 @@ const stableValue = (value) =>
       )
       : value;
 
-const [deployed, forwardCorrection, reportText, staticContract, migrationNames] =
+const HOST_A = "host-a";
+const HOST_B = "host-b";
+const PARTICIPANT = "participant";
+const UNRELATED = "unrelated";
+const ROOM_A = "room-a";
+const ROOM_B = "room-b";
+const modelFixture = {
+  roomHosts: new Map([[ROOM_A, HOST_A], [ROOM_B, HOST_B]]),
+  blocks: new Set([`${ROOM_A}:${PARTICIPANT}`]),
+};
+
+const evaluateAuthorization = (context, mutation = {}) => {
+  const serviceAuthorized =
+    (context.invokerRole === "service_role" &&
+      context.requestRole === "service_role") ||
+    (mutation.inferServiceFromNullIdentity && context.userId === null);
+  const authenticatedAuthorized =
+    context.invokerRole === "authenticated" &&
+    context.requestRole === "authenticated" &&
+    (context.userId !== null || mutation.allowNullAuthenticatedIdentity);
+
+  if (!serviceAuthorized && !authenticatedAuthorized) {
+    return { status: "denied" };
+  }
+
+  if (authenticatedAuthorized && context.actorId !== context.userId) {
+    const exactHost = mutation.allowEveryAuthenticatedActorCheck ||
+      (mutation.removeHostIdentityPredicate
+        ? modelFixture.roomHosts.has(context.partyId)
+        : mutation.removeHostPartyPredicate
+          ? [...modelFixture.roomHosts.values()].includes(context.userId)
+          : modelFixture.roomHosts.get(context.partyId) === context.userId);
+    if (!exactHost) return { status: "denied" };
+  }
+
+  if (!context.partyId || !context.actorId) {
+    return { status: "allowed", value: false };
+  }
+
+  const blocked = mutation.removeBlockPartyPredicate
+    ? [...modelFixture.blocks].some((entry) =>
+      entry.endsWith(`:${context.actorId}`)
+    )
+    : modelFixture.blocks.has(`${context.partyId}:${context.actorId}`);
+  return { status: "allowed", value: blocked };
+};
+
+const assertDenied = (result) => assert.equal(result.status, "denied");
+const assertAllowedValue = (result, value) => {
+  assert.equal(result.status, "allowed");
+  assert.equal(result.value, value);
+};
+const assertControlTrips = (assertion) => {
+  assert.throws(assertion, { name: "AssertionError" });
+};
+
+const assertCorrectionSourceContract = (source) => {
+  const text = source.toString("utf8");
+  const body = text.match(/as \$\$([\s\S]+?)\$\$;/u)?.[1] ?? "";
+  const executableBody = body.replace(/--.*$/gmu, "");
+  const callerGate = body.indexOf("if not v_authenticated_authorized");
+  const invalidInput = body.indexOf("if v_party_id is null");
+
+  assert.match(text, /security definer\s+set search_path = ''/u);
+  assert.match(text, /v_invoker_role = 'authenticated'[\s\S]+v_request_role = 'authenticated'/u);
+  assert.match(text, /v_invoker_role = 'service_role'[\s\S]+v_request_role = 'service_role'/u);
+  assert.match(text, /if v_auth_user_id is null then\s+raise exception 'room_block_check_forbidden'/u);
+  assert.match(text, /where room\."party_id" = v_party_id\s+and room\."host_user_id"::text = v_auth_user_id/u);
+  assert.match(text, /if not v_auth_is_room_host then\s+raise exception 'room_block_check_forbidden'/u);
+  assert.match(text, /from public\."watch_party_rooms"/u);
+  assert.match(text, /join public\."channel_audience_blocks"/u);
+  assert.doesNotMatch(executableBody, /request\.jwt\.claim\.role/u);
+  assert.doesNotMatch(executableBody, /\bcurrent_user\b/u);
+  assert.doesNotMatch(executableBody, /\b(insert|update|delete|merge|execute|format)\b/iu);
+  assert.ok(callerGate >= 0 && callerGate < invalidInput);
+  assert.match(
+    text,
+    /revoke all on function\s+public\."watch_party_room_actor_blocked_by_host"\(text, text\)\s+from public, anon, authenticated, service_role;/u,
+  );
+  assert.match(
+    text,
+    /grant execute on function\s+public\."watch_party_room_actor_blocked_by_host"\(text, text\)\s+to authenticated, service_role;/u,
+  );
+  assert.doesNotMatch(text, /grant execute[\s\S]+\bto\s+anon\b/iu);
+};
+
+const [
+  deployed,
+  forwardCorrection,
+  focusedTest,
+  compatibilityTest,
+  reportText,
+  staticContract,
+  scopeWaiverText,
+  migrationNames,
+] =
   await Promise.all([
     readFile(deployedPath),
     readFile(forwardCorrectionPath),
+    readFile(focusedTestPath),
+    readFile(compatibilityTestPath),
     readFile(reportPath, "utf8"),
     readFile(staticContractPath),
+    readFile(scopeWaiverPath, "utf8"),
     readdir("supabase/migrations"),
   ]);
 const report = JSON.parse(reportText);
+const scopeWaiver = JSON.parse(scopeWaiverText);
 
 test("the confirmed undeployed predecessor is absent", async () => {
   await assert.rejects(
@@ -80,6 +185,7 @@ test("the exact deployed migration remains byte-identical", () => {
 
 test("the forward-only authority correction remains present and unchanged", () => {
   assert.equal(sha256(forwardCorrection), forwardCorrectionSha256);
+  assertCorrectionSourceContract(forwardCorrection);
   assert.ok(forwardCorrectionPath > deployedPath);
   assert.equal(report.forwardCorrection.version, "20260730230031");
   assert.equal(
@@ -89,6 +195,209 @@ test("the forward-only authority correction remains present and unchanged", () =
   assert.equal(report.forwardCorrection.file, forwardCorrectionPath);
   assert.equal(report.forwardCorrection.rawSha256, forwardCorrectionSha256);
   assert.equal(report.forwardCorrection.deployed, false);
+  assert.equal(report.focusedTest.file, focusedTestPath);
+  assert.equal(report.focusedTest.fileRawSha256, sha256(focusedTest));
+  assert.equal(report.focusedTest.assertions, 48);
+  assert.equal(report.focusedTest.executionStatus, "PASS_LOCAL_INTEGRATION");
+  assert.deepEqual(
+    {
+      planned: report.focusedTest.execution.planned,
+      executed: report.focusedTest.execution.executed,
+      passed: report.focusedTest.execution.passed,
+      failed: report.focusedTest.execution.failed,
+    },
+    { planned: 48, executed: 48, passed: 48, failed: 0 },
+  );
+  assert.equal(report.focusedTest.execution.remoteAccess, undefined);
+  assert.equal(report.focusedTest.remoteAccess, false);
+  assert.equal(report.focusedTest.execution.localAclReadback.publicExecute, false);
+  assert.equal(report.focusedTest.execution.localAclReadback.anonExecute, false);
+  assert.equal(
+    report.focusedTest.execution.localAclReadback.authenticatedExecute,
+    true,
+  );
+  assert.equal(
+    report.focusedTest.execution.localAclReadback.serviceRoleExecute,
+    true,
+  );
+  assert.equal(report.focusedTest.cases.length, 48);
+  assert.match(
+    report.focusedTest.cases.join("\n"),
+    /invalid input cannot bypass caller authorization/u,
+  );
+  assert.match(
+    report.focusedTest.cases.join("\n"),
+    /behavioral cross-user membership RLS denial/u,
+  );
+  assert.match(
+    report.focusedTest.cases.join("\n"),
+    /content digest unchanged/u,
+  );
+  assert.match(report.gateApplicability.T2_MODEL, /^required-/u);
+  assert.equal(report.proofTiers.T2_MODEL, "MODEL_CLEAR");
+  assert.equal(
+    report.proofTiers.T3_INTEGRATION,
+    "INTEGRATION_CLEAR",
+  );
+  assert.match(report.permittedNextAction, /freeze and push/u);
+  assert.match(report.permittedNextAction, /bind current truth/u);
+  assert.equal(
+    report.compatibilityFixture.file,
+    compatibilityTestPath,
+  );
+  assert.equal(
+    report.compatibilityFixture.fileRawSha256,
+    sha256(compatibilityTest),
+  );
+  assert.equal(
+    report.compatibilityFixture.executionStatus,
+    "PASS_LOCAL_INTEGRATION",
+  );
+  assert.equal(report.compatibilityFixture.passed, 4);
+  assert.equal(report.compatibilityFixture.failed, 0);
+  assert.match(
+    compatibilityTest.toString("utf8"),
+    /set local role authenticated;/u,
+  );
+  assert.match(
+    compatibilityTest.toString("utf8"),
+    /request\.jwt\.claims/u,
+  );
+  assert.deepEqual(report.livePreCorrectionFunction, {
+    evidenceMode: "owner-supplied-read-only-linked-inspection",
+    owner: "postgres",
+    securityDefiner: true,
+    volatility: "stable",
+    searchPath: "public",
+    explicitExecuteGrantees: [
+      "postgres",
+      "anon",
+      "authenticated",
+      "service_role",
+    ],
+    publicExplicitGranteePresent: false,
+    definitionSha256:
+      "c68fb3282ba4955f41f4aae5c143dabf678f278c051eb641251bdfd7097c8ad2",
+    changedByThisProgram: false,
+  });
+});
+
+test("the deterministic authorization model satisfies the unmutated decision table", () => {
+  const authenticated = (userId, partyId, actorId, requestRole = "authenticated") =>
+    evaluateAuthorization({
+      invokerRole: "authenticated",
+      requestRole,
+      userId,
+      partyId,
+      actorId,
+    });
+  const service = (partyId, actorId, userId = null, requestRole = "service_role") =>
+    evaluateAuthorization({
+      invokerRole: "service_role",
+      requestRole,
+      userId,
+      partyId,
+      actorId,
+    });
+
+  assertAllowedValue(
+    authenticated(PARTICIPANT, ROOM_A, PARTICIPANT),
+    true,
+  );
+  assertAllowedValue(authenticated(UNRELATED, ROOM_A, UNRELATED), false);
+  assertAllowedValue(authenticated(HOST_A, ROOM_A, PARTICIPANT), true);
+  assertDenied(authenticated(HOST_B, ROOM_A, PARTICIPANT));
+  assertDenied(authenticated(UNRELATED, ROOM_A, PARTICIPANT));
+  assertDenied(authenticated(PARTICIPANT, ROOM_A, PARTICIPANT, "unknown"));
+  assertDenied(authenticated(null, ROOM_A, PARTICIPANT));
+  assertAllowedValue(service(ROOM_A, PARTICIPANT), true);
+  assertAllowedValue(service(ROOM_B, PARTICIPANT, UNRELATED), false);
+  assertAllowedValue(authenticated(PARTICIPANT, null, PARTICIPANT), false);
+  assertDenied(service(ROOM_A, PARTICIPANT, null, null));
+});
+
+test("the eight deterministic negative controls are non-vacuous", async (t) => {
+  await t.test("1. removing null-auth denial is caught", () => {
+    const mutant = evaluateAuthorization({
+      invokerRole: "authenticated",
+      requestRole: "authenticated",
+      userId: null,
+      partyId: ROOM_A,
+      actorId: null,
+    }, { allowNullAuthenticatedIdentity: true });
+    assertControlTrips(() => assertDenied(mutant));
+  });
+
+  await t.test("2. removing the exact-host identity check is caught", () => {
+    const mutant = evaluateAuthorization({
+      invokerRole: "authenticated",
+      requestRole: "authenticated",
+      userId: UNRELATED,
+      partyId: ROOM_A,
+      actorId: PARTICIPANT,
+    }, { removeHostIdentityPredicate: true });
+    assertControlTrips(() => assertDenied(mutant));
+  });
+
+  await t.test("3. removing the block exact-party predicate is caught", () => {
+    const mutant = evaluateAuthorization({
+      invokerRole: "service_role",
+      requestRole: "service_role",
+      userId: null,
+      partyId: ROOM_B,
+      actorId: PARTICIPANT,
+    }, { removeBlockPartyPredicate: true });
+    assertControlTrips(() => assertAllowedValue(mutant, false));
+  });
+
+  await t.test("4. restoring anon execute is caught", () => {
+    const mutant = forwardCorrection.toString("utf8").replace(
+      "to authenticated, service_role;",
+      "to anon, authenticated, service_role;",
+    );
+    assertControlTrips(() => assertCorrectionSourceContract(mutant));
+  });
+
+  await t.test("5. inferring service role from null identity is caught", () => {
+    const mutant = evaluateAuthorization({
+      invokerRole: "postgres",
+      requestRole: "service_role",
+      userId: null,
+      partyId: ROOM_A,
+      actorId: PARTICIPANT,
+    }, { inferServiceFromNullIdentity: true });
+    assertControlTrips(() => assertDenied(mutant));
+  });
+
+  await t.test("6. broadening the search path is caught", () => {
+    const mutant = forwardCorrection.toString("utf8").replace(
+      "set search_path = ''",
+      "set search_path = public",
+    );
+    assertControlTrips(() => assertCorrectionSourceContract(mutant));
+  });
+
+  await t.test("7. allowing an unrelated authenticated caller is caught", () => {
+    const mutant = evaluateAuthorization({
+      invokerRole: "authenticated",
+      requestRole: "authenticated",
+      userId: UNRELATED,
+      partyId: ROOM_A,
+      actorId: PARTICIPANT,
+    }, { allowEveryAuthenticatedActorCheck: true });
+    assertControlTrips(() => assertDenied(mutant));
+  });
+
+  await t.test("8. allowing a host from another room is caught", () => {
+    const mutant = evaluateAuthorization({
+      invokerRole: "authenticated",
+      requestRole: "authenticated",
+      userId: HOST_B,
+      partyId: ROOM_A,
+      actorId: PARTICIPANT,
+    }, { removeHostPartyPredicate: true });
+    assertControlTrips(() => assertDenied(mutant));
+  });
 });
 
 test("the report preserves the resolved first dry-run and binds the final no-apply pass", () => {
@@ -116,6 +425,15 @@ test("the report preserves the resolved first dry-run and binds the final no-app
   assert.equal(
     report.staticSourceContract.fileRawSha256,
     sha256(staticContract),
+  );
+  assert.equal(report.scopeWaiver.file, scopeWaiverPath);
+  assert.equal(report.scopeWaiver.contractId, scopeWaiver.contractId);
+  assert.equal(scopeWaiver.secondHighRiskDomain, false);
+  assert.equal(scopeWaiver.fileBudget.waivedMaximum, 8);
+  assert.equal(scopeWaiver.lineBudget.waivedMaximum, 2400);
+  assert.equal(
+    scopeWaiver.reviewStatus,
+    "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
   );
   assert.equal(removed.version, "20260725224000");
   assert.equal(removed.formerFile, removedCandidatePath);

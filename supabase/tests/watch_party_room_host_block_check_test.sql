@@ -33,7 +33,14 @@ values (
   now()
 );
 
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', '45222222-2222-4222-8222-222222222222', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"45222222-2222-4222-8222-222222222222"}',
+  true
+);
 select lives_ok(
   $$select public.watch_party_room_actor_blocked_by_host(
     'HOST-BLOCK-CHECK',
@@ -43,6 +50,11 @@ select lives_ok(
 );
 
 select set_config('request.jwt.claim.sub', '45111111-1111-4111-8111-111111111111', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"45111111-1111-4111-8111-111111111111"}',
+  true
+);
 select lives_ok(
   $$select public.watch_party_room_actor_blocked_by_host(
     'HOST-BLOCK-CHECK',
@@ -60,6 +72,11 @@ select is(
 );
 
 select set_config('request.jwt.claim.sub', '45333333-3333-4333-8333-333333333333', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"45333333-3333-4333-8333-333333333333"}',
+  true
+);
 select throws_ok(
   $$select public.watch_party_room_actor_blocked_by_host(
     'HOST-BLOCK-CHECK',
@@ -69,6 +86,7 @@ select throws_ok(
   'room_block_check_forbidden',
   'an unrelated authenticated user still cannot inspect another actor'
 );
+reset role;
 
 select * from finish();
 rollback;

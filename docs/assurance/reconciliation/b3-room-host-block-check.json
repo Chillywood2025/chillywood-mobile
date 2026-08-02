@@ -1,9 +1,18 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "reconciliationId": "first-pass-assurance-b3-room-host-block-check",
   "implementationPrNumber": 75,
   "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
   "startingImplementationHead": "bded4793b26e8e2e8bd2331df7f5b3fcc55f141b",
+  "programStartingMain": "483175fc1b3784fdc4db670c1aea2311d5d80e4f",
+  "preservedLocalSuccessor": {
+    "head": "b2cd931802329d3aee82a0ab2bad6ce843950387",
+    "tree": "046f390851a2eec18d398a0599e8fea0124f502b",
+    "startingStatus": "clean-unpushed",
+    "reset": false,
+    "rebase": false,
+    "forcePush": false
+  },
   "currentMainMerged": {
     "mainHead": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
     "mergeCommit": "897d2b5e9269f5f8d4e51c310b5cee75e605e81e",
@@ -11,11 +20,19 @@
     "rebase": false,
     "forcePush": false
   },
-  "objective": "Preserve the exact deployed room-host participant block-check source, remove the confirmed undeployed predecessor candidate, and retain a forward-only fail-closed authority correction without applying it.",
+  "objective": "Preserve the exact deployed room-host participant block-check source, remove the confirmed undeployed predecessor candidate, and retain one undeployed forward-only correction that fails closed by exact caller role, removes anon execution, hardens the SECURITY DEFINER boundary, and preserves exact-room enforcement.",
   "risk": "C",
   "domains": [
     "database/RLS"
   ],
+  "scopeWaiver": {
+    "file": "config/assurance/pr-b3-room-host-authorization-scope-waiver-v1.json",
+    "contractId": "pr-b3-room-host-authorization-scope-waiver-v1",
+    "reason": "The exact owner-mandated 48-case integration matrix and eight anti-vacuity controls exceed the default line budget while remaining inside one room-host database/RLS authorization domain.",
+    "fileBudgetMaximum": 8,
+    "lineBudgetMaximum": 2400,
+    "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE"
+  },
   "affectedFeatures": [
     "supabase-migrations-rls",
     "watch-party-live"
@@ -60,21 +77,23 @@
     "version": "20260730230031",
     "name": "room_host_block_check_fail_closed_authority",
     "file": "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql",
-    "rawSha256": "4aea3d852682f921c13aa382f7afe59c971999793472f1654c0d74f3c7376127",
-    "repositoryNormalizeSqlV1Sha256": "998420f5d381a0c6077012fdd9cca3ff6249979d406811f29f02a7d4ef1779b7",
-    "lowerWhitespaceV1Sha256": "99d98a9cb31daab6b2e1eb58e07c742f4506298c6a80e2948c392d5238b548ee",
+    "rawSha256": "0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38",
+    "repositoryNormalizeSqlV1Sha256": "46fbdbcf48db5a399ff60c2c9ee51283e2016cd253b802267824facd9b3ed75e",
+    "lowerWhitespaceV1Sha256": "3f8f15055843fb6935dbcc05aa54c62ccc38c207100b49adca9f1bf1c77c66dd",
     "classification": "SOURCE_ONLY_FORWARD_CORRECTION",
     "deployed": false,
     "behavior": {
-      "invalidArguments": "return-false-without-authority-query",
-      "authenticatedSubject": "self-or-exact-room-host-only",
+      "invalidArguments": "classify-caller-first-then-return-false-only-for-an-authorized-self-or-service-context",
+      "authenticatedSubject": "exact-authenticated-invoker-and-full-claims-role-with-nonnull-auth.uid-then-self-or-exact-room-host-only",
       "authenticatedNullSubject": "raise-room_block_check_forbidden",
       "authenticatedServiceClaimSpoof": "raise-room_block_check_forbidden",
-      "serviceNullSubject": "allowed-only-when-invoker-role-and-request-role-are-service_role",
-      "serviceNonNullSubject": "self-or-exact-room-host-only-without-null-subject-bypass",
+      "serviceNullSubject": "allowed-only-when-invoker-role-and-full-claims-request-role-are-both-service_role",
+      "serviceNonNullSubject": "remains-explicit-service-authority-and-does-not-fabricate-or-enter-authenticated-user-logic",
       "otherRoomHost": "raise-room_block_check_forbidden",
       "unrelatedAuthenticated": "raise-room_block_check_forbidden",
-      "invalidInputOrder": "normalize-inputs-and-return-false-before-reading-authority-state"
+      "unknownOrMissingRequestRole": "raise-room_block_check_forbidden",
+      "directPostgresNoJwt": "raise-room_block_check_forbidden",
+      "invalidInputOrder": "classify-exact-role-and-identity-first; exact-host-check-precedes-harmless-invalid-return-for-cross-actor-calls"
     },
     "securityBoundary": {
       "securityDefiner": true,
@@ -82,6 +101,12 @@
       "relationsSchemaQualified": true,
       "publicExecuteRevoked": true,
       "anonExecuteRevoked": true,
+      "aclResetBeforeGrant": [
+        "PUBLIC",
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
       "exactExplicitNonOwnerGrantees": [
         "authenticated",
         "service_role"
@@ -95,9 +120,10 @@
       "securityDefinerCurrentUser": "function-owner-not-caller-authority",
       "configuredRole": "current_setting-role-retains-PostgREST-SET-ROLE-provenance",
       "roleNoneFallback": "session_user",
-      "fullClaimsPrecedence": "auth.jwt-role-before-legacy-request.jwt.claim.role",
+      "fullClaimsAuthority": "auth.jwt-role-only; missing-malformed-or-roleless-full-claims-deny",
+      "legacySingleClaimRole": "not-authority",
       "serviceAuthority": "both-invoker-role-and-request-role-must-equal-service_role",
-      "authenticatedClaimSpoof": "denied-when-invoker-role-is-authenticated"
+      "authenticatedClaimSpoof": "denied-when-invoker-role-and-full-claims-role-do-not-both-equal-authenticated"
     },
     "rollback": "Do not deploy this source under this program. Before any separately authorized deployment, block and supersede it with another forward-only migration if review finds a defect; never rewrite 20260730161737."
   },
@@ -197,103 +223,178 @@
   },
   "staticSourceContract": {
     "file": "tests/assurance/reconciliation/room-host-source-parity.test.mjs",
-    "fileRawSha256": "66bc766c31a07b9cf78907ae8c2acfba60b6e10ea7ddded4fe83f3ebb23fc8f3",
-    "assertionGroups": 4,
+    "fileRawSha256": "c9be887023b431998d781604cb676cf57de2b76de333f7652dfb8451845fb2c5",
+    "assertionGroups": 6,
     "status": "SOURCE_CLEAR",
     "deterministicOutput": {
       "runs": 3,
       "identical": true,
       "reporter": "dot",
-      "sha256": "dd29908dd97805d66daeec8bab6b2e2b632de7c11bb01889203309ec93cad524"
+      "sha256": "656362fab7149b791b9940333bce3c500437d55bfa584cc1f50b747288c722b0",
+      "status": "SOURCE_CLEAR"
+    },
+    "authorizationModel": {
+      "positiveDecisionTableCases": 11,
+      "negativeControls": 8,
+      "status": "MODEL_CLEAR",
+      "mutants": [
+        "null-auth denial removed",
+        "exact-host identity predicate removed",
+        "block exact-party predicate removed",
+        "anon execute restored",
+        "service role inferred from null identity",
+        "search path broadened to public",
+        "unrelated authenticated caller allowed",
+        "host exact-party predicate removed"
+      ]
     },
     "asserts": [
       "20260725224000 source-only predecessor is absent",
       "20260730161737 deployed version, name, source path, raw body hash, and remote statement hash remain exact",
-      "20260730230031 forward-only correction remains present, byte-identical, and undeployed",
+      "20260730230031 remains undeployed and enforces exact role pairs, caller-before-input authorization, empty search path, qualified objects, generic denial, no dynamic SQL or DML, and an explicit four-role ACL reset before the two-role grant",
+      "the 11-case positive authorization decision table is deterministic",
+      "all eight required negative controls are caught",
       "first assembled dry-run is retained as historical_resolved and the successor assembled dry-run is PASS_NO_APPLY with no proof substitution"
     ]
   },
   "focusedTest": {
     "file": "supabase/tests/room_host_participant_block_check_test.sql",
-    "fileRawSha256": "f0db6aad56394b403affdebab1076da9d412c899e1bb92c4648bc8aff48a0e34",
+    "fileRawSha256": "3c34a8b9b69d987d4b396e7bd890410363e9d41a58aa1086eeab1e86a35da069",
     "mode": "local-focused-pgTap",
-    "assertions": 31,
-    "executionStatus": "INTEGRATION_CLEAR",
-    "executionReason": "The exact frozen 31-case file passed 31/31 inside one outer rollback-only local transaction under the coordinator database lock.",
-    "databaseReset": false,
+    "assertions": 48,
+    "executionStatus": "PASS_LOCAL_INTEGRATION",
+    "executionReason": "The coordinator held test-lock-database, completed a clean isolated local reset through the exact predecessor and correction, and executed all 48 focused assertions successfully. Every fixture and the temporary pgTAP extension rolled back without persistence.",
+    "databaseReset": true,
     "remoteAccess": false,
-    "successorPersisted": false,
+    "successorAppliedLocally": true,
+    "successorPersistedRemotely": false,
     "temporaryPgTapPersisted": false,
-    "staticValidation": {
-      "planMatchesAssertions": true,
-      "plannedAssertions": 31,
-      "mappedCases": 31,
-      "deterministicOutput": {
-        "runs": 3,
-        "sha256": "eafb2cf687d0ea5eb33ddc2e806a2d9e3f4f71717ad861f0a854cf9596f8383c"
+    "execution": {
+      "cliVersion": "2.110.0",
+      "planned": 48,
+      "executed": 48,
+      "passed": 48,
+      "failed": 0,
+      "outerTransaction": "ROLLBACK",
+      "postRollbackPgTapExtensionCount": 0,
+      "postRollbackFixtureRoomCount": 0,
+      "postRollbackFixtureBlockCount": 0,
+      "postRollbackFixtureMembershipCount": 0,
+      "localAclReadback": {
+        "owner": "postgres",
+        "securityDefiner": true,
+        "volatility": "stable",
+        "searchPath": "",
+        "publicExecute": false,
+        "anonExecute": false,
+        "authenticatedExecute": true,
+        "serviceRoleExecute": true,
+        "explicitExecuteGrantees": [
+          "postgres",
+          "authenticated",
+          "service_role"
+        ]
       }
     },
-    "executionEvidence": {
+    "staticValidation": {
+      "planMatchesAssertions": true,
+      "plannedAssertions": 48,
+      "mappedCases": 48,
+      "deterministicOutput": {
+        "runs": 3,
+        "sha256": "656362fab7149b791b9940333bce3c500437d55bfa584cc1f50b747288c722b0",
+        "status": "PLAN_AND_MAPPING_SOURCE_CLEAR"
+      }
+    },
+    "historicalExecutedBaselines": [{
+      "fileRawSha256": "f0db6aad56394b403affdebab1076da9d412c899e1bb92c4648bc8aff48a0e34",
       "planned": 31,
       "executed": 31,
       "passed": 31,
       "failed": 0,
       "deployedSourceSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
       "forwardCorrectionSha256": "4aea3d852682f921c13aa382f7afe59c971999793472f1654c0d74f3c7376127",
-      "focusedTestSha256": "f0db6aad56394b403affdebab1076da9d412c899e1bb92c4648bc8aff48a0e34",
       "outerTransaction": "ROLLBACK",
       "postRollbackPgTapExtensionCount": 0,
       "postRollbackFunctionSearchPath": "public",
       "persistentDatabaseMutation": false,
-      "providerContact": false
-    },
-    "historicalExecutedBaseline": {
+      "providerContact": false,
+      "doesNotProveCurrentFile": true
+    }, {
       "fileRawSha256": "9b57229dfbb4cbad1caef9c8bc1afb67ade60624a5057b17a0fffb96100db11e",
       "assertions": 18,
       "passed": 18,
       "failed": 0,
       "mode": "local-transaction-rolled-back",
       "doesNotProveCurrentFile": true
-    },
+    }],
     "cases": [
       "function exists",
-      "empty search path is fixed on the security definer",
-      "anonymous execute privilege is absent",
-      "authenticated and service-role execute grants are exact",
-      "function ACL has exactly authenticated and service_role as explicit non-owner grantees",
-      "security-definer owner is separated from caller role provenance",
-      "anonymous runtime call is denied",
-      "role none falls back to session_user and rejects claim-only service authority",
-      "invalid input returns false before null-auth authority evaluation",
-      "authenticated null subject is denied",
-      "authenticated service-claim spoof is denied",
-      "participant self-check is allowed",
-      "exact room host is allowed",
-      "exact host observes unblocked false",
-      "exact host observes blocked true",
-      "participant observes own blocked true",
-      "host of another room is denied",
-      "unrelated authenticated caller is denied",
-      "empty room input returns false",
-      "null room input returns false",
-      "whitespace room input returns false",
-      "malformed room input returns false",
-      "nonexistent room self-check returns false",
-      "empty actor input returns false",
-      "null actor input returns false",
-      "whitespace actor input returns false",
-      "explicit service-role null-subject call is allowed",
-      "full-claims role takes precedence over legacy role",
-      "legacy role is used only when full claims omit role",
-      "service role with unrelated non-null subject is denied",
-      "service role with exact non-null subject follows the participant self path"
+      "SECURITY DEFINER and stable volatility",
+      "exact empty search path",
+      "PUBLIC execute denied",
+      "anon execute denied",
+      "authenticated execute allowed",
+      "service_role execute allowed",
+      "exact non-owner ACL",
+      "authenticated participant self access",
+      "unblocked self false",
+      "blocked self true",
+      "authenticated null auth.uid denied",
+      "cross-actor denied without exact host",
+      "exact host unblocked false",
+      "exact host blocked true",
+      "other-room host denied",
+      "unrelated authenticated denied",
+      "non-host participant denied",
+      "host nonexistent-room denial",
+      "host other-room denial exact-party anchor",
+      "anon invocation denied",
+      "direct no-JWT postgres denied",
+      "authenticated absent sub denied",
+      "fabricated request role denied",
+      "invalid input cannot bypass caller authorization",
+      "explicit service_role check",
+      "null auth.uid does not infer service_role",
+      "service_role exact room and actor scope with nonnull sub not treated as user identity",
+      "service_role protected-row content immutability",
+      "unblocked membership insert",
+      "blocked membership insert denial",
+      "blocked reconnect denial",
+      "unblocked message insert",
+      "blocked message denial",
+      "blocked seat-request marker denial",
+      "exact host membership behavior",
+      "behavioral cross-user membership RLS denial after host-authorized function check",
+      "anon membership denial",
+      "Premium content-access policy preserved",
+      "LiveKit publication authority absent from correction",
+      "attacker same-name relation cannot hijack lookup",
+      "trusted objects and auth helpers fully qualified with no legacy role GUC",
+      "existing and nonexistent rooms share denial class",
+      "blocked and unblocked actors share denial class",
+      "no DML dynamic SQL or role setting",
+      "block-row content digest unchanged",
+      "room-row content digest unchanged",
+      "membership-row content digest unchanged outside rollback-only fixtures"
     ]
+  },
+  "compatibilityFixture": {
+    "file": "supabase/tests/watch_party_room_host_block_check_test.sql",
+    "fileRawSha256": "b03527c4a1d9476772cbfe52d04fabbca79a225067572575994c86366749e168",
+    "change": "The preserved four-case compatibility fixture now establishes the exact authenticated database role plus full role/sub claims; it no longer relies on direct postgres with a fabricated sub-only context.",
+    "assertions": 4,
+    "executionStatus": "PASS_LOCAL_INTEGRATION",
+    "executed": 4,
+    "passed": 4,
+    "failed": 0,
+    "outerTransaction": "ROLLBACK"
   },
   "gateApplicability": {
     "scope": "this-B3-source-reconciliation-and-forward-correction-only",
     "T0_REQUIREMENT": "required",
     "T1_SOURCE": "required",
-    "T2_MODEL": "not-applicable-no-room-host-state-model-the-31-case-pgTap-is-T3-only",
+    "T2_MODEL": "required-deterministic-authorization-decision-table-and-eight-negative-controls",
     "T3_INTEGRATION": "required-local-only",
     "T4_NATIVE_PROVIDER": "not-applicable-to-this-PR",
     "T5_SIGNED_ARTIFACT": "not-applicable-to-this-PR",
@@ -304,19 +405,20 @@
     "scope": "this-B3-source-reconciliation-and-forward-correction-only",
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
-    "T2_MODEL": "NOT_APPLICABLE",
-    "T2_MODEL_REASON": "This narrow reconciliation has no executable room-host state model. Source inspection and the pgTAP matrix cannot substitute for T2.",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T2_MODEL_REASON": "The 11-case unmutated authorization decision table and all eight distinct deterministic negative controls passed identically in three dependency-free runs.",
     "T3_INTEGRATION": "INTEGRATION_CLEAR",
-    "T3_INTEGRATION_REASON": "The exact frozen 31-case pgTAP file passed 31/31 inside one outer rollback-only local transaction with no persisted extension or correction state.",
+    "T3_INTEGRATION_REASON": "The exact current 48-case authorization/ACL/RLS pgTAP and four-case compatibility fixture passed 52/52 under test-lock-database after a clean isolated local reset. Fixture rows and pgTAP rolled back; no linked migration or ACL was applied.",
     "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
     "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
   },
   "knownFindingDisposition": {
-    "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "INTEGRATION_CLEAR-forward-correction-not-deployed",
-    "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "INTEGRATION_CLEAR",
-    "B3_CURRENT_31_CASE_PGTAP_NOT_EXECUTED": "SUPERSEDED-by-31-of-31-rollback-only-result",
+    "B3_NULL_AUTHORIZATION_BYPASS_NOT_FAIL_CLOSED": "SOURCE_AND_LOCAL_INTEGRATION_CORRECTED-forward-correction-not-deployed",
+    "B3_EXPLICIT_ANON_EXECUTE_GRANT": "SOURCE_AND_LOCAL_ACL_INTEGRATION_CORRECTED-forward-correction-not-deployed",
+    "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING": "SOURCE_MODEL_AND_LOCAL_INTEGRATION_CORRECTED",
+    "B3_CURRENT_48_CASE_PGTAP_NOT_EXECUTED": "SUPERSEDED-by-current-48-of-48-local-pass",
     "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING": "SUPERSEDED-by-final-linked-PASS_NO_APPLY-result",
     "B3_RESIDUAL_SOURCE_ONLY_DRY_RUN_BLOCKER": "SUPERSEDED-candidate-removed-final-assembled-dry-run-PASS_NO_APPLY"
   },
@@ -333,10 +435,13 @@
   },
   "rollback": "Block merge or deployment on any authority, role, room, version, name, body, hash, grant, RLS, dry-run, or exact-review mismatch. Any correction remains forward-only.",
   "emergencyStop": "Stop the database lane; do not apply, rewrite, rename, or re-run deployed migration 20260730161737.",
-  "permittedNextAction": "Proceed to exact-head review and frozen-head CI. Do not deploy any pending forward correction.",
+  "permittedNextAction": "Complete dependency-free source and scope guards, freeze and push the immutable B3 source, then bind current truth before the required history-preserving base synchronization; do not deploy any pending forward correction.",
   "safety": {
     "liveDatabaseChanged": false,
     "localDatabasePersistentlyChanged": false,
+    "localDatabaseReset": true,
+    "localCorrectionApplied": true,
+    "localFixtureRowsPersisted": false,
     "providerStateChanged": false,
     "migrationDeployed": false,
     "deployedMigrationChanged": false,
@@ -348,5 +453,21 @@
     "productSourceChanged": false,
     "buildOrOta": false,
     "proofSubstitutionAccepted": false
+  },
+  "livePreCorrectionFunction": {
+    "evidenceMode": "owner-supplied-read-only-linked-inspection",
+    "owner": "postgres",
+    "securityDefiner": true,
+    "volatility": "stable",
+    "searchPath": "public",
+    "explicitExecuteGrantees": [
+      "postgres",
+      "anon",
+      "authenticated",
+      "service_role"
+    ],
+    "publicExplicitGranteePresent": false,
+    "definitionSha256": "c68fb3282ba4955f41f4aae5c143dabf678f278c051eb641251bdfd7097c8ad2",
+    "changedByThisProgram": false
   }
 }
