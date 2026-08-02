@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-generated-native-capability-parity-review-v4",
+  "reviewVersion": 4,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "generated-native-source-and-required-provided-capability-parity",
+  "reviewLevel": "C",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "historicalEvidencePreserved": ["v1", "v2", "v3"],
+  "priorEvidenceState": "historical-pre-base-synchronization",
+  "humanApproval": false,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "synchronizedBranchHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "currentBase": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseHead": "12985e2ad505ca813611c64b793345f069dc5515",
+  "synchronizedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "implementationTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "canonicalSyntheticTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "sourceDeltaHash": "cb9c89c217f960f75befd86c5a3d02a732246cab2354e12bed4de1bad4bc5c75",
+  "sourceDeltaHashMethod": "sha256(raw git diff --binary --no-renames currentBase synchronizedBranchHead)",
+  "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+  "changedFileHashMethod": "sha256(git diff --name-status -z --no-renames currentBase synchronizedBranchHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a8953b3ee5d856490a461e367729492d1bcf5d799748251e03c565601a4ececa",
+  "testResultHash": "376435870d7c6aa7c0f57fa9f0b671486f355557735163f466e364a238af410d",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewRef": "codex/first-pass-assurance-pr-d1-review-generated-native-capability",
+  "reviewRefHead": "171839b6cfe91fe3323ea6629422f594cfd7245c",
+  "reviewHead": "171839b6cfe91fe3323ea6629422f594cfd7245c",
+  "reviewTimestamp": "2026-08-02T09:54:00Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-generated-native-and-capability-parity",
+    "additive-v4-synchronized-head",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 2},
+  "testResults": {
+    "exactSynchronization": {
+      "status": "pass",
+      "sourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "synchronizedHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "firstParent": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "secondParent": "12985e2ad505ca813611c64b793345f069dc5515",
+      "commitDistance": 1,
+      "sourceIsAncestor": true,
+      "canonicalMergeConflict": false,
+      "observedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+      "canonicalSyntheticTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "providerHeadExact": true
+    },
+    "synchronizedScope": {
+      "status": "pass",
+      "changedFiles": 6,
+      "additions": 1049,
+      "deletions": 0,
+      "netChangedLines": 1049,
+      "changedPaths": [
+        "config/assurance/native-capability-registry-v1.json",
+        "config/assurance/release-target-parity-v1.json",
+        "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
+        "docs/assurance/pr-d1-offline-parity-report-v1.json",
+        "scripts/assurance/release-parity.mjs",
+        "tests/assurance/release-parity.test.mjs"
+      ],
+      "releaseOrProductSourceChanged": false,
+      "nativeImplementationChanged": false,
+      "packageOrWorkflowChanged": false,
+      "oneAssuranceDomain": true
+    },
+    "postSynchronizationFocusedTests": {
+      "status": "pass",
+      "provenance": "COORDINATOR_EXACT_POST_SYNCHRONIZATION_OFFLINE_TEST_RESULT",
+      "rerunByThisReviewLane": false,
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "mandatoryNegativeControls": "8/8",
+      "additionalNegativeControls": "16/16",
+      "totalNegativeControls": "24/24",
+      "providerContact": false,
+      "buildPerformed": false
+    },
+    "directImportClosure": {
+      "status": "pass",
+      "grammars": [
+        "STATIC_IMPORT_FROM",
+        "SIDE_EFFECT_IMPORT",
+        "DYNAMIC_IMPORT",
+        "COMMONJS_REQUIRE",
+        "EXPORT_FROM"
+      ],
+      "discovered": 42,
+      "nativeMapped": 34,
+      "reviewedJsOnly": 8,
+      "unclassified": 0,
+      "sourceByteEquivalentToReviewedImmutableSource": true
+    },
+    "targetCapabilityParity": {
+      "status": "pass",
+      "androidChatLivekitQaBuild86": "21/21",
+      "iosQaBuild8": "26/26",
+      "androidProductionBuild84HistoricalCurrentReplay": "21/21",
+      "missingCapabilities": 0,
+      "requiredAndProvidedIndependentlyDerived": true,
+      "generatedEvidenceIsT1SourceOnly": true
+    },
+    "randomValuesNativeCapability": {
+      "status": "pass",
+      "androidCapability": "android.random-values-native",
+      "iosCapability": "ios.random-values-native",
+      "androidGeneratedAutolink": true,
+      "iosGeneratedAutolink": true
+    },
+    "urlPolyfillReviewedJsOnly": {
+      "status": "pass",
+      "lockedVersion": "3.0.0",
+      "nativeIndicators": 0,
+      "sourceDigest": "d15dc6c2037506c825983e808562ac183ec1a0288af5900211297f769be39201",
+      "coveredByAndroid": "android.react-native-core",
+      "coveredByIos": "ios.react-native-core"
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationEditedByReviewer": false,
+      "heavyGenerationRerunByReviewer": false,
+      "providerContact": false,
+      "buildPerformed": false,
+      "otaPublished": false,
+      "artifactInstalled": false,
+      "generatedAndroidOrIosCommitted": false,
+      "secretOrPrivateConfigContentRecorded": false
+    },
+    "phase1Ci": {
+      "status": "pending-rerun",
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "canceledRunId": 30742530172,
+      "canceledAttempt": 1,
+      "canceledResult": "CANCELED",
+      "rerun": "PENDING",
+      "formalReviewHeadExpected": "BLOCKED_INTERNAL_ONLY_UNTIL_EXACT_FROZEN_HEAD_CI_PASS"
+    }
+  },
+  "findings": [
+    {
+      "id": "PRD1_REQUIRED_CAPABILITY_CATALOG_NOT_CLOSED",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "The synchronized head preserves exact five-grammar closure at 42 discovered, 34 native-mapped, 8 reviewed JS-only and zero unclassified packages."
+    },
+    {
+      "id": "PRD1_GENERATED_PROVIDED_EVIDENCE_INCOMPLETE",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "The synchronized head preserves generated provided evidence and 21/21, 26/26 and 21/21 capability parity."
+    },
+    {
+      "id": "PRD1_HISTORICAL_TARGET_DIGEST_SOURCE_CROSS_BOUND",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "The synchronized head preserves build-84 current-source replay separation from historical artifact proof."
+    },
+    {
+      "id": "PRD2_ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-ANDROID-GENERATED-NATIVE-LIFECYCLE-INSTRUMENTATION"
+    },
+    {
+      "id": "PRD2_IOS_NATIVE_CALL_XCTEST_GENERATED_PLUGIN_CONTRACT",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-IOS-NATIVE-CALL-XCTEST-GENERATED-PLUGIN-CONTRACT"
+    }
+  ],
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2,
+    "mergeGate": "PASS_LEVEL_C_LANE_2_SYNCHRONIZED_HEAD_PENDING_CI",
+    "phase1Ci": "RERUN_PENDING_AFTER_CANCELED_RUN_30742530172_ATTEMPT_1",
+    "reviewDisposition": "PRESERVE_V1_V2_V3_V4; NEVER_MERGE_REVIEW_BRANCH"
+  }
+}
