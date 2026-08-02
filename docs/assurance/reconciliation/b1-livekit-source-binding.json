@@ -3,7 +3,7 @@
   "recordId": "b1-livekit-source-binding-reconciliation",
   "lane": "B1",
   "branch": "codex/assurance-reconcile-livekit-source-binding",
-  "objective": "Represent the already-deployed LiveKit platform source-identity binding exactly in Git without applying it again.",
+  "objective": "Preserve the exact deployed LiveKit source binding and add a forward-only final receipt/artifact cross-binding correction without applying either migration.",
   "riskLevel": "C",
   "classification": "REMOTE_AND_SOURCE_MATCH",
   "remoteReadback": {
@@ -21,6 +21,7 @@
       "normalizedHash": "71cabbdf9f262ebefddd6f160094cb8677b6bdf51c0dea35adea99c68e1505f4"
     }
   ],
+  "hashAlgorithms": {"raw": "SHA-256 over exact UTF-8 migration statement bytes; this is the byte-identity authority", "remoteNormalized": "SHA-256 over the coordinator readback's canonical statement-array representation; retained as readback metadata, not substituted for raw byte identity", "repositoryNormalized": "SHA-256 after CRLF-to-LF conversion, trailing horizontal-whitespace removal, collapse of 3+ newlines to 2, and trim; diagnostic only"},
   "source": {
     "path": "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
     "frozenStoppedPr": 52,
@@ -31,6 +32,7 @@
     "versionPreservedExactly": true,
     "namePreservedExactly": true
   },
+  "successor": {"version": "20260730230022", "name": "cognitive_livekit_final_source_identity_cross_binding", "deploymentStatus": "GIT_SOURCE_ONLY_NOT_APPLIED", "deployedPredecessorRewritten": false},
   "scope": {
     "domains": [
       "LiveKit",
@@ -38,8 +40,9 @@
     ],
     "included": [
       "deployed migration source parity",
-      "focused binding pgTAP",
-      "existing authorization source guard",
+      "forward-only final receipt/artifact identity cross-binding",
+      "behavioral predicate pgTAP and deterministic source contract",
+      "provider-backed local concurrency fixture repair",
       "Git-only reconciliation documentation"
     ],
     "excluded": [
@@ -64,46 +67,58 @@
   "proofLimits": {
     "formalLiveKitSentinelRuns": 0,
     "formalLiveKitFindings": 0,
-    "installedProofClaimed": false,
-    "physicalProofClaimed": false,
+    "providerProofClaimed": false,
+    "installedProofClaimed": false, "physicalProofClaimed": false,
     "publicCanaryProofClaimed": false,
     "sourceSubstitutionAccepted": false
   },
   "validation": {
-    "localDatabaseReset": {
+    "historicalDeployedSourceMaterialization": {
       "cliVersion": "2.109.1",
       "target": "local stack only",
-      "attempts": 1,
-      "status": "INTEGRATION_CLEAR",
+      "attempts": 3,
+      "status": "SOURCE_CLEAR",
       "exitCode": 0,
       "materializedThrough": "20260730142519",
       "remoteConnectionUsed": false,
       "retryPerformed": false
     },
-    "focusedPgTap": {
-      "cliVersion": "2.109.1",
-      "target": "reset local stack",
-      "file": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+    "successorSourceContract": {
+      "file": "tests/assurance/reconciliation/livekit-final-source-identity-cross-binding.test.mjs",
       "attempts": 1,
-      "status": "INTEGRATION_CLEAR",
-      "plannedTests": 23,
-      "executedTests": 23,
+      "status": "SOURCE_CLEAR",
+      "plannedTests": 4,
+      "executedTests": 4,
       "exitCode": 0,
       "result": "PASS",
-      "detail": "The focused source-identity contract passed after the one authorized local-only reset materialized the exact reconciled migration.",
-      "resetPerformed": true,
-      "remoteConnectionUsed": false,
-      "retryPerformed": false
-    }
+      "detail": "The current four-test deterministic source proof preserves deployed bytes, binds the named source-predicate matrix, and requires the 19 named governance/concurrency witnesses.",
+      "databaseContact": false
+    },
+    "successorBehavioralPgTap": {
+      "file": "supabase/tests/cognitive_livekit_final_source_identity_cross_binding_test.sql",
+      "status": "INTEGRATION_CLEAR",
+      "plannedTests": 28, "executedTests": 28,
+      "passedTests": 28, "failedTests": 0,
+      "detail": "The initial NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE classification and predecessor-head 27/27 rollback-only pass remain historical. With pinned CLI 2.109.1, a clean local reset materialized through 20260730230022 with the exact two-row manifest; its later Storage readiness warning was non-source and occurred after database materialization. Current-head pgTAP passed 28/28 in 47s after deterministic enum-type and truncated-constraint-name test corrections, and concurrency passed 19/19 in 7s with the supported local container override after one reserved-alias readback correction. Cleanup retained zero receipts, authorizations, or outcomes.",
+      "proofBoundary": "T3 is clear only for sanitized local database integration; no remote/provider mutation occurred, and this does not claim T4 provider/native, signed-artifact, installed, physical, or public-canary proof.",
+      "attempts": 3, "elapsedSeconds": 47, "migrationParsedCompletely": true,
+      "failureCodes": ["permission_denied_session_replication_role", "livekit_sandbox_premium_proof_rejected", "local_pgtap_missing", "local_predecessor_schema_missing", "sanitizer_cpu_path_unbounded", "NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE", "case_type_mismatch", "constraint_name_truncation", "reserved_alias_syntax"],
+      "focusedTestSha256": "5af016399979fe5cc7b5d96a49b716b3bf903c2af3c2271367096fdcb237fcca", "historicalFocusedTestSha256": "54c7b7cec9ad366ef8b65a74447ea4316a2723ddb469f43923bf1472ea0985ba",
+      "sourceOrSchemaSubstitutionAccepted": false
+    },
+    "remoteDryRun": {"status": "PASS_NO_APPLY", "performed": true, "mode": "assembled-linked-read-only", "assembledHead": "24237254fba83534018c3dca5e986d5c4f73ba66", "assembledTree": "88588462ce33cd9fc0de72bc3be3515ef9d8b880", "components": {"B0": "860ee2b", "B1": "7e39e49f", "B2": "fdc04d5", "B3": "67edc2b"}, "cliVersion": "2.110.0", "remoteDeployedHistory": "ALIGNED", "pendingForwardCorrections": ["20260730170000", "20260730230022", "20260730230031"], "seeds": [], "roles": [], "unlinkedImmediately": true, "migrationApplied": false, "providerMutation": false},
+    "exactHeadReview": {"status": "BLOCKED_INTERNAL", "reason": "Exact implementation head/tree review evidence remains pending."}
   },
   "rollback": "No runtime rollback is required for Git-only source reconciliation. Any future database correction must be forward-only and separately authorized.",
   "emergencyStop": "Stop this lane without changing the remote database if any version, name, statement body, or hash differs.",
   "unresolvedBlockers": [
-    "The feature still has zero formal installed LiveKit sentinel runs."
+    "Exact-head review remains coordinator-owned and pending.",
+    "T3 local integration is clear; the feature still has zero formal installed LiveKit sentinel runs."
   ],
   "nonInterference": {
     "remoteMigrationApplied": false,
-    "localMigrationMaterializedForTest": true,
+    "deployedSourceMaterializedLocallyHistorical": true,
+    "successorMaterializedLocally": true,
     "providerStateChanged": false,
     "switchChanged": false,
     "scheduleChanged": false,

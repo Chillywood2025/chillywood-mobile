@@ -32,6 +32,47 @@
       ]
     }
   },
+  "implementationHeadBinding": {
+    "required": true,
+    "networkAccess": "forbidden",
+    "refNamespace": "refs/remotes/origin/",
+    "missingRef": "BLOCKED_INTERNAL",
+    "malformedSha": "BLOCKED_INTERNAL",
+    "duplicatePrOrBranch": "BLOCKED_INTERNAL",
+    "recordedObservedMismatch": "BLOCKED_INTERNAL",
+    "listedCurrentBranchCheckoutMustMatch": true,
+    "namedMainCheckoutMustEqualOriginMain": true,
+    "providerSnapshotImplementationFields": ["number", "branch", "head", "state"],
+    "providerSnapshotInventoryMismatch": "BLOCKED_INTERNAL",
+    "providerSnapshotReadOrRootFailure": "BLOCKED_INTERNAL",
+    "providerSnapshotState": "nonblank-trimmed-string",
+    "detachedCi": "explicit-branch-and-head-required-unless-head-is-origin-main",
+    "unlistedBranchPolicy": "deferred-to-pr-e",
+    "baseSynchronization": {
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "exactHeadMatchingRemainsDefault": true,
+      "sourceMustBeAncestor": true,
+      "commitDistance": 1,
+      "commitDistanceTraversal": "first-parent",
+      "ordinaryMergeParentCount": 2,
+      "firstParent": "recorded-source-head",
+      "secondParent": "exact-origin-main",
+      "canonicalMergeTreeRequired": true,
+      "sourceDeltaMustBeByteEquivalent": true,
+      "changedPathSetMustBeEquivalent": true,
+      "providerRemoteRefMustMatch": true,
+      "reviewEvidenceRefNamespace": "refs/remotes/origin/",
+      "reviewEvidenceRoots": ["docs/reviews", "config/assurance/reviews"],
+      "minimumReviewEvidence": 1,
+      "reviewFreshnessHours": 24,
+      "reviewEvidenceMustBeReviewOnly": true,
+      "criticalFindingMaximum": {"P0": 0, "P1": 0},
+      "repeatedMergeChainAllowed": false,
+      "manualResolutionAllowed": false,
+      "networkAccess": "forbidden",
+      "failureStatus": "BLOCKED_INTERNAL"
+    }
+  },
   "freshness": {"defaultHours": 24, "providerCriticalHours": 8, "clock": "UTC", "failClosed": true},
   "staleFindingIds": {
     "mainSha": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
@@ -40,6 +81,7 @@
     "buildRuntime": "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE",
     "remoteMigrationHead": "ASSURANCE_CURRENT_TRUTH_MIGRATION_STALE",
     "switches": "ASSURANCE_CURRENT_TRUTH_SWITCH_STALE",
+    "implementationHead": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE",
     "age": "ASSURANCE_CURRENT_TRUTH_STALE"
   },
   "providerMode": {"default": "offline", "allowedExplicitMode": "read-only", "mutationAllowed": false, "secretOutputAllowed": false}
