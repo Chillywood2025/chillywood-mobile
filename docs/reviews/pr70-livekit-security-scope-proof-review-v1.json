@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr70-livekit-security-scope-proof-review-v1",
+  "reviewVersion": 1,
+  "reviewLane": "security-scope-and-proof-strength",
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "immutableSourceHead": "3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73",
+  "synchronizedBranchHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+  "implementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+  "currentBase": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+  "baseHead": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+  "synchronizationParents": [
+    "3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73",
+    "5a34a1da27cd7b1689d55889f966bfc3708541b7"
+  ],
+  "synchronizedTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "implementationTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "canonicalSyntheticTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "sourceDeltaHash": "553172beaff237585272979db17e4ec36ed61f875a622cc1c6177dbfcc433f46",
+  "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+  "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+  "configHash": "1261812056afb1d7fd982c9a43bc36d9b3ee27cfe41cd18adb116f14e58f5d9d",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+  "reviewTimestamp": "2026-08-02T01:01:35Z",
+  "reviewLevel": "C",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-4-security-scope-and-proof-strength",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "security-scope-and-proof-strength",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "databaseContactByReview": false,
+      "providerContactByReview": false
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "immutableSourceIsFirstParent": true,
+      "currentBaseIsSecondParent": true,
+      "providerSnapshotMatches": true,
+      "canonicalTreeMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedFileSetEquivalent": true,
+      "reviewedAndSynchronizedSourceDeltaHash": "553172beaff237585272979db17e4ec36ed61f875a622cc1c6177dbfcc433f46",
+      "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91"
+    },
+    "boundedScope": {
+      "status": "pass",
+      "featureId": "livekit-media-transport",
+      "approvedDomain": "LiveKit/database final source identity",
+      "changedFiles": 10,
+      "fileBudget": 10,
+      "additions": 2517,
+      "deletions": 17,
+      "netChangedLines": 2500,
+      "lineBudget": 2500,
+      "scopeWaiver": "pr-b1-livekit-source-cross-binding-scope-waiver-v1",
+      "productSourceGrowth": false,
+      "providerSourceGrowth": false,
+      "nativeSourceGrowth": false,
+      "packageGrowth": false,
+      "workflowGrowth": false,
+      "unrelatedScopeFound": false
+    },
+    "securityAuthority": {
+      "status": "pass",
+      "successorRlsEnabled": true,
+      "successorRlsForced": true,
+      "successorRevokesPublicAnonAuthenticatedAndServiceRole": true,
+      "successorServiceRoleGrant": false,
+      "successorPolicyCreateAlterOrDrop": false,
+      "successorRlsDisable": false,
+      "serviceRoleWidening": false,
+      "rlsWeakening": false,
+      "authOrRoleWidening": false,
+      "switchOrScheduleActivation": false
+    },
+    "migrationIntegrity": {
+      "status": "pass",
+      "deployedPredecessorVersion": "20260730142519",
+      "deployedPredecessorRawSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "deployedPredecessorByteIdenticalToStoppedPr52": true,
+      "forwardCorrectionVersion": "20260730230022",
+      "forwardCorrectionRawSha256": "9408ac9896751a4f4ad798ad2644e805e2c42a10c374e24667c66aa624701011",
+      "forwardCorrectionOnly": true,
+      "deployedMigrationRewritten": false,
+      "migrationAppliedByReview": false
+    },
+    "focusedChecks": {
+      "status": "pass",
+      "sourceContract": {
+        "command": "node --test tests/assurance/reconciliation/livekit-final-source-identity-cross-binding.test.mjs",
+        "planned": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "migrationReadbackGuard": "pass",
+      "assuranceContracts": "pass_13_contracts_20_features_25_escaped_defects",
+      "assurancePrScope": "pass_10_of_10_files_2500_of_2500_net_lines",
+      "concurrencyFixtureSyntax": "pass",
+      "sourceContractSyntax": "pass",
+      "gitDiffCheck": "pass",
+      "secretOrPrivateEvidenceMatches": 0,
+      "databaseContact": false,
+      "providerContact": false
+    },
+    "localBehavioralEvidence": {
+      "status": "pass_recorded_at_exact_immutable_source_and_preserved_by_exact_base_sync",
+      "rerunByThisReviewLane": false,
+      "pgTapPassed": 28,
+      "pgTapFailed": 0,
+      "concurrencyPassed": 19,
+      "concurrencyFailed": 0,
+      "proofBoundary": "T3 sanitized local database integration only",
+      "substitutesForProviderProof": false
+    },
+    "linkedNoApply": {
+      "status": "PASS_NO_APPLY_SCOPED",
+      "evidenceMode": "coordinator-supplied-sanitized-private-coordination-record",
+      "evidenceSource": "assembled-dry-run.json:b1SynchronizedHeadRefresh",
+      "reviewRanLinkedCommand": false,
+      "reviewQueriedProvider": false,
+      "b1PendingExactlyOnce": true,
+      "b2AndB3SeparatelyOwned": true,
+      "unexpectedMigrations": [],
+      "seeds": [],
+      "roles": [],
+      "migrationApplied": false,
+      "providerStateChanged": false
+    },
+    "proofStrength": {
+      "status": "pass",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T3_INTEGRATION": "LOCAL_INTEGRATION_CLEAR",
+      "T4_NATIVE_PROVIDER": "NOT_CLAIMED",
+      "T5_SIGNED_ARTIFACT": "NOT_CLAIMED",
+      "T6_INSTALLED_PHYSICAL": "NOT_CLAIMED",
+      "T7_PUBLIC_CANARY": "NOT_CLAIMED",
+      "localDatabaseTestsSubstituteForProviderProof": false,
+      "noApplySubstitutesForRuntimeBehavior": false,
+      "higherTierProofClaimedByReview": false
+    },
+    "phase1Ci": {
+      "status": "coordinator-owned-pending-after-four-current-review-lanes",
+      "implementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+      "reviewDoesNotSubstituteForCi": true
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationSourceEditedByReview": false,
+      "databaseMutation": false,
+      "providerMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRightsRolesChanged": false,
+      "authOrRlsChangedByReview": false,
+      "fullCiRunByReview": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false
+    }
+  },
+  "testResultHash": "587c9b0359bf394c0e7f5078784f823ea5876c0c022c29b77fd23478366ceb90",
+  "findings": [
+    {
+      "id": "B1_SECURITY_AUTHORITY_SCOPE",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The source-only deployed predecessor is byte-identical, the forward correction grants no service-role authority, forces RLS on its immutable binding table, revokes all client and service-role access, and changes no auth or provider source."
+    },
+    {
+      "id": "B1_PROOF_TIER_SUBSTITUTION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The 28/28 pgTAP and 19/19 concurrency results remain T3 sanitized local behavior; linked no-apply remains migration-planning evidence, and neither is presented as T4 provider/native or higher-tier proof."
+    },
+    {
+      "id": "B1_BOUNDED_HIGH_RISK_SCOPE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact delta is 10 files and 2,500 net lines under the B1 waiver, confined to one LiveKit/database identity objective with no product, provider, native, package, or workflow growth."
+    }
+  ],
+  "severityCounts": {
+    "P0": {"open": 0, "resolved": 0, "total": 0},
+    "P1": {"open": 0, "resolved": 2, "total": 2},
+    "P2": {"open": 0, "resolved": 1, "total": 1},
+    "P3": {"open": 0, "resolved": 0, "total": 0}
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "resolvedFindings": 3,
+    "reviewDisposition": "PASS_LEVEL_C_SECURITY_SCOPE_AND_PROOF_STRENGTH_PENDING_FROZEN_HEAD_CI",
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
