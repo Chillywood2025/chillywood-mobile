@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "d2c-call-lifecycle-server-authority-historical-v1",
+  "classification": "HISTORICAL_LEVEL_C_LANE_3_BLOCKED_P1",
+  "reviewLevel": "C",
+  "reviewLane": {
+    "number": 3,
+    "discipline": "call_lifecycle_server_authority"
+  },
+  "reviewTimestamp": "2026-08-02T19:06:42Z",
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "implementationHead": "e0d5158b8b2862e218b76ceb915a90172183ca5e",
+  "implementationTree": "db6e45ecb658c67967fbd8bd43124547cd591f4b",
+  "immutableSourceHead": "fa64edaef14e4a29225a377136b5ede504be20f0",
+  "baseHead": "e7712926d59eb379475834351fbbf48e74a32e98",
+  "changedFileHash": "c59d277812a4e6146af89047603a7c034417337d2536b8a54131863d8c684d50",
+  "changedFileContentHash": "d559628a1934014e74d45c1dcc9e8c047889e6e7b1672a0c36a394f11dcd778d",
+  "migrationSetHash": "e90c426c41bf9844f04dead4bfc1b0995150b62153be51c8916622dcae979ada",
+  "configHash": "4386705ece1505e542d10fc37e38095fb7b145c8ec12b65622d01e91b0d715d2",
+  "testResultHash": "c01786cf4b6e5298d3bcaff984426d0a7fda72a8625bc21cc03cc0ad5e065b08",
+  "verdict": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 2,
+    "mergeEligible": false,
+    "summary": "The route-only provenance defect is corrected, but a consumed claim is not revalidated for expiry at transition use. Android provenance remains D2B-owned, and per-call iOS mute UUID binding remains D3-owned."
+  },
+  "findings": [
+    {
+      "id": "IOS_NATIVE_CALL_CONSUMED_CLAIM_EXPIRY_AT_USE_MISSING",
+      "severity": "P1",
+      "status": "OPEN_BLOCKING",
+      "expected": "A native claim must remain within its monotonic TTL when the authenticated server transition actually begins, not only when the registry consumes it.",
+      "actual": "The registry purges expiry before consume, then returns an immutable consumed claim. The thread stores that result in React state, and transition ownership validates its binding and consumed flag without checking expiresAtMonotonicMs against a current monotonic time. Loading, callBusy, hydration retries, or scheduling can therefore delay use beyond the 30-second authority window.",
+      "evidence": [
+        "_lib/nativeCallTransitionProvenance.mjs:91-104",
+        "_lib/nativeCallTransitionProvenance.mjs:147-186",
+        "app/chat/[threadId].tsx:315-354",
+        "_lib/communicationCallMediaPolicy.mjs:30-56",
+        "app/chat/[threadId].tsx:1715-1768",
+        "scripts/test-ios-native-call-route-provenance.mjs:79-127"
+      ],
+      "requiredCorrection": "Fail closed at transition ownership/use with an injected monotonic clock or a bounded consumed-at age check, clear expired consumed state, and add a negative control that consumes within TTL but attempts the transition after TTL."
+    },
+    {
+      "id": "ANDROID_NATIVE_ACTION_PROVENANCE_PENDING_D2B",
+      "severity": "P2",
+      "status": "ASSIGNED_D2B",
+      "evidence": [
+        "config/assurance/native-call-transition-provenance-v1.json:platforms.android",
+        "config/assurance/native-call-transition-provenance-v1.json:d2bReconciliation",
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:d2bReconciliation"
+      ],
+      "disposition": "D2B must register consumed Android native-store payloads through the shared registry and preserve its backup, receiver, and schema-v2 correction."
+    },
+    {
+      "id": "IOS_NATIVE_MUTE_EVENT_PER_CALL_UUID_BINDING_PENDING_D3",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "evidence": [
+        "app/chat/[threadId].tsx:1913-1933",
+        "config/assurance/native-call-transition-provenance-v1.json:directNativeEvents",
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:d3OnlyFollowUps"
+      ],
+      "disposition": "D3 must require exact per-call identity for mute/unmute and native audio events; an absent event UUID must not act as a wildcard for an active call."
+    }
+  ],
+  "otherwiseVerified": {
+    "nativeProducer": "The only iOS answer-claim producer is the authenticated, validated answerRequested bridge callsite; malformed platform, UUID, thread, invite, call type, generation, or event type is denied.",
+    "routeAuthority": "Custom schemes, initial/live Linking, native-intent rewriting, ordinary notifications, copied query values, openCall, and arbitrary UUIDs cannot own a native transition without a consumed claim.",
+    "serverAuthority": "The client re-reads the invite and checks exact thread and participant/callee scope before calling the authenticated transition function; the edge function derives the actor from the authenticated user and the database transition function enforces participant, membership, state, callee, and expiry rules.",
+    "foregroundUi": "Foreground Answer and Decline remain deliberate authenticated UI transitions and do not manufacture native route authority.",
+    "tokenGate": "The LiveKit hook starts only for an accepted LiveKit invite, verifies room and participant identity, joins membership first, and the token function independently verifies the exact accepted invite, thread, room, provider, participant, and active memberships.",
+    "mediaGate": "Media activation remains accepted-invite and room scoped; the provider is fixed per invite and provenance creation has no token, camera, microphone, or media side effect.",
+    "terminalEvents": "Declined, missed, ended, answer-failed, audio-session-failed, provider-reset, and remote-ended paths retain participant/state checks, bounded retry, idempotent cleanup, and native completion sequencing.",
+    "proofBoundary": "No provider, signed-artifact, installed-physical, or public-canary proof is inferred from this source/model review."
+  },
+  "searchedPaths": [
+    "_lib/nativeCallTransitionProvenance.mjs",
+    "_lib/nativeCallTransitionProvenance.d.ts",
+    "_lib/communicationCallMediaPolicy.mjs",
+    "_lib/communicationCallMediaPolicy.d.ts",
+    "_lib/iosNativeCalls.ts",
+    "_lib/chillyChatCalls.ts",
+    "_lib/appLinks.ts",
+    "_lib/notifications.ts",
+    "app/+native-intent.tsx",
+    "app/_layout.tsx",
+    "app/chat/[threadId].tsx",
+    "hooks/use-chat-call-media-session.ts",
+    "hooks/use-livekit-chat-call-session.ts",
+    "hooks/use-communication-room-session.ts",
+    "supabase/functions/chilly-chat-call-transition/index.ts",
+    "supabase/functions/livekit-token/index.ts",
+    "supabase/functions/_shared/chat-call-livekit-authority.ts",
+    "supabase/migrations/20260718103000_durable_chat_call_status_transition.sql",
+    "config/assurance/native-call-transition-provenance-v1.json",
+    "config/assurance/pr-d2c-scope-waiver-v1.json",
+    "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json",
+    "scripts/test-ios-native-call-route-provenance.mjs",
+    "scripts/test-chilly-chat-call-semantics.mjs",
+    "scripts/guard-ios-native-call-policy.mjs",
+    "scripts/guard-notification-room-call-policy.mjs",
+    "scripts/guard-chilly-chat-call-push-policy.mjs"
+  ],
+  "testResults": {
+    "iosNativeCallRouteProvenance": {
+      "status": "PASS_WITH_REVIEW_FINDING",
+      "preFixReproductions": "10/10",
+      "trustedPositive": "22/22",
+      "producerDenials": "8/8",
+      "routeDenials": "30/30",
+      "negativeControls": "18/18",
+      "reviewNote": "The suite tests expiry before registry consumption but lacks the consumed-within-TTL, use-after-TTL transition case."
+    },
+    "iosNativeCallPolicyGuard": "PASS",
+    "notificationRoomCallPolicyGuard": "PASS",
+    "chillyChatCallPushPolicyGuard": "PASS",
+    "chatCallSemantics": {
+      "historicalFrozenHeadReport": "PASS",
+      "isolatedReviewRerun": "BLOCKED_LOCAL_DEPENDENCY_MISSING",
+      "detail": "The isolated review worktree has no resolvable TypeScript package; this is not classified as a source failure and did not alter the historical report."
+    },
+    "currentTruthReadback": "EXPECTED_STALE_ON_UNLISTED_REVIEW_BRANCH_PENDING_REVIEW_EVIDENCE"
+  },
+  "nonInterference": {
+    "implementationFilesChanged": false,
+    "providerContact": false,
+    "databaseMutation": false,
+    "buildOrInstall": false,
+    "physicalDevice": false,
+    "reviewBranchPush": false
+  }
+}
