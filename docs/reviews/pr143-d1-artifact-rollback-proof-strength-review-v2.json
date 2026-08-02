@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-artifact-rollback-proof-strength-review-v2",
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "implementationHead": "aecff4fd7aa84b53e7a25402d156fc0a945cb9fb",
+  "implementationTree": "6c5f765d60c307cc9e3b5b57c4261a4ec100ad7b",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "baseTree": "d76676e7ddff74c09ffa4bc2994153772b69b73a",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "88c2e0ee96fca9baab77bc76ce54a9565b37336ec3b229b44d1f2c505d1024cf",
+  "reviewLevel": "C",
+  "reviewHead": "cd7a23607f92174661b8fa8247ca14c821490cf5",
+  "reviewTree": "5e2cf8dd38b313a4d258231dd3c4e82d5b2115b4",
+  "reviewTimestamp": "2026-08-02T09:12:10Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "lane": "ARTIFACT_ROLLBACK_PROOF_STRENGTH",
+  "priorEvidence": {
+    "path": "docs/reviews/pr143-d1-artifact-rollback-proof-strength-review-v1.json",
+    "commit": "ad6a4a12df8abaa45774fcf784f1198cca1f4385",
+    "sha256": "6f194aa8c5146ff578611e2d684b55d433612565f316d1465478fa86fcc6af68",
+    "status": "HISTORICAL_PRESERVED"
+  },
+  "artifactHashes": {
+    "staticContract": "cf3eacbbc565b7433f3a16dd7ca27edf06750e3c20a754efa9404540d30f10fb",
+    "capabilityRegistry": "7782d54b1892407a838b46db4590b94c6911dbb35f401efd6b549fbbca695863",
+    "validator": "1cf8d20202f2a433bca5aab247b04b94c7daceaa21c712782115300c973874d5",
+    "modelTest": "db2762c8620f245686de09b3ca33cc957be4270de8a85f84e6b983cf75b7f211",
+    "offlineReport": "b01fa986d01ba3fafa73d80c8f4a98ec8e1e47b9e46f419d92526568ebd02234"
+  },
+  "reviewResult": {
+    "signedIdentity": {
+      "android-chat-livekit-qa-build-86": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED",
+      "ios-qa-build-8": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED",
+      "android-production-build-84-historical": "HISTORICAL_RECORDED_INPUT_NOT_CURRENTLY_REPROVED"
+    },
+    "historicalCurrentSeparation": {
+      "historicalBuild84Source": "8c426f4e74de61de7d4529d32d124744833912dc",
+      "currentReplayClassification": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF",
+      "currentReplayDigest": "1f4391e2a6df0c9266db66b7f2615984e9370163827426593077cbb53d9ef2c4",
+      "historicalArtifactEquivalentToCurrentReplay": false,
+      "substitutionControl": "HISTORICAL_SOURCE_SUBSTITUTION_REJECTED"
+    },
+    "rollback": {
+      "android-chat-livekit-qa-build-86": "ROLLBACK_INCOMPATIBLE_MISSING_BUILD_85_ARTIFACT_IDENTITY",
+      "ios-qa-build-8": "ROLLBACK_INCOMPATIBLE_IDENTITY_MISSING",
+      "android-production-build-84-historical": "ROLLBACK_INCOMPATIBLE_BUILD_80_MISSING_20_REQUIRED_CAPABILITIES"
+    },
+    "proofSubstitution": {
+      "currentReleaseIdentityWithoutIndependentArtifactProof": "CURRENT_RELEASE_IDENTITY_UNPROVED",
+      "signedArtifactFromHistoricalInput": "SIGNED_ARTIFACT_PROOF_MISSING",
+      "providerOrInstalledFromSource": "PROOF_SUBSTITUTION_REJECTED",
+      "providerClaim": false,
+      "signedArtifactClaim": false,
+      "installedPhysicalClaim": false,
+      "publicCanaryClaim": false
+    },
+    "proofTiers": {
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "BLOCKED_INTERNAL",
+      "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+      "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "mayProceed": {
+      "nativeCompilation": false,
+      "signedArtifactInspection": false,
+      "updatePublication": false,
+      "release": false
+    },
+    "p0": 0,
+    "p1": 0
+  },
+  "testResults": {
+    "focusedArtifactRollbackModel": {
+      "status": "pass",
+      "command": "node tests/assurance/release-parity.test.mjs",
+      "targets": "3/3",
+      "historicalIdentityNotReproved": "3/3",
+      "rollbackRejected": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "23/23",
+      "directImportClosure": "40_DISCOVERED_33_NATIVE_MAPPED_7_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
+      "networkAccess": false,
+      "providerContact": false,
+      "buildPerformed": false,
+      "otaPublished": false
+    },
+    "phase1Ci": {
+      "status": "pending",
+      "implementationHead": "aecff4fd7aa84b53e7a25402d156fc0a945cb9fb",
+      "reason": "Coordinator-owned full CI awaits all current Level C lanes and base synchronization"
+    }
+  },
+  "testResultHash": "2f77c688dd7ce3ea4976b4b0cee95949f4eb328949dd8e4f9c42d6189457285a",
+  "findings": [
+    {
+      "id": "PRD1-LATER-T3-INTEGRATION",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-D2-D3",
+      "summary": "Native integration and lifecycle instrumentation remain blocked outside PR D1 T0-T2 correctness."
+    },
+    {
+      "id": "PRD1-LATER-T4-T6-CURRENT-PROOF",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "later-owner-authorized-native-provider-artifact-lanes",
+      "summary": "Current provider, signed-artifact, and installed-physical proof remains deliberately unproved."
+    },
+    {
+      "id": "PRD1-LATER-T7-PUBLIC-CANARY",
+      "severity": "P2",
+      "status": "assigned",
+      "owner": "PR-F-or-later-explicit-release-authorization",
+      "summary": "Public canary proof remains blocked and no public action is authorized."
+    }
+  ],
+  "blockers": [
+    "BASE_SYNCHRONIZATION_PENDING",
+    "PHASE1_CI_PENDING",
+    "T3_INTEGRATION_BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER_BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT_HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL_HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY_BLOCKED_EXTERNAL"
+  ],
+  "formalGuardExpectation": {
+    "status": "BLOCKED_PENDING_PHASE1_CI_ONLY",
+    "mergePermitted": false
+  },
+  "nonInterference": {
+    "implementationChanged": false,
+    "providerContact": false,
+    "build": false,
+    "ota": false,
+    "install": false,
+    "release": false,
+    "reviewOnlyNeverMerge": true
+  }
+}
