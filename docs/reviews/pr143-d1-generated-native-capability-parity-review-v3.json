@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-generated-native-capability-parity-review-v3",
+  "reviewVersion": 3,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "generated-native-source-and-required-provided-capability-parity",
+  "reviewLevel": "C",
+  "humanApproval": false,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "implementationTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "sourceDeltaHash": "bbc41226a0f44d555f07cf22830b382c8d8802b1bbaf0388b448c9275ad72576",
+  "sourceDeltaHashMethod": "sha256(trim(git diff --binary --no-renames baseHead implementationHead))",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "changedFileHashMethod": "sha256(trim(git diff --name-status -z baseHead implementationHead))",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "07bd294b3f216b4fe5aa3995859268ce2c8ab58c7f2b8f66636062df8a8085f4",
+  "testResultHash": "e2142cd2fee09949e9541b38b53428cac169ebabc9f3ab79b054da00345612b7",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewRef": "codex/first-pass-assurance-pr-d1-review-generated-native-capability",
+  "reviewHead": "77f4317afbf2a53979d5749e7315de8724cb0dd3",
+  "reviewTimestamp": "2026-08-02T09:26:47Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-generated-native-and-capability-parity",
+    "additive-v3-after-final-import-closure-correction",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "v1EvidencePreserved": true,
+      "v2EvidencePreserved": true,
+      "historicalP1EvidencePreserved": true
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+      "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "implementationTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+      "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+      "implementationMergedNormallyIntoReviewBranch": true,
+      "reviewBranchContainsOnlyReviewEvidenceBeyondImplementation": true,
+      "baseSynchronizationPending": true
+    },
+    "implementationScope": {
+      "status": "pass",
+      "changedFiles": 6,
+      "additions": 899,
+      "deletions": 8,
+      "netChangedLines": 891,
+      "releaseOrProductSourceChanged": false,
+      "nativeImplementationChanged": false,
+      "packageOrWorkflowChanged": false,
+      "oneAssuranceDomain": true
+    },
+    "lockedDependencies": {
+      "status": "pass",
+      "classification": "EXACT_LOCKED_DEPENDENCY_SET",
+      "packageSha256": "3cd1f2049b72a89bb5630659b76d24f6add21d7e670ca0003ecb0a5f122ea744",
+      "lockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28",
+      "directPackages": 66,
+      "fullTreeValidated": true,
+      "fullTreeProblems": []
+    },
+    "offlineGeneratedSource": {
+      "status": "pass",
+      "method": "DISPOSABLE_OFFLINE_EXPO_PREBUILD_NO_INSTALL_PLUS_EXACT_AUTOLINKING_READBACK",
+      "normalizationAllowlist": [
+        "absolute disposable/dependency roots",
+        "line endings",
+        "file order",
+        "opaque Xcode object IDs via relationship-preserving first-occurrence mapping"
+      ],
+      "androidIosDigestsSeparated": true,
+      "generatedRuns": "9/9",
+      "deterministicPerTarget": "3/3",
+      "temporaryDirectoriesRemoved": true,
+      "generatedDirectoriesCommitted": false,
+      "compiledNativeProof": false
+    },
+    "targetDigests": {
+      "androidChatLivekitQaBuild86": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+      "iosQaBuild8": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+      "androidProductionBuild84HistoricalCurrentReplay": "1f4391e2a6df0c9266db66b7f2615984e9370163827426593077cbb53d9ef2c4"
+    },
+    "focusedTests": {
+      "status": "pass",
+      "command": "node tests/assurance/release-parity.test.mjs",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "mandatoryNegativeControls": "8/8",
+      "additionalNegativeControls": "16/16",
+      "totalNegativeControls": "24/24"
+    },
+    "directImportClosureAudit": {
+      "status": "pass",
+      "grammarContract": [
+        "STATIC_IMPORT_FROM",
+        "SIDE_EFFECT_IMPORT",
+        "DYNAMIC_IMPORT",
+        "COMMONJS_REQUIRE",
+        "EXPORT_FROM"
+      ],
+      "grammarCounts": {
+        "STATIC_IMPORT_FROM": 451,
+        "SIDE_EFFECT_IMPORT": 2,
+        "DYNAMIC_IMPORT": 13,
+        "COMMONJS_REQUIRE": 7,
+        "EXPORT_FROM": 2
+      },
+      "closure": {
+        "discovered": 42,
+        "nativeMapped": 34,
+        "reviewedJsOnly": 8,
+        "unclassified": 0
+      },
+      "grammarUnitFixture": "5/5",
+      "grammarOmissionNegativeControl": "DIRECT_IMPORT_GRAMMAR_INCOMPLETE",
+      "mappingOmissionNegativeControl": "DIRECT_NATIVE_IMPORT_UNCLASSIFIED",
+      "priorP1Resolved": true
+    },
+    "randomValuesNativeCapability": {
+      "status": "pass",
+      "sourceImport": "_lib/supabase.ts side-effect import",
+      "androidCapability": "android.random-values-native",
+      "iosCapability": "ios.random-values-native",
+      "androidGeneratedAutolinkMarker": "react-native-get-random-values in android/.assurance/react-native-config.json across 3/3 Android target runs",
+      "iosGeneratedAutolinkMarker": "react-native-get-random-values in ios/.assurance/react-native-config.json across 3/3 iOS runs",
+      "providedDerivationIndependentFromRequired": true
+    },
+    "urlPolyfillReviewedJsOnly": {
+      "status": "pass",
+      "package": "react-native-url-polyfill",
+      "lockedVersion": "3.0.0",
+      "entrypoints": [
+        "index.js",
+        "auto.js"
+      ],
+      "inspectedFiles": 23,
+      "nativeIndicators": 0,
+      "sourceDigest": "d15dc6c2037506c825983e808562ac183ec1a0288af5900211297f769be39201",
+      "trackedReportDigestMatch": true,
+      "reactNativeManifestFieldAbsent": true,
+      "codegenConfigAbsent": true,
+      "androidIosPodspecAutolinkConfigAbsent": true,
+      "coveredBy": {
+        "android": "android.react-native-core",
+        "ios": "ios.react-native-core"
+      }
+    },
+    "targetCapabilityParity": {
+      "status": "pass",
+      "androidChatLivekitQaBuild86": "21/21",
+      "iosQaBuild8": "26/26",
+      "androidProductionBuild84HistoricalCurrentReplay": "21/21",
+      "missingCapabilities": 0,
+      "requiredAndProvidedDataStructuresSeparated": true,
+      "requiredEqualsCurrentSourceCatalog": true,
+      "requiredSubsetOfGeneratedProvided": true
+    },
+    "generatedProvidedEvidenceCorrection": {
+      "status": "resolved",
+      "iosImagePickerAutolink": true,
+      "iosApsEnvironmentSourceMarker": true,
+      "androidNotificationSounds": "6/6",
+      "iosNotificationSounds": "6/6",
+      "firebaseCoreAnalytics": "Android and iOS generated autolinking verified",
+      "documentAndFileSystem": "Android and iOS generated autolinking verified",
+      "updatesAndStorage": "Android and iOS generated autolinking verified"
+    },
+    "historicalBuild84SourceSeparation": {
+      "status": "resolved",
+      "currentReplayClassification": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF",
+      "historicalArtifactSource": "8c426f4e74de61de7d4529d32d124744833912dc",
+      "historicalArtifactEquivalentToCurrentReplay": false,
+      "currentReplayRequirements": "21/21 CURRENT SOURCE ANDROID CAPABILITIES",
+      "historicalSignedIdentity": "HISTORICAL_RECORDED_INPUT_NOT_REPROVED",
+      "negativeControl": "HISTORICAL_SOURCE_SUBSTITUTION_REJECTED"
+    },
+    "nonInterference": {
+      "status": "pass",
+      "parityExecutionNetworkAccess": false,
+      "providerContact": false,
+      "buildPerformed": false,
+      "otaPublished": false,
+      "artifactInstalled": false,
+      "generatedAndroidOrIosCommitted": false,
+      "secretOrPrivateConfigContentRecorded": false
+    },
+    "phase1Ci": {
+      "status": "pending-after-four-current-reviews",
+      "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "runId": null,
+      "formalReviewHeadExpected": "BLOCKED_INTERNAL_ONLY_UNTIL_BASE_SYNCHRONIZATION_AND_FROZEN_HEAD_CI"
+    }
+  },
+  "findings": [
+    {
+      "id": "PRD1_REQUIRED_CAPABILITY_CATALOG_NOT_CLOSED",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "The direct-import catalog now covers all five required grammars and closes the current source at exactly 42 discovered, 34 native-mapped, 8 reviewed JS-only and zero unclassified packages.",
+      "evidence": [
+        "scripts/assurance/release-parity.mjs:217-260",
+        "scripts/assurance/release-parity.mjs:285-288",
+        "config/assurance/native-capability-registry-v1.json:10",
+        "config/assurance/native-capability-registry-v1.json:42",
+        "config/assurance/native-capability-registry-v1.json:51",
+        "config/assurance/native-capability-registry-v1.json:55-56",
+        "tests/assurance/release-parity.test.mjs:22-50",
+        "focused offline parity: 42/34/8/0; grammar counts 451/2/13/7/2; 24/24 controls"
+      ]
+    },
+    {
+      "id": "PRD1_GENERATED_PROVIDED_EVIDENCE_INCOMPLETE",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Generated provided evidence verifies every current registered capability, including random-values autolinking on Android and iOS, with 21/21, 26/26 and 21/21 target parity."
+    },
+    {
+      "id": "PRD1_HISTORICAL_TARGET_DIGEST_SOURCE_CROSS_BOUND",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Build 84 remains explicitly separated into a current-source profile replay at T1 and historical artifact identity that is not reproduced or equated to the replay."
+    },
+    {
+      "id": "PRD2_ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-ANDROID-GENERATED-NATIVE-LIFECYCLE-INSTRUMENTATION",
+      "summary": "No Android instrumentation or compiled lifecycle test proves generated plugin behavior; this is outside D1 T0-T2 and remains blocked."
+    },
+    {
+      "id": "PRD2_IOS_NATIVE_CALL_XCTEST_GENERATED_PLUGIN_CONTRACT",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-IOS-NATIVE-CALL-XCTEST-GENERATED-PLUGIN-CONTRACT",
+      "summary": "No iOS native-call XCTest or compile proof verifies module registration, PushKit/CallKit lifecycle, or signed entitlements; this is outside D1 T0-T2 and remains blocked."
+    }
+  ],
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2,
+    "mergeGate": "PASS_LEVEL_C_LANE_2_PRE_BASE_SYNCHRONIZATION",
+    "phase1Ci": "PENDING",
+    "reviewDisposition": "PRESERVE_V1_V2_V3; RERUN_ADDITIVELY_AFTER_BASE_SYNCHRONIZATION; NEVER_MERGE_REVIEW_BRANCH"
+  }
+}
