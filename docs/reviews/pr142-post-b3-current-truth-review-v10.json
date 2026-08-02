@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr142-post-b3-current-truth-review-v10",
+  "reviewVersion": 10,
+  "reviewLabel": "Post-B3 merged current-truth Level A review",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLevel": "A",
+  "reviewerLanes": [
+    "independent"
+  ],
+  "reviewTimestamp": "2026-08-02T06:40:25Z",
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-b0-guard-review",
+  "reviewHead": "5f281cc4a2a9d07660dfa203df2e2c5f7aa13dfb",
+  "reviewTree": "09aea7303872d8381152bdb7bb2bea07f6e2fcf1",
+  "reviewEvidenceParentHead": "5f281cc4a2a9d07660dfa203df2e2c5f7aa13dfb",
+  "historicalEvidencePreserved": [
+    "v1",
+    "v2",
+    "v3",
+    "v4",
+    "v5",
+    "v6",
+    "v7",
+    "v8",
+    "v9"
+  ],
+  "historicalEvidenceHashes": {
+    "v1": "9f9b70bdeabd042309991b3c364db3f6c3e051fab4ab5d282234bc6b05f1d2ba",
+    "v2": "29d6d7b5743a3b22bceb3a783f73eea2dca0b98eb6e5590a095510765549f577",
+    "v3": "50667d8900c12b70bfe94ded74d5cb58ad64905d112ea79a610053d641ed8398",
+    "v4": "bb1658e24e30d888d12c49e0e8f1eaabc51e49ca320d9a4c4966c35e0bb89a43",
+    "v5": "d8890af8a6188dbebdbfda9ff50149a9e25168d30b033b1b4c5a3c4da5859409",
+    "v6": "d3dbcf54ee4dc7823818eb1acfb57a1e4efd8196f697e290a33103c8bc61c4bb",
+    "v7": "494acffbd4e92e97fccaff923ed8cfb227b99e840e26f3f5fdf9ce089710b3e9",
+    "v8": "961fc5e005574d2bd87eab7dc7d0f9ef22b43cd84f4a00e9be7eb41059bdd340",
+    "v9": "77bf53052b8eca9679b5b66a928e7537ead462e2b1578754d976f59c4380a1a6"
+  },
+  "implementationPrNumber": 142,
+  "implementationPrState": "open",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-b0-guard",
+  "implementationHead": "1a41b8d06cc3fb58f93daa468896d170e8eee825",
+  "implementationTree": "206bac373c166d523a4020731aa44be7b909dc84",
+  "baseHead": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+  "baseTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "mergeBase": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
+  "changedNameHash": "246863974b7dc9633ab1448d13e918aad1577b7c34c324d1a1b0805c9330d465",
+  "changedNameHashMethod": "sha256(git diff --name-only -z baseHead implementationHead)",
+  "implementationDiffHash": "d0ac19663623c8d703b9ef1b4337d5ed6d00a39b55b76727a5dcb6e35fc016c0",
+  "implementationDiffHashMethod": "sha256(git diff --binary --no-renames baseHead implementationHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "migrationSetHashMethod": "sha256(git diff --name-only baseHead implementationHead -- supabase/migrations; empty set)",
+  "configHash": "d7341dd32cd9c4322722fbe6d3d06d431b2e7eed7b6fbe9763df3589a0ab5701",
+  "configHashMethod": "sha256(git ls-tree -r implementationHead config/assurance)",
+  "currentTruthRecordHash": "831349cf7ff64beb801a85252abd543b3a896f70fec40b78291a0746ad61c5e7",
+  "artifactHashes": {
+    "CURRENT_STATE.md": "2f12d6b8845a8aedcf97a4bc5ad1e7ed6811774cfcd3a54d515028637e8d0f0f",
+    "NEXT_TASK.md": "c898c441c52df03e1f2758910314bedec66c950409b6cdf6a661ca55803422b8"
+  },
+  "testResults": {
+    "exactImplementationBinding": {
+      "status": "SOURCE_CLEAR",
+      "prNumber": 142,
+      "head": "1a41b8d06cc3fb58f93daa468896d170e8eee825",
+      "tree": "206bac373c166d523a4020731aa44be7b909dc84",
+      "base": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+      "providerBranchHead": "1a41b8d06cc3fb58f93daa468896d170e8eee825",
+      "providerBranchMatches": true
+    },
+    "historyPreservingReviewReuse": {
+      "status": "SOURCE_CLEAR",
+      "previousReviewHead": "ee30d7b34fff2e262aa90b22c41f61f343345efa",
+      "normalMergeCommit": "5f281cc4a2a9d07660dfa203df2e2c5f7aa13dfb",
+      "mergeParents": [
+        "ee30d7b34fff2e262aa90b22c41f61f343345efa",
+        "1a41b8d06cc3fb58f93daa468896d170e8eee825"
+      ],
+      "reviewLineageIsFirstParent": true,
+      "implementationHeadIsSecondParent": true,
+      "mergeConflict": false,
+      "canonicalMergeTree": "09aea7303872d8381152bdb7bb2bea07f6e2fcf1",
+      "historicalEvidenceV1ThroughV9PreservedByteForByte": true,
+      "v10EvidenceStatus": "current"
+    },
+    "allowedFileScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "additions": 32,
+      "deletions": 34,
+      "netChangedLines": -2,
+      "paths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "maximumFiles": 15,
+      "maximumNetChangedLines": 1200,
+      "highRiskDomains": []
+    },
+    "b3MergedUndeployedState": {
+      "status": "SOURCE_CLEAR",
+      "latestMergedImplementationPr": 75,
+      "latestMergedImplementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "mergeSha": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+      "immutableSourceHead": "a24efd543c5f19290879e7089c1c57768bc03a4d",
+      "synchronizedHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "synchronizedTree": "2405577c7215140a3d731bff7b53012997a4d635",
+      "deployedPredecessorSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "forwardCorrectionVersion": "20260730230031",
+      "forwardCorrectionSha256": "0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38",
+      "currentTruthState": "MERGED_UNDEPLOYED",
+      "forwardCorrectionDeployed": false,
+      "migrationOrAclAppliedByThisReview": false
+    },
+    "pendingCorrectionLedger": {
+      "status": "SOURCE_CLEAR",
+      "entries": [
+        {
+          "program": "B2",
+          "version": "20260730170000",
+          "deployed": false
+        },
+        {
+          "program": "B1",
+          "version": "20260730230022",
+          "deployed": false
+        },
+        {
+          "program": "B3",
+          "version": "20260730230031",
+          "deployed": false
+        }
+      ],
+      "deploymentClaimed": false
+    },
+    "b3ProofAndReviewCloseout": {
+      "status": "SOURCE_CLEAR",
+      "sourceAssertions": "14/14",
+      "negativeControls": "8/8",
+      "deterministicSourceRuns": "3/3",
+      "focusedLocalPgTap": "48/48",
+      "compatibilityLocalPgTap": "4/4",
+      "mutationFree": true,
+      "linkedNoApply": "PASS_NO_APPLY_SCOPED",
+      "pendingMigrationsExactlyOnce": [
+        "20260730170000",
+        "20260730230022",
+        "20260730230031"
+      ],
+      "phase1CiRun": 30735474318,
+      "phase1Ci": "13/13",
+      "reviewPrs": [
+        77,
+        78,
+        79,
+        141
+      ],
+      "reviewPrState": "closed-unmerged",
+      "reviewedImplementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "reviewOnlyPrMergedCount": 0
+    },
+    "pr52AndPrDSequencing": {
+      "status": "SOURCE_CLEAR",
+      "openImplementationPrs": [
+        52
+      ],
+      "pr52State": "open-draft",
+      "pr52Disposition": "reconcile-then-supersede-unmerged",
+      "pr53State": "open-draft-stale",
+      "pr53Disposition": "never-merge",
+      "coverageProofPrecedesDisposition": true,
+      "uniqueRequiredSourceMustBeIsolatedBeforePrD": true,
+      "prDBeginsOnlyAfterPr52DispositionOrExactRemainderIsolation": true,
+      "activationResumed": false
+    },
+    "generatedDocuments": {
+      "status": "SOURCE_CLEAR",
+      "authoritativeRecord": "config/assurance/current-truth-v1.json",
+      "exactlyRenderedFromAuthoritativeRecord": true,
+      "deterministicRuns": 3,
+      "driftFindings": 0,
+      "outputSha256": "26cd3dc639711899717071c13612c774dd82f2cd51ae810948ef82a268b0364d"
+    },
+    "currentTruth": {
+      "status": "SOURCE_CLEAR",
+      "mode": "offline",
+      "recordedMain": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+      "observedMain": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+      "findingCount": 0
+    },
+    "contractValidation": {
+      "status": "SOURCE_CLEAR",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25
+    },
+    "currentTruthTests": {
+      "status": "SOURCE_CLEAR",
+      "syncCases": 9,
+      "headBindingFailClosedCases": 25,
+      "headBindingRegressionSuitePassed": true,
+      "headBindingExternalDeterministicRuns": 3,
+      "headBindingExternalOutputSha256": "eb4bd64f7014f7d42e9d358035802242741b974e8dfcd37c59f9c21ce29d781e",
+      "headBindingInternalDeterministicRuns": 3,
+      "headBindingInternalOutputSha256": "c45b995f5d45366e92912199ccf505c99d1c46155e2e0e0f972647d3e04b48cb"
+    },
+    "semanticBindingAssertions": {
+      "status": "SOURCE_CLEAR",
+      "passed": 42,
+      "total": 42
+    },
+    "featurePlan": {
+      "status": "SOURCE_CLEAR",
+      "featureId": "supabase-migrations-rls",
+      "requirements": "REQUIREMENTS_CLEAR",
+      "architecture": "ARCHITECTURE_CLEAR"
+    },
+    "phase1Ci": {
+      "status": "coordinator_owned_in_progress_at_review_time",
+      "implementationHead": "1a41b8d06cc3fb58f93daa468896d170e8eee825",
+      "completedJobsObservedFromCoordinator": 11,
+      "totalJobs": 13,
+      "finalResult": null,
+      "reviewDoesNotSubstituteForCi": true,
+      "failureWaived": false
+    },
+    "diffCheck": {
+      "status": "SOURCE_CLEAR"
+    },
+    "privacyAndSecretScan": {
+      "status": "SOURCE_CLEAR",
+      "addedLineScanPassed": true,
+      "newPrivateEvidence": false,
+      "newSecretMaterial": false,
+      "newDeviceIdentifiers": false
+    },
+    "safetyAndProviderInvariance": {
+      "status": "SOURCE_CLEAR",
+      "remoteMigrationHead": "20260730161737",
+      "b1B2B3ForwardCorrectionsDeployed": false,
+      "userDerivedMemory": "off",
+      "level2Repair": "off",
+      "enabledScheduleCount": 0
+    },
+    "nonInterference": {
+      "status": "SOURCE_CLEAR",
+      "productSourceChanged": false,
+      "providerRead": false,
+      "providerWrite": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "aclMutation": false,
+      "nativeChange": false,
+      "buildOrOta": false,
+      "workflowChange": false,
+      "packageOrLockfileChange": false,
+      "currentTruthImplementationChangedByReview": false,
+      "denoLockChanged": false
+    }
+  },
+  "testResultHash": "3584d4607778866d76a45f21890be77e1c02ebb292c12bc465462ae8d673b2de",
+  "testResultHashMethod": "sha256(stableJson(testResults))",
+  "findings": [],
+  "severityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "openSeverityCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "reviewOnly": true,
+  "disposition": "LANE_CLEAR_P0_P1_P2_P3_ZERO_POST_B3_CURRENT_TRUTH_VERIFIED_CI_COORDINATOR_OWNED"
+}
