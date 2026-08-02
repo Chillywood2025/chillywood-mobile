@@ -9,10 +9,10 @@
     "base": "62d4b526675e5a10177d37c53670709d63062293"
   },
   "contracts": {
-    "static": {"path": "config/assurance/release-target-parity-v1.json", "sha256": "cf3eacbbc565b7433f3a16dd7ca27edf06750e3c20a754efa9404540d30f10fb"},
-    "capabilities": {"path": "config/assurance/native-capability-registry-v1.json", "sha256": "7782d54b1892407a838b46db4590b94c6911dbb35f401efd6b549fbbca695863"},
-    "validator": {"path": "scripts/assurance/release-parity.mjs", "sha256": "1cf8d20202f2a433bca5aab247b04b94c7daceaa21c712782115300c973874d5"},
-    "test": {"path": "tests/assurance/release-parity.test.mjs", "sha256": "db2762c8620f245686de09b3ca33cc957be4270de8a85f84e6b983cf75b7f211"}
+    "static": {"path": "config/assurance/release-target-parity-v1.json", "sha256": "be042630c00addc1bb1de4689694c77b6612f2a29c3342b1b2d211f31b4e54d6"},
+    "capabilities": {"path": "config/assurance/native-capability-registry-v1.json", "sha256": "c13e3a4848dd509f828692e836481dac7c7b8b3ac4586666c1f433bf49f66328"},
+    "validator": {"path": "scripts/assurance/release-parity.mjs", "sha256": "19b10362ad03f4052bf562d4432e6ca3782ffe4eb88f2ca78ee5ada87600bb95"},
+    "test": {"path": "tests/assurance/release-parity.test.mjs", "sha256": "e5ab60f8c77ae818d193b504f9122ff45869627282d0926161cc44e0d8c648fb"}
   },
   "dependencyIntegrity": {
     "status": "EXACT_LOCKED_DEPENDENCY_SET",
@@ -26,13 +26,13 @@
     {
       "targetId": "android-chat-livekit-qa-build-86", "classification": "ACTIVE_INTERNAL_TARGET",
       "generatedNativeSourceDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
-      "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY", "capabilityParity": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_20_OF_20", "missingCapabilities": [],
+      "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY", "capabilityParity": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_21_OF_21", "missingCapabilities": [],
       "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_MISSING_BUILD_85_ARTIFACT_IDENTITY"
     },
     {
       "targetId": "ios-qa-build-8", "classification": "ACTIVE_INTERNAL_TARGET",
       "generatedNativeSourceDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
-      "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY", "capabilityParity": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_25_OF_25", "missingCapabilities": [],
+      "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY", "capabilityParity": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_26_OF_26", "missingCapabilities": [],
       "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_IDENTITY_MISSING"
     },
     {
@@ -40,7 +40,7 @@
       "generatedNativeSourceDigest": "1f4391e2a6df0c9266db66b7f2615984e9370163827426593077cbb53d9ef2c4",
       "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF",
       "historicalArtifactSource": "8c426f4e74de61de7d4529d32d124744833912dc", "historicalArtifactEquivalentToCurrentReplay": false,
-      "capabilityParity": "PASS_CURRENT_SOURCE_REPLAY_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_20_OF_20", "missingCapabilities": [],
+      "capabilityParity": "PASS_CURRENT_SOURCE_REPLAY_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_21_OF_21", "missingCapabilities": [],
       "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_BUILD_80_LACKS_IMAGE_MANIPULATOR"
     }
   ],
@@ -58,9 +58,15 @@
     "capabilityParity": "3/3",
     "deterministicEvidence": "3/3",
     "mandatoryNegativeControls": "8/8",
-    "directImportClosure": "40_DISCOVERED_33_NATIVE_MAPPED_7_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
-    "additionalNegativeControls": "15/15",
-    "negativeControlResultSha256": "29a30a72bdc3d987555455de1fe1b8f9eee4c43f7e0f2130eacddd3df935df92"
+    "directImportClosure": "42_DISCOVERED_34_NATIVE_MAPPED_8_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
+    "directImportGrammar": "451_STATIC_IMPORT_FROM_2_SIDE_EFFECT_IMPORT_13_DYNAMIC_IMPORT_7_COMMONJS_REQUIRE_2_EXPORT_FROM",
+    "sideEffectClassifications": {
+      "react-native-get-random-values": {"classification": "NATIVE_ANDROID_AND_IOS_REQUIRED_AND_GENERATED_CAPABILITY_PROVED", "androidCapability": "android.random-values-native", "iosCapability": "ios.random-values-native"},
+      "react-native-url-polyfill": {"classification": "REVIEWED_JS_ONLY_NO_NATIVE_PROJECT_OR_AUTOLINK_CONFIG_REACT_NATIVE_CORE_ALREADY_COVERED", "lockedVersion": "3.0.0", "lockedSourceDigest": "d15dc6c2037506c825983e808562ac183ec1a0288af5900211297f769be39201"}
+    },
+    "additionalNegativeControls": "16/16",
+    "negativeControlResultSha256": "5c8b7317b799cd2727b760c97ff2a4beda4794a8a9660fb6d72c93f52b2f38de",
+    "negativeControlHashMethod": "SHA256_JSON_ORDERED_RESULT_OBJECTS"
   },
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",

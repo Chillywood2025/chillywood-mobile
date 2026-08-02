@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { evaluateParity } from "../../scripts/assurance/release-parity.mjs";
+import { directImportGrammar, evaluateParity, extractDirectModuleSpecifiers } from "../../scripts/assurance/release-parity.mjs";
 
 const root = process.cwd();
 const first = evaluateParity();
@@ -20,12 +20,43 @@ assert.equal(first.dependencyIntegrity.fullTreeValidated, true);
 assert.deepEqual(first.dependencyIntegrity.fullTreeProblems, []);
 assert.match(first.dependencyIntegrity.packageSha256, /^[a-f0-9]{64}$/u);
 assert.match(first.dependencyIntegrity.lockSha256, /^[a-f0-9]{64}$/u);
-assert.deepEqual(first.directImportClosure, { discovered: 40, nativeMapped: 33, reviewedJsOnly: 7, unclassified: 0 });
+assert.deepEqual(first.directImportClosure, {
+  discovered: 42, nativeMapped: 34, reviewedJsOnly: 8, unclassified: 0,
+  grammarCounts: { STATIC_IMPORT_FROM: 451, SIDE_EFFECT_IMPORT: 2, DYNAMIC_IMPORT: 13, COMMONJS_REQUIRE: 7, EXPORT_FROM: 2 },
+});
+assert.deepEqual(directImportGrammar, ["STATIC_IMPORT_FROM", "SIDE_EFFECT_IMPORT", "DYNAMIC_IMPORT", "COMMONJS_REQUIRE", "EXPORT_FROM"]);
+assert.deepEqual(extractDirectModuleSpecifiers(`
+  import value from "expo-device";
+  import "react-native-get-random-values";
+  const dynamic = import("expo-updates");
+  const commonJs = require("expo-camera");
+  export { readAsStringAsync } from "expo-file-system";
+`), [
+  { grammar: "COMMONJS_REQUIRE", specifier: "expo-camera" },
+  { grammar: "DYNAMIC_IMPORT", specifier: "expo-updates" },
+  { grammar: "EXPORT_FROM", specifier: "expo-file-system" },
+  { grammar: "SIDE_EFFECT_IMPORT", specifier: "react-native-get-random-values" },
+  { grammar: "STATIC_IMPORT_FROM", specifier: "expo-device" },
+]);
+
+const registry = JSON.parse(fs.readFileSync("config/assurance/native-capability-registry-v1.json", "utf8"));
+assert.deepEqual(registry.importCoverage.mappings["react-native-get-random-values"], { android: "android.random-values-native", ios: "ios.random-values-native" });
+assert.equal(registry.importCoverage.excludedPackages["react-native-url-polyfill"].classification, "REVIEWED_JS_ONLY");
+assert.deepEqual(registry.importCoverage.excludedPackages["react-native-url-polyfill"].coveredBy, { android: "android.react-native-core", ios: "ios.react-native-core" });
+assert.equal(first.reviewedJsOnlySourceProof.length, 1);
+assert.deepEqual(first.reviewedJsOnlySourceProof[0].entrypoints, ["index.js", "auto.js"]);
+assert.equal(first.reviewedJsOnlySourceProof[0].nativeIndicators, 0);
+assert.match(first.reviewedJsOnlySourceProof[0].sourceDigest, /^[a-f0-9]{64}$/u);
 
 const byId = Object.fromEntries(first.targets.map((target) => [target.targetId, target]));
 assert.equal(byId["android-chat-livekit-qa-build-86"].classification, "ACTIVE_INTERNAL_TARGET");
 assert.equal(byId["ios-qa-build-8"].classification, "ACTIVE_INTERNAL_TARGET");
 assert.equal(byId["android-production-build-84-historical"].classification, "HISTORICAL_ARTIFACT");
+assert.equal(byId["android-chat-livekit-qa-build-86"].requiredCapabilities.length, 21);
+assert.equal(byId["ios-qa-build-8"].requiredCapabilities.length, 26);
+assert.equal(byId["android-production-build-84-historical"].requiredCapabilities.length, 21);
+assert.ok(byId["android-chat-livekit-qa-build-86"].requiredCapabilities.includes("android.random-values-native"));
+assert.ok(byId["ios-qa-build-8"].requiredCapabilities.includes("ios.random-values-native"));
 for (const target of first.targets) {
   assert.equal(target.generatedNative.runs, "3/3");
   assert.equal(target.generatedNative.proofTier, "T1_SOURCE");
@@ -49,7 +80,7 @@ for (const target of first.targets) {
 }
 assert.equal(byId["android-chat-livekit-qa-build-86"].rollback.identityStatus, "MISSING_HISTORICAL_ARTIFACT_IDENTITY");
 assert.equal(byId["ios-qa-build-8"].rollback.identityStatus, "MISSING");
-assert.equal(byId["android-production-build-84-historical"].rollback.missingCapabilities.length, 20);
+assert.equal(byId["android-production-build-84-historical"].rollback.missingCapabilities.length, 21);
 assert.ok(byId["android-production-build-84-historical"].rollback.missingCapabilities.includes("android.image-manipulator"));
 assert.equal(byId["android-chat-livekit-qa-build-86"].runtimeBinding.key, "ANDROID_CHAT_LIVEKIT_QA_RUNTIME_VERSION");
 assert.equal(byId["ios-qa-build-8"].runtimeBinding.key, "IOS_QA_RUNTIME_VERSION");
@@ -66,12 +97,12 @@ const mandatory = {
 const controls = Object.fromEntries(first.negativeControls.results.map((result) => [result.fixtureId, result.observed]));
 for (const [fixture, code] of Object.entries(mandatory)) assert.equal(controls[fixture], code);
 assert.equal(first.negativeControls.required, 8);
-assert.equal(first.negativeControls.total, 23);
-assert.equal(first.negativeControls.passed, 23);
+assert.equal(first.negativeControls.total, 24);
+assert.equal(first.negativeControls.passed, 24);
 for (const fixture of ["source-tree-mismatch", "package-bundle-mismatch", "duplicate-target", "unknown-capability", "cross-platform-evidence", "unsafe-normalization"]) {
   assert.equal(first.negativeControls.results.find((result) => result.fixtureId === fixture)?.result, "FAIL_CLOSED");
 }
-for (const fixture of ["unqualified-target-classification", "unknown-fail-closed-target-classification", "current-release-identity-unproved", "profile-runtime-env-cross-bound", "profile-distribution-cross-bound", "direct-import-capability-omitted", "direct-import-mapping-omitted", "direct-import-wrong-platform", "historical-source-substitution"]) {
+for (const fixture of ["unqualified-target-classification", "unknown-fail-closed-target-classification", "current-release-identity-unproved", "profile-runtime-env-cross-bound", "profile-distribution-cross-bound", "direct-import-capability-omitted", "direct-import-mapping-omitted", "direct-import-wrong-platform", "direct-import-grammar-omitted", "historical-source-substitution"]) {
   assert.equal(first.negativeControls.results.find((result) => result.fixtureId === fixture)?.result, "FAIL_CLOSED");
 }
 
