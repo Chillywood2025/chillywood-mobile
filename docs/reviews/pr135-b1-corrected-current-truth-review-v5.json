@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr135-b1-corrected-current-truth-review-v5",
+  "reviewVersion": 5,
+  "reviewLabel": "B1 corrected immutable-source current-truth Level A review",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLevel": "A",
+  "reviewerLanes": ["independent"],
+  "reviewTimestamp": "2026-08-02T01:21:52Z",
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-b0-guard-review",
+  "reviewHead": "7cb31e3717844ae8a6472b7f3647f68310d13963",
+  "reviewEvidenceParentHead": "7cb31e3717844ae8a6472b7f3647f68310d13963",
+  "historicalEvidencePreserved": ["v1", "v2", "v3", "v4"],
+  "implementationPrNumber": 135,
+  "implementationPrState": "open-draft",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-b0-guard",
+  "implementationHead": "0a0847079bb646bded21224b68f13ac914bb5ed1",
+  "implementationTree": "e1d8dfd80aa16df269c1a83c7487008d6dbe18b4",
+  "baseHead": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+  "baseTree": "97f5e293a7bfd3c3e87ee8563e619b4b48c611e0",
+  "mergeBase": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
+  "changedNameHash": "246863974b7dc9633ab1448d13e918aad1577b7c34c324d1a1b0805c9330d465",
+  "changedNameHashMethod": "sha256(git diff --name-only -z baseHead implementationHead)",
+  "implementationDiffHash": "ce51f00a81ab41b67497f2d1aa42d83de1b6a00f32de693e4fdd3fc5d06a6353",
+  "implementationDiffHashMethod": "sha256(git diff --binary --no-renames baseHead implementationHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "migrationSetHashMethod": "sha256(git diff --name-only baseHead implementationHead -- supabase/migrations; empty set)",
+  "b1MigrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+  "configHash": "19021ffcf645dfe80c6bb49925dddad6139094702e7511c409aca6dc472b2d1a",
+  "configHashMethod": "sha256(git ls-tree -r implementationHead config/assurance)",
+  "artifactHashes": {
+    "CURRENT_STATE.md": "b0ebdb16bf8c8ad013c2de75460ccc2e56420f638f8725006eb37e552c430ce9",
+    "NEXT_TASK.md": "6d6d1115383dbd3c674e4dfc42444c9083f490794dcbaa03e688b37628d2b0d9"
+  },
+  "testResults": {
+    "exactImplementationBinding": {
+      "status": "SOURCE_CLEAR",
+      "prNumber": 135,
+      "head": "0a0847079bb646bded21224b68f13ac914bb5ed1",
+      "tree": "e1d8dfd80aa16df269c1a83c7487008d6dbe18b4",
+      "base": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+      "providerBranchHead": "0a0847079bb646bded21224b68f13ac914bb5ed1",
+      "providerBranchMatches": true
+    },
+    "historyPreservingReviewReuse": {
+      "status": "SOURCE_CLEAR",
+      "normalMergeCommit": "7cb31e3717844ae8a6472b7f3647f68310d13963",
+      "previousReviewHead": "996170805029c0afd9e111a28d0cc4a1c11d6499",
+      "previousReviewHeadIsFirstParent": true,
+      "implementationHeadIsSecondParent": true,
+      "mergeConflict": false,
+      "v1ThroughV4EvidencePreservedUnchanged": true,
+      "v5EvidenceStatus": "current"
+    },
+    "allowedFileScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "additions": 26,
+      "deletions": 21,
+      "netChangedLines": 5,
+      "paths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "providerChangedFileCountMatches": true,
+      "highRiskDomains": []
+    },
+    "currentMainBinding": {
+      "status": "SOURCE_CLEAR",
+      "recordedMain": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+      "observedOriginMain": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+      "latestMergedImplementationPr": 132,
+      "latestMergedImplementationHead": "ff47420a2e00b9e27b4e773d2ca7094b5fecfc96"
+    },
+    "b1CorrectedImmutableSourceBinding": {
+      "status": "SOURCE_CLEAR",
+      "implementationPrNumber": 70,
+      "branch": "codex/assurance-reconcile-livekit-source-binding",
+      "recordedHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+      "providerBranchHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+      "tree": "d635fac5052bd84a45ba0f7d5c5153db2c861222",
+      "headBindingClassification": "EXACT_SOURCE_HEAD",
+      "correctionScope": "one predecessor pgTAP test file only",
+      "correctedPlan": 23,
+      "correctedPassed": 23,
+      "correctedFailed": 0,
+      "enabledTriggerRequired": "cognitive_livekit_platform_run_identity_v3",
+      "retiredTriggerRequiredAbsent": "cognitive_livekit_platform_run_identity_v2",
+      "findingCount": 0
+    },
+    "priorB1LocalBehavioralEvidence": {
+      "status": "INTEGRATION_CLEAR",
+      "focusedPgTap": {"planned": 28, "executed": 28, "passed": 28, "failed": 0},
+      "concurrency": {"planned": 19, "executed": 19, "passed": 19, "failed": 0},
+      "evidenceBoundary": "sanitized local database integration only; no provider/native, signed-artifact, installed, physical, or public-canary proof",
+      "executedByThisLevelAReview": false
+    },
+    "failedCiDisclosure": {
+      "status": "SOURCE_CLEAR",
+      "runId": 30725970541,
+      "runHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+      "phase1JobsPassed": 12,
+      "phase1JobsFailed": 1,
+      "failedJob": "Phase 1 / Supabase Database Integration",
+      "failedSuite": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+      "suitePlanned": 23,
+      "failedTestNumber": 11,
+      "rootCause": "stale predecessor assertion expected the retired v2 trigger instead of the deployed v3 trigger",
+      "failureWaived": false,
+      "requiredExactCorrectedHeadCi": "pending 13/13 after base synchronization and current Level C reviews"
+    },
+    "migrationSetImmutability": {
+      "status": "SOURCE_CLEAR",
+      "previousReviewedHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+      "correctedSourceHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+      "changedMigrationFiles": 0,
+      "beforeMigrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+      "afterMigrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+      "deployedMigrationRewritten": false,
+      "forwardCorrectionApplied": false
+    },
+    "b1ReviewOnlyLanes": {
+      "status": "SOURCE_CLEAR",
+      "historicalStale": true,
+      "lanes": [
+        {"pr": 74, "head": "2cd45c26536c1e949210aa97503f45447e26bb80", "reviewedImplementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd", "state": "open-draft", "disposition": "never-merge"},
+        {"pr": 76, "head": "83f03d2dd1301a863d8d10e2ff3c20358df7be61", "reviewedImplementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd", "state": "open-draft", "disposition": "never-merge"},
+        {"pr": 133, "head": "6f17c1e261e3035e7ac0ea7d56e13c698b2c3bf8", "reviewedImplementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd", "state": "open-draft", "disposition": "never-merge"},
+        {"pr": 134, "head": "16b1c2a9c51e8d29deeb16a7f675202c103354f9", "reviewedImplementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd", "state": "open-draft", "disposition": "never-merge"}
+      ],
+      "mergedReviewPrCount": 0
+    },
+    "generatedDocuments": {
+      "status": "SOURCE_CLEAR",
+      "authoritativeRecord": "config/assurance/current-truth-v1.json",
+      "exactlyRenderedFromAuthoritativeRecord": true,
+      "driftFindings": 0
+    },
+    "currentTruth": {
+      "status": "SOURCE_CLEAR",
+      "mode": "offline",
+      "recordedMain": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+      "observedMain": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+      "pr70HeadBindingClassification": "EXACT_SOURCE_HEAD",
+      "findingCount": 0
+    },
+    "contractValidation": {
+      "status": "SOURCE_CLEAR",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25
+    },
+    "currentTruthTests": {
+      "status": "SOURCE_CLEAR",
+      "syncCases": 9,
+      "headBindingFailClosedCases": 25,
+      "headBindingRegressionSuitePassed": true
+    },
+    "deterministicCurrentTruth": {
+      "status": "SOURCE_CLEAR",
+      "mode": "offline",
+      "runs": 3,
+      "identical": true,
+      "reviewContextOutputSha256": "55942b6b274d416f9bd24f0f7cc4f85f2d76c042ea296cd3c02e4a753bba8d7b",
+      "implementationContextReportedOutputSha256": "31f451588ff7532893275d8d323f856f5851b1efffab799660775e125d2494fd"
+    },
+    "prScope": {
+      "status": "SOURCE_CLEAR",
+      "implementationChangedFiles": 3,
+      "maximumFiles": 15,
+      "implementationNetChangedLines": 5,
+      "maximumNetChangedLines": 1200,
+      "highRiskDomains": [],
+      "reviewBranchHistoricalEvidenceExcludedFromImplementationScope": true
+    },
+    "diffCheck": {
+      "status": "SOURCE_CLEAR"
+    },
+    "privacyAndSecretScan": {
+      "status": "SOURCE_CLEAR",
+      "newPrivateEvidence": false,
+      "newSecretMaterial": false,
+      "newDeviceIdentifiers": false
+    },
+    "nonInterference": {
+      "status": "SOURCE_CLEAR",
+      "productSourceChanged": false,
+      "providerRead": false,
+      "providerWrite": false,
+      "providerBoundary": "no production/runtime provider read or write; GitHub source-control metadata read only",
+      "githubSourceControlRead": true,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeChange": false,
+      "buildOrOta": false,
+      "workflowChange": false,
+      "packageOrLockfileChange": false,
+      "currentTruthImplementationChangedByReview": false,
+      "denoLockChanged": false,
+      "userDerivedMemory": "off",
+      "level2Repair": "off"
+    }
+  },
+  "testResultHash": "57854b071025891ab187fafc3c633bde73c354452f05943fd96e8c3fa9148ce1",
+  "testResultHashMethod": "sha256(stableJson(testResults))",
+  "findings": [],
+  "severityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "reviewOnly": true,
+  "disposition": "LANE_CLEAR_P0_P1_P2_P3_ZERO_B1_CORRECTED_CURRENT_TRUTH_VERIFIED"
+}
