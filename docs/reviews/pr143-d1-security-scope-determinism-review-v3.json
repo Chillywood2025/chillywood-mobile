@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-security-scope-determinism-review-v3-synchronized",
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewPrNumber": 149,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "humanApproval": false,
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "immutableSourceTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "synchronizedBranchHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "synchronizedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "implementationTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "canonicalSyntheticTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "currentBase": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseHead": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseTree": "37ca0beab2536600301532df9f46b7154fc33fa0",
+  "synchronizationParents": [
+    "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+    "12985e2ad505ca813611c64b793345f069dc5515"
+  ],
+  "reviewHead": "873957ff713706a43aa44aef36ff1322851f66f5",
+  "reviewBranchSynchronizationMerge": {
+    "commit": "873957ff713706a43aa44aef36ff1322851f66f5",
+    "tree": "3b1f438fd60732aa301143c1ac20f4cb46f715a2",
+    "parents": [
+      "e010e9dafd52b4eaf1fd0c4cbd90cf4bc8f93a2c",
+      "173f17ce3b481d3e61ea7af27c563cdc78530044"
+    ],
+    "method": "normal-no-ff-merge-no-rebase-no-force"
+  },
+  "sourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+  "sourceDeltaArtifactHash": "cb9c89c217f960f75befd86c5a3d02a732246cab2354e12bed4de1bad4bc5c75",
+  "sourceDeltaHashAlgorithms": {
+    "sourceDeltaHash": "SHA-256 of git-helper-trimmed git diff --binary --no-renames currentBase..synchronizedBranchHead; consumed by current-truth guard",
+    "sourceDeltaArtifactHash": "SHA-256 of the raw same diff including its terminal newline"
+  },
+  "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a8953b3ee5d856490a461e367729492d1bcf5d799748251e03c565601a4ececa",
+  "testResultHash": "3737ed1354890dd556fb2a1dbb81751695c8abed9b37292008c99b8087e2c32b",
+  "artifactHashes": {
+    "staticContractSha256": "be042630c00addc1bb1de4689694c77b6612f2a29c3342b1b2d211f31b4e54d6",
+    "capabilityRegistrySha256": "c13e3a4848dd509f828692e836481dac7c7b8b3ac4586666c1f433bf49f66328",
+    "validatorSha256": "19b10362ad03f4052bf562d4432e6ca3782ffe4eb88f2ca78ee5ada87600bb95",
+    "testSha256": "e5ab60f8c77ae818d193b504f9122ff45869627282d0926161cc44e0d8c648fb",
+    "reportSha256": "cd905a4141654ac41a7ec664e452098f2665e8997ca5dc0bd08e5c2cedaaab5a"
+  },
+  "changedPaths": [
+    "config/assurance/native-capability-registry-v1.json",
+    "config/assurance/release-target-parity-v1.json",
+    "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
+    "docs/assurance/pr-d1-offline-parity-report-v1.json",
+    "scripts/assurance/release-parity.mjs",
+    "tests/assurance/release-parity.test.mjs"
+  ],
+  "scopeStatus": "pass",
+  "scope": {
+    "objectiveDomain": "offline-release-native-artifact-assurance",
+    "changedFiles": 6,
+    "maximumFiles": 15,
+    "additions": 1049,
+    "deletions": 0,
+    "netChangedLines": 1049,
+    "maximumNetChangedLines": 1200,
+    "sourceDeltaByteEquivalentAfterSynchronization": true,
+    "changedPathsEquivalentAfterSynchronization": true,
+    "productSourceChanged": false,
+    "nativeImplementationChanged": false,
+    "releaseManifestChanged": false,
+    "workflowChanged": false,
+    "packageManifestOrLockChanged": false,
+    "migrationChanged": false,
+    "secondHighRiskDomain": false,
+    "scopeWaiverRequired": false
+  },
+  "synchronizationReview": {
+    "status": "PASS",
+    "immutableSourceIsFirstParent": true,
+    "exactCurrentMainIsSecondParent": true,
+    "firstParentDistance": 1,
+    "mergeConflict": false,
+    "observedTreeEqualsCanonicalSyntheticTree": true,
+    "sourceDeltaEquivalent": true,
+    "changedFileHashEquivalent": true,
+    "changedPathsEquivalent": true,
+    "manualImplementationResolution": false
+  },
+  "securityScopeDeterminismReview": {
+    "status": "PASS",
+    "cliFailClosed": {
+      "unknownFlagRejected": "UNKNOWN_FLAG",
+      "unknownTargetRejected": "UNKNOWN_TARGET",
+      "unknownFixtureRejected": "UNKNOWN_FIXTURE",
+      "existingEvidenceOverwriteRejected": "EVIDENCE_OUTPUT_EXISTS",
+      "explicitReplaceRequiresOutput": true,
+      "selectedAndSkippedTargetsRecorded": true,
+      "defaultReadOnly": true
+    },
+    "offlineBoundary": {
+      "directNetworkClientImported": false,
+      "generationEnvironment": ["EXPO_OFFLINE=1", "npm_config_offline=true", "expo prebuild --no-install"],
+      "providerReadbackInvoked": false,
+      "providerContact": false,
+      "build": false,
+      "ota": false,
+      "submission": false,
+      "installation": false,
+      "packetCaptureClaimed": false
+    },
+    "secretSafety": {
+      "rawPrivateConfigRecorded": false,
+      "privateConfigPathRecorded": false,
+      "digestOrPresenceOnly": true,
+      "secretPrivateEvidenceDiffScan": "PASS",
+      "credentialOrTokenOutput": false
+    },
+    "generatedNativeBoundary": {
+      "disposableMode": "0700",
+      "cleanupInFinally": true,
+      "generatedNativeDirectoryCommitted": false,
+      "evidenceTier": "T1_SOURCE_NOT_COMPILED_SIGNED_INSTALLED_OR_PHYSICAL"
+    },
+    "capabilityClosure": {
+      "directImports": "42_DISCOVERED_34_NATIVE_MAPPED_8_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
+      "grammars": "5/5",
+      "androidQa": "21/21",
+      "iosQa": "26/26",
+      "androidHistoricalCurrentReplay": "21/21",
+      "missingCapabilities": 0,
+      "requiredProvidedIndependent": true
+    },
+    "negativeControls": {
+      "mandatory": "8/8",
+      "additional": "16/16",
+      "total": "24/24",
+      "allFailClosed": true,
+      "resultSha256": "5c8b7317b799cd2727b760c97ff2a4beda4794a8a9660fb6d72c93f52b2f38de"
+    },
+    "determinism": {
+      "generatedSource": "9/9",
+      "perTarget": "3/3",
+      "evidence": "3/3_BYTE_IDENTICAL",
+      "unsafeNormalizationRejected": true
+    },
+    "proofSubstitution": {
+      "generatedSourceCalledCompiledProof": false,
+      "historicalIdentityCalledCurrentProof": false,
+      "providerOrInstalledProofInferred": false,
+      "historicalBuild84CalledCurrentReplayOnly": true
+    }
+  },
+  "testResults": {
+    "postSynchronizationFocusedEvidence": {
+      "status": "pass",
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "source": "coordinator-exact-result-reused-no-duplicate-heavy-generation",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "24/24"
+    },
+    "lightweightReviewChecks": {
+      "mergeParents": "PASS",
+      "canonicalTree": "PASS",
+      "sourceAndPathEquivalence": "PASS",
+      "nodeSyntax": "PASS_2_OF_2",
+      "json": "PASS_4_OF_4",
+      "fixtureCatalog": "PASS_24",
+      "directImportGrammarCatalog": "PASS_5",
+      "contractValidation": "PASS_13_CONTRACTS_20_FEATURES_25_ESCAPED_DEFECTS",
+      "plan": "REQUIREMENTS_CLEAR_ARCHITECTURE_CLEAR",
+      "gitDiffCheck": "PASS",
+      "secretPrivateEvidenceScan": "PASS",
+      "implementationScope": "PASS_6_FILES_1049_NET_LINES"
+    },
+    "phase1Ci": {
+      "status": "pending",
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "canceledPreReviewRun": {
+        "runId": 30742530172,
+        "attempt": 1,
+        "conclusion": "cancelled",
+        "classification": "CANCELED_PRE_REVIEW_NOT_CI_EVIDENCE"
+      },
+      "exactRerun": "pending-after-all-four-current-synchronized-reviews"
+    }
+  },
+  "findings": [],
+  "findingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "criticalFindingCounts": {"P0": 0, "P1": 0},
+  "waivedFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "lifecycleGate": {
+    "status": "BLOCKED_INTERNAL",
+    "sourceP0": 0,
+    "sourceP1": 0,
+    "phase1Ci": "pending",
+    "mergeGate": "BLOCKED_INTERNAL_CI_ONLY"
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "reviewLevel": "C",
+  "reviewTimestamp": "2026-08-02T09:57:00Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "lane-4-security-scope-determinism-negative-controls",
+    "isolated-automated-review",
+    "implementation-agent-not-sole-reviewer"
+  ],
+  "historicalEvidence": {
+    "v1": {"path": "docs/reviews/pr143-d1-security-scope-determinism-review-v1.json", "sha256": "f29acab5c55dd86f4cd2572514b81234f2ad0a0adbffccb81ef99a6a99c01bc0", "changed": false},
+    "v2": {"path": "docs/reviews/pr143-d1-security-scope-determinism-review-v2.json", "sha256": "5ef33665f4605fdc12d30b16c84cb798e3ed22b15e30ed08eed715f6b123ff30", "changed": false}
+  },
+  "nonInterference": {
+    "implementationEditedByReview": false,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "artifactInstalled": false,
+    "publicRelease": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRoleRightAuthRlsChanged": false,
+    "generatedAndroidOrIosCommittedByImplementation": false,
+    "denoLockTouched": false
+  },
+  "summary": {
+    "laneResult": "P0_0_P1_0",
+    "aggregateResult": "P0_0_P1_0_SOURCE_AND_SYNCHRONIZATION_CLEAR",
+    "implementationMergeRecommendation": "eligible-only-after-all-four-current-synchronized-reviews-and-one-exact-frozen-head-CI-pass",
+    "reviewPrDisposition": "remain-draft-never-merge",
+    "noP1Waived": true
+  }
+}
