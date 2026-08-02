@@ -2,10 +2,10 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Review and merge this one bounded three-file current-truth synchronization binding PR #69 immutable source fc451c509c7af5c220c11ab9f3d34a0db608f35d; do not deploy B1 or B2 forward corrections.
-2. After this binding merges, merge current main normally into B2 without rebase or manual source edits, verify the canonical synchronized tree and unchanged source delta, then push normally.
-3. Run direct and assembled linked no-apply planning, reuse PRs #71-#73 additively, add exactly one concurrency/atomicity Level C lane, require P0=0/P1=0 and one exact 13/13 CI, then merge only PR #69 without RevenueCat or database mutation.
-4. Keep preserved B3 successor b2cd9318 clean and unpushed until B2 and post-B2 current truth merge; then continue B3 independently without combining domains.
+1. Review and merge this one bounded post-B2 three-file current-truth synchronization; do not deploy the B1, B2, or B3 forward corrections.
+2. Continue B3 from preserved local successor b2cd931802329d3aee82a0ab2bad6ce843950387 without reset, first freezing and pushing its immutable source normally, then binding current truth once.
+3. After the B3 binding merges, merge current main normally into B3 without rebase or manual source edits, verify the canonical synchronized tree and unchanged source delta, then push normally.
+4. Run B3 local behavioral database proof, exact linked no-apply planning, additive Level C reviews, and one exact 13/13 CI before merging only PR #75.
 5. After B1, B2, and B3 are reconciled and merged, begin PR D native/provider/runtime/artifact assurance without a production build, OTA, provider mutation, or product behavior change.
 6. Keep PR E blocked until PRs C and D are merged; keep PR F blocked until PR E merges.
 7. Keep PR #52 frozen and unmerged and PR #53 stale, review-only, and unmerged until bounded reconciliation safely preserves all unique source.
