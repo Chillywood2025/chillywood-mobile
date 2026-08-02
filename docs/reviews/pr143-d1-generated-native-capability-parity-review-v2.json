@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-generated-native-capability-parity-review-v2",
+  "reviewVersion": 2,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "generated-native-source-and-required-provided-capability-parity",
+  "reviewLevel": "C",
+  "humanApproval": false,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "immutableSourceHead": "aecff4fd7aa84b53e7a25402d156fc0a945cb9fb",
+  "implementationHead": "aecff4fd7aa84b53e7a25402d156fc0a945cb9fb",
+  "implementationTree": "6c5f765d60c307cc9e3b5b57c4261a4ec100ad7b",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "sourceDeltaHash": "5ed63b3fe3ba5acb1b45a7266576860095b2d6126c617afa356eed7ab8025e51",
+  "sourceDeltaHashMethod": "sha256(trim(git diff --binary --no-renames baseHead implementationHead))",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "changedFileHashMethod": "sha256(trim(git diff --name-status -z baseHead implementationHead))",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "88c2e0ee96fca9baab77bc76ce54a9565b37336ec3b229b44d1f2c505d1024cf",
+  "testResultHash": "0a97afe5418e66a19a9892da636250ab2c6c0c533022901b6c3cc5c6505dc153",
+  "scopeStatus": "pass-with-one-open-p1-finding",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewRef": "codex/first-pass-assurance-pr-d1-review-generated-native-capability",
+  "reviewHead": "05b498d95502a4a3b5e599c091dd8cbcb016a017",
+  "reviewTimestamp": "2026-08-02T09:11:12Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-generated-native-and-capability-parity",
+    "additive-v2-after-implementation-correction",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 2
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "v1EvidencePreserved": true
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+      "implementationHead": "aecff4fd7aa84b53e7a25402d156fc0a945cb9fb",
+      "implementationTree": "6c5f765d60c307cc9e3b5b57c4261a4ec100ad7b",
+      "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+      "implementationMergedNormallyIntoReviewBranch": true,
+      "reviewBranchContainsOnlyReviewEvidenceBeyondImplementation": true,
+      "baseSynchronizationPending": true
+    },
+    "implementationScope": {
+      "status": "pass",
+      "changedFiles": 6,
+      "additions": 809,
+      "deletions": 8,
+      "netChangedLines": 801,
+      "releaseOrProductSourceChanged": false,
+      "nativeImplementationChanged": false,
+      "packageOrWorkflowChanged": false,
+      "oneAssuranceDomain": true
+    },
+    "lockedDependencies": {
+      "status": "pass",
+      "classification": "EXACT_LOCKED_DEPENDENCY_SET",
+      "packageSha256": "3cd1f2049b72a89bb5630659b76d24f6add21d7e670ca0003ecb0a5f122ea744",
+      "lockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28",
+      "directPackages": 66,
+      "fullTreeValidated": true,
+      "fullTreeProblems": []
+    },
+    "offlineGeneratedSource": {
+      "status": "pass",
+      "method": "DISPOSABLE_OFFLINE_EXPO_PREBUILD_NO_INSTALL_PLUS_EXACT_AUTOLINKING_READBACK",
+      "normalizationAllowlist": [
+        "absolute disposable/dependency roots",
+        "line endings",
+        "file order",
+        "opaque Xcode object IDs via relationship-preserving first-occurrence mapping"
+      ],
+      "androidIosDigestsSeparated": true,
+      "generatedRuns": "9/9",
+      "deterministicPerTarget": "3/3",
+      "temporaryDirectoriesRemoved": true,
+      "generatedDirectoriesCommitted": false,
+      "compiledNativeProof": false
+    },
+    "targetDigests": {
+      "androidChatLivekitQaBuild86": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+      "iosQaBuild8": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+      "androidProductionBuild84HistoricalCurrentReplay": "1f4391e2a6df0c9266db66b7f2615984e9370163827426593077cbb53d9ef2c4"
+    },
+    "focusedTests": {
+      "status": "pass-with-one-open-p1-finding",
+      "command": "node tests/assurance/release-parity.test.mjs",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "mandatoryNegativeControls": "8/8",
+      "additionalNegativeControls": "15/15",
+      "totalNegativeControls": "23/23"
+    },
+    "directImportClosureAudit": {
+      "status": "fail-open-p1-finding",
+      "implementationReported": {
+        "discovered": 40,
+        "nativeMapped": 33,
+        "reviewedJsOnly": 7,
+        "unclassified": 0
+      },
+      "independentlyObserved": {
+        "distinctDirectDependencyImports": 42,
+        "nativeMappedOrRequired": 34,
+        "reviewedJsOnly": 8,
+        "omittedByScanner": [
+          "react-native-get-random-values",
+          "react-native-url-polyfill"
+        ]
+      },
+      "scannerGrammar": {
+        "staticFromImports": "matched",
+        "dynamicImports": "matched",
+        "requireCalls": "matched",
+        "sideEffectImports": "omitted",
+        "exportFrom": "not-parsed-as-an-explicit-syntax-form; current react-native occurrence is only incidentally captured by the broad from branch",
+        "syntaxAware": false
+      },
+      "nativeImpact": {
+        "react-native-get-random-values": "NATIVE_CAPABILITY_UNREGISTERED; package contains Android RNGetRandomValuesModule/ReactPackage and an iOS pod/Objective-C bridge and requires generated autolinking proof",
+        "react-native-url-polyfill": "REVIEWED_JS_ONLY_CLASSIFICATION_MISSING; package has JavaScript source and no native package surface"
+      },
+      "claimed40Of40ClosureProved": false
+    },
+    "generatedProvidedEvidenceCorrection": {
+      "status": "resolved",
+      "iosImagePickerAutolink": "verified in ios/.assurance/expo-modules-resolve.json",
+      "iosApsEnvironmentSourceMarker": "verified in generated Chillywood.entitlements; retained at T1 source, not signed-entitlement proof",
+      "androidNotificationSounds": "6/6 generated raw resources verified",
+      "iosNotificationSounds": "6/6 generated Xcode resource markers verified",
+      "firebaseCoreAnalytics": "Android and iOS app/analytics generated autolinking verified",
+      "documentAndFileSystem": "Android and iOS expo-document-picker/expo-file-system generated autolinking verified",
+      "updatesAndStorage": "Android and iOS expo-updates plus AsyncStorage generated autolinking verified",
+      "requiredProvidedDerivationIndependent": true
+    },
+    "historicalBuild84SourceSeparation": {
+      "status": "resolved",
+      "currentReplayClassification": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF",
+      "historicalArtifactSource": "8c426f4e74de61de7d4529d32d124744833912dc",
+      "historicalArtifactEquivalentToCurrentReplay": false,
+      "currentReplayRequirements": "20/20 CURRENT SOURCE ANDROID CAPABILITIES",
+      "historicalSignedIdentity": "HISTORICAL_RECORDED_INPUT_NOT_REPROVED",
+      "negativeControl": "HISTORICAL_SOURCE_SUBSTITUTION_REJECTED"
+    },
+    "capabilityParityReview": {
+      "status": "fail-open-p1-finding",
+      "requiredAndProvidedDataStructuresSeparated": true,
+      "allActualNativeRequirementsClosedOver": false,
+      "reportedMissingCapabilities": 0,
+      "reportedZeroMissingCapabilitiesIsSufficientlyProved": false,
+      "staleDigestControlObserved": "GENERATED_NATIVE_DIGEST_STALE",
+      "missingCapabilityControlObserved": "REQUIRED_NATIVE_CAPABILITY_MISSING"
+    },
+    "nonInterference": {
+      "status": "pass",
+      "networkAccess": false,
+      "providerContact": false,
+      "buildPerformed": false,
+      "otaPublished": false,
+      "artifactInstalled": false,
+      "generatedAndroidOrIosCommitted": false,
+      "secretOrPrivateConfigContentRecorded": false
+    },
+    "phase1Ci": {
+      "status": "pending-after-four-current-reviews",
+      "implementationHead": "aecff4fd7aa84b53e7a25402d156fc0a945cb9fb",
+      "runId": null,
+      "formalReviewHeadExpected": "BLOCKED_INTERNAL_UNTIL_P1_RESOLUTION_BASE_SYNCHRONIZATION_AND_CI"
+    }
+  },
+  "findings": [
+    {
+      "id": "PRD1_REQUIRED_CAPABILITY_CATALOG_NOT_CLOSED",
+      "severity": "P1",
+      "status": "open",
+      "summary": "The new direct-import closure scanner reports 40/40 but omits two direct side-effect package imports, including one autolinked native module, so zero missing capabilities is not yet proved.",
+      "evidence": [
+        "scripts/assurance/release-parity.mjs:216-238",
+        "scripts/assurance/release-parity.mjs:301-306",
+        "_lib/supabase.ts:2",
+        "_lib/supabase.ts:6",
+        "hooks/use-color-scheme.ts:1",
+        "package.json:646",
+        "package.json:653",
+        "react-native-get-random-values@1.11.0 contains android/src/main/java/org/linusu/RNGetRandomValuesModule.java, RNGetRandomValuesPackage.java, react-native-get-random-values.podspec and ios/RNGetRandomValues.m",
+        "react-native-url-polyfill@3.0.0 contains JavaScript-only package source and no native package surface"
+      ],
+      "requiredResolution": "Use a syntax-complete fail-closed import/export scanner covering side-effect imports and export-from forms; map react-native-get-random-values to per-platform native capabilities with generated autolinking markers; classify react-native-url-polyfill as reviewed JS-only; add negative controls for both forms; require the current inventory to close as 42 discovered, 34 native-mapped, 8 reviewed JS-only and 0 unclassified."
+    },
+    {
+      "id": "PRD1_GENERATED_PROVIDED_EVIDENCE_INCOMPLETE",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Generated provided evidence now verifies iOS image-picker autolinking, the source-level aps marker, all six Android/iOS notification sounds, Firebase core/analytics, document/file, update and storage markers.",
+      "evidence": [
+        "config/assurance/native-capability-registry-v1.json:55",
+        "config/assurance/native-capability-registry-v1.json:65",
+        "config/assurance/native-capability-registry-v1.json:69",
+        "config/assurance/native-capability-registry-v1.json:73",
+        "config/assurance/native-capability-registry-v1.json:76-77",
+        "config/assurance/native-capability-registry-v1.json:84-85",
+        "config/assurance/native-capability-registry-v1.json:88-89",
+        "focused offline parity generation passed all generatedBy markers in all 9/9 generated-source runs"
+      ]
+    },
+    {
+      "id": "PRD1_HISTORICAL_TARGET_DIGEST_SOURCE_CROSS_BOUND",
+      "severity": "P1",
+      "status": "resolved",
+      "summary": "Build 84 is explicitly separated into a current-source profile replay at T1 and a historical artifact identity that is not reproduced or equated to the replay.",
+      "evidence": [
+        "config/assurance/release-target-parity-v1.json:69-79",
+        "scripts/assurance/release-parity.mjs:252-254",
+        "scripts/assurance/release-parity.mjs:301-304",
+        "scripts/assurance/release-parity.mjs:341-343",
+        "tests/assurance/release-parity.test.mjs:52-58",
+        "historical source substitution negative control observed HISTORICAL_SOURCE_SUBSTITUTION_REJECTED"
+      ]
+    },
+    {
+      "id": "PRD2_ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-ANDROID-GENERATED-NATIVE-LIFECYCLE-INSTRUMENTATION",
+      "summary": "No Android instrumentation or compiled lifecycle test proves generated plugin behavior; this is outside D1 T0-T2 and remains blocked."
+    },
+    {
+      "id": "PRD2_IOS_NATIVE_CALL_XCTEST_GENERATED_PLUGIN_CONTRACT",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "PR-D2-IOS-NATIVE-CALL-XCTEST-GENERATED-PLUGIN-CONTRACT",
+      "summary": "No iOS native-call XCTest or compile proof verifies module registration, PushKit/CallKit lifecycle, or signed entitlements; this is outside D1 T0-T2 and remains blocked."
+    }
+  ],
+  "conclusion": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 2,
+    "mergeGate": "BLOCKED_INTERNAL",
+    "phase1Ci": "PENDING",
+    "reviewDisposition": "PRESERVE_V1_AND_V2; CORRECT_IMPORT_GRAMMAR_AND_CAPABILITY_COVERAGE; RERUN_ADDITIVELY; NEVER_MERGE_REVIEW_BRANCH"
+  }
+}
