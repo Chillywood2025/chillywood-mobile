@@ -34,7 +34,10 @@ export function resolveIncomingCallRoomJoinAction(input: {
 }): "host" | "accept" | "resume" | "blocked";
 export function doesNativeCallActionOwnTransition(input: {
   callInviteId?: string | null;
+  nativeCallUuid?: string | null;
   nativeCallAction?: string | null;
+  platform?: string | null;
+  trustedAndroidProvenance?: boolean;
 }): boolean;
 export function resolveIosChatCallAudioRoute(callType?: string | null): "speaker" | "receiver";
 export function shouldActivateAcceptedChatCallMedia(input: { roomId?: string | null; inviteStatus?: string | null }): boolean;

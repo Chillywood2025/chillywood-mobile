@@ -1,33 +1,20 @@
-import { Linking, NativeModules, Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 
 import {
-  createChillyChatNativeCallRouteBuffer,
+  clearTrustedAndroidNativeCallActions,
   redirectChillyChatNativeCallSystemPath,
-  resolveChillyChatNativeCallActionPayload,
-  resolveChillyChatNativeCallRoute,
+  registerConsumedAndroidNativeCallAction,
 } from "./chillyChatNativeCallRoutes.mjs";
-
-type NativeCallRouteListener = (
-  route: NonNullable<ReturnType<typeof resolveChillyChatNativeCallRoute>>,
-) => void;
-
-const earlyNativeCallRouteBuffer = createChillyChatNativeCallRouteBuffer();
 const nativeCallNotificationModule = NativeModules.ChillyChatCallNotifications as {
   consumePendingNativeCallAction?: () => Promise<unknown>;
   readPendingNativeCallActionStatus?: () => Promise<unknown>;
 } | undefined;
 
-if (Platform.OS === "android") {
-  Linking.addEventListener("url", ({ url }) => {
-    earlyNativeCallRouteBuffer.capture(url);
-  });
-}
-
 export async function consumePendingAndroidNativeCallRoute() {
   if (Platform.OS !== "android") return null;
   const pendingAction =
     await nativeCallNotificationModule?.consumePendingNativeCallAction?.();
-  return resolveChillyChatNativeCallActionPayload(pendingAction);
+  return registerConsumedAndroidNativeCallAction(pendingAction);
 }
 
 export async function readPendingAndroidNativeCallActionStatus() {
@@ -48,12 +35,10 @@ export async function readPendingAndroidNativeCallActionStatus() {
   return { schemaVersion, status };
 }
 
-export const subscribeToEarlyAndroidNativeCallRoutes = (
-  listener: NativeCallRouteListener,
-) => earlyNativeCallRouteBuffer.subscribe(listener);
-
 export const redirectEarlyAndroidNativeCallSystemPath = (path: string) => (
-  earlyNativeCallRouteBuffer.capture(path)
-    ? redirectChillyChatNativeCallSystemPath(path)
-    : path
+  redirectChillyChatNativeCallSystemPath(path)
 );
+
+export const clearPendingAndroidNativeCallRouteClaims = () => {
+  if (Platform.OS === "android") clearTrustedAndroidNativeCallActions();
+};

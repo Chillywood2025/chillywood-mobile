@@ -1,35 +1,12 @@
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const NATIVE_REQUEST_KEY_PATTERN = /^[0-9a-f]{64}$/u;
+const TRUSTED_ANDROID_ACTIONS = new Set(["answer", "decline"]);
+const TRUSTED_CLAIM_TTL_MS = 15_000;
 
 const normalizeUuid = (value) => {
   const normalized = String(value ?? "").trim();
   return UUID_PATTERN.test(normalized) ? normalized.toLowerCase() : "";
-};
-
-const buildResolvedNativeCallRoute = (
-  threadId,
-  callInviteId,
-  nativeCallAction,
-) => {
-  if (
-    !threadId
-    || !callInviteId
-    || !["answer", "decline"].includes(nativeCallAction)
-  ) {
-    return null;
-  }
-
-  const params = new URLSearchParams({
-    callInviteId,
-    nativeCallAction,
-  });
-  if (nativeCallAction === "answer") params.set("openCall", "1");
-
-  return {
-    destination: `/chat/${encodeURIComponent(threadId)}?${params.toString()}`,
-    requestKey: `${threadId}:${callInviteId}:${nativeCallAction}`,
-  };
 };
 
 const readChatThreadId = (parsedUrl) => {
@@ -46,17 +23,15 @@ const readChatThreadId = (parsedUrl) => {
   return "";
 };
 
-export const resolveChillyChatNativeCallRoute = (value) => {
+const parseChillyChatUrl = (value) => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return null;
-
   let parsedUrl;
   try {
     parsedUrl = new URL(normalized);
   } catch {
     return null;
   }
-
   if (
     parsedUrl.protocol.toLowerCase() !== "chillywoodmobile:"
     || parsedUrl.username
@@ -66,13 +41,19 @@ export const resolveChillyChatNativeCallRoute = (value) => {
   ) {
     return null;
   }
-
   const threadId = readChatThreadId(parsedUrl);
-  const callInviteId = normalizeUuid(parsedUrl.searchParams.get("callInviteId"));
-  const nativeCallAction = String(
-    parsedUrl.searchParams.get("nativeCallAction") ?? "",
-  ).trim().toLowerCase();
-  return buildResolvedNativeCallRoute(threadId, callInviteId, nativeCallAction);
+  return threadId ? { parsedUrl, threadId } : null;
+};
+
+const buildNavigationOnlyRoute = (threadId) => ({
+  destination: `/chat/${encodeURIComponent(threadId)}`,
+  requestKey: `navigation:${threadId}`,
+  threadId,
+});
+
+export const resolveChillyChatNativeCallRoute = (value) => {
+  const parsed = parseChillyChatUrl(value);
+  return parsed ? buildNavigationOnlyRoute(parsed.threadId) : null;
 };
 
 export const resolveChillyChatNativeCallActionPayload = (value) => {
@@ -80,18 +61,28 @@ export const resolveChillyChatNativeCallActionPayload = (value) => {
   const threadId = normalizeUuid(value.threadId);
   const callInviteId = normalizeUuid(value.callInviteId);
   const nativeCallAction = String(value.nativeCallAction ?? "").trim().toLowerCase();
-  const nativeRequestKey = String(value.requestKey ?? "").trim().toLowerCase();
+  const requestKey = String(value.requestKey ?? "").trim().toLowerCase();
   const createdAt = Number(value.createdAt);
   const schemaVersion = Number(value.schemaVersion);
   if (
-    !NATIVE_REQUEST_KEY_PATTERN.test(nativeRequestKey)
+    !threadId
+    || !callInviteId
+    || !TRUSTED_ANDROID_ACTIONS.has(nativeCallAction)
+    || !NATIVE_REQUEST_KEY_PATTERN.test(requestKey)
     || !Number.isSafeInteger(createdAt)
     || createdAt <= 0
-    || schemaVersion !== 1
+    || schemaVersion !== 2
   ) {
     return null;
   }
-  return buildResolvedNativeCallRoute(threadId, callInviteId, nativeCallAction);
+  return {
+    callInviteId,
+    createdAt,
+    nativeCallAction,
+    requestKey,
+    schemaVersion,
+    threadId,
+  };
 };
 
 export const redirectChillyChatNativeCallSystemPath = (value) => (
@@ -101,16 +92,12 @@ export const redirectChillyChatNativeCallSystemPath = (value) => (
 export const createChillyChatNativeCallRouteBuffer = () => {
   let bufferedRoute = null;
   const listeners = new Set();
-
   return {
     capture(value) {
       const route = resolveChillyChatNativeCallRoute(value);
       if (!route) return false;
-      if (listeners.size === 0) {
-        bufferedRoute = route;
-      } else {
-        listeners.forEach((listener) => listener(route));
-      }
+      if (listeners.size === 0) bufferedRoute = route;
+      else listeners.forEach((listener) => listener(route));
       return true;
     },
     subscribe(listener) {
@@ -120,9 +107,84 @@ export const createChillyChatNativeCallRouteBuffer = () => {
         bufferedRoute = null;
         listener(route);
       }
-      return () => {
-        listeners.delete(listener);
-      };
+      return () => listeners.delete(listener);
     },
   };
+};
+
+export const createAndroidNativeCallProvenanceRegistry = ({
+  now = () => Date.now(),
+  ttlMs = TRUSTED_CLAIM_TTL_MS,
+} = {}) => {
+  let pendingClaim = null;
+  const consumedRequestKeys = new Map();
+  const listeners = new Set();
+
+  const purge = () => {
+    const currentTime = now();
+    if (pendingClaim && currentTime - pendingClaim.consumedAt > ttlMs) {
+      pendingClaim = null;
+    }
+    consumedRequestKeys.forEach((consumedAt, requestKey) => {
+      if (currentTime - consumedAt > ttlMs) consumedRequestKeys.delete(requestKey);
+    });
+  };
+
+  return {
+    registerConsumedNativeStorePayload(value) {
+      purge();
+      const payload = resolveChillyChatNativeCallActionPayload(value);
+      if (!payload || consumedRequestKeys.has(payload.requestKey)) return null;
+      if (pendingClaim) return null;
+      pendingClaim = Object.freeze({
+        ...payload,
+        consumedAt: now(),
+        platform: "android",
+        source: "native_action_store",
+      });
+      listeners.forEach((listener) => listener({ threadId: pendingClaim.threadId }));
+      return {
+        destination: `/chat/${encodeURIComponent(pendingClaim.threadId)}`,
+        requestKey: pendingClaim.requestKey,
+        threadId: pendingClaim.threadId,
+      };
+    },
+    consumeForThread(threadIdInput) {
+      purge();
+      const threadId = normalizeUuid(threadIdInput);
+      if (!pendingClaim || !threadId || pendingClaim.threadId !== threadId) return null;
+      const claim = pendingClaim;
+      pendingClaim = null;
+      consumedRequestKeys.set(claim.requestKey, now());
+      return claim;
+    },
+    clear() {
+      pendingClaim = null;
+      consumedRequestKeys.clear();
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      purge();
+      if (pendingClaim) listener({ threadId: pendingClaim.threadId });
+      return () => listeners.delete(listener);
+    },
+  };
+};
+
+const androidNativeCallProvenanceRegistry = createAndroidNativeCallProvenanceRegistry();
+
+export const registerConsumedAndroidNativeCallAction = (value) => (
+  androidNativeCallProvenanceRegistry.registerConsumedNativeStorePayload(value)
+);
+
+export const consumeTrustedAndroidNativeCallActionForThread = (threadId) => (
+  androidNativeCallProvenanceRegistry.consumeForThread(threadId)
+);
+
+export const subscribeToTrustedAndroidNativeCallActions = (listener) => (
+  androidNativeCallProvenanceRegistry.subscribe(listener)
+);
+
+export const clearTrustedAndroidNativeCallActions = () => {
+  androidNativeCallProvenanceRegistry.clear();
 };

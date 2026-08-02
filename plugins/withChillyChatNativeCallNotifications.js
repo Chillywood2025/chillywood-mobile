@@ -3,26 +3,28 @@ const {
   withAndroidManifest,
   withAppBuildGradle,
   withDangerousMod,
-  withMainActivity,
   withMainApplication,
+  XML,
 } = require("@expo/config-plugins");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const PACKAGE_NAME = "com.chillywood.mobile";
 const JAVA_PACKAGE_PATH = PACKAGE_NAME.replace(/\./g, "/");
+const TRANSIENT_ACTION_PREFERENCES_FILE = "chilly_chat_native_call_action_v1.xml";
+const LEGACY_BACKUP_RESOURCE_NAME = "chillywood_native_call_full_backup_rules";
+const MODERN_BACKUP_RESOURCE_NAME = "chillywood_native_call_data_extraction_rules";
 const NATIVE_FILES = {
   "ChillyChatNativeCallActionStore.kt": String.raw`package com.chillywood.mobile
 
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.os.SystemClock
 import android.util.Log
 import java.security.MessageDigest
 
 object ChillyChatNativeCallActionStore {
-  const val SCHEMA_VERSION = 1
+  const val SCHEMA_VERSION = 2
   private const val LOG_TAG = "ChillyChatCallAction"
   private const val PREFERENCES_NAME = "chilly_chat_native_call_action_v1"
   private const val KEY_SCHEMA_VERSION = "schema_version"
@@ -50,19 +52,15 @@ object ChillyChatNativeCallActionStore {
   )
 
   @Synchronized
-  fun capture(context: Context, intent: Intent?): Boolean {
-    val data = intent?.data ?: return false
-    if (!data.scheme.equals("chillywoodmobile", ignoreCase = true)) return false
-    if (!data.host.equals("chat", ignoreCase = true)) return false
-    if (data.userInfo != null || data.port != -1 || data.fragment != null) return false
-    if (data.pathSegments.size != 1) return false
-
-    val threadId = normalizeUuid(data.pathSegments.firstOrNull()) ?: return false
-    val inviteId = normalizeUuid(data.getQueryParameter("callInviteId")) ?: return false
-    val nativeAction = normalizeAction(data.getQueryParameter("nativeCallAction")) ?: return false
-    if (!matchesOptionalUuidExtra(intent, "threadId", threadId)) return false
-    if (!matchesOptionalUuidExtra(intent, "callInviteId", inviteId)) return false
-    if (!matchesOptionalActionExtra(intent, "nativeCallAction", nativeAction)) return false
+  fun captureTrustedNotificationAction(
+    context: Context,
+    threadIdInput: String?,
+    inviteIdInput: String?,
+    nativeActionInput: String?,
+  ): Boolean {
+    val threadId = normalizeUuid(threadIdInput) ?: return false
+    val inviteId = normalizeUuid(inviteIdInput) ?: return false
+    val nativeAction = normalizeAction(nativeActionInput) ?: return false
     Log.i(LOG_TAG, "ACTION_CAPTURED")
 
     val requestKey = sha256("$threadId:$inviteId:$nativeAction")
@@ -106,24 +104,6 @@ object ChillyChatNativeCallActionStore {
       .commit()
     if (persisted) Log.i(LOG_TAG, "ACTION_BUFFERED")
     return persisted
-  }
-
-  fun captureForActivity(context: Context, intent: Intent?) {
-    if (normalizeAction(
-      intent?.getStringExtra("nativeCallAction")
-        ?: intent?.data?.getQueryParameter("nativeCallAction"),
-    ) == null) return
-    if (capture(context, intent)) return
-
-    intent?.apply {
-      data = null
-      action = Intent.ACTION_MAIN
-      removeCategory(Intent.CATEGORY_BROWSABLE)
-      removeExtra("callInviteId")
-      removeExtra("threadId")
-      removeExtra("nativeCallAction")
-      removeExtra("openCall")
-    }
   }
 
   @Synchronized
@@ -216,16 +196,6 @@ object ChillyChatNativeCallActionStore {
   private fun normalizeAction(value: String?): String? {
     val normalized = value?.trim()?.lowercase().orEmpty()
     return normalized.takeIf { it == "answer" || it == "decline" }
-  }
-
-  private fun matchesOptionalUuidExtra(intent: Intent, key: String, expected: String): Boolean {
-    if (!intent.hasExtra(key)) return true
-    return normalizeUuid(intent.getStringExtra(key)) == expected
-  }
-
-  private fun matchesOptionalActionExtra(intent: Intent, key: String, expected: String): Boolean {
-    if (!intent.hasExtra(key)) return true
-    return normalizeAction(intent.getStringExtra(key)) == expected
   }
 
   private fun isFresh(createdElapsedAt: Long, currentElapsedAt: Long): Boolean {
@@ -354,10 +324,10 @@ object ChillyChatCallNotifications {
       "$callerName is calling you on Chi'lly Chat."
     }
 
-    val contentIntent = buildActivityPendingIntent(context, data, "incoming", 0)
-    val answerIntent = buildActivityPendingIntent(context, data, "answer", 1)
+    val contentIntent = buildNavigationPendingIntent(context, data, 0)
+    val answerIntent = buildActionPendingIntent(context, data, ACTION_ANSWER, 1)
     val declineIntent = buildActionPendingIntent(context, data, ACTION_DECLINE, 2)
-    val fullScreenIntent = buildActivityPendingIntent(context, data, "incoming", 3)
+    val fullScreenIntent = buildNavigationPendingIntent(context, data, 3)
     val caller = Person.Builder()
       .setName(callerName)
       .setImportant(true)
@@ -396,13 +366,12 @@ object ChillyChatCallNotifications {
     NotificationManagerCompat.from(context).cancel(notificationIdForInvite(inviteId))
   }
 
-  private fun buildActivityPendingIntent(
+  private fun buildNavigationPendingIntent(
     context: Context,
     data: Map<String, String>,
-    nativeAction: String,
     requestOffset: Int,
   ): PendingIntent {
-    val deepLink = buildDeepLink(data, nativeAction)
+    val deepLink = buildNavigationDeepLink(data)
     val launchComponent = context.packageManager
       .getLaunchIntentForPackage(context.packageName)
       ?.component
@@ -415,10 +384,6 @@ object ChillyChatCallNotifications {
       addCategory(Intent.CATEGORY_DEFAULT)
       addCategory(Intent.CATEGORY_BROWSABLE)
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-      putExtra("callInviteId", data["callInviteId"])
-      putExtra("threadId", data["threadId"])
-      putExtra("nativeCallAction", nativeAction)
-      putExtra("openCall", if (nativeAction == "answer") "1" else "0")
     }
     return PendingIntent.getActivity(
       context,
@@ -449,49 +414,35 @@ object ChillyChatCallNotifications {
     )
   }
 
-  private fun buildDeepLink(data: Map<String, String>, nativeAction: String): Uri {
+  private fun buildNavigationDeepLink(data: Map<String, String>): Uri {
     val threadId = data["threadId"].orEmpty()
-    val inviteId = data["callInviteId"].orEmpty()
-    val builder = Uri.Builder()
+    return Uri.Builder()
       .scheme("chillywoodmobile")
       .authority("chat")
       .appendPath(threadId)
-      .appendQueryParameter("callInviteId", inviteId)
-      .appendQueryParameter("nativeCallAction", nativeAction)
-    if (nativeAction == "answer") {
-      builder.appendQueryParameter("openCall", "1")
-    }
-    return builder.build()
+      .build()
   }
 
   private fun notificationIdForInvite(inviteId: String): Int =
     NOTIFICATION_ID_BASE + (inviteId.hashCode() and 0x0FFFFFFF)
 
-  fun openDeepLinkForAction(context: Context, inviteId: String?, threadId: String?, nativeAction: String) {
-    if (inviteId.isNullOrBlank() || threadId.isNullOrBlank()) return
-    val data = mapOf(
-      "callInviteId" to inviteId,
-      "threadId" to threadId,
-    )
-    val deepLink = buildDeepLink(data, nativeAction)
+  fun launchAfterTrustedAction(context: Context, inviteId: String?, threadId: String?, nativeAction: String) {
+    if (!ChillyChatNativeCallActionStore.captureTrustedNotificationAction(
+      context,
+      threadId,
+      inviteId,
+      nativeAction,
+    )) return
     val launchComponent = context.packageManager
       .getLaunchIntentForPackage(context.packageName)
       ?.component
-    val intent = Intent(Intent.ACTION_VIEW, deepLink).apply {
-      if (launchComponent != null) {
-        component = launchComponent
-      } else {
-        setPackage(context.packageName)
-      }
-      addCategory(Intent.CATEGORY_DEFAULT)
-      addCategory(Intent.CATEGORY_BROWSABLE)
+      ?: return
+    val intent = Intent(Intent.ACTION_MAIN).apply {
+      component = launchComponent
+      setPackage(context.packageName)
+      data = null
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-      putExtra("callInviteId", inviteId)
-      putExtra("threadId", threadId)
-      putExtra("nativeCallAction", nativeAction)
-      putExtra("openCall", if (nativeAction == "answer") "1" else "0")
     }
-    if (!ChillyChatNativeCallActionStore.capture(context, intent)) return
     clearIncomingCallNotification(context, inviteId)
     context.startActivity(intent)
   }
@@ -533,10 +484,10 @@ class ChillyChatCallNotificationActionReceiver : BroadcastReceiver() {
     val nativeAction = when (intent.action) {
       ChillyChatCallNotifications.ACTION_ANSWER -> "answer"
       ChillyChatCallNotifications.ACTION_DECLINE -> "decline"
-      else -> "incoming"
+      else -> return
     }
 
-    ChillyChatCallNotifications.openDeepLinkForAction(context, inviteId, threadId, nativeAction)
+    ChillyChatCallNotifications.launchAfterTrustedAction(context, inviteId, threadId, nativeAction)
   }
 }
 `,
@@ -700,34 +651,144 @@ function ensureMainApplicationPackage(contents) {
   );
 }
 
-function ensureMainActivityActionCapture(contents) {
-  let next = contents;
-  if (!next.includes("import android.content.Intent")) {
-    next = next.replace(
-      "import android.os.Build",
-      "import android.content.Intent\nimport android.os.Build",
-    );
-  }
-  if (!next.includes("ChillyChatNativeCallActionStore.captureForActivity(this, intent)")) {
-    next = next.replace(
-      "  override fun onCreate(savedInstanceState: Bundle?) {",
-      "  override fun onCreate(savedInstanceState: Bundle?) {\n    ChillyChatNativeCallActionStore.captureForActivity(this, intent)",
-    );
-  }
-  if (!next.includes("override fun onNewIntent(intent: Intent)")) {
-    next = next.replace(
-      "  /**\n   * Returns the name of the main component registered from JavaScript.",
-      `  override fun onNewIntent(intent: Intent) {
-    ChillyChatNativeCallActionStore.captureForActivity(this, intent)
-    setIntent(intent)
-    super.onNewIntent(intent)
-  }
+const BACKUP_RULE_ALLOWED_KEYS = {
+  legacy: new Set(["$", "exclude", "include"]),
+  modern: new Set(["$", "cloud-backup", "device-transfer"]),
+};
 
-  /**
-   * Returns the name of the main component registered from JavaScript.`,
-    );
+function failBackupComposition(message) {
+  const error = new Error(message);
+  error.code = "ANDROID_BACKUP_RULE_COMPOSITION_CONFLICT";
+  throw error;
+}
+
+function copyXml(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function assertSupportedBackupKeys(value, kind) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    failBackupComposition(`The ${kind} backup resource is malformed.`);
+  }
+  const unexpected = Object.keys(value).filter((key) => !BACKUP_RULE_ALLOWED_KEYS[kind].has(key));
+  if (unexpected.length > 0) {
+    failBackupComposition(`The ${kind} backup resource contains unsupported nodes: ${unexpected.join(", ")}.`);
+  }
+}
+
+function ensureTransientPreferenceExclusion(entries) {
+  const next = Array.isArray(entries) ? copyXml(entries) : [];
+  const matches = next.filter((entry) => (
+    entry?.$?.domain === "sharedpref"
+    && entry?.$?.path === TRANSIENT_ACTION_PREFERENCES_FILE
+  ));
+  if (matches.length === 0) {
+    next.push({
+      $: {
+        domain: "sharedpref",
+        path: TRANSIENT_ACTION_PREFERENCES_FILE,
+      },
+    });
+  } else if (matches.length > 1) {
+    const first = matches[0];
+    return [
+      ...next.filter((entry) => !matches.includes(entry)),
+      first,
+    ];
   }
   return next;
+}
+
+function composeLegacyBackupRules(existing) {
+  const root = copyXml(existing?.["full-backup-content"] ?? {});
+  assertSupportedBackupKeys(root, "legacy");
+  root.exclude = ensureTransientPreferenceExclusion(root.exclude);
+  return { "full-backup-content": root };
+}
+
+function ensureModernBackupSection(root, key) {
+  const sections = Array.isArray(root[key]) ? root[key] : [];
+  if (sections.length > 1) {
+    failBackupComposition(`The Android 12+ backup resource has multiple ${key} nodes.`);
+  }
+  const section = copyXml(sections[0] ?? {});
+  if (!section || typeof section !== "object" || Array.isArray(section)) {
+    failBackupComposition(`The Android 12+ ${key} rule is malformed.`);
+  }
+  const unexpected = Object.keys(section).filter((name) => !["$", "exclude", "include"].includes(name));
+  if (unexpected.length > 0) {
+    failBackupComposition(`The Android 12+ ${key} rule contains unsupported nodes: ${unexpected.join(", ")}.`);
+  }
+  section.exclude = ensureTransientPreferenceExclusion(section.exclude);
+  root[key] = [section];
+}
+
+function composeModernBackupRules(existing) {
+  const root = copyXml(existing?.["data-extraction-rules"] ?? {});
+  assertSupportedBackupKeys(root, "modern");
+  ensureModernBackupSection(root, "cloud-backup");
+  ensureModernBackupSection(root, "device-transfer");
+  return { "data-extraction-rules": root };
+}
+
+function backupResourcePath(platformProjectRoot, resourceName) {
+  return path.join(
+    platformProjectRoot,
+    "app/src/main/res/xml",
+    `${resourceName}.xml`,
+  );
+}
+
+async function readReferencedBackupRules(platformProjectRoot, reference, expectedRoot, ownedResourceName) {
+  if (!reference) return null;
+  const match = /^@xml\/([a-z][a-z0-9_]*)$/u.exec(reference);
+  if (!match) {
+    failBackupComposition(`Unsupported Android backup resource reference: ${reference}.`);
+  }
+  const resourceName = match[1];
+  const resourcePath = backupResourcePath(platformProjectRoot, resourceName);
+  if (!fs.existsSync(resourcePath)) {
+    if (resourceName === ownedResourceName) return null;
+    failBackupComposition(`Referenced Android backup resource is missing: ${resourceName}.`);
+  }
+  const parsed = await XML.readXMLAsync({ path: resourcePath });
+  if (!parsed?.[expectedRoot]) {
+    failBackupComposition(`Android backup resource ${resourceName} is not ${expectedRoot}.`);
+  }
+  return parsed;
+}
+
+async function ensureBackupResources(nextConfig, application) {
+  const platformProjectRoot = nextConfig.modRequest.platformProjectRoot;
+  const legacyRules = await readReferencedBackupRules(
+    platformProjectRoot,
+    application.$?.["android:fullBackupContent"],
+    "full-backup-content",
+    LEGACY_BACKUP_RESOURCE_NAME,
+  );
+  const modernRules = await readReferencedBackupRules(
+    platformProjectRoot,
+    application.$?.["android:dataExtractionRules"],
+    "data-extraction-rules",
+    MODERN_BACKUP_RESOURCE_NAME,
+  );
+  const xmlDir = path.dirname(backupResourcePath(platformProjectRoot, LEGACY_BACKUP_RESOURCE_NAME));
+  fs.mkdirSync(xmlDir, { recursive: true });
+  fs.writeFileSync(
+    backupResourcePath(platformProjectRoot, LEGACY_BACKUP_RESOURCE_NAME),
+    `${XML.format(composeLegacyBackupRules(legacyRules)).trim()}\n`,
+    "utf8",
+  );
+  fs.writeFileSync(
+    backupResourcePath(platformProjectRoot, MODERN_BACKUP_RESOURCE_NAME),
+    `${XML.format(composeModernBackupRules(modernRules)).trim()}\n`,
+    "utf8",
+  );
+  application.$ = {
+    ...(application.$ ?? {}),
+    "android:dataExtractionRules": `@xml/${MODERN_BACKUP_RESOURCE_NAME}`,
+    "android:fullBackupContent": `@xml/${LEGACY_BACKUP_RESOURCE_NAME}`,
+  };
 }
 
 function ensureUsesPermission(androidManifest, permissionName) {
@@ -781,9 +842,12 @@ function ensureManifestServices(androidManifest) {
 }
 
 function withChillyChatNativeCallNotifications(config) {
-  config = withAndroidManifest(config, (nextConfig) => {
+  config = withAndroidManifest(config, async (nextConfig) => {
     ensureUsesPermission(nextConfig.modResults, "android.permission.USE_FULL_SCREEN_INTENT");
     ensureManifestServices(nextConfig.modResults);
+    const application = nextConfig.modResults.manifest.application?.[0];
+    if (!application) failBackupComposition("AndroidManifest application is missing.");
+    await ensureBackupResources(nextConfig, application);
     return nextConfig;
   });
 
@@ -794,11 +858,6 @@ function withChillyChatNativeCallNotifications(config) {
 
   config = withMainApplication(config, (nextConfig) => {
     nextConfig.modResults.contents = ensureMainApplicationPackage(nextConfig.modResults.contents);
-    return nextConfig;
-  });
-
-  config = withMainActivity(config, (nextConfig) => {
-    nextConfig.modResults.contents = ensureMainActivityActionCapture(nextConfig.modResults.contents);
     return nextConfig;
   });
 
@@ -821,5 +880,10 @@ function withChillyChatNativeCallNotifications(config) {
 module.exports = createRunOncePlugin(
   withChillyChatNativeCallNotifications,
   "with-chilly-chat-native-call-notifications",
-  "1.1.0",
+  "1.2.0",
 );
+
+module.exports.__test = {
+  composeLegacyBackupRules,
+  composeModernBackupRules,
+};

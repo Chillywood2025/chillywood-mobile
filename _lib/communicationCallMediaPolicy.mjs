@@ -28,10 +28,19 @@ export function resolveIncomingCallRoomJoinAction(input) {
 }
 
 export function doesNativeCallActionOwnTransition(input) {
+  const platform = String(input?.platform ?? "").trim().toLowerCase();
   const callInviteId = String(input?.callInviteId ?? "").trim();
   const nativeCallAction = String(input?.nativeCallAction ?? "").trim().toLowerCase();
-  return callInviteId.length > 0
-    && ["answer", "decline", "end", "mute", "unmute"].includes(nativeCallAction);
+  if (!callInviteId) return false;
+  if (platform === "android") {
+    return input?.trustedAndroidProvenance === true
+      && ["answer", "decline"].includes(nativeCallAction);
+  }
+  if (platform === "ios") {
+    return String(input?.nativeCallUuid ?? "").trim().length > 0
+      && ["answer", "decline", "end", "mute", "unmute"].includes(nativeCallAction);
+  }
+  return false;
 }
 
 export function resolveChillyChatCallParticipantRole(input) {
