@@ -1,0 +1,288 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "room-host-block-check-function-security-review-v2-synchronized",
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewPrNumber": 78,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "humanApproval": false,
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "implementationPrNumber": 75,
+  "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
+  "immutableSourceHead": "a24efd543c5f19290879e7089c1c57768bc03a4d",
+  "synchronizedBranchHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "currentBase": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "baseHead": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "synchronizationParents": [
+    "a24efd543c5f19290879e7089c1c57768bc03a4d",
+    "da89d88adb929e8cd9718b31227f79bf243c2395"
+  ],
+  "synchronizedTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "implementationTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "canonicalSyntheticTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "sourceDeltaHash": "8446093a0e5ff054558f7a8bcbaf73e456d612a76a4a736e36ab011d35db7efb",
+  "changedFileHash": "6712e28d6225c1ae597be763f14fc903c0f2d625b352c3385e9fcc14a7469a73",
+  "migrationSetHash": "30400e0046e0658e10e6ffe185a2093f47865601be6b5369aa63a3db4004d2fb",
+  "configHash": "d1244c82268f7249273a486338e07686e377852f12cc578e62b67724356fddcd",
+  "testResultHash": "b413e9d96a4081b75408bd1327c441026613e541a0ba84745f1d7173a7eff161",
+  "aclExpectationHash": "824e3c6b94607aa55c4b7290029d161798dd8683c0e9fbdb5708cc31b69f3d4c",
+  "authorizationContractHash": "14b43a2d11b03366bb724418236fb4725ed7fa27568e6507110733fe7251803b",
+  "hashAlgorithms": {
+    "sourceDeltaHash": "sha256 of the trimmed git diff --binary --no-renames bytes used by the current-truth guard",
+    "changedFileHash": "sha256 of the NUL-delimited git diff --name-status --no-renames bytes used by the current-truth guard",
+    "migrationSetHash": "sha256 of stable JSON for the ordered removed-candidate, immutable-deployed, and undeployed-forward migration identities",
+    "configHash": "raw sha256 of config/assurance/pr-b3-room-host-authorization-scope-waiver-v1.json",
+    "testResultHash": "sha256 of stable JSON for the source hashes, dependency-free results, 48-case map, source-bound local integration totals, and eight negative controls",
+    "aclExpectationHash": "sha256 of stable JSON for owner-visible explicit grantees, role execution decisions, SECURITY DEFINER, stable volatility, and empty search path",
+    "authorizationContractHash": "sha256 of stable JSON for authenticated, service-role, denied-caller, denial-ordering, and prohibited-authority decisions"
+  },
+  "changedPaths": [
+    "config/assurance/pr-b3-room-host-authorization-scope-waiver-v1.json",
+    "docs/assurance/reconciliation/b3-room-host-block-check.json",
+    "supabase/migrations/20260725224000_allow_room_host_participant_block_check.sql",
+    "supabase/migrations/20260730161737_allow_room_host_participant_block_check.sql",
+    "supabase/migrations/20260730230031_room_host_block_check_fail_closed_authority.sql",
+    "supabase/tests/room_host_participant_block_check_test.sql",
+    "supabase/tests/watch_party_room_host_block_check_test.sql",
+    "tests/assurance/reconciliation/room-host-source-parity.test.mjs"
+  ],
+  "scopeStatus": "pass",
+  "scope": {
+    "featureId": "supabase-migrations-rls",
+    "objectiveDomain": "database-RLS",
+    "highRiskDomains": [
+      "database-RLS"
+    ],
+    "supportingDomains": [
+      "CI-test-infrastructure",
+      "documentation-metadata"
+    ],
+    "changedFilesWithRenameDetection": 7,
+    "changedPathsWithoutRenameDetection": 8,
+    "netChangedLines": 2122,
+    "waivedFileMaximum": 8,
+    "waivedLineMaximum": 2400,
+    "secondHighRiskDomain": false,
+    "result": "PASS"
+  },
+  "migrationIdentity": {
+    "deployed": {
+      "version": "20260730161737",
+      "name": "allow_room_host_participant_block_check",
+      "classification": "REMOTE_AND_SOURCE_MATCH_IMMUTABLE",
+      "rawSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "rewritten": false
+    },
+    "removedCandidate": {
+      "version": "20260725224000",
+      "name": "allow_room_host_participant_block_check",
+      "classification": "SOURCE_ONLY_REMOVED",
+      "formerRawSha256": "8c0509254110ebb045a1e7c24c0a5dc593d5d4baa14b01f16079dc6e44aada9f"
+    },
+    "forwardCorrection": {
+      "version": "20260730230031",
+      "name": "room_host_block_check_fail_closed_authority",
+      "classification": "SOURCE_ONLY_FORWARD_CORRECTION_UNDEPLOYED",
+      "rawSha256": "0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38"
+    }
+  },
+  "authorityReview": {
+    "status": "pass",
+    "callerClassificationPrecedesInputAndStateInspection": true,
+    "authenticated": {
+      "invokerRoleMustEqual": "authenticated",
+      "fullClaimsRoleMustEqual": "authenticated",
+      "authUidMustBeNonnull": true,
+      "selfCheckRequiresActorEqualsAuthUid": true,
+      "crossActorCheckRequiresExactPartyHost": true,
+      "hostPredicate": "public.watch_party_rooms.party_id = v_party_id AND host_user_id::text = v_auth_user_id"
+    },
+    "serviceRole": {
+      "invokerRoleMustEqual": "service_role",
+      "fullClaimsRoleMustEqual": "service_role",
+      "requiresDualRoleProvenance": true,
+      "authUidUsedAsServiceAuthority": false,
+      "nonnullSubFabricatesUserAuthority": false,
+      "resultLimitedToSuppliedExactPartyAndActor": true
+    },
+    "denied": [
+      "PUBLIC direct execution",
+      "anon direct execution",
+      "missing request role",
+      "unknown or fabricated request role",
+      "authenticated role with null auth.uid()",
+      "unrelated authenticated caller inspecting another actor",
+      "non-host participant inspecting another actor",
+      "host of another room inspecting an actor",
+      "direct postgres invocation without JWT context",
+      "service_role claim without service_role invoker provenance"
+    ],
+    "securityDefinerCurrentUserUsedAsCallerAuthority": false,
+    "ownerOrPostgresBypassBranch": false,
+    "legacySingleClaimRoleGucUsedAsAuthority": false,
+    "fullClaimsRoleSource": "auth.jwt() ->> role",
+    "identitySource": "auth.uid()",
+    "genericAuthorizationError": "P0001:room_block_check_forbidden",
+    "existingAndNonexistentRoomDenialClassEqual": true,
+    "blockedAndUnblockedActorDenialClassEqual": true,
+    "roomExistenceOrBlockStateReturnedToUnauthorizedCaller": false
+  },
+  "aclAndDefinerReview": {
+    "status": "pass",
+    "securityDefiner": true,
+    "volatility": "stable",
+    "searchPath": "",
+    "allMutableObjectsSchemaQualified": true,
+    "authHelpersSchemaQualified": true,
+    "dynamicSql": false,
+    "roleSetting": false,
+    "dataMutation": false,
+    "aclResetBeforeGrant": [
+      "PUBLIC",
+      "anon",
+      "authenticated",
+      "service_role"
+    ],
+    "expectedCorrectedExecution": {
+      "PUBLIC": false,
+      "anon": false,
+      "authenticated": true,
+      "service_role": true,
+      "unexpectedNonOwnerRoles": false
+    },
+    "explicitExecuteGranteesAfterLocalCorrection": [
+      "postgres",
+      "authenticated",
+      "service_role"
+    ]
+  },
+  "focusedProofReview": {
+    "status": "pass_source_and_source_bound_local_evidence",
+    "reviewLaneReranDatabase": false,
+    "focusedPgTap": {
+      "fileSha256": "3c34a8b9b69d987d4b396e7bd890410363e9d41a58aa1086eeab1e86a35da069",
+      "plan": 48,
+      "mappedLabels": 48,
+      "uniqueLabels": 48,
+      "sequenceExact": true,
+      "sourceBoundLocalResult": {
+        "executed": 48,
+        "passed": 48,
+        "failed": 0,
+        "outerTransaction": "ROLLBACK"
+      },
+      "caseGroups": [
+        "1-8 ACL, SECURITY DEFINER, empty search path, and exact grantees",
+        "9-20 authenticated self, exact host, other-room, unrelated, and non-host authority",
+        "21-25 anon, no-JWT, null-sub, fabricated-role, and invalid-input denial",
+        "26-29 dual-provenance service_role and mutation-free bounded result",
+        "30-40 membership, message, seat-request, Premium, and LiveKit non-regression",
+        "41-48 search-path hijack, qualification, information-leak class, no-DML, and row-digest immutability"
+      ]
+    },
+    "compatibilityPgTap": {
+      "fileSha256": "b03527c4a1d9476772cbfe52d04fabbca79a225067572575994c86366749e168",
+      "sourceBoundLocalResult": {
+        "executed": 4,
+        "passed": 4,
+        "failed": 0,
+        "outerTransaction": "ROLLBACK"
+      }
+    },
+    "dependencyFreeSourceContract": {
+      "fileSha256": "c9be887023b431998d781604cb676cf57de2b76de333f7652dfb8451845fb2c5",
+      "topLevelTests": 6,
+      "nestedNegativeControls": 8,
+      "totalTests": 14,
+      "passed": 14,
+      "failed": 0,
+      "deterministicRuns": 3,
+      "identical": true,
+      "laneOutputSha256": "3778c5c90f5276339c6de23117314f593efa65b62332a11fb9ba1c55404fb3ad"
+    },
+    "negativeControls": [
+      "null-auth denial removed",
+      "exact-host identity predicate removed",
+      "block exact-party predicate removed",
+      "anon execution restored",
+      "service role inferred from null auth.uid()",
+      "search path broadened to public",
+      "unrelated authenticated caller allowed",
+      "host exact-party predicate removed"
+    ],
+    "negativeControlsPassed": 8,
+    "negativeControlsFailed": 0
+  },
+  "historicalEvidence": {
+    "preservedFile": "docs/reviews/room-host-block-check-function-security-review.json",
+    "preservedRawSha256": "e4e7d6f1d5fc795f0c3b8dafe091c09983113d5eb47abe75ea3944ac8fcd3966",
+    "changedByThisReview": false,
+    "priorNullAuthorizationFinding": "resolved-by-undeployed-forward-correction-and-48-of-48-source-bound-local-integration",
+    "priorSearchPathFinding": "resolved-by-empty-search-path-and-qualified-object-regression",
+    "priorAuthorityMatrixFinding": "resolved-by-48-case-matrix-and-eight-negative-controls"
+  },
+  "validation": {
+    "contractValidation": "PASS-13-contracts-20-features-25-escaped-defects",
+    "supabaseMigrationPlan": "REQUIREMENTS_CLEAR-ARCHITECTURE_CLEAR",
+    "watchPartyPlan": "REQUIREMENTS_CLEAR-ARCHITECTURE_CLEAR",
+    "implementationScope": "PASS-7-files-2122-net-lines-under-8-file-2400-line-waiver",
+    "jsonSyntax": "PASS",
+    "nodeSyntax": "PASS",
+    "gitDiffCheck": "PASS",
+    "currentTruthBeforeReviewPublication": "EXPECTED_BLOCKED_INTERNAL_MISSING_FRESH_BASE_SYNC_REVIEW_EVIDENCE",
+    "currentTruthExpectedAfterReviewPublication": "eligible-for-base-synchronization-evidence-recognition"
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR_SOURCE_BOUND_LOCAL_ONLY",
+    "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+    "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+    "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+    "T7_PUBLIC_CANARY": "NOT_APPLICABLE"
+  },
+  "findings": [],
+  "findingCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "waivedFindingCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "reviewLevel": "C",
+  "reviewTimestamp": "2026-08-02T06:18:28Z",
+  "reviewerLanes": [
+    "isolated-automated-review",
+    "lane-2-function-security-role-authority",
+    "separate-existing-review-worktree",
+    "implementation-agent-not-sole-reviewer"
+  ],
+  "nonInterference": {
+    "implementationEditedByReview": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "databaseResetByReview": false,
+    "migrationDeployment": false,
+    "linkedAclMutation": false,
+    "buildOrOta": false,
+    "liveKitPremiumMoneyEntitlementRoleRightModerationRankingChanged": false,
+    "denoLockTouched": false
+  },
+  "summary": {
+    "result": "P0_P1_P2_P3_CLEAR_AT_EXACT_SYNCHRONIZED_HEAD",
+    "implementationMergeRecommendation": "eligible-only-after-all-four-Level-C-lanes-and-one-exact-frozen-head-CI-pass",
+    "reviewPrDisposition": "remain-draft-never-merge",
+    "noP1Waived": true
+  }
+}
