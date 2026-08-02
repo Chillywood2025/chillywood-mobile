@@ -20,6 +20,7 @@ assert.equal(first.dependencyIntegrity.fullTreeValidated, true);
 assert.deepEqual(first.dependencyIntegrity.fullTreeProblems, []);
 assert.match(first.dependencyIntegrity.packageSha256, /^[a-f0-9]{64}$/u);
 assert.match(first.dependencyIntegrity.lockSha256, /^[a-f0-9]{64}$/u);
+assert.deepEqual(first.directImportClosure, { discovered: 40, nativeMapped: 33, reviewedJsOnly: 7, unclassified: 0 });
 
 const byId = Object.fromEntries(first.targets.map((target) => [target.targetId, target]));
 assert.equal(byId["android-chat-livekit-qa-build-86"].classification, "ACTIVE_INTERNAL_TARGET");
@@ -32,6 +33,8 @@ for (const target of first.targets) {
   assert.equal(target.generatedNative.signedArtifactProof, false);
   assert.match(target.generatedNative.digest, /^[a-f0-9]{64}$/u);
   assert.deepEqual(target.missingCapabilities, []);
+  assert.equal(target.profileDistribution, "store");
+  assert.equal(target.directImportClosure.unclassified, 0);
   assert.ok(target.requiredCapabilities.every((capability) => target.providedCapabilities.includes(capability)));
   assert.equal(target.releaseIdentity.classification, "HISTORICAL_RECORDED_INPUT");
   assert.equal(target.releaseIdentity.currentlyReproved, false);
@@ -46,7 +49,13 @@ for (const target of first.targets) {
 }
 assert.equal(byId["android-chat-livekit-qa-build-86"].rollback.identityStatus, "MISSING_HISTORICAL_ARTIFACT_IDENTITY");
 assert.equal(byId["ios-qa-build-8"].rollback.identityStatus, "MISSING");
-assert.deepEqual(byId["android-production-build-84-historical"].rollback.missingCapabilities, ["android.image-manipulator"]);
+assert.equal(byId["android-production-build-84-historical"].rollback.missingCapabilities.length, 20);
+assert.ok(byId["android-production-build-84-historical"].rollback.missingCapabilities.includes("android.image-manipulator"));
+assert.equal(byId["android-chat-livekit-qa-build-86"].runtimeBinding.key, "ANDROID_CHAT_LIVEKIT_QA_RUNTIME_VERSION");
+assert.equal(byId["ios-qa-build-8"].runtimeBinding.key, "IOS_QA_RUNTIME_VERSION");
+assert.equal(byId["android-production-build-84-historical"].generatedNative.classification, "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF");
+assert.equal(byId["android-production-build-84-historical"].historicalArtifactEquivalentToCurrentReplay, false);
+assert.equal(byId["android-production-build-84-historical"].historicalArtifactSource, "8c426f4e74de61de7d4529d32d124744833912dc");
 
 const mandatory = {
   "wrong-environment": "ENVIRONMENT_MISMATCH", "runtime-channel-cross-bound": "RUNTIME_CHANNEL_MISMATCH",
@@ -57,9 +66,12 @@ const mandatory = {
 const controls = Object.fromEntries(first.negativeControls.results.map((result) => [result.fixtureId, result.observed]));
 for (const [fixture, code] of Object.entries(mandatory)) assert.equal(controls[fixture], code);
 assert.equal(first.negativeControls.required, 8);
-assert.equal(first.negativeControls.total, 14);
-assert.equal(first.negativeControls.passed, 14);
+assert.equal(first.negativeControls.total, 23);
+assert.equal(first.negativeControls.passed, 23);
 for (const fixture of ["source-tree-mismatch", "package-bundle-mismatch", "duplicate-target", "unknown-capability", "cross-platform-evidence", "unsafe-normalization"]) {
+  assert.equal(first.negativeControls.results.find((result) => result.fixtureId === fixture)?.result, "FAIL_CLOSED");
+}
+for (const fixture of ["unqualified-target-classification", "unknown-fail-closed-target-classification", "current-release-identity-unproved", "profile-runtime-env-cross-bound", "profile-distribution-cross-bound", "direct-import-capability-omitted", "direct-import-mapping-omitted", "direct-import-wrong-platform", "historical-source-substitution"]) {
   assert.equal(first.negativeControls.results.find((result) => result.fixtureId === fixture)?.result, "FAIL_CLOSED");
 }
 
