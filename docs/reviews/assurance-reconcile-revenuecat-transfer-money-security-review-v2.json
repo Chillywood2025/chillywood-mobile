@@ -1,0 +1,381 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "assurance-reconcile-revenuecat-transfer-money-security-review-v2",
+  "reviewVersion": 2,
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "money-and-provider-authority",
+  "reviewLevel": "C",
+  "humanApproval": false,
+  "implementationPrNumber": 69,
+  "implementationBranch": "codex/assurance-reconcile-revenuecat-transfer",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "immutableSourceHead": "fc451c509c7af5c220c11ab9f3d34a0db608f35d",
+  "synchronizedBranchHead": "81892f3dae544713d8e35512da895cd99c610966",
+  "implementationHead": "81892f3dae544713d8e35512da895cd99c610966",
+  "currentBase": "cbf6df6a6c932b8a29cb793b577b426f8a7b6259",
+  "baseHead": "cbf6df6a6c932b8a29cb793b577b426f8a7b6259",
+  "synchronizedTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "implementationTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "canonicalSyntheticTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "synchronizationParents": [
+    "fc451c509c7af5c220c11ab9f3d34a0db608f35d",
+    "cbf6df6a6c932b8a29cb793b577b426f8a7b6259"
+  ],
+  "sourceDeltaHash": "0ff30d73629020ac985c9bafb21100f7a6f6bf7df4f70cbfe0182b8dfd462c46",
+  "changedFileHash": "93f357c635ec14c8a357cd9bf7cee37c45bf6aeb584ee24a9484a9d61f289a4d",
+  "migrationSetHash": "864a53d7732f014684f031eb30db908912fd8b49d6dd86f2eb25557d0fe6da37",
+  "configHash": "a778e144288e00fe442cb55dd383e4f625df21455fba3570357a5ae6e4984b26",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewHead": "6b11393035682930c7309efc275c826a4648b5ed",
+  "reviewTimestamp": "2026-08-02T04:11:33Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-money-and-provider-authority",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "historicalEvidence": {
+    "preservedFile": "docs/reviews/assurance-reconcile-revenuecat-transfer-money-security-review.json",
+    "preservedReviewId": "assurance-reconcile-revenuecat-transfer-money-security-review-v1",
+    "preservedSha256": "f0fda3082c72d5e310a3361bc73dbbdbd0da938b55c1c89172ae8711e09eb1c2",
+    "preservedUnchanged": true,
+    "classification": "historical_stale",
+    "reason": "The v1 record binds predecessor head a5a37296800419a50c9bb271d99e505f6ad7a056 and correctly identified the out-of-order authority and isolated transfer-lock P1 before the forward-only correction."
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "money-and-provider-authority",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "databaseContactByReview": false,
+      "providerContactByReview": false
+    },
+    "historyPreservation": {
+      "status": "pass",
+      "normalMergeCommit": "6b11393035682930c7309efc275c826a4648b5ed",
+      "previousReviewHead": "56992ff76891088116b9bcf7d9ec1efb3c9c63e2",
+      "previousReviewHeadIsFirstParent": true,
+      "synchronizedImplementationHeadIsSecondParent": true,
+      "historicalReviewSha256BeforeAndAfterMerge": "f0fda3082c72d5e310a3361bc73dbbdbd0da938b55c1c89172ae8711e09eb1c2",
+      "historicalEvidencePreservedUnchanged": true
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "ordinaryTwoParentImplementationMerge": true,
+      "immutableSourceIsImplementationFirstParent": true,
+      "currentBaseIsImplementationSecondParent": true,
+      "observedTreeEqualsCanonicalSyntheticTree": true,
+      "providerBranchSnapshotMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "manualConflictResolution": false
+    },
+    "scope": {
+      "status": "pass",
+      "featureId": "revenuecat-premium",
+      "approvedDomain": "one RevenueCat Premium and database reconciliation objective",
+      "changedFiles": 12,
+      "additions": 3302,
+      "deletions": 2,
+      "netChangedLines": 3300,
+      "scopeWaiver": "pr-b2-revenuecat-reconciliation-scope-waiver-v1",
+      "secondHighRiskDomain": false,
+      "productNativePackageWorkflowGrowth": false,
+      "liveKitOrB3ImplementationMixedIn": false,
+      "unrelatedScopeFound": false
+    },
+    "providerEventBoundary": {
+      "status": "pass",
+      "sharedWebhookSecretVerifiedBeforeEventExtractionOrMutation": true,
+      "transferEventTypeRequired": true,
+      "exactRawStore": "APP_STORE",
+      "exactProvider": "revenuecat_app_store",
+      "exactPlatform": "ios",
+      "exactStore": "app_store",
+      "exactEnvironment": "sandbox",
+      "macAppStoreRejected": true,
+      "googlePlayOrAndroidRejected": true,
+      "productionTransferRejected": true,
+      "sourceAndTargetExactDistinctAuthUsersRequired": true,
+      "providerRequestMadeByReview": false,
+      "providerBehaviorClaimed": false
+    },
+    "providerBackedEntitlementAuthority": {
+      "status": "pass",
+      "sourceEntitlementSource": "revenuecat",
+      "sourceEntitlementMustBeEffective": true,
+      "sourceEffectivePremiumGrantCountMustEqualOne": true,
+      "sourceGrantProvider": "revenuecat_app_store",
+      "sourceGrantEnvironment": "sandbox",
+      "sourceGrantStatus": "sandbox_only",
+      "sourceGrantMustBeUnexpired": true,
+      "sourceGrantMustBindProcessedProviderEvent": true,
+      "sourceProviderEventUserProductAndEnvironmentBound": true,
+      "storeMappingConcept": "premium",
+      "storeMappingStatus": "sandbox",
+      "storeMappingUnlocksDigitalAccess": true,
+      "targetEffectiveNonRevenueCatGrantRejected": true,
+      "targetDifferentProductOrEnvironmentRejected": true,
+      "targetEffectiveNonRevenueCatEntitlementRejected": true,
+      "manualOrTestEntitlementSubstitutionAccepted": false,
+      "productionEntitlementCreated": false
+    },
+    "authoritativeOrdering": {
+      "status": "pass",
+      "tuple": [
+        "provider occurrence time",
+        "event authority rank",
+        "provider event id under C collation"
+      ],
+      "eventRanks": {
+        "cancellation": 1,
+        "purchase": 2,
+        "renewal": 3,
+        "transfer": 4,
+        "expiration": 5,
+        "refund": 6,
+        "revocation": 7
+      },
+      "localReceiptTimeIsAuthority": false,
+      "sourceAndTargetUseSameComparison": true,
+      "olderTransferCannotOverrideNewerSource": true,
+      "olderTransferCannotOverrideNewerTarget": true,
+      "olderOrdinaryEventCannotOverrideNewerTransfer": true,
+      "equalTimeTransferOutranksRenewal": true,
+      "equalTimeExpirationRefundRevocationOutrankTransfer": true,
+      "sameRankEqualTimeProviderEventIdDeterministic": true,
+      "duplicateRecognitionPrecedesStaleRejectionWithoutReplayingWrites": true
+    },
+    "sharedLocking": {
+      "status": "pass",
+      "canonicalNamespace": "revenuecat-premium:<user_id>:<product_id>",
+      "ordinaryLifecycleUsesSameNamespace": true,
+      "premiumProductCatalogFrozenWithShareLock": true,
+      "productOrder": "premium_subscription product UUID ascending",
+      "userOrder": "lexical UUID least then greatest",
+      "eventLockAfterCanonicalProductLocks": true,
+      "transferSpecificLockIsOnlyBoundedEventIdempotencyLock": true,
+      "globalCustomerLockIntroduced": false,
+      "reversedTransfersDeadlock": false
+    },
+    "uniquenessAtomicityAndIdempotency": {
+      "status": "pass",
+      "sourceAndTargetWritesShareOneTransaction": true,
+      "sourceRevocationAndTargetActivationAtomic": true,
+      "activeOwnerMaximum": 1,
+      "activeGrantOwnerMaximum": 1,
+      "exactDuplicateReturnsDeterministicReadOnlyAcknowledgement": true,
+      "sameEventDifferentParticipantRejected": true,
+      "sameEventDifferentHashRejected": true,
+      "sameEventDifferentOccurrenceTimeRejected": true,
+      "oneSidedProviderEventPairRejected": true,
+      "afterSourceFailpointRolledBack": true,
+      "afterTargetFailpointRolledBack": true,
+      "partialProviderEventPair": false,
+      "partialEntitlementOrGrant": false
+    },
+    "moneyAndAuthoritySafety": {
+      "status": "pass",
+      "transferLedgerAmountMinor": 0,
+      "sourceLedgerState": "refunded",
+      "targetLedgerState": "not_payable",
+      "payableBalanceCreated": false,
+      "creatorEarningsCreated": false,
+      "payoutLiabilityCreated": false,
+      "withdrawableBalanceCreated": false,
+      "moneyMoved": false,
+      "liveMoneyAction": false,
+      "liveKitAuthorityCreated": false,
+      "moderationAdminRoleOrRightsCreated": false,
+      "rawProviderPayloadStored": false,
+      "onlyPayloadSha256Stored": true,
+      "providerEventAuditStoresOnlySanitizedHashesAndStructuredMetadata": true
+    },
+    "focusedSourceChecks": {
+      "status": "pass",
+      "storePolicy": {
+        "command": "node --test supabase/functions/revenuecat-webhook/store-policy.test.mjs",
+        "planned": 14,
+        "passed": 14,
+        "failed": 0
+      },
+      "sanitizedProviderFixtures": {
+        "command": "node --test tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures.test.mjs",
+        "planned": 8,
+        "passed": 8,
+        "failed": 0,
+        "providerBehaviorProved": false
+      },
+      "combinedFocusedNode": {
+        "planned": 22,
+        "passed": 22,
+        "failed": 0
+      },
+      "denoStaticCheck": {
+        "command": "deno check --no-lock --node-modules-dir=auto supabase/functions/revenuecat-webhook/index.ts",
+        "result": "pass",
+        "denoLockCreated": false
+      },
+      "assurancePlan": "pass_requirements_clear_architecture_clear",
+      "assuranceContracts": "pass_13_contracts_20_features_25_escaped_defects",
+      "concurrencyFixtureSyntax": "pass",
+      "jsonSyntax": "pass",
+      "gitDiffCheck": "pass",
+      "databaseContact": false,
+      "providerContact": false
+    },
+    "recordedLocalBehavioralEvidence": {
+      "status": "pass_recorded_post_base_synchronization_not_rerun_by_this_lane",
+      "target": "isolated local Supabase/PostgreSQL stack",
+      "pgTapPlanned": 120,
+      "pgTapPassed": 120,
+      "pgTapFailed": 0,
+      "concurrencyPlanned": 10,
+      "concurrencyPassed": 10,
+      "concurrencyFailed": 0,
+      "deterministicAdvisoryLockBarriers": true,
+      "fixtureUsersAfterCleanup": 0,
+      "fixtureTransfersAfterCleanup": 0,
+      "b2BackendsAfterCleanup": 0,
+      "fixturePayableRowsAfterCleanup": 0,
+      "fixtureAuthorityRowsAfterCleanup": 0,
+      "remoteDatabaseContact": false,
+      "providerContact": false,
+      "persistentDatabaseMutation": false
+    },
+    "linkedNoApply": {
+      "directStatus": "BLOCKED_INTERNAL_SOURCE_ASSEMBLY_REQUIRES_PRESERVED_B3",
+      "directBlockerIsB2SourceFailure": false,
+      "directApplied": false,
+      "assembledStatus": "PASS_NO_APPLY_SCOPED",
+      "assembledTree": "47be54602eb3c9cc614e29aa21034237284a1d19",
+      "pendingForwardFiles": [
+        "20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "b1PendingExactlyOnce": true,
+      "b2PendingExactlyOnce": true,
+      "b3PendingExactlyOnce": true,
+      "unexpectedMigrationCount": 0,
+      "seeded": false,
+      "applied": false,
+      "roleMutation": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "runByReview": false
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "LOCAL_INTEGRATION_CLEAR_RECORDED_NOT_RERUN",
+      "T4_NATIVE_PROVIDER": "NOT_CLAIMED",
+      "T5_SIGNED_ARTIFACT": "NOT_CLAIMED",
+      "T6_INSTALLED_PHYSICAL": "NOT_CLAIMED",
+      "T7_PUBLIC_CANARY": "NOT_CLAIMED",
+      "sourceOrFixtureInspectionAcceptedAsProviderProof": false,
+      "localDatabaseOrNoApplyAcceptedAsProviderProof": false,
+      "productionMoneyOrEntitlementBehaviorClaimed": false
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending_after_current_reviews",
+      "implementationHead": "81892f3dae544713d8e35512da895cd99c610966",
+      "run": null,
+      "reviewDoesNotSubstituteForCi": true,
+      "failureWaived": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationSourceEditedByReview": false,
+      "databaseTestRerunByReview": false,
+      "providerContactByReview": false,
+      "remoteDatabaseContactByReview": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "purchaseOrEntitlementChanged": false,
+      "moneyMoved": false,
+      "payableBalanceCreated": false,
+      "liveKitAuthorityGranted": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "rightsRolesAuthRlsChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false,
+      "userDerivedMemory": "off",
+      "level2Repair": "off"
+    }
+  },
+  "testResultHash": "3a704e086b1cef0591cc0218458c01255d2aa5f1667cea261c642de8a85ba0e9",
+  "findings": [
+    {
+      "id": "REVENUECAT_TRANSFER_OUT_OF_ORDER_AUTHORITY_OVERRIDE",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The distinct undeployed 20260730170000 forward correction applies the shared occurrence-time, rank, and provider-event-id tuple to transfers and ordinary lifecycle events, rechecks both participants after canonical serialization, and preserves the deployed predecessor bytes."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_ISOLATED_LOCK_NAMESPACE",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Transfer now acquires the ordinary revenuecat-premium per-user/per-product locks for both participants in deterministic product and user order before its bounded event-id lock; ordinary renewal, refund, revocation, expiration, and transfer therefore share one authority lock domain."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_PROVIDER_AND_MONEY_AUTHORITY",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The Edge and database paths jointly require exact sandbox APP_STORE/iOS/revenuecat_app_store identity and a unique active provider-backed source grant, reject manual or incompatible authority, store hashes rather than raw payloads, and create zero-amount non-payable viewer access without LiveKit, payout, role, or production-money authority."
+    },
+    {
+      "id": "REVENUECAT_TRANSFER_FIXTURE_CATEGORIES_DECLARATIVE_ONLY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The sanitized fixtures remain explicitly source/model-only with providerBehaviorProved=false; recorded post-synchronization pgTAP 120/120 and deterministic concurrency 10/10 provide separate T3 local behavior and are not represented as T4 provider proof."
+    },
+    {
+      "id": "REVENUECAT_RECONCILIATION_REPORT_VALIDATION_STALE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "This additive v2 review binds immutable source fc451c50, synchronized head 81892f3d, current base cbf6df6a, exact tree 50e49282, current behavioral totals, and current no-apply classifications without altering historical v1 evidence."
+    }
+  ],
+  "severityCounts": {
+    "P0": {"open": 0, "resolved": 0, "total": 0},
+    "P1": {"open": 0, "resolved": 3, "total": 3},
+    "P2": {"open": 0, "resolved": 2, "total": 2},
+    "P3": {"open": 0, "resolved": 0, "total": 0}
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "PRE_CI_PASS_LEVEL_C_MONEY_AND_PROVIDER_AUTHORITY",
+    "reviewHeadValidation": "CI_PENDING_AFTER_REVIEW_PUSH",
+    "historicalEvidencePreserved": true,
+    "implementationFilesOnReviewBranch": 0,
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
