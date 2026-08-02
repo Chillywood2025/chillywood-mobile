@@ -9,10 +9,10 @@
     "base": "62d4b526675e5a10177d37c53670709d63062293"
   },
   "contracts": {
-    "static": {"path": "config/assurance/release-target-parity-v1.json", "sha256": "2aac96f3198cf3aba101e038413464e6f2a4021fe1f77529aba8c3aaae5dbc1c"},
-    "capabilities": {"path": "config/assurance/native-capability-registry-v1.json", "sha256": "7869bcc6c6c8796d6675eaeeba4dfb345d8e84e667e14183df7e1fbfbf33fb2a"},
-    "validator": {"path": "scripts/assurance/release-parity.mjs", "sha256": "422719f5679db04a3b630fbf130021715a05b725ee5f15588c411208cea3308f"},
-    "test": {"path": "tests/assurance/release-parity.test.mjs", "sha256": "032162446d83d2d3f8a30cccb4eaca969cff25c2f048f20bb0615fea0caa41dd"}
+    "static": {"path": "config/assurance/release-target-parity-v1.json", "sha256": "cf3eacbbc565b7433f3a16dd7ca27edf06750e3c20a754efa9404540d30f10fb"},
+    "capabilities": {"path": "config/assurance/native-capability-registry-v1.json", "sha256": "7782d54b1892407a838b46db4590b94c6911dbb35f401efd6b549fbbca695863"},
+    "validator": {"path": "scripts/assurance/release-parity.mjs", "sha256": "1cf8d20202f2a433bca5aab247b04b94c7daceaa21c712782115300c973874d5"},
+    "test": {"path": "tests/assurance/release-parity.test.mjs", "sha256": "db2762c8620f245686de09b3ca33cc957be4270de8a85f84e6b983cf75b7f211"}
   },
   "dependencyIntegrity": {
     "status": "EXACT_LOCKED_DEPENDENCY_SET",
@@ -25,20 +25,22 @@
   "targets": [
     {
       "targetId": "android-chat-livekit-qa-build-86", "classification": "ACTIVE_INTERNAL_TARGET",
-      "generatedNativeSourceDigest": "4e71a2b9f91e87338918ce276e53b06114a47aeb2f5bf3ca0aefe543ce985409",
-      "capabilityParity": "PASS_REQUIRED_SUBSET_PROVIDED", "missingCapabilities": [],
+      "generatedNativeSourceDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+      "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY", "capabilityParity": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_20_OF_20", "missingCapabilities": [],
       "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_MISSING_BUILD_85_ARTIFACT_IDENTITY"
     },
     {
       "targetId": "ios-qa-build-8", "classification": "ACTIVE_INTERNAL_TARGET",
       "generatedNativeSourceDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
-      "capabilityParity": "PASS_REQUIRED_SUBSET_PROVIDED", "missingCapabilities": [],
+      "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY", "capabilityParity": "PASS_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_25_OF_25", "missingCapabilities": [],
       "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_IDENTITY_MISSING"
     },
     {
       "targetId": "android-production-build-84-historical", "classification": "HISTORICAL_ARTIFACT",
-      "generatedNativeSourceDigest": "ae8941621e95ce1ae4b5225aea3ad442c1d4c01b61288b098553dd6075cd121a",
-      "capabilityParity": "PASS_REQUIRED_SUBSET_PROVIDED", "missingCapabilities": [],
+      "generatedNativeSourceDigest": "1f4391e2a6df0c9266db66b7f2615984e9370163827426593077cbb53d9ef2c4",
+      "generatedSourceClassification": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF",
+      "historicalArtifactSource": "8c426f4e74de61de7d4529d32d124744833912dc", "historicalArtifactEquivalentToCurrentReplay": false,
+      "capabilityParity": "PASS_CURRENT_SOURCE_REPLAY_REQUIRED_EQUALS_CURRENT_SOURCE_AND_SUBSET_PROVIDED_20_OF_20", "missingCapabilities": [],
       "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_BUILD_80_LACKS_IMAGE_MANIPULATOR"
     }
   ],
@@ -56,8 +58,9 @@
     "capabilityParity": "3/3",
     "deterministicEvidence": "3/3",
     "mandatoryNegativeControls": "8/8",
-    "additionalNegativeControls": "6/6",
-    "negativeControlResultSha256": "1d05ace812b68618aa63225a015049c9d823df5658387104ae2a9cd9c885838f"
+    "directImportClosure": "40_DISCOVERED_33_NATIVE_MAPPED_7_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
+    "additionalNegativeControls": "15/15",
+    "negativeControlResultSha256": "29a30a72bdc3d987555455de1fe1b8f9eee4c43f7e0f2130eacddd3df935df92"
   },
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",

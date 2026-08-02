@@ -85,8 +85,8 @@
       "finding": "Swift module sources exist, but no committed generated iOS project or native-call XCTest proves plugin output, entitlements, capabilities, runtime, or release-profile parity."
     },
     "easBuildUpdateParity": {
-      "status": "PARTIAL",
-      "finding": "Profiles and focused guards exist, but no single deterministic fail-closed contract binds source, profile, environment, runtime, channel, platform, generated native digests, capabilities, release identity, and rollback."
+      "status": "T0_T2_CLEAR_OFFLINE_SOURCE_MODEL",
+      "finding": "PR D1 now binds source, resolved profile environment/distribution/runtime, channel, platform, deterministic generated source, direct native imports, independently provided capabilities, historical release identity, rollback, and proof blockers without build or provider contact."
     },
     "providerFixtures": {
       "status": "PARTIAL",
@@ -152,7 +152,17 @@
       "T5_SIGNED_ARTIFACT",
       "T6_INSTALLED_PHYSICAL",
       "T7_PUBLIC_CANARY"
-    ]
+    ],
+    "result": {
+      "targets": "3/3",
+      "generatedSourceRuns": "9/9",
+      "directImportClosure": "40_DISCOVERED_33_NATIVE_MAPPED_7_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
+      "capabilityParity": "20/20_ANDROID_QA_25/25_IOS_QA_20/20_ANDROID_CURRENT_SOURCE_REPLAY",
+      "negativeControls": "23/23",
+      "historicalBuild84Boundary": "CURRENT_SOURCE_PROFILE_REPLAY_T1_ONLY_NOT_HISTORICAL_BUILD_84_PROOF",
+      "unresolvedP0": 0,
+      "unresolvedP1": 0
+    }
   },
   "prohibitions": [
     "no build",
