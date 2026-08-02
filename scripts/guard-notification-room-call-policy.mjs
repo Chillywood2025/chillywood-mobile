@@ -162,7 +162,7 @@ assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller
 assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") return;", "caller timeout may only attempt a missed transition from ringing");
 assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\") return;", "caller timeout cleanup requires a confirmed missed transition");
 assertIncludes(chatThread, "trustedNativeCallClaim", "native call transitions must originate from a consumed platform-scoped claim");
-assertIncludes(chatThread, "consumeTrustedIosCallKitNativeEventClaim", "CallKit Answer must be consumed once before the thread requests a transition");
+assertIncludes(chatThread, "consumeMountedIosNativeCallRoute", "CallKit Answer must be consumed once after mounted-thread auth readiness and before a transition request");
 assertIncludes(chatThread, "requestedNativeCallOwnsTransition", "trusted native actions must own acceptance without racing navigation-only openCall");
 assertNotIncludes(chatThread, "requestedOpenCall", "openCall route text must remain navigation-only");
 assertNotIncludes(chatThread, "requestedCallMode", "startCall route text must remain navigation-only");

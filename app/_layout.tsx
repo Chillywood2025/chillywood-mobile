@@ -79,7 +79,9 @@ import {
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
 import {
-  registerTrustedIosCallKitNativeEvent,
+  containsSensitiveNativeCallClaimRouteParams,
+  createForegroundAuthenticatedUiCallIntent,
+  createIosCallKitAnswerRouteHandler,
   sanitizeExternalIosNativeCallPath,
 } from "../_lib/nativeCallTransitionProvenance.mjs";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
@@ -142,6 +144,7 @@ const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
   "authorization",
   "code",
   "code_verifier",
+  "foregroundcallclaim",
   "nativecallaction",
   "nativecallclaim",
   "nativecalluuid",
@@ -738,8 +741,19 @@ function IncomingCallNotificationBridge() {
       Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
       return;
     }
-    const params = new URLSearchParams({callInviteId: acceptedInvite.id});
-    const path = `/chat/${encodeURIComponent(acceptedInvite.threadId)}?${params.toString()}`;
+    const trustedUiIntent = createForegroundAuthenticatedUiCallIntent({
+      action: "open_call",
+      authenticated: true,
+      authenticatedUserId: actorUserId,
+      inviteId: acceptedInvite.id,
+      roomId: acceptedInvite.communicationRoomId,
+      threadId: acceptedInvite.threadId,
+    });
+    if (trustedUiIntent.status !== "created" || !trustedUiIntent.claimId) {
+      Alert.alert("Unable to open", "The call remains accepted. Open it from the chat thread.");
+      return;
+    }
+    const path = `/chat/${encodeURIComponent(acceptedInvite.threadId)}`;
     cleanupChillyChatCallNotifications({
       callInviteId: acceptedInvite.id,
       path,
@@ -747,7 +761,15 @@ function IncomingCallNotificationBridge() {
       threadId: acceptedInvite.threadId,
     });
     clearAlert();
-    router.push(path as Parameters<typeof router.push>[0]);
+    router.push({
+      pathname: "/chat/[threadId]",
+      params: {
+        callInviteId: acceptedInvite.id,
+        foregroundCallClaim: trustedUiIntent.claimId,
+        openCall: "1",
+        threadId: acceptedInvite.threadId,
+      },
+    });
   };
 
   const decline = async () => {
@@ -1123,31 +1145,14 @@ function IosNativeCallsBridge() {
       void reconcileInvite();
     };
 
-    const routeNativeAnswer = async (event: SanitizedNativeCallEvent) => {
-      const created = registerTrustedIosCallKitNativeEvent({
-        ...event,
-        authenticated: isSignedIn && !!currentUserId,
-      });
-      if (created.status === "duplicate") return;
-      if (
-        created.status !== "created"
-        || !created.claimId
-        || !created.threadId
-        || !created.inviteId
-        || !created.nativeIdentity
-      ) {
-        const callUuid = String(event.callUuid ?? "").trim();
-        if (callUuid) await completeIosNativeCallAnswer(callUuid, false);
-        return;
-      }
-      const params = new URLSearchParams({
-        callInviteId: created.inviteId,
-        nativeCallClaim: created.claimId,
-        nativeCallUuid: created.nativeIdentity,
-      });
-      const destination = `/chat/${encodeURIComponent(created.threadId)}?${params.toString()}`;
-      router.replace(destination as Parameters<typeof router.replace>[0]);
-    };
+    const routeNativeAnswer = createIosCallKitAnswerRouteHandler({
+      completeAnswerFailure: (callUuid: string) => completeIosNativeCallAnswer(callUuid, false),
+      getAuthenticatedUserId: () => currentUserId,
+      isActive: () => active && isSignedIn,
+      replace: (destination: string) => {
+        router.replace(destination as Parameters<typeof router.replace>[0]);
+      },
+    });
 
     const pendingNativeTerminalActions = new Map<string, {
       event: SanitizedNativeCallEvent;
@@ -1306,6 +1311,8 @@ function DefaultOrientationLock() {
 }
 
 function RootNavigator() {
+  const params = useGlobalSearchParams<Record<string, string | string[]>>();
+  const hideDebugOverlay = containsSensitiveNativeCallClaimRouteParams(params);
   return (
     <>
       <RouteAnalyticsBridge />
@@ -1353,7 +1360,7 @@ function RootNavigator() {
         <Stack.Screen name="beta-support" />
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       </Stack>
-      <DevDebugOverlay />
+      {hideDebugOverlay ? null : <DevDebugOverlay />}
     </>
   );
 }

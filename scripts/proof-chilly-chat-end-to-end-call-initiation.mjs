@@ -96,7 +96,7 @@ const callDeliveryCopy = read("_lib/chillyChatCallDeliveryCopy.ts");
   "chilly_chat_call_invite",
   "app-wide-incoming-call-banner",
   "presentation === \"native_background\"",
-  "callInviteId: invite.id",
+  "openCall: \"1\"",
 ].forEach((needle) => requireText("app-wide receiver source", appLayout, needle));
 
 [
@@ -104,15 +104,6 @@ const callDeliveryCopy = read("_lib/chillyChatCallDeliveryCopy.ts");
   "result.role === \"callee\"",
   "shouldShowOutgoingRingingPanel",
 ].forEach((needle) => requireText("same-thread collision source", thread, needle));
-
-[
-  "requestedOpenCall",
-  "autoOpenCallRef",
-  "requestedCallMode",
-  "autoStartCallRef",
-].forEach((needle) => {
-  if (thread.includes(needle)) failures.push(`route-only call authority remains in the thread: ${needle}`);
-});
 
 [
   "Android call alert sent.",

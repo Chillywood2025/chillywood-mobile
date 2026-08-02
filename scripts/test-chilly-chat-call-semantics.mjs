@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
 import {
@@ -35,6 +35,7 @@ import {
   resolveChillyChatNativeCallActionPayload,
   resolveChillyChatNativeCallRoute,
 } from "../_lib/chillyChatNativeCallRoutes.mjs";
+import {createNativeCallTransitionProvenanceRegistry} from "../_lib/nativeCallTransitionProvenance.mjs";
 import {
   isPermanentFcmTokenError,
   readFcmProviderErrorCode,
@@ -42,6 +43,7 @@ import {
 
 const nativeRouteThreadId = "11111111-1111-4111-8111-111111111111";
 const nativeRouteInviteId = "22222222-2222-4222-8222-222222222222";
+const nativeRouteUserId = "77777777-7777-4777-8777-777777777777";
 assert.deepEqual(
   resolveChillyChatNativeCallRoute(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
@@ -533,22 +535,14 @@ for (const nativeCallAction of ["answer", "decline", "end", "mute", "unmute"]) {
     nativeCallAction,
   }), false, `${nativeCallAction}: route values alone never own a native transition`);
 }
-const consumedIosAnswerClaim = Object.freeze({
-  action: "answer",
-  consumed: true,
-  consumedAtMonotonicMs: 100,
-  createdAtMonotonicMs: 90,
-  expiresAtMonotonicMs: 30_090,
-  inviteId: nativeRouteInviteId,
-  nativeEventGeneration: 1,
-  nativeIdentity: "33333333-3333-4333-8333-333333333333",
-  platform: "ios",
-  source: "ios_callkit_native_event",
-  threadId: nativeRouteThreadId,
-});
+const semanticsRegistry = createNativeCallTransitionProvenanceRegistry({claimIdFactory: () => "a".repeat(64), now: () => 100});
+const semanticsCreation = semanticsRegistry.create({action: "answer", authenticatedUserId: nativeRouteUserId, inviteId: nativeRouteInviteId, nativeEventGeneration: 1, nativeIdentity: "33333333-3333-4333-8333-333333333333", platform: "ios", source: "ios_callkit_native_event", threadId: nativeRouteThreadId});
+const consumedIosAnswerClaim = semanticsRegistry.consume({authenticatedUserId: nativeRouteUserId, claimId: semanticsCreation.claimId, inviteId: nativeRouteInviteId, nativeIdentity: semanticsCreation.nativeIdentity, platform: "ios", source: "ios_callkit_native_event", threadId: nativeRouteThreadId});
+assert.ok(consumedIosAnswerClaim, "semantics proof must use a module-attested create-and-consume result");
 assert.equal(doesNativeCallActionOwnTransition({
   authority: "trusted_native_claim",
   callInviteId: nativeRouteInviteId,
+  currentUserId: nativeRouteUserId,
   monotonicNowMs: 100,
   nativeCallAction: "answer",
   nativeIdentity: consumedIosAnswerClaim.nativeIdentity,
@@ -918,7 +912,7 @@ assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen present
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
 assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
-assert.match(rootLayoutSource, /registerTrustedIosCallKitNativeEvent/u, "CallKit Answer creates one canonical in-memory provenance claim");
+assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
 assert.match(rootLayoutSource, /await updateChillyChatCallInviteStatus[\s\S]{0,500}status:\s*"accepted"/u, "foreground Answer requests the server-authoritative transition directly");
 assert.match(
   chatThreadSource,

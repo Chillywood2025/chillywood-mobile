@@ -35,6 +35,7 @@ export function resolveIncomingCallRoomJoinAction(input: {
 export function doesNativeCallActionOwnTransition(input: {
   authority?: "foreground_authenticated_ui" | "none" | "trusted_native_claim";
   callInviteId?: string | null;
+  currentUserId?: string | null;
   nativeIdentity?: string | null;
   nativeCallAction?: string | null;
   monotonicNowMs?: number | null;
@@ -42,6 +43,7 @@ export function doesNativeCallActionOwnTransition(input: {
   threadId?: string | null;
   trustedNativeClaim?: {
     action?: string;
+    authenticatedUserId?: string;
     consumed?: boolean;
     consumedAtMonotonicMs?: number;
     expiresAtMonotonicMs?: number;
@@ -52,6 +54,26 @@ export function doesNativeCallActionOwnTransition(input: {
     source?: string;
     threadId?: string;
   } | null;
+}): boolean;
+export function doesForegroundAuthenticatedUiCallIntentOwnAction(input: {
+  action?: string | null;
+  activeInviteId?: string | null;
+  activeRoomId?: string | null;
+  authority?: "foreground_authenticated_ui" | "none";
+  currentUserId?: string | null;
+  foregroundUiIntent?: {
+    action?: string;
+    authenticatedUserId?: string;
+    consumed?: boolean;
+    consumedAtMonotonicMs?: number;
+    expiresAtMonotonicMs?: number;
+    inviteId?: string;
+    roomId?: string;
+    source?: string;
+    threadId?: string;
+  } | null;
+  monotonicNowMs?: number | null;
+  threadId?: string | null;
 }): boolean;
 export function resolveIosChatCallAudioRoute(callType?: string | null): "speaker" | "receiver";
 export function shouldActivateAcceptedChatCallMedia(input: { roomId?: string | null; inviteStatus?: string | null }): boolean;

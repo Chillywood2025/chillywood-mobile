@@ -36,10 +36,7 @@ export default function CommunicationRoomCompatibilityRedirect() {
       if (thread?.threadId) {
         router.replace({
           pathname: "/chat/[threadId]",
-          params: {
-            threadId: thread.threadId,
-            openCall: "1",
-          },
+          params: {threadId: thread.threadId},
         });
         return;
       }
