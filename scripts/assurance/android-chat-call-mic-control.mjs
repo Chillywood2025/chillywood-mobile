@@ -172,39 +172,54 @@ const runSourceBoundCandidateProbes = () => {
 };
 
 const negativeDefinitions = Object.freeze({
-  "ui-toggle-not-inverted": ["ANDROID_MIC_UI_TOGGLE_INVALID", () => gate(uiModel({micEnabled: true, invert: false}).next === false, "ANDROID_MIC_UI_TOGGLE_INVALID", "UI did not invert")],
-  "ui-error-not-disabled": ["ANDROID_MIC_UI_ERROR_BOUNDARY_INVALID", () => gate(false, "ANDROID_MIC_UI_ERROR_BOUNDARY_INVALID", "Error boundary did not disable")],
-  "provider-fixed-livekit": ["ANDROID_MIC_PROVIDER_SCOPE_INVALID", () => gate("livekit" === "legacy", "ANDROID_MIC_PROVIDER_SCOPE_INVALID", "Provider was fixed instead of selected")],
-  "lost-serialization": ["ANDROID_MIC_SERIALIZATION_MISSING", () => { const order = ["second", "first"]; gate(order.join(",") === "first,second", "ANDROID_MIC_SERIALIZATION_MISSING", "Mic operations overlapped"); }],
-  "ended-track-reused": ["ANDROID_MIC_ENDED_TRACK_REUSED", () => gate({readyState: "ended"}.readyState === "live", "ANDROID_MIC_ENDED_TRACK_REUSED", "Ended track reused")],
-  "new-track-not-attached": ["ANDROID_MIC_NEW_TRACK_NOT_ATTACHED", () => gate([].length === 1, "ANDROID_MIC_NEW_TRACK_NOT_ATTACHED", "New track not attached")],
-  "membership-not-updated": ["ANDROID_MIC_MEMBERSHIP_NOT_UPDATED", () => gate(false, "ANDROID_MIC_MEMBERSHIP_NOT_UPDATED", "Membership stayed stale")],
-  "failure-no-cleanup": ["ANDROID_MIC_FAILURE_CLEANUP_MISSING", () => gate({capture: true}.capture === false, "ANDROID_MIC_FAILURE_CLEANUP_MISSING", "Failed toggle retained capture")],
-  "token-zero-provider": ["ANDROID_MIC_PROVIDER_TOKEN_ZERO_INVALID", () => gate(0 > 0, "ANDROID_MIC_PROVIDER_TOKEN_ZERO_INVALID", "Provider token/version was zero")],
-  "native-template-no-webrtc-toggle": ["ANDROID_MIC_NATIVE_WEBRTC_TOGGLE_MISSING", () => gate(read(nativeTemplatePath).includes("track.setEnabled(false)") && false, "ANDROID_MIC_NATIVE_WEBRTC_TOGGLE_MISSING", "Native toggle absent")],
+  "unhandled-rejection": {code: "ANDROID_MIC_TOGGLE_UNHANDLED_REJECTION", baseline: {rejectionHandled: true}, mutate: (s) => { s.rejectionHandled = false; }, invariant: (s) => s.rejectionHandled},
+  "failure-terminates-call": {code: "ANDROID_MIC_FAILURE_TERMINATES_CALL", baseline: {callTerminated: false}, mutate: (s) => { s.callTerminated = true; }, invariant: (s) => !s.callTerminated},
+  "duplicate-audio-track": {code: "ANDROID_MIC_DUPLICATE_AUDIO_TRACK", baseline: {audioTracks: 1}, mutate: (s) => { s.audioTracks += 1; }, invariant: (s) => s.audioTracks === 1},
+  "track-restore-failed": {code: "ANDROID_MIC_TRACK_RESTORE_FAILED", baseline: {restoredTrackState: "live"}, mutate: (s) => { s.restoredTrackState = "ended"; }, invariant: (s) => s.restoredTrackState === "live"},
+  "native-audio-fatal": {code: "ANDROID_MIC_NATIVE_AUDIO_FATAL", baseline: {fatalLogcatMarkers: 0}, mutate: (s) => { s.fatalLogcatMarkers += 1; }, invariant: (s) => s.fatalLogcatMarkers === 0},
+  "serialization-bypassed": {code: "ANDROID_MIC_CONTROL_SERIALIZATION_BYPASSED", baseline: {maximumConcurrentControls: 1}, mutate: (s) => { s.maximumConcurrentControls = 2; }, invariant: (s) => s.maximumConcurrentControls <= 1},
+  "membership-track-mismatch": {code: "ANDROID_MIC_MEMBERSHIP_TRACK_MISMATCH", baseline: {membershipMic: true, trackEnabled: true}, mutate: (s) => { s.trackEnabled = false; }, invariant: (s) => s.membershipMic === s.trackEnabled},
+  "toggle-token-authority": {code: "ANDROID_MIC_TOGGLE_TOKEN_AUTHORITY_VIOLATION", baseline: {tokenRequests: 0}, mutate: (s) => { s.tokenRequests += 1; }, invariant: (s) => s.tokenRequests === 0},
+  "toggle-provider-immutability": {code: "ANDROID_MIC_TOGGLE_PROVIDER_IMMUTABILITY_VIOLATION", baseline: {providerBefore: "livekit", providerAfter: "livekit"}, mutate: (s) => { s.providerAfter = "legacy"; }, invariant: (s) => s.providerBefore === s.providerAfter},
+  "platform-proof-crossover": {code: "PLATFORM_PROOF_SCOPE_MISMATCH", baseline: {targetPlatform: "android", evidencePlatform: "android"}, mutate: (s) => { s.evidencePlatform = "ios"; }, invariant: (s) => s.targetPlatform === s.evidencePlatform},
+});
+const runNegativeControls = () => Object.entries(negativeDefinitions).map(([id, definition]) => {
+  const baseline = structuredClone(definition.baseline); gate(definition.invariant(baseline), "ANDROID_MIC_NEGATIVE_CONTROL_BASELINE_INVALID", id);
+  const mutant = structuredClone(baseline); definition.mutate(mutant);
+  let observed = "NO_FAILURE"; try { gate(definition.invariant(mutant), definition.code, id); } catch (error) { observed = error.code ?? "UNCLASSIFIED"; }
+  gate(observed === definition.code, "ANDROID_MIC_NEGATIVE_CONTROL_FAILED", `${id}: ${observed}`);
+  return {id, expected: definition.code, observed, mutationExercised: true, proof: "ADAPTER_ANTI_VACUITY", result: "FAIL_CLOSED"};
 });
 export const evaluateMicControl = () => {
   const source = sourceBindings();
   const sharedUi = runShared(); const liveKit = runLiveKit(); const legacy = runLegacy();
   const sourceBoundCandidates = runSourceBoundCandidateProbes();
-  const negatives = Object.entries(negativeDefinitions).map(([id, [expected, operation]]) => { let observed = "NO_FAILURE"; try { operation(); } catch (error) { observed = error.code ?? "UNCLASSIFIED"; } gate(observed === expected, "ANDROID_MIC_NEGATIVE_CONTROL_FAILED", `${id}: ${observed}`); return {id, expected, observed, result: "FAIL_CLOSED"}; });
+  const negatives = runNegativeControls();
   const nativeTemplate = read(nativeTemplatePath);
   gate(nativeTemplate.includes("PeerConnectionFactory") && nativeTemplate.includes("track.setEnabled(false)") && nativeTemplate.includes("track.setEnabled(true)"), "ANDROID_MIC_NATIVE_WEBRTC_TOGGLE_MISSING", "Native WebRTC template is incomplete");
-  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, sourceBoundCandidates, modelClassification: "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 10, results: negatives}, nativeLayer: {status: "NOT_RUN_STOPPED_ON_SOURCE_BOUND_P1_CANDIDATES", templateBound: true, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
+  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, sourceBoundCandidates, modelClassification: "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 10, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: true, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
   evidence.deterministicEvidenceSha256 = hash(stable(evidence));
   return evidence;
+};
+
+export const classifyMicEvidence = (evidence) => {
+  if (evidence.sourceBoundCandidates?.length) return "BLOCKED_INTERNAL_MIC_SOURCE_P1_CANDIDATES";
+  if (String(evidence.modelClassification).startsWith("BLOCKED")) return "BLOCKED_INTERNAL_MIC_MODEL";
+  if (/^(?:NOT_RUN|BLOCKED)|INCOMPLETE/u.test(String(evidence.nativeLayer?.status))) return "BLOCKED_INTERNAL_MIC_NATIVE_LAYER";
+  return "ANDROID_MIC_ASSURANCE_CLEAR";
 };
 
 const main = async () => { try {
   const allowed = new Set(["--json", "--native"]); for (const arg of process.argv.slice(2)) gate(allowed.has(arg), "ANDROID_MIC_UNKNOWN_FLAG", arg);
   const evidence = evaluateMicControl();
-  if (evidence.sourceBoundCandidates.length) {
-    const output = {ok: false, classification: "BLOCKED_INTERNAL_MIC_SOURCE_P1_CANDIDATES", evidence,
+  if (process.argv.includes("--native")) evidence.nativeLayer = await runIndependentMicNativeLayer();
+  const classification = classifyMicEvidence(evidence);
+  if (classification !== "ANDROID_MIC_ASSURANCE_CLEAR") {
+    const output = {ok: false, classification, evidence,
       findings: evidence.sourceBoundCandidates.map(({code, severity, summary}) => ({code, severity, message: summary}))};
-    process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify(output)}\n`) : console.error(`android mic control: BLOCKED — ${evidence.sourceBoundCandidates.length} source-bound unexecuted P1 candidates`);
+    process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify(output)}\n`) : console.error(`android mic control: BLOCKED — ${classification}`);
     process.exitCode = 1; return;
   }
-  if (process.argv.includes("--native")) evidence.nativeLayer = await runIndependentMicNativeLayer();
   process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify({ok: true, evidence})}\n`) : console.log(`android mic control: PASS — UI 10/10, LiveKit 20/20, legacy 20/20, negative 10/10; native ${evidence.nativeLayer.status}`);
-} catch (error) { const output = {ok: false, findings: [{code: error.code ?? "UNCLASSIFIED", message: error.message}]}; process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify(output)}\n`) : console.error(`android mic control: FAIL — ${output.findings[0].code}`); process.exitCode = 1; } };
+} catch (error) { const output = {ok: false, classification: error.details?.classification ?? "BLOCKED_INTERNAL", findings: [{code: error.code ?? "UNCLASSIFIED", message: error.message}]}; process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify(output)}\n`) : console.error(`android mic control: FAIL — ${output.findings[0].code}`); process.exitCode = 1; } };
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

@@ -16,6 +16,7 @@ const pluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const unitTemplate = "tools/android-native-call-harness/ChillyChatNativeCallActionStoreTest.kt";
 const instrumentationTemplate = "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt";
 const micInstrumentationTemplate = "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt";
+const micContractPath = "config/assurance/android-chat-call-mic-control-v1.json";
 const digest = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const read = (relative) => fs.readFileSync(path.join(root, relative));
 const readText = (relative) => read(relative).toString("utf8");
@@ -489,7 +490,20 @@ export const deterministicEvidenceDigest = (value) => {
   return digest(stable(normalized));
 };
 
+export const evaluateMicNativeAudioMatrix = (template = readText(micInstrumentationTemplate), hostMethods = []) => {
+  const required = readJson(micContractPath).nativeLayer.audioMatrix.required;
+  const implemented = required.filter(({method, runner}) => runner.startsWith("INSTRUMENTATION")
+    ? methodDeclared(template, method) : hostMethods.includes(method));
+  return {required: required.map(({id}) => id), implemented: implemented.map(({id}) => id),
+    missing: required.filter(({id}) => !implemented.some((entry) => entry.id === id)).map(({id}) => id),
+    complete: implemented.length === required.length};
+};
+export const assertCompleteMicNativeAudioMatrix = (matrix = evaluateMicNativeAudioMatrix()) => gate(matrix.complete,
+  "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", `Missing native microphone scenarios: ${matrix.missing.join(",")}`,
+  {classification: "BLOCKED_INTERNAL", required: matrix.required.length, implemented: matrix.implemented.length});
+
 export const runIndependentMicNativeLayer = () => {
+  const audioMatrix = evaluateMicNativeAudioMatrix(); assertCompleteMicNativeAudioMatrix(audioMatrix);
   assertNativeEntryPreflight();
   const generated = generateOnce({retain: true});
   const installState = {serial: null, appPackage: "com.chillywood.mobile", testPackage: "com.chillywood.mobile.test", preexistingChecked: false, preexistingNone: false, installedApp: false, installedTest: false};
@@ -538,7 +552,7 @@ dependencies {
     const instrumentation = adbRun(installState.serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatMicControlInstrumentationTest", "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner"]);
     gate(instrumentation.status === 0 && /OK \(4 tests\)/u.test(instrumentation.stdout) && !instrumentation.stdout.includes("FAILURES!!!"),
       "ANDROID_MIC_NATIVE_INSTRUMENTATION_FAILED", "Native WebRTC mic instrumentation did not pass 4/4");
-    return {status: "ANDROID_MIC_NATIVE_WEBRTC_EMULATOR_CLEAR", generatedSourceDigest: generated.digest, gradle: taskResults, tests: "4/4", emulatorSerialRecorded: false, providerContact: false, physicalProof: false, signedArtifactProof: false};
+    return {status: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_CLEAR", audioMatrix, generatedSourceDigest: generated.digest, gradle: taskResults, emulatorSerialRecorded: false, providerContact: false, physicalProof: false, signedArtifactProof: false};
   } finally {
     try { cleanupSelectedEmulator(installState); } finally { fs.rmSync(generated.temp, {recursive: true, force: true}); }
   }
