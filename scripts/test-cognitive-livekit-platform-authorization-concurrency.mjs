@@ -695,13 +695,13 @@ select case when
   )
   and (
     select count(*)=2
-    from public.cognitive_livekit_platform_canary_authorizations authorization
+    from public.cognitive_livekit_platform_canary_authorizations authz
     join public.cognitive_livekit_platform_preflight_receipts receipt
-      on receipt.id=authorization.preflight_receipt_id
-    where (authorization.shared_task_id,authorization.target_task_id,authorization.project_id,
-      authorization.shared_platform,authorization.target_platform,authorization.environment,authorization.owner_user_id,
-      authorization.baseline_version_id,authorization.source_commit,authorization.source_tree_hash,
-      authorization.independent_review_hash,authorization.tests_hash,authorization.deployment_hash,authorization.rollback_hash)
+      on receipt.id=authz.preflight_receipt_id
+    where (authz.shared_task_id,authz.target_task_id,authz.project_id,
+      authz.shared_platform,authz.target_platform,authz.environment,authz.owner_user_id,
+      authz.baseline_version_id,authz.source_commit,authz.source_tree_hash,
+      authz.independent_review_hash,authz.tests_hash,authz.deployment_hash,authz.rollback_hash)
     is not distinct from (receipt.shared_task_id,receipt.target_task_id,receipt.project_id,receipt.shared_platform,receipt.target_platform,receipt.environment,receipt.owner_user_id,receipt.baseline_version_id,receipt.source_commit,
       receipt.source_tree_hash,receipt.independent_review_hash,receipt.tests_hash,receipt.deployment_hash,receipt.rollback_hash)
   )
