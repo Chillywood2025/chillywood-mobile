@@ -208,23 +208,44 @@ const fixtureDefinitions = {
   "profile-runtime-env-cross-bound": ["PROFILE_RUNTIME_ENV_MISMATCH", (state) => { state.contract.targets[0].runtimeBinding.value = "wrong-runtime"; }],
   "profile-distribution-cross-bound": ["PROFILE_DISTRIBUTION_MISMATCH", (state) => { state.contract.targets[0].profileDistribution = "internal"; }],
   "direct-import-capability-omitted": ["REQUIRED_CAPABILITY_COVERAGE_MISMATCH", (state) => { state.contract.targets[0].requiredCapabilities = state.contract.targets[0].requiredCapabilities.filter((id) => id !== "android.document-file-system"); }],
-  "direct-import-mapping-omitted": ["DIRECT_NATIVE_IMPORT_UNCLASSIFIED", (state) => { delete state.registry.importCoverage.mappings["expo-document-picker"]; }],
+  "direct-import-mapping-omitted": ["DIRECT_NATIVE_IMPORT_UNCLASSIFIED", (state) => { delete state.registry.importCoverage.mappings["react-native-get-random-values"]; }],
   "direct-import-wrong-platform": ["DIRECT_NATIVE_IMPORT_PLATFORM_MISMATCH", (state) => { state.registry.importCoverage.mappings["expo-document-picker"].android = "ios.document-file-system"; }],
+  "direct-import-grammar-omitted": ["DIRECT_IMPORT_GRAMMAR_INCOMPLETE", (state) => { state.registry.importCoverage.requiredGrammar = state.registry.importCoverage.requiredGrammar.filter((item) => item !== "SIDE_EFFECT_IMPORT"); }],
   "historical-source-substitution": ["HISTORICAL_SOURCE_SUBSTITUTION_REJECTED", (state) => { state.contract.targets[2].generatedSourceClassification = "HISTORICAL_ARTIFACT_DIGEST"; }],
 };
+
+export const directImportGrammar = Object.freeze([
+  "STATIC_IMPORT_FROM",
+  "SIDE_EFFECT_IMPORT",
+  "DYNAMIC_IMPORT",
+  "COMMONJS_REQUIRE",
+  "EXPORT_FROM",
+]);
+const directImportPatterns = Object.freeze([
+  ["STATIC_IMPORT_FROM", /\bimport\s+(?!\s*\()[^;"'`]*?\bfrom\s*["']([^"']+)["']/gu],
+  ["SIDE_EFFECT_IMPORT", /\bimport\s*["']([^"']+)["']/gu],
+  ["DYNAMIC_IMPORT", /\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu],
+  ["COMMONJS_REQUIRE", /\brequire\s*\(\s*["']([^"']+)["']\s*\)/gu],
+  ["EXPORT_FROM", /\bexport\s+[^;"'`]*?\bfrom\s*["']([^"']+)["']/gu],
+]);
+export const extractDirectModuleSpecifiers = (source) => directImportPatterns.flatMap(([grammar, pattern]) =>
+  [...source.matchAll(pattern)].map((match) => ({ grammar, specifier: match[1] })))
+  .sort((a, b) => a.grammar.localeCompare(b.grammar) || a.specifier.localeCompare(b.specifier));
 
 const directImportClosure = (state, capabilityById) => {
   const direct = new Set(Object.keys(readJson("package.json").dependencies ?? {}));
   const roots = state.registry.importCoverage.scanRoots;
   const files = git("ls-files", "-z").split("\0").filter((relative) => roots.some((prefix) => relative.startsWith(prefix)) && /\.[cm]?[jt]sx?$/u.test(relative));
   const imported = new Set();
-  const importPattern = /(?:from\s*|import\s*\(|require\s*\()\s*["']([^"']+)["']/gu;
+  const grammarCounts = Object.fromEntries(directImportGrammar.map((grammar) => [grammar, 0]));
   for (const relative of files) {
     const source = read(relative).toString("utf8");
-    for (const match of source.matchAll(importPattern)) {
-      const specifier = match[1];
+    for (const { grammar, specifier } of extractDirectModuleSpecifiers(source)) {
       const packageName = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
-      if (direct.has(packageName)) imported.add(packageName);
+      if (direct.has(packageName)) {
+        imported.add(packageName);
+        grammarCounts[grammar] += 1;
+      }
     }
   }
   const mapped = [...imported].filter((name) => state.registry.importCoverage.mappings[name]).sort();
@@ -235,12 +256,36 @@ const directImportClosure = (state, capabilityById) => {
     const capability = capabilityById.get(capabilityId);
     requireGate(capability && capability.platform === platform, "DIRECT_NATIVE_IMPORT_PLATFORM_MISMATCH", `${packageName} maps ${platform} to ${capabilityId}`);
   }
-  return { discovered: [...imported].sort(), mapped, reviewedJsOnly, unclassified };
+  return { discovered: [...imported].sort(), mapped, reviewedJsOnly, unclassified, grammarCounts };
 };
+
+const validateReviewedJsOnlyPackages = (state, dependencies, capabilityById) => Object.entries(state.registry.importCoverage.excludedPackages)
+  .filter(([, review]) => review && typeof review === "object")
+  .map(([packageName, review]) => {
+    requireGate(review.classification === "REVIEWED_JS_ONLY", "REVIEWED_JS_ONLY_EVIDENCE_INVALID", `${packageName} has an invalid source-only classification`);
+    const packageRoot = path.join(dependencies.modules, packageName);
+    const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+    requireGate(manifest.version === review.lockedVersion && manifest["react-native"] === undefined && manifest.codegenConfig === undefined,
+      "REVIEWED_JS_ONLY_EVIDENCE_INVALID", `${packageName} package metadata no longer proves JavaScript-only source`);
+    const visit = (directory, prefix = "") => fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      return entry.isDirectory() ? visit(path.join(directory, entry.name), relative) : [relative];
+    });
+    const files = visit(packageRoot).sort();
+    requireGate(review.entrypoints.every((entry) => files.includes(entry))
+      && !files.some((entry) => /(?:^|\/)(?:android|ios)(?:\/|$)|\.podspec$|(?:^|\/)react-native\.config\.[cm]?js$/u.test(entry)),
+    "REVIEWED_JS_ONLY_EVIDENCE_INVALID", `${packageName} now contains a native project, podspec, autolinking config, or missing reviewed entrypoint`);
+    for (const [platform, capabilityId] of Object.entries(review.coveredBy ?? {})) {
+      requireGate(capabilityById.get(capabilityId)?.platform === platform, "REVIEWED_JS_ONLY_EVIDENCE_INVALID", `${packageName} lacks ${platform} React Native core coverage`);
+    }
+    return { packageName, classification: review.classification, version: manifest.version, entrypoints: review.entrypoints, nativeIndicators: 0,
+      sourceDigest: digest(files.map((relative) => `${relative}\0${digest(fs.readFileSync(path.join(packageRoot, relative)))}\n`).join("")), coveredBy: review.coveredBy };
+  });
 
 const validateCatalog = (state) => {
   const exactNormalization = ["absolute disposable/dependency roots", "line endings", "file order", "opaque Xcode object IDs via relationship-preserving first-occurrence mapping"];
   requireGate(stable(state.contract.generatedSource.normalizationAllowlist) === stable(exactNormalization), "UNSAFE_NORMALIZATION", "Generated-source normalization must match the reviewed allowlist");
+  requireGate(stable(state.registry.importCoverage.requiredGrammar) === stable(directImportGrammar), "DIRECT_IMPORT_GRAMMAR_INCOMPLETE", "Direct-import grammar must cover static, side-effect, dynamic, require, and export-from syntax");
   const ids = state.contract.targets.map((target) => target.targetId);
   requireGate(new Set(ids).size === ids.length, "DUPLICATE_TARGET", "Release target IDs must be unique");
   const capabilityIds = new Set(state.registry.capabilities.map((item) => item.capabilityId));
@@ -293,6 +338,7 @@ const evaluateCore = (state, selectedIds, generationCache = new Map()) => {
   requireGate(!state.claims.tree || state.claims.tree === tree, "SOURCE_TREE_MISMATCH", "Expected source tree differs from current tree");
   const dependencies = dependencyIntegrity();
   const capabilityById = new Map(state.registry.capabilities.map((item) => [item.capabilityId, item]));
+  const reviewedJsOnlySourceProof = validateReviewedJsOnlyPackages(state, dependencies, capabilityById);
   const importClosure = directImportClosure(state, capabilityById);
   const targetResults = [];
   {
@@ -347,7 +393,7 @@ const evaluateCore = (state, selectedIds, generationCache = new Map()) => {
     const sourcePaths = [...new Set([contractPath, capabilityPath, ...state.contract.authoritativeInputs,
       ...state.registry.capabilities.flatMap((item) => [...item.requiredBy, ...item.providedBy].map((entry) => entry.path))])].sort();
     const inputSetDigest = digest(sourcePaths.map((relative) => `${relative}\0${digest(read(relative))}\n`).join(""));
-    return { head, tree, dependencies: dependencies.evidence, importClosure, inputSetDigest, targets: targetResults, generationCache };
+    return { head, tree, dependencies: dependencies.evidence, importClosure, reviewedJsOnlySourceProof, inputSetDigest, targets: targetResults, generationCache };
   }
 };
 
@@ -375,7 +421,8 @@ export const evaluateParity = ({ targetIds, fixture, includeNegativeControls = t
     schemaVersion: 1, contractId: "release-parity-evidence-v1", mode: "OFFLINE_READ_ONLY", implementationHead: result.head, implementationTree: result.tree,
     selectedTargets: ids, skippedTargets: state.contract.targets.map((target) => target.targetId).filter((id) => !ids.includes(id)),
     inputSetDigest: result.inputSetDigest, dependencyIntegrity: result.dependencies,
-    directImportClosure: { discovered: result.importClosure.discovered.length, nativeMapped: result.importClosure.mapped.length, reviewedJsOnly: result.importClosure.reviewedJsOnly.length, unclassified: result.importClosure.unclassified.length }, targets: result.targets,
+    directImportClosure: { discovered: result.importClosure.discovered.length, nativeMapped: result.importClosure.mapped.length, reviewedJsOnly: result.importClosure.reviewedJsOnly.length, unclassified: result.importClosure.unclassified.length, grammarCounts: result.importClosure.grammarCounts },
+    reviewedJsOnlySourceProof: result.reviewedJsOnlySourceProof, targets: result.targets,
     negativeControls: { required: 8, total: negativeControls.length, passed: negativeControls.length, results: negativeControls },
     proofBoundary: state.contract.proofBoundary, networkAccess: false, providerContact: false, buildPerformed: false, otaPublished: false,
   };
