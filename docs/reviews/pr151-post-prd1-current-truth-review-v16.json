@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr151-post-prd1-current-truth-review-v16",
+  "reviewVersion": 16,
+  "reviewLabel": "Post-PR-D1 current-truth exact CI-control head Level A review",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLevel": "A",
+  "reviewerLanes": ["independent"],
+  "reviewTimestamp": "2026-08-02T10:18:44Z",
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-b0-guard-review",
+  "reviewHead": "15942d897f5ac26f55bc487c89e1ad02ecffb9b8",
+  "reviewTree": "fc6542fe96c217659119a2483334fd6169193f8a",
+  "reviewEvidenceParentHead": "15942d897f5ac26f55bc487c89e1ad02ecffb9b8",
+  "historicalEvidencePreserved": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15"],
+  "historicalEvidenceHashes": {
+    "v1": "9f9b70bdeabd042309991b3c364db3f6c3e051fab4ab5d282234bc6b05f1d2ba",
+    "v2": "29d6d7b5743a3b22bceb3a783f73eea2dca0b98eb6e5590a095510765549f577",
+    "v3": "50667d8900c12b70bfe94ded74d5cb58ad64905d112ea79a610053d641ed8398",
+    "v4": "bb1658e24e30d888d12c49e0e8f1eaabc51e49ca320d9a4c4966c35e0bb89a43",
+    "v5": "d8890af8a6188dbebdbfda9ff50149a9e25168d30b033b1b4c5a3c4da5859409",
+    "v6": "d3dbcf54ee4dc7823818eb1acfb57a1e4efd8196f697e290a33103c8bc61c4bb",
+    "v7": "494acffbd4e92e97fccaff923ed8cfb227b99e840e26f3f5fdf9ce089710b3e9",
+    "v8": "961fc5e005574d2bd87eab7dc7d0f9ef22b43cd84f4a00e9be7eb41059bdd340",
+    "v9": "77bf53052b8eca9679b5b66a928e7537ead462e2b1578754d976f59c4380a1a6",
+    "v10": "b262f78f3c0d236631a7e1ffcd5aecacf50541acc2a29be7107f29f17aa5c3ba",
+    "v11": "687c2e4f751803c5a85d586d22806bf1ab186bbaa868d1efe81cde2171ffc75d",
+    "v12": "95acf6367b524f85ade90e5719c9ab4b54dabcada801ad08e223f71e15dc8530",
+    "v13": "02a4eb7a45ac3bc499a7dd2abf1d6fe9eb2544320593257b573507af2a9da4cd",
+    "v14": "82bfc032186606dc7517a529c04d7a437513e75a28c458e035e2ba7618aa5017",
+    "v15": "d167ab49e2afc37bfe0c0372cbc5649bcf0c847d3f164b9671ae9033fce7ca58"
+  },
+  "implementationPrNumber": 151,
+  "implementationPrState": "open-draft",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-b0-guard",
+  "implementationHead": "899a8106ee29a799cf9bca4f793bfe1b139d9c28",
+  "implementationTree": "2c95fb46943e61318dce43a26540f812ca3837e7",
+  "baseHead": "2c5f9d1622dd29c57b92996b1d7faf58762299f8",
+  "baseTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "mergeBase": "2c5f9d1622dd29c57b92996b1d7faf58762299f8",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
+  "changedNameHash": "5f5e15c6cf6bdf5f258082987bcfeafb2cfe5f704516024afe98d06fb31ff70a",
+  "implementationDiffHash": "d4b1020d6d7861c46aebc3cc5c35eec9d23020043cee4f356fe165c97b1a62d9",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "17eaaa64af3e661fbf7f78e8f9304043ad8e6bc1e5d87513160465010af4b892",
+  "currentTruthRecordHash": "a7f0971208e2f2b16205602b13bdae574c333f422aa7285fd3dfbb2c5b813138",
+  "artifactHashes": {
+    "CURRENT_STATE.md": "5c692189984da33a0845c4e546ab9a0821a6847a9bc516f96208694adef33f60",
+    "NEXT_TASK.md": "64bc4c13e75b2e37fb5dc35bab45a24b39121132f4a8d8f460955c00c966f790"
+  },
+  "testResults": {
+    "exactImplementationBinding": {
+      "status": "SOURCE_CLEAR",
+      "prNumber": 151,
+      "head": "899a8106ee29a799cf9bca4f793bfe1b139d9c28",
+      "tree": "2c95fb46943e61318dce43a26540f812ca3837e7",
+      "parent": "1cd329c16503a07f47213504b9d55ccc7063a05a",
+      "base": "2c5f9d1622dd29c57b92996b1d7faf58762299f8",
+      "providerBranchMatches": true
+    },
+    "noContentCiControl": {
+      "status": "SOURCE_CLEAR",
+      "contentCommit": "1cd329c16503a07f47213504b9d55ccc7063a05a",
+      "contentTree": "2c95fb46943e61318dce43a26540f812ca3837e7",
+      "controlTree": "2c95fb46943e61318dce43a26540f812ca3837e7",
+      "treeIdentical": true,
+      "threeFileDeltaIdentical": true,
+      "sourceBindingsUnchangedFromV15": true
+    },
+    "historyPreservingReviewReuse": {
+      "status": "SOURCE_CLEAR",
+      "previousReviewHead": "b13c076a00228212a3a3a3c335c9888ff2fe03cc",
+      "normalMergeCommit": "15942d897f5ac26f55bc487c89e1ad02ecffb9b8",
+      "mergeParents": ["b13c076a00228212a3a3a3c335c9888ff2fe03cc", "899a8106ee29a799cf9bca4f793bfe1b139d9c28"],
+      "reviewLineageIsFirstParent": true,
+      "implementationHeadIsSecondParent": true,
+      "mergeConflict": false,
+      "historicalEvidenceV1ThroughV15PreservedByteForByte": true
+    },
+    "allowedFileScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "additions": 37,
+      "deletions": 39,
+      "netChangedLines": -2,
+      "paths": ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
+      "scopeGate": "PASS_3_OF_15_NO_HIGH_RISK_DOMAIN"
+    },
+    "v15Bindings": {
+      "status": "SOURCE_CLEAR",
+      "allExactBindingsUnchanged": true,
+      "prD1MergeCloseout": "VERIFIED",
+      "levelCReviewDispositions": "VERIFIED_CLOSED_UNMERGED",
+      "proofBoundary": "T0_T2_ONLY_CLEAR_T3_T7_BLOCKED_OR_HISTORICAL",
+      "pendingCorrectionLedger": "B1_B2_B3_UNDEPLOYED",
+      "prD2": "READ_ONLY_HANDOFF_ONLY",
+      "prE": "BLOCKED"
+    },
+    "currentTruth": {
+      "status": "SOURCE_CLEAR",
+      "recordedMain": "2c5f9d1622dd29c57b92996b1d7faf58762299f8",
+      "observedMain": "2c5f9d1622dd29c57b92996b1d7faf58762299f8",
+      "deterministicRuns": "3/3",
+      "deterministicOutputSha256": "8e6f5ce834d1f5397c1411c3b308dbd3921449da13009abfaaede91e8df8bde8",
+      "findingCount": 0
+    },
+    "validation": {
+      "status": "SOURCE_CLEAR",
+      "contracts": "13/13",
+      "proofCatalog": "PASS",
+      "prScope": "PASS_3_OF_15_NET_MINUS_2",
+      "json": "PASS",
+      "diffCheck": "PASS"
+    },
+    "phase1Ci": {
+      "status": "rerun_pending_after_pre_current_head_review_cancellation",
+      "implementationHead": "899a8106ee29a799cf9bca4f793bfe1b139d9c28",
+      "attempt1RunId": 30743470232,
+      "attempt1Conclusion": "cancelled_pre_current_head_review",
+      "reviewDoesNotSubstituteForCi": true,
+      "failureWaived": false
+    },
+    "nonInterference": {
+      "status": "SOURCE_CLEAR",
+      "providerContact": false,
+      "providerMutation": false,
+      "buildOrOta": false,
+      "artifactInstallOrRelease": false,
+      "databaseOrMigrationMutation": false,
+      "switchScheduleMoneyRightsAuthRlsChange": false,
+      "denoLockChanged": false
+    }
+  },
+  "testResultHash": "c5a2548b9079f623f993e1f8dfa54b708dde6f7fc1363a31727bb2c7459bfccf",
+  "testResultHashMethod": "sha256(stableJson(testResults))",
+  "findings": [],
+  "severityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "reviewOnly": true,
+  "disposition": "LANE_CLEAR_P0_P1_ZERO_IDENTICAL_CI_CONTROL_HEAD_VERIFIED_RERUN_PENDING"
+}
