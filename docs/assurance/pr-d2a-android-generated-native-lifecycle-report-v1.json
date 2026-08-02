@@ -12,7 +12,7 @@
     "ownerAuthorizedMaximumNetLines": 2500,
     "timeboxHours": 8,
     "actualFilesFromMain": 11,
-    "actualNetLinesFromMain": 1942,
+    "actualNetLinesFromMain": 1975,
     "oneAssuranceDomain": true,
     "productOrProviderChangeAllowed": false
   },
@@ -35,9 +35,13 @@
     "generatedDirectoryCommitted": false
   },
   "dependencySet": {
-    "classification": "EXACT_LOCKED_DIRECT_PACKAGE_IDENTITIES",
+    "classification": "EXACT_LOCKED_ALL_DECLARED_DIRECT_PACKAGE_IDENTITIES",
     "inputs": ["package.json", "package-lock.json", "installed direct package metadata"],
     "identityAndVersionComparison": true,
+    "declaredDirect": 66,
+    "production": 59,
+    "development": 7,
+    "validated": 66,
     "packagePathsRecorded": false
   },
   "productDefects": [
@@ -90,9 +94,10 @@
   ],
   "scenarioMatrix": {
     "required": 12,
-    "implementedMarkers": 5,
+    "implementedExecutableMethods": 5,
     "executed": 0,
     "status": "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE",
+    "futureMarkerOnlyClearAllowed": false,
     "missing": ["BACKGROUND", "ACTIVITY_DESTROYED_PROCESS_ALIVE", "PROCESS_COLD", "REACT_CONTEXT_UNAVAILABLE", "DECLINE", "EXPIRATION", "BACKUP_POLICY"]
   },
   "tests": {
@@ -101,7 +106,7 @@
     "mandatoryNegativeControls": "12/12",
     "cliFailClosed": "14/14",
     "d1GeneratedDigestContinuity": "3/3",
-    "backupPolicyFixtures": "13/13",
+    "backupPolicyFixtures": "14/14",
     "jvmUnit": "BLOCKED_BEFORE_EXECUTION",
     "emulatorLifecycle": "NOT_RUN_AFTER_PRODUCT_DEFECT_STOP"
   },

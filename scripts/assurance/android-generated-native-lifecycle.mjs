@@ -149,13 +149,15 @@ export const evaluateD1SourceCapabilityParity = ({
     derivation: {required: d1ContractPath, sourceProvided: registryPath, independent: true}, setDigest: digest(stable({required, sourceProvided}))};
 };
 
-export const validateInstalledDirectPackageSet = ({modules, packageJson, lock, relevantNames = null, installedPackageReader = (name) => JSON.parse(fs.readFileSync(path.join(modules, name, "package.json"), "utf8"))}) => {
-  const declared = {...(packageJson.dependencies ?? {}), ...(packageJson.devDependencies ?? {})};
+export const validateInstalledDirectPackageSet = ({modules, packageJson, lock, installedPackageReader = (name) => JSON.parse(fs.readFileSync(path.join(modules, name, "package.json"), "utf8"))}) => {
+  const production = packageJson.dependencies ?? {}; const development = packageJson.devDependencies ?? {};
+  gate(Object.keys(production).every((name) => !Object.hasOwn(development, name)), "DEPENDENCY_DIRECT_CLASSIFICATION_OVERLAP", "A direct dependency is classified as both production and development");
+  const declared = {...production, ...development};
   const lockedRoot = {...(lock.packages?.[""]?.dependencies ?? {}), ...(lock.packages?.[""]?.devDependencies ?? {})};
   gate(stable(declared) === stable(lockedRoot), "DEPENDENCY_LOCK_ROOT_MISMATCH", "Direct dependency declarations differ from the lock root");
   const identities = [];
-  const selected = (relevantNames ?? Object.keys(declared)).filter((name) => Object.hasOwn(declared, name)).sort();
-  gate(selected.length > 0, "DEPENDENCY_RELEVANT_SET_EMPTY", "No relevant direct packages were selected");
+  const selected = Object.keys(declared).sort();
+  gate(selected.length > 0, "DEPENDENCY_DIRECT_SET_EMPTY", "No declared direct packages were found");
   for (const name of selected) {
     const locked = lock.packages?.[`node_modules/${name}`];
     gate(typeof locked?.version === "string", "DEPENDENCY_LOCK_IDENTITY_MISSING", `Locked direct package identity is missing for ${name}`);
@@ -165,28 +167,24 @@ export const validateInstalledDirectPackageSet = ({modules, packageJson, lock, r
     gate(installed.name === name && installed.version === locked.version, "DEPENDENCY_INSTALLED_VERSION_MISMATCH", `Installed direct package identity differs for ${name}`);
     identities.push(`${name}@${locked.version}`);
   }
-  return {directPackageCount: identities.length, identityDigest: digest(identities.join("\n")), versionsMatched: identities.length, pathsRecorded: false};
+  return {directPackageCount: identities.length, productionPackageCount: Object.keys(production).length, developmentPackageCount: Object.keys(development).length,
+    identityDigest: digest(identities.join("\n")), versionsMatched: identities.length, allDeclaredDirectDependenciesValidated: true, pathsRecorded: false};
 };
 
 export const resolveDependencySet = () => {
   const packageBytes = read("package.json"); const lockBytes = read("package-lock.json");
   const packageHash = digest(packageBytes); const lockHash = digest(lockBytes);
   const packageJson = JSON.parse(packageBytes); const lock = JSON.parse(lockBytes);
-  const targetId = readJson(contractPath).target.targetId;
-  const declaredNames = new Set([...Object.keys(packageJson.dependencies ?? {}), ...Object.keys(packageJson.devDependencies ?? {})]);
-  const relevantNames = [...new Set(readJson(registryPath).capabilities.filter((capability) => capability.platform === "android"
-    && capability.targetApplicability.includes(targetId)).flatMap((capability) => capability.providedBy.flatMap((evidence) => evidence.includes))
-    .filter((marker) => marker.startsWith("node_modules/")).map((marker) => {
-      const parts = marker.slice("node_modules/".length).split("/"); return parts[0].startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
-    }).filter((name) => declaredNames.has(name)))].sort();
   const candidates = git("worktree", "list", "--porcelain").split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9));
   for (const candidate of candidates) {
     const modules = path.join(candidate, "node_modules");
     if (!fs.existsSync(modules)) continue;
     if (!fs.existsSync(path.join(candidate, "package.json")) || !fs.existsSync(path.join(candidate, "package-lock.json"))) continue;
     if (digest(fs.readFileSync(path.join(candidate, "package.json"))) !== packageHash || digest(fs.readFileSync(path.join(candidate, "package-lock.json"))) !== lockHash) continue;
-    const direct = validateInstalledDirectPackageSet({modules, packageJson, lock, relevantNames});
-    return { modules, evidence: { packageSha256: packageHash, lockSha256: lockHash, ...direct, status: "EXACT_LOCKED_DIRECT_PACKAGE_IDENTITIES" } };
+    try {
+      const direct = validateInstalledDirectPackageSet({modules, packageJson, lock});
+      return { modules, evidence: { packageSha256: packageHash, lockSha256: lockHash, ...direct, status: "EXACT_LOCKED_ALL_DECLARED_DIRECT_PACKAGE_IDENTITIES" } };
+    } catch { continue; }
   }
   throw new GateError("DEPENDENCY_SET_MISMATCH", "No exact installed dependency set is available");
 };
@@ -226,7 +224,7 @@ const generatedDigest = (temp, modules, paths) => digest(paths.slice().sort().ma
   return `${relative}\0${digest(normalize(fs.readFileSync(absolute), temp, modules))}\n`;
 }).join(""));
 const stripXmlComments = (xml) => xml.replace(/<!--[\s\S]*?-->/gu, "");
-const startTag = (xml, tag) => stripXmlComments(xml).match(new RegExp(`<${tag}\\b[^>]*>`, "u"))?.[0] ?? "";
+const startTag = (xml, tag) => stripXmlComments(xml).match(new RegExp(`<${tag}(?=\\s|>)[^>]*>`, "u"))?.[0] ?? "";
 const manifestApplicationAttribute = (manifest, name) => startTag(manifest, "application").match(new RegExp(`android:${name}="([^"]+)"`, "u"))?.[1] ?? null;
 const resourcePath = (reference) => reference?.match(/^@xml\/([a-zA-Z0-9_]+)$/u)?.[1]
   ? `android/app/src/main/res/xml/${reference.slice(5)}.xml` : null;
@@ -385,25 +383,31 @@ const gradleEvidence = (generated) => {
   return { results, sdk, env };
 };
 const adbRun = (serial, args, options = {}) => run("adb", ["-s", serial, ...args], { ...options, timeout: options.timeout ?? 5 * 60 * 1000 });
-const scenarioMarkers = Object.freeze({
-  FOREGROUND: "activityCreationCapturesAndConsumesOnce",
-  BACKGROUND: "backgroundActionResumesAndConsumesOnce",
-  ACTIVITY_RECREATION: "recreationRetainsPendingAction",
-  ACTIVITY_DESTROYED_PROCESS_ALIVE: "destroyedActivityRetainsPendingAction",
-  PROCESS_COLD: null,
-  REACT_CONTEXT_UNAVAILABLE: "receiverBeforeReactContextRetainsAction",
-  WARM_NEW_INTENT: "warmIntentReusesActivityAndCannotReplay",
-  DECLINE: "declineForegroundAndCold",
-  EXPIRATION: "expiredActionRejectedAndDeleted",
-  MALFORMED_ADVERSARIAL: "explicitReceiverRejectsUnsupportedActionWithoutCrash",
-  EXTERNAL_CUSTOM_SCHEME_ORIGIN: "verifyExternallyLaunchedActionWasNotPersisted",
-  BACKUP_POLICY: "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING",
+const scenarioDefinitions = Object.freeze({
+  FOREGROUND: {method: "activityCreationCapturesAndConsumesOnce", runner: "INSTRUMENTATION"},
+  BACKGROUND: {method: "backgroundActionResumesAndConsumesOnce", runner: null},
+  ACTIVITY_RECREATION: {method: "recreationRetainsPendingAction", runner: "INSTRUMENTATION"},
+  ACTIVITY_DESTROYED_PROCESS_ALIVE: {method: "destroyedActivityRetainsPendingAction", runner: null},
+  PROCESS_COLD: {method: "processColdReceiverPersistsBeforeReactAndConsumesOnce", runner: null},
+  REACT_CONTEXT_UNAVAILABLE: {method: "receiverBeforeReactContextRetainsAction", runner: null},
+  WARM_NEW_INTENT: {method: "warmIntentReusesActivityAndCannotReplay", runner: "INSTRUMENTATION"},
+  DECLINE: {method: "declineForegroundAndCold", runner: null},
+  EXPIRATION: {method: "expiredActionRejectedAndDeleted", runner: null},
+  MALFORMED_ADVERSARIAL: {method: "explicitReceiverRejectsUnsupportedActionWithoutCrash", runner: "INSTRUMENTATION"},
+  EXTERNAL_CUSTOM_SCHEME_ORIGIN: {method: "verifyExternallyLaunchedActionWasNotPersisted", runner: "EXTERNAL_URI_THEN_INSTRUMENTATION"},
+  BACKUP_POLICY: {method: "backupPolicyPreflightConfirmedOnInstalledDebugApp", runner: "BACKUP_PREFLIGHT_THEN_INSTRUMENTATION"},
 });
+const methodDeclared = (template, method) => new RegExp(`@Test\\s+fun\\s+${method}\\s*\\(`, "u").test(template);
 export const evaluateScenarioMatrix = (template = readText(instrumentationTemplate), backupPolicyClear = false) => {
   const required = readJson(contractPath).lifecycleScenarios;
-  const implemented = required.filter((scenario) => scenario === "BACKUP_POLICY" ? backupPolicyClear
-    : typeof scenarioMarkers[scenario] === "string" && template.includes(scenarioMarkers[scenario]));
-  return {required, implemented, missing: required.filter((scenario) => !implemented.includes(scenario)), complete: implemented.length === required.length};
+  const mappings = required.map((scenario) => ({scenario, ...scenarioDefinitions[scenario]}));
+  const mappingValid = mappings.every(({method}) => typeof method === "string" && method.length > 0)
+    && new Set(mappings.map(({method}) => method)).size === required.length;
+  const executionPlan = mappings.filter(({scenario, method, runner}) => methodDeclared(template, method) && typeof runner === "string"
+    && (scenario !== "BACKUP_POLICY" || backupPolicyClear));
+  const implemented = executionPlan.map(({scenario}) => scenario);
+  return {required, implemented, missing: required.filter((scenario) => !implemented.includes(scenario)), executionPlan,
+    mappingValid, complete: mappingValid && implemented.length === required.length};
 };
 export const assertCompleteScenarioMatrix = (matrix) => gate(matrix.complete, "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE",
   `Missing mandatory scenarios: ${matrix.missing.join(",")}`);
@@ -443,21 +447,27 @@ const emulatorEvidence = (generated, native, installState) => {
   const testVerified = installState.installedTest && packagePresent(serial, installState.testPackage);
   gate(testVerified, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
   const component = "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner";
-  const passingMethods = ["activityCreationCapturesAndConsumesOnce", "warmIntentReusesActivityAndCannotReplay", "recreationRetainsPendingAction", "explicitReceiverRejectsUnsupportedActionWithoutCrash"];
+  gate(scenarioMatrix.executionPlan.length === scenarioMatrix.required.length
+    && new Set(scenarioMatrix.executionPlan.map(({method}) => method)).size === scenarioMatrix.required.length,
+  "ANDROID_EMULATOR_SCENARIO_EXECUTION_PLAN_INVALID", "Every required scenario must have one unique executable instrumentation method");
   const methodResults = [];
-  for (const method of passingMethods) {
+  for (const {scenario, method, runner} of scenarioMatrix.executionPlan) {
+    if (runner === "EXTERNAL_URI_THEN_INSTRUMENTATION") {
+      adbRun(serial, ["shell", "pm", "clear", "com.chillywood.mobile"]);
+      adbRun(serial, ["shell", "am", "force-stop", "com.chillywood.mobile"]);
+      const externalUri = "chillywoodmobile://chat/11111111-1111-4111-8111-111111111111?callInviteId=22222222-2222-4222-8222-222222222222&nativeCallAction=answer";
+      const launch = adbRun(serial, ["shell", "am", "start", "-W", "-n", "com.chillywood.mobile/.MainActivity", "-a", "android.intent.action.VIEW", "-d", externalUri]);
+      gate(launch.status === 0, "ANDROID_EXTERNAL_ACTION_TEST_SETUP_FAILED", "External custom-scheme launch setup failed");
+    }
     const result = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", `com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#${method}`, component]);
-    methodResults.push({ scenario: method, passed: result.status === 0 && !result.stdout.includes("FAILURES!!!") });
-    gate(methodResults.at(-1).passed, "ANDROID_EMULATOR_LIFECYCLE_FAILED", `${method} failed`);
+    const passed = result.status === 0 && !result.stdout.includes("FAILURES!!!");
+    if (scenario === "EXTERNAL_CUSTOM_SCHEME_ORIGIN" && !passed) throw new GateError("ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED",
+      "An external custom-scheme Activity launch persisted a trusted native call action", {compiled: true, emulatorReproduced: true, identifiersRecorded: false});
+    methodResults.push({scenario, method, runner, passed});
+    gate(passed, "ANDROID_EMULATOR_LIFECYCLE_FAILED", `${scenario} failed`);
   }
-  adbRun(serial, ["shell", "pm", "clear", "com.chillywood.mobile"]);
-  adbRun(serial, ["shell", "am", "force-stop", "com.chillywood.mobile"]);
-  const externalUri = "chillywoodmobile://chat/11111111-1111-4111-8111-111111111111?callInviteId=22222222-2222-4222-8222-222222222222&nativeCallAction=answer";
-  const launch = adbRun(serial, ["shell", "am", "start", "-W", "-n", "com.chillywood.mobile/.MainActivity", "-a", "android.intent.action.VIEW", "-d", externalUri]);
-  gate(launch.status === 0, "ANDROID_EXTERNAL_ACTION_TEST_SETUP_FAILED", "External custom-scheme launch setup failed");
-  const external = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#verifyExternallyLaunchedActionWasNotPersisted", component]);
-  const rejected = external.status === 0 && !external.stdout.includes("FAILURES!!!");
-  if (!rejected) throw new GateError("ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED", "An external custom-scheme Activity launch persisted a trusted native call action", { compiled: true, emulatorReproduced: true, identifiersRecorded: false });
+  gate(methodResults.length === scenarioMatrix.required.length && methodResults.every(({passed}) => passed),
+    "ANDROID_EMULATOR_SCENARIO_EXECUTION_INCOMPLETE", "Every required scenario must execute exactly once and pass");
   return { emulatorCount: 1, serialRecorded: false, methodResults, scenarioMatrix, externalOriginRejected: true, signedArtifactProof: false, physicalDeviceProof: false };
 };
 const cleanupSelectedEmulator = (state) => {
