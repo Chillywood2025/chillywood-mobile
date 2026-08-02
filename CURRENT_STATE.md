@@ -2,9 +2,9 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Main SHA observed at this assurance checkpoint: `8b02a5882511c029581fda0ef39af862bb62ef2a`.
-- Latest merged implementation: PR #116, `4c0a2619da79d3109bfbcb19c1e30a2645f85211`; merge `8b02a5882511c029581fda0ef39af862bb62ef2a`.
-- Assurance program: PR-B1-LIVEKIT-SOURCE-BINDING-SUCCESSOR-PREPARATION; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116.
+- Main SHA observed at this assurance checkpoint: `b99961d7bc38d06136ecbaed502a96bd5b3cf012`.
+- Latest merged implementation: PR #131, `69d9ed1fbec884afc0b8e36150326fa9169843bd`; merge `b99961d7bc38d06136ecbaed502a96bd5b3cf012`.
+- Assurance program: PR-B1-IMMUTABLE-SOURCE-3D8AE2B6-BOUND-PENDING-BASE-SYNCHRONIZATION; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
 - iOS internal: build 8, runtime `1.0.0-iosqa1`, channel `ios-qa`, update `019fb099-f7c3-7130-97aa-a4bb1c49792f`.
 - Remote migration head: `20260730161737`.
@@ -21,7 +21,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 - PR #52 at `2b7f9fa491180cb1f2b9a883c07b317eb39ae43a`: open-draft; reconcile-then-supersede-unmerged.
 - PR #69 at `a5a37296800419a50c9bb271d99e505f6ad7a056`: open-draft-remote-predecessor-local-successor-frozen; local successor f30d37a1 is frozen; push and exact review follow B0 merge.
-- PR #70 at `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`: open-draft-remote-predecessor-local-successor-frozen; local successor e841f986 is frozen; push and exact review follow B0 merge.
+- PR #70 at `3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73`: open-draft-immutable-source-bound-pending-base-sync; immutable B1 source is pushed and current-truth-bound; local database gates passed 28/28 and 19/19; merge current main normally, then run linked no-apply, review, and CI gates.
 - PR #75 at `bded4793b26e8e2e8bd2331df7f5b3fcc55f141b`: open-draft-remote-predecessor-local-successor-frozen; local successor b2cd9318 is frozen; push and exact review follow B0 merge.
 
 ## Open review-only PRs
@@ -37,8 +37,8 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - PR #71 at `34dc488b0d461d486c9e36c102aa5cc051f516d0`: open-draft-blocking, reviews `a5a37296800419a50c9bb271d99e505f6ad7a056`; never-merge.
 - PR #72 at `56992ff76891088116b9bcf7d9ec1efb3c9c63e2`: open-draft-blocking, reviews `a5a37296800419a50c9bb271d99e505f6ad7a056`; never-merge.
 - PR #73 at `05ae25604c83627272128c75bdeeb0d2d3436a05`: open-draft-blocking, reviews `a5a37296800419a50c9bb271d99e505f6ad7a056`; never-merge.
-- PR #74 at `2b6e01177721a361c8b5bd790a05ef6efc19285d`: open-draft-blocking, reviews `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`; never-merge.
-- PR #76 at `2979921987c6955905d71537ca37a07499a622c2`: open-draft-blocking, reviews `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`; never-merge.
+- PR #74 at `2b6e01177721a361c8b5bd790a05ef6efc19285d`: open-draft-historical-stale-pending-additive-review, reviews `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`; reuse additively for the exact synchronized B1 successor; never-merge.
+- PR #76 at `2979921987c6955905d71537ca37a07499a622c2`: open-draft-historical-stale-pending-additive-review, reviews `6d05b2bd2e56695e76a7bcfb0890303bf768cb8e`; reuse additively for the exact synchronized B1 successor; never-merge.
 - PR #77 at `0df8313c4f3652540b8ef3a7baba27804790aabe`: open-draft-blocking, reviews `bded4793b26e8e2e8bd2331df7f5b3fcc55f141b`; never-merge.
 - PR #78 at `a7b15f08fc84d4f38c6ed4ebc8e7666e2ea9619d`: open-draft-blocking, reviews `bded4793b26e8e2e8bd2331df7f5b3fcc55f141b`; never-merge.
 - PR #79 at `ce155bdd7a7cba093c7f67a9bd48c5c3b2577382`: open-draft-blocking, reviews `bded4793b26e8e2e8bd2331df7f5b3fcc55f141b`; never-merge.
