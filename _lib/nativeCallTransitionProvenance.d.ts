@@ -32,7 +32,7 @@ export type NativeCallTransitionClaimCreation = {
 };
 
 export type NativeCallTransitionProvenanceRegistry = {
-  clear(): void;
+  clear(platform: NativeCallTransitionPlatform): boolean;
   create(input?: Partial<NativeCallTransitionClaimInput> | null): NativeCallTransitionClaimCreation;
   consume(input?: {
     claimId: string;
@@ -80,7 +80,7 @@ export function consumeTrustedIosCallKitNativeEventClaim(input?: {
   inviteId?: string;
   threadId?: string;
 } | null): NativeCallTransitionClaim | null;
-export function clearNativeCallTransitionClaims(): void;
+export function clearNativeCallTransitionClaims(platform: NativeCallTransitionPlatform): boolean;
 export function sanitizeExternalIosNativeCallPath(value?: string | null): string;
 export const nativeCallTransitionProvenancePolicy: Readonly<{
   claimIdPattern: RegExp;
