@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr70-livekit-migration-no-apply-review-v2",
+  "reviewVersion": 2,
+  "reviewLane": "migration-immutability-and-linked-no-apply",
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "immutableSourceHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+  "synchronizedBranchHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "implementationHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "currentBase": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+  "baseHead": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+  "synchronizedTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "implementationTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "canonicalSyntheticTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "sourceDeltaHash": "f8e77af6fdee5e753094d724eb08887fe1b9cdc12c7048d1e58506ea8ee77284",
+  "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+  "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewTimestamp": "2026-08-02T01:39:22Z",
+  "reviewLevel": "C",
+  "historicalEvidence": {
+    "preservedFile": "docs/reviews/pr70-livekit-migration-no-apply-review-v1.json",
+    "preservedReviewId": "pr70-livekit-migration-no-apply-review-v1",
+    "preservedUnchanged": true,
+    "classification": "historical_stale",
+    "reason": "The v1 record binds synchronized head 341a45688e59bc320a2acaf9047deeaef03098cd before the focused regression correction and corrected current-truth/base synchronization."
+  },
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "migration-immutability-and-linked-no-apply",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "implementationPrNumber": 70,
+      "immutableSourceHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+      "synchronizedBranchHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+      "currentBase": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+      "synchronizedTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+      "canonicalSyntheticTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+      "firstParentIsImmutableSource": true,
+      "secondParentIsCurrentBase": true,
+      "canonicalTreeMatches": true,
+      "providerBranchSnapshotMatches": true
+    },
+    "sourceDeltaEquivalence": {
+      "status": "pass",
+      "sourceDeltaHash": "f8e77af6fdee5e753094d724eb08887fe1b9cdc12c7048d1e58506ea8ee77284",
+      "synchronizedDeltaHash": "f8e77af6fdee5e753094d724eb08887fe1b9cdc12c7048d1e58506ea8ee77284",
+      "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+      "byteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "migrationBodiesChangedByFocusedRegressionCorrection": false,
+      "migrationBodiesChangedByBaseSynchronization": false
+    },
+    "deployedPredecessorIdentity": {
+      "status": "pass",
+      "version": "20260730142519",
+      "name": "cognitive_livekit_final_chat_source_identity_binding",
+      "path": "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
+      "statementCount": 1,
+      "rawSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "gitBlob": "4d01dbc1c972866206ceab99ee5a5d7c5f39f523",
+      "stoppedImplementationPr": 52,
+      "stoppedImplementationHead": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+      "stoppedImplementationBlob": "4d01dbc1c972866206ceab99ee5a5d7c5f39f523",
+      "byteIdenticalToStoppedImplementation": true,
+      "versionPreservedExactly": true,
+      "namePreservedExactly": true,
+      "bodyPreservedExactly": true
+    },
+    "forwardCorrectionIdentity": {
+      "status": "pass",
+      "version": "20260730230022",
+      "name": "cognitive_livekit_final_source_identity_cross_binding",
+      "path": "supabase/migrations/20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+      "rawSha256": "9408ac9896751a4f4ad798ad2644e805e2c42a10c374e24667c66aa624701011",
+      "gitBlob": "e80234273d441abfcff1848664f0f984cac65ad6",
+      "deploymentStatus": "GIT_SOURCE_ONLY_NOT_APPLIED",
+      "predecessorVersion": "20260730142519",
+      "predecessorIdentityExact": true,
+      "forwardOnly": true
+    },
+    "migrationImmutability": {
+      "status": "pass",
+      "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+      "deployedBodyRewritten": false,
+      "deployedVersionRenamed": false,
+      "deployedMigrationDeleted": false,
+      "deployedMigrationReapplied": false,
+      "successorBodyChangedByFocusedRegressionCorrection": false,
+      "successorBodyChangedByBaseSynchronization": false,
+      "migrationDeploymentAttemptedByReview": false
+    },
+    "linkedNoApply": {
+      "status": "PASS_NO_APPLY_SCOPED",
+      "evidenceMode": "coordinator-supplied-sanitized-private-coordination-record",
+      "evidenceSource": "assembled-dry-run.json:b1CorrectedSynchronizedHeadRefresh",
+      "reviewQueriedProvider": false,
+      "reviewRanLinkedCommand": false,
+      "supabaseCli": "2.109.1",
+      "dryRun": true,
+      "linkedSeconds": 5.3,
+      "pendingForwardOnlyMigrations": [
+        "20260730170000_revenuecat_transfer_authoritative_ordering.sql",
+        "20260730230022_cognitive_livekit_final_source_identity_cross_binding.sql",
+        "20260730230031_room_host_block_check_fail_closed_authority.sql"
+      ],
+      "b1PendingExactlyOnce": true,
+      "b2PendingExactlyOnce": true,
+      "b3PendingExactlyOnce": true,
+      "b2AndB3SeparatelyOwned": true,
+      "unexpectedMigrations": [],
+      "seeds": [],
+      "roles": [],
+      "migrationApplied": false,
+      "providerStateChanged": false,
+      "databaseStateChanged": false
+    },
+    "focusedReadOnlyChecks": {
+      "status": "pass",
+      "migrationHashesExact": true,
+      "stoppedPr52PredecessorBytesExact": true,
+      "canonicalMergeTreeExact": true,
+      "migrationSetUnchanged": true,
+      "sourceContract": {
+        "command": "node --test tests/assurance/reconciliation/livekit-final-source-identity-cross-binding.test.mjs",
+        "planned": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "migrationReadbackGuard": {
+        "command": "npm run guard:chilly-chat-livekit-migration-readback",
+        "result": "pass"
+      },
+      "assuranceContracts": {
+        "command": "node scripts/assurance/validate-contracts.mjs",
+        "contracts": 13,
+        "features": 20,
+        "escapedDefects": 25,
+        "result": "pass"
+      },
+      "sourceContractSyntax": "pass",
+      "gitDiffCheck": "pass",
+      "databaseContact": false,
+      "providerContact": false
+    },
+    "phase1Ci": {
+      "status": "coordinator-owned-pending-after-four-corrected-current-review-lanes",
+      "implementationHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+      "reviewDoesNotSubstituteForCi": true,
+      "fullCiRunByReview": false
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "NOT_APPLICABLE",
+      "T3_INTEGRATION": "REFERENCED_LOCAL_INTEGRATION_CLEAR_NOT_REEXECUTED_BY_THIS_LANE",
+      "T4_NATIVE_PROVIDER": "NOT_CLAIMED",
+      "T5_SIGNED_ARTIFACT": "NOT_CLAIMED",
+      "T6_INSTALLED_PHYSICAL": "NOT_CLAIMED",
+      "T7_PUBLIC_CANARY": "NOT_CLAIMED",
+      "noApplyIsNotRuntimeBehaviorProof": true,
+      "higherTierProofClaimedByReview": false
+    },
+    "nonInterference": {
+      "providerContactByReview": false,
+      "providerMutation": false,
+      "databaseContactByReview": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRoleOrRightsChanged": false,
+      "authOrRlsChangedByReview": false,
+      "implementationEdit": false,
+      "privateEvidenceCommitted": false,
+      "fullCiRunByReview": false,
+      "denoLockTouched": false
+    }
+  },
+  "findings": [
+    {
+      "id": "PR70_CORRECTED_SOURCE_MIGRATION_BYTES_UNCHANGED",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The focused regression correction changed no B1 migration bytes: the deployed predecessor remains exact to stopped PR #52 and the successor remains the distinct forward-only source migration."
+    },
+    {
+      "id": "PR70_DEPLOYED_PREDECESSOR_BYTE_IDENTITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The 20260730142519 version, name, blob, and raw SHA-256 are exact and byte-identical to stopped PR #52."
+    },
+    {
+      "id": "PR70_FORWARD_ONLY_CORRECTION_IDENTITY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The 20260730230022 correction is a distinct forward-only Git source migration and no deployment or reapplication occurred."
+    },
+    {
+      "id": "PR70_CORRECTED_LINKED_NO_APPLY_SCOPED",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "Sanitized corrected-head evidence lists B2, B1, and B3 exactly once with no unexpected migration, seed, role, apply, provider mutation, or database mutation."
+    },
+    {
+      "id": "PR70_PROOF_TIER_BOUNDARY",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The linked dry-run proves no-apply source/remote planning only and is not presented as provider, installed, physical, or public-canary behavior."
+    }
+  ],
+  "severityCounts": {
+    "P0": {"open": 0, "resolved": 0, "total": 0},
+    "P1": {"open": 0, "resolved": 1, "total": 1},
+    "P2": {"open": 0, "resolved": 4, "total": 4},
+    "P3": {"open": 0, "resolved": 0, "total": 0}
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "resolvedFindings": 5,
+    "historicalEvidencePreserved": true,
+    "reviewDisposition": "PASS_LEVEL_C_MIGRATION_IMMUTABILITY_AND_NO_APPLY_PENDING_COORDINATOR_FROZEN_HEAD_CI",
+    "humanApproval": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
