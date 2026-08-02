@@ -50,6 +50,7 @@ import {
   type PublicEventReminderSummary,
 } from "../../_lib/notifications";
 import { reportRuntimeError } from "../../_lib/logger";
+import { createForegroundAuthenticatedUiCallIntent } from "../../_lib/nativeCallTransitionProvenance.mjs";
 import {
   readCreatorPermissions,
   getMonetizationAccessSheetPresentation,
@@ -1620,11 +1621,25 @@ export default function ProfileScreen() {
         tagline: profile.tagline,
       });
 
+      const trustedUiIntent = entryMode === "voice" || entryMode === "video"
+        ? createForegroundAuthenticatedUiCallIntent({
+          action: entryMode === "video" ? "start_video" : "start_voice",
+          authenticated: !!currentUserId,
+          authenticatedUserId: currentUserId,
+          threadId: thread.threadId,
+        })
+        : null;
+      if (entryMode !== "message" && (trustedUiIntent?.status !== "created" || !trustedUiIntent.claimId)) {
+        Alert.alert("Unable to start call", "Open the chat thread and use its Voice or Video control.");
+      }
+
       router.push({
         pathname: "/chat/[threadId]",
         params: {
           threadId: thread.threadId,
-          ...(entryMode === "voice" || entryMode === "video" ? { startCall: entryMode } : {}),
+          ...(trustedUiIntent?.status === "created" && trustedUiIntent.claimId
+            ? {foregroundCallClaim: trustedUiIntent.claimId, startCall: entryMode}
+            : {}),
         },
       });
     } catch (error) {
