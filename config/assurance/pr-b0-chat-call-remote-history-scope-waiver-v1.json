@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-b0-chat-call-remote-history-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Represent five exact deployed Chat Call migration versions discovered by the linked no-apply dry-run and retire only their confirmed undeployed version-mismatch candidates.",
+  "exactReason": "One remote migration body was deployed twice under distinct versions, so exact immutable source parity necessarily adds the duplicate statement body. Four local candidates use non-remote versions, and one candidate body differs from its remote counterpart. The bounded replacement remains Git-only database history reconciliation in one Chat Call domain.",
+  "reviewer": "four-lane-exact-head-review-set",
+  "mandatingReviewEvidence": [
+    "linked no-apply dry-run missing-local error",
+    "read-only remote migration statement and SHA-256 comparison"
+  ],
+  "approvalState": "PENDING_FRESH_EXACT_HEAD_REVIEW",
+  "supportingDomains": [
+    "Chat",
+    "LiveKit",
+    "database-RLS",
+    "CI-test-infrastructure"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 4,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 14
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 2600
+  },
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "product behavior change beyond exact remote statement preservation",
+    "LiveKit activation, canary, switch, schedule, or provider state",
+    "RevenueCat, entitlement, money, or payout source or state",
+    "room-host participant block-check source",
+    "live database mutation, migration deployment, history repair, or schema pull",
+    "app product or native source",
+    "build, OTA, release, or store track",
+    "GitHub workflow or package dependency",
+    "current-truth files or guards"
+  ]
+}

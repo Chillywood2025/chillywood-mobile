@@ -21,6 +21,7 @@ import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.t
 import {
   canReconcileExistingProviderEventIntent,
   isSafeStoreMapping,
+  isVerifiedRevenueCatTransferPolicy,
   isValidPremiumStoreProductResolution,
   providerProductIdCandidatesForStore,
   resolveRevenueCatTransferUsers,
@@ -2229,7 +2230,7 @@ const writePremiumTransferFromRevenueCatEvent = async (
   const storePolicy = revenueCatStorePolicy(event);
   const transferUsers = resolveRevenueCatTransferUsers(event);
   if (eventType !== "TRANSFER") throw new Error("RevenueCat transfer event type is invalid.");
-  if (storePolicy.provider !== "revenuecat_app_store" || environment !== "sandbox") {
+  if (!isVerifiedRevenueCatTransferPolicy(storePolicy, environment)) {
     throw new Error("RevenueCat transfer is limited to verified sandbox App Store events.");
   }
   if (!transferUsers) throw new Error("RevenueCat transfer identities are invalid.");

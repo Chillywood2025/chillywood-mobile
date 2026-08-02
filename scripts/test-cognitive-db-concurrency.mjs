@@ -76,6 +76,45 @@ const runSession = (sql) =>
     child.stdin.end(sql);
   });
 
+const startSignaledSession = (sql, marker) => {
+  let resolveReady;
+  let rejectReady;
+  let readyResolved = false;
+  const ready = new Promise((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  const result = new Promise((resolve, reject) => {
+    const child = spawn("docker", psqlArgs, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      if (!readyResolved && stdout.includes(marker)) {
+        readyResolved = true;
+        resolveReady();
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      if (!readyResolved) rejectReady(error);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      if (!readyResolved) {
+        rejectReady(new Error(`session closed before marker ${marker}`));
+      }
+      resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+    child.stdin.end(sql);
+  });
+  return { ready, result };
+};
+
 const runRace = (...sessions) => Promise.all(sessions.map(runSession));
 const assertRace = (label, results, expectedSuccesses, rejectedPattern) => {
   const successes = results.filter(({ code }) => code === 0);
@@ -660,18 +699,21 @@ recordPass("approval allowance claim", "2 winners / 1 rejection");
 
 // 2. Service assertion revocation: the verifier's FOR SHARE waits behind the
 // revocation update and must reject after the revocation commits.
-const serviceRevocationRace = await runRace(
-  `
+const serviceRevocationMarker = `service-revocation-${randomUUID()}`;
+const serviceRevocationWriter = startSignaledSession(`
 begin;
 ${ownerRoleSql(ids.owner)}
 select public.governance_revoke_two_party_service_principal(
   'product_experience_baseline_service',${sqlLiteral(h2)}
 );
+select ${sqlLiteral(serviceRevocationMarker)};
 select pg_sleep(0.35);
 commit;
-`,
-  `
-select pg_sleep(0.08);
+`, serviceRevocationMarker);
+await serviceRevocationWriter.ready;
+const serviceRevocationRace = await Promise.all([
+  serviceRevocationWriter.result,
+  runSession(`
 begin;
 ${serviceRoleSql()}
 select public.governance_assert_two_party_service_principal(
@@ -679,8 +721,8 @@ select public.governance_assert_two_party_service_principal(
   'visual_experience_canary'
 );
 commit;
-`,
-);
+`),
+]);
 assert.equal(serviceRevocationRace[0].code, 0, "service revocation must commit");
 assert.notEqual(serviceRevocationRace[1].code, 0, "revoked assertion must not verify");
 assert.match(
@@ -779,18 +821,22 @@ const emergencyExecution = stageExecution(emergencyApproval, "evaluating");
 const emergencyReceipt = "e".repeat(64);
 const emergencyProof = "f".repeat(64);
 query(evaluatorProofSql(emergencyExecution, emergencyReceipt, emergencyProof));
-const emergencyRace = await runRace(
-  `
+const emergencyMarker = `emergency-stop-${randomUUID()}`;
+const emergencyWriter = startSignaledSession(`
 begin;
 update public.autonomous_system_emergency_states
 set status='emergency_stop',reason='concurrent emergency stop',
     updated_at=transaction_timestamp()
 where system_id='product_intelligence_operator';
+select ${sqlLiteral(emergencyMarker)};
 select pg_sleep(0.35);
 commit;
-`,
-  completeSql(emergencyExecution, emergencyReceipt, emergencyProof, 0.08),
-);
+`, emergencyMarker);
+await emergencyWriter.ready;
+const emergencyRace = await Promise.all([
+  emergencyWriter.result,
+  runSession(completeSql(emergencyExecution, emergencyReceipt, emergencyProof)),
+]);
 assert.equal(emergencyRace[0].code, 0, "emergency stop must commit");
 assert.notEqual(emergencyRace[1].code, 0, "completion must fail behind emergency stop");
 assert.match(
@@ -828,19 +874,22 @@ const cancellationApproval = createApproval({
   policyVersion: "concurrency-cancellation",
 });
 const cancellationExecution = stageExecution(cancellationApproval, "executing");
-const cancellationRace = await runRace(
-  `
+const cancellationMarker = `task-cancellation-${randomUUID()}`;
+const cancellationWriter = startSignaledSession(`
 begin;
 update public.intelligence_tasks
 set cancelled_at=transaction_timestamp(),updated_at=transaction_timestamp()
 where id=${sqlLiteral(ids.task)};
+select ${sqlLiteral(cancellationMarker)};
 select pg_sleep(0.35);
 commit;
-`,
-  `
+`, cancellationMarker);
+await cancellationWriter.ready;
+const cancellationRace = await Promise.all([
+  cancellationWriter.result,
+  runSession(`
 begin;
 ${serviceRoleSql()}
-select pg_sleep(0.08);
 select public.governance_execute_approved_switch(
   ${sqlLiteral(cancellationExecution)},'cognitive_approved_action_worker',
   ${sqlLiteral(workerAssertion)},${sqlLiteral(cancellationApproval.switchKey)},
@@ -848,8 +897,8 @@ select public.governance_execute_approved_switch(
   ${sqlLiteral(cancellationApproval.targetHash)}
 );
 commit;
-`,
-);
+`),
+]);
 assert.equal(cancellationRace[0].code, 0, "task cancellation must commit");
 assert.notEqual(cancellationRace[1].code, 0, "side effect must fail after cancellation");
 assert.match(
@@ -1214,23 +1263,26 @@ const revokedBootstrapReceipt = bootstrapStage(
   revokedBootstrapExecution,
   revokedBootstrapApproval,
 );
-const bootstrapRevocationRace = await runRace(
-  `
+const bootstrapRevocationMarker = `bootstrap-revocation-${randomUUID()}`;
+const bootstrapRevocationWriter = startSignaledSession(`
 begin;
 ${ownerRoleSql(ids.owner)}
 select public.governance_revoke_bootstrap_approval(
   ${sqlLiteral(revokedBootstrapApproval.id)},${sqlLiteral("e".repeat(64))}
 );
+select ${sqlLiteral(bootstrapRevocationMarker)};
 select pg_sleep(0.35);
 commit;
-`,
-  bootstrapEvaluatorSql(
+`, bootstrapRevocationMarker);
+await bootstrapRevocationWriter.ready;
+const bootstrapRevocationRace = await Promise.all([
+  bootstrapRevocationWriter.result,
+  runSession(bootstrapEvaluatorSql(
     revokedBootstrapExecution,
     revokedBootstrapReceipt,
     "f".repeat(64),
-    0.08,
-  ),
-);
+  )),
+]);
 assert.equal(bootstrapRevocationRace[0].code, 0, "bootstrap revocation must commit");
 assert.notEqual(
   bootstrapRevocationRace[1].code,
@@ -1270,23 +1322,26 @@ query(bootstrapEvaluatorSql(
 
 // 16. Bootstrap emergency stop: the stop writer owns the emergency row first;
 // completion blocks, rechecks, and rejects with no partial materialization.
-const bootstrapEmergencyRace = await runRace(
-  `
+const bootstrapEmergencyMarker = `bootstrap-emergency-${randomUUID()}`;
+const bootstrapEmergencyWriter = startSignaledSession(`
 begin;
 ${ownerRoleSql(ids.owner)}
 select public.governance_set_cognitive_emergency_state(
   'emergency_stop',${sqlLiteral("8".repeat(64))}
 );
+select ${sqlLiteral(bootstrapEmergencyMarker)};
 select pg_sleep(0.35);
 commit;
-`,
-  bootstrapCompleteSql(
+`, bootstrapEmergencyMarker);
+await bootstrapEmergencyWriter.ready;
+const bootstrapEmergencyRace = await Promise.all([
+  bootstrapEmergencyWriter.result,
+  runSession(bootstrapCompleteSql(
     bootstrapExecution,
     bootstrapReceipt,
     bootstrapProof,
-    0.08,
-  ),
-);
+  )),
+]);
 assert.equal(bootstrapEmergencyRace[0].code, 0, "bootstrap emergency stop must commit");
 assert.notEqual(
   bootstrapEmergencyRace[1].code,

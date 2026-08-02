@@ -17,7 +17,7 @@
     {"id": "release-OTA", "risk": "high", "paths": ["eas.json", "app.config.ts", "config/release/", "ops/release-", "docs/release/"]},
     {"id": "Cognitive", "risk": "high", "paths": ["config/intelligence/", "docs/intelligence/", "supabase/functions/cognitive-"]},
     {"id": "autonomous-operators", "risk": "high", "paths": ["config/autonomy/", "ops/", "_lib/autonomous", "_lib/ownerCommand"]},
-    {"id": "CI-test-infrastructure", "risk": "supporting", "paths": [".github/", "scripts/", "tests/", "package.json", "package-lock.json", "config/assurance/"]},
+    {"id": "CI-test-infrastructure", "risk": "supporting", "paths": [".github/", "_lib/assurance/", "scripts/", "tests/", "package.json", "package-lock.json", "config/assurance/"]},
     {"id": "legal-store", "risk": "high", "paths": ["legal/", "docs/legal/", "docs/google-play/", "tools/ios-storekit-harness/"]}
   ],
   "featureDomainBundles": [
