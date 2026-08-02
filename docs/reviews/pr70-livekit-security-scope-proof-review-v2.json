@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr70-livekit-security-scope-proof-review-v2",
+  "reviewVersion": 2,
+  "reviewLane": "security-scope-and-proof-strength",
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "immutableSourceHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+  "synchronizedBranchHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "implementationHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "currentBase": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+  "baseHead": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+  "synchronizationParents": [
+    "4425554ed713d05e17ef117c6fe33985b9800912",
+    "dc9080e6278a82334e6196520dcbe5e5b844e943"
+  ],
+  "synchronizedTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "implementationTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "canonicalSyntheticTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "sourceDeltaHash": "f8e77af6fdee5e753094d724eb08887fe1b9cdc12c7048d1e58506ea8ee77284",
+  "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+  "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+  "configHash": "a723272ecf034cbd8ea20d07da9f78ad3cd09527ef776909c2a7ae95bb27a73e",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewHead": "daa0b179ec57d0963b5052268f3ae277f8ec52c1",
+  "reviewTimestamp": "2026-08-02T01:41:51Z",
+  "reviewLevel": "C",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-4-security-scope-and-proof-strength",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "security-scope-and-proof-strength",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "databaseContactByReview": false,
+      "providerContactByReview": false
+    },
+    "historyPreservation": {
+      "status": "pass",
+      "normalMergeCommit": "daa0b179ec57d0963b5052268f3ae277f8ec52c1",
+      "previousReviewHead": "16b1c2a9c51e8d29deeb16a7f675202c103354f9",
+      "previousReviewHeadIsFirstParent": true,
+      "implementationHeadIsSecondParent": true,
+      "v1EvidencePreservedUnchanged": true
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "correctedImmutableSourceIsFirstParent": true,
+      "currentBaseIsSecondParent": true,
+      "providerSnapshotMatches": true,
+      "canonicalTreeMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedFileSetEquivalent": true,
+      "manualConflictResolution": false,
+      "reviewedAndSynchronizedSourceDeltaHash": "f8e77af6fdee5e753094d724eb08887fe1b9cdc12c7048d1e58506ea8ee77284",
+      "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91"
+    },
+    "boundedScope": {
+      "status": "pass",
+      "featureId": "livekit-media-transport",
+      "approvedDomain": "one LiveKit/database final-source-identity objective",
+      "changedFiles": 10,
+      "fileBudget": 10,
+      "additions": 2517,
+      "deletions": 17,
+      "netChangedLines": 2500,
+      "lineBudget": 2500,
+      "scopeWaiver": "pr-b1-livekit-source-cross-binding-scope-waiver-v1",
+      "productSourceGrowth": false,
+      "providerSourceGrowth": false,
+      "nativeSourceGrowth": false,
+      "packageGrowth": false,
+      "workflowGrowth": false,
+      "currentTruthAuthoredDelta": false,
+      "unrelatedScopeFound": false
+    },
+    "securityAuthority": {
+      "status": "pass",
+      "successorRlsEnabled": true,
+      "successorRlsForced": true,
+      "successorTableRevokes": ["public", "anon", "authenticated", "service_role"],
+      "successorFunctionRevokes": ["public", "anon", "authenticated", "service_role"],
+      "securityDefinerFunctions": 2,
+      "emptySearchPathFunctions": 2,
+      "successorGrantStatements": 0,
+      "successorPolicyCreateAlterOrDropStatements": 0,
+      "successorRlsDisableStatements": 0,
+      "successorServiceRoleGrant": false,
+      "serviceRoleWidening": false,
+      "rlsWeakening": false,
+      "authOrRoleWidening": false,
+      "switchOrScheduleActivation": false
+    },
+    "correctedPredecessorTest": {
+      "status": "pass_recorded_not_rerun",
+      "correctionChangedFiles": [
+        "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql"
+      ],
+      "migrationOrAuthoritySourceChanged": false,
+      "planned": 23,
+      "passed": 23,
+      "failed": 0,
+      "enabledTriggerRequired": "cognitive_livekit_platform_run_identity_v3",
+      "retiredTriggerRequiredAbsent": "cognitive_livekit_platform_run_identity_v2",
+      "rerunByThisReviewLane": false
+    },
+    "migrationIntegrity": {
+      "status": "pass",
+      "deployedPredecessorVersion": "20260730142519",
+      "deployedPredecessorRawSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "deployedPredecessorByteIdenticalToStoppedPr52": true,
+      "forwardCorrectionVersion": "20260730230022",
+      "forwardCorrectionRawSha256": "9408ac9896751a4f4ad798ad2644e805e2c42a10c374e24667c66aa624701011",
+      "forwardCorrectionOnly": true,
+      "deployedMigrationRewritten": false,
+      "migrationAppliedByReview": false
+    },
+    "focusedChecks": {
+      "status": "pass",
+      "securityScopeSourceAssertions": "pass_forced_rls_four_role_revokes_two_empty_search_paths_no_grant_policy_or_rls_widening",
+      "sourceContract": {
+        "command": "node --test tests/assurance/reconciliation/livekit-final-source-identity-cross-binding.test.mjs",
+        "planned": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "migrationReadbackGuard": "pass",
+      "assuranceContracts": "pass_13_contracts_20_features_25_escaped_defects",
+      "assurancePrScope": "pass_10_of_10_files_2500_of_2500_net_lines",
+      "concurrencyFixtureSyntax": "pass",
+      "sourceContractSyntax": "pass",
+      "gitDiffCheck": "pass",
+      "databaseContact": false,
+      "providerContact": false
+    },
+    "localBehavioralEvidence": {
+      "status": "pass_recorded_at_corrected_immutable_source_and_preserved_by_exact_base_sync",
+      "rerunByThisReviewLane": false,
+      "pgTapPassed": 28,
+      "pgTapFailed": 0,
+      "concurrencyPassed": 19,
+      "concurrencyFailed": 0,
+      "correctedPredecessorPassed": 23,
+      "correctedPredecessorFailed": 0,
+      "proofBoundary": "T3 sanitized local database integration only",
+      "substitutesForProviderOrRuntimeProof": false
+    },
+    "linkedNoApply": {
+      "status": "PASS_NO_APPLY_SCOPED_HISTORICAL_EXACT_MIGRATION_SET",
+      "evidenceMode": "coordinator-supplied-sanitized-private-coordination-record",
+      "reviewRanLinkedCommand": false,
+      "reviewQueriedProvider": false,
+      "b1PendingExactlyOnce": true,
+      "b2AndB3SeparatelyOwned": true,
+      "unexpectedMigrations": [],
+      "seeds": [],
+      "roles": [],
+      "migrationApplied": false,
+      "providerStateChanged": false,
+      "correctedSynchronizedHeadRefresh": "coordinator_owned",
+      "substitutesForProviderOrRuntimeBehavior": false
+    },
+    "proofStrength": {
+      "status": "pass",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T3_INTEGRATION": "LOCAL_INTEGRATION_CLEAR_RECORDED_NOT_RERUN",
+      "T4_NATIVE_PROVIDER": "NOT_CLAIMED",
+      "T5_SIGNED_ARTIFACT": "NOT_CLAIMED",
+      "T6_INSTALLED_PHYSICAL": "NOT_CLAIMED",
+      "T7_PUBLIC_CANARY": "NOT_CLAIMED",
+      "localDatabaseTestsSubstituteForProviderRuntimeProof": false,
+      "noApplySubstitutesForRuntimeBehavior": false,
+      "higherTierProofClaimedByReview": false
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending_after_current_reviews",
+      "implementationHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+      "reviewDoesNotSubstituteForCi": true,
+      "failureWaived": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationSourceEditedByReview": false,
+      "databaseMutation": false,
+      "providerMutation": false,
+      "migrationDeployment": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRightsRolesChanged": false,
+      "authOrRlsChangedByReview": false,
+      "fullCiRunByReview": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false,
+      "userDerivedMemory": "off",
+      "level2Repair": "off"
+    }
+  },
+  "testResultHash": "3db80744241b4da462a59d86e6e2b837966218cb9a9a6d1a666c5e9b63352965",
+  "findings": [
+    {
+      "id": "B1_SECURITY_AUTHORITY_SCOPE",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The successor forces RLS, revokes table and function access from public, anon, authenticated, and service_role, gives both security-definer functions an empty search path, grants no role authority, changes no policies, and does not weaken auth or RLS."
+    },
+    {
+      "id": "B1_PROOF_TIER_SUBSTITUTION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The recorded 28/28 pgTAP, 19/19 concurrency, and corrected predecessor 23/23 remain T3 sanitized local behavior; linked no-apply is planning evidence. None is presented as T4 provider/runtime or higher-tier proof."
+    },
+    {
+      "id": "B1_BOUNDED_HIGH_RISK_SCOPE",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The exact delta is 10 files and 2,500 net lines under the B1 waiver, confined to one LiveKit/database identity objective with no product, provider, native, package, workflow, or authored current-truth growth."
+    }
+  ],
+  "severityCounts": {
+    "P0": {"open": 0, "resolved": 0, "total": 0},
+    "P1": {"open": 0, "resolved": 2, "total": 2},
+    "P2": {"open": 0, "resolved": 1, "total": 1},
+    "P3": {"open": 0, "resolved": 0, "total": 0}
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "resolvedFindings": 3,
+    "historicalEvidencePreserved": true,
+    "implementationFilesOnReviewBranch": 0,
+    "reviewDisposition": "PASS_LEVEL_C_SECURITY_SCOPE_AND_PROOF_STRENGTH_PENDING_FROZEN_HEAD_CI",
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
