@@ -135,16 +135,16 @@ select ok(
 );
 
 select ok(
-  exists (
-    select 1
+  (
+    select count(*) filter (
+      where tgname = 'cognitive_livekit_platform_run_identity_v3'
+        and tgenabled = 'O'
+    ) = 1 and count(*) filter (where tgname = 'cognitive_livekit_platform_run_identity_v2') = 0
     from pg_trigger
-    where tgrelid =
-      'public.cognitive_livekit_platform_activation_outcomes'::regclass
-      and tgname = 'cognitive_livekit_platform_run_identity_v2'
+    where tgrelid = 'public.cognitive_livekit_platform_activation_outcomes'::regclass
       and not tgisinternal
-      and tgenabled = 'O'
   ),
-  'the final run-identity trigger is enabled'
+  'the v3 final run-identity trigger is enabled and v2 is retired'
 );
 
 select ok(
