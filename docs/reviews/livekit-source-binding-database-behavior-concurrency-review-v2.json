@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "livekit-source-binding-database-behavior-concurrency-review-v2",
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "database-behavior-and-concurrency",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "implementationClassification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "immutableSourceHead": "3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73",
+  "synchronizedImplementationHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+  "synchronizedImplementationTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "currentBase": "5a34a1da27cd7b1689d55889f966bfc3708541b7",
+  "synchronizationParents": [
+    "3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73",
+    "5a34a1da27cd7b1689d55889f966bfc3708541b7"
+  ],
+  "canonicalSyntheticTree": "9c04f76366d4a879be247a26c6eb7edf6fcf17e9",
+  "providerBranchSnapshot": "341a45688e59bc320a2acaf9047deeaef03098cd",
+  "hashes": {
+    "sourceDeltaHash": "553172beaff237585272979db17e4ec36ed61f875a622cc1c6177dbfcc433f46",
+    "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+    "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+    "independentSourceDeltaPatchSha256": "cc89591ece055dc91a195a5a088a646ad6243d625da62119a402c4cb217687d7",
+    "independentChangedPathListSha256": "238be1fb91f19134800ad05c5243446fe430af6c322168305fee40d490e9f609",
+    "focusedPgTapSha256": "5af016399979fe5cc7b5d96a49b716b3bf903c2af3c2271367096fdcb237fcca",
+    "concurrencyFixtureSha256": "bdb806f9eeeaa89cd82c33998b64f9eefeaecbadb0ca4afae44693e4d6ce2269",
+    "successorMigrationSha256": "9408ac9896751a4f4ad798ad2644e805e2c42a10c374e24667c66aa624701011",
+    "deployedPredecessorSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204"
+  },
+  "historicalEvidence": {
+    "preservedFile": "docs/reviews/livekit-source-binding-db-security-review.json",
+    "preservedReviewId": "livekit-source-binding-db-security-review-v1",
+    "preservedUnchanged": true,
+    "classification": "historical_stale",
+    "reason": "It binds predecessor head 6d05b2bd2e56695e76a7bcfb0890303bf768cb8e and predates the behavioral matrix, local integration gate, and verified base synchronization."
+  },
+  "exactHeadBinding": {
+    "status": "pass",
+    "immutableSourceIsFirstParent": true,
+    "currentBaseIsSecondParent": true,
+    "observedTreeEqualsCanonicalSyntheticTree": true,
+    "providerSnapshotMatches": true,
+    "sourceDeltaByteEquivalentAfterBaseSynchronization": true,
+    "changedPathsEquivalentAfterBaseSynchronization": true
+  },
+  "scope": {
+    "status": "pass",
+    "featureId": "livekit-media-transport",
+    "changedFiles": 10,
+    "fileBudget": 10,
+    "netChangedLines": 2500,
+    "lineBudget": 2500,
+    "waiver": "pr-b1-livekit-source-cross-binding-scope-waiver-v1",
+    "unrelatedScopeFound": false
+  },
+  "localDatabaseEvidence": {
+    "status": "pass",
+    "evidenceSource": "coordinator-private-sanitized-local-gate-record",
+    "reviewReranDatabase": false,
+    "target": "isolated local Supabase/PostgreSQL stack only",
+    "cliVersion": "2.109.1",
+    "initialHarnessClassification": "NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE",
+    "initialHarnessWasSourceFailure": false,
+    "migrationChainMaterializedThrough": "20260730230022",
+    "focusedPgTap": {
+      "planned": 28,
+      "executed": 28,
+      "passed": 28,
+      "failed": 0,
+      "elapsedSeconds": 47,
+      "result": "PASS"
+    },
+    "concurrency": {
+      "plannedWitnesses": 19,
+      "executedWitnesses": 19,
+      "passedWitnesses": 19,
+      "failedWitnesses": 0,
+      "elapsedSeconds": 7,
+      "result": "PASS"
+    },
+    "cleanupReadback": {
+      "outcomes": 0,
+      "authorizations": 0,
+      "receipts": 0,
+      "result": "PASS"
+    },
+    "remoteDatabaseContact": false,
+    "providerContact": false,
+    "migrationDeployment": false
+  },
+  "behavioralAudit": {
+    "status": "pass",
+    "fixtureIsNonVacuous": true,
+    "providerBackedSanitizedSandboxProof": true,
+    "actualImmutableUpdateAndDeleteRejections": true,
+    "actualAuthorizationReceiptCrossBinding": true,
+    "actualEnabledFinalizationTriggerExercised": true,
+    "exactAndroidAccepted": true,
+    "exactIosAccepted": true,
+    "androidReplayDenied": true,
+    "iosReplayDenied": true,
+    "mismatchedPlatformDenied": true,
+    "mismatchedSourceCommitDenied": true,
+    "mismatchedSourceTreeDenied": true,
+    "mismatchedDeploymentDenied": true,
+    "mismatchedRuntimeDenied": true,
+    "mismatchedUpdateDenied": true,
+    "mismatchedArtifactDenied": true,
+    "mismatchedRunSourceHashDenied": true,
+    "mismatchedRunRuntimeHashDenied": true,
+    "olderOrSiblingSourceSubstitutionDenied": true,
+    "sourceOrSchemaIntrospectionAcceptedAsBehaviorProof": false
+  },
+  "transactionAndRaceAudit": {
+    "status": "pass",
+    "preflightUsesPerPlatformAdvisoryTransactionLock": true,
+    "authorizationLocksReceiptForUpdate": true,
+    "authorizationUsesPerPlatformAdvisoryTransactionLock": true,
+    "authorizationLocksTargetSwitchForUpdate": true,
+    "parallelAuthorizationSingleWinnerObserved": true,
+    "parallelAuthorizationLoserObserved": true,
+    "finalizationLocksAuthorizationForUpdate": true,
+    "finalizationLocksReceiptForShare": true,
+    "finalizationUsesSamePerPlatformAdvisoryTransactionLock": true,
+    "finalizationLocksTargetSwitchForUpdate": true,
+    "authorizationOutcomeUniqueConstraintPresent": true,
+    "replayedAuthorizationDeniedBehaviorally": true,
+    "androidAndIosSwitchStateIsolated": true,
+    "expiredReceiptOpenDenied": true,
+    "expiredAuthorizationRollsBack": true,
+    "enabledScheduleRemainsAbsent": true,
+    "existingVisualSwitchesRemainEnabled": true
+  },
+  "proofBoundary": {
+    "highestSatisfiedTier": "T3_LOCAL_INTEGRATION",
+    "providerOrNativeProofClaimed": false,
+    "signedArtifactProofClaimed": false,
+    "installedOrPhysicalProofClaimed": false,
+    "publicCanaryProofClaimed": false,
+    "runtimeActivationClaimed": false
+  },
+  "dependencyFreeChecks": {
+    "concurrencyFixtureSyntax": "pass",
+    "sourceContract": {
+      "planned": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "assuranceContracts": {
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25,
+      "result": "pass"
+    },
+    "implementationPrScope": "pass_10_of_10_files_2500_of_2500_net_lines",
+    "gitDiffCheck": "pass"
+  },
+  "historicalFindingDisposition": [
+    {
+      "id": "B1_CONCURRENCY_FIXTURE_REJECTED_BY_SOURCE_BINDING",
+      "previousSeverity": "P1",
+      "status": "resolved",
+      "resolution": "The exact frozen receipt/source/artifact tuples and provider-backed sanitized sandbox proof now pass the 19-witness local concurrency gate."
+    },
+    {
+      "id": "B1_T3_SOURCE_INTROSPECTION_SUBSTITUTION",
+      "previousSeverity": "P1",
+      "status": "resolved",
+      "resolution": "The 28-case pgTAP now executes positive and negative DML against the actual v3 trigger and immutable tables; source inspection is not accepted as its substitute."
+    },
+    {
+      "id": "B1_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING",
+      "previousSeverity": "P1",
+      "status": "resolved_by_separate_migration_no_apply_lane",
+      "resolution": "Current sanitized coordination evidence records PASS_NO_APPLY_SCOPED; independent no-apply adjudication remains owned by the migration/no-apply review discipline."
+    },
+    {
+      "id": "B1_RECONCILIATION_REPORT_NOT_EXACT_HEAD_BOUND",
+      "previousSeverity": "P2",
+      "status": "resolved",
+      "resolution": "This additive review binds the immutable source, synchronized head, exact base, exact tree, provider branch snapshot, and evidence hashes."
+    }
+  ],
+  "findings": [],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "PASS_LEVEL_C_DATABASE_BEHAVIOR_AND_CONCURRENCY",
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true
+  },
+  "nonInterference": {
+    "implementationSourceEditedByReview": false,
+    "databaseTestRerunByReview": false,
+    "remoteDatabaseMutation": false,
+    "providerMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRightsRolesAuthRlsChanged": false,
+    "fullCiRunByReview": false,
+    "privateEvidenceCommitted": false,
+    "denoLockTouched": false
+  },
+  "reviewTimestamp": "2026-08-02T00:55:32Z"
+}
