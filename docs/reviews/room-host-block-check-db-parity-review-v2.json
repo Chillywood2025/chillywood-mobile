@@ -1,0 +1,367 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "room-host-block-check-db-parity-review-v2",
+  "reviewVersion": 2,
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "database-parity-immutability-and-no-apply",
+  "reviewLevel": "C",
+  "humanApproval": false,
+  "implementationPrNumber": 75,
+  "implementationBranch": "codex/assurance-reconcile-room-host-block-check",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "immutableSourceHead": "a24efd543c5f19290879e7089c1c57768bc03a4d",
+  "synchronizedBranchHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+  "currentBase": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "baseHead": "da89d88adb929e8cd9718b31227f79bf243c2395",
+  "synchronizedTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "implementationTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "canonicalSyntheticTree": "2405577c7215140a3d731bff7b53012997a4d635",
+  "synchronizationParents": [
+    "a24efd543c5f19290879e7089c1c57768bc03a4d",
+    "da89d88adb929e8cd9718b31227f79bf243c2395"
+  ],
+  "sourceDeltaHash": "8446093a0e5ff054558f7a8bcbaf73e456d612a76a4a736e36ab011d35db7efb",
+  "sourceDeltaHashMethod": "sha256(trim(git diff --binary --no-renames merge-base immutable-source-head)) and synchronized equivalent",
+  "changedFileHash": "6712e28d6225c1ae597be763f14fc903c0f2d625b352c3385e9fcc14a7469a73",
+  "changedFileHashMethod": "sha256(trim(git diff --name-status -z --no-renames current-base synchronized-head))",
+  "renameAwareChangedFileHash": "e4d65c9275075dfbc8a190f075da701392ca2b97637a845831476003b60b1c17",
+  "migrationSetHash": "93151ccc267c571e4120e5461d4b6b0bd7881ca7f95f61019107122f3e22d882",
+  "configHash": "22cad5f2dead2e6d2b52332d8541f39ea644aee340263066d39c3e59dc21e783",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewRef": "codex/assurance-reconcile-room-host-block-check-review-db-parity",
+  "reviewHead": "5e90027367c280b8f928629fa4a52d9081bdf937",
+  "reviewTimestamp": "2026-08-02T06:18:24Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-database-parity-immutability-and-no-apply",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "historicalEvidence": [
+    {
+      "preservedFile": "docs/reviews/room-host-block-check-db-parity-review.json",
+      "preservedReviewId": "room-host-block-check-db-parity-review-v1",
+      "preservedSha256": "799a1cd0d5e89b401d5b98835e7f92112036cf2395c6c840784720d0ab6aaa56",
+      "preservedUnchanged": true,
+      "classification": "historical_stale_resolved_additively"
+    }
+  ],
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "database-parity-immutability-and-no-apply",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "databaseContactByReview": false,
+      "providerContactByReview": false
+    },
+    "historyPreservation": {
+      "status": "pass",
+      "v1Sha256": "799a1cd0d5e89b401d5b98835e7f92112036cf2395c6c840784720d0ab6aaa56",
+      "v1PreservedUnchanged": true
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "ordinaryTwoParentImplementationMerge": true,
+      "immutableSourceIsImplementationFirstParent": true,
+      "currentBaseIsImplementationSecondParent": true,
+      "firstParentDistance": 1,
+      "observedTreeEqualsCanonicalSyntheticTree": true,
+      "providerBranchSnapshotMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "implementationBlobIdentitiesPreserved": true,
+      "reviewBranchContainsOnlyReviewEvidenceBeyondImplementation": true
+    },
+    "scope": {
+      "status": "pass",
+      "featureId": "supabase-migrations-rls",
+      "changedFiles": 7,
+      "additions": 2123,
+      "deletions": 1,
+      "netChangedLines": 2122,
+      "registeredScopeWaiver": "pr-b3-room-host-authorization-scope-waiver-v1",
+      "fileBudgetMaximum": 8,
+      "lineBudgetMaximum": 2400,
+      "highRiskDomains": [
+        "database-RLS"
+      ],
+      "secondHighRiskDomain": false,
+      "unrelatedScopeFound": false
+    },
+    "deployedMigrationParity": {
+      "status": "pass",
+      "classification": "DEPLOYED_SOURCE_BYTE_EXACT",
+      "reviewQueriedRemote": false,
+      "remoteEvidenceMode": "preserved-read-only-coordinator-evidence",
+      "remoteMigrationHead": "20260730161737",
+      "version": "20260730161737",
+      "name": "allow_room_host_participant_block_check",
+      "statementCount": 1,
+      "rawSha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "remoteStatementArraySha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "repositoryNormalizeSqlV1Sha256": "6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765",
+      "lowerWhitespaceV1Sha256": "694167713f37b1bdff9e8bc0570ba6de27c87074aa52ea8d01a1bc9b2a41949d",
+      "byteExact": true,
+      "bodyRewritten": false,
+      "versionRenamed": false,
+      "reapplied": false
+    },
+    "undeployedCandidateDisposition": {
+      "status": "pass",
+      "version": "20260725224000",
+      "name": "allow_room_host_participant_block_check",
+      "classificationBeforeRemoval": "SOURCE_ONLY",
+      "remotePresent": false,
+      "executableSourcePresent": false,
+      "disposition": "confirmed-undeployed-and-removed-through-preserved-successor-history",
+      "deployedMigrationChanged": false
+    },
+    "forwardCorrection": {
+      "status": "pass",
+      "version": "20260730230031",
+      "name": "room_host_block_check_fail_closed_authority",
+      "rawSha256": "0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38",
+      "repositoryNormalizeSqlV1Sha256": "46fbdbcf48db5a399ff60c2c9ee51283e2016cd253b802267824facd9b3ed75e",
+      "lowerWhitespaceV1Sha256": "3f8f15055843fb6935dbcc05aa54c62ccc38c207100b49adca9f1bf1c77c66dd",
+      "deploymentStatus": "GIT_SOURCE_ONLY_NOT_APPLIED",
+      "forwardOnly": true,
+      "deployedPredecessorChanged": false,
+      "deployedMigrationReapplied": false,
+      "migrationDeploymentAttemptedByReview": false
+    },
+    "recordedLocalDatabaseGate": {
+      "status": "pass_recorded_post_base_synchronization_not_rerun_by_review",
+      "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "target": "isolated-local-supabase-postgresql-stack",
+      "cleanLocalReset": true,
+      "focusedPgTapPlanned": 48,
+      "focusedPgTapExecuted": 48,
+      "focusedPgTapPassed": 48,
+      "focusedPgTapFailed": 0,
+      "compatibilityPlanned": 4,
+      "compatibilityExecuted": 4,
+      "compatibilityPassed": 4,
+      "compatibilityFailed": 0,
+      "totalPlanned": 52,
+      "totalExecuted": 52,
+      "totalPassed": 52,
+      "totalFailed": 0,
+      "transactionRolledBack": true,
+      "temporaryPgTapExtensionCountAfterRollback": 0,
+      "fixtureRoomCountAfterRollback": 0,
+      "fixtureBlockCountAfterRollback": 0,
+      "fixtureMembershipCountAfterRollback": 0,
+      "remoteDatabaseContact": false,
+      "providerContact": false,
+      "remotePersistentDatabaseMutation": false
+    },
+    "localAclReadback": {
+      "status": "pass",
+      "owner": "postgres",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "searchPath": "",
+      "publicExecute": false,
+      "anonExecute": false,
+      "authenticatedExecute": true,
+      "serviceRoleExecute": true,
+      "explicitExecuteGrantees": [
+        "postgres",
+        "authenticated",
+        "service_role"
+      ],
+      "linkedAclChanged": false
+    },
+    "linkedPreCorrectionAcl": {
+      "status": "preserved_read_only",
+      "owner": "postgres",
+      "securityDefiner": true,
+      "volatility": "stable",
+      "searchPath": "public",
+      "explicitExecuteGrantees": [
+        "postgres",
+        "anon",
+        "authenticated",
+        "service_role"
+      ],
+      "publicExplicitGranteePresent": false,
+      "definitionSha256": "c68fb3282ba4955f41f4aae5c143dabf678f278c051eb641251bdfd7097c8ad2",
+      "changedByProgram": false,
+      "changedByReview": false
+    },
+    "linkedNoApply": {
+      "status": "PASS_NO_APPLY_SCOPED",
+      "command": "supabase db push --dry-run",
+      "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "directSynchronizedContext": true,
+      "sourceAssemblyRequired": false,
+      "pendingCount": 3,
+      "pendingMigrations": [
+        {
+          "program": "B2",
+          "version": "20260730170000",
+          "name": "revenuecat_transfer_authoritative_ordering",
+          "count": 1
+        },
+        {
+          "program": "B1",
+          "version": "20260730230022",
+          "name": "cognitive_livekit_final_source_identity_cross_binding",
+          "count": 1
+        },
+        {
+          "program": "B3",
+          "version": "20260730230031",
+          "name": "room_host_block_check_fail_closed_authority",
+          "count": 1
+        }
+      ],
+      "undeployedCandidate20260725224000Present": false,
+      "deployed20260730161737Pending": false,
+      "unexpectedMigrations": [],
+      "seedFiles": [],
+      "roleFiles": [],
+      "applied": false,
+      "aclMutation": false,
+      "roleMutation": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "runByReview": false
+    },
+    "sourceAndModelRerun": {
+      "status": "pass",
+      "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "topLevelGroups": 6,
+      "totalAssertions": 14,
+      "passed": 14,
+      "failed": 0,
+      "negativeControls": 8,
+      "negativeControlsPassed": 8,
+      "reviewReranDependencyFreeGate": true
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR",
+      "T3_INTEGRATION": "INTEGRATION_CLEAR_LOCAL_ONLY",
+      "T4_NATIVE_PROVIDER": "NOT_APPLICABLE",
+      "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
+      "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
+      "T7_PUBLIC_CANARY": "NOT_APPLICABLE_TO_THIS_NON_RELEASE_REVIEW",
+      "sourceIntrospectionAcceptedAsDatabaseIntegrationProof": false,
+      "linkedNoApplyAcceptedAsDeploymentOrRuntimeProof": false,
+      "providerOrNativeProofClaimed": false,
+      "signedArtifactProofClaimed": false,
+      "installedOrPhysicalProofClaimed": false,
+      "publicCanaryProofClaimed": false
+    },
+    "phase1Ci": {
+      "status": "pending_post_review_by_owner_mandated_sequence",
+      "implementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9",
+      "planned": 13,
+      "reviewLaneAwaitedOrPolled": false,
+      "finding": false,
+      "exactNextAction": "After all four B3 review lanes report P0=0 and P1=0, run one exact 13/13 Phase 1 CI at this frozen synchronized head."
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationSourceEditedByReview": false,
+      "historicalReviewEditedByReview": false,
+      "databaseTestRerunByReview": false,
+      "providerContactByReview": false,
+      "remoteDatabaseContactByReview": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "linkedAclMutation": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRightsRolesModerationRankingChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false
+    }
+  },
+  "testResultHash": "ca2e3d7a70ca6f477c531eefc6b12cc22386f11d9fbd6f628c05e08e2b808263",
+  "findings": [
+    {
+      "id": "B3_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The direct synchronized context returned PASS_NO_APPLY_SCOPED with only B2 20260730170000, B1 20260730230022, and B3 20260730230031 pending exactly once; no apply or mutation occurred."
+    },
+    {
+      "id": "B3_CROSS_ROOM_HOST_AUTHORITY_CASE_MISSING",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The current 48-case local pgTAP includes other-room-host denial and exact-party negative controls, and all 48 focused assertions passed."
+    },
+    {
+      "id": "B3_REMOTE_EVIDENCE_LINEAGE_AND_NORMALIZER_AMBIGUOUS",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "The current reconciliation record binds preserved read-only ledger evidence and names the raw, repository normalizeSql v1, and lower-whitespace v1 hashes separately."
+    },
+    {
+      "id": "B3_RECONCILIATION_REPORT_NOT_EXACT_HEAD_BOUND",
+      "severity": "P2",
+      "status": "resolved",
+      "resolution": "This additive review binds immutable source, synchronized head, exact base, two parents, canonical tree, source-delta hash, changed-file hash, migration-set hash, config hash, and local and linked evidence."
+    }
+  ],
+  "severityCounts": {
+    "P0": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    },
+    "P1": {
+      "open": 0,
+      "resolved": 2,
+      "total": 2
+    },
+    "P2": {
+      "open": 0,
+      "resolved": 2,
+      "total": 2
+    },
+    "P3": {
+      "open": 0,
+      "resolved": 0,
+      "total": 0
+    }
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "PASS_LEVEL_C_DATABASE_PARITY_IMMUTABILITY_AND_NO_APPLY",
+    "reviewHeadValidation": "BASE_SYNC_BINDING_CLEAR_PHASE1_CI_SEQUENCED_AFTER_FOUR_REVIEWS",
+    "historicalEvidencePreserved": true,
+    "implementationFilesOnReviewBranch": 0,
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "linkedAclMutation": false,
+    "buildOrOta": false
+  }
+}
