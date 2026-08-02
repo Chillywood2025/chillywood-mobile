@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "inventoryId": "pr-d-native-provider-runtime-artifact-inventory-v1",
+  "classification": "READ_ONLY_INVENTORY_FIRST_BOUNDED_OBJECTIVE",
+  "branch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "worktree": "/Users/loverslane/chillywood-assurance-worktrees/d-native-provider-runtime-artifact",
+  "startingMain": "62d4b526675e5a10177d37c53670709d63062293",
+  "feature": "eas-build-update-release",
+  "plan": {
+    "command": "node scripts/assurance/plan.mjs --feature=eas-build-update-release",
+    "status": "PASS",
+    "requirements": "REQUIREMENTS_CLEAR",
+    "architecture": "ARCHITECTURE_CLEAR",
+    "risk": "D",
+    "ownerSystems": [
+      "release_ota_operator",
+      "installed_product_qa_operator"
+    ]
+  },
+  "inventory": {
+    "sourceProfiles": [
+      "app.json",
+      "app.config.ts",
+      "eas.json",
+      "config/release/android-chat-livekit-qa.json",
+      "config/release/android-production.json",
+      "config/release/ios-qa.json"
+    ],
+    "releaseAndRuntimeGuards": [
+      "scripts/generate-release-manifest-contract.mjs",
+      "scripts/guard-ota-native-boundary.mjs",
+      "scripts/guard-android-native-runtime-compatibility.mjs",
+      "scripts/guard-ios-native-call-policy.mjs",
+      "scripts/guard-ios-release-workflows.mjs",
+      "scripts/guard-tester-build-current-runtime-policy.mjs",
+      "scripts/test-runtime-update-activation.mjs",
+      "scripts/validate-runtime.mjs",
+      "scripts/validate-runtime-config.js"
+    ],
+    "providerReadbackSurfaces": [
+      "scripts/android-release-provider-readback.mjs",
+      "scripts/ios-release-provider-readback.mjs",
+      "scripts/all-platform-release-provider-readback.mjs",
+      "scripts/guard-provider-access-broker.mjs",
+      "scripts/guard-provider-readiness-policy.mjs"
+    ],
+    "nativeSourceSurfaces": [
+      "plugins/withChillyChatIosNativeCalls.js",
+      "plugins/withChillyChatNativeCallNotifications.js",
+      "plugins/withLiveKitIosStaticFrameworkCompatibility.js",
+      "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift",
+      "modules/chillywood-native-calls/ios/ChillywoodNativeCallsAppDelegateSubscriber.swift",
+      "modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift",
+      "modules/chillywood-native-calls/expo-module.config.json",
+      "android/app/src/main/res/raw"
+    ],
+    "existingSanitizedProviderFixtures": [
+      "tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures-v1.json",
+      "tests/assurance/providers/revenuecat/revenuecat-transfer-fixtures.test.mjs"
+    ],
+    "existingNativeHarnesses": [
+      "tools/ios-storekit-harness/Tests/ChillywoodStoreKitTests/ChillywoodStoreKitTests.swift"
+    ]
+  },
+  "gaps": {
+    "androidInstrumentation": {
+      "status": "GAP",
+      "androidTestDirectoryPresent": false,
+      "unitTestDirectoryPresent": false,
+      "generatedProjectSourceInGit": "resources-only",
+      "finding": "No committed Android instrumentation or native unit test proves generated configuration, capability, runtime, or plugin parity."
+    },
+    "iosNativeTests": {
+      "status": "GAP",
+      "generatedIosProjectPresent": false,
+      "nativeCallXcTestPresent": false,
+      "storeKitHarnessIsSufficient": false,
+      "finding": "Swift module sources exist, but no committed generated iOS project or native-call XCTest proves plugin output, entitlements, capabilities, runtime, or release-profile parity."
+    },
+    "easBuildUpdateParity": {
+      "status": "PARTIAL",
+      "finding": "Profiles and focused guards exist, but no single deterministic fail-closed contract binds source, profile, environment, runtime, channel, platform, generated native digests, capabilities, release identity, and rollback."
+    },
+    "providerFixtures": {
+      "status": "PARTIAL",
+      "finding": "Sanitized RevenueCat fixtures exist; EAS, Apple, and Google Play readback inputs are not yet represented by a bounded offline fixture contract for this feature."
+    },
+    "artifactProof": {
+      "status": "NOT_STARTED",
+      "finding": "No current signed-artifact inspection, embedded update readback, native-capability extraction, install, physical-device, or public-canary proof is claimed by this inventory."
+    }
+  },
+  "fileOwnershipPlan": {
+    "singleImplementationOwner": "PR-D-IMPLEMENTATION-OWNER",
+    "initialOwnedFiles": [
+      "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
+      "config/assurance/feature-registry-v1.json",
+      "one focused PR D source guard",
+      "one focused PR D deterministic model test"
+    ],
+    "conditionalNativeOwnershipAfterScopeFreeze": [
+      "Android instrumentation or native unit-test surfaces",
+      "iOS native-test surfaces for generated plugin/module behavior"
+    ],
+    "readOnlyInputsUnlessAProvenDefectRequiresChange": [
+      "app.json",
+      "app.config.ts",
+      "eas.json",
+      "config/release/*.json",
+      "plugins/*.js",
+      "modules/chillywood-native-calls/**",
+      "scripts/*release*",
+      "scripts/*runtime*",
+      "scripts/*native*",
+      "scripts/*provider*"
+    ],
+    "coordinatorOnlyExcluded": [
+      "config/assurance/current-truth-v1.json",
+      "CURRENT_STATE.md",
+      "NEXT_TASK.md"
+    ]
+  },
+  "firstBoundedObjective": {
+    "mode": "offline-deterministic-no-provider-contact",
+    "objective": "Create one fail-closed parity map binding source, build profile, environment, runtime, channel, platform, generated native digests, declared and required capabilities, release identity, compatible rollback, and proof-tier blockers.",
+    "requiredNegativeControls": [
+      "wrong environment accepted",
+      "runtime and channel cross-bound",
+      "platform profile cross-bound",
+      "required native capability omitted",
+      "generated native digest stale",
+      "signed identity absent but treated as proved",
+      "incompatible rollback accepted",
+      "provider or installed proof inferred from source-only evidence"
+    ],
+    "permittedProofTiers": [
+      "T0_REQUIREMENT",
+      "T1_SOURCE",
+      "T2_MODEL"
+    ],
+    "notClaimed": [
+      "T4_NATIVE_PROVIDER",
+      "T5_SIGNED_ARTIFACT",
+      "T6_INSTALLED_PHYSICAL",
+      "T7_PUBLIC_CANARY"
+    ]
+  },
+  "prohibitions": [
+    "no build",
+    "no OTA",
+    "no provider contact or mutation",
+    "no submission or release",
+    "no switch or schedule change",
+    "no user-derived memory",
+    "no Level 2 repair",
+    "do not revive the rejected PR #52 activation bundle"
+  ]
+}
