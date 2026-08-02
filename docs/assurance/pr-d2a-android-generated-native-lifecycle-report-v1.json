@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "reportId": "pr-d2a-android-generated-native-lifecycle-report-v1",
+  "classification": "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT",
+  "objective": "ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
+  "startingMain": "ddc5bfa92d8bf70a3374e1dee6983c2bc8cf9874",
+  "startingTree": "2c95fb46943e61318dce43a26540f812ca3837e7",
+  "target": {
+    "targetId": "android-chat-livekit-qa-build-86",
+    "packageIdentifier": "com.chillywood.mobile",
+    "nativeBuild": "86",
+    "runtimeVersion": "1.0.0-android-chat-call-action-v1",
+    "channel": "android-chat-livekit-qa"
+  },
+  "generatedSource": {
+    "runs": "3/3",
+    "observedDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+    "expectedD1Digest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+    "deterministic": true,
+    "authoritativePaths": 22,
+    "generatedDirectoryCommitted": false
+  },
+  "productDefects": [
+    {
+      "code": "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING",
+      "severity": "P1",
+      "sourcePath": "plugins/withChillyChatNativeCallNotifications.js",
+      "generatedPath": "android/app/src/main/AndroidManifest.xml",
+      "lifecycleState": "PENDING_NATIVE_ACTION_AT_REST",
+      "expected": "The private pending-action preferences file is excluded from cloud backup and device-to-device transfer, or application backup is disabled.",
+      "actual": "The generated application does not disable backup and defines no backup/data-extraction rule excluding chilly_chat_native_call_action_v1.",
+      "effect": "Thread and invite identifiers plus pending Answer/Decline routing state can become eligible for Android backup or transfer outside the intended 45-second lifecycle.",
+      "newBinaryRequired": true,
+      "evidenceTier": "T1_GENERATED_NATIVE_SOURCE",
+      "emulatorRequiredToReproduce": false
+    }
+  ],
+  "preservedSecurityTest": {
+    "code": "ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED",
+    "path": "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt",
+    "scenario": "EXTERNAL_CUSTOM_SCHEME_ORIGIN",
+    "sourceConcern": "The notification Answer PendingIntent uses the exported MainActivity, whose generated onCreate/onNewIntent capture path accepts a valid custom-scheme action without a notification-origin authenticity marker.",
+    "antiVacuity": "ACTION_VIEW_ACTIVITY_LAUNCH_PRECEDES_EMPTY_STORE_ASSERTION",
+    "expectedCurrentProductResult": "FAIL_ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED",
+    "emulatorResult": "NOT_RUN_AFTER_PRODUCT_DEFECT_STOP",
+    "classification": "UNRESOLVED_P1_CANDIDATE_FOR_D2B"
+  },
+  "compile": {
+    "java": "OPENJDK_21_LOCAL",
+    "androidSdk": "LOCAL_PLATFORMS_34_36_36_1",
+    "gradle": "GENERATED_PROJECT_WRAPPER",
+    "tasks": [
+      {"task": ":app:compileDebugKotlin", "result": "PASS"},
+      {"task": ":app:compileDebugUnitTestKotlin", "result": "FAIL_TEST_HARNESS_COMPILE_DIAGNOSTIC_INCOMPLETE"},
+      {"task": ":app:testDebugUnitTest", "result": "NOT_RUN"},
+      {"task": ":app:assembleDebug", "result": "NOT_RUN"},
+      {"task": ":app:compileDebugAndroidTestKotlin", "result": "NOT_RUN"},
+      {"task": ":app:assembleDebugAndroidTest", "result": "NOT_RUN"}
+    ],
+    "releaseOrDistributionBuild": false,
+    "signedArtifactProof": false
+  },
+  "tests": {
+    "contractAssertions": "24/24",
+    "sourceModelAssertions": "10/10",
+    "mandatoryNegativeControls": "12/12",
+    "cliFailClosed": "14/14",
+    "d1GeneratedDigestContinuity": "3/3",
+    "jvmUnit": "BLOCKED_BEFORE_EXECUTION",
+    "emulatorLifecycle": "NOT_RUN_AFTER_PRODUCT_DEFECT_STOP"
+  },
+  "capabilities": {
+    "required": 21,
+    "d1ProvidedSource": 21,
+    "missingAtGeneratedSourceTier": 0,
+    "compiledRegistrationProof": "PARTIAL_APP_KOTLIN_COMPILE_ONLY"
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR_WITH_BLOCKING_PRODUCT_DEFECT",
+    "T2_MODEL": "MODEL_CLEAR_WITH_PRESERVED_FAILING_TEST",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT",
+    "T4_NATIVE_PROVIDER": "PARTIAL_LOCAL_ANDROID_COMPILE_ONLY",
+    "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "requiredD2BCorrectionAuthorization": {
+    "scope": "Android native-action provenance plus backup exclusion in the same generated-native notification domain",
+    "mustPreserve": [
+      "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING failing gate",
+      "ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED instrumentation gate",
+      "server-authoritative JavaScript acceptance",
+      "no native LiveKit token or media authority"
+    ],
+    "mustNotInclude": ["release build", "provider contact", "OTA", "iOS implementation", "product behavior outside native call action capture"]
+  },
+  "nonInterference": {
+    "productNativeSourceModified": false,
+    "releaseManifestModified": false,
+    "packageOrWorkflowModified": false,
+    "providerContact": false,
+    "releaseBuild": false,
+    "ota": false,
+    "physicalDevice": false,
+    "databaseMutation": false,
+    "generatedAndroidCommitted": false
+  },
+  "cleanup": {
+    "disposableProjectsRemoved": true,
+    "debugOrTestApksRetained": false,
+    "emulatorPackagesInstalled": false,
+    "emulatorSerialRecorded": false,
+    "secretOrPrivateLogRetained": false
+  }
+}

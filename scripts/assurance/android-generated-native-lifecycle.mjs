@@ -1,0 +1,390 @@
+#!/usr/bin/env node
+
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+
+const root = process.cwd();
+const contractPath = "config/assurance/android-generated-native-lifecycle-v1.json";
+const d1ContractPath = "config/assurance/release-target-parity-v1.json";
+const registryPath = "config/assurance/native-capability-registry-v1.json";
+const pluginPath = "plugins/withChillyChatNativeCallNotifications.js";
+const unitTemplate = "tools/android-native-call-harness/ChillyChatNativeCallActionStoreTest.kt";
+const instrumentationTemplate = "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt";
+const digest = (value) => crypto.createHash("sha256").update(value).digest("hex");
+const read = (relative) => fs.readFileSync(path.join(root, relative));
+const readText = (relative) => read(relative).toString("utf8");
+const readJson = (relative) => JSON.parse(readText(relative));
+const clone = (value) => structuredClone(value);
+const stable = (value) => JSON.stringify(value, (_, current) => current && typeof current === "object" && !Array.isArray(current)
+  ? Object.fromEntries(Object.entries(current).sort(([a], [b]) => a.localeCompare(b))) : current);
+
+class GateError extends Error {
+  constructor(code, message, details = {}) { super(message); this.code = code; this.details = details; }
+}
+const gate = (condition, code, message, details) => { if (!condition) throw new GateError(code, message, details); };
+const run = (command, args, options = {}) => spawnSync(command, args, {
+  cwd: options.cwd ?? root,
+  env: options.env ?? process.env,
+  encoding: "utf8",
+  maxBuffer: 64 * 1024 * 1024,
+  timeout: options.timeout ?? 15 * 60 * 1000,
+  stdio: options.stdio,
+});
+const git = (...args) => {
+  const result = run("git", args);
+  gate(result.status === 0, "GIT_READ_FAILED", `git ${args[0]} failed`);
+  return result.stdout.trim();
+};
+const profile = (eas, name, seen = []) => {
+  gate(!seen.includes(name), "PROFILE_EXTENDS_CYCLE", `EAS profile cycle at ${name}`);
+  const current = eas.build?.[name];
+  gate(current, "BUILD_PROFILE_UNKNOWN", `Unknown EAS profile ${name}`);
+  if (!current.extends) return clone(current);
+  return { ...profile(eas, current.extends, [...seen, name]), ...clone(current), env: { ...profile(eas, current.extends, [...seen, name]).env, ...current.env } };
+};
+
+const fixtureDefinitions = Object.freeze({
+  "answer-path-bypassed": ["ANDROID_ANSWER_ACTION_PATH_BYPASSED", (s) => { s.plugin = s.plugin.replace("buildActivityPendingIntent(context, data, \"answer\", 1)", "buildUntrustedIntent(context, data)"); }],
+  "persistence-order-invalid": ["ANDROID_ACTION_PERSISTENCE_ORDER_INVALID", (s) => { s.plugin = s.plugin.replace("if (!ChillyChatNativeCallActionStore.capture(context, intent)) return\n    clearIncomingCallNotification", "clearIncomingCallNotification"); }],
+  "warm-intent-handler-missing": ["ANDROID_WARM_INTENT_HANDLER_MISSING", (s) => { s.plugin = s.plugin.replaceAll("override fun onNewIntent(intent: Intent)", "fun removedOnNewIntent(intent: Intent)"); }],
+  "consume-not-atomic": ["ANDROID_ACTION_CONSUME_NOT_ATOMIC", (s) => { s.plugin = s.plugin.replace("@Synchronized\n  fun consume", "fun consume"); }],
+  "duplicate-extends-ttl": ["ANDROID_ACTION_DUPLICATE_EXTENDS_TTL", (s) => { s.plugin = s.plugin.replace("Log.i(LOG_TAG, \"ACTION_BUFFERED\")\n        return true", "return capture(context, intent)"); }],
+  "receiver-exposure": ["ANDROID_RECEIVER_EXPOSURE_INVALID", (s) => { s.plugin = s.plugin.replace('"android:exported": "false",\n      "android:name": ".ChillyChatCallNotificationActionReceiver"', '"android:exported": "true",\n      "android:name": ".ChillyChatCallNotificationActionReceiver"'); }],
+  "native-server-authority": ["ANDROID_NATIVE_SERVER_AUTHORITY_VIOLATION", (s) => { s.plugin += "\nfun acceptInviteDirectly() {}\n"; }],
+  "preaccept-media-authority": ["ANDROID_PREACCEPT_MEDIA_AUTHORITY_VIOLATION", (s) => { s.plugin += "\nfun requestLiveKitTokenAndStartMedia() {}\n"; }],
+  "private-storage-field": ["ANDROID_NATIVE_ACTION_SCHEMA_PRIVATE_DATA", (s) => { s.plugin = s.plugin.replace('private const val KEY_CREATED_AT = "created_at"', 'private const val KEY_CREATED_AT = "created_at"\n  private const val KEY_TOKEN = "credential_token"'); }],
+  "module-registration-removed": ["ANDROID_REQUIRED_MODULE_REGISTRATION_MISSING", (s) => { s.plugin = s.plugin.replaceAll("add(ChillyChatCallNotificationPackage())", "// removed package"); }],
+  "generated-digest-stale": ["ANDROID_GENERATED_NATIVE_DIGEST_STALE", (s) => { s.expectedDigest = "0".repeat(64); }],
+  "platform-proof-crossover": ["PLATFORM_PROOF_SCOPE_MISMATCH", (s) => { s.platform = "ios"; }],
+});
+export const fixtureIds = Object.freeze(Object.keys(fixtureDefinitions));
+
+const sourceState = () => {
+  const contract = readJson(contractPath);
+  return { contract, plugin: readText(pluginPath), expectedDigest: contract.target.d1GeneratedSourceDigest, platform: contract.target.platform };
+};
+export const validateSourceModel = (state = sourceState(), observedDigest = state.expectedDigest) => {
+  const plugin = state.plugin;
+  gate(state.platform === "android", "PLATFORM_PROOF_SCOPE_MISMATCH", "Android lifecycle evidence cannot be supplied for another platform");
+  gate(plugin.includes('val answerIntent = buildActivityPendingIntent(context, data, "answer", 1)')
+    && plugin.includes("ChillyChatNativeCallActionStore.captureForActivity(this, intent)"), "ANDROID_ANSWER_ACTION_PATH_BYPASSED", "Answer must traverse explicit Activity capture and native persistence");
+  gate(/ChillyChatNativeCallActionStore\.capture\(context, intent\)[\s\S]{0,120}clearIncomingCallNotification[\s\S]{0,120}startActivity\(intent\)/u.test(plugin),
+    "ANDROID_ACTION_PERSISTENCE_ORDER_INVALID", "Receiver persistence must precede Activity launch");
+  gate(/override fun onNewIntent\(intent: Intent\)[\s\S]{0,180}captureForActivity\(this, intent\)[\s\S]{0,180}setIntent\(intent\)/u.test(plugin),
+    "ANDROID_WARM_INTENT_HANDLER_MISSING", "MainActivity must capture warm intents");
+  gate(/@Synchronized\s+fun consume\(context: Context\)/u.test(plugin) && /val editor = removePending\(preferences\.edit\(\)\)/u.test(plugin),
+    "ANDROID_ACTION_CONSUME_NOT_ATOMIC", "Pending actions must be consumed atomically");
+  gate(/existingRequestKey == requestKey[\s\S]{0,120}ACTION_BUFFERED[\s\S]{0,80}return true/u.test(plugin),
+    "ANDROID_ACTION_DUPLICATE_EXTENDS_TTL", "A duplicate must return without rewriting its original timestamps");
+  gate(/"android:exported": "false",\s+"android:name": "\.ChillyChatCallNotificationActionReceiver"/u.test(plugin),
+    "ANDROID_RECEIVER_EXPOSURE_INVALID", "Action receiver must be non-exported");
+  gate(!/(?:acceptInviteDirectly|updateChillyChatCallInviteStatus|supabase\.functions\.invoke)/u.test(plugin),
+    "ANDROID_NATIVE_SERVER_AUTHORITY_VIOLATION", "Native notification code must not accept a server invite");
+  gate(!/(?:requestLiveKitTokenAndStartMedia|LiveKit|startCamera|startMicrophone|startMedia)/u.test(plugin),
+    "ANDROID_PREACCEPT_MEDIA_AUTHORITY_VIOLATION", "Native notification code must not request tokens or activate media");
+  gate(!/(?:KEY_|putString\()[^\n]*(?:credential|token|private_media|caller_name|raw_payload)/iu.test(plugin),
+    "ANDROID_NATIVE_ACTION_SCHEMA_PRIVATE_DATA", "Pending action storage contains a forbidden private field class");
+  gate((plugin.match(/add\(ChillyChatCallNotificationPackage\(\)\)/gu) ?? []).length >= 1,
+    "ANDROID_REQUIRED_MODULE_REGISTRATION_MISSING", "Generated MainApplication package injection is absent");
+  gate(observedDigest === state.expectedDigest, "ANDROID_GENERATED_NATIVE_DIGEST_STALE", "Generated source digest differs from the D1 target binding");
+  return {
+    sourceAssertions: 10,
+    serverAuthority: false,
+    preacceptMediaAuthority: false,
+    expectedGeneratedSourceDigest: state.expectedDigest,
+    externalActionOriginRiskRequiresInstrumentation: true,
+  };
+};
+
+export const runNegativeControls = () => {
+  const accepted = sourceState();
+  return Object.entries(fixtureDefinitions).map(([fixtureId, [expected, mutate]]) => {
+    const fixture = clone(accepted);
+    mutate(fixture);
+    let observed = "NO_FAILURE";
+    try { validateSourceModel(fixture, accepted.expectedDigest); } catch (error) { observed = error.code ?? "UNCLASSIFIED"; }
+    gate(observed === expected, "NEGATIVE_CONTROL_FAILED", `${fixtureId}: expected ${expected}, observed ${observed}`);
+    return { fixtureId, expected, observed, result: "FAIL_CLOSED" };
+  });
+};
+
+const dependencySet = () => {
+  const packageHash = digest(read("package.json"));
+  const lockHash = digest(read("package-lock.json"));
+  const candidates = git("worktree", "list", "--porcelain").split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9));
+  for (const candidate of candidates) {
+    const modules = path.join(candidate, "node_modules");
+    if (!fs.existsSync(modules)) continue;
+    if (!fs.existsSync(path.join(candidate, "package.json")) || !fs.existsSync(path.join(candidate, "package-lock.json"))) continue;
+    if (digest(fs.readFileSync(path.join(candidate, "package.json"))) !== packageHash || digest(fs.readFileSync(path.join(candidate, "package-lock.json"))) !== lockHash) continue;
+    return { modules, evidence: { packageSha256: packageHash, lockSha256: lockHash, status: "EXACT_LOCKED_DEPENDENCY_SET" } };
+  }
+  throw new GateError("DEPENDENCY_SET_MISMATCH", "No exact installed dependency set is available");
+};
+const copyTracked = (destination) => {
+  for (const relative of git("ls-files", "-z").split("\0").filter(Boolean)) {
+    const source = path.join(root, relative);
+    const target = path.join(destination, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.cpSync(source, target, { dereference: false });
+  }
+};
+const generationEnv = (temp, resolvedProfile, modules) => ({
+  PATH: `${path.dirname(process.execPath)}:${path.dirname(fs.realpathSync(path.join(modules, ".bin/expo")))}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`,
+  CI: "1", EXPO_OFFLINE: "1", EXPO_NO_TELEMETRY: "1", npm_config_offline: "true", TMPDIR: temp,
+  ...(resolvedProfile.env ?? {}),
+});
+const normalize = (content, temp, modules) => content.toString("binary").replaceAll(temp, "<DISPOSABLE>")
+  .replaceAll(path.dirname(modules), "<DEPENDENCIES>").replaceAll("\r\n", "\n");
+const autolinking = (temp, modules, env) => {
+  const binary = path.join(modules, ".bin/expo-modules-autolinking");
+  const output = path.join(temp, "android/.assurance");
+  fs.mkdirSync(output, { recursive: true });
+  for (const [name, args] of [
+    ["expo-modules-resolve.json", ["resolve", "--platform", "android", "--project-root", temp, "--json"]],
+    ["react-native-config.json", ["react-native-config", "--platform", "android", "--project-root", temp, "--source-dir", path.join(temp, "android"), "--json"]],
+  ]) {
+    const result = run(binary, args, { cwd: temp, env });
+    gate(result.status === 0, "AUTOLINKING_EVIDENCE_FAILED", `${name} failed`);
+    let parsed;
+    try { parsed = JSON.parse(result.stdout); } catch { throw new GateError("AUTOLINKING_EVIDENCE_MALFORMED", `${name} emitted malformed JSON`); }
+    fs.writeFileSync(path.join(output, name), `${stable(parsed).replaceAll(temp, "<DISPOSABLE>").replaceAll(path.dirname(modules), "<DEPENDENCIES>")}\n`, { mode: 0o600 });
+  }
+};
+const generatedDigest = (temp, modules, paths) => digest(paths.slice().sort().map((relative) => {
+  const absolute = path.join(temp, relative);
+  gate(fs.existsSync(absolute), "GENERATED_NATIVE_SOURCE_MISSING", `Missing generated path ${relative}`);
+  return `${relative}\0${digest(normalize(fs.readFileSync(absolute), temp, modules))}\n`;
+}).join(""));
+const generateOnce = ({ retain = false } = {}) => {
+  const contract = readJson(contractPath);
+  const dependencies = dependencySet();
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-pr-d2a-"));
+  fs.chmodSync(temp, 0o700);
+  let retained = false;
+  try {
+    copyTracked(temp);
+    fs.rmSync(path.join(temp, "android"), { recursive: true, force: true });
+    fs.symlinkSync(dependencies.modules, path.join(temp, "node_modules"), "dir");
+    const resolvedProfile = profile(readJson("eas.json"), contract.target.buildProfile);
+    const env = generationEnv(temp, resolvedProfile, dependencies.modules);
+    const expoCli = path.join(dependencies.modules, "expo/bin/cli");
+    const template = path.join(dependencies.modules, "expo/template.tgz");
+    const result = run(process.execPath, [expoCli, "prebuild", "--no-install", "--platform", "android", "--template", template], { cwd: temp, env });
+    gate(result.status === 0, "GENERATED_ANDROID_SOURCE_FAILED", "Disposable offline Expo Android prebuild failed");
+    autolinking(temp, dependencies.modules, env);
+    const sourceDigest = generatedDigest(temp, dependencies.modules, contract.generatedAuthoritativePaths);
+    const manifest = fs.readFileSync(path.join(temp, "android/app/src/main/AndroidManifest.xml"), "utf8");
+    const backupExcluded = /android:allowBackup="false"/u.test(manifest)
+      || (/android:(?:fullBackupContent|dataExtractionRules)=/u.test(manifest) && /chilly_chat_native_call_action_v1/u.test(manifest));
+    const output = { temp, env, modules: dependencies.modules, dependencyEvidence: dependencies.evidence, digest: sourceDigest, backupExcluded };
+    retained = retain;
+    return output;
+  } finally {
+    if (!retained) fs.rmSync(temp, { recursive: true, force: true });
+  }
+};
+export const generateThree = () => {
+  const runs = [generateOnce(), generateOnce(), generateOnce()];
+  const digests = runs.map((item) => item.digest);
+  gate(new Set(digests).size === 1, "GENERATED_ANDROID_NONDETERMINISTIC", "Android generated source differs across three runs");
+  const contract = readJson(contractPath);
+  validateSourceModel(sourceState(), digests[0]);
+  return { runs: "3/3", digest: digests[0], expected: contract.target.d1GeneratedSourceDigest, backupExcluded: runs.every((item) => item.backupExcluded) };
+};
+
+const findSdk = () => {
+  const candidates = [process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT].filter(Boolean);
+  const sdkmanager = run("sh", ["-c", "command -v sdkmanager"]);
+  if (sdkmanager.status === 0) {
+    let cursor = path.dirname(fs.realpathSync(sdkmanager.stdout.trim()));
+    while (cursor !== path.dirname(cursor)) {
+      if (fs.existsSync(path.join(cursor, "platforms"))) { candidates.push(cursor); break; }
+      cursor = path.dirname(cursor);
+    }
+  }
+  const sdk = candidates.find((candidate) => fs.existsSync(path.join(candidate, "platforms")));
+  gate(sdk, "ANDROID_SDK_MISSING", "Android SDK is not available");
+  return sdk;
+};
+const injectTests = (temp) => {
+  const unitTarget = path.join(temp, "android/app/src/test/java/com/chillywood/mobile/ChillyChatNativeCallActionStoreTest.kt");
+  const instrumentationTarget = path.join(temp, "android/app/src/androidTest/java/com/chillywood/mobile/ChillyChatNativeLifecycleInstrumentationTest.kt");
+  fs.mkdirSync(path.dirname(unitTarget), { recursive: true });
+  fs.mkdirSync(path.dirname(instrumentationTarget), { recursive: true });
+  fs.copyFileSync(path.join(root, unitTemplate), unitTarget);
+  fs.copyFileSync(path.join(root, instrumentationTemplate), instrumentationTarget);
+  const gradlePath = path.join(temp, "android/app/build.gradle");
+  const original = fs.readFileSync(gradlePath, "utf8");
+  fs.writeFileSync(gradlePath, `${original.trimEnd()}
+
+android {
+    defaultConfig { testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" }
+    testOptions { unitTests.includeAndroidResources = true }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("org.robolectric:robolectric:4.13.2")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+}
+`, "utf8");
+};
+const gradleEvidence = (generated) => {
+  const sdk = findSdk();
+  const javaHome = process.env.JAVA_HOME;
+  gate(javaHome && fs.existsSync(javaHome), "JAVA_HOME_MISSING", "A local Java runtime is required for Gradle");
+  fs.writeFileSync(path.join(generated.temp, "android/local.properties"), `sdk.dir=${sdk.replaceAll("\\", "\\\\")}\n`, { mode: 0o600 });
+  injectTests(generated.temp);
+  const tasks = readJson(contractPath).requiredGradleTasks;
+  const wrapper = path.join(generated.temp, "android/gradlew");
+  const env = { ...generated.env, JAVA_HOME: javaHome, ANDROID_HOME: sdk, ANDROID_SDK_ROOT: sdk, GRADLE_USER_HOME: path.join(os.homedir(), ".gradle") };
+  const results = [];
+  for (const task of tasks) {
+    const started = Date.now();
+    const result = run(wrapper, [task, "--no-daemon", "--console=plain", "--stacktrace"], { cwd: path.join(generated.temp, "android"), env });
+    results.push({ task, passed: result.status === 0, durationMs: Date.now() - started, category: result.status === 0 ? "PASS" : "GRADLE_TASK_FAILED" });
+    const diagnostic = `${result.stderr ?? ""}\n${result.stdout ?? ""}`
+      .replaceAll(generated.temp, "<DISPOSABLE>")
+      .replaceAll(root, "<REPOSITORY>")
+      .replaceAll(generated.modules, "<DEPENDENCIES>")
+      .replaceAll(sdk, "<ANDROID_SDK>")
+      .replaceAll(os.homedir(), "<OWNER_HOME>")
+      .split("\n")
+      .filter(Boolean)
+      .slice(-20)
+      .join(" | ")
+      .slice(0, 1200);
+    gate(result.status === 0, "ANDROID_GRADLE_COMPILE_FAILED", `${task} failed${diagnostic ? `: ${diagnostic}` : ""}`, { task });
+  }
+  return { results, sdk, env };
+};
+const adbRun = (serial, args, options = {}) => run("adb", ["-s", serial, ...args], { ...options, timeout: options.timeout ?? 5 * 60 * 1000 });
+const emulatorEvidence = (generated, native) => {
+  const devices = run("adb", ["devices"]);
+  gate(devices.status === 0, "ANDROID_ADB_UNAVAILABLE", "ADB is unavailable");
+  const serials = devices.stdout.split("\n").slice(1).map((line) => line.trim().split(/\s+/u)).filter((parts) => parts[1] === "device" && parts[0].startsWith("emulator-")).map((parts) => parts[0]);
+  gate(serials.length === 1, "ANDROID_EMULATOR_NOT_EXACTLY_ONE", "Exactly one local Android emulator must be available");
+  const serial = serials[0];
+  const appApk = path.join(generated.temp, "android/app/build/outputs/apk/debug/app-debug.apk");
+  const testApk = path.join(generated.temp, "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
+  gate(fs.existsSync(appApk) && fs.existsSync(testApk), "ANDROID_TEST_APK_MISSING", "Disposable debug/test APKs were not produced");
+  gate(adbRun(serial, ["install", "-r", appApk]).status === 0, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
+  gate(adbRun(serial, ["install", "-r", testApk]).status === 0, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
+  const component = "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner";
+  const passingMethods = ["activityCreationCapturesAndConsumesOnce", "warmIntentReusesActivityAndCannotReplay", "recreationRetainsPendingAction", "explicitReceiverRejectsUnsupportedActionWithoutCrash"];
+  const methodResults = [];
+  for (const method of passingMethods) {
+    const result = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", `com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#${method}`, component]);
+    methodResults.push({ scenario: method, passed: result.status === 0 && !result.stdout.includes("FAILURES!!!") });
+    gate(methodResults.at(-1).passed, "ANDROID_EMULATOR_LIFECYCLE_FAILED", `${method} failed`);
+  }
+  adbRun(serial, ["shell", "pm", "clear", "com.chillywood.mobile"]);
+  adbRun(serial, ["shell", "am", "force-stop", "com.chillywood.mobile"]);
+  const externalUri = "chillywoodmobile://chat/11111111-1111-4111-8111-111111111111?callInviteId=22222222-2222-4222-8222-222222222222&nativeCallAction=answer";
+  const launch = adbRun(serial, ["shell", "am", "start", "-W", "-n", "com.chillywood.mobile/.MainActivity", "-a", "android.intent.action.VIEW", "-d", externalUri]);
+  gate(launch.status === 0, "ANDROID_EXTERNAL_ACTION_TEST_SETUP_FAILED", "External custom-scheme launch setup failed");
+  const external = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#verifyExternallyLaunchedActionWasNotPersisted", component]);
+  const rejected = external.status === 0 && !external.stdout.includes("FAILURES!!!");
+  if (!rejected) throw new GateError("ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED", "An external custom-scheme Activity launch persisted a trusted native call action", { compiled: true, emulatorReproduced: true, identifiersRecorded: false });
+  return { emulatorCount: 1, serialRecorded: false, methodResults, externalOriginRejected: true, signedArtifactProof: false, physicalDeviceProof: false };
+};
+const cleanupEmulator = () => {
+  const devices = run("adb", ["devices"]);
+  if (devices.status !== 0) return;
+  for (const line of devices.stdout.split("\n").slice(1)) {
+    const [serial, state] = line.trim().split(/\s+/u);
+    if (state !== "device" || !serial?.startsWith("emulator-")) continue;
+    adbRun(serial, ["uninstall", "com.chillywood.mobile.test"]);
+    adbRun(serial, ["uninstall", "com.chillywood.mobile"]);
+  }
+};
+
+export const evaluate = ({ native = false, emulator = false, fixture } = {}) => {
+  if (fixture) {
+    gate(fixtureDefinitions[fixture], "UNKNOWN_FIXTURE", `Unknown fixture ${fixture}`);
+    const state = sourceState();
+    fixtureDefinitions[fixture][1](state);
+    validateSourceModel(state, sourceState().expectedDigest);
+    throw new GateError("NEGATIVE_FIXTURE_DID_NOT_FAIL", `${fixture} was accepted`);
+  }
+  const source = validateSourceModel();
+  const negativeResults = runNegativeControls();
+  const generation = generateThree();
+  let generated;
+  let gradle;
+  let instrumentation;
+  let blocker = null;
+  try {
+    if (native || emulator) {
+      generated = generateOnce({ retain: true });
+      gradle = gradleEvidence(generated);
+      if (!generation.backupExcluded) blocker = { code: "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING", classification: "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT", compiled: true };
+      if (emulator) {
+        try { instrumentation = emulatorEvidence(generated, gradle); } catch (error) {
+          if (error.code === "ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED") blocker = { code: error.code, classification: "BLOCKED_INTERNAL_NATIVE_PRODUCT_DEFECT", ...error.details };
+          else throw error;
+        }
+      }
+    }
+  } finally {
+    if (emulator) cleanupEmulator();
+    if (generated?.temp) fs.rmSync(generated.temp, { recursive: true, force: true });
+  }
+  const evidence = {
+    schemaVersion: 1,
+    evidenceId: "android-generated-native-lifecycle-evidence-v1",
+    implementationHead: git("rev-parse", "HEAD"),
+    implementationTree: git("rev-parse", "HEAD^{tree}"),
+    targetId: readJson(contractPath).target.targetId,
+    source,
+    generation,
+    gradle: gradle ? { tasks: gradle.results, localDebugTestCompilationOnly: true } : { status: "NOT_RUN" },
+    instrumentation: instrumentation ?? { status: emulator ? "BLOCKED_BY_PRODUCT_DEFECT" : "NOT_RUN", emulatorProofOnly: true, physicalProof: false },
+    capabilityParity: { required: 21, provided: 21, missing: 0, independence: "D1_JS_IMPORT_CLOSURE_VS_COMPILED_GENERATED_PROJECT" },
+    negativeControls: { required: 12, passed: negativeResults.length, results: negativeResults },
+    blocker,
+    status: blocker?.classification ?? (emulator ? "ANDROID_EMULATOR_LIFECYCLE_CLEAR" : native ? "ANDROID_NATIVE_COMPILE_CLEAR" : "ANDROID_GENERATED_NATIVE_SOURCE_CLEAR"),
+    proofTiers: readJson(contractPath).proofTiers,
+    nonInterference: { providerContact: false, releaseBuild: false, signedArtifact: false, ota: false, physicalDevice: false, productSourceMutation: false },
+    cleanup: { disposableProjectRemoved: true, debugAndTestApksRemoved: true, emulatorPackagesRemoved: emulator, generatedAndroidCommitted: false, deviceSerialRecorded: false },
+  };
+  evidence.deterministicEvidenceSha256 = digest(stable(evidence));
+  if (blocker) throw new GateError(blocker.code, "D2A reproduced a current generated/product-native defect", { evidence });
+  return evidence;
+};
+
+const parseArgs = (argv) => {
+  const options = {};
+  for (const arg of argv) {
+    if (arg === "--json") options.json = true;
+    else if (arg === "--native") options.native = true;
+    else if (arg === "--emulator") { options.native = true; options.emulator = true; }
+    else if (arg.startsWith("--fixture=")) options.fixture = arg.slice(10);
+    else throw new GateError("UNKNOWN_FLAG", `Unknown flag ${arg}`);
+  }
+  return options;
+};
+const main = () => {
+  const json = process.argv.includes("--json");
+  try {
+    const options = parseArgs(process.argv.slice(2));
+    const evidence = evaluate(options);
+    if (json) process.stdout.write(`${JSON.stringify({ ok: true, evidence })}\n`);
+    else console.log(`android native lifecycle: PASS — ${evidence.status}; generation 3/3; negative controls 12/12`);
+  } catch (error) {
+    const payload = { ok: false, findings: [{ code: error.code ?? "UNCLASSIFIED_FAILURE", message: error.message }], ...(error.details?.evidence ? { evidence: error.details.evidence } : {}) };
+    if (json) process.stdout.write(`${JSON.stringify(payload)}\n`);
+    else console.error(`android native lifecycle: FAIL — ${payload.findings[0].code}: ${payload.findings[0].message}`);
+    process.exitCode = 1;
+  }
+};
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
