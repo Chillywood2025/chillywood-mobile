@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-70-livekit-source-proof-review-v3",
+  "reviewType": "isolated-automated-review-lane",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "immutableSourceHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+  "synchronizedBranchHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "currentBase": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+  "synchronizedTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "canonicalSyntheticTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "sourceDeltaHash": "f8e77af6fdee5e753094d724eb08887fe1b9cdc12c7048d1e58506ea8ee77284",
+  "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+  "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "implementationTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "baseHead": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+  "configHash": "a723272ecf034cbd8ea20d07da9f78ad3cd09527ef776909c2a7ae95bb27a73e",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "source-identity-and-invariants",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "databaseContact": false,
+      "providerContact": false
+    },
+    "historyPreservation": {
+      "status": "pass",
+      "normalMergeCommit": "52da8c7b1af202164981bfe6d48eabad637aa15b",
+      "previousReviewHead": "83f03d2dd1301a863d8d10e2ff3c20358df7be61",
+      "previousReviewHeadIsFirstParent": true,
+      "implementationHeadIsSecondParent": true,
+      "v1AndV2EvidencePreservedUnchanged": true
+    },
+    "baseSynchronization": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "correctedImmutableSourceIsFirstParent": true,
+      "currentBaseIsSecondParent": true,
+      "canonicalTreeMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedFileSetEquivalent": true,
+      "manualConflictResolution": false
+    },
+    "exactDelta": {
+      "status": "pass",
+      "files": 10,
+      "additions": 2517,
+      "deletions": 17,
+      "netChangedLines": 2500,
+      "approvedScope": "LiveKit/database source-binding",
+      "scopeWaiver": "pr-b1-livekit-source-cross-binding-scope-waiver-v1",
+      "productNativeProviderPackageWorkflowGrowth": false
+    },
+    "correctedImmutableSource": {
+      "status": "pass",
+      "previousSynchronizedHead": "341a45688e59bc320a2acaf9047deeaef03098cd",
+      "correctedImmutableSourceHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+      "correctionChangedFiles": [
+        "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql"
+      ],
+      "implementationOrMigrationChangedByCorrection": false,
+      "correctedPredecessorPlan": 23,
+      "correctedPredecessorPassed": 23,
+      "correctedPredecessorFailed": 0,
+      "correctedResultRerunByThisReviewLane": false,
+      "enabledTriggerRequired": "cognitive_livekit_platform_run_identity_v3",
+      "retiredTriggerRequiredAbsent": "cognitive_livekit_platform_run_identity_v2"
+    },
+    "sourceIdentityAndInvariants": {
+      "status": "pass",
+      "preflightFinalSourceCommitBound": true,
+      "preflightFinalSourceTreeBound": true,
+      "authorizationReceiptTupleBound": true,
+      "finalizationAuthorizationReceiptTupleBound": true,
+      "sourceBuildHashBound": true,
+      "runtimeIdentityHashBound": true,
+      "internalUpdateIdBound": true,
+      "installedArtifactHashBound": true,
+      "androidIosIdentitySeparation": true,
+      "androidEvidenceCannotSatisfyIos": true,
+      "iosEvidenceCannotSatisfyAndroid": true,
+      "parentAndDivergedSourceDenied": true,
+      "sourceTreeMismatchDenied": true,
+      "runtimeMismatchDenied": true,
+      "updateMismatchDenied": true,
+      "artifactMismatchDenied": true,
+      "staleReceiptDenied": true,
+      "authorizationReplayDenied": true,
+      "enabledOutcomeReplayDenied": true,
+      "validExactAndroidAccepted": true,
+      "validExactIosAccepted": true,
+      "proofSubstitutionAccepted": false
+    },
+    "deployedMigrationImmutability": {
+      "status": "pass",
+      "deployedVersion": "20260730142519",
+      "deployedSourceSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204",
+      "successorVersion": "20260730230022",
+      "successorSourceSha256": "9408ac9896751a4f4ad798ad2644e805e2c42a10c374e24667c66aa624701011",
+      "forwardOnly": true,
+      "migrationAppliedByReviewLane": false
+    },
+    "focusedSourceContract": {
+      "status": "pass",
+      "command": "node --test tests/assurance/reconciliation/livekit-final-source-identity-cross-binding.test.mjs",
+      "passed": 4,
+      "failed": 0,
+      "databaseContact": false
+    },
+    "migrationReadbackGuard": {
+      "status": "pass",
+      "command": "npm run guard:chilly-chat-livekit-migration-readback"
+    },
+    "assuranceContracts": {
+      "status": "pass",
+      "command": "node scripts/assurance/validate-contracts.mjs",
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25
+    },
+    "fixtureSyntax": {
+      "status": "pass",
+      "command": "node --check scripts/test-cognitive-livekit-platform-authorization-concurrency.mjs"
+    },
+    "localBehavioralEvidence": {
+      "status": "pass_recorded_at_corrected_immutable_source",
+      "rerunByThisReviewLane": false,
+      "focusedPgTapPassed": 28,
+      "focusedPgTapFailed": 0,
+      "concurrencyPassed": 19,
+      "concurrencyFailed": 0,
+      "correctedPredecessorPassed": 23,
+      "correctedPredecessorFailed": 0,
+      "proofBoundary": "T3 sanitized local database integration only"
+    },
+    "proofTierHonesty": {
+      "status": "pass",
+      "t1Source": "SOURCE_CLEAR",
+      "t3LocalIntegration": "INTEGRATION_CLEAR_RECORDED_NOT_RERUN",
+      "sourceInspectionSubstitutedForDatabaseExecution": false,
+      "t4ProviderNativeClaimed": false,
+      "t5SignedArtifactClaimed": false,
+      "t6InstalledPhysicalClaimed": false,
+      "t7PublicCanaryClaimed": false
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending_after_current_reviews",
+      "implementationHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+      "eligibleAsThisLaneProof": false,
+      "failureWaived": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "providerMutation": false,
+      "databaseMutationByReviewLane": false,
+      "migrationDeployment": false,
+      "switchOrScheduleChanged": false,
+      "buildOrOta": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false,
+      "userDerivedMemory": "off",
+      "level2Repair": "off"
+    },
+    "gitDiffCheck": "pass"
+  },
+  "testResultHash": "ade8c79eea45ca593434699af24a9ef4cba9adfa1af9ef2215864fa861d50b25",
+  "reviewLevel": "C",
+  "reviewHead": "52da8c7b1af202164981bfe6d48eabad637aa15b",
+  "reviewTimestamp": "2026-08-02T01:38:48Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-source-identity-and-invariants",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "findings": [
+    {
+      "id": "LIVEKIT_FINAL_SOURCE_IDENTITY_CROSS_BINDING_MISSING",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The forward-only successor joins finalization to the immutable authorization and receipt tuple and exact per-platform source, tree, update, runtime, artifact, source-build, and runtime-identity fields; Android/iOS substitution and stale/replay cases are denied."
+    },
+    {
+      "id": "LIVEKIT_T3_MATERIALIZATION_PROOF_SUBSTITUTION",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "Recorded exact-source local behavioral evidence is 28/28 pgTAP, 19/19 concurrency, and corrected predecessor 23/23. This lane did not rerun the database or substitute source inspection for that execution."
+    },
+    {
+      "id": "LIVEKIT_PREDECESSOR_V2_TRIGGER_ASSERTION_STALE",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The one-file test-only correction requires exactly one enabled v3 outcome trigger and requires the retired v2 trigger to be absent; migration and implementation bytes are unchanged."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "historicalEvidencePreserved": true,
+    "implementationFilesOnReviewBranch": 0,
+    "reviewDisposition": "clear-source-identity-and-invariants-pending-coordinator-full-ci",
+    "mergePermitted": false
+  }
+}
