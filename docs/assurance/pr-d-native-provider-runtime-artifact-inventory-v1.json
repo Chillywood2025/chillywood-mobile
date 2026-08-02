@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "inventoryId": "pr-d-native-provider-runtime-artifact-inventory-v1",
-  "classification": "READ_ONLY_INVENTORY_FIRST_BOUNDED_OBJECTIVE",
+  "classification": "OFFLINE_PARITY_IMPLEMENTED_T0_T2_PENDING_IMMUTABLE_FREEZE",
   "branch": "codex/first-pass-assurance-native-provider-runtime-artifact",
   "worktree": "/Users/loverslane/chillywood-assurance-worktrees/d-native-provider-runtime-artifact",
   "startingMain": "62d4b526675e5a10177d37c53670709d63062293",
@@ -60,7 +60,14 @@
     ],
     "existingNativeHarnesses": [
       "tools/ios-storekit-harness/Tests/ChillywoodStoreKitTests/ChillywoodStoreKitTests.swift"
-    ]
+    ],
+    "controlClassifications": {
+      "AUTHORITATIVE_INPUT": ["app.json", "app.config.ts", "eas.json", "package.json", "package-lock.json", "config/release/*.json"],
+      "PARTIAL_GUARD": ["existing release/runtime/native-boundary guards", "existing release-manifest generator", "provider-readback scripts"],
+      "HISTORICAL_EVIDENCE": ["build 86 deliveryReadback", "build 8 binary/App Store identity", "build 84 artifact/provider/install records"],
+      "CURRENT_PROOF": [],
+      "MISSING": ["T3 integration", "T4 provider", "T5 current signed artifact", "T6 installed/physical", "T7 public canary"]
+    }
   },
   "gaps": {
     "androidInstrumentation": {
@@ -94,9 +101,11 @@
     "singleImplementationOwner": "PR-D-IMPLEMENTATION-OWNER",
     "initialOwnedFiles": [
       "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
-      "config/assurance/feature-registry-v1.json",
-      "one focused PR D source guard",
-      "one focused PR D deterministic model test"
+      "config/assurance/release-target-parity-v1.json",
+      "config/assurance/native-capability-registry-v1.json",
+      "scripts/assurance/release-parity.mjs",
+      "tests/assurance/release-parity.test.mjs",
+      "docs/assurance/pr-d1-offline-parity-report-v1.json"
     ],
     "conditionalNativeOwnershipAfterScopeFreeze": [
       "Android instrumentation or native unit-test surfaces",

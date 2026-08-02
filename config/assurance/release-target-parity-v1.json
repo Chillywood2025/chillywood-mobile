@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "contractId": "release-target-parity-v1",
+  "proofBoundary": {
+    "permittedClear": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL"],
+    "integration": "BLOCKED_INTERNAL",
+    "nativeProvider": "BLOCKED_EXTERNAL",
+    "signedArtifact": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "installedPhysical": "INSTALLED_PROOF_MISSING",
+    "publicCanary": "BLOCKED_EXTERNAL"
+  },
+  "authoritativeInputs": [
+    "app.json", "app.config.ts", "eas.json", "package.json", "package-lock.json",
+    "config/release/android-chat-livekit-qa.json", "config/release/android-production.json", "config/release/ios-qa.json"
+  ],
+  "profilePlatforms": {
+    "android-chat-livekit-qa": "android",
+    "android-production-local-recovery": "android",
+    "ios-qa": "ios"
+  },
+  "generatedSource": {
+    "method": "DISPOSABLE_OFFLINE_EXPO_PREBUILD_NO_INSTALL",
+    "proofTier": "T1_SOURCE",
+    "compiledNativeProof": false,
+    "signedArtifactProof": false,
+    "normalizationAllowlist": ["absolute disposable/dependency roots", "line endings", "file order", "opaque Xcode object IDs via relationship-preserving first-occurrence mapping"],
+    "androidFiles": [
+      "android/app/src/main/AndroidManifest.xml", "android/app/src/main/java/com/chillywood/mobile/MainActivity.kt",
+      "android/app/src/main/java/com/chillywood/mobile/MainApplication.kt", "android/app/src/main/java/com/chillywood/mobile/ChillyChatCallNotificationActionReceiver.kt",
+      "android/app/src/main/java/com/chillywood/mobile/ChillyChatCallNotificationModule.kt", "android/app/src/main/java/com/chillywood/mobile/ChillyChatCallNotificationPackage.kt",
+      "android/app/src/main/java/com/chillywood/mobile/ChillyChatCallNotifications.kt", "android/app/src/main/java/com/chillywood/mobile/ChillyChatFirebaseMessagingService.kt",
+      "android/app/src/main/java/com/chillywood/mobile/ChillyChatNativeCallActionStore.kt", "android/app/build.gradle", "android/build.gradle",
+      "android/settings.gradle", "android/gradle.properties", "android/app/src/main/res/values/strings.xml",
+      "android/.assurance/expo-modules-resolve.json", "android/.assurance/react-native-config.json"
+    ],
+    "iosFiles": [
+      "ios/Chillywood/Info.plist", "ios/Chillywood/Chillywood.entitlements", "ios/Chillywood/PrivacyInfo.xcprivacy",
+      "ios/Chillywood/AppDelegate.swift", "ios/Chillywood/Supporting/Expo.plist", "ios/Chillywood.xcodeproj/project.pbxproj",
+      "ios/Podfile", "ios/Podfile.properties.json", "ios/.assurance/expo-modules-resolve.json", "ios/.assurance/react-native-config.json"
+    ]
+  },
+  "targets": [
+    {
+      "targetId": "android-chat-livekit-qa-build-86", "classification": "ACTIVE_INTERNAL_TARGET",
+      "releaseManifest": "config/release/android-chat-livekit-qa.json", "platform": "android", "buildProfile": "android-chat-livekit-qa",
+      "environment": "production", "packageIdentifier": "com.chillywood.mobile", "appVersion": "1.0.0", "nativeBuild": "86",
+      "runtimeVersion": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "distribution": "google_play_internal",
+      "requiredCapabilities": ["android.image-manipulator", "android.livekit-webrtc", "android.native-call-actions", "android.notifications-custom-sounds", "android.firebase-messaging", "android.firebase-observability", "android.revenuecat", "android.camera-microphone", "android.photo-picker", "android.app-links"],
+      "releaseIdentityFields": ["deliveryReadback.easBuildId", "deliveryReadback.easSubmissionId", "deliveryReadback.embeddedUpdateId", "deliveryReadback.aabSha256", "deliveryReadback.playReleaseIdentity"],
+      "releaseIdentityClassification": "HISTORICAL_RECORDED_INPUT",
+      "rollback": {"identity": "declared-build-85", "nativeBuild": "85", "runtimeVersion": "1.0.0-android-imagemanipulator-v1", "identityStatus": "MISSING_HISTORICAL_ARTIFACT_IDENTITY", "providedCapabilities": []}
+    },
+    {
+      "targetId": "ios-qa-build-8", "classification": "ACTIVE_INTERNAL_TARGET",
+      "releaseManifest": "config/release/ios-qa.json", "platform": "ios", "buildProfile": "ios-qa", "environment": "production",
+      "packageIdentifier": "com.chillywood.mobile", "appVersion": "1.0.0", "nativeBuild": "8", "runtimeVersion": "1.0.0-iosqa1",
+      "channel": "ios-qa", "distribution": "testflight_internal",
+      "requiredCapabilities": ["ios.image-manipulator", "ios.livekit-webrtc", "ios.native-call-bridge", "ios.pushkit-voip", "ios.callkit", "ios.av-audio-session", "ios.background-modes", "ios.notifications-custom-sounds", "ios.firebase-observability", "ios.revenuecat", "ios.camera-microphone", "ios.photo-picker", "ios.associated-domains", "ios.privacy-manifest"],
+      "releaseIdentityFields": ["binarySha256", "appStoreConnectBuildId"], "releaseIdentityClassification": "HISTORICAL_RECORDED_INPUT",
+      "rollback": {"identityStatus": "MISSING", "providedCapabilities": []}
+    },
+    {
+      "targetId": "android-production-build-84-historical", "classification": "HISTORICAL_ARTIFACT",
+      "releaseManifest": "config/release/android-production.json", "platform": "android", "buildProfile": "android-production-local-recovery",
+      "environment": "production", "packageIdentifier": "com.chillywood.mobile", "appVersion": "1.0.0", "nativeBuild": "84",
+      "runtimeVersion": "1.0.0-android-imagemanipulator-v1", "channel": "production", "distribution": "google_play_internal",
+      "requiredCapabilities": ["android.image-manipulator"],
+      "releaseIdentityFields": ["artifactEvidence.productionAabSha256", "artifactEvidence.signingCertificateSha256", "playDistributionEvidence.submissionIdentifierSha256"],
+      "releaseIdentityClassification": "HISTORICAL_RECORDED_INPUT",
+      "rollback": {"identity": "legacy-build-80", "platform": "android", "packageIdentifier": "com.chillywood.mobile", "nativeBuild": "80", "runtimeVersion": "1.0.0", "identityStatus": "HISTORICAL_RECORDED_INPUT", "providedCapabilities": []}
+    }
+  ]
+}

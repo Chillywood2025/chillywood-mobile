@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "reportId": "pr-d1-offline-parity-report-v1",
+  "classification": "T0_T2_CLEAR_OFFLINE_SOURCE_MODEL",
+  "freezeBinding": "IMMUTABLE_HEAD_TREE_AND_EVIDENCE_HASHES_RECORDED_EXTERNALLY_AFTER_FREEZE_NOT_TRACKED_SELF_REFERENCE",
+  "startingCheckpoint": {
+    "head": "165533d50a58947140982f1a5dbe3fd13add30a5",
+    "tree": "d76676e7ddff74c09ffa4bc2994153772b69b73a",
+    "base": "62d4b526675e5a10177d37c53670709d63062293"
+  },
+  "contracts": {
+    "static": {"path": "config/assurance/release-target-parity-v1.json", "sha256": "2aac96f3198cf3aba101e038413464e6f2a4021fe1f77529aba8c3aaae5dbc1c"},
+    "capabilities": {"path": "config/assurance/native-capability-registry-v1.json", "sha256": "7869bcc6c6c8796d6675eaeeba4dfb345d8e84e667e14183df7e1fbfbf33fb2a"},
+    "validator": {"path": "scripts/assurance/release-parity.mjs", "sha256": "422719f5679db04a3b630fbf130021715a05b725ee5f15588c411208cea3308f"},
+    "test": {"path": "tests/assurance/release-parity.test.mjs", "sha256": "032162446d83d2d3f8a30cccb4eaca969cff25c2f048f20bb0615fea0caa41dd"}
+  },
+  "dependencyIntegrity": {
+    "status": "EXACT_LOCKED_DEPENDENCY_SET",
+    "packageSha256": "3cd1f2049b72a89bb5630659b76d24f6add21d7e670ca0003ecb0a5f122ea744",
+    "lockSha256": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28",
+    "directPackages": 66,
+    "fullTreeProblems": [],
+    "networkUsed": false
+  },
+  "targets": [
+    {
+      "targetId": "android-chat-livekit-qa-build-86", "classification": "ACTIVE_INTERNAL_TARGET",
+      "generatedNativeSourceDigest": "4e71a2b9f91e87338918ce276e53b06114a47aeb2f5bf3ca0aefe543ce985409",
+      "capabilityParity": "PASS_REQUIRED_SUBSET_PROVIDED", "missingCapabilities": [],
+      "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_MISSING_BUILD_85_ARTIFACT_IDENTITY"
+    },
+    {
+      "targetId": "ios-qa-build-8", "classification": "ACTIVE_INTERNAL_TARGET",
+      "generatedNativeSourceDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+      "capabilityParity": "PASS_REQUIRED_SUBSET_PROVIDED", "missingCapabilities": [],
+      "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_IDENTITY_MISSING"
+    },
+    {
+      "targetId": "android-production-build-84-historical", "classification": "HISTORICAL_ARTIFACT",
+      "generatedNativeSourceDigest": "ae8941621e95ce1ae4b5225aea3ad442c1d4c01b61288b098553dd6075cd121a",
+      "capabilityParity": "PASS_REQUIRED_SUBSET_PROVIDED", "missingCapabilities": [],
+      "releaseIdentity": "HISTORICAL_RECORDED_INPUT", "rollback": "ROLLBACK_INCOMPATIBLE_BUILD_80_LACKS_IMAGE_MANIPULATOR"
+    }
+  ],
+  "generation": {
+    "method": "DISPOSABLE_OFFLINE_EXPO_PREBUILD_NO_INSTALL_PLUS_EXACT_AUTOLINKING_READBACK",
+    "runs": "9/9",
+    "deterministicPerTarget": "3/3",
+    "proofTier": "T1_SOURCE",
+    "compiledNativeProof": false,
+    "temporaryDirectoriesRemoved": true,
+    "generatedDirectoriesCommitted": false
+  },
+  "tests": {
+    "targets": "3/3",
+    "capabilityParity": "3/3",
+    "deterministicEvidence": "3/3",
+    "mandatoryNegativeControls": "8/8",
+    "additionalNegativeControls": "6/6",
+    "negativeControlResultSha256": "1d05ace812b68618aa63225a015049c9d823df5658387104ae2a9cd9c885838f"
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "mayProceed": {"nativeCompilation": false, "signedArtifactInspection": false, "updatePublication": false, "release": false},
+  "nonInterference": {"providerContact": false, "build": false, "ota": false, "install": false, "databaseMutation": false, "releaseManifestMutation": false, "packageOrWorkflowMutation": false}
+}
