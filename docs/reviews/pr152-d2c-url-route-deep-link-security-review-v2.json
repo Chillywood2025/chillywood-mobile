@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr152-d2c-url-route-deep-link-security-review-v2",
+  "reviewVersion": 2,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "url-route-deep-link-security",
+  "reviewLevel": "C",
+  "humanApproval": false,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH_CURRENT_REVIEW_BLOCKED",
+  "historicalEvidence": false,
+  "preservesHistoricalEvidence": [
+    "docs/reviews/pr152-d2c-url-route-deep-link-security-review-v1.json"
+  ],
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "immutableSourceHead": "72e9833200caca80b56ae7441511cb5320b051ae",
+  "synchronizedBranchHead": "60bb4196860e092f50dcb2e2db821603809f1daa",
+  "implementationHead": "60bb4196860e092f50dcb2e2db821603809f1daa",
+  "implementationTree": "ffd57f61c5fee6b36d1b877e9207f3c3a6744107",
+  "baseHead": "d4e9df79fd724c432509b1e319538ed34cb656f5",
+  "synchronizationParents": [
+    "72e9833200caca80b56ae7441511cb5320b051ae",
+    "d4e9df79fd724c432509b1e319538ed34cb656f5"
+  ],
+  "sourceDeltaHash": "fdbd3cebb2c08dece8349edea1bee439c9b9e4650d5f2bd614abf006a3a7aa76",
+  "sourceDeltaHashMethod": "sha256(git diff --binary --no-renames baseHead implementationHead)",
+  "changedFileHash": "f1fa9ec50c8bd60e2229b7f91177527272a9a88d393f383d19e943c7a67872f7",
+  "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "759a2d7d0852f59281d735f6c555001af93a69fd666dd6112fd804fb60fe5cd9",
+  "testResultHash": "e6bd5d171a0f9e2839fbb04ef2fd9ebdd40c05d44cc08efaee48db6c5b503832",
+  "testResultHashMethod": "sha256(canonical JSON serialization of testResults through scripts/assurance/lib.mjs)",
+  "reviewRef": "codex/first-pass-assurance-d2c-review-url-route-security",
+  "reviewHead": "33a31ee3e64be58748a18ad9f91b992cf72ff217",
+  "reviewTimestamp": "2026-08-02T19:42:00Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-2-url-route-deep-link-security",
+    "separate-clean-worktree",
+    "implementation-agent-not-sole-reviewer"
+  ],
+  "reviewScope": {
+    "customScheme": true,
+    "universalAndApplicationLinks": true,
+    "linkingInitialUrl": true,
+    "linkingLiveEvents": true,
+    "expoNativeIntent": true,
+    "directRouterAndQueryParameters": true,
+    "queryAndFragmentStripping": true,
+    "arbitraryCallKitUuid": true,
+    "openCallAndStartCall": true,
+    "ordinaryNotificationNavigation": true,
+    "claimSecrecy": true,
+    "productionWideCreatorAllowlist": true,
+    "adversarialExecutableMutants": true
+  },
+  "historicalFindingDisposition": {
+    "IOS_EXTERNAL_FRAGMENT_NATIVE_CLAIM_DISCLOSURE": "RESOLVED_AT_CURRENT_HEAD_BY_FRAGMENT_STRIPPING_AND_ANALYTICS_DENYLIST",
+    "IOS_ORDINARY_NOTIFICATION_DIRECT_ROUTE_NOT_NAVIGATION_ONLY": "ROUTE_AUTHORITY_REMOVED_BUT_REPLACEMENT_INTRODUCED_INTERNAL_CALL_ENTRY_REGRESSION",
+    "IOS_ROUTE_DENIAL_MUTATION_AND_INTEGRATION_PROOF_VACUOUS": "PARTIALLY_CORRECTED_PRODUCTION_MUTANTS_ADDED_BUT_CREATOR_ALLOWLIST_AND_END_TO_END_INTEGRATION_REMAIN_INSUFFICIENT",
+    "IOS_ROUTE_REVIEW_EVIDENCE_FIDELITY": "UNIVERSAL_LINK_HOST_CORRECTED_REPORT_EXACTNESS_REMAINS_OPEN"
+  },
+  "confirmedSecurityControls": {
+    "externalSensitiveQueryParametersRemoved": true,
+    "externalFragmentsRemoved": true,
+    "routeAnalyticsRejectsFragmentAndSensitiveNames": true,
+    "queryOnlyAnswerDenied": true,
+    "queryOnlyDeclineDenied": true,
+    "queryOnlyEndMuteUnmuteDenied": true,
+    "arbitraryCallKitUuidAloneDenied": true,
+    "openCallDoesNotOwnTransition": true,
+    "startCallDoesNotOwnTransition": true,
+    "claimMemoryOnly": true,
+    "claimTtlMs": 30000,
+    "claimConsumedOnce": true,
+    "claimExactBindingRequired": true,
+    "claimPlatformScoped": true,
+    "currentDirectCreatorCallsites": [
+      {
+        "path": "app/_layout.tsx",
+        "line": 1127
+      }
+    ]
+  },
+  "integrationVerdict": {
+    "reportedSimulatorAppLaunched": false,
+    "reportedEquivalentHarness": "EQUIVALENT_EXACT_BRIDGE_ROUTE_HARNESS_PASS_3_OF_3_PENDING_REVIEW_ACCEPTANCE",
+    "laneAcceptance": "NOT_ACCEPTED",
+    "reason": "The harness directly invokes the registry and consumer and constructs a URL in memory. It does not execute subscribeToIosNativeCallEvents, IosNativeCallsBridge readiness or cold-start drainage, Expo Router replacement, the mounted thread effect, or an external system URL through Linking and redirectSystemPath. It is not equivalent to the required local integration chain."
+  },
+  "testResults": {
+    "focusedProvenance": {
+      "status": "PASS_WITH_OPEN_P1_REVIEW_FINDINGS",
+      "command": "node scripts/test-ios-native-call-route-provenance.mjs",
+      "preFixReproductions": "10/10",
+      "trustedPositive": "31/31",
+      "producerDenials": "8/8",
+      "routeDenials": "30/30",
+      "reportedProductionSourceMutants": "19/19"
+    },
+    "iosPolicyGuard": {
+      "status": "PASS_WITH_CREATOR_SCAN_BYPASS_P1",
+      "command": "node scripts/guard-ios-native-call-policy.mjs"
+    },
+    "notificationRoomCallGuard": "PASS",
+    "callPushGuard": "PASS",
+    "endToEndCallInitiationProof": {
+      "status": "PASS_BUT_VACUOUS_FOR_STARTCALL_CONSUMER",
+      "command": "node scripts/proof-chilly-chat-end-to-end-call-initiation.mjs"
+    },
+    "creatorAllowlistAdversarialScan": {
+      "status": "FAIL_CLOSED_GUARD_BYPASS_REPRODUCED",
+      "baseDetectedCallsites": ["app/_layout.tsx:1127"],
+      "aliasedImportDetectedCallsites": ["app/_layout.tsx:1127"],
+      "computedNamespaceDetectedCallsites": ["app/_layout.tsx:1127"],
+      "aliasedProductionCreatorWouldPassGuard": true,
+      "computedNamespaceProductionCreatorWouldPassGuard": true
+    },
+    "implementationSyntax": "PASS_NODE_CHECK_CHANGED_MJS_POLICY_AND_PROVENANCE",
+    "gitDiffCheck": "PASS",
+    "assuranceContracts": "PASS_13_CONTRACTS_20_FEATURES_25_ESCAPED_DEFECTS",
+    "assurancePlan": "PASS_REQUIREMENTS_CLEAR_ARCHITECTURE_CLEAR",
+    "applicationLinksProof": "BLOCKED_LOCAL_DEPENDENCY_TYPESCRIPT_NOT_RESOLVED_IN_CLEAN_REVIEW_WORKTREE",
+    "currentTruth": {
+      "status": "EXPECTED_FAIL_REVIEW_AND_BINDING_PENDING",
+      "findings": [
+        "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE",
+        "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE"
+      ]
+    },
+    "phase1Ci": {
+      "status": "pending-blocked-open-p1",
+      "implementationHead": "60bb4196860e092f50dcb2e2db821603809f1daa",
+      "reason": "Full CI is prohibited until all current Level C lanes report P0=0/P1=0; this current review records three open P1 findings."
+    }
+  },
+  "findings": [
+    {
+      "id": "IOS_INTERNAL_CALL_ENTRY_ROUTE_CONSUMER_REMOVED",
+      "severity": "P1",
+      "status": "open",
+      "summary": "The correction made external startCall/openCall text inert by deleting the thread consumers, but retained legitimate in-app producers. Inbox and profile Voice/Video shortcuts still navigate with startCall, and the communication compatibility route still navigates with openCall=1; the thread no longer consumes either intent, so those authenticated foreground product actions silently degrade to ordinary navigation.",
+      "evidence": [
+        "app/chat/index.tsx:287-300 and 383-415 still produce startCall from user-visible inbox and people-search Voice/Video actions",
+        "app/profile/[userId].tsx:1623-1628 still produces startCall for profile Voice/Video actions",
+        "app/communication/[roomId].tsx:36-43 still produces openCall=1 for the compatibility redirect",
+        "app/chat/[threadId].tsx contains no requestedCallMode/autoStartCallRef or requestedOpenCall/autoOpenCallRef consumer",
+        "scripts/proof-chilly-chat-end-to-end-call-initiation.mjs:65-71 requires startCall producers but lines 108-115 reject every thread consumer, allowing the proof to pass while the requested transition is no longer exercised",
+        "docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md documents that startCall triggers the requested call and docs/PUBLIC_V1_READINESS_CHECKLIST.md documents openCall compatibility behavior"
+      ],
+      "impact": "A security correction regresses legitimate authenticated internal Voice/Video entry behavior and weakens its end-to-end regression proof. This is product behavior loss in the reviewed domain, not merely a documentation mismatch.",
+      "requiredResolution": "Preserve external route text as navigation-only while introducing a trusted memory-only foreground navigation intent or another reviewed internal authority for legitimate UI producers; add mounted end-to-end tests that prove the UI action reaches exactly one call start/open without letting copied URLs reproduce it."
+    },
+    {
+      "id": "IOS_CLAIM_CREATOR_ALLOWLIST_ALIAS_BYPASS",
+      "severity": "P1",
+      "status": "open",
+      "summary": "The claimed repository-wide sole-creator guard matches only the literal function name followed by an opening parenthesis. A production module can import the creator under an alias or invoke it through a computed namespace member and remain invisible to both the focused test and policy guard.",
+      "evidence": [
+        "scripts/test-ios-native-call-route-provenance.mjs:75-93 scans each line with /registerTrustedIosCallKitNativeEvent\\s*\\(/",
+        "scripts/guard-ios-native-call-policy.mjs:27-40 uses the same literal-name regex",
+        "a valid aliased import and call left the detected callsite set unchanged at only app/_layout.tsx:1127",
+        "a valid namespace import with provenance[\"registerTrustedIosCallKitNativeEvent\"] left the detected callsite set unchanged at only app/_layout.tsx:1127",
+        "the extra-creator mutant appends a bare exact-name call to an uncompiled source string and therefore does not exercise import binding or valid production compilation"
+      ],
+      "impact": "The production-wide creator allowlist and the authority-boundary anti-vacuity claim are not proved. A future untrusted URL, screen, or notification module could acquire the creator under a different binding without failing the gate.",
+      "requiredResolution": "Use an AST/import-binding-aware scan or structurally restrict creator acquisition, and add compilable alias-import, renamed-destructuring, namespace-member, and computed-member mutants that the real gate rejects."
+    },
+    {
+      "id": "IOS_EQUIVALENT_ROUTE_INTEGRATION_NOT_EXECUTED",
+      "severity": "P1",
+      "status": "open",
+      "summary": "No simulator app launched, and the substitute harness does not execute the real bridge-to-router-to-mounted-thread path. It directly calls claim creation and consumption helpers, bypassing the lifecycle and routing boundaries whose behavior it is offered to replace.",
+      "evidence": [
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json records simulatorAppLaunched=false",
+        "scripts/test-ios-native-call-route-provenance.mjs directly calls registerTrustedIosCallKitNativeEvent and consumeTrustedIosCallKitNativeEventClaim and constructs a URL in memory",
+        "the harness does not execute subscribeToIosNativeCallEvents or IosNativeCallsBridge auth/readiness and cold-start event drainage",
+        "the harness does not mount Expo Router and app/chat/[threadId].tsx to exercise router replacement, claim parsing, effect ordering, and one-time consumption",
+        "the harness does not invoke an external custom scheme or Universal Link through the actual Linking and redirectSystemPath entry points"
+      ],
+      "impact": "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION_CLEAR cannot be accepted, and the owner-required simulator-or-equivalent merge gate remains open.",
+      "requiredResolution": "Execute the required simulator path, or provide a reviewed local mounted integration harness that uses the actual native subscription adapter, auth readiness/cold-start drainage, Router replacement, thread consumer, and external URL adapters without directly bypassing those components."
+    },
+    {
+      "id": "IOS_D2C_REPORT_CURRENT_HEAD_FIDELITY",
+      "severity": "P2",
+      "status": "open",
+      "summary": "The committed source report still describes a pre-freeze and pending-review state after correction and synchronization, and states that ordinary notification sensitive parameters and fragments are stripped although the in-app notification router path is not sanitized.",
+      "evidence": [
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json state remains LOCAL_GENERATION_COMPILE_AND_EQUIVALENT_INTEGRATION_PASS_PENDING_FREEZE",
+        "the same report leaves T1/T2 pending and lists immutable source commit and base synchronization under remainingBeforeFreeze",
+        "the report says ordinaryNotification=SENSITIVE_CALL_PARAMETERS_AND_FRAGMENTS_STRIPPED, while components/notifications/notification-bell-button.tsx routes resolved application paths directly"
+      ],
+      "impact": "The report overstates route normalization and is not an exact synchronized-head account, although route-only transition authority is independently denied by the current thread policy.",
+      "requiredResolution": "Publish additive exact-head evidence and distinguish stripped external system URLs from in-app navigation paths that are safe because route text has no transition authority."
+    },
+    {
+      "id": "IOS_GLOBAL_FRAGMENT_STRIPPING_AUTH_LINK_REGRESSION_UNPROVED",
+      "severity": "P2",
+      "status": "open",
+      "summary": "The iOS native-intent hook now removes the entire fragment from every system path, while the application-link parser intentionally merges fragment parameters for password recovery and auth callbacks. No focused executable regression proves that initial recovery/auth links still reach the canonical auth listener with their required fragment values.",
+      "evidence": [
+        "app/+native-intent.tsx:12-14 sends every iOS system path through sanitizeExternalIosNativeCallPath",
+        "_lib/nativeCallTransitionProvenance.mjs:248-260 clears parsed.hash unconditionally and strips fallback input at either query or fragment",
+        "_lib/appLinks.ts:136 and recovery/auth route handling intentionally merge fragment parameters",
+        "the independent application-links proof could not run in the clean review worktree because the local TypeScript dependency was unresolved"
+      ],
+      "impact": "This is an unclosed adjacent regression risk for authentication/recovery routing; it is not classified as a reproduced product defect at this head.",
+      "requiredResolution": "Add executable initial and live auth/recovery fixtures with fragment-carried values and prove the canonical auth listener receives them while native-call claim fragments remain stripped from navigation and analytics."
+    }
+  ],
+  "findingCounts": {"P0": 0, "P1": 3, "P2": 2, "P3": 0},
+  "criticalFindingCounts": {"P0": 0, "P1": 3},
+  "waivedFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "proofTiersAtReviewedHead": {
+    "IOS_NATIVE_ROUTE_PROVENANCE_SOURCE": "BLOCKED_INTERNAL_P1",
+    "IOS_NATIVE_ROUTE_PROVENANCE_MODEL": "BLOCKED_INTERNAL_P1",
+    "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION": "NOT_ACCEPTED_BLOCKED_INTERNAL",
+    "IOS_EXTERNAL_URL_TRANSITION_DENIAL": "SOURCE_MODEL_CLEAR_LOCAL_INTEGRATION_NOT_ACCEPTED",
+    "IOS_CALLKIT_EVENT_CLAIM": "SOURCE_MODEL_PARTIAL_NO_LOCAL_INTEGRATION_ACCEPTANCE",
+    "IOS_PUSHKIT_PROVIDER": "BLOCKED_EXTERNAL",
+    "IOS_APNS_DELIVERY": "BLOCKED_EXTERNAL",
+    "IOS_PHYSICAL_CALLKIT_UI": "BLOCKED_EXTERNAL",
+    "IOS_SIGNED_ARTIFACT": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "IOS_TESTFLIGHT_FIX_DELIVERED": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "nonInterference": {
+    "implementationSourceEditedByReview": false,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "artifactInstalled": false,
+    "physicalDeviceUsed": false,
+    "publicRelease": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRoleRightAuthRlsChanged": false,
+    "generatedAndroidOrIosCommitted": false,
+    "denoLockTouched": false
+  },
+  "conclusion": {
+    "P0": 0,
+    "P1": 3,
+    "P2": 2,
+    "P3": 0,
+    "integrationVerdict": "NOT_ACCEPTED",
+    "mergeGate": "BLOCKED_INTERNAL",
+    "implementationMergeRecommendation": "DO_NOT_MERGE_CORRECT_ALL_THREE_P1_FINDINGS_REFREEZE_AND_REREVIEW",
+    "reviewDisposition": "PRESERVE_V1_HISTORICAL_EVIDENCE_AND_THIS_V2_CURRENT_REVIEW_ADDITIVELY; NEVER_MERGE_REVIEW_BRANCH",
+    "noP1Waived": true
+  }
+}
