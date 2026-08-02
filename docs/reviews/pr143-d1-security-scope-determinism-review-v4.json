@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-security-scope-determinism-review-v4-final-ci-bound",
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewPrNumber": 149,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "humanApproval": false,
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "immutableSourceTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "synchronizedBranchHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+  "synchronizedTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "implementationTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "canonicalSyntheticTree": "3d49d62b6f8950cc283e2bd01aaa8542d5896ab2",
+  "currentBase": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseHead": "12985e2ad505ca813611c64b793345f069dc5515",
+  "baseTree": "37ca0beab2536600301532df9f46b7154fc33fa0",
+  "synchronizationParents": [
+    "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+    "12985e2ad505ca813611c64b793345f069dc5515"
+  ],
+  "reviewHead": "97525798994a7ee958ffcbd404d9ab89df29d9ec",
+  "sourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+  "sourceDeltaArtifactHash": "cb9c89c217f960f75befd86c5a3d02a732246cab2354e12bed4de1bad4bc5c75",
+  "sourceDeltaHashAlgorithms": {
+    "sourceDeltaHash": "SHA-256 of git-helper-trimmed git diff --binary --no-renames currentBase..synchronizedBranchHead; consumed by current-truth guard",
+    "sourceDeltaArtifactHash": "SHA-256 of the raw same diff including its terminal newline"
+  },
+  "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "a8953b3ee5d856490a461e367729492d1bcf5d799748251e03c565601a4ececa",
+  "testResultHash": "53edb282eac5bc5084ef43bab3e4fe5381fdd7fd2b566b8576785218c8a9c313",
+  "changedPaths": [
+    "config/assurance/native-capability-registry-v1.json",
+    "config/assurance/release-target-parity-v1.json",
+    "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
+    "docs/assurance/pr-d1-offline-parity-report-v1.json",
+    "scripts/assurance/release-parity.mjs",
+    "tests/assurance/release-parity.test.mjs"
+  ],
+  "scopeStatus": "pass",
+  "scope": {
+    "objectiveDomain": "offline-release-native-artifact-assurance",
+    "changedFiles": 6,
+    "netChangedLines": 1049,
+    "withinBudget": true,
+    "sourceDeltaByteEquivalentAfterSynchronization": true,
+    "changedPathsEquivalentAfterSynchronization": true,
+    "productSourceChanged": false,
+    "nativeImplementationChanged": false,
+    "releaseManifestChanged": false,
+    "packageManifestOrLockChanged": false,
+    "workflowChanged": false,
+    "secondHighRiskDomain": false
+  },
+  "synchronizationReview": {
+    "status": "PASS",
+    "immutableSourceIsFirstParent": true,
+    "exactMainIsSecondParent": true,
+    "canonicalTreeMatches": true,
+    "sourceDeltaEquivalent": true,
+    "changedFileAndPathSetEquivalent": true,
+    "manualResolution": false
+  },
+  "securityScopeDeterminismReview": {
+    "status": "PASS",
+    "cliUnknownInputsAndOverwriteFailClosed": true,
+    "mandatoryNegativeControls": "8/8",
+    "additionalNegativeControls": "16/16",
+    "totalNegativeControls": "24/24",
+    "generatedSource": "9/9",
+    "deterministicEvidence": "3/3",
+    "directImportClosure": "42_DISCOVERED_34_NATIVE_MAPPED_8_REVIEWED_JS_ONLY_0_UNCLASSIFIED",
+    "requiredProvidedCapabilityParity": "21/21_ANDROID_QA_26/26_IOS_QA_21/21_ANDROID_HISTORICAL_CURRENT_REPLAY",
+    "missingCapabilities": 0,
+    "networkOrProviderContact": false,
+    "buildOrOta": false,
+    "submissionOrInstallation": false,
+    "secretOrPrivateEvidenceLeakage": false,
+    "generatedNativeEvidenceTier": "T1_SOURCE_NOT_COMPILED_SIGNED_INSTALLED_OR_PHYSICAL"
+  },
+  "testResults": {
+    "postSynchronizationFocusedEvidence": {
+      "status": "pass",
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "24/24"
+    },
+    "phase1Ci": {
+      "status": "pass",
+      "implementationHead": "173f17ce3b481d3e61ea7af27c563cdc78530044",
+      "runId": 30742530172,
+      "attempt": 2,
+      "workflow": "Phase 1 CI",
+      "event": "pull_request",
+      "conclusion": "success",
+      "jobs": "13/13",
+      "completedAt": "2026-08-02T10:06:28Z",
+      "githubReadbackAt": "2026-08-02T10:09:22Z",
+      "priorAttempt": {
+        "attempt": 1,
+        "conclusion": "cancelled",
+        "classification": "CANCELED_PRE_REVIEW_NOT_CI_EVIDENCE"
+      },
+      "jobNames": [
+        "Phase 1 / Cognitive Intelligence Contract",
+        "Phase 1 / Cognitive Execution Safety",
+        "Phase 1 / Research and Memory Integrity",
+        "Phase 1 / Runtime Validation",
+        "Phase 1 / iOS Configuration",
+        "Phase 1 / Android Regression Guards",
+        "Phase 1 / Autonomous Systems All-Platform Contract",
+        "Phase 1 / TypeScript",
+        "Phase 1 / Expo Doctor",
+        "Phase 1 / Repository Lint",
+        "Phase 1 / Autonomous Systems iOS Contract",
+        "Phase 1 / Supabase Database Integration",
+        "Phase 1 / Route Contracts"
+      ]
+    }
+  },
+  "findings": [],
+  "findingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "criticalFindingCounts": {"P0": 0, "P1": 0},
+  "waivedFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "reviewLevel": "C",
+  "reviewTimestamp": "2026-08-02T10:09:22Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "lane-4-security-scope-determinism-negative-controls",
+    "isolated-automated-review",
+    "implementation-agent-not-sole-reviewer"
+  ],
+  "historicalEvidence": {
+    "v1": {"path": "docs/reviews/pr143-d1-security-scope-determinism-review-v1.json", "sha256": "f29acab5c55dd86f4cd2572514b81234f2ad0a0adbffccb81ef99a6a99c01bc0", "changed": false},
+    "v2": {"path": "docs/reviews/pr143-d1-security-scope-determinism-review-v2.json", "sha256": "5ef33665f4605fdc12d30b16c84cb798e3ed22b15e30ed08eed715f6b123ff30", "changed": false},
+    "v3": {"path": "docs/reviews/pr143-d1-security-scope-determinism-review-v3.json", "sha256": "8344f83930db93c15125e24417f8790b7122671d49b75afd6761bb75be4ceca7", "changed": false}
+  },
+  "nonInterference": {
+    "implementationEditedByReview": false,
+    "providerContactOrMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "artifactInstalled": false,
+    "publicRelease": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRoleRightAuthRlsChanged": false,
+    "generatedAndroidOrIosCommittedByImplementation": false,
+    "denoLockTouched": false
+  },
+  "summary": {
+    "laneResult": "P0_0_P1_0_FORMAL_REVIEW_HEAD_PASS",
+    "aggregateResult": "P0_0_P1_0_EXACT_PHASE1_CI_13_OF_13_PASS",
+    "implementationMergeRecommendation": "eligible-from-lane-4-subject-to-coordinator-confirming-all-remaining-merge-gates",
+    "reviewPrDisposition": "remain-draft-never-merge",
+    "noP1Waived": true
+  }
+}
