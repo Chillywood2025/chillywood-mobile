@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "revenuecat-transfer-db-parity-review-v4",
+  "reviewVersion": 4,
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "database-parity-immutability-and-no-apply",
+  "reviewLevel": "C",
+  "humanApproval": false,
+  "implementationPrNumber": 69,
+  "implementationBranch": "codex/assurance-reconcile-revenuecat-transfer",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "immutableSourceHead": "fc451c509c7af5c220c11ab9f3d34a0db608f35d",
+  "synchronizedBranchHead": "81892f3dae544713d8e35512da895cd99c610966",
+  "implementationHead": "81892f3dae544713d8e35512da895cd99c610966",
+  "currentBase": "cbf6df6a6c932b8a29cb793b577b426f8a7b6259",
+  "baseHead": "cbf6df6a6c932b8a29cb793b577b426f8a7b6259",
+  "synchronizedTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "implementationTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "canonicalSyntheticTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "synchronizationParents": [
+    "fc451c509c7af5c220c11ab9f3d34a0db608f35d",
+    "cbf6df6a6c932b8a29cb793b577b426f8a7b6259"
+  ],
+  "sourceDeltaHash": "0ff30d73629020ac985c9bafb21100f7a6f6bf7df4f70cbfe0182b8dfd462c46",
+  "changedFileHash": "93f357c635ec14c8a357cd9bf7cee37c45bf6aeb584ee24a9484a9d61f289a4d",
+  "migrationSetHash": "864a53d7732f014684f031eb30db908912fd8b49d6dd86f2eb25557d0fe6da37",
+  "configHash": "a778e144288e00fe442cb55dd383e4f625df21455fba3570357a5ae6e4984b26",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "reviewRef": "codex/assurance-reconcile-revenuecat-transfer-review-db-parity",
+  "reviewRefHead": "4f0bd0d2a3501ed7f98db08589bfe2e916d5ac70",
+  "reviewHead": "4f0bd0d2a3501ed7f98db08589bfe2e916d5ac70",
+  "reviewTimestamp": "2026-08-02T04:26:28Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-1-database-parity-immutability-and-no-apply",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "historicalEvidence": [
+    {
+      "preservedFile": "docs/reviews/revenuecat-transfer-db-parity-review.json",
+      "preservedReviewId": "revenuecat-transfer-db-parity-review-v1",
+      "preservedSha256": "88a4cf65aa4d8c8014d77f95d5f8c62ca031e2c3938a58c3132e66bbdaab68e9",
+      "preservedUnchanged": true,
+      "classification": "historical_stale"
+    },
+    {
+      "preservedFile": "docs/reviews/revenuecat-transfer-db-parity-review-v2.json",
+      "preservedReviewId": "revenuecat-transfer-db-parity-review-v2",
+      "preservedSha256": "c1e11be2f96b487b369f4030b510ef34dfa0b712c997b6318e14d632f48b13f6",
+      "preservedUnchanged": true,
+      "classification": "historical_schema_incomplete"
+    },
+    {
+      "preservedFile": "docs/reviews/revenuecat-transfer-db-parity-review-v3.json",
+      "preservedReviewId": "revenuecat-transfer-db-parity-review-v3",
+      "preservedSha256": "8733281c3275f1cd8a9610cdee0c53e14ca47169543daff4939461d4df6eae66",
+      "preservedUnchanged": true,
+      "classification": "historical_pre_ci"
+    }
+  ],
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "database-parity-immutability-and-no-apply",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false,
+      "databaseContactByReview": false,
+      "providerContactByReview": false
+    },
+    "historyPreservation": {
+      "status": "pass",
+      "v1Sha256": "88a4cf65aa4d8c8014d77f95d5f8c62ca031e2c3938a58c3132e66bbdaab68e9",
+      "v2Sha256": "c1e11be2f96b487b369f4030b510ef34dfa0b712c997b6318e14d632f48b13f6",
+      "v3Sha256": "8733281c3275f1cd8a9610cdee0c53e14ca47169543daff4939461d4df6eae66",
+      "v1ThroughV3PreservedUnchanged": true
+    },
+    "exactBinding": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "ordinaryTwoParentImplementationMerge": true,
+      "immutableSourceIsImplementationFirstParent": true,
+      "currentBaseIsImplementationSecondParent": true,
+      "observedTreeEqualsCanonicalSyntheticTree": true,
+      "providerBranchSnapshotMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedPathsEquivalent": true,
+      "reviewBranchContainsOnlyReviewEvidenceBeyondImplementation": true
+    },
+    "scope": {
+      "status": "pass",
+      "featureId": "revenuecat-premium",
+      "changedFiles": 12,
+      "additions": 3302,
+      "deletions": 2,
+      "netChangedLines": 3300,
+      "registeredScopeWaiver": "pr-b2-revenuecat-reconciliation-scope-waiver-v1",
+      "unrelatedScopeFound": false
+    },
+    "deployedMigrationParity": {
+      "status": "pass",
+      "classification": "DEPLOYED_SOURCE_BYTE_EXACT",
+      "reviewQueriedRemote": false,
+      "files": [
+        {
+          "version": "20260730153724",
+          "name": "revenuecat_verified_transfer_reconciliation",
+          "rawSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+          "byteExact": true,
+          "bodyRewritten": false,
+          "versionRenamed": false
+        },
+        {
+          "version": "20260730154416",
+          "name": "allow_expired_revenuecat_transfer_target_reconciliation",
+          "rawSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+          "byteExact": true,
+          "bodyRewritten": false,
+          "versionRenamed": false
+        }
+      ]
+    },
+    "forwardCorrection": {
+      "status": "pass",
+      "version": "20260730170000",
+      "name": "revenuecat_transfer_authoritative_ordering",
+      "rawSha256": "5ecd5159055a704f0e76842ab56ff20fe98a760cdf001eea08abe25407ee30c9",
+      "deploymentStatus": "GIT_SOURCE_ONLY_NOT_APPLIED",
+      "forwardOnly": true,
+      "deployedPredecessorChanged": false,
+      "deployedMigrationReapplied": false,
+      "migrationDeploymentAttemptedByReview": false
+    },
+    "databaseSecurityBoundary": {
+      "status": "pass",
+      "serviceOnlyBoundaryPreserved": true,
+      "closedSearchPathPreserved": true,
+      "anonOrAuthenticatedExecuteWidened": false,
+      "rlsOrTableGrantWeakened": false,
+      "rawProviderPayloadStored": false,
+      "payableOrMoneyAuthorityAdded": false,
+      "liveKitAuthorityAdded": false
+    },
+    "recordedLocalDatabaseGate": {
+      "status": "pass_recorded_post_base_synchronization_not_rerun_by_review",
+      "target": "isolated local Supabase/PostgreSQL stack",
+      "pgTapPlanned": 120,
+      "pgTapExecuted": 120,
+      "pgTapPassed": 120,
+      "pgTapFailed": 0,
+      "concurrencyPlanned": 10,
+      "concurrencyExecuted": 10,
+      "concurrencyPassed": 10,
+      "concurrencyFailed": 0,
+      "deterministicLockBarriers": true,
+      "cleanupCountersAllZero": true,
+      "remoteDatabaseContact": false,
+      "providerContact": false,
+      "persistentDatabaseMutation": false
+    },
+    "linkedNoApply": {
+      "status": "PASS_NO_APPLY_SCOPED",
+      "directContext": "BLOCKED_INTERNAL_SOURCE_ASSEMBLY_REQUIRES_PRESERVED_B3",
+      "assembledTree": "47be54602eb3c9cc614e29aa21034237284a1d19",
+      "b1PendingExactlyOnce": true,
+      "b2PendingExactlyOnce": true,
+      "b3PendingExactlyOnce": true,
+      "unexpectedMigrations": [],
+      "seeded": false,
+      "applied": false,
+      "roleMutation": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "runByReview": false
+    },
+    "proofBoundary": {
+      "status": "pass",
+      "highestSatisfiedTier": "T3_LOCAL_INTEGRATION",
+      "sourceIntrospectionAcceptedAsT3": false,
+      "linkedNoApplyAcceptedAsRuntimeProof": false,
+      "providerOrNativeProofClaimed": false,
+      "signedArtifactProofClaimed": false,
+      "installedOrPhysicalProofClaimed": false,
+      "publicCanaryProofClaimed": false
+    },
+    "phase1Ci": {
+      "status": "pass",
+      "run": 30732164462,
+      "event": "pull_request",
+      "implementationHead": "81892f3dae544713d8e35512da895cd99c610966",
+      "planned": 13,
+      "executed": 13,
+      "passed": 13,
+      "failed": 0,
+      "canceled": 0,
+      "exactHead": true,
+      "providerMutation": false,
+      "databaseProductionMutation": false,
+      "migrationDeployment": false,
+      "failureWaived": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationSourceEditedByReview": false,
+      "historicalReviewEditedByReview": false,
+      "databaseTestRerunByReview": false,
+      "providerContactByReview": false,
+      "remoteDatabaseContactByReview": false,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "moneyEntitlementRightsRolesAuthRlsChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false
+    }
+  },
+  "testResultHash": "166f861e55bc5887d6734863e0b069709806e7acedb4b3a00bf11c547bc4683c",
+  "findings": [],
+  "severityCounts": {
+    "P0": {"open": 0, "resolved": 0, "total": 0},
+    "P1": {"open": 0, "resolved": 0, "total": 0},
+    "P2": {"open": 0, "resolved": 0, "total": 0},
+    "P3": {"open": 0, "resolved": 0, "total": 0}
+  },
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "PASS_LEVEL_C_DATABASE_PARITY_IMMUTABILITY_NO_APPLY_AND_FROZEN_HEAD_CI",
+    "reviewHeadValidation": "PASS_ZERO_FINDINGS_EXPECTED_AFTER_EVIDENCE_COMMIT",
+    "historicalEvidencePreserved": true,
+    "implementationFilesOnReviewBranch": 0,
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false
+  }
+}
