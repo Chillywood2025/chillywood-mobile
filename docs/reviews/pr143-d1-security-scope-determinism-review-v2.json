@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-security-scope-determinism-review-v2-corrected-immutable-source",
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewPrNumber": 149,
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "humanApproval": false,
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+  "implementationTree": "9190a283099c0c214e32de8f480219533ea91b4b",
+  "baseHead": "62d4b526675e5a10177d37c53670709d63062293",
+  "baseTree": "206bac373c166d523a4020731aa44be7b909dc84",
+  "currentMainAtReview": "40b1c7ba9de0ab96dddc1442708ecfcaaf05a1d0",
+  "reviewHead": "6e6c8af1d5c3fb4289dbb17bb2f1db25b7396820",
+  "reviewBranchSourceMerge": {
+    "commit": "6e6c8af1d5c3fb4289dbb17bb2f1db25b7396820",
+    "tree": "8892e17b426a1b6f4a5c7b7770cc4031cf24d568",
+    "parents": [
+      "84ca2f2a00bd13f5e771adf5ae9e93f68b46a761",
+      "78d0140a08159cdd2c78bd0597631a5cc87b5029"
+    ],
+    "method": "normal-no-ff-merge-no-rebase-no-force"
+  },
+  "sourceDeltaHash": "fafb0cd348fe7a38f7d2136065ec4ff5cbe45ea2b3627fb36367cfe3e122bdc7",
+  "changedFileHash": "f7d2aebd2d8556a23464981ec2e815db42428c1e9a891f2494479f4ab6396700",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "07bd294b3f216b4fe5aa3995859268ce2c8ab58c7f2b8f66636062df8a8085f4",
+  "testResultHash": "8a3251cfb06eef00a9a1d186efcdc7975c0c7a730808a298c6914de5a41da566",
+  "artifactHashes": {
+    "staticContractSha256": "be042630c00addc1bb1de4689694c77b6612f2a29c3342b1b2d211f31b4e54d6",
+    "capabilityRegistrySha256": "c13e3a4848dd509f828692e836481dac7c7b8b3ac4586666c1f433bf49f66328",
+    "validatorSha256": "19b10362ad03f4052bf562d4432e6ca3782ffe4eb88f2ca78ee5ada87600bb95",
+    "testSha256": "e5ab60f8c77ae818d193b504f9122ff45869627282d0926161cc44e0d8c648fb",
+    "reportSha256": "cd905a4141654ac41a7ec664e452098f2665e8997ca5dc0bd08e5c2cedaaab5a"
+  },
+  "changedPaths": [
+    "config/assurance/native-capability-registry-v1.json",
+    "config/assurance/release-target-parity-v1.json",
+    "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
+    "docs/assurance/pr-d1-offline-parity-report-v1.json",
+    "scripts/assurance/release-parity.mjs",
+    "tests/assurance/release-parity.test.mjs"
+  ],
+  "scope": {
+    "status": "PASS",
+    "objectiveDomain": "offline-release-native-artifact-assurance",
+    "changedFiles": 6,
+    "maximumFiles": 15,
+    "additions": 1049,
+    "deletions": 0,
+    "netChangedLines": 1049,
+    "maximumNetChangedLines": 1200,
+    "productSourceChanged": false,
+    "nativeImplementationChanged": false,
+    "releaseManifestChanged": false,
+    "workflowChanged": false,
+    "packageManifestOrLockChanged": false,
+    "migrationChanged": false,
+    "currentTruthChanged": false,
+    "secondHighRiskDomain": false,
+    "scopeWaiverRequired": false
+  },
+  "priorP1Resolutions": [
+    {
+      "id": "PR_D1_TARGET_AND_RELEASE_IDENTITY_CLASSIFICATIONS_NOT_FAIL_CLOSED",
+      "status": "resolved",
+      "evidence": "Allowed target and release-identity vocabularies are explicit; invalid, UNKNOWN_FAIL_CLOSED, and unproved CURRENTLY_REPROVED variants fail closed."
+    },
+    {
+      "id": "PR_D1_EAS_RUNTIME_ENVIRONMENT_NOT_BOUND",
+      "status": "resolved",
+      "evidence": "Resolved EAS environment, channel, and profile runtime environment key/value must match each target."
+    },
+    {
+      "id": "PR_D1_EAS_DISTRIBUTION_POLICY_NOT_BOUND",
+      "status": "resolved",
+      "evidence": "Resolved EAS profile distribution must equal the target profileDistribution policy."
+    },
+    {
+      "id": "PRD1_REQUIRED_CAPABILITY_CATALOG_NOT_CLOSED",
+      "status": "resolved",
+      "evidence": "Required capabilities equal the independently applicable registry set and close over every mapped direct import."
+    },
+    {
+      "id": "PRD1_GENERATED_PROVIDED_EVIDENCE_INCOMPLETE",
+      "status": "resolved",
+      "evidence": "Provided capability acceptance requires independent source evidence plus every platform-specific generated marker."
+    },
+    {
+      "id": "PRD1_HISTORICAL_TARGET_DIGEST_SOURCE_CROSS_BOUND",
+      "status": "resolved",
+      "evidence": "The build 84 record identifies its historical source separately and labels the digest as current-source profile replay T1 evidence only."
+    }
+  ],
+  "securityAndDeterminismReview": {
+    "status": "PASS",
+    "cli": {
+      "unknownFlagRejected": "UNKNOWN_FLAG",
+      "unknownTargetRejected": "UNKNOWN_TARGET",
+      "unknownFixtureRejected": "UNKNOWN_FIXTURE",
+      "existingEvidenceOverwriteRejected": "EVIDENCE_OUTPUT_EXISTS",
+      "explicitReplaceRequiresOutput": true,
+      "silentTargetSkip": false,
+      "selectedAndSkippedTargetsRecorded": true,
+      "defaultReadOnly": true
+    },
+    "offlineBoundary": {
+      "directNetworkClientImported": false,
+      "providerReadbackScriptInvoked": false,
+      "childGenerationEnvironment": ["EXPO_OFFLINE=1", "npm_config_offline=true", "expo prebuild --no-install"],
+      "providerContactObserved": false,
+      "buildCommandInvoked": false,
+      "otaCommandInvoked": false,
+      "submissionOrInstallationInvoked": false,
+      "packetCaptureClaimed": false
+    },
+    "privateEvidence": {
+      "rawPrivateConfigRecorded": false,
+      "privateConfigPathRecorded": false,
+      "privateConfigStateOrDigestOnly": true,
+      "secretAndPrivateEvidenceDiffScan": "PASS",
+      "credentialsOrTokensPrinted": false
+    },
+    "temporaryGeneration": {
+      "disposableDirectoryMode": "0700",
+      "cleanupInFinally": true,
+      "generatedNativePathsChangedByImplementation": false,
+      "generatedNativeEvidenceTier": "T1_SOURCE_NOT_COMPILED_OR_SIGNED_PROOF"
+    },
+    "capabilityClosure": {
+      "directImportsDiscovered": 42,
+      "nativeMapped": 34,
+      "reviewedJavascriptOnly": 8,
+      "unclassified": 0,
+      "grammarCounts": {
+        "STATIC_IMPORT_FROM": 451,
+        "SIDE_EFFECT_IMPORT": 2,
+        "DYNAMIC_IMPORT": 13,
+        "COMMONJS_REQUIRE": 7,
+        "EXPORT_FROM": 2
+      },
+      "androidQaRequiredProvided": "21/21",
+      "iosQaRequiredProvided": "26/26",
+      "androidHistoricalCurrentReplayRequiredProvided": "21/21",
+      "requiredAndProvidedIndependentlyDerived": true,
+      "historicalArtifactSubstitutionRejected": true
+    },
+    "negativeControls": {
+      "mandatory": "8/8",
+      "additional": "16/16",
+      "total": "24/24",
+      "allFailClosed": true,
+      "resultSha256": "5c8b7317b799cd2727b760c97ff2a4beda4794a8a9660fb6d72c93f52b2f38de"
+    },
+    "determinism": {
+      "targetGeneratedSourceRuns": "9/9",
+      "perTargetRuns": "3/3",
+      "evidenceRuns": "3/3_BYTE_IDENTICAL",
+      "normalizationAllowlistExact": true,
+      "unsafeNormalizationRejected": "UNSAFE_NORMALIZATION"
+    },
+    "proofSubstitution": {
+      "generatedSourceCalledCompiledProof": false,
+      "historicalIdentityCalledCurrentProof": false,
+      "providerOrInstalledProofInferred": false,
+      "historicalBuild84CalledCurrentReplayOnly": true
+    }
+  },
+  "testResults": {
+    "exactFrozenHeadEvidence": {
+      "status": "pass",
+      "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "source": "existing-exact-result-reused-no-duplicate-heavy-generation",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "24/24",
+      "directImportClosure": "42_DISCOVERED_34_NATIVE_MAPPED_8_REVIEWED_JS_ONLY_0_UNCLASSIFIED"
+    },
+    "lightweightReviewChecks": {
+      "nodeSyntax": "PASS_2_OF_2",
+      "json": "PASS_4_OF_4",
+      "exportedFixtureCatalog": "PASS_24",
+      "directImportGrammarCatalog": "PASS_5",
+      "contractValidation": "PASS_13_CONTRACTS_20_FEATURES_25_ESCAPED_DEFECTS",
+      "plan": "REQUIREMENTS_CLEAR_ARCHITECTURE_CLEAR",
+      "gitDiffCheck": "PASS",
+      "secretPrivateEvidenceScan": "PASS",
+      "implementationScope": "PASS_6_FILES_1049_NET_LINES"
+    },
+    "cliFailClosed": {
+      "status": "pass_exact_frozen_head_evidence",
+      "unknownFlag": "rejected",
+      "unknownTarget": "rejected",
+      "unknownFixture": "rejected",
+      "existingOutput": "preserved"
+    },
+    "currentTruth": {
+      "status": "expected-fail-pre-base-synchronization",
+      "finding": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE"
+    },
+    "baseSynchronization": {
+      "status": "pending",
+      "requiredAfterCurrentTruthBinding": true
+    },
+    "phase1Ci": {
+      "status": "pending",
+      "implementationHead": "78d0140a08159cdd2c78bd0597631a5cc87b5029",
+      "reason": "One exact Phase 1 CI run belongs after base synchronization and all four current Level C reviews."
+    }
+  },
+  "laneFindings": [],
+  "findings": [],
+  "findingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "criticalFindingCounts": {"P0": 0, "P1": 0},
+  "aggregateCriticalFindingCounts": {"P0": 0, "P1": 0},
+  "waivedFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "lifecycleGate": {
+    "status": "BLOCKED_INTERNAL",
+    "sourceP0": 0,
+    "sourceP1": 0,
+    "baseSynchronization": "pending",
+    "phase1Ci": "pending",
+    "mergeGate": "BLOCKED_INTERNAL_LIFECYCLE_ONLY"
+  },
+  "proofTiersAtReviewedHead": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "MODEL_CLEAR",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "reviewLevel": "C",
+  "reviewTimestamp": "2026-08-02T09:29:05Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "lane-4-security-scope-determinism-negative-controls",
+    "isolated-automated-review",
+    "implementation-agent-not-sole-reviewer"
+  ],
+  "historicalEvidence": {
+    "preservedFile": "docs/reviews/pr143-d1-security-scope-determinism-review-v1.json",
+    "preservedSha256": "f29acab5c55dd86f4cd2572514b81234f2ad0a0adbffccb81ef99a6a99c01bc0",
+    "changedByV2": false,
+    "classification": "HISTORICAL_PRE_CORRECTION_REVIEW"
+  },
+  "nonInterference": {
+    "implementationEditedByReview": false,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "artifactInstalled": false,
+    "publicRelease": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRoleRightAuthRlsChanged": false,
+    "generatedAndroidOrIosCommittedByImplementation": false,
+    "denoLockTouched": false
+  },
+  "summary": {
+    "laneResult": "P0_0_P1_0",
+    "aggregateResult": "P0_0_P1_0_SOURCE_CLEAR",
+    "implementationMergeRecommendation": "eligible-only-after-current-truth-binding-base-synchronization-additive-current-reviews-and-one-exact-frozen-head-CI-pass",
+    "reviewPrDisposition": "remain-draft-never-merge",
+    "noP1Waived": true
+  }
+}
