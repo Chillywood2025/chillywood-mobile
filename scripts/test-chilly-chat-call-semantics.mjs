@@ -536,6 +536,9 @@ for (const nativeCallAction of ["answer", "decline", "end", "mute", "unmute"]) {
 const consumedIosAnswerClaim = Object.freeze({
   action: "answer",
   consumed: true,
+  consumedAtMonotonicMs: 100,
+  createdAtMonotonicMs: 90,
+  expiresAtMonotonicMs: 30_090,
   inviteId: nativeRouteInviteId,
   nativeEventGeneration: 1,
   nativeIdentity: "33333333-3333-4333-8333-333333333333",
@@ -546,6 +549,7 @@ const consumedIosAnswerClaim = Object.freeze({
 assert.equal(doesNativeCallActionOwnTransition({
   authority: "trusted_native_claim",
   callInviteId: nativeRouteInviteId,
+  monotonicNowMs: 100,
   nativeCallAction: "answer",
   nativeIdentity: consumedIosAnswerClaim.nativeIdentity,
   platform: "ios",
@@ -921,16 +925,8 @@ assert.match(
   /const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition\(\{[\s\S]{0,220}authority: trustedNativeCallClaim[\s\S]{0,400}trustedNativeClaim: trustedNativeCallClaim/u,
   "the chat thread must use the tested native-transition ownership policy",
 );
-assert.match(
-  chatThreadSource,
-  /!requestedOpenCall[\s\S]{0,120}\|\| requestedNativeCallOwnsTransition[\s\S]{0,620}void handleJoinOrCloseCall\(requestedCallInviteId, false\)/u,
-  "openCall compatibility routing must stay inert while a native action settles and cannot accept a ringing invite",
-);
-assert.match(
-  chatThreadSource,
-  /normalizedExpectedInviteId && joinInvite\?\.id !== normalizedExpectedInviteId[\s\S]{0,900}!joinInvite && !normalizedExpectedInviteId/u,
-  "openCall compatibility must not fall through from a stale invite ID to a newer same-thread call",
-);
+assert.doesNotMatch(chatThreadSource, /requestedOpenCall|autoOpenCallRef/u, "openCall route text must never open or join call media");
+assert.doesNotMatch(chatThreadSource, /requestedCallMode|autoStartCallRef/u, "startCall route text must never create a call");
 assert.match(
   chatThreadSource,
   /activeNativeCallActionRequestKeyRef\.current = requestedNativeCallRequestKey[\s\S]{0,320}\[requestedNativeCallRequestKey\]/u,

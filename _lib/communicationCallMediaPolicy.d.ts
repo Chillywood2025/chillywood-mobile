@@ -37,11 +37,13 @@ export function doesNativeCallActionOwnTransition(input: {
   callInviteId?: string | null;
   nativeIdentity?: string | null;
   nativeCallAction?: string | null;
+  monotonicNowMs?: number | null;
   platform?: string | null;
   threadId?: string | null;
   trustedNativeClaim?: {
     action?: string;
     consumed?: boolean;
+    consumedAtMonotonicMs?: number;
     expiresAtMonotonicMs?: number;
     inviteId?: string;
     nativeEventGeneration?: number;
