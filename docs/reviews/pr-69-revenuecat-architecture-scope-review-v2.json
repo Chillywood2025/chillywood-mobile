@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr-69-revenuecat-architecture-scope-review-v2",
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "architecture-scope-and-proof-strength",
+  "humanApproval": false,
+  "implementationPrNumber": 69,
+  "implementationBranch": "codex/assurance-reconcile-revenuecat-transfer",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "immutableSourceHead": "fc451c509c7af5c220c11ab9f3d34a0db608f35d",
+  "immutableSourceTree": "2983627d42cfd94ac3ff6b7ea7f4fd2c155427de",
+  "synchronizedBranchHead": "81892f3dae544713d8e35512da895cd99c610966",
+  "synchronizedTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "currentBase": "cbf6df6a6c932b8a29cb793b577b426f8a7b6259",
+  "canonicalSyntheticTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "synchronizationParents": [
+    "fc451c509c7af5c220c11ab9f3d34a0db608f35d",
+    "cbf6df6a6c932b8a29cb793b577b426f8a7b6259"
+  ],
+  "providerBranchSnapshot": "81892f3dae544713d8e35512da895cd99c610966",
+  "sourceDeltaHash": "0ff30d73629020ac985c9bafb21100f7a6f6bf7df4f70cbfe0182b8dfd462c46",
+  "changedFileHash": "93f357c635ec14c8a357cd9bf7cee37c45bf6aeb584ee24a9484a9d61f289a4d",
+  "migrationSetHash": "864a53d7732f014684f031eb30db908912fd8b49d6dd86f2eb25557d0fe6da37",
+  "configHash": "a778e144288e00fe442cb55dd383e4f625df21455fba3570357a5ae6e4984b26",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "historicalEvidence": [
+    {
+      "preservedFile": "docs/reviews/pr-69-revenuecat-architecture-scope-review.json",
+      "preservedReviewId": "pr-69-revenuecat-architecture-scope-review-v1",
+      "preservedSha256": "300ee7a3ad38e957233f728918c7f25797949eec39de19493c23e52f8f19ee20",
+      "preservedUnchanged": true,
+      "classification": "historical_stale",
+      "reason": "The v1 record binds predecessor head a5a37296800419a50c9bb271d99e505f6ad7a056 and predates the forward-only ordering correction, current local behavioral gate, linked no-apply assembly, and verified base synchronization."
+    }
+  ],
+  "implementationHead": "81892f3dae544713d8e35512da895cd99c610966",
+  "implementationTree": "50e49282a4087c9a784fec74b0f6bfa1ce2aa00a",
+  "baseHead": "cbf6df6a6c932b8a29cb793b577b426f8a7b6259",
+  "testResults": {
+    "laneIdentity": {
+      "status": "pass",
+      "lane": "architecture-scope-and-proof-strength",
+      "isolatedWorktree": true,
+      "implementationAgentWasSoleReviewer": false,
+      "reviewOnly": true,
+      "mergePermitted": false
+    },
+    "baseSynchronization": {
+      "status": "pass",
+      "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+      "immutableSourceIsFirstParent": true,
+      "currentBaseIsSecondParent": true,
+      "ordinaryTwoParentMerge": true,
+      "firstParentDistance": 1,
+      "canonicalMergeConflict": false,
+      "observedTreeEqualsCanonicalSyntheticTree": true,
+      "providerSnapshotMatches": true,
+      "sourceDeltaByteEquivalent": true,
+      "changedFileSetEquivalent": true,
+      "manualConflictResolution": false
+    },
+    "sourceDeltaEquivalence": {
+      "status": "pass",
+      "immutableSourceMergeBase": "ee29494539cd9a88ea179aafb48f745511b6ffa3",
+      "immutableSourceDeltaHash": "0ff30d73629020ac985c9bafb21100f7a6f6bf7df4f70cbfe0182b8dfd462c46",
+      "synchronizedSourceDeltaHash": "0ff30d73629020ac985c9bafb21100f7a6f6bf7df4f70cbfe0182b8dfd462c46",
+      "immutableChangedFileHash": "93f357c635ec14c8a357cd9bf7cee37c45bf6aeb584ee24a9484a9d61f289a4d",
+      "synchronizedChangedFileHash": "93f357c635ec14c8a357cd9bf7cee37c45bf6aeb584ee24a9484a9d61f289a4d",
+      "implementationDeltaChangedByBaseSynchronization": false
+    },
+    "boundedScope": {
+      "status": "pass",
+      "featureId": "revenuecat-premium",
+      "objective": "one RevenueCat transfer and database authority-ordering reconciliation domain",
+      "changedFiles": 12,
+      "fileBudget": 12,
+      "additions": 3302,
+      "deletions": 2,
+      "netChangedLines": 3300,
+      "lineBudget": 3300,
+      "scopeWaiver": "pr-b2-revenuecat-reconciliation-scope-waiver-v1",
+      "registeredFeatureBundle": [
+        "RevenueCat-Premium",
+        "database-RLS"
+      ],
+      "secondHighRiskDomain": false,
+      "b3RoomHostImplementationPaths": [],
+      "liveKitImplementationPaths": [],
+      "appProductPaths": [],
+      "nativePaths": [],
+      "packagePaths": [],
+      "workflowPaths": [],
+      "currentTruthAuthoredDelta": false,
+      "unrelatedScopeFound": false
+    },
+    "migrationArchitecture": {
+      "status": "pass",
+      "deployedPredecessors": [
+        {
+          "version": "20260730153724",
+          "name": "revenuecat_verified_transfer_reconciliation",
+          "rawSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+          "bodyRewritten": false
+        },
+        {
+          "version": "20260730154416",
+          "name": "allow_expired_revenuecat_transfer_target_reconciliation",
+          "rawSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+          "bodyRewritten": false
+        }
+      ],
+      "forwardCorrection": {
+        "version": "20260730170000",
+        "name": "revenuecat_transfer_authoritative_ordering",
+        "rawSha256": "5ecd5159055a704f0e76842ab56ff20fe98a760cdf001eea08abe25407ee30c9",
+        "classification": "GIT_SOURCE_ONLY_NOT_APPLIED"
+      },
+      "deployedMigrationRewritten": false,
+      "deployedMigrationReapplied": false,
+      "migrationDeploymentAttemptedByReview": false
+    },
+    "focusedSourceAndModelChecks": {
+      "status": "pass",
+      "storePolicy": {
+        "planned": 14,
+        "passed": 14,
+        "failed": 0
+      },
+      "sanitizedProviderFixtures": {
+        "planned": 8,
+        "passed": 8,
+        "failed": 0,
+        "providerContact": false
+      },
+      "combinedNodeTests": {
+        "planned": 22,
+        "passed": 22,
+        "failed": 0
+      },
+      "assurancePlan": {
+        "feature": "revenuecat-premium",
+        "requirements": "REQUIREMENTS_CLEAR",
+        "architecture": "ARCHITECTURE_CLEAR"
+      },
+      "assuranceContracts": {
+        "contracts": 13,
+        "features": 20,
+        "escapedDefects": 25,
+        "result": "pass"
+      },
+      "assurancePrScope": "pass_12_of_12_files_3300_of_3300_net_lines",
+      "gitDiffCheck": "pass"
+    },
+    "localBehavioralEvidence": {
+      "status": "pass_recorded_not_rerun_by_review_lane",
+      "target": "isolated local Supabase/PostgreSQL only",
+      "pgTap": {
+        "planned": 120,
+        "executed": 120,
+        "passed": 120,
+        "failed": 0,
+        "sourceSha256": "45b80ed97d501986fae0ecc0b340a88b59e7941d427318f924e7f1a47298fff8"
+      },
+      "deterministicConcurrency": {
+        "plannedRaces": 10,
+        "executedRaces": 10,
+        "passedRaces": 10,
+        "failedRaces": 0,
+        "sourceSha256": "5a6ecb084ad57fcaf706ad8837417dae8a9afd8e94d78f82126e410fac6afea2"
+      },
+      "cleanup": {
+        "fixtureUsers": 0,
+        "fixtureTransfers": 0,
+        "b2Backends": 0,
+        "fixturePayableRows": 0,
+        "fixtureAuthorityRows": 0
+      },
+      "providerContact": false,
+      "remoteDatabaseContact": false,
+      "persistentDatabaseMutation": false
+    },
+    "linkedNoApply": {
+      "status": "PASS_NO_APPLY_SCOPED",
+      "directContext": {
+        "status": "BLOCKED_INTERNAL_SOURCE_ASSEMBLY_REQUIRES_PRESERVED_B3",
+        "stoppedBeforePlanning": true,
+        "applied": false,
+        "unlinkedAfterStop": true,
+        "sourceOrProviderFailure": false
+      },
+      "assembledContext": {
+        "status": "PASS_NO_APPLY_SCOPED",
+        "tree": "47be54602eb3c9cc614e29aa21034237284a1d19",
+        "pendingOwners": [
+          "B2",
+          "B1",
+          "B3"
+        ],
+        "eachPendingExactlyOnce": true,
+        "unexpectedMigrations": [],
+        "seedFiles": [],
+        "roleFiles": [],
+        "applied": false
+      },
+      "evidenceMode": "coordinator-supplied-sanitized-no-apply-record",
+      "reviewRanLinkedCommand": false,
+      "providerMutation": false,
+      "databaseMutation": false
+    },
+    "proofTierBoundary": {
+      "status": "pass",
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "MODEL_CLEAR_DETERMINISTIC_SANITIZED",
+      "T3_INTEGRATION": "INTEGRATION_CLEAR_LOCAL_DATABASE_RECORDED_NOT_RERUN",
+      "T4_NATIVE_PROVIDER": "NOT_PROVED_NOT_CLAIMED",
+      "T5_SIGNED_ARTIFACT": "NOT_CLAIMED",
+      "T6_INSTALLED_PHYSICAL": "NOT_CLAIMED",
+      "T7_PUBLIC_CANARY": "NOT_CLAIMED",
+      "sourceOrFixtureInspectionAcceptedAsDatabaseProof": false,
+      "localDatabaseAcceptedAsProviderProof": false,
+      "noApplyAcceptedAsRuntimeBehaviorProof": false,
+      "productionEntitlementOrMoneyClaimed": false
+    },
+    "phase1Ci": {
+      "status": "coordinator_pending_after_four_current_review_lanes",
+      "implementationHead": "81892f3dae544713d8e35512da895cd99c610966",
+      "reviewDoesNotSubstituteForCi": true,
+      "failureWaived": false
+    },
+    "nonInterference": {
+      "status": "pass",
+      "implementationSourceEditedByReview": false,
+      "providerContactByReview": false,
+      "providerMutation": false,
+      "productionDatabaseContactByReview": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "migrationReapply": false,
+      "revenueCatRequestOrPurchase": false,
+      "moneyOrEntitlementChanged": false,
+      "payableBalanceCreated": false,
+      "liveKitAuthorityGranted": false,
+      "authRlsRolesOrRightsChanged": false,
+      "buildOrOta": false,
+      "switchOrScheduleChanged": false,
+      "privateEvidenceCommitted": false,
+      "denoLockTouched": false,
+      "userDerivedMemory": "off",
+      "level2Repair": "off"
+    }
+  },
+  "testResultHash": "dee8e51314679959117f526f8bf95494d4b4602ff9d00f74657b564ce1cc8859",
+  "reviewLevel": "C",
+  "reviewHead": "934a8b81d2fe6f315f7e84ee77fc5231645e6392",
+  "reviewTimestamp": "2026-08-02T04:09:04Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "isolated-automated-review",
+    "lane-3-architecture-scope-and-proof-strength",
+    "separate-clean-worktree"
+  ],
+  "criticalFindingCounts": {
+    "P0": 0,
+    "P1": 0
+  },
+  "findings": [
+    {
+      "id": "REVENUECAT_TRANSFER_STALE_EVENT_AND_RENEWAL_INTERLEAVING_UNGUARDED",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The distinct forward-only ordering migration uses the shared Premium authority lock domain and deterministic ordering tuple; current local pgTAP and race evidence exercises the stale, equal-time, duplicate, rollback, and concurrency cases without rewriting either deployed predecessor."
+    },
+    {
+      "id": "B2_RECONCILIATION_T3_CLAIM_EXCEEDS_EXECUTED_PROOF",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "T3 is now based on recorded 120/120 local pgTAP and 10/10 deterministic races with zero cleanup counters. Sanitized source fixtures remain T1/T2 evidence and are not substituted for database or provider execution."
+    },
+    {
+      "id": "B2_RECONCILIATION_REPORT_BASE_IS_STALE",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "This additive exact review binds immutable source fc451c50, current base cbf6df6a, synchronized head 81892f3d, canonical tree 50e49282, and byte-equivalent source and changed-file hashes while preserving the historical report bytes."
+    },
+    {
+      "id": "B2_ASSEMBLED_REMOTE_DRY_RUN_MISSING",
+      "severity": "P1",
+      "status": "resolved",
+      "resolution": "The direct context stopped fail-closed before planning because it lacked the preserved B3 exact-source boundary. The exact assembled tree 47be54602eb3c9cc614e29aa21034237284a1d19 passed no-apply planning with only B2, B1, and B3 pending exactly once and no apply, seed, role, provider, or database mutation."
+    }
+  ],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "historicalEvidencePreserved": true,
+    "implementationFilesOnReviewBranch": 0,
+    "reviewDisposition": "PASS_LEVEL_C_ARCHITECTURE_SCOPE_AND_PROOF_STRENGTH_PENDING_FROZEN_HEAD_CI",
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true
+  }
+}
