@@ -176,7 +176,7 @@ stable
 as $$
   select not public.cognitive_livekit_final_source_identity_matches_v3(
     case when p_field = 'platform'
-      then case p_manifest_platform when 'android' then 'ios' else 'android' end
+      then case p_manifest_platform when 'android' then 'ios'::public.cognitive_platform else 'android'::public.cognitive_platform end
       else p_manifest_platform end,
     case when p_field = 'commit' then repeat('a',40)
       else binding.final_source_commit end,
