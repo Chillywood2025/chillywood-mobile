@@ -58,14 +58,14 @@
     {"path": "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql", "classification": "SOURCE_ONLY", "resolution": "INCLUDED_IN_B2"}
   ],
   "focusedValidation": {
-    "nodeTests": {"passed": 20, "failed": 0},
-    "deterministicNodeOutput": {"runs": 3, "normalizedSha256": "bceb38a2ee1b7b788ffda0788b36ab180e500fffdb17e60320fd6a12f39de21a"},
+    "nodeTests": {"status": "SOURCE_CLEAR", "passed": 22, "failed": 0},
+    "deterministicNodeOutput": {"status": "HISTORICAL_STALE", "runs": 3, "normalizedSha256": "bceb38a2ee1b7b788ffda0788b36ab180e500fffdb17e60320fd6a12f39de21a"},
     "denoCheck": "SOURCE_CLEAR",
     "migrationRawHashes": "SOURCE_CLEAR",
     "scope": "SOURCE_CLEAR",
-    "databasePgTap": {"status": "HISTORICAL_BASELINE_CLEAR", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
+    "databasePgTap": {"status": "HISTORICAL_STALE", "passed": 27, "failed": 0, "runtime": "supabase-cli-2.109.1-local"},
     "successorPgTap": {
-      "status": "INTEGRATION_CLEAR",
+      "status": "HISTORICAL_STALE",
       "planned": 69,
       "executed": 69,
       "passed": 69,
@@ -83,9 +83,9 @@
       "persistentDatabaseMutation": false,
       "providerContact": false
     },
-    "orderingSchedules": {"status": "MODEL_CLEAR", "passed": 8, "failed": 0, "antiVacuityControls": 1, "deterministic": true},
+    "orderingSchedules": {"status": "HISTORICAL_STALE", "passed": 8, "failed": 0, "antiVacuityControls": 1, "deterministic": true},
     "remoteDryRun": {
-      "status": "PASS_NO_APPLY",
+      "status": "HISTORICAL_STALE",
       "command": "supabase db push --dry-run",
       "supabaseCliVersion": "2.110.0",
       "assembledBranchHead": "24237254fba83534018c3dca5e986d5c4f73ba66",
@@ -108,6 +108,12 @@
       "applied": false,
       "remoteMutation": false,
       "providerMutation": false
+    },
+    "currentRequiredGates": {
+      "localPgTap": {"status": "PASS", "planned": 120, "executed": 120, "passed": 120, "failed": 0, "durationSeconds": 10.54, "sourceSha256": "45b80ed97d501986fae0ecc0b340a88b59e7941d427318f924e7f1a47298fff8", "mode": "local-only", "providerContact": false, "remoteMutation": false, "persistentDatabaseMutation": false},
+      "concurrency": {"status": "PASS", "plannedRaces": 10, "executed": 10, "passed": 10, "failed": 0, "durationSeconds": 14.15, "sourceSha256": "5a6ecb084ad57fcaf706ad8837417dae8a9afd8e94d78f82126e410fac6afea2", "cleanup": {"fixtureUsers": 0, "fixtureTransfers": 0, "b2Backends": 0, "fixturePayableRows": 0, "fixtureAuthorityRows": 0}, "mode": "local-only", "providerContact": false, "remoteMutation": false, "persistentDatabaseMutation": false},
+      "linkedDirectNoApply": {"status": "PENDING_NOT_EXECUTED", "applied": false},
+      "linkedAssembledNoApply": {"status": "PENDING_NOT_EXECUTED", "applied": false}
     }
   },
   "fixtureCoverage": [
@@ -127,7 +133,7 @@
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
     "T1_SOURCE": "SOURCE_CLEAR",
     "T2_MODEL": "MODEL_CLEAR",
-    "T3_INTEGRATION": "INTEGRATION_CLEAR",
+    "T3_INTEGRATION": "INTEGRATION_CLEAR_LOCAL_DB",
     "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
     "T5_SIGNED_ARTIFACT": "NOT_APPLICABLE",
     "T6_INSTALLED_PHYSICAL": "NOT_APPLICABLE",
@@ -135,13 +141,13 @@
   },
   "proofLimits": [
     "The fixture corpus proves only deterministic sanitized source contracts.",
-    "The frozen 69/69 local pgTAP result proves the current source only inside its outer rollback-only local transaction.",
-    "The final assembled linked no-apply dry-run passed with remote history/source aligned and exactly three forward-only files pending.",
-    "The local integration and dry-run results do not substitute for provider-backed proof.",
+    "The prior 69/69 pgTAP record remains historical stale; current local-only integration passed pgTAP 120/120 and deterministic concurrency 10/10 with zero fixture users, transfer rows, B2 backends, payable rows, or authority rows after cleanup, without provider, remote, or persistent database mutation.",
+    "The prior assembled linked no-apply result is historical stale evidence; both current direct and assembled linked dry-runs remain pending and unapplied.",
+    "The database wrapper proves only the exact existing iOS/App Store/revenuecat_app_store sandbox mapping and provider-backed grant join; signature and provider verification remain at the Edge boundary, and local integration or dry-run results do not substitute for provider-backed proof.",
     "No provider, installed, physical, signed-artifact, or release behavior is claimed."
   ],
   "rollback": "Retain immutable deployed migration source. The forward correction remains undeployed; any future deployed correction requires another forward-only successor rather than rewriting migration history.",
   "emergencyStop": "Do not deploy the webhook or mutate provider state; route any future provider action to Money Flow Control under separate authorization.",
-  "finalPermittedNextAction": "Require fresh exact-head review and scope enforcement of the passed assembled linked no-apply dry-run before this Git-only reconciliation may merge.",
+  "finalPermittedNextAction": "Freeze, commit, and push the immutable source; bind current truth once, base-synchronize normally, then run direct and assembled linked no-apply planning before exact review and CI.",
   "claimedFeatureCompletion": false
 }

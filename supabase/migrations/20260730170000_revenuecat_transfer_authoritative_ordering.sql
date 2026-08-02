@@ -8,6 +8,83 @@
 -- Acquire that exact namespace for both transfer participants, in stable user
 -- order, then re-read provider authority before allowing the transfer.
 
+-- This is the database form of the already-merged RevenueCat state-model
+-- authority tuple: (provider occurrence time, event rank, provider event id).
+-- The rank is cancellation=1, purchase=2, renewal=3, transfer=4,
+-- expiration=5, refund=6, revocation=7.  Product-change, uncancellation and
+-- billing-issue events share renewal authority; subscription-paused shares
+-- revocation authority.  The C collation makes the final text comparison
+-- stable across database locale settings.
+create or replace function public."revenuecat_premium_authority_rank_internal"(
+  p_event_type text,
+  p_is_transfer boolean
+)
+returns smallint
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $$
+  select case
+    when p_is_transfer then 4::smallint
+    else case upper(trim(coalesce(p_event_type, '')))
+      when 'CANCELLATION' then 1::smallint
+      when 'INITIAL_PURCHASE' then 2::smallint
+      when 'NON_RENEWING_PURCHASE' then 2::smallint
+      when 'PRODUCT_CHANGE' then 3::smallint
+      when 'RENEWAL' then 3::smallint
+      when 'UNCANCELLATION' then 3::smallint
+      when 'BILLING_ISSUE' then 3::smallint
+      when 'TRANSFER' then 4::smallint
+      when 'EXPIRATION' then 5::smallint
+      when 'REFUND' then 6::smallint
+      when 'REVOCATION' then 7::smallint
+      when 'SUBSCRIPTION_PAUSED' then 7::smallint
+      else 0::smallint
+    end
+  end;
+$$;
+
+create or replace function public."revenuecat_premium_authority_is_newer_internal"(
+  p_existing_occurred_at timestamptz,
+  p_existing_event_type text,
+  p_existing_event_id text,
+  p_existing_is_transfer boolean,
+  p_candidate_occurred_at timestamptz,
+  p_candidate_event_type text,
+  p_candidate_event_id text,
+  p_candidate_is_transfer boolean
+)
+returns boolean
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $$
+  select case
+    when p_existing_occurred_at is null
+      or nullif(trim(coalesce(p_existing_event_id, '')), '') is null
+      or p_candidate_occurred_at is null
+      or nullif(trim(coalesce(p_candidate_event_id, '')), '') is null
+    then true
+    else (
+      p_existing_occurred_at,
+      public."revenuecat_premium_authority_rank_internal"(
+        p_existing_event_type,
+        p_existing_is_transfer
+      ),
+      trim(p_existing_event_id) collate "C"
+    ) > (
+      p_candidate_occurred_at,
+      public."revenuecat_premium_authority_rank_internal"(
+        p_candidate_event_type,
+        p_candidate_is_transfer
+      ),
+      trim(p_candidate_event_id) collate "C"
+    )
+  end;
+$$;
+
 create or replace function public."process_revenuecat_premium_transfer_ordered_internal"(
   p_provider_event_id text,
   p_source_user_id uuid,
@@ -30,10 +107,13 @@ declare
   v_target_transfer_event public."provider_events"%rowtype;
   v_source_current_entitlement public."user_entitlements"%rowtype;
   v_target_current_entitlement public."user_entitlements"%rowtype;
+  v_now timestamptz := timezone('utc'::text, now());
   v_locked_product_id uuid;
   v_lock_product_id uuid;
   v_first_user_id uuid;
   v_second_user_id uuid;
+  v_source_effective_grant_count integer;
+  v_target_compatible_grant_count integer;
 begin
   if v_transfer_event_id = '' then
     raise exception 'transfer_provider_event_id_required';
@@ -47,8 +127,8 @@ begin
   if lower(trim(coalesce(p_environment, ''))) <> 'sandbox' then
     raise exception 'transfer_environment_must_be_sandbox';
   end if;
-  if nullif(trim(coalesce(p_raw_payload_hash, '')), '') is null then
-    raise exception 'transfer_payload_hash_required';
+  if coalesce(p_raw_payload_hash, '') !~ '^[0-9a-f]{64}$' then
+    raise exception 'transfer_payload_hash_invalid';
   end if;
   if p_occurred_at is null then
     raise exception 'transfer_occurred_at_required';
@@ -154,18 +234,68 @@ begin
     );
   end if;
 
+  select count(*)::integer into v_source_effective_grant_count
+  from public."access_grants" grant_row
+  where grant_row."user_id" = p_source_user_id
+    and grant_row."grant_type" = 'premium'
+    and grant_row."status" in ('active', 'sandbox_only')
+    and (grant_row."expires_at" is null or grant_row."expires_at" > v_now);
+
+  if v_source_effective_grant_count <> 1 then
+    raise exception 'transfer_source_provider_grant_ambiguous';
+  end if;
+
   select grant_row."product_id" into v_locked_product_id
   from public."access_grants" grant_row
+  join public."provider_events" source_event
+    on source_event."id" = grant_row."provider_event_id"
+   and source_event."provider" = 'revenuecat_app_store'
+   and source_event."user_id" = p_source_user_id
+   and source_event."environment" = 'sandbox'
+   and source_event."status" = 'processed'
+   and source_event."product_id" = grant_row."product_id"
   where grant_row."user_id" = p_source_user_id
     and grant_row."grant_type" = 'premium'
     and grant_row."provider" = 'revenuecat_app_store'
     and grant_row."environment" = 'sandbox'
+    and grant_row."status" = 'sandbox_only'
+    and grant_row."expires_at" > v_now
     and grant_row."product_id" is not null
   order by grant_row."updated_at" desc
   limit 1;
 
   if v_locked_product_id is null then
     raise exception 'transfer_source_provider_grant_not_active';
+  end if;
+
+  if exists (
+    select 1
+    from public."access_grants" grant_row
+    where grant_row."user_id" = p_target_user_id
+      and grant_row."grant_type" = 'premium'
+      and grant_row."status" in ('active', 'sandbox_only')
+      and (grant_row."expires_at" is null or grant_row."expires_at" > v_now)
+      and (
+        grant_row."provider" is distinct from 'revenuecat_app_store'
+        or grant_row."environment" is distinct from 'sandbox'
+        or grant_row."product_id" is distinct from v_locked_product_id
+      )
+  ) then
+    raise exception 'transfer_target_grant_conflict';
+  end if;
+
+  select count(*)::integer into v_target_compatible_grant_count
+  from public."access_grants" grant_row
+  where grant_row."user_id" = p_target_user_id
+    and grant_row."grant_type" = 'premium'
+    and grant_row."provider" = 'revenuecat_app_store'
+    and grant_row."environment" = 'sandbox'
+    and grant_row."product_id" = v_locked_product_id
+    and grant_row."status" = 'sandbox_only'
+    and grant_row."expires_at" > v_now;
+
+  if v_target_compatible_grant_count > 1 then
+    raise exception 'transfer_target_provider_grant_ambiguous';
   end if;
 
   if exists (
@@ -180,7 +310,19 @@ begin
       )
       and event."environment" = 'sandbox'
       and event."status" in ('processed', 'refunded', 'reversed')
-      and event."occurred_at" > p_occurred_at
+      and public."revenuecat_premium_authority_is_newer_internal"(
+        event."occurred_at",
+        event."event_type",
+        coalesce(
+          event."metadata"->>'transfer_provider_event_id',
+          event."provider_event_id"
+        ),
+        coalesce((event."metadata"->>'revenuecat_transfer')::boolean, false),
+        p_occurred_at,
+        'TRANSFER',
+        v_transfer_event_id,
+        true
+      )
   ) then
     raise exception 'transfer_event_stale';
   end if;
@@ -245,8 +387,8 @@ begin
   if v_provider_event_id = '' then
     raise exception 'provider_event_id_required';
   end if;
-  if nullif(trim(coalesce(p_raw_payload_hash, '')), '') is null then
-    raise exception 'payload_hash_required';
+  if coalesce(p_raw_payload_hash, '') !~ '^[0-9a-f]{64}$' then
+    raise exception 'payload_hash_invalid';
   end if;
   if p_occurred_at is null then
     raise exception 'revenuecat_event_occurred_at_required';
@@ -323,7 +465,19 @@ begin
       )
       and event."environment" = v_environment
       and event."status" in ('processed', 'refunded', 'reversed')
-      and event."occurred_at" > p_occurred_at
+      and public."revenuecat_premium_authority_is_newer_internal"(
+        event."occurred_at",
+        event."event_type",
+        coalesce(
+          event."metadata"->>'transfer_provider_event_id',
+          event."provider_event_id"
+        ),
+        coalesce((event."metadata"->>'revenuecat_transfer')::boolean, false),
+        p_occurred_at,
+        v_event_type,
+        v_provider_event_id,
+        false
+      )
       and event."id" is distinct from v_existing_event."id"
   ) into v_has_newer_authority;
 
@@ -485,6 +639,14 @@ $$;
 revoke all on function public."process_revenuecat_premium_event_ordered_internal"(
   text, text, text, uuid, text, text, text, text, timestamptz, timestamptz,
   timestamptz, integer, text, text, text, text, text, uuid, uuid, text
+) from public, anon, authenticated, service_role;
+
+revoke all on function public."revenuecat_premium_authority_rank_internal"(
+  text, boolean
+) from public, anon, authenticated, service_role;
+
+revoke all on function public."revenuecat_premium_authority_is_newer_internal"(
+  timestamptz, text, text, boolean, timestamptz, text, text, boolean
 ) from public, anon, authenticated, service_role;
 
 revoke all on function public."process_revenuecat_premium_event_atomic"(
