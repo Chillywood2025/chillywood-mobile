@@ -26,11 +26,11 @@
   "changedFileHash": "594eefe2b6a8c2fab9930597ea640ac8d8d9198e15b34c34b0c04e8bbd6ba82a",
   "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
   "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "configHash": "4386705ece1505e542d10fc37e38095fb7b145c8ec12b65622d01e91b0d715d2",
-  "testResultHash": "8273862fd6642ff0a884fd8b7872a6b48e378782dccfbf81514fae2141026600",
-  "testResultHashMethod": "sha256(canonical JSON of testResults excluding descriptive command text)",
+  "configHash": "81cd3b6707cc172321787bf35460b3edf5b9fe854f395b1d2bc4cd1f30faa307",
+  "testResultHash": "fef86a5c26e8e5d0a12fdab1884693b1198109197e97dbd837e4e63861740a94",
+  "testResultHashMethod": "sha256(canonical JSON serialization of testResults through scripts/assurance/lib.mjs)",
   "reviewRef": "codex/first-pass-assurance-d2c-review-url-route-security",
-  "reviewHead": "e0d5158b8b2862e218b76ceb915a90172183ca5e",
+  "reviewHead": "ecb841808e9a57421bc5387380df10c723646e39",
   "reviewTimestamp": "2026-08-02T19:00:27Z",
   "reviewerLanes": [
     "architecture-state",
@@ -94,6 +94,11 @@
         "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE",
         "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE"
       ]
+    },
+    "phase1Ci": {
+      "status": "pending-blocked-open-p1",
+      "implementationHead": "e0d5158b8b2862e218b76ceb915a90172183ca5e",
+      "reason": "Full CI is prohibited until all current Level C review lanes report P0=0/P1=0; this historical review records three open P1 findings."
     }
   },
   "findings": [
