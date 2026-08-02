@@ -140,11 +140,19 @@ select ok(
     from pg_trigger
     where tgrelid =
       'public.cognitive_livekit_platform_activation_outcomes'::regclass
-      and tgname = 'cognitive_livekit_platform_run_identity_v2'
+      and tgname = 'cognitive_livekit_platform_run_identity_v3'
       and not tgisinternal
       and tgenabled = 'O'
+  )
+  and not exists (
+    select 1
+    from pg_trigger
+    where tgrelid =
+      'public.cognitive_livekit_platform_activation_outcomes'::regclass
+      and tgname = 'cognitive_livekit_platform_run_identity_v2'
+      and not tgisinternal
   ),
-  'the final run-identity trigger is enabled'
+  'the v3 final run-identity trigger is enabled and v2 is retired'
 );
 
 select ok(
