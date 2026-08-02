@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr70-b1-current-truth-binding-review-v4",
+  "reviewVersion": 4,
+  "reviewLabel": "B1 immutable-source current-truth Level A review",
+  "reviewType": "isolated-automated-review-lane",
+  "reviewLevel": "A",
+  "reviewTimestamp": "2026-08-02T00:36:29Z",
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-b0-guard-review",
+  "reviewHead": "f5397bb98a8c95f6cf55ce65e2f375d9815bea7e",
+  "reviewEvidenceParentHead": "f5397bb98a8c95f6cf55ce65e2f375d9815bea7e",
+  "historicalEvidencePreserved": ["v1", "v2", "v3"],
+  "implementationPrNumber": null,
+  "implementationPrState": "not-yet-opened-at-review-time",
+  "implementationBranch": "codex/first-pass-assurance-current-truth-after-b0-guard",
+  "implementationHead": "ff47420a2e00b9e27b4e773d2ca7094b5fecfc96",
+  "implementationTree": "97f5e293a7bfd3c3e87ee8563e619b4b48c611e0",
+  "baseHead": "b99961d7bc38d06136ecbaed502a96bd5b3cf012",
+  "baseTree": "74816c6996c371bffc71a5e1074d33b4e64b0b44",
+  "mergeBase": "b99961d7bc38d06136ecbaed502a96bd5b3cf012",
+  "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
+  "changedNameHash": "246863974b7dc9633ab1448d13e918aad1577b7c34c324d1a1b0805c9330d465",
+  "changedNameHashMethod": "sha256(git diff --name-only -z baseHead implementationHead)",
+  "implementationDiffHash": "768f3a22bd180168d870a20bef275dd1458f681180c9835fd32dc434e5d61bbf",
+  "implementationDiffHashMethod": "sha256(git diff --binary --no-renames baseHead implementationHead)",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "migrationSetHashMethod": "sha256(git diff --name-only baseHead implementationHead -- supabase/migrations; empty set)",
+  "configHash": "a537214777d589d08a9203c94cc1a2bc8821ba1d525b34e8d263bcf1998f2ab4",
+  "configHashMethod": "sha256(config/assurance/current-truth-v1.json exact bytes)",
+  "artifactHashes": {
+    "CURRENT_STATE.md": "6879c5c44db8196f996e5d239bc896ebee6f636a19c7d766367c6e00ea3a3aae",
+    "NEXT_TASK.md": "0e6906c184cf25ffd3fef43a1f3e58f6a4a2646b1b8caaceabaf1ea5c36a12dd"
+  },
+  "testResults": {
+    "exactImplementationBinding": {
+      "status": "SOURCE_CLEAR",
+      "head": "ff47420a2e00b9e27b4e773d2ca7094b5fecfc96",
+      "tree": "97f5e293a7bfd3c3e87ee8563e619b4b48c611e0",
+      "base": "b99961d7bc38d06136ecbaed502a96bd5b3cf012",
+      "providerBranchHead": "ff47420a2e00b9e27b4e773d2ca7094b5fecfc96",
+      "providerBranchMatches": true
+    },
+    "historyPreservingReviewReuse": {
+      "status": "SOURCE_CLEAR",
+      "normalMergeCommit": "f5397bb98a8c95f6cf55ce65e2f375d9815bea7e",
+      "previousReviewHeadIsFirstParent": true,
+      "implementationHeadIsSecondParent": true,
+      "mergeConflict": false,
+      "v1ThroughV3EvidencePreservedUnchanged": true,
+      "v4EvidenceStatus": "current"
+    },
+    "allowedFileScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "additions": 23,
+      "deletions": 20,
+      "netChangedLines": 3,
+      "paths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-v1.json"
+      ],
+      "highRiskDomains": []
+    },
+    "b1ImmutableSourceBinding": {
+      "status": "SOURCE_CLEAR",
+      "implementationPrNumber": 70,
+      "branch": "codex/assurance-reconcile-livekit-source-binding",
+      "recordedHead": "3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73",
+      "providerBranchHead": "3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73",
+      "tree": "80f5a5ada687f2c664dc76ee50ce3154ede780dd",
+      "headBindingClassification": "EXACT_SOURCE_HEAD",
+      "findingCount": 0
+    },
+    "generatedDocuments": {
+      "status": "SOURCE_CLEAR",
+      "authoritativeRecord": "config/assurance/current-truth-v1.json",
+      "exactlyRenderedFromAuthoritativeRecord": true,
+      "driftFindings": 0
+    },
+    "currentTruth": {
+      "status": "SOURCE_CLEAR",
+      "recordedMain": "b99961d7bc38d06136ecbaed502a96bd5b3cf012",
+      "observedMain": "b99961d7bc38d06136ecbaed502a96bd5b3cf012",
+      "pr70HeadBindingClassification": "EXACT_SOURCE_HEAD",
+      "findingCount": 0
+    },
+    "contractValidation": {
+      "status": "SOURCE_CLEAR",
+      "contractsValidated": 13,
+      "featureCount": 20,
+      "escapedDefectCount": 25
+    },
+    "currentTruthTests": {
+      "status": "SOURCE_CLEAR",
+      "syncCases": 9,
+      "headBindingFailClosedCases": 25,
+      "headBindingRegressionSuitePassed": true
+    },
+    "deterministicCurrentTruth": {
+      "status": "SOURCE_CLEAR",
+      "mode": "offline",
+      "runs": 3,
+      "identical": true,
+      "outputSha256": "a6de6fd6c7e567919b49cd43f362cd84313523e0f4b07c2dd88a7e363d364887"
+    },
+    "prScope": {
+      "status": "SOURCE_CLEAR",
+      "changedFiles": 3,
+      "maximumFiles": 15,
+      "netChangedLines": 3,
+      "maximumNetChangedLines": 1200,
+      "highRiskDomains": []
+    },
+    "diffCheck": {
+      "status": "SOURCE_CLEAR"
+    },
+    "privacyAndSecretScan": {
+      "status": "SOURCE_CLEAR",
+      "newPrivateEvidence": false,
+      "newSecretMaterial": false,
+      "newDeviceIdentifiers": false
+    },
+    "nonInterference": {
+      "status": "SOURCE_CLEAR",
+      "productSourceChanged": false,
+      "providerRead": false,
+      "providerWrite": false,
+      "providerBoundary": "no production/runtime provider read or write; GitHub source-control metadata read only",
+      "githubSourceControlRead": true,
+      "providerMutation": false,
+      "databaseMutation": false,
+      "migrationDeployment": false,
+      "nativeChange": false,
+      "buildOrOta": false,
+      "workflowChange": false,
+      "packageOrLockfileChange": false,
+      "currentTruthImplementationChangedByReview": false,
+      "denoLockChanged": false
+    }
+  },
+  "testResultHash": "752955fe3445a75d5afc2b3c4f4a849eff7fdcc0cfc8faeec96cee5078e6d4b1",
+  "testResultHashMethod": "sha256(stableJson(testResults))",
+  "findings": [],
+  "severityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "humanApproval": false,
+  "mergeAuthorized": false,
+  "reviewOnly": true,
+  "disposition": "LANE_CLEAR_P0_P1_P2_P3_ZERO_B1_CURRENT_TRUTH_BINDING_VERIFIED"
+}
