@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "livekit-source-binding-database-behavior-concurrency-review-v3",
+  "reviewType": "isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "database-behavior-and-concurrency",
+  "humanApproval": false,
+  "implementationPrNumber": 70,
+  "implementationBranch": "codex/assurance-reconcile-livekit-source-binding",
+  "implementationClassification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "immutableSourceHead": "4425554ed713d05e17ef117c6fe33985b9800912",
+  "immutableSourceTree": "d635fac5052bd84a45ba0f7d5c5153db2c861222",
+  "synchronizedImplementationHead": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "synchronizedImplementationTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "currentBase": "dc9080e6278a82334e6196520dcbe5e5b844e943",
+  "synchronizationParents": [
+    "4425554ed713d05e17ef117c6fe33985b9800912",
+    "dc9080e6278a82334e6196520dcbe5e5b844e943"
+  ],
+  "canonicalSyntheticTree": "4d367db2eb70d08fa5be5688769c2171e099eddd",
+  "providerBranchSnapshot": "d1840447c0bb5b069e78e1d2f03e6824170f2f16",
+  "hashes": {
+    "sourceDeltaHash": "f8e77af6fdee5e753094d724eb08887fe1b9cdc12c7048d1e58506ea8ee77284",
+    "changedFileHash": "df052033c71b269ce9ffa2ef12681ca20e7cc7cfea81b84cbd9f7f5f6ea95e91",
+    "migrationSetHash": "c74b7acee8d24658dfd74c4c419a82f64c185bf80c0fe462f29c47f7b526e216",
+    "independentSourceDeltaPatchSha256": "aa7eabdc977c701063ad8e33a8c63b355256a7c2559a3317b1e9651b69aeefa1",
+    "independentChangedPathListSha256": "238be1fb91f19134800ad05c5243446fe430af6c322168305fee40d490e9f609",
+    "correctedPredecessorPgTapSha256": "443a39c6e6765c31552cdf49f051c7f7049c17a108e2b3f0e278ee3444c3f207",
+    "focusedPgTapSha256": "5af016399979fe5cc7b5d96a49b716b3bf903c2af3c2271367096fdcb237fcca",
+    "concurrencyFixtureSha256": "bdb806f9eeeaa89cd82c33998b64f9eefeaecbadb0ca4afae44693e4d6ce2269",
+    "successorMigrationSha256": "9408ac9896751a4f4ad798ad2644e805e2c42a10c374e24667c66aa624701011",
+    "deployedPredecessorSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204"
+  },
+  "historicalEvidence": [
+    {
+      "preservedFile": "docs/reviews/livekit-source-binding-db-security-review.json",
+      "preservedReviewId": "livekit-source-binding-db-security-review-v1",
+      "preservedUnchanged": true,
+      "classification": "historical_stale",
+      "reason": "It binds predecessor head 6d05b2bd2e56695e76a7bcfb0890303bf768cb8e and predates the behavioral matrix, local integration gate, and verified base synchronization."
+    },
+    {
+      "preservedFile": "docs/reviews/livekit-source-binding-database-behavior-concurrency-review-v2.json",
+      "preservedReviewId": "livekit-source-binding-database-behavior-concurrency-review-v2",
+      "preservedUnchanged": true,
+      "classification": "historical_stale",
+      "reason": "It binds immutable source 3d8ae2b6acaf05adfdf5bb81770c87b629e7ee73 and synchronized head 341a45688e59bc320a2acaf9047deeaef03098cd before the corrected predecessor pgTAP and current base synchronization."
+    }
+  ],
+  "exactHeadBinding": {
+    "status": "pass",
+    "immutableSourceIsFirstParent": true,
+    "currentBaseIsSecondParent": true,
+    "ordinaryTwoParentMerge": true,
+    "observedTreeEqualsCanonicalSyntheticTree": true,
+    "providerSnapshotMatches": true,
+    "sourceDeltaByteEquivalentAfterBaseSynchronization": true,
+    "changedPathsEquivalentAfterBaseSynchronization": true
+  },
+  "scope": {
+    "status": "pass",
+    "featureId": "livekit-media-transport",
+    "changedFiles": 10,
+    "fileBudget": 10,
+    "additions": 2517,
+    "deletions": 17,
+    "netChangedLines": 2500,
+    "lineBudget": 2500,
+    "waiver": "pr-b1-livekit-source-cross-binding-scope-waiver-v1",
+    "unrelatedScopeFound": false
+  },
+  "databaseEvidenceAdjudication": {
+    "status": "pass",
+    "evidenceSource": "exact committed current-truth and implementation readback of sanitized coordinator local-gate records",
+    "reviewReranDatabase": false,
+    "target": "isolated local Supabase/PostgreSQL stack only",
+    "cliVersion": "2.109.1",
+    "initialHarnessClassification": "NOT_EXECUTED_LOCAL_DATABASE_UNAVAILABLE",
+    "initialHarnessWasSourceFailure": false,
+    "migrationChainMaterializedThrough": "20260730230022",
+    "correctedPredecessorPgTap": {
+      "planned": 23,
+      "executed": 23,
+      "passed": 23,
+      "failed": 0,
+      "result": "PASS"
+    },
+    "focusedPgTap": {
+      "planned": 28,
+      "executed": 28,
+      "passed": 28,
+      "failed": 0,
+      "elapsedSeconds": 47,
+      "result": "PASS"
+    },
+    "concurrency": {
+      "plannedWitnesses": 19,
+      "executedWitnesses": 19,
+      "passedWitnesses": 19,
+      "failedWitnesses": 0,
+      "elapsedSeconds": 7,
+      "result": "PASS"
+    },
+    "cleanupReadback": {
+      "outcomes": 0,
+      "authorizations": 0,
+      "receipts": 0,
+      "result": "PASS"
+    },
+    "remoteDatabaseContact": false,
+    "providerContact": false,
+    "migrationDeployment": false
+  },
+  "correctedPredecessorAudit": {
+    "status": "pass",
+    "implementationChangeSincePriorBehaviorReview": "test-only",
+    "changedImplementationFile": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+    "testPlan": 23,
+    "enabledV3TriggerRequiredExactlyOnce": true,
+    "retiredV2TriggerRequiredAbsent": true,
+    "v2GuardFunctionPrivilegeBoundaryStillTested": true,
+    "migrationBodyChanged": false,
+    "behavioralPgTapChanged": false,
+    "concurrencyFixtureChanged": false,
+    "recordedResult": "PASS_23_OF_23"
+  },
+  "behavioralAudit": {
+    "status": "pass",
+    "fixtureIsNonVacuous": true,
+    "providerBackedSanitizedSandboxProof": true,
+    "actualImmutableUpdateAndDeleteRejections": true,
+    "actualAuthorizationReceiptCrossBinding": true,
+    "actualEnabledFinalizationTriggerExercised": true,
+    "exactAndroidAccepted": true,
+    "exactIosAccepted": true,
+    "androidReplayDenied": true,
+    "iosReplayDenied": true,
+    "mismatchedPlatformDenied": true,
+    "mismatchedSourceCommitDenied": true,
+    "mismatchedSourceTreeDenied": true,
+    "mismatchedDeploymentDenied": true,
+    "mismatchedRuntimeDenied": true,
+    "mismatchedUpdateDenied": true,
+    "mismatchedArtifactDenied": true,
+    "mismatchedRunSourceHashDenied": true,
+    "mismatchedRunRuntimeHashDenied": true,
+    "olderOrSiblingSourceSubstitutionDenied": true,
+    "sourceOrSchemaIntrospectionAcceptedAsBehaviorProof": false
+  },
+  "transactionAndRaceAudit": {
+    "status": "pass",
+    "preflightUsesPerPlatformAdvisoryTransactionLock": true,
+    "authorizationLocksReceiptForUpdate": true,
+    "authorizationUsesPerPlatformAdvisoryTransactionLock": true,
+    "authorizationLocksTargetSwitchForUpdate": true,
+    "parallelAuthorizationSingleWinnerObserved": true,
+    "parallelAuthorizationLoserObserved": true,
+    "finalizationLocksAuthorizationForUpdate": true,
+    "finalizationLocksReceiptForShare": true,
+    "finalizationUsesSamePerPlatformAdvisoryTransactionLock": true,
+    "finalizationLocksTargetSwitchForUpdate": true,
+    "authorizationOutcomeUniqueConstraintPresent": true,
+    "replayedAuthorizationDeniedBehaviorally": true,
+    "androidAndIosSwitchStateIsolated": true,
+    "expiredReceiptOpenDenied": true,
+    "expiredAuthorizationRollsBack": true,
+    "enabledScheduleRemainsAbsent": true,
+    "existingVisualSwitchesRemainEnabled": true,
+    "antiVacuityPositiveAndNegativeWitnessesPresent": true
+  },
+  "proofBoundary": {
+    "highestSatisfiedTier": "T3_LOCAL_INTEGRATION",
+    "t3BasedOnRecordedBehavioralExecution": true,
+    "sourceIntrospectionAcceptedAsT3": false,
+    "providerOrNativeProofClaimed": false,
+    "signedArtifactProofClaimed": false,
+    "installedOrPhysicalProofClaimed": false,
+    "publicCanaryProofClaimed": false,
+    "runtimeActivationClaimed": false
+  },
+  "dependencyFreeChecks": {
+    "canonicalSyntheticTree": "pass",
+    "concurrencyFixtureSyntax": "pass",
+    "sourceContract": {
+      "planned": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "assuranceContracts": {
+      "contracts": 13,
+      "features": 20,
+      "escapedDefects": 25,
+      "result": "pass"
+    },
+    "implementationPrScope": "pass_10_of_10_files_2500_of_2500_net_lines",
+    "reconciliationJsonSyntax": "pass",
+    "gitDiffCheck": "pass"
+  },
+  "historicalFindingDisposition": [
+    {
+      "id": "B1_CONCURRENCY_FIXTURE_REJECTED_BY_SOURCE_BINDING",
+      "previousSeverity": "P1",
+      "status": "resolved",
+      "resolution": "The exact frozen receipt/source/artifact tuples and provider-backed sanitized sandbox proof pass the recorded 19-witness local concurrency gate."
+    },
+    {
+      "id": "B1_T3_SOURCE_INTROSPECTION_SUBSTITUTION",
+      "previousSeverity": "P1",
+      "status": "resolved",
+      "resolution": "The 28-case pgTAP executes positive and negative DML against the actual v3 trigger and immutable tables; this review explicitly rejects source inspection as its substitute."
+    },
+    {
+      "id": "B1_PREDECESSOR_PGTAP_EXPECTED_RETIRED_V2_TRIGGER",
+      "previousSeverity": "P1",
+      "status": "resolved",
+      "resolution": "The bounded test-only correction requires exactly one enabled v3 trigger and no retired v2 trigger, and the corrected predecessor gate passed 23/23."
+    },
+    {
+      "id": "B1_REQUIRED_REMOTE_DRY_RUN_EVIDENCE_MISSING",
+      "previousSeverity": "P1",
+      "status": "owned_by_separate_migration_no_apply_lane",
+      "resolution": "This database-behavior lane does not substitute for or adjudicate the independent linked no-apply discipline."
+    },
+    {
+      "id": "B1_RECONCILIATION_REPORT_NOT_EXACT_HEAD_BOUND",
+      "previousSeverity": "P2",
+      "status": "resolved",
+      "resolution": "This additive review binds the corrected immutable source, synchronized head, exact base, exact tree, provider branch snapshot, and evidence hashes."
+    }
+  ],
+  "findings": [],
+  "summary": {
+    "p0Open": 0,
+    "p1Open": 0,
+    "p2Open": 0,
+    "p3Open": 0,
+    "reviewDisposition": "PASS_LEVEL_C_DATABASE_BEHAVIOR_AND_CONCURRENCY",
+    "implementationAgentWasSoleReviewer": false,
+    "reviewOnly": true,
+    "mustNeverMerge": true
+  },
+  "nonInterference": {
+    "implementationSourceEditedByReview": false,
+    "databaseTestRerunByReview": false,
+    "remoteDatabaseMutation": false,
+    "providerMutation": false,
+    "migrationDeployment": false,
+    "buildOrOta": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRightsRolesAuthRlsChanged": false,
+    "fullCiRunByReview": false,
+    "privateEvidenceCommitted": false,
+    "denoLockTouched": false
+  },
+  "reviewTimestamp": "2026-08-02T01:38:32Z"
+}
