@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "matrixId": "pr52-source-coverage-matrix-v1",
+  "classification": "PASS_SOURCE_COVERAGE_SUPERSEDED_UNMERGED",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPr": {
+    "number": 52,
+    "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a",
+    "tree": "ce08584a062185252885a825267f3481a9dbf5a1",
+    "mergeBase": "fcf45ab8d450e4d51e0e2a18c7c2d195d055a2b6",
+    "changedPaths": 15,
+    "changedHunks": 34,
+    "trimmedBinaryNoRenamesDiffSha256": "42c042598f6164f5b6bde73937930419180963fdcfc9ae1bda6d95beff5be09a",
+    "changedFileSha256": "a8634386024fab1a86cc0e34a7759c8ca7d2f2111157a769086b8d95081902d0",
+    "commitPatchIds": {
+      "e05c3e82a293a8836cd9f87a9b48059b2ae5421d": "63e86f447ad9c938513e0310fd96febf11632574",
+      "fac21649": "d8d2e91efb5e93d9a6b64f68098734a9e0c4527f",
+      "af1c280a": "9aebf6df8ee768ba83517e6f7ad00fa3ba769e5d",
+      "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a": "3dfc9bfeb5ae94ca518709a037b7ae5b36e7b9bd"
+    }
+  },
+  "reviewPr": {
+    "number": 53,
+    "historicalHead": "67d78b4bdaad3ddc02f90391d46a9e03c430bb0b",
+    "reviewedImplementationHead": "e05c3e82a293a8836cd9f87a9b48059b2ae5421d",
+    "historicalOnlyPath": "docs/reviews/cognitive-livekit-platform-activation-review.md",
+    "historicalOnlySha256": "a0f70511fe5541d36985b757c23118666e5fc543b5a269877bce382258fbe579"
+  },
+  "authoritativePrograms": {
+    "B1": {
+      "implementationPr": 70,
+      "mergeSha": "33674105cdbe5ffb72caefbde6a275e0425c8c29",
+      "forwardCorrectionVersion": "20260730230022",
+      "forwardCorrectionDeployed": false
+    },
+    "B2": {
+      "implementationPr": 69,
+      "mergeSha": "5bcfa8cd7d3ed6ce733dae1483bda6e8eb4e62d6",
+      "forwardCorrectionVersion": "20260730170000",
+      "forwardCorrectionDeployed": false
+    },
+    "B3": {
+      "implementationPr": 75,
+      "mergeSha": "b72ed6a5f1b9897504dccf14edad9df107d573b6",
+      "overlapHunks": 0,
+      "forwardCorrectionVersion": "20260730230031",
+      "forwardCorrectionDeployed": false
+    }
+  },
+  "paths": [
+    {
+      "path": ".github/workflows/phase1-ci.yml",
+      "hunks": 1,
+      "disposition": "INTENTIONALLY_REJECTED_SUPERSEDED",
+      "authority": "activation-contract-bundle-rejection",
+      "evidence": "The sole stopped-branch line invokes the rejected activation contract; main intentionally contains neither the test nor its workflow registration."
+    },
+    {
+      "path": "config/intelligence/cognitive-livekit-platform-activation-v1.json",
+      "hunks": 1,
+      "disposition": "INTENTIONALLY_REJECTED_SUPERSEDED",
+      "authority": "activation-contract-bundle-rejection",
+      "evidence": "The stopped activation and installed-platform claim is absent by design; exact identities remain represented by B1 migration and source guards."
+    },
+    {
+      "path": "docs/intelligence/LIVEKIT_EXPERIENCE_SENTINEL.md",
+      "hunks": 2,
+      "disposition": "B1_HARDENED_SUCCESSOR_AND_HISTORICAL_ONLY",
+      "authority": "PR-70",
+      "currentPath": "docs/intelligence/LIVEKIT_EXPERIENCE_SENTINEL.md",
+      "currentSha256": "94837b5f82db3bd80df639fe74794a7fe26963e5731d1ba16524454e63f491a1",
+      "evidence": "B1 replaces installed/activation claims with honest Git-only T1 and local-only T3 language."
+    },
+    {
+      "path": "package.json",
+      "hunks": 1,
+      "disposition": "INTENTIONALLY_REJECTED_SUPERSEDED",
+      "authority": "activation-contract-bundle-rejection",
+      "evidence": "The sole stopped-branch line registers the rejected activation test, so no package functionality is lost."
+    },
+    {
+      "path": "scripts/test-cognitive-livekit-platform-activation-contract.mjs",
+      "hunks": 1,
+      "disposition": "INTENTIONALLY_REJECTED_SUPERSEDED",
+      "authority": "activation-contract-bundle-rejection",
+      "evidence": "The test is coupled to the rejected activation manifest; B1 source and cross-binding tests are authoritative."
+    },
+    {
+      "path": "scripts/test-cognitive-livekit-platform-authorization-concurrency.mjs",
+      "hunks": 11,
+      "disposition": "B1_HARDENED_SUCCESSOR",
+      "authority": "PR-70",
+      "currentPath": "scripts/test-cognitive-livekit-platform-authorization-concurrency.mjs",
+      "currentSha256": "bdb806f9eeeaa89cd82c33998b64f9eefeaecbadb0ca4afae44693e4d6ce2269",
+      "evidence": "The B1 successor contains 19 named witnesses and the safer provider-backed fixture."
+    },
+    {
+      "path": "supabase/functions/revenuecat-webhook/index.ts",
+      "hunks": 5,
+      "disposition": "B2_HARDENED_SUCCESSOR",
+      "authority": "PR-69",
+      "currentPath": "supabase/functions/revenuecat-webhook/index.ts",
+      "currentSha256": "82293fba8997e90e7f6851994ba7d40ef0378d30d0731866147150555df98f2d",
+      "evidence": "B2 preserves the gate while refactoring it into a stricter store-policy helper."
+    },
+    {
+      "path": "supabase/functions/revenuecat-webhook/store-policy.mjs",
+      "hunks": 2,
+      "disposition": "B2_HARDENED_SUCCESSOR",
+      "authority": "PR-69",
+      "currentPath": "supabase/functions/revenuecat-webhook/store-policy.mjs",
+      "currentSha256": "3efc1630c27fc687609246273f15fcbf01568596b29a94f06b65618f1c413331",
+      "evidence": "B2 preserves the stopped additions and adds the exact App Store, raw-store, and sandbox helper."
+    },
+    {
+      "path": "supabase/functions/revenuecat-webhook/store-policy.test.mjs",
+      "hunks": 3,
+      "disposition": "B2_HARDENED_SUCCESSOR",
+      "authority": "PR-69",
+      "currentPath": "supabase/functions/revenuecat-webhook/store-policy.test.mjs",
+      "currentSha256": "ca80f4c7a72d367a901c375e881998bc1b90e07aa059f8bdfcd097fe556fcf72",
+      "evidence": "B2 preserves the stopped tests and adds stricter gate coverage."
+    },
+    {
+      "path": "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
+      "hunks": 1,
+      "disposition": "B1_EXACT_ON_MAIN",
+      "authority": "PR-70",
+      "currentPath": "supabase/migrations/20260730142519_cognitive_livekit_final_chat_source_identity_binding.sql",
+      "stoppedAndCurrentSha256": "af519609a5097be7b39ac7a7672884402c03ad2d69c1233018134b985a5bd204"
+    },
+    {
+      "path": "supabase/migrations/20260730152710_revenuecat_verified_transfer_reconciliation.sql",
+      "hunks": 1,
+      "disposition": "B2_EXACT_BODY_DEPLOYED_VERSION",
+      "authority": "PR-69",
+      "currentPath": "supabase/migrations/20260730153724_revenuecat_verified_transfer_reconciliation.sql",
+      "stoppedAndCurrentSha256": "e09f8d2dfdf5bbbe85b2f29bed885a4cf338ce3ea640e2ace0e4d1bfa5fa34f8",
+      "evidence": "The body is exact under the linked deployed version; the stopped version identity is rejected."
+    },
+    {
+      "path": "supabase/migrations/20260730160000_allow_expired_revenuecat_transfer_target_reconciliation.sql",
+      "hunks": 1,
+      "disposition": "B2_EXACT_BODY_DEPLOYED_VERSION",
+      "authority": "PR-69",
+      "currentPath": "supabase/migrations/20260730154416_allow_expired_revenuecat_transfer_target_reconciliation.sql",
+      "stoppedAndCurrentSha256": "b0578dff41a5c1fd0c08a4c0b90e1d2a3704c498d117165442a1f1d6d844449e",
+      "evidence": "The body is exact under the linked deployed version; the stopped version identity is rejected."
+    },
+    {
+      "path": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+      "hunks": 1,
+      "disposition": "B1_HARDENED_SUCCESSOR",
+      "authority": "PR-70",
+      "currentPath": "supabase/tests/cognitive_livekit_final_chat_source_identity_binding_test.sql",
+      "currentSha256": "443a39c6e6765c31552cdf49f051c7f7049c17a108e2b3f0e278ee3444c3f207",
+      "evidence": "B1 replaces the v2 trigger expectation with the v3-required and v2-retired assertion."
+    },
+    {
+      "path": "supabase/tests/cognitive_livekit_platform_canary_authorization_test.sql",
+      "hunks": 2,
+      "disposition": "B1_EXACT_ON_MAIN",
+      "authority": "PR-70",
+      "currentPath": "supabase/tests/cognitive_livekit_platform_canary_authorization_test.sql",
+      "stoppedAndCurrentSha256": "16e737229fe1c8afb7163b15975a289ed5f7584bbc8f51523ed35c34a28a4505"
+    },
+    {
+      "path": "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql",
+      "hunks": 1,
+      "disposition": "B2_HARDENED_SUCCESSOR",
+      "authority": "PR-69",
+      "currentPath": "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql",
+      "currentSha256": "45b80ed97d501986fae0ecc0b340a88b59e7941d427318f924e7f1a47298fff8",
+      "evidence": "B2 expands the stopped 27-case plan to 120 cases with atomicity and ordering coverage."
+    }
+  ],
+  "activationBundleDisposition": {
+    "status": "INTENTIONALLY_REJECTED_SUPERSEDED_ATOMICALLY",
+    "paths": [
+      ".github/workflows/phase1-ci.yml",
+      "config/intelligence/cognitive-livekit-platform-activation-v1.json",
+      "package.json",
+      "scripts/test-cognitive-livekit-platform-activation-contract.mjs"
+    ],
+    "mainContainsManifest": false,
+    "mainContainsContractTest": false,
+    "mainContainsWorkflowRegistration": false,
+    "mainContainsPackageRegistration": false,
+    "resumeActivation": false,
+    "mixIntoPrD": false
+  },
+  "summary": {
+    "pathsClassified": 15,
+    "hunksClassified": 34,
+    "b1Hunks": 17,
+    "b2Hunks": 13,
+    "intentionallyRejectedHunks": 4,
+    "b3Hunks": 0,
+    "unresolvedPaths": 0,
+    "unresolvedHunks": 0,
+    "requiredSourceOnlyInPr52": false,
+    "migrationOnlyInPr52": false,
+    "revenueCatCorrectionOnlyInPr52": false,
+    "liveKitCorrectionOnlyInPr52": false,
+    "roomHostCorrectionOnlyInPr52": false,
+    "requiredTestOnlyInPr52": false,
+    "workflowOrPackageFunctionalitySilentlyLost": false,
+    "rowMatrixStableSha256": "7b67f5f2c603e237dede42f72526ccbba9efc4c7424e2634a3d44dc02af1b8bd",
+    "P0": 0,
+    "P1": 0
+  },
+  "closure": {
+    "pr52": "SAFE_TO_CLOSE_UNMERGED_AS_SUPERSEDED_BRANCH_RETAINED",
+    "pr53": "SAFE_TO_CLOSE_UNMERGED_AS_STALE_REVIEW_ONLY_BRANCH_RETAINED",
+    "boundedReconciliationLaneRequired": false,
+    "prD": "RE_DERIVE_FROM_CURRENT_AUTHORITATIVE_NATIVE_PROVIDER_RUNTIME_ARTIFACT_INPUTS"
+  },
+  "safety": {
+    "implementationSourceChanged": false,
+    "databaseOrAclMutation": false,
+    "migrationApplied": false,
+    "providerContact": false,
+    "buildOrOta": false,
+    "switchOrScheduleChanged": false,
+    "userDerivedMemory": false,
+    "level2Repair": false,
+    "denoLockTouched": false
+  }
+}
