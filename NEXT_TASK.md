@@ -2,12 +2,12 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Continue draft PR #143 on branch codex/first-pass-assurance-native-provider-runtime-artifact in worktree /Users/loverslane/chillywood-assurance-worktrees/d-native-provider-runtime-artifact from its read-only inventory head 165533d50a58947140982f1a5dbe3fd13add30a5.
-2. Run node scripts/assurance/plan.mjs --feature=eas-build-update-release and preserve one-owner boundaries across assurance/release config, focused source guards and tests, Android instrumentation, and iOS native-test surfaces.
-3. First bound PR D to an offline deterministic fail-closed parity map for source, profile, environment, runtime, channel, generated native digests, capabilities, release identity, rollback, and proof-tier blockers.
-4. Do not build, publish OTA, contact or mutate EAS, Apple, Google Play, or another provider, or claim signed, installed, physical, or public proof during the first PR D objective.
+1. Merge this exact three-file current-truth binding for immutable PR D1 source d1de3e20d0d634607b140867f45cd1252a42d504 only after persistent Level A PR #124 reports P0=0/P1=0 and the exact current-truth CI passes.
+2. Then base-synchronize PR #143 through one normal --no-ff merge of current main while preserving immutable source as first parent and current main as second parent; do not rebase or force-push.
+3. Run the offline parity matrix again, create exactly four persistent Level C review lanes, require aggregate P0=0/P1=0, and run one exact Phase 1 CI before merging only PR #143.
+4. Keep T3 integration blocked internally and T4 native/provider, T5 signed-artifact, T6 installed/physical, and T7 public-canary proof blocked; no build, OTA, provider contact, install, or release is authorized.
 5. Keep B1 20260730230022, B2 20260730170000, and B3 20260730230031 represented in Git and undeployed.
-6. Keep PR E blocked until PRs C and D are merged; keep PR F blocked until PR E merges.
+6. Keep PR E blocked until every required PR D successor merges; keep PR F blocked until PR E merges.
 7. Keep all review-only branches retained and never merge them.
 
 Do not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.
