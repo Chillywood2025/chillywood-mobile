@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr143-d1-security-scope-determinism-review-v1",
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "humanApproval": false,
+  "classification": "IMMUTABLE_SOURCE_PRE_BASE_SYNCHRONIZATION_REVIEW",
+  "historicalAfterSourceCorrection": true,
+  "implementationPrNumber": 143,
+  "implementationBranch": "codex/first-pass-assurance-native-provider-runtime-artifact",
+  "immutableSourceHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "implementationHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "implementationTree": "ededbd397c870e818d4b00a1325e8811ba3eac4c",
+  "baseHead": "165533d50a58947140982f1a5dbe3fd13add30a5",
+  "baseTree": "d76676e7ddff74c09ffa4bc2994153772b69b73a",
+  "currentMainAtReview": "40b1c7ba9de0ab96dddc1442708ecfcaaf05a1d0",
+  "reviewHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+  "sourceDeltaHash": "709f1f5115e877f4dbd49af493ca4911bb00478b09971f0df8da29039efa8cfd",
+  "changedFileHash": "86aa72814b9467d4dd18aea5b83ff6f73b7e002b675a885889240e6e1b2bd204",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "0cf1443cf10de447fdccf312eedf3f53409898f149a0d50a0301c65dd2abb991",
+  "testResultHash": "d538babe79ca51e5bd2ac51dc96d20a8df983ecb10050e132fd7b26ef99a4752",
+  "artifactHashes": {
+    "staticContractSha256": "2aac96f3198cf3aba101e038413464e6f2a4021fe1f77529aba8c3aaae5dbc1c",
+    "capabilityRegistrySha256": "7869bcc6c6c8796d6675eaeeba4dfb345d8e84e667e14183df7e1fbfbf33fb2a",
+    "validatorSha256": "422719f5679db04a3b630fbf130021715a05b725ee5f15588c411208cea3308f",
+    "testSha256": "032162446d83d2d3f8a30cccb4eaca969cff25c2f048f20bb0615fea0caa41dd",
+    "reportSha256": "972c64eb7b7f1ffe9b9766b079f883dadf83fcb0b06ddd3f853eef28a409979d"
+  },
+  "changedPaths": [
+    "config/assurance/native-capability-registry-v1.json",
+    "config/assurance/release-target-parity-v1.json",
+    "docs/assurance/pr-d-native-provider-runtime-artifact-inventory-v1.json",
+    "docs/assurance/pr-d1-offline-parity-report-v1.json",
+    "scripts/assurance/release-parity.mjs",
+    "tests/assurance/release-parity.test.mjs"
+  ],
+  "scope": {
+    "status": "PASS",
+    "objectiveDomain": "offline-release-native-artifact-assurance",
+    "changedFiles": 6,
+    "maximumFiles": 15,
+    "additions": 651,
+    "deletions": 5,
+    "netChangedLines": 646,
+    "maximumNetChangedLines": 1200,
+    "productSourceChanged": false,
+    "nativeImplementationChanged": false,
+    "releaseManifestChanged": false,
+    "workflowChanged": false,
+    "packageManifestOrLockChanged": false,
+    "migrationChanged": false,
+    "currentTruthChanged": false,
+    "secondHighRiskDomain": false,
+    "scopeWaiverRequired": false
+  },
+  "securityAndDeterminismReview": {
+    "status": "PASS_WITH_AGGREGATE_GATE_BLOCKED_BY_OTHER_LANES",
+    "cli": {
+      "unknownFlagRejected": "UNKNOWN_FLAG",
+      "unknownTargetRejected": "UNKNOWN_TARGET",
+      "unknownFixtureRejected": "UNKNOWN_FIXTURE",
+      "existingEvidenceOverwriteRejected": "EVIDENCE_OUTPUT_EXISTS",
+      "silentTargetSkip": false,
+      "selectedAndSkippedTargetsRecorded": true,
+      "defaultReadOnly": true
+    },
+    "offlineBoundary": {
+      "directNetworkClientImported": false,
+      "providerReadbackScriptInvoked": false,
+      "childGenerationEnvironment": ["EXPO_OFFLINE=1", "npm_config_offline=true", "expo prebuild --no-install"],
+      "providerContactObserved": false,
+      "buildCommandInvoked": false,
+      "otaCommandInvoked": false,
+      "submissionOrInstallationInvoked": false,
+      "packetCaptureClaimed": false
+    },
+    "privateEvidence": {
+      "rawPrivateConfigRecorded": false,
+      "privateConfigPathRecorded": false,
+      "privateConfigStateOrDigestOnly": true,
+      "secretAndPrivateEvidenceDiffScan": "PASS",
+      "credentialsOrTokensPrinted": false
+    },
+    "temporaryGeneration": {
+      "disposableDirectoryMode": "0700",
+      "cleanupInFinally": true,
+      "generatedNativePathsChangedByImplementation": false,
+      "generatedNativeEvidenceTier": "T1_SOURCE_NOT_COMPILED_OR_SIGNED_PROOF"
+    },
+    "negativeControls": {
+      "mandatory": "8/8",
+      "additional": "6/6",
+      "total": "14/14",
+      "allFailClosed": true
+    },
+    "determinism": {
+      "targetGeneratedSourceRuns": "9/9",
+      "perTargetRuns": "3/3",
+      "evidenceRuns": "3/3_BYTE_IDENTICAL",
+      "normalizationAllowlistExact": true,
+      "unsafeNormalizationRejected": "UNSAFE_NORMALIZATION"
+    },
+    "proofSubstitution": {
+      "generatedSourceCalledCompiledProof": false,
+      "historicalIdentityCalledCurrentProof": false,
+      "providerOrInstalledProofInferred": false,
+      "denylistDogfoodRejected": "2/2"
+    }
+  },
+  "testResults": {
+    "focusedParity": {
+      "status": "pass",
+      "targets": "3/3",
+      "generatedSource": "9/9",
+      "deterministicEvidence": "3/3",
+      "negativeControls": "14/14"
+    },
+    "cliFailClosed": {
+      "status": "pass",
+      "unknownFlag": "rejected",
+      "unknownTarget": "rejected",
+      "unknownFixture": "rejected",
+      "existingOutput": "preserved"
+    },
+    "contractValidation": "PASS_13_CONTRACTS_20_FEATURES_25_ESCAPED_DEFECTS",
+    "plan": "REQUIREMENTS_CLEAR_ARCHITECTURE_CLEAR",
+    "scope": "PASS_6_FILES_646_NET_LINES",
+    "json": "PASS_4_OF_4",
+    "nodeSyntax": "PASS_2_OF_2",
+    "gitDiffCheck": "PASS",
+    "secretPrivateEvidenceScan": "PASS",
+    "proofStrengthDenylistDogfood": "PASS_REJECTED_2_OF_2_FORBIDDEN_SUBSTITUTIONS",
+    "currentTruth": {
+      "status": "expected-fail-pre-binding",
+      "finding": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE"
+    },
+    "phase1Ci": {
+      "status": "pending",
+      "implementationHead": "d1de3e20d0d634607b140867f45cd1252a42d504",
+      "reason": "CI is prohibited until all four current reviews report P0=0/P1=0; six cross-lane source P1 findings require correction and refreeze first."
+    }
+  },
+  "laneFindings": [],
+  "findings": [],
+  "findingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "criticalFindingCounts": {"P0": 0, "P1": 0},
+  "waivedFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "crossLaneGate": {
+    "status": "BLOCKED_INTERNAL",
+    "openP0": 0,
+    "openP1": 6,
+    "p1Waived": 0,
+    "requiresImplementationCorrectionAndRefreeze": true,
+    "sourceFindings": [
+      {"lane": 1, "id": "PR_D1_TARGET_AND_RELEASE_IDENTITY_CLASSIFICATIONS_NOT_FAIL_CLOSED"},
+      {"lane": 1, "id": "PR_D1_EAS_RUNTIME_ENVIRONMENT_NOT_BOUND"},
+      {"lane": 1, "id": "PR_D1_EAS_DISTRIBUTION_POLICY_NOT_BOUND"},
+      {"lane": 2, "id": "PRD1_REQUIRED_CAPABILITY_CATALOG_NOT_CLOSED"},
+      {"lane": 2, "id": "PRD1_GENERATED_PROVIDED_EVIDENCE_INCOMPLETE"},
+      {"lane": 2, "id": "PRD1_HISTORICAL_TARGET_DIGEST_SOURCE_CROSS_BOUND"}
+    ],
+    "lane3": {"P0": 0, "P1": 0, "followups": "P2_T3_T7_BOUNDARIES_ONLY"},
+    "mergeGate": "BLOCKED_INTERNAL"
+  },
+  "proofTiersAtReviewedHead": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "BLOCKED_INTERNAL_CROSS_LANE_P1",
+    "T2_MODEL": "BLOCKED_INTERNAL_CROSS_LANE_P1",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "reviewLevel": "C",
+  "reviewTimestamp": "2026-08-02T08:49:10Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback",
+    "lane-4-security-scope-determinism-negative-controls",
+    "isolated-automated-review",
+    "implementation-agent-not-sole-reviewer"
+  ],
+  "nonInterference": {
+    "implementationEditedByReview": false,
+    "providerContact": false,
+    "providerMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "artifactInstalled": false,
+    "publicRelease": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRoleRightAuthRlsChanged": false,
+    "generatedAndroidOrIosCommittedByImplementation": false,
+    "denoLockTouched": false
+  },
+  "summary": {
+    "laneResult": "P0_0_P1_0",
+    "aggregateResult": "BLOCKED_INTERNAL_P0_0_P1_6",
+    "evidenceState": "HISTORICAL_PRE_CORRECTION_PRE_BASE_SYNCHRONIZATION",
+    "implementationMergeRecommendation": "DO_NOT_MERGE_CORRECT_SIX_CROSS_LANE_P1_FINDINGS_REFREEZE_AND_REREVIEW",
+    "reviewPrDisposition": "remain-draft-never-merge",
+    "noP1Waived": true
+  }
+}
