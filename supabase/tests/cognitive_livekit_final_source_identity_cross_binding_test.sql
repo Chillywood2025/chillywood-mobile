@@ -875,7 +875,7 @@ begin
   exception when unique_violation then
     get stacked diagnostics violated_constraint = constraint_name;
     return violated_constraint =
-      'cognitive_livekit_platform_activation_outcomes_authorization_id_key';
+      'cognitive_livekit_platform_activation_outc_authorization_id_key';
   end;
 end;
 $$;
