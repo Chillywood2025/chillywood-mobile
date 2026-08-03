@@ -464,23 +464,23 @@ class ChillyChatNativeActionOriginInstrumentationTest {
       .digest("$threadId:$inviteId:$action".toByteArray(Charsets.UTF_8))
       .joinToString("") { "%02x".format(it) }
 
-  private fun captureState(action: String): String {
-    if (ChillyChatNativeCallActionStore.readStatus(context) == "present") return "present"
-    return if (preferences.getString("last_consumed_request_key", null) == requestKey(action)) {
-      "consumed"
-    } else {
-      "empty_or_foreign"
+  private fun captureState(): Pair<String, String?> {
+    if (ChillyChatNativeCallActionStore.readStatus(context) == "present") return "present" to null
+    return when (preferences.getString("last_consumed_request_key", null)) {
+      requestKey("answer") -> "consumed" to "answer"
+      requestKey("decline") -> "consumed" to "decline"
+      else -> "empty_or_foreign" to null
     }
   }
 
-  private fun awaitCapture(action: String): String {
+  private fun awaitCapture(): Pair<String, String?> {
     val deadline = SystemClock.elapsedRealtime() + 10_000L
     while (SystemClock.elapsedRealtime() < deadline) {
-      val state = captureState(action)
-      if (state != "empty_or_foreign") return state
+      val state = captureState()
+      if (state.first != "empty_or_foreign") return state
       SystemClock.sleep(20L)
     }
-    return captureState(action)
+    return captureState()
   }
 
   private fun awaitNotification(): android.app.Notification {
@@ -506,15 +506,11 @@ class ChillyChatNativeActionOriginInstrumentationTest {
     for (action in notification.actions) {
       if (Build.VERSION.SDK_INT >= 31) assertTrue("notification action PendingIntent must be immutable", action.actionIntent.isImmutable)
       sendPendingIntent(action.actionIntent)
-      val expectedAction = when (action.semanticAction) {
-        android.app.Notification.Action.SEMANTIC_ACTION_ANSWER_CALL -> "answer"
-        android.app.Notification.Action.SEMANTIC_ACTION_DECLINE_CALL -> "decline"
-        else -> throw AssertionError("notification action must retain Answer or Decline semantics")
-      }
-      val state = awaitCapture(expectedAction)
-      assertTrue("trusted notification receiver must persist before native consumption; state=$state", state == "present" || state == "consumed")
-      val captured = if (state == "present") ChillyChatNativeCallActionStore.consume(context) else null
-      observed.add(captured?.nativeCallAction ?: expectedAction)
+      val state = awaitCapture()
+      assertTrue("trusted notification receiver must persist before native consumption; state=${state.first}", state.first == "present" || state.first == "consumed")
+      val capturedAction = if (state.first == "present") ChillyChatNativeCallActionStore.consume(context)?.nativeCallAction else state.second
+      assertTrue("trusted notification receiver must yield an approved action", capturedAction == "answer" || capturedAction == "decline")
+      observed.add(capturedAction!!)
       ChillyChatCallNotifications.showIncomingCallNotification(context, data)
     }
     assertEquals(listOf("answer", "decline"), observed.sorted())
@@ -528,9 +524,9 @@ class ChillyChatNativeActionOriginInstrumentationTest {
     assertTrue(notification.deleteIntent != null)
     if (Build.VERSION.SDK_INT >= 31) assertTrue(notification.deleteIntent.isImmutable)
     sendPendingIntent(notification.deleteIntent)
-    val state = awaitCapture("decline")
-    assertTrue("trusted delete receiver must persist before native consumption; state=$state", state == "present" || state == "consumed")
-    val consumed = if (state == "present") ChillyChatNativeCallActionStore.consume(context)?.nativeCallAction else "decline"
+    val state = awaitCapture()
+    assertTrue("trusted delete receiver must persist before native consumption; state=${state.first}", state.first == "present" || state.first == "consumed")
+    val consumed = if (state.first == "present") ChillyChatNativeCallActionStore.consume(context)?.nativeCallAction else state.second
     assertEquals("decline", consumed)
     assertNull(ChillyChatNativeCallActionStore.consume(context))
     ChillyChatCallNotifications.showIncomingCallNotification(context, data)
