@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr152-d2c-url-route-deep-link-security-review-v4",
+  "reviewVersion": 4,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "url-route-deep-link-security",
+  "reviewLevel": "C",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "classification": "SYNCHRONIZED_IMPLEMENTATION_HEAD_CURRENT_REVIEW_ACCEPTED",
+  "historicalEvidence": false,
+  "preservesHistoricalEvidence": [
+    "docs/reviews/pr152-d2c-url-route-deep-link-security-review-v1.json",
+    "docs/reviews/pr152-d2c-url-route-deep-link-security-review-v2.json",
+    "docs/reviews/pr152-d2c-url-route-deep-link-security-review-v3.json"
+  ],
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "immutableSourceHead": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+  "immutableSourceTree": "d78792b30a1b61b4673b7423f031cf586db22592",
+  "implementationHead": "f40e935dffa1e78f6d68aa843d5eb97b51db1aed",
+  "implementationTree": "7107386f15f039200c3c3e6bd339060fa8222405",
+  "baseHead": "c68e2d11ddee44845c26c9b3f0c512926760cf03",
+  "synchronizationParents": [
+    "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+    "c68e2d11ddee44845c26c9b3f0c512926760cf03"
+  ],
+  "sourceDeltaHash": "f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf",
+  "sourceDeltaHashMethod": "sha256(git diff --binary --no-renames baseHead implementationHead)",
+  "changedFileHash": "d326b324add46a7610db1258253c56b65d8ff19c983269fc279c670a3ba9531c",
+  "changedFileHashMethod": "sha256(git diff --name-status -z baseHead implementationHead)",
+  "provenanceContractHash": "afdf297cd581042b8b434ee8f7a0360320009fb958c2c84057514d393354f8ba",
+  "claimRegistryHash": "f536f4f1a208eaf446634fec6de4ed545eb3ed4d54c92812aaa92bcef6aa3858",
+  "focusedTestHash": "9297f453a8b2a3fa98f914d9574fec099522c455836ff142a3e08b18778988b2",
+  "reviewRef": "codex/first-pass-assurance-d2c-review-url-route-security",
+  "reviewMergeHeadBeforeEvidence": "c7a93554ba4db339d7ddb917f94f33b3dccf9ded",
+  "reviewedAt": "2026-08-02",
+  "reviewScope": {
+    "customScheme": true,
+    "universalLinks": true,
+    "applicationLinks": true,
+    "linkingInitialUrl": true,
+    "linkingLiveEvents": true,
+    "expoNativeIntent": true,
+    "directRouterAndQueryParameters": true,
+    "ordinaryNotificationNavigation": true,
+    "arbitraryCallKitUuid": true,
+    "openCallAndStartCall": true,
+    "claimSecrecy": true,
+    "claimReplayAndMismatch": true,
+    "allNativeCallActionUuidClaimProducersAndReaders": true
+  },
+  "searchedProductionPaths": [
+    {
+      "path": "app/+native-intent.tsx:6-14",
+      "role": "platform-gated external system-path entry; iOS invokes the canonical sanitizer"
+    },
+    {
+      "path": "_lib/nativeCallTransitionProvenance.mjs:496-521",
+      "role": "removes foregroundCallClaim, nativeCallAction, nativeCallUuid, nativeCallClaim, openCall and startCall from external query and fragment data"
+    },
+    {
+      "path": "app/_layout.tsx:328-333",
+      "role": "sanitizes ordinary iOS notification-response navigation"
+    },
+    {
+      "path": "app/_layout.tsx:365-397",
+      "role": "Linking initial/live handlers route legal or authentication flows and never create provenance"
+    },
+    {
+      "path": "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift:713-727",
+      "role": "CallKit answer action emits answerRequested"
+    },
+    {
+      "path": "modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift:7-16",
+      "role": "native module event emitter"
+    },
+    {
+      "path": "_lib/iosNativeCalls.ts:264-285",
+      "role": "token-stripping, platform-scoped readiness-generation facade"
+    },
+    {
+      "path": "app/_layout.tsx:1148-1155,1230-1238",
+      "role": "sole production iOS answer claim producer callsite and native event dispatch"
+    },
+    {
+      "path": "_lib/nativeCallTransitionProvenance.mjs:228-324",
+      "role": "authenticated validated iOS event registration and internal route creation"
+    },
+    {
+      "path": "app/chat/[threadId].tsx:235-271,325-354",
+      "role": "mounted-thread exact claim consumer; action comes from consumed claim, not query text"
+    },
+    {
+      "path": "_lib/communicationCallMediaPolicy.mjs:42-79",
+      "role": "module-attested, frozen, unexpired, platform/source/user/thread/invite/action/native-identity ownership policy"
+    },
+    {
+      "path": "app/chat/[threadId].tsx:1792-1868",
+      "role": "transition-time claim revalidation and server-authoritative invite handling"
+    },
+    {
+      "path": "app/_layout.tsx:141-176,983-1006,1313-1315,1363",
+      "role": "claim/action/UUID analytics and redirect exclusion plus debug-overlay suppression"
+    },
+    {
+      "path": "_lib/chillyChatNativeCallRouteBuffer.ts:20-30",
+      "role": "remaining URL/Linking native-action parsing is Android-only and D2B-owned"
+    },
+    {
+      "path": "_lib/chillyChatNativeCallRoutes.mjs:10-99",
+      "role": "remaining nativeCallAction URL/payload producer-reader is the frozen Android path, unable to satisfy iOS platform/source authority"
+    }
+  ],
+  "producerReaderAudit": {
+    "trustedIosClaimProducerCount": 1,
+    "trustedIosClaimConsumerCount": 1,
+    "productionOwnershipPolicyCallerCount": 1,
+    "unexpectedIosCreatorOrConsumerCount": 0,
+    "nativeCallActionRouteAuthorityReadersOnIos": 0,
+    "nativeCallUuidWithoutClaimAuthorityReaders": 0,
+    "openCallOrStartCallTextAuthorityReaders": 0,
+    "androidUrlParsersPlatformIsolated": true
+  },
+  "confirmedControls": {
+    "externalCustomSchemeNavigationOnly": true,
+    "universalAndApplicationLinksNavigationOnly": true,
+    "linkingInitialAndLiveCannotCreateClaim": true,
+    "nativeIntentStripsSensitiveQueryAndFragmentKeys": true,
+    "directRouteAndQueryTextCannotOwnTransition": true,
+    "ordinaryNotificationNavigationOnly": true,
+    "queryOnlyAnswerDenied": true,
+    "queryOnlyDeclineDenied": true,
+    "queryOnlyEndMuteUnmuteDenied": true,
+    "arbitraryCallKitUuidDenied": true,
+    "openCallAndStartCallTextDenied": true,
+    "claimMemoryOnly": true,
+    "claimCryptoRandomFailClosed": true,
+    "claimTtlMs": 30000,
+    "claimDeleteBeforeReturn": true,
+    "claimModulePrivateAttestation": true,
+    "claimReplayDenied": true,
+    "claimExactMismatchDenied": true,
+    "claimExcludedFromAnalyticsAndAuthRedirects": true,
+    "claimDebugSurfaceSuppressed": true,
+    "serverAuthorityPreserved": true,
+    "tokenAndMediaRemainAcceptedOnly": true
+  },
+  "validation": {
+    "focusedProvenance": "PASS_78_OF_78_TRUSTED_POSITIVE_30_OF_30_ROUTE_DENIAL_8_OF_8_PRODUCER_DENIAL_48_OF_48_EXECUTABLE_MUTANTS",
+    "iosPolicyGuard": "PASS",
+    "notificationRoomCallGuard": "PASS",
+    "worktreeReadOnlyReview": "PASS_NO_IMPLEMENTATION_SOURCE_EDITED",
+    "implementationStatus": "CLEAN",
+    "proofBoundary": "LOCAL_EQUIVALENT_INTEGRATION_ACCEPTED_OS_URL_CALLBACK_NOT_OBSERVED_NO_PHYSICAL_PROVIDER_SIGNED_OR_DELIVERY_PROOF"
+  },
+  "findings": [
+    {
+      "id": "BLOCKED_LOCAL_IOS_SIMULATOR_URL_CALLBACK",
+      "severity": "P2",
+      "status": "open-nonblocking-proof-boundary",
+      "summary": "The production sanitizer, internal router and mounted-thread denial chain executed through the equivalent local harness, but an operating-system URL callback was not observed.",
+      "assignedSuccessor": "D3_OR_SEPARATELY_AUTHORIZED_SIGNED_INSTALLED_IOS_URL_ENTRY_LANE",
+      "requiredBeforeD2CMerge": false
+    },
+    {
+      "id": "IOS_PENDING_NATIVE_EVENT_ORIGIN_TIMESTAMP_NOT_BOUND",
+      "severity": "P2",
+      "status": "open-nonblocking-hardening",
+      "summary": "Cold pending native events receive the current JavaScript readiness generation when drained and do not yet bind a native-origin timestamp. This is not an external route bypass: the event still originates in the native bridge and all server-authority checks remain required.",
+      "assignedSuccessor": "D3_NATIVE_PENDING_EVENT_TIMESTAMP_AND_GENERATION",
+      "requiredBeforeD2CMerge": false
+    }
+  ],
+  "findingCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2,
+    "P3": 0
+  },
+  "waivedFindingCounts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "P3": 0
+  },
+  "proofTiers": {
+    "IOS_NATIVE_ROUTE_PROVENANCE_SOURCE": "SOURCE_CLEAR",
+    "IOS_NATIVE_ROUTE_PROVENANCE_MODEL": "MODEL_CLEAR",
+    "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION": "LOCAL_EQUIVALENT_INTEGRATION_CLEAR_WITH_EXPLICIT_OS_URL_CALLBACK_LIMITATION",
+    "IOS_EXTERNAL_URL_TRANSITION_DENIAL": "SOURCE_MODEL_NATIVE_INTENT_AND_MOUNTED_DENIAL_CLEAR_OS_CALLBACK_DELIVERY_NOT_PROVED",
+    "IOS_PUSHKIT_PROVIDER": "BLOCKED_EXTERNAL",
+    "IOS_APNS_DELIVERY": "BLOCKED_EXTERNAL",
+    "IOS_PHYSICAL_CALLKIT_UI": "BLOCKED_EXTERNAL",
+    "IOS_SIGNED_ARTIFACT": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "IOS_TESTFLIGHT_FIX_DELIVERED": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "nonInterference": {
+    "implementationSourceEditedByReview": false,
+    "currentTruthEditedByReview": false,
+    "providerContact": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "physicalDeviceUsed": false,
+    "reviewOnlyPrMergePermitted": false,
+    "generatedAndroidOrIosCommitted": false,
+    "denoLockTouched": false
+  },
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2,
+    "P3": 0,
+    "mergeGate": "CLEAR_FOR_LEVEL_C_LANE_2_PENDING_OTHER_LANES_AND_EXACT_FULL_CI",
+    "reviewDisposition": "PRESERVE_V1_V2_V3_AND_V4_ADDITIVELY_REVIEW_BRANCH_NEVER_MERGES",
+    "noP1Waived": true
+  }
+}
