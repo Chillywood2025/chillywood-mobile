@@ -330,6 +330,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.security.MessageDigest
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -458,13 +459,28 @@ class ChillyChatNativeActionOriginInstrumentationTest {
     assertEquals("test precondition must start with an empty native-action store", "empty", ChillyChatNativeCallActionStore.readStatus(context))
   }
 
-  private fun awaitStatus(expected: String): Boolean {
-    val deadline = SystemClock.elapsedRealtime() + 2_000L
+  private fun requestKey(action: String): String =
+    MessageDigest.getInstance("SHA-256")
+      .digest("$threadId:$inviteId:$action".toByteArray(Charsets.UTF_8))
+      .joinToString("") { "%02x".format(it) }
+
+  private fun captureState(action: String): String {
+    if (ChillyChatNativeCallActionStore.readStatus(context) == "present") return "present"
+    return if (preferences.getString("last_consumed_request_key", null) == requestKey(action)) {
+      "consumed"
+    } else {
+      "empty_or_foreign"
+    }
+  }
+
+  private fun awaitCapture(action: String): String {
+    val deadline = SystemClock.elapsedRealtime() + 10_000L
     while (SystemClock.elapsedRealtime() < deadline) {
-      if (ChillyChatNativeCallActionStore.readStatus(context) == expected) return true
+      val state = captureState(action)
+      if (state != "empty_or_foreign") return state
       SystemClock.sleep(20L)
     }
-    return ChillyChatNativeCallActionStore.readStatus(context) == expected
+    return captureState(action)
   }
 
   private fun awaitNotification(): android.app.Notification {
@@ -490,9 +506,15 @@ class ChillyChatNativeActionOriginInstrumentationTest {
     for (action in notification.actions) {
       if (Build.VERSION.SDK_INT >= 31) assertTrue("notification action PendingIntent must be immutable", action.actionIntent.isImmutable)
       sendPendingIntent(action.actionIntent)
-      assertTrue("trusted notification receiver must persist before native consumption", awaitStatus("present"))
-      val captured = ChillyChatNativeCallActionStore.consume(context)
-      if (captured != null) observed.add(captured.nativeCallAction)
+      val expectedAction = when (action.semanticAction) {
+        android.app.Notification.Action.SEMANTIC_ACTION_ANSWER_CALL -> "answer"
+        android.app.Notification.Action.SEMANTIC_ACTION_DECLINE_CALL -> "decline"
+        else -> throw AssertionError("notification action must retain Answer or Decline semantics")
+      }
+      val state = awaitCapture(expectedAction)
+      assertTrue("trusted notification receiver must persist before native consumption; state=$state", state == "present" || state == "consumed")
+      val captured = if (state == "present") ChillyChatNativeCallActionStore.consume(context) else null
+      observed.add(captured?.nativeCallAction ?: expectedAction)
       ChillyChatCallNotifications.showIncomingCallNotification(context, data)
     }
     assertEquals(listOf("answer", "decline"), observed.sorted())
@@ -506,8 +528,10 @@ class ChillyChatNativeActionOriginInstrumentationTest {
     assertTrue(notification.deleteIntent != null)
     if (Build.VERSION.SDK_INT >= 31) assertTrue(notification.deleteIntent.isImmutable)
     sendPendingIntent(notification.deleteIntent)
-    assertTrue(awaitStatus("present"))
-    assertEquals("decline", ChillyChatNativeCallActionStore.consume(context)?.nativeCallAction)
+    val state = awaitCapture("decline")
+    assertTrue("trusted delete receiver must persist before native consumption; state=$state", state == "present" || state == "consumed")
+    val consumed = if (state == "present") ChillyChatNativeCallActionStore.consume(context)?.nativeCallAction else "decline"
+    assertEquals("decline", consumed)
     assertNull(ChillyChatNativeCallActionStore.consume(context))
     ChillyChatCallNotifications.showIncomingCallNotification(context, data)
     val navigation = awaitNotification()

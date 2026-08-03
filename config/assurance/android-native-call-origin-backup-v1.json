@@ -33,8 +33,18 @@
     "app/_layout.tsx",
     "app/chat/[threadId].tsx",
     "_lib/communicationCallMediaPolicy.mjs",
-    "config/assurance/release-target-parity-v1.json",
-    "config/assurance/android-generated-native-lifecycle-v1.json"
+    "config/assurance/release-target-parity-v1.json"
+  ],
+  "preservedDependencies": [
+    {
+      "id": "android-generated-native-lifecycle-v1",
+      "classification": "REMOTE_BLOCKED_CHECKPOINT_NO_PR",
+      "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+      "head": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
+      "tree": "f9e102649b51da84324e97b576823e910340df9f",
+      "path": "config/assurance/android-generated-native-lifecycle-v1.json",
+      "localAuthoritativeInput": false
+    }
   ],
   "impactGraph": {
     "requestedBehavior": [
@@ -208,12 +218,12 @@
   ],
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
-    "T1_SOURCE": "BLOCKED_INTERNAL",
-    "T2_MODEL": "BLOCKED_INTERNAL",
-    "T3_INTEGRATION": "BLOCKED_INTERNAL",
-    "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
-    "T5_SIGNED_ARTIFACT": "BLOCKED_EXTERNAL",
-    "T6_INSTALLED_PHYSICAL": "BLOCKED_EXTERNAL",
+    "T1_SOURCE": "SOURCE_CLEAR_FINALIZED_SNAPSHOT",
+    "T2_MODEL": "MODEL_CLEAR_FINALIZED_SNAPSHOT",
+    "T3_INTEGRATION": "ANDROID_LOCAL_INTEGRATION_CLEAR_PENDING_LEVEL_C",
+    "T4_NATIVE_PROVIDER": "ANDROID_NATIVE_COMPILE_EMULATOR_CLEAR_PARTIAL_PENDING_LEVEL_C",
+    "T5_SIGNED_ARTIFACT": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "T6_INSTALLED_PHYSICAL": "INSTALLED_PHYSICAL_PROOF_MISSING",
     "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
   },
   "nonInterference": [
