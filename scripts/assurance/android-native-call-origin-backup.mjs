@@ -507,7 +507,7 @@ class ChillyChatNativeActionOriginInstrumentationTest {
       if (Build.VERSION.SDK_INT >= 31) assertTrue("notification action PendingIntent must be immutable", action.actionIntent.isImmutable)
       sendPendingIntent(action.actionIntent)
       val state = awaitCapture()
-      assertTrue("trusted notification receiver must persist before native consumption; state=${state.first}", state.first == "present" || state.first == "consumed")
+      assertTrue("trusted notification receiver must persist before native consumption; state=" + state.first, state.first == "present" || state.first == "consumed")
       val capturedAction = if (state.first == "present") ChillyChatNativeCallActionStore.consume(context)?.nativeCallAction else state.second
       assertTrue("trusted notification receiver must yield an approved action", capturedAction == "answer" || capturedAction == "decline")
       observed.add(capturedAction!!)
@@ -525,7 +525,7 @@ class ChillyChatNativeActionOriginInstrumentationTest {
     if (Build.VERSION.SDK_INT >= 31) assertTrue(notification.deleteIntent.isImmutable)
     sendPendingIntent(notification.deleteIntent)
     val state = awaitCapture()
-    assertTrue("trusted delete receiver must persist before native consumption; state=${state.first}", state.first == "present" || state.first == "consumed")
+    assertTrue("trusted delete receiver must persist before native consumption; state=" + state.first, state.first == "present" || state.first == "consumed")
     val consumed = if (state.first == "present") ChillyChatNativeCallActionStore.consume(context)?.nativeCallAction else state.second
     assertEquals("decline", consumed)
     assertNull(ChillyChatNativeCallActionStore.consume(context))
