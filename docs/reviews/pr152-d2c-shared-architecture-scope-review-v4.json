@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr152-d2c-shared-architecture-scope-review-v4",
+  "reviewVersion": 4,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "shared-architecture-scope-d2b-compatibility",
+  "reviewLevel": "C",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "reviewTimestamp": "2026-08-03T01:14:52Z",
+  "reviewBranch": "codex/first-pass-assurance-d2c-review-shared-architecture-scope",
+  "reviewRef": "codex/first-pass-assurance-d2c-review-shared-architecture-scope",
+  "reviewRefHead": "3f9029b60f4e7dbf45674358df6e1c0201b18a34",
+  "reviewEvidenceParentHead": "3f9029b60f4e7dbf45674358df6e1c0201b18a34",
+  "historicalEvidencePreserved": ["v1", "v2", "v3"],
+  "historicalEvidenceHashes": {
+    "v1": "44c9f34357a8080a07b12807b503d029b8c0d14804f679b48704b4238f7cb552",
+    "v2": "917b9c193596122c368b72f31e4632c2886a942a8b59ab24c05835f8bbca3d19",
+    "v3": "bbaf9e666467c60b9d7a0c6aefca5062a6416b1d639d8f4ba0667792402f97a3"
+  },
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "immutableSourceHead": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+  "immutableSourceTree": "d78792b30a1b61b4673b7423f031cf586db22592",
+  "synchronizedBranchHead": "f40e935dffa1e78f6d68aa843d5eb97b51db1aed",
+  "currentBase": "c68e2d11ddee44845c26c9b3f0c512926760cf03",
+  "synchronizedTree": "7107386f15f039200c3c3e6bd339060fa8222405",
+  "canonicalSyntheticTree": "7107386f15f039200c3c3e6bd339060fa8222405",
+  "sourceDeltaHash": "f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf",
+  "changedFileHash": "d326b324add46a7610db1258253c56b65d8ff19c983269fc279c670a3ba9531c",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 4, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 4, "P3": 0},
+  "verifierSchemaCorrection": {
+    "status": "pass",
+    "reason": "V3 retained the correct review conclusion but used descriptive SHA and base aliases; V4 adds the exact fail-closed base-synchronization verifier field names without rewriting historical evidence.",
+    "implementationSourceChanged": false,
+    "reviewConclusionChanged": false
+  },
+  "reviewResult": {
+    "canonicalSharedRegistry": "pass-no-merged-competitor",
+    "d2bFrozenPathMapping": "pass-8-of-8-hunk-complete",
+    "negativeControls": "pass-48-of-48-exact-contract-test-set",
+    "scope": "pass-18-files-2200-net-lines-authorized-waiver",
+    "proofSubstitution": "pass-none",
+    "P0": 0,
+    "P1": 0
+  },
+  "proofBoundary": {
+    "source": "IOS_NATIVE_ROUTE_PROVENANCE_SOURCE_CLEAR",
+    "model": "IOS_NATIVE_ROUTE_PROVENANCE_MODEL_CLEAR",
+    "localIntegration": "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION_CLEAR_EQUIVALENT_MOUNTED_HARNESS",
+    "simulatorOsUrlCallback": "BLOCKED_LOCAL_IOS_SIMULATOR_URL_CALLBACK",
+    "pushKitProvider": "BLOCKED_EXTERNAL",
+    "apnsDelivery": "BLOCKED_EXTERNAL",
+    "physicalCallKitUi": "BLOCKED_EXTERNAL",
+    "signedArtifact": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "testFlightDelivery": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "publicCanary": "BLOCKED_EXTERNAL"
+  },
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 4,
+    "P3": 0,
+    "failureWaived": false,
+    "laneMergeGate": "PASS_LEVEL_C_LANE_4_P0_P1_ZERO",
+    "implementationMergeAuthorizedByThisReviewAlone": false,
+    "reviewDisposition": "V1_V2_V3_HISTORICAL_V4_CURRENT_REVIEW_BRANCH_NEVER_MERGES"
+  }
+}
