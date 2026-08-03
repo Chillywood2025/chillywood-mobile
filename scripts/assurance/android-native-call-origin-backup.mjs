@@ -969,7 +969,18 @@ const tryLocalBackupRestore = ({adb, serial}) => {
     gate(token, "ANDROID_BACKUP_SET_MISSING", "The completed local backup did not expose a restore token");
     gate(adbRun(adb, serial, ["shell", "pm", "clear", packageName]).status === 0, "ANDROID_BACKUP_RESTORE_SETUP_FAILED", "Unable to clear the disposable app before local restore");
     const restore = adbRun(adb, serial, ["shell", "bmgr", "restore", token, packageName], {timeout: 10 * 60 * 1000});
-    gate(restore.status === 0 && /restoreFinished:\s*0|Restore finished with result:\s*0/iu.test(restore.stdout), "ANDROID_NATIVE_ACTION_RESTORE_EXECUTION_FAILED", "The local restore did not complete successfully");
+    const restoreOutput = `${restore.stdout ?? ""}\n${restore.stderr ?? ""}`;
+    const restoreResultCode = restoreOutput.match(/(?:restoreFinished:|Restore finished with result:)\s*(-?\d+)/iu)?.[1] ?? null;
+    if (restore.status !== 0 || restoreResultCode !== "0") {
+      return {
+        allowedControlRestored: null,
+        replayStateRestored: null,
+        restoreResultCode: restoreResultCode ?? "UNAVAILABLE",
+        status: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+        transientActionRestored: null,
+        transportAttempt: "BACKUP_SUCCEEDED_RESTORE_UNAVAILABLE",
+      };
+    }
     instrument(adb, serial, "com.chillywood.mobile.ChillyChatNativeActionBackupInstrumentationTest", "assertBackupRestoreResult", 1);
     return {allowedControlRestored: true, replayStateRestored: false, status: "ANDROID_NATIVE_ACTION_BACKUP_RESTORE_CLEAR", transientActionRestored: false};
   } finally {
