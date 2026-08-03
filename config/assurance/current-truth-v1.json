@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "e7712926d59eb379475834351fbbf48e74a32e98",
+  "mainSha": "b3197e148756c994b859c889f3c264ba3a3fc331",
   "latestMergedImplementationPr": {"number": 143, "state": "merged", "head": "173f17ce3b481d3e61ea7af27c563cdc78530044", "mergeSha": "2c5f9d1622dd29c57b92996b1d7faf58762299f8", "title": "Complete PR D1 offline native provider runtime artifact parity"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -69,32 +69,38 @@
   "d2cCurrentTruthBinding": {
     "implementationPr": 152,
     "branch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
-    "immutableSourceHead": "72e9833200caca80b56ae7441511cb5320b051ae",
-    "immutableSourceTree": "d981ffd5425f731cef07fee7aa5fa2852eb89190",
-    "parentMain": "e0d5158b8b2862e218b76ceb915a90172183ca5e",
-    "sourceDeltaSha256": "506002417493181a2c5aed5bc9307e4a811d9950831b1d53404078dbea3fe63c",
-    "changedFileSha256": "2765502c9d1b2ab15b75e1c8345a82817682722aa1a40554b8561b08f5f32780",
-    "provenanceContractSha256": "548a99ee8fe452ed9532368efe1cae9d3f492ebb1aa14d0ec8a0611141f3d84d",
-    "claimRegistrySha256": "b6757a5f3627b86fca873cfe81a95717893c55f98ce21de8adab548b83c258b3",
+    "immutableSourceHead": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+    "immutableSourceTree": "d78792b30a1b61b4673b7423f031cf586db22592",
+    "parentMain": "b3197e148756c994b859c889f3c264ba3a3fc331",
+    "immediateParent": "0eec21a8dbbd3944f6e4c21af252c7f762061bdd",
+    "sourceDeltaSha256": "f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf",
+    "changedFileSha256": "868570e117229720fbdc71a52b7030e1c824e1c35e5b04d01ffce7257c0a27bf",
+    "provenanceContractSha256": "afdf297cd581042b8b434ee8f7a0360320009fb958c2c84057514d393354f8ba",
+    "claimRegistrySha256": "f536f4f1a208eaf446634fec6de4ed545eb3ed4d54c92812aaa92bcef6aa3858",
     "iosGeneratedSourceDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
     "proof": {
       "preFixReproduction": "10/10",
-      "trustedPositive": "31/31",
+      "trustedPositive": "78/78",
+      "producerDenial": "8/8",
       "routeDenial": "30/30",
-      "negativeControls": "19/19_EXECUTABLE_PRODUCTION_SOURCE_MUTANTS",
+      "negativeControls": "48/48_EXECUTABLE_PRODUCTION_SOURCE_MUTANTS",
       "deterministic": "3/3",
       "generatedSource": "3/3",
       "capabilityParity": "26/26",
       "missingCapabilities": 0,
       "unsignedSimulatorCompile": "PASS",
-      "localIntegration": "EQUIVALENT_EXACT_BRIDGE_ROUTE_HARNESS_PASS_3_OF_3_PENDING_LEVEL_C_ACCEPTANCE"
+      "localIntegration": "LOCAL_MOUNTED_NATIVE_BRIDGE_ROUTE_PASS_23_OF_23_NATIVE_INTENT_PASS_5_OF_5_OS_URL_CALLBACK_BLOCKED_PENDING_LEVEL_C_ACCEPTANCE",
+      "localIntegrationEvidenceSha256": "aea1d120bc819fe446ad53516d64d8ac26cecdaef06bcc62efa43887dd2d11f0",
+      "focusedTestSha256": "9297f453a8b2a3fa98f914d9574fec099522c455836ff142a3e08b18778988b2",
+      "iosPolicyGuardSha256": "f939afdee1788b79a3e7bce0c9d0df4599aa65eb37184cf2005f82737ee9c77f",
+      "acceptedMediaSettlement": "EXECUTABLE_HELPERS_BOTH_PROVIDERS_PRODUCTION_REACT_EFFECT_SOURCE_AUDITED_QUEUE_ACKNOWLEDGEMENT_NOT_PHYSICAL_FULFILLMENT"
     },
     "proofTiers": {
       "IOS_NATIVE_ROUTE_PROVENANCE_SOURCE": "SOURCE_CLEAR",
       "IOS_NATIVE_ROUTE_PROVENANCE_MODEL": "MODEL_CLEAR",
-      "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION": "PENDING_LEVEL_C_EQUIVALENT_HARNESS_ACCEPTANCE",
-      "IOS_EXTERNAL_URL_TRANSITION_DENIAL": "SOURCE_MODEL_CLEAR",
-      "IOS_CALLKIT_EVENT_CLAIM": "SOURCE_MODEL_CLEAR",
+      "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION": "LOCAL_EQUIVALENT_INTEGRATION_PENDING_LEVEL_C_ACCEPTANCE_OS_URL_CALLBACK_BLOCKED",
+      "IOS_EXTERNAL_URL_TRANSITION_DENIAL": "SOURCE_MODEL_AND_NATIVE_INTENT_DENIAL_CLEAR_OS_URL_CALLBACK_BLOCKED",
+      "IOS_CALLKIT_EVENT_CLAIM": "LOCAL_HOT_COLD_COORDINATOR_AND_MOUNTED_INTEGRATION_CLEAR_PENDING_LEVEL_C_ACCEPTANCE",
       "IOS_PUSHKIT_PROVIDER": "BLOCKED_EXTERNAL",
       "IOS_APNS_DELIVERY": "BLOCKED_EXTERNAL",
       "IOS_PHYSICAL_CALLKIT_UI": "BLOCKED_EXTERNAL",
@@ -107,14 +113,14 @@
       "d2b": {"head": "44741942afb8062d9348e555b7d29a5dc9c2ca3a", "tree": "6bdc50191f6756271ccb050fa94d3045d6e9fa3e", "state": "REMOTE_BLOCKED_CHECKPOINT_NO_PR_D2C_MUST_MERGE_FIRST"}
     },
     "reviewLanes": [
-      {"lane": "native-event-claim-lifecycle", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION"},
-      {"lane": "url-route-deep-link-security", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION"},
-      {"lane": "call-lifecycle-server-authority-non-regression", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION"},
-      {"lane": "shared-architecture-scope-d2b-compatibility", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION"}
+      {"lane": "native-event-claim-lifecycle", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION_REFRESH_V3"},
+      {"lane": "url-route-deep-link-security", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION_REFRESH_V3"},
+      {"lane": "call-lifecycle-server-authority-non-regression", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION_REFRESH_V3"},
+      {"lane": "shared-architecture-scope-d2b-compatibility", "pr": null, "state": "PENDING_AFTER_BASE_SYNCHRONIZATION_REFRESH_V3"}
     ],
     "levelAReviewPr": 124,
     "mayProceed": {"baseSynchronization": false, "merge": false, "otaPublication": false, "binaryBuild": false, "providerContact": false, "release": false},
-  "state": "REVIEW_CORRECTED_IMMUTABLE_SOURCE_PUSHED_CURRENT_TRUTH_REBINDING_PENDING"
+  "state": "FINAL_CORRECTIVE_IMMUTABLE_SOURCE_PUSHED_CURRENT_TRUTH_REBINDING_PENDING"
   },
   "enabledCognitiveSwitches": ["cognitive_android_visual_sentinel", "cognitive_ios_visual_sentinel"],
   "enabledSchedules": [],
@@ -150,7 +156,7 @@
   },
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
   "openImplementationPrs": [
-    {"number": 152, "branch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction", "head": "72e9833200caca80b56ae7441511cb5320b051ae", "state": "open-draft-review-corrected-immutable-source-pushed", "disposition": "merge-this-exact-three-file-review-correction-current-truth-binding-then-base-synchronize-normally-update-four-review-lanes-additively-require-p0-0-p1-0-and-run-one-exact-ci-before-merging-only-pr-152"}
+    {"number": 152, "branch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction", "head": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e", "state": "open-draft-final-corrective-immutable-source-pushed", "disposition": "merge-this-exact-three-file-final-current-truth-rebinding-then-base-synchronize-normally-refresh-four-review-lanes-additively-require-explicit-source-audited-react-effect-and-os-url-callback-limitations-p0-0-p1-0-and-run-one-exact-ci-before-merging-only-pr-152"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -216,11 +222,11 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151"],
-    "active": "D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-REVIEW-CORRECTION-BINDING",
+    "active": "D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-FINAL-CORRECTIVE-BINDING",
     "nextActions": [
-      "Merge this exact three-file current-truth correction binding for draft PR #152 immutable D2C source 72e9833200caca80b56ae7441511cb5320b051ae only after persistent Level A PR #124 reports P0=0/P1=0 and the exact current-truth CI passes; close PR #124 unmerged and retain its branch.",
-      "Then base-synchronize PR #152 through one normal --no-ff merge of current main, preserve immutable D2C source 72e9833200caca80b56ae7441511cb5320b051ae, rerun focused generation compile and equivalent integration, and update exactly four persistent Level C review-only lanes additively while retaining their historical rejected-head evidence.",
-      "Require all four D2C review lanes to report P0=0/P1=0 and explicitly accept the equivalent exact bridge-route harness for the local integration tier before one exact Phase 1 CI and merge of only PR #152.",
+      "Merge this exact three-file current-truth correction binding for draft PR #152 immutable D2C source 442852da70d723aedcf6ad1fa76c2f3eb23d3e0e only after persistent Level A PR #124 reports P0=0/P1=0 and the exact current-truth CI passes; close PR #124 unmerged and retain its branch.",
+      "Then base-synchronize PR #152 through one normal --no-ff merge of current main, preserve immutable D2C source 442852da70d723aedcf6ad1fa76c2f3eb23d3e0e, rerun focused generation compile and local route-bridge integration, and update exactly four persistent Level C review-only lanes additively while retaining their historical rejected-head evidence.",
+      "Require all four D2C review lanes to report P0=0/P1=0 and explicitly accept the local route-bridge and native-intent proof, source-audited accepted-media React effect, queue-acknowledgement boundary, and blocked OS URL callback limitation before one exact Phase 1 CI and merge of only PR #152.",
       "After D2C and its post-merge current-truth synchronization merge, resume D2B by normally merging current main into preserved checkpoint 44741942afb8062d9348e555b7d29a5dc9c2ca3a and retaining the canonical shared provenance architecture; keep D2A frozen until D2B merges.",
       "Keep iOS PushKit/APNs provider, physical CallKit, signed-artifact, TestFlight delivery and public-canary proof blocked; no OTA, binary, provider contact, physical device, install, or release is authorized.",
       "Keep B1 20260730230022, B2 20260730170000, and B3 20260730230031 represented in Git and undeployed.",
@@ -233,10 +239,10 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-02T19:22:29Z",
-  "freshnessDeadline": "2026-08-03T19:22:29Z",
+  "timestamp": "2026-08-03T00:30:48Z",
+  "freshnessDeadline": "2026-08-04T00:30:48Z",
   "evidenceSources": [
-    {"id": "d2c-review-corrected-immutable-source-binding-20260802-1922", "mode": "local-offline-and-github-read-only", "covers": ["starting main ddc5bfa92d8bf70a3374e1dee6983c2bc8cf9874 and corrected-source binding main e7712926d59eb379475834351fbbf48e74a32e98", "D2A local and remote checkpoint 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f preserved frozen with no PR", "D2B blocked remote checkpoint 44741942afb8062d9348e555b7d29a5dc9c2ca3a tree 6bdc50191f6756271ccb050fa94d3045d6e9fa3e preserved with no PR", "draft PR #152 corrected immutable D2C source 72e9833200caca80b56ae7441511cb5320b051ae tree d981ffd5425f731cef07fee7aa5fa2852eb89190 with rejected predecessor history preserved", "17 files with 1462 additions and 128 deletions in one native-call provenance domain", "pre-fix reproduction 10/10", "trusted positives 31/31 producer denials 8/8 route denials 30/30 and executable production-source mutants 19/19", "transition-time expiry platform-scoped clearing fragment secrecy navigation-only route inputs and repository-wide sole-producer enforcement corrected", "memory-only 30-second claim with 32 active and 64 consumed caps", "iOS generated-source digest unchanged 3/3 at e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0", "iOS capability parity 26/26 and zero missing", "local unsigned simulator compilation passed for the unchanged generated-native source", "equivalent exact native-bridge route integration harness passed 3/3 pending fresh explicit four-lane Level C acceptance", "iOS source fix not delivered", "no provider physical device EAS TestFlight OTA database migration entitlement money role right auth RLS switch schedule memory Level 2 or public-release mutation"]},
+    {"id": "d2c-final-corrective-immutable-source-rebinding-20260803-0030", "mode": "local-offline-and-github-read-only", "covers": ["starting main ddc5bfa92d8bf70a3374e1dee6983c2bc8cf9874 and final rebinding main b3197e148756c994b859c889f3c264ba3a3fc331", "D2A local and remote checkpoint 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f preserved frozen with no PR", "D2B blocked remote checkpoint 44741942afb8062d9348e555b7d29a5dc9c2ca3a tree 6bdc50191f6756271ccb050fa94d3045d6e9fa3e preserved with no PR", "draft PR #152 final corrected immutable D2C source 442852da70d723aedcf6ad1fa76c2f3eb23d3e0e tree d78792b30a1b61b4673b7423f031cf586db22592 with prior immutable source and current main in ancestry", "18 files with 2401 additions and 201 deletions net 2200 in one native-call provenance domain", "pre-fix reproduction 10/10", "trusted positives 78/78 producer denials 8/8 route denials 30/30 and executable production-source mutants 48/48", "exact expected-action consumption canonical-registry-only attestation module-private claims process-lifetime event tombstones foreground UI exact binding transition-time expiry platform-scoped clearing fragment secrecy navigation-only route inputs accepted-media exact settlement and exact creator-consumer callsite enforcement corrected", "memory-only 30-second claim with 32 active and 64 consumed caps", "iOS generated-source digest unchanged 3/3 at e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0", "iOS capability parity 26/26 and zero missing", "local unsigned simulator compilation and installation passed for the unchanged generated-native source", "real native coordinator hot and cold pending-event drainage passed 1/1 each", "mounted route-bridge consumer and ownership integration passed 23/23 and production native-intent sanitization passed 5/5", "accepted-media helpers executed for LiveKit and legacy WebRTC while the production React effect remains source-audited and native completion/end booleans remain queue acknowledgements not physical fulfillment", "simctl openurl command succeeded but the disposable harness did not observe the OS URL callback so local OS URL callback remains explicitly blocked pending four-lane acceptance", "hunk-complete D2B reconciliation marks the duplicate Android registry stale iOS UUID-only contract and schema-v1 route buffer obsolete or manual", "source/model independent audit and post-edit recheck P0=0 P1=0", "local integration evidence SHA-256 aea1d120bc819fe446ad53516d64d8ac26cecdaef06bcc62efa43887dd2d11f0", "iOS source fix not delivered", "no provider physical device EAS TestFlight OTA database migration entitlement money role right auth RLS switch schedule memory Level 2 or public-release mutation"]},
     {"id": "pr-d1-merge-closeout-20260802-1013", "mode": "local-offline-and-github-read-only", "covers": ["starting main 412cd3ae28e24408fb60e04501113975e4232ebd", "preserved PR #143 inventory head 165533d50a58947140982f1a5dbe3fd13add30a5 tree d76676e7ddff74c09ffa4bc2994153772b69b73a", "immutable source 78d0140a08159cdd2c78bd0597631a5cc87b5029 tree 9190a283099c0c214e32de8f480219533ea91b4b", "base-synchronized head 173f17ce3b481d3e61ea7af27c563cdc78530044 tree 3d49d62b6f8950cc283e2bd01aaa8542d5896ab2 with immutable first parent and main 12985e2ad505ca813611c64b793345f069dc5515 second parent", "PR #143 merged normally as 2c5f9d1622dd29c57b92996b1d7faf58762299f8 with exact synchronized tree", "six files and 1049 net lines in one offline release-native-artifact assurance domain", "three targets classified with generated source 9/9 and deterministic output 3/3", "required and provided capabilities independently derived with Android QA 21/21, iOS QA 26/26, historical Android current-source replay 21/21, and zero missing", "mandatory negative controls 8/8 plus bounded controls 16/16", "signed identities historical inputs not currently reproved and all rollback declarations fail closed as incompatible", "T0 requirements T1 source and T2 model clear only; T3 through T7 blocked or historical input not reproved", "review PRs #146 #147 #148 and #149 final aggregate P0=0/P1=0 formal PASS and closed unmerged with branches retained", "exact Phase 1 CI run 30742530172 attempt 2 passed 13/13 at synchronized head", "post-merge source readback passed 6/6 paths with exact merged tree", "PR D2 Android instrumentation and separately scoped iOS XCTest gaps remain read-only handoff only", "no build OTA provider contact artifact installation public release database mutation release-manifest mutation switch schedule money entitlement role right auth RLS memory or Level 2 action"]},
     {"id": "pr-d1-final-immutable-offline-parity-rebinding-20260802-0931", "mode": "local-offline-and-github-read-only", "covers": ["program starting main 412cd3ae28e24408fb60e04501113975e4232ebd and rebinding main 40b1c7ba9de0ab96dddc1442708ecfcaaf05a1d0", "preserved PR #143 inventory checkpoint 165533d50a58947140982f1a5dbe3fd13add30a5 tree d76676e7ddff74c09ffa4bc2994153772b69b73a", "final immutable PR D1 source 78d0140a08159cdd2c78bd0597631a5cc87b5029 tree 9190a283099c0c214e32de8f480219533ea91b4b pushed normally to existing draft PR #143 with all earlier reviewed descendants preserved", "six changed files with 1049 additions and zero deletions from PR base in one offline release-native-artifact assurance domain", "three registered targets classified", "five direct-import grammars with 42 discovered dependencies, 34 native mappings, 8 reviewed JS-only mappings, and zero unclassified", "react-native-get-random-values independently required and generated on Android and iOS; exact locked react-native-url-polyfill source fail-closed as reviewed JS-only", "generated native source 9/9 with target determinism 3/3 and byte-identical evidence 3/3", "Android build 86 digest 4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b", "iOS build 8 digest e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0", "Android historical build 84 target current-source replay digest 1f4391e2a6df0c9266db66b7f2615984e9370163827426593077cbb53d9ef2c4 explicitly not historical signed or installed proof", "required capabilities independently derived from runtime imports and provided capabilities independently derived from source plus generated native output", "capability parity 21/21 Android QA, 26/26 iOS QA, and 21/21 Android historical-target current-source replay with zero missing", "all three signed identities historical inputs not currently reproved and all three rollback declarations incompatible", "mandatory negative controls 8/8 plus bounded controls 16/16", "review PRs #146, #147, #148, and #149 current pre-base-sync evidence aggregate P0=0/P1=0 and remain draft never-merge", "T0/T1/T2 clear only; T3 blocked internally and T4/T5/T6/T7 blocked", "all native compilation, signed inspection, OTA publication, and release proceed decisions false", "no provider contact, build, OTA, installation, public release, database mutation, release-manifest mutation, package/workflow change, generated-platform commit, user-derived memory, or Level 2 action"]},
     {"id": "pr-d-read-only-inventory-handoff-20260802-0647", "mode": "local-offline", "covers": ["draft PR #143", "branch codex/first-pass-assurance-native-provider-runtime-artifact", "worktree /Users/loverslane/chillywood-assurance-worktrees/d-native-provider-runtime-artifact", "base 62d4b526675e5a10177d37c53670709d63062293", "inventory head 165533d50a58947140982f1a5dbe3fd13add30a5 tree d76676e7ddff74c09ffa4bc2994153772b69b73a", "inventory SHA-256 0bc1e8e6f16cd6bc391ab93380742090ada68c7adbcd307f486b3dc977ab0582", "assurance plan eas-build-update-release requirements and architecture clear", "Android instrumentation and unit-test gaps mapped", "iOS generated-project and native-call XCTest gaps mapped", "EAS profile/runtime/channel/native-capability parity gap mapped", "provider fixture and signed-artifact proof gaps mapped", "first objective limited to offline deterministic T0/T1/T2 parity and eight negative controls", "no build, OTA, provider contact, signed artifact, install, physical proof, or public-canary claim"]},
