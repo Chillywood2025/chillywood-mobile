@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 5,
+  "evidenceId": "d2c-call-lifecycle-server-authority-v5",
+  "classification": "FINAL_SYNCHRONIZED_LEVEL_C_LANE_3_P0_P1_CLEAR_WITH_ASSIGNED_P2_AND_EXPLICIT_PROOF_BOUNDARIES",
+  "reviewLevel": "C",
+  "reviewLane": {
+    "number": 3,
+    "discipline": "call_lifecycle_server_authority_non_regression"
+  },
+  "reviewTimestamp": "2026-08-03T01:38:08Z",
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "implementationHead": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580",
+  "implementationTree": "f276aee4a82348bc56ad46d2af9ba54da70388e6",
+  "finalPreSynchronizationSourceHead": "33d1d108ef35b7a5927d3c4c0c71aa4b9ca6ed4a",
+  "finalPreSynchronizationSourceTree": "41766743f1df214a9fedf23b7775e787e28adfd1",
+  "synchronizedBaseHead": "33509b3edebf5628e41fc2c7c15b7aaa133d9b26",
+  "synchronizedFirstParent": "33d1d108ef35b7a5927d3c4c0c71aa4b9ca6ed4a",
+  "synchronizedSecondParent": "33509b3edebf5628e41fc2c7c15b7aaa133d9b26",
+  "reviewBranchInputHead": "dcb21a47a579306a8b03f2feb00def4dde48ad57",
+  "reviewBranchInputTree": "1240754e470d1426129d9248e4dfd8915a2915df",
+  "sourceDeltaSha256": "f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf",
+  "changedPathSetSha256": "868570e117229720fbdc71a52b7030e1c824e1c35e5b04d01ffce7257c0a27bf",
+  "changedNameStatusSha256": "d326b324add46a7610db1258253c56b65d8ff19c983269fc279c670a3ba9531c",
+  "contractSha256": "afdf297cd581042b8b434ee8f7a0360320009fb958c2c84057514d393354f8ba",
+  "claimRegistrySha256": "f536f4f1a208eaf446634fec6de4ed545eb3ed4d54c92812aaa92bcef6aa3858",
+  "implementationReportSha256": "5ac2297780ba5b369d7600a8fa884182247ee40e1bc1df2dfdcfb8ccd276dcc6",
+  "focusedTestSourceSha256": "9297f453a8b2a3fa98f914d9574fec099522c455836ff142a3e08b18778988b2",
+  "finalSynchronization": {
+    "mode": "normal_no_ff_merge",
+    "canonicalParents": true,
+    "implementationDeltaByteEquivalent": true,
+    "changedPathsByteEquivalent": true,
+    "incrementalPathsFromPriorSynchronizedHead": [
+      "config/assurance/current-truth-v1.json",
+      "CURRENT_STATE.md",
+      "NEXT_TASK.md"
+    ],
+    "incrementalImplementationSourceChanges": 0
+  },
+  "historicalEvidence": [
+    {
+      "path": "docs/assurance/reviews/d2c-call-lifecycle-server-authority-historical-v1.json",
+      "sha256": "bdd4972b66157b965edf645a2c2c4ec1f3b87a15c1ab40320dc09675965ea079",
+      "preservedUnchanged": true,
+      "priorVerdict": {"P0": 0, "P1": 1, "P2": 2}
+    },
+    {
+      "path": "docs/assurance/reviews/d2c-call-lifecycle-server-authority-v2.json",
+      "sha256": "9ddc26f8ff01ae9260f33ec05a558547285c19c8b52b956ab940407a036876a6",
+      "preservedUnchanged": true,
+      "priorVerdict": {"P0": 0, "P1": 0, "P2": 2}
+    },
+    {
+      "path": "docs/assurance/reviews/d2c-call-lifecycle-server-authority-v3.json",
+      "sha256": "e47d07361dada40e7e67f4768b1c56a9b74b74315e8af4e526d572f2fd6da737",
+      "preservedUnchanged": true,
+      "priorVerdict": {"P0": 0, "P1": 1, "P2": 2},
+      "preservedFinding": "IOS_ACCEPTED_CALLKIT_MEDIA_FAILURE_SETTLEMENT_MISSING"
+    },
+    {
+      "path": "docs/assurance/reviews/d2c-call-lifecycle-server-authority-v4.json",
+      "sha256": "18a522172c419c57f57d5aff46636703fb8ffb5f1b6d6cf1543d6cf467c15c3d",
+      "preservedUnchanged": true,
+      "priorVerdict": {"P0": 0, "P1": 0, "P2": 5}
+    }
+  ],
+  "verdict": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 5,
+    "laneMergeGateClear": true,
+    "overallMergeEligibilityNotClaimed": true,
+    "summary": "The final synchronized D2C head preserves the exact reviewed implementation delta and clears Lane 3 P0/P1. Foreground UI authority remains distinct; native Answer requires an attested exact iOS claim; exact callee, invite, room and server state remain authoritative; CallKit completion follows server acceptance; token and media stay accepted-only; LiveKit and legacy WebRTC use the bounded accepted-media failure settlement; terminal and mute events remain direct; and Android provenance fails closed pending D2B. Five nonblocking follow-ups and all provider, physical, signed, delivery and public proof boundaries remain explicit."
+  },
+  "resolvedHistoricalFindings": [
+    {
+      "id": "IOS_ACCEPTED_CALLKIT_MEDIA_FAILURE_SETTLEMENT_MISSING",
+      "priorSeverity": "P1",
+      "status": "RESOLVED_FINAL_SYNCHRONIZED_SOURCE",
+      "resolution": "One exact accepted-media descriptor is created only after server acceptance and successful native Answer queue acknowledgement. Channel-error settlement binds exact user, thread, invite, room, CallKit UUID and immutable provider; terminal confirmation precedes exact-room leave and local clear; retry and replay fail closed.",
+      "evidence": ["_lib/communicationCallMediaPolicy.mjs:81-159", "app/chat/[threadId].tsx:496-509", "app/chat/[threadId].tsx:817-849", "scripts/test-ios-native-call-route-provenance.mjs:694-699"]
+    },
+    {
+      "id": "IOS_NATIVE_CALL_CONSUMED_CLAIM_EXPIRY_AT_USE_MISSING",
+      "priorSeverity": "P1",
+      "status": "RESOLVED_FINAL_SYNCHRONIZED_SOURCE",
+      "resolution": "The policy revalidates the consumed claim's original monotonic expiry immediately before transition use; an expired claim fails closed.",
+      "evidence": ["_lib/communicationCallMediaPolicy.mjs:42-79", "app/chat/[threadId].tsx:1819-1840"]
+    }
+  ],
+  "findings": [
+    {
+      "id": "ANDROID_NATIVE_ACTION_PROVENANCE_PENDING_D2B",
+      "severity": "P2",
+      "status": "ASSIGNED_D2B",
+      "mergeBlockingForD2C": false,
+      "disposition": "D2B must add the exact authenticated android_native_action_store producer. Until then Android route-derived Answer or Decline fails closed; no current signed binary is represented as changed or fixed."
+    },
+    {
+      "id": "IOS_NATIVE_MUTE_EVENT_PER_CALL_UUID_BINDING_PENDING_D3",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "D3 must require exact per-call identity for mute, unmute and native audio events; the absent-event-UUID wildcard is not represented as per-call, physical or provider proof."
+    },
+    {
+      "id": "IOS_NATIVE_COMPLETION_QUEUE_ACK_NOT_PHYSICAL_FULFILLMENT",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "Native completion and end booleans are local bridge queue acknowledgements, not physical CXAction fulfillment, signed-artifact or provider proof."
+    },
+    {
+      "id": "IOS_COLD_PENDING_EVENT_NATIVE_GENERATION_PENDING_D3",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "Cold pending events receive the current JavaScript lifecycle generation after drainage; native timestamp and generation attestation remain D3 work."
+    },
+    {
+      "id": "IOS_ACCEPTED_MEDIA_REACT_EFFECT_NOT_MOUNTED_IN_RETAINED_HARNESS",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "Both provider helpers are executable and the production effect is source-audited, but the retained local integration harness does not mount that React effect. No installed or physical lifecycle proof is inferred."
+    }
+  ],
+  "reviewResults": {
+    "foregroundUiAuthority": {
+      "status": "CLEAR",
+      "evidence": ["app/_layout.tsx:717-805", "_lib/nativeCallTransitionProvenance.mjs:366-480", "_lib/communicationCallMediaPolicy.mjs:161-189", "app/chat/[threadId].tsx:1678-1790"]
+    },
+    "exactCalleeInviteAndState": {
+      "status": "CLEAR",
+      "evidence": ["app/chat/[threadId].tsx:1572-1644", "app/chat/[threadId].tsx:1678-1704", "app/chat/[threadId].tsx:1819-1868", "_lib/communicationCallMediaPolicy.mjs:42-79"]
+    },
+    "serverAuthority": {
+      "status": "CLEAR",
+      "result": "The claim permits only a transition request. Existing authenticated server and database checks remain authoritative; claim creation does not update an invite, request a token or activate media.",
+      "evidence": ["_lib/nativeCallTransitionProvenance.mjs:228-345", "app/chat/[threadId].tsx:1689-1704", "supabase/functions/chilly-chat-call-transition/index.ts:139-188", "supabase/migrations/20260718103000_durable_chat_call_status_transition.sql:78-152"]
+    },
+    "acceptedBeforeTokenAndMedia": {
+      "status": "CLEAR_SOURCE_MODEL",
+      "evidence": ["app/chat/[threadId].tsx:777-788", "hooks/use-chat-call-media-session.ts:38-100", "hooks/use-livekit-chat-call-session.ts:471-515", "supabase/functions/livekit-token/index.ts:715-851"]
+    },
+    "nativeAnswerCompletionOrdering": {
+      "status": "CLEAR_LOCAL_QUEUE_ACK_BOUNDARY",
+      "evidence": ["_lib/communicationCallMediaPolicy.mjs:81-150", "app/chat/[threadId].tsx:496-509", "app/chat/[threadId].tsx:1598-1704"]
+    },
+    "acceptedMediaFailureSettlement": {
+      "status": "CLEAR_HELPER_EXECUTION_SOURCE_AUDITED_REACT_EFFECT",
+      "evidence": ["_lib/communicationCallMediaPolicy.mjs:81-159", "app/chat/[threadId].tsx:817-849", "scripts/test-ios-native-call-route-provenance.mjs:694-699"]
+    },
+    "terminalEvents": {
+      "status": "CLEAR",
+      "evidence": ["app/_layout.tsx:1157-1269", "app/chat/[threadId].tsx:1974-2158"]
+    },
+    "muteAndUnmute": {
+      "status": "CLEAR_ROUTE_DENIAL_WITH_D3_P2",
+      "evidence": ["app/_layout.tsx:1244-1249", "app/chat/[threadId].tsx:1952-1972"]
+    },
+    "liveKitLegacyCompatibility": {
+      "status": "CLEAR_SOURCE_MODEL",
+      "evidence": ["hooks/use-chat-call-media-session.ts:38-100", "_lib/communicationCallMediaPolicy.mjs:81-159"]
+    },
+    "androidNonInterference": {
+      "status": "CLEAR_FAIL_CLOSED_PENDING_D2B",
+      "evidence": ["_lib/nativeCallTransitionProvenance.mjs:25-34", "_lib/nativeCallTransitionProvenance.mjs:118-131", "config/assurance/native-call-transition-provenance-v1.json:51-56,109-130"]
+    },
+    "osUrlCallbackLimitation": {
+      "status": "ACCEPTED_FOR_SOURCE_MODEL_LOCAL_EQUIVALENT_SCOPE_ONLY",
+      "evidence": ["docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:21,40-45", "config/assurance/current-truth-v1.json:84-114"]
+    }
+  },
+  "testResults": {
+    "freshAtFinalSynchronizedHead": {
+      "iosNativeCallRouteProvenance": "PASS",
+      "preFixReproduction": "10/10",
+      "trustedPositive": "78/78",
+      "producerDenial": "8/8",
+      "routeDenial": "30/30",
+      "negativeControls": "48/48_EXECUTABLE_PRODUCTION_SOURCE_MUTANTS",
+      "iosNativeCallPolicyGuard": "PASS",
+      "notificationRoomCallPolicyGuard": "PASS",
+      "jsonValidation": "PASS",
+      "gitDiffCheck": "PASS"
+    },
+    "boundNativeProof": {
+      "generatedIosDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+      "generationDeterminism": "3/3",
+      "postSynchronizationNativeModuleCompile": "PASS_DEBUG_IPHONESIMULATOR_26_5_NO_SIGNING",
+      "compileLogSha256": "9f9ac8f90795d3b6f4fff98c5145795e9efde169a892c6b625fc76cb826738fa",
+      "mountedRouteBridge": "23/23",
+      "nativeIntentDenial": "5/5",
+      "osUrlCallback": "BLOCKED_LOCAL_IOS_SIMULATOR_URL_CALLBACK"
+    }
+  },
+  "proofBoundary": {
+    "clearedByThisLane": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "D2C_CALL_LIFECYCLE_SERVER_AUTHORITY_LANE"],
+    "integrationClassification": "LOCAL_EQUIVALENT_INTEGRATION_ACCEPTED_WITH_SOURCE_AUDITED_MEDIA_EFFECT_AND_OS_URL_CALLBACK_BLOCKED",
+    "mustRemainBlocked": ["IOS_EXTERNAL_OS_URL_CALLBACK_CLEAR", "IOS_PUSHKIT_PROVIDER_CLEAR", "IOS_APNS_DELIVERY_CLEAR", "IOS_PHYSICAL_CALLKIT_UI_CLEAR", "IOS_SIGNED_ARTIFACT_CLEAR", "IOS_TESTFLIGHT_FIX_DELIVERED", "PUBLIC_CANARY_CLEAR"],
+    "delivery": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "architectureCompatibilityOnly": "IOS_OTA_COMPATIBLE_SOURCE_CHANGE_NOT_PUBLISHED",
+    "noProofSubstitution": true
+  },
+  "nonInterference": {
+    "historicalEvidenceChanged": false,
+    "implementationFilesChangedByReview": false,
+    "androidImplementationChanged": false,
+    "iosNativeGeneratedSourceChanged": false,
+    "providerContact": false,
+    "databaseMutation": false,
+    "nativeOperationByReview": false,
+    "buildOrInstallByReview": false,
+    "physicalDevice": false,
+    "reviewPrMergeAuthorized": false
+  }
+}
