@@ -32,11 +32,14 @@ object ChillyChatNativeCallActionStore {
   private const val KEY_CALL_INVITE_ID = "call_invite_id"
   private const val KEY_NATIVE_ACTION = "native_action"
   private const val KEY_REQUEST_KEY = "request_key"
+  private const val KEY_CAPTURE_GENERATION = "capture_generation"
+  private const val KEY_CAPTURE_GENERATION_COUNTER = "capture_generation_counter"
   private const val KEY_CREATED_AT = "created_at"
   private const val KEY_CREATED_ELAPSED_AT = "created_elapsed_at"
   private const val KEY_LAST_CONSUMED_REQUEST_KEY = "last_consumed_request_key"
   private const val KEY_LAST_CONSUMED_ELAPSED_AT = "last_consumed_elapsed_at"
   private const val MAX_ACTION_AGE_MS = 45_000L
+  private const val MAX_SAFE_JS_INTEGER = 9_007_199_254_740_991L
   private val UUID_PATTERN = Regex(
     "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
   )
@@ -47,6 +50,7 @@ object ChillyChatNativeCallActionStore {
     val callInviteId: String,
     val nativeCallAction: String,
     val requestKey: String,
+    val captureGeneration: Long,
     val createdAt: Long,
     val schemaVersion: Int,
   )
@@ -66,9 +70,19 @@ object ChillyChatNativeCallActionStore {
     val requestKey = sha256("$threadId:$inviteId:$nativeAction")
     val preferences = preferences(context)
     val elapsedAt = SystemClock.elapsedRealtime()
+    val storedSchemaVersion = preferences.getInt(KEY_SCHEMA_VERSION, 0)
+    if (
+      storedSchemaVersion != SCHEMA_VERSION
+      && (storedSchemaVersion != 0 || preferences.all.isNotEmpty())
+    ) {
+      preferences.edit().clear().commit()
+    }
     val existingRequestKey = preferences.getString(KEY_REQUEST_KEY, null).orEmpty()
     val existingElapsedAt = preferences.getLong(KEY_CREATED_ELAPSED_AT, 0L)
-    if (isFresh(existingElapsedAt, elapsedAt)) {
+    if (
+      preferences.getInt(KEY_SCHEMA_VERSION, 0) == SCHEMA_VERSION
+      && isFresh(existingElapsedAt, elapsedAt)
+    ) {
       if (existingRequestKey == requestKey) {
         Log.i(LOG_TAG, "ACTION_BUFFERED")
         return true
@@ -87,6 +101,10 @@ object ChillyChatNativeCallActionStore {
       return false
     }
 
+    val previousCaptureGeneration = preferences.getLong(KEY_CAPTURE_GENERATION_COUNTER, 0L)
+    val captureGeneration = if (
+      previousCaptureGeneration in 1 until MAX_SAFE_JS_INTEGER
+    ) previousCaptureGeneration + 1L else 1L
     val editor = preferences.edit()
     if (!isFresh(lastConsumedElapsedAt, elapsedAt)) {
       editor
@@ -99,6 +117,8 @@ object ChillyChatNativeCallActionStore {
       .putString(KEY_CALL_INVITE_ID, inviteId)
       .putString(KEY_NATIVE_ACTION, nativeAction)
       .putString(KEY_REQUEST_KEY, requestKey)
+      .putLong(KEY_CAPTURE_GENERATION, captureGeneration)
+      .putLong(KEY_CAPTURE_GENERATION_COUNTER, captureGeneration)
       .putLong(KEY_CREATED_AT, System.currentTimeMillis())
       .putLong(KEY_CREATED_ELAPSED_AT, elapsedAt)
       .commit()
@@ -110,10 +130,15 @@ object ChillyChatNativeCallActionStore {
   fun consume(context: Context): PendingAction? {
     val preferences = preferences(context)
     val schemaVersion = preferences.getInt(KEY_SCHEMA_VERSION, 0)
+    if (schemaVersion != SCHEMA_VERSION) {
+      if (preferences.all.isNotEmpty()) preferences.edit().clear().commit()
+      return null
+    }
     val threadId = normalizeUuid(preferences.getString(KEY_THREAD_ID, null))
     val inviteId = normalizeUuid(preferences.getString(KEY_CALL_INVITE_ID, null))
     val nativeAction = normalizeAction(preferences.getString(KEY_NATIVE_ACTION, null))
     val requestKey = preferences.getString(KEY_REQUEST_KEY, null).orEmpty()
+    val captureGeneration = preferences.getLong(KEY_CAPTURE_GENERATION, 0L)
     val createdAt = preferences.getLong(KEY_CREATED_AT, 0L)
     val createdElapsedAt = preferences.getLong(KEY_CREATED_ELAPSED_AT, 0L)
     val elapsedAt = SystemClock.elapsedRealtime()
@@ -127,6 +152,7 @@ object ChillyChatNativeCallActionStore {
     val valid = schemaVersion == SCHEMA_VERSION
       && requestKey.matches(REQUEST_KEY_PATTERN)
       && requestKey == expectedRequestKey
+      && captureGeneration in 1..MAX_SAFE_JS_INTEGER
       && createdAt > 0L
       && isFresh(createdElapsedAt, elapsedAt)
 
@@ -154,6 +180,7 @@ object ChillyChatNativeCallActionStore {
       inviteId,
       nativeAction,
       requestKey,
+      captureGeneration,
       createdAt,
       schemaVersion,
     )
@@ -162,6 +189,11 @@ object ChillyChatNativeCallActionStore {
   @Synchronized
   fun readStatus(context: Context): String {
     val preferences = preferences(context)
+    val schemaVersion = preferences.getInt(KEY_SCHEMA_VERSION, 0)
+    if (schemaVersion != SCHEMA_VERSION && preferences.all.isNotEmpty()) {
+      preferences.edit().clear().commit()
+      return "expired"
+    }
     val elapsedAt = SystemClock.elapsedRealtime()
     if (!preferences.contains(KEY_REQUEST_KEY)) {
       val lastConsumedElapsedAt =
@@ -205,11 +237,11 @@ object ChillyChatNativeCallActionStore {
 
   private fun removePending(editor: SharedPreferences.Editor): SharedPreferences.Editor =
     editor
-      .remove(KEY_SCHEMA_VERSION)
       .remove(KEY_THREAD_ID)
       .remove(KEY_CALL_INVITE_ID)
       .remove(KEY_NATIVE_ACTION)
       .remove(KEY_REQUEST_KEY)
+      .remove(KEY_CAPTURE_GENERATION)
       .remove(KEY_CREATED_AT)
       .remove(KEY_CREATED_ELAPSED_AT)
 
@@ -493,18 +525,57 @@ class ChillyChatCallNotificationActionReceiver : BroadcastReceiver() {
 `,
   "ChillyChatCallNotificationModule.kt": String.raw`package com.chillywood.mobile
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.util.Log
+import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.modules.core.DeviceEventManagerModule
 
 class ChillyChatCallNotificationModule(
   private val reactContext: ReactApplicationContext,
-) : ReactContextBaseJavaModule(reactContext) {
+  private val pendingActionEmitter: () -> Unit = {
+    reactContext
+      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+      .emit(EVENT_PENDING_ACTION_AVAILABLE, null)
+  },
+) : ReactContextBaseJavaModule(reactContext), ActivityEventListener {
+  companion object {
+    const val EVENT_PENDING_ACTION_AVAILABLE = "pendingNativeCallActionAvailable"
+
+    internal fun shouldEmitPendingAction(intent: Intent, status: String): Boolean =
+      intent.action == Intent.ACTION_MAIN
+        && intent.data == null
+        && status == "present"
+  }
+
+  init {
+    reactContext.addActivityEventListener(this)
+  }
+
   override fun getName(): String = "ChillyChatCallNotifications"
+
+  override fun invalidate() {
+    reactContext.removeActivityEventListener(this)
+    super.invalidate()
+  }
+
+  override fun onActivityResult(
+    activity: Activity,
+    requestCode: Int,
+    resultCode: Int,
+    data: Intent?,
+  ) = Unit
+
+  override fun onNewIntent(intent: Intent) {
+    if (!shouldEmitPendingAction(intent, ChillyChatNativeCallActionStore.readStatus(reactContext))) return
+    pendingActionEmitter()
+  }
 
   @ReactMethod
   fun ensureNativeCallNotificationChannel(promise: Promise) {
@@ -569,6 +640,7 @@ class ChillyChatCallNotificationModule(
         putString("callInviteId", pendingAction.callInviteId)
         putString("nativeCallAction", pendingAction.nativeCallAction)
         putString("requestKey", pendingAction.requestKey)
+        putDouble("captureGeneration", pendingAction.captureGeneration.toDouble())
         putDouble("createdAt", pendingAction.createdAt.toDouble())
         putInt("schemaVersion", pendingAction.schemaVersion)
       }
@@ -653,7 +725,7 @@ function ensureMainApplicationPackage(contents) {
 
 const BACKUP_RULE_ALLOWED_KEYS = {
   legacy: new Set(["$", "exclude", "include"]),
-  modern: new Set(["$", "cloud-backup", "device-transfer"]),
+  modern: new Set(["$", "cloud-backup", "cross-platform-transfer", "device-transfer"]),
 };
 
 function failBackupComposition(message) {
@@ -676,8 +748,14 @@ function assertSupportedBackupKeys(value, kind) {
   }
 }
 
-function ensureTransientPreferenceExclusion(entries) {
-  const next = Array.isArray(entries) ? copyXml(entries) : [];
+function ensureTransientPreferenceExclusion(entries, location) {
+  if (entries != null && !Array.isArray(entries)) {
+    failBackupComposition(`The ${location} backup rules contain a malformed exclude list.`);
+  }
+  const next = copyXml(entries ?? []);
+  if (next.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry) || !entry.$ || typeof entry.$ !== "object" || Array.isArray(entry.$))) {
+    failBackupComposition(`The ${location} backup rules contain a malformed exclude entry.`);
+  }
   const matches = next.filter((entry) => (
     entry?.$?.domain === "sharedpref"
     && entry?.$?.path === TRANSIENT_ACTION_PREFERENCES_FILE
@@ -702,7 +780,10 @@ function ensureTransientPreferenceExclusion(entries) {
 function composeLegacyBackupRules(existing) {
   const root = copyXml(existing?.["full-backup-content"] ?? {});
   assertSupportedBackupKeys(root, "legacy");
-  root.exclude = ensureTransientPreferenceExclusion(root.exclude);
+  if (root.include != null && !Array.isArray(root.include)) {
+    failBackupComposition("The legacy backup resource contains a malformed include list.");
+  }
+  root.exclude = ensureTransientPreferenceExclusion(root.exclude, "legacy");
   return { "full-backup-content": root };
 }
 
@@ -719,7 +800,10 @@ function ensureModernBackupSection(root, key) {
   if (unexpected.length > 0) {
     failBackupComposition(`The Android 12+ ${key} rule contains unsupported nodes: ${unexpected.join(", ")}.`);
   }
-  section.exclude = ensureTransientPreferenceExclusion(section.exclude);
+  if (section.include != null && !Array.isArray(section.include)) {
+    failBackupComposition(`The Android 12+ ${key} rules contain a malformed include list.`);
+  }
+  section.exclude = ensureTransientPreferenceExclusion(section.exclude, `Android 12+ ${key}`);
   root[key] = [section];
 }
 
@@ -728,6 +812,16 @@ function composeModernBackupRules(existing) {
   assertSupportedBackupKeys(root, "modern");
   ensureModernBackupSection(root, "cloud-backup");
   ensureModernBackupSection(root, "device-transfer");
+  ensureModernBackupSection(root, "cross-platform-transfer");
+  const crossPlatformSection = root["cross-platform-transfer"][0];
+  const existingPlatform = String(crossPlatformSection.$?.platform ?? "").trim().toLowerCase();
+  if (existingPlatform && existingPlatform !== "ios") {
+    failBackupComposition("The cross-platform transfer resource targets an unsupported platform.");
+  }
+  crossPlatformSection.$ = {
+    ...(crossPlatformSection.$ ?? {}),
+    platform: "ios",
+  };
   return { "data-extraction-rules": root };
 }
 

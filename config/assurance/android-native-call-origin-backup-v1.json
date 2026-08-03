@@ -8,6 +8,7 @@
     "platform": "android",
     "packageId": "com.chillywood.mobile",
     "priorGeneratedDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+    "correctedGeneratedDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
     "newBinaryRequired": true
   },
   "scopeWaiver": {
@@ -27,6 +28,7 @@
     "plugins/withChillyChatNativeCallNotifications.js",
     "_lib/chillyChatNativeCallRoutes.mjs",
     "_lib/chillyChatNativeCallRouteBuffer.ts",
+    "_lib/nativeCallTransitionProvenance.mjs",
     "app/+native-intent.tsx",
     "app/_layout.tsx",
     "app/chat/[threadId].tsx",
@@ -69,7 +71,8 @@
       ["ChillyChatNativeCallActionStore", "eligible_for_transfer", "chillywood_native_call_data_extraction_rules.xml"],
       ["ChillyChatNativeCallActionStore", "consumes_once", "ChillyChatCallNotificationModule"],
       ["ChillyChatCallNotificationModule", "creates_route", "AndroidNativeCallRouteBridge"],
-      ["AndroidNativeCallRouteBridge", "creates_one_time_claim", "app/chat/[threadId].tsx"],
+      ["AndroidNativeCallRouteBridge", "creates_one_time_claim", "_lib/nativeCallTransitionProvenance.mjs"],
+      ["_lib/nativeCallTransitionProvenance.mjs", "routes_to", "app/chat/[threadId].tsx"],
       ["app/chat/[threadId].tsx", "claims_transition", "authenticated invite transition"],
       ["authenticated invite transition", "enables_token", "accepted-only token issuance"],
       ["authenticated invite transition", "activates_media", "accepted-only media activation"],
@@ -88,6 +91,7 @@
       "foreground and background incoming-call presentation",
       "cold and warm Activity startup",
       "auth readiness",
+      "payload-free warm onNewIntent wake and immediate private-store drain",
       "accepted-only LiveKit or legacy media session activation",
       "D1 generated-source parity",
       "D2A lifecycle resumption"
@@ -110,8 +114,8 @@
       "auth loading or signed out"
     ],
     "platformBoundaries": {
-      "android": "requires a consumed native_action_store claim",
-      "ios": "retains the separate current native CallKit UUID path",
+      "android": "requires a consumed android_native_action_store claim",
+      "ios": "requires the canonical ios_callkit_native_event claim",
       "crossPlatformProofReuse": "denied"
     },
     "releaseEffects": [
@@ -132,7 +136,7 @@
     "legacy": {"domain": "sharedpref", "path": "chilly_chat_native_call_action_v1.xml"},
     "cloudBackup": {"domain": "sharedpref", "path": "chilly_chat_native_call_action_v1.xml"},
     "deviceTransfer": {"domain": "sharedpref", "path": "chilly_chat_native_call_action_v1.xml"},
-    "crossPlatformTransfer": "NOT_APPLICABLE_UNTIL_COMPILE_SDK_36_1_OR_LATER",
+    "crossPlatformTransfer": {"platform": "ios", "domain": "sharedpref", "path": "chilly_chat_native_call_action_v1.xml"},
     "unrelatedPreferenceExclusionsAllowed": false,
     "composition": "PRESERVE_EXISTING_SUPPORTED_RULES_OR_FAIL_ANDROID_BACKUP_RULE_COMPOSITION_CONFLICT"
   },
@@ -140,24 +144,27 @@
     "trustedOrigin": "APP_CREATED_IMMUTABLE_EXPLICIT_NON_EXPORTED_RECEIVER_PENDING_INTENT",
     "trustedActions": ["answer", "decline"],
     "storeSchemaVersion": 2,
+    "captureGeneration": "DISTINCT_POSITIVE_MONOTONIC_SAFE_INTEGER",
     "preCorrectionSchemaDisposition": "SCHEMA_1_INVALIDATED_AND_DELETED_BEFORE_CLAIM",
     "persistBeforeActivityLaunch": true,
     "activityLaunch": "EXPLICIT_NEUTRAL_ACTION_MAIN_NO_URI_NO_BROWSABLE_NO_AUTHORITY_EXTRAS",
+    "warmWake": "PAYLOAD_FREE_ACTIVITY_EVENT_AFTER_PRIVATE_STORE_COMMIT",
+    "warmWakeAuthority": false,
     "receiverExported": false,
     "nativeServerAuthority": false,
     "nativeTokenAuthority": false,
     "nativeMediaAuthority": false
   },
   "javascriptProvenanceContract": {
-    "source": "native_action_store",
+    "source": "android_native_action_store",
     "storage": "IN_MEMORY_ONLY",
-    "ttlMs": 15000,
+    "ttlMs": 30000,
     "consumeOnce": true,
     "survivesProcessDeath": false,
     "urlCreatable": false,
     "routeParameterAuthority": false,
     "externalActionNamesDeniedOnAndroid": ["answer", "decline", "end", "mute", "unmute"],
-    "requiredBindings": ["platform", "threadId", "callInviteId", "nativeCallAction", "requestKey", "schemaVersion", "consumedAt", "source"]
+    "requiredBindings": ["platform", "authenticatedUserId", "threadId", "callInviteId", "nativeCallAction", "requestKey", "captureGeneration", "nativePayloadSchemaVersion", "claimId", "consumedAt", "source"]
   },
   "originClassifications": {
     "notificationAnswerPendingIntent": "TRUSTED_NOTIFICATION_PENDING_INTENT",
@@ -190,7 +197,14 @@
     "ANDROID_RESTORED_NATIVE_ACTION_ACCEPTED",
     "ANDROID_NATIVE_SERVER_AUTHORITY_VIOLATION",
     "ANDROID_PREACCEPT_MEDIA_AUTHORITY_VIOLATION",
-    "PLATFORM_PROOF_SCOPE_MISMATCH"
+    "PLATFORM_PROOF_SCOPE_MISMATCH",
+    "ANDROID_NATIVE_DECLINE_SERVER_AUTHORITY_ACK_MISSING",
+    "ANDROID_NATIVE_ACTION_SCHEMA_BINDING_MISSING",
+    "ANDROID_NATIVE_ACTION_WARM_ROUTE_REPLACED",
+    "ANDROID_NATIVE_ACTION_WARM_WAKE_MISSING",
+    "ANDROID_NATIVE_ACTION_WARM_WAKE_PREDICATE_UNSAFE",
+    "ANDROID_NATIVE_ACTION_HIDDEN_SCREEN_CONSUMER",
+    "ANDROID_NATIVE_ACTION_CLAIM_DISCLOSURE"
   ],
   "proofTiers": {
     "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",

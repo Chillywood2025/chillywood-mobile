@@ -33,11 +33,52 @@ export function resolveIncomingCallRoomJoinAction(input: {
   inviteStatus?: string | null;
 }): "host" | "accept" | "resume" | "blocked";
 export function doesNativeCallActionOwnTransition(input: {
+  authority?: "foreground_authenticated_ui" | "none" | "trusted_native_claim";
   callInviteId?: string | null;
-  nativeCallUuid?: string | null;
+  currentUserId?: string | null;
+  nativeIdentity?: string | null;
   nativeCallAction?: string | null;
+  monotonicNowMs?: number | null;
   platform?: string | null;
-  trustedAndroidProvenance?: boolean;
+  threadId?: string | null;
+  trustedNativeClaim?: {
+    action?: string;
+    authenticatedUserId?: string;
+    consumed?: boolean;
+    consumedAtMonotonicMs?: number;
+    expiresAtMonotonicMs?: number;
+    inviteId?: string;
+    nativeEventGeneration?: number;
+    nativeIdentity?: string;
+    platform?: string;
+    source?: string;
+    threadId?: string;
+  } | null;
+}): boolean;
+export type IosAcceptedCallKitMediaDescriptor = Readonly<{authenticatedUserId: string; callUuid: string; claimId: string; inviteId: string; mediaProvider: "legacy_webrtc" | "livekit"; nativeEventGeneration: number; platform: "ios"; roomId: string; source: "ios_callkit_native_event"; threadId: string}>;
+export function createIosAcceptedCallKitMediaDescriptor(input?: Record<string, unknown>): IosAcceptedCallKitMediaDescriptor | null;
+export function terminateIosAcceptedNativeAnswer(input?: Record<string, unknown>, operations?: Record<string, (...args: any[]) => unknown>): Promise<boolean>;
+export function completeIosAcceptedNativeAnswer(input?: Record<string, unknown>, operations?: Record<string, unknown>): Promise<{descriptor?: IosAcceptedCallKitMediaDescriptor; status: "denied" | "ready" | "terminal_confirmed" | "terminal_retryable"}>;
+export function settleIosAcceptedCallKitMediaFailure(input?: Record<string, unknown>, operations?: Record<string, (...args: any[]) => unknown>): Promise<{descriptor?: IosAcceptedCallKitMediaDescriptor; status: "denied" | "retryable" | "settled" | "settled_cleanup_pending"}>;
+export function doesForegroundAuthenticatedUiCallIntentOwnAction(input: {
+  action?: string | null;
+  activeInviteId?: string | null;
+  activeRoomId?: string | null;
+  authority?: "foreground_authenticated_ui" | "none";
+  currentUserId?: string | null;
+  foregroundUiIntent?: {
+    action?: string;
+    authenticatedUserId?: string;
+    consumed?: boolean;
+    consumedAtMonotonicMs?: number;
+    expiresAtMonotonicMs?: number;
+    inviteId?: string;
+    roomId?: string;
+    source?: string;
+    threadId?: string;
+  } | null;
+  monotonicNowMs?: number | null;
+  threadId?: string | null;
 }): boolean;
 export function resolveIosChatCallAudioRoute(callType?: string | null): "speaker" | "receiver";
 export function shouldActivateAcceptedChatCallMedia(input: { roomId?: string | null; inviteStatus?: string | null }): boolean;

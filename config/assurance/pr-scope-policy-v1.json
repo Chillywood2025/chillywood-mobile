@@ -30,6 +30,14 @@
       "featureId": "revenuecat-premium",
       "allowedHighRiskDomains": ["RevenueCat-Premium", "database-RLS"],
       "reason": "RevenueCat transfer reconciliation binds the verified webhook policy to its exact deployed migration source."
+    },
+    {
+      "featureId": "chilly-chat-call-lifecycle",
+      "allowedHighRiskDomains": [
+        "Chat",
+        "notifications-native-calls"
+      ],
+      "reason": "Native call provenance must bind the generated notification receiver and private native store to the authenticated Chat transition in one fail-closed lifecycle domain."
     }
   ],
   "violations": [

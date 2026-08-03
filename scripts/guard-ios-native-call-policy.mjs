@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import {execFileSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const failures = [];
@@ -8,6 +10,107 @@ const requireText = (source, marker, message) => {
 const rejectText = (source, marker, message) => {
   if (source.includes(marker)) failures.push(message);
 };
+const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
+const trackedProductionPaths = execFileSync("git", ["ls-files", "-z"], {
+  cwd: repositoryRoot,
+  encoding: "utf8",
+}).split("\0").filter((path) => (
+  /^(?:_lib|app|components|hooks|modules|plugins)\//u.test(path)
+  && /\.(?:cjs|js|jsx|mjs|ts|tsx)$/u.test(path)
+  && !path.endsWith(".d.ts")
+  && !/(?:^|\/)(?:__tests__|fixtures?|test|tests)(?:\/|$)|\.(?:spec|test)\.[^.]+$/u.test(path)
+));
+const trackedProductionSources = Object.fromEntries(trackedProductionPaths.map((path) => [
+  path,
+  fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8"),
+]));
+const PROVENANCE_CREATOR_POLICIES = Object.freeze({
+  registerTrustedAndroidNativeActionStorePayload: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "_lib/chillyChatNativeCallRouteBuffer.ts": Object.freeze({calls: 1, references: 2, specifier: "./nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeTrustedAndroidNativeActionStoreClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+    "app/_layout.tsx": Object.freeze({calls: 2, references: 3, specifier: "../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeMountedAndroidNativeCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({calls: 2, references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  subscribeToTrustedAndroidNativeActionRoutes: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({calls: 1, references: 2, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeNativeCallTransitionClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+  }),
+  createNativeCallTransitionProvenanceRegistry: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  createForegroundAuthenticatedUiCallIntentRegistry: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  consumeTrustedIosCallKitNativeEventClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+  }),
+  consumeMountedIosNativeCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeMountedForegroundAuthenticatedUiCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  createForegroundAuthenticatedUiCallIntent: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/_layout.tsx": Object.freeze({references: 2, specifier: "../_lib/nativeCallTransitionProvenance.mjs"}),
+    "app/chat/index.tsx": Object.freeze({references: 2, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+    "app/profile/[userId].tsx": Object.freeze({references: 2, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  createIosCallKitAnswerRouteHandler: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/_layout.tsx": Object.freeze({references: 2, specifier: "../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+});
+const stripComments = (source) => String(source)
+  .replace(/\/\*[\s\S]*?\*\//gu, "")
+  .replace(/(^|[^:])\/\/.*$/gmu, "$1");
+const countSymbolReferences = (source, symbol) => (
+  stripComments(source).match(new RegExp(`\\b${symbol}\\b`, "gu")) ?? []
+).length;
+const containsComputedSymbolReference = (source, symbol) => {
+  const uncommented = stripComments(source);
+  const withoutDirectReferences = uncommented.split(symbol).join("");
+  return withoutDirectReferences.replace(/[^A-Za-z0-9_$]/gu, "").includes(symbol);
+};
+const hasExactCreatorImport = (source, symbol, specifier) => (
+  (stripComments(source).match(/import\s*\{[\s\S]*?\}\s*from\s*["'][^"']+["'];?/gu) ?? [])
+    .filter((declaration) => {
+      const importedFrom = declaration.match(/from\s*["']([^"']+)["']/u)?.[1] ?? "";
+      const bindings = declaration.match(/\{([\s\S]*?)\}/u)?.[1]
+        ?.split(",").map((binding) => binding.trim()).filter(Boolean) ?? [];
+      return importedFrom === specifier && bindings.includes(symbol);
+    }).length === 1
+);
+const provenanceCreatorAllowlistPasses = (productionSources) => Object.entries(PROVENANCE_CREATOR_POLICIES)
+  .every(([symbol, expectedByPath]) => {
+    if (Object.entries(expectedByPath).some(([path, expected]) => (
+      countSymbolReferences(productionSources[path] ?? "", symbol) !== expected.references
+      || (!!expected.specifier && !hasExactCreatorImport(productionSources[path] ?? "", symbol, expected.specifier))
+    ))) return false;
+    return Object.entries(productionSources).every(([path, source]) => {
+      if (Object.hasOwn(expectedByPath, path)) {
+        if (containsComputedSymbolReference(source, symbol)) return false;
+        if (path !== "_lib/nativeCallTransitionProvenance.mjs") {
+          const directCalls = stripComments(source).match(new RegExp(`\\b${symbol}\\s*\\(`, "gu")) ?? [];
+          return directCalls.length === (expectedByPath[path].calls ?? 1);
+        }
+        return true;
+      }
+      return countSymbolReferences(source, symbol) === 0
+        && !containsComputedSymbolReference(source, symbol);
+    });
+  });
 
 const plugin = read("plugins/withChillyChatIosNativeCalls.js");
 const appConfig = read("app.config.ts");
@@ -18,6 +121,8 @@ const rootLayout = read("app/_layout.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const communicationSession = read("hooks/use-communication-room-session.ts");
 const nativeMediaPolicy = read("_lib/communicationCallMediaPolicy.mjs");
+const provenance = read("_lib/nativeCallTransitionProvenance.mjs");
+const nativeIntent = read("app/+native-intent.tsx");
 const settings = read("app/settings.tsx");
 const callInvites = read("_lib/chillyChatCalls.ts");
 const easConfig = JSON.parse(read("eas.json"));
@@ -69,9 +174,27 @@ requireText(facade, "revokeIosVoipRegistration", "The JS facade must revoke on l
 requireText(facade, "dispatchIosVoipIncomingCall", "The JS facade must expose incoming-only PushKit dispatch.");
 requireText(facade, "const { token: _token", "Native events exposed to application listeners must omit raw tokens.");
 requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers must receive sanitized audio-session and application-state events.");
+requireText(facade, "nativeEventGeneration", "Native and cold-start events must bind the current JavaScript readiness generation.");
+requireText(facade, 'clearNativeCallTransitionClaims("ios")', "Account and readiness lifecycle changes must clear only iOS in-memory native claims.");
 rejectText(facade, "console.", "The native-call facade must never log PushKit tokens or provider responses.");
 requireText(rootLayout, "startIosNativeCallsReadiness", "Authenticated runtime must wire the native-call bridge.");
-requireText(rootLayout, 'nativeCallAction: "answer"', "Sanitized CallKit Answer must use the existing authorized chat route.");
+requireText(rootLayout, "createIosCallKitAnswerRouteHandler", "CallKit Answer must create a bounded claim through the canonical bridge handler.");
+requireText(rootLayout, "{hideDebugOverlay ? null : <DevDebugOverlay />}", "Opaque native and foreground claim handles must never mount the debug snapshot/clipboard overlay.");
+requireText(rootLayout, '"#"', "Expo Router fragment values must be treated as sensitive route material.");
+requireText(rootLayout, 'normalizedValue.includes("#")', "Fragment-bearing values must be excluded from route analytics.");
+requireText(rootLayout, 'pathname.split("#", 1)', "Authentication redirects must remove route fragments.");
+requireText(provenance, "nativeCallClaim: created.claimId", "The canonical CallKit bridge handler must carry only the opaque one-time handle.");
+requireText(provenance, "seenEventKeys", "Native event replay tombstones must survive claim expiry for the bounded process lifetime.");
+requireText(provenance, "attestedNativeClaims", "Consumed native claims must carry module-private attestation.");
+requireText(provenance, "attestationCapability === INTERNAL_NATIVE_CLAIM_ATTESTATION", "Only the canonical internal registry may attest consumed native claims.");
+requireText(provenance, "attestationCapability === INTERNAL_FOREGROUND_INTENT_ATTESTATION", "Only the canonical internal foreground registry may attest consumed UI intents.");
+requireText(provenance, "const expectedAction = normalizeText(expected.action);", "Native claim consumption must normalize a caller-supplied expected action.");
+requireText(provenance, "expectedAction !== claim.action", "Native claim consumption must atomically bind the expected action with the other identities.");
+requireText(provenance, "nativeCallTransitionRegistry.consume({", "Router failure must discard its exact native claim before failing CallKit Answer.");
+if ((provenance.match(/nativeCallTransitionRegistry\.create\(\{/gu) ?? []).length !== 2) failures.push("Exactly one private producer per reviewed iOS and Android native source must create canonical claims.");
+requireText(provenance, 'source: "ios_callkit_native_event"', "The private CallKit bridge must remain the sole iOS native claim source.");
+requireText(provenance, 'source: "android_native_action_store"', "The private Android store bridge must remain the sole Android native claim source.");
+rejectText(rootLayout, 'nativeCallAction: "answer"', "CallKit navigation must not carry authoritative action text.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline must use a direct server-authoritative transition.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End must use a direct server-authoritative transition.");
 requireText(rootLayout, "router.replace(destination", "CallKit Answer must replace the current route for deterministic cold-start recovery.");
@@ -82,6 +205,49 @@ requireText(chatThread, "subscribeToIosNativeCallEvents", "The chat call screen 
 requireText(chatThread, 'event.type === "audioSessionActivated"', "The chat call screen must react to CallKit AVAudioSession activation.");
 requireText(chatThread, 'event.type === "applicationActive"', "The chat call screen must restore foreground video after a native answer.");
 requireText(chatThread, 'requestedNativeCallAction === "answer"', "Background audio permission must be scoped to a native Answer action.");
+requireText(chatThread, "consumeMountedIosNativeCallRoute", "The mounted thread must atomically consume the exact native claim after auth readiness.");
+requireText(chatThread, 'action: "answer"', "The mounted CallKit Answer consumer must supply its exact expected action.");
+for (const marker of ["completeIosAcceptedNativeAnswer", "settleIosAcceptedCallKitMediaFailure", 'accepted?.status === "accepted"', "descriptor.roomId === activeCallRoomId"]) requireText(chatThread, marker, `Accepted CallKit media failure settlement requires ${marker}.`);
+for (const marker of ["iosAcceptedMediaDescriptorStates", "terminateIosAcceptedNativeAnswer", "operations.readInvite", "settleIosAcceptedCallKitMediaFailure"]) requireText(nativeMediaPolicy, marker, `Accepted CallKit media policy requires ${marker}.`);
+if (/callChannelState\s*===\s*["']live["'][\s\S]{0,240}completeIosNativeCallAnswer/u.test(chatThread)) failures.push("An unrelated live media channel must never complete a newly routed CallKit claim.");
+requireText(chatThread, 'authority: trustedNativeCallClaim ? "trusted_native_claim" : "none"', "Route values without a consumed claim must have no authority.");
+rejectText(chatThread, "requestedOpenCall", "openCall route text must not open or join call media.");
+rejectText(chatThread, "requestedCallMode", "startCall route text must not create a call.");
+rejectText(chatThread, "nativeCallAction: nativeCallActionParam", "The thread must not read route action text as native authority.");
+requireText(nativeIntent, "sanitizeExternalIosNativeCallPath(path)", "iOS system paths must strip native action, UUID, claim, openCall, and startCall parameters.");
+requireText(provenance, "fragmentParameters", "External iOS paths must remove only native-call authority from fragments.");
+requireText(provenance, "safeFragment", "Authentication and recovery fragment fields must survive native-call sanitization.");
+requireText(provenance, "containsSensitiveNativeCallClaimRouteParams", "Debug surfaces must fail closed while an opaque claim handle is routed.");
+requireText(nativeMediaPolicy, "isAttestedForegroundAuthenticatedUiCallIntent", "Foreground route shortcuts must require a module-attested one-time intent.");
+requireText(nativeMediaPolicy, "intent.inviteId === activeInviteId", "App-wide foreground open-call intent must bind the exact accepted invite.");
+requireText(nativeMediaPolicy, "intent.roomId === activeRoomId", "App-wide foreground open-call intent must bind the exact active room.");
+for (const marker of ["memory_only", "ttlMs", "maxActive", "maxConsumed"]) {
+  requireText(read("config/assurance/native-call-transition-provenance-v1.json"), marker, `The provenance contract must bind ${marker}.`);
+}
+for (const forbidden of ["AsyncStorage", "UserDefaults", "SecureStore", "Math.random", "console."]) {
+  rejectText(provenance, forbidden, `The in-memory claim registry must not contain ${forbidden}.`);
+}
+if (!provenanceCreatorAllowlistPasses(trackedProductionSources)) {
+  failures.push("Production provenance creator symbols must have only their exact direct allowlisted definitions, imports, and calls.");
+}
+if (provenanceCreatorAllowlistPasses({
+  ...trackedProductionSources,
+  "components/UnsafeNativeClaimCreator.tsx": "import { createIosCallKitAnswerRouteHandler as unsafe } from '../_lib/nativeCallTransitionProvenance.mjs';\nunsafe({});\n",
+})) {
+  failures.push("The tracked-production creator guard did not reject an aliased iOS claim creator.");
+}
+if (provenanceCreatorAllowlistPasses({
+  ...trackedProductionSources,
+  "components/UnsafeNamespaceCreator.tsx": "import * as provenance from '../_lib/nativeCallTransitionProvenance.mjs';\nprovenance.createIosCallKitAnswerRouteHandler({});\n",
+})) {
+  failures.push("The tracked-production creator guard did not reject a namespace iOS claim creator.");
+}
+if (provenanceCreatorAllowlistPasses({
+  ...trackedProductionSources,
+  "components/UnsafeComputedCreator.tsx": "import * as provenance from '../_lib/nativeCallTransitionProvenance.mjs';\nprovenance['createIosCallKit' + 'AnswerRouteHandler']({});\n",
+})) {
+  failures.push("The tracked-production creator guard did not reject a computed iOS claim creator.");
+}
 requireText(communicationSession, "shouldPreserveNativeCallBackgroundAudio", "CallKit background audio must survive transient inactive/background AppState changes.");
 requireText(communicationSession, 'channelStateRef.current = "live"', "An existing subscribed call channel must recover to live after foregrounding.");
 requireText(communicationSession, "restoreLocalMediaAfterForeground", "Foreground recovery must restore the requested microphone and camera tracks.");
