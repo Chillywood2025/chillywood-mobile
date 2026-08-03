@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr152-d2c-shared-architecture-scope-review-v6",
+  "reviewVersion": 6,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "shared-architecture-scope-d2b-compatibility",
+  "reviewLevel": "C",
+  "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+  "reviewTimestamp": "2026-08-03T01:42:10Z",
+  "reviewBranch": "codex/first-pass-assurance-d2c-review-shared-architecture-scope",
+  "reviewRef": "codex/first-pass-assurance-d2c-review-shared-architecture-scope",
+  "reviewRefHead": "ca2d2ee62aa7868285a85de8882a5d282b44e330",
+  "reviewEvidenceParentHead": "ca2d2ee62aa7868285a85de8882a5d282b44e330",
+  "historicalEvidencePreserved": ["v1", "v2", "v3", "v4", "v5"],
+  "historicalEvidenceHashes": {
+    "v1": "44c9f34357a8080a07b12807b503d029b8c0d14804f679b48704b4238f7cb552",
+    "v2": "917b9c193596122c368b72f31e4632c2886a942a8b59ab24c05835f8bbca3d19",
+    "v3": "bbaf9e666467c60b9d7a0c6aefca5062a6416b1d639d8f4ba0667792402f97a3",
+    "v4": "1131ab026f38a98d5a6bde067ae3fff761c6b8f716dc53095ea9ed1956e1c4d4",
+    "v5": "4eac46b18bc5a7c098ea03b4574781f028e669a8cd6318051f822a900485c9f4"
+  },
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "immutableSourceHead": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+  "immutableSourceTree": "d78792b30a1b61b4673b7423f031cf586db22592",
+  "sourceCheckpointHead": "33d1d108ef35b7a5927d3c4c0c71aa4b9ca6ed4a",
+  "synchronizedBranchHead": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580",
+  "currentBase": "33509b3edebf5628e41fc2c7c15b7aaa133d9b26",
+  "synchronizedTree": "f276aee4a82348bc56ad46d2af9ba54da70388e6",
+  "canonicalSyntheticTree": "f276aee4a82348bc56ad46d2af9ba54da70388e6",
+  "synchronizedParents": [
+    "33d1d108ef35b7a5927d3c4c0c71aa4b9ca6ed4a",
+    "33509b3edebf5628e41fc2c7c15b7aaa133d9b26"
+  ],
+  "immutableSourceInAncestry": true,
+  "sourceDeltaHash": "8c6cff0fd3477e63f2e84418b21d3a932e5959e2a576358e5e11844ef0e6c55a",
+  "sourceDeltaHashMethod": "sha256(trim(raw git diff --binary --no-renames currentBase synchronizedBranchHead))",
+  "rawSourceDeltaSha256": "f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf",
+  "rawSourceDeltaSha256Method": "sha256(raw git diff --binary --no-renames bytes including terminal newline)",
+  "changedPathSetSha256": "868570e117229720fbdc71a52b7030e1c824e1c35e5b04d01ffce7257c0a27bf",
+  "changedPathSetHashMethod": "sha256(sorted newline-delimited git diff --name-only currentBase synchronizedBranchHead)",
+  "reviewMerge": {
+    "head": "ca2d2ee62aa7868285a85de8882a5d282b44e330",
+    "tree": "899504326568b65862e54959bddf01ea688fb792",
+    "parents": [
+      "45534493a38c948dafa0ade8d0d9fdb509c0c00a",
+      "16e9bab2626df8db8eff5a3a64d30c57e4ff5580"
+    ],
+    "canonicalSyntheticTree": "899504326568b65862e54959bddf01ea688fb792",
+    "status": "pass-normal-no-ff-clean"
+  },
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 4, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 4, "P3": 0},
+  "reviewResult": {
+    "canonicalSharedRegistry": "pass-exactly-one-tracked-production-registry-module-no-merged-competitor",
+    "platformScope": "pass-ios-producer-enabled-android-producer-disabled-and-owned-by-d2b",
+    "d2bFrozenPathMapping": "pass-8-of-8-checkpoint-paths-hunk-complete",
+    "d2bDuplicateRegistryDisposition": "pass-obsolete-delete-and-reuse-shared-registry",
+    "negativeControls": "pass-48-of-48-executable-production-source-mutants",
+    "scope": "pass-18-files-2401-additions-201-deletions-2200-net-lines-authorized-waiver",
+    "deterministicGeneratedSource": "pass-ios-digest-unchanged-3-of-3",
+    "nativeCompile": "pass-focused-generated-native-module-unsigned-simulator-compile",
+    "fullAppCompile": "blocked-local-toolchain-timebox-no-compile-error-observed",
+    "localIntegration": "pass-reviewed-mounted-route-bridge-harness-simulator-os-url-callback-blocked",
+    "proofSubstitution": "pass-none",
+    "currentTruthReadback": "pass-final-synchronized-head-tree-and-parent-shape",
+    "P0": 0,
+    "P1": 0
+  },
+  "proofBoundary": {
+    "source": "IOS_NATIVE_ROUTE_PROVENANCE_SOURCE_CLEAR",
+    "model": "IOS_NATIVE_ROUTE_PROVENANCE_MODEL_CLEAR",
+    "localIntegration": "IOS_NATIVE_ROUTE_PROVENANCE_LOCAL_INTEGRATION_CLEAR_EQUIVALENT_MOUNTED_HARNESS",
+    "simulatorOsUrlCallback": "BLOCKED_LOCAL_IOS_SIMULATOR_URL_CALLBACK",
+    "fullAppCompile": "BLOCKED_LOCAL_IOS_FULL_APP_COMPILE_TIMEBOX",
+    "pushKitProvider": "BLOCKED_EXTERNAL",
+    "apnsDelivery": "BLOCKED_EXTERNAL",
+    "physicalCallKitUi": "BLOCKED_EXTERNAL",
+    "signedArtifact": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "testFlightDelivery": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "publicCanary": "BLOCKED_EXTERNAL"
+  },
+  "remainingP2": [
+    "The full clean simulator app compile exceeded the bounded local toolchain window after native pod compilation began; the focused generated ChillywoodNativeCalls simulator scheme compiled successfully without signing.",
+    "The local simulator OS URL callback was unavailable; URL denial is covered by the mounted production route/bridge integration harness and remains non-physical proof.",
+    "Native bridge completion methods acknowledge bounded queueing, not physical CallKit fulfillment; provider and physical-device proof remain blocked.",
+    "Accepted-media failure settlement is covered by executable helpers and production orchestration source, not a mounted React effect against physical CallKit media."
+  ],
+  "nonInterference": {
+    "androidProductImplementationChanged": false,
+    "d2bCheckpointChanged": false,
+    "providerContact": false,
+    "signedArtifactClaimed": false,
+    "physicalProofClaimed": false,
+    "releaseAction": false,
+    "generatedPlatformDirectoryCommitted": false
+  },
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 4,
+    "P3": 0,
+    "failureWaived": false,
+    "laneMergeGate": "PASS_LEVEL_C_LANE_4_P0_P1_ZERO",
+    "implementationMergeAuthorizedByThisReviewAlone": false,
+    "reviewDisposition": "V1_V2_V3_V4_V5_HISTORICAL_V6_CURRENT_REVIEW_BRANCH_NEVER_MERGES"
+  }
+}
