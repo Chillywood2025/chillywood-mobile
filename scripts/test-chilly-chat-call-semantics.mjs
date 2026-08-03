@@ -966,9 +966,10 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /requestedNativeCallAction === "answer"[\s\S]{0,420}completeIosNativeCallAnswer\([\s\S]{0,160}true[\s\S]{0,420}applyAcceptedIncomingInviteState\(acceptedInvite\)/u,
-  "a server-accepted CallKit answer is fulfilled before accepted media initialization can publish",
+  /const acceptedInvite = await updateChillyChatCallInviteStatus[\s\S]{0,620}completeTrustedIosNativeAnswer\(acceptedInvite\)[\s\S]{0,260}applyAcceptedIncomingInviteState\(acceptedInvite\)/u,
+  "a server-accepted CallKit answer completes the trusted native orchestrator before accepted media state can publish",
 );
+assert.match(chatThreadSource, /completeIosAcceptedNativeAnswer\([\s\S]{0,520}completeNative: completeIosNativeCallAnswer/u, "the trusted completion helper delegates to the executable provenance-bound CallKit orchestrator");
 assert.match(
   chatThreadSource,
   /const resumeAcceptedIncomingInvite = useCallback[\s\S]{0,2200}latestInvite\?\.status === "accepted"[\s\S]{0,700}latestThread\?\.activeCommunicationRoomId === roomId[\s\S]{0,320}snapshot\?\.room\.status === "active"/u,

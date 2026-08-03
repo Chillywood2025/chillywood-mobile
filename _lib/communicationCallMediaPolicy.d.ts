@@ -55,6 +55,11 @@ export function doesNativeCallActionOwnTransition(input: {
     threadId?: string;
   } | null;
 }): boolean;
+export type IosAcceptedCallKitMediaDescriptor = Readonly<{authenticatedUserId: string; callUuid: string; claimId: string; inviteId: string; mediaProvider: "legacy_webrtc" | "livekit"; nativeEventGeneration: number; platform: "ios"; roomId: string; source: "ios_callkit_native_event"; threadId: string}>;
+export function createIosAcceptedCallKitMediaDescriptor(input?: Record<string, unknown>): IosAcceptedCallKitMediaDescriptor | null;
+export function terminateIosAcceptedNativeAnswer(input?: Record<string, unknown>, operations?: Record<string, (...args: any[]) => unknown>): Promise<boolean>;
+export function completeIosAcceptedNativeAnswer(input?: Record<string, unknown>, operations?: Record<string, unknown>): Promise<{descriptor?: IosAcceptedCallKitMediaDescriptor; status: "denied" | "ready" | "terminal_confirmed" | "terminal_retryable"}>;
+export function settleIosAcceptedCallKitMediaFailure(input?: Record<string, unknown>, operations?: Record<string, (...args: any[]) => unknown>): Promise<{descriptor?: IosAcceptedCallKitMediaDescriptor; status: "denied" | "retryable" | "settled" | "settled_cleanup_pending"}>;
 export function doesForegroundAuthenticatedUiCallIntentOwnAction(input: {
   action?: string | null;
   activeInviteId?: string | null;
