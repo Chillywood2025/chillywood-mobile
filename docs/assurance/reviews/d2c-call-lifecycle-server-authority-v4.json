@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 4,
+  "evidenceId": "d2c-call-lifecycle-server-authority-v4",
+  "classification": "CURRENT_LEVEL_C_LANE_3_P0_P1_CLEAR_WITH_ASSIGNED_P2_AND_EXPLICIT_PROOF_BOUNDARIES",
+  "reviewLevel": "C",
+  "reviewLane": {
+    "number": 3,
+    "discipline": "call_lifecycle_server_authority_non_regression"
+  },
+  "reviewTimestamp": "2026-08-03T00:56:31Z",
+  "implementationPrNumber": 152,
+  "implementationBranch": "codex/first-pass-assurance-ios-native-action-route-provenance-correction",
+  "implementationHead": "f40e935dffa1e78f6d68aa843d5eb97b51db1aed",
+  "implementationTree": "7107386f15f039200c3c3e6bd339060fa8222405",
+  "immutableSourceHead": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+  "immutableSourceTree": "d78792b30a1b61b4673b7423f031cf586db22592",
+  "synchronizedBaseHead": "c68e2d11ddee44845c26c9b3f0c512926760cf03",
+  "synchronizedBaseTree": "1dffa30f0cb78be7e61bbc1d7ab04c62d4762868",
+  "synchronizedFirstParent": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+  "synchronizedSecondParent": "c68e2d11ddee44845c26c9b3f0c512926760cf03",
+  "reviewBranchInputHead": "4a8f63cea347ee37e6aff54bd0e5a3cc71f3ca57",
+  "reviewBranchInputTree": "2f254204d5486a5013bcf459a96d7ac06f182da8",
+  "sourceDeltaSha256": "f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf",
+  "changedPathSetSha256": "868570e117229720fbdc71a52b7030e1c824e1c35e5b04d01ffce7257c0a27bf",
+  "changedNameStatusSha256": "d326b324add46a7610db1258253c56b65d8ff19c983269fc279c670a3ba9531c",
+  "contractSha256": "afdf297cd581042b8b434ee8f7a0360320009fb958c2c84057514d393354f8ba",
+  "claimRegistrySha256": "f536f4f1a208eaf446634fec6de4ed545eb3ed4d54c92812aaa92bcef6aa3858",
+  "implementationReportSha256": "5ac2297780ba5b369d7600a8fa884182247ee40e1bc1df2dfdcfb8ccd276dcc6",
+  "focusedTestSourceSha256": "9297f453a8b2a3fa98f914d9574fec099522c455836ff142a3e08b18778988b2",
+  "historicalEvidence": [
+    {
+      "path": "docs/assurance/reviews/d2c-call-lifecycle-server-authority-historical-v1.json",
+      "sha256": "bdd4972b66157b965edf645a2c2c4ec1f3b87a15c1ab40320dc09675965ea079",
+      "preservedUnchanged": true,
+      "priorVerdict": {"P0": 0, "P1": 1, "P2": 2}
+    },
+    {
+      "path": "docs/assurance/reviews/d2c-call-lifecycle-server-authority-v2.json",
+      "sha256": "9ddc26f8ff01ae9260f33ec05a558547285c19c8b52b956ab940407a036876a6",
+      "preservedUnchanged": true,
+      "priorVerdict": {"P0": 0, "P1": 0, "P2": 2}
+    },
+    {
+      "path": "docs/assurance/reviews/d2c-call-lifecycle-server-authority-v3.json",
+      "sha256": "e47d07361dada40e7e67f4768b1c56a9b74b74315e8af4e526d572f2fd6da737",
+      "preservedUnchanged": true,
+      "priorVerdict": {"P0": 0, "P1": 1, "P2": 2},
+      "preservedFinding": "IOS_ACCEPTED_CALLKIT_MEDIA_FAILURE_SETTLEMENT_MISSING"
+    }
+  ],
+  "verdict": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 5,
+    "laneMergeGateClear": true,
+    "overallMergeEligibilityNotClaimed": true,
+    "summary": "The exact synchronized D2C head clears Lane 3 P0/P1. Foreground UI authority remains separate; native Answer requires one attested exact iOS claim; exact callee, invite, room and server state remain authoritative; CallKit completion follows server acceptance; token and media stay accepted-only; both LiveKit and legacy providers use the bounded accepted-media failure settlement; terminal and mute events remain direct; and Android provenance fails closed pending D2B. The historical accepted-media settlement P1 is resolved without restoring generic live-channel authority. Five nonblocking follow-ups and all provider, physical, signed, delivery and public proof boundaries remain explicit."
+  },
+  "resolvedHistoricalFindings": [
+    {
+      "id": "IOS_ACCEPTED_CALLKIT_MEDIA_FAILURE_SETTLEMENT_MISSING",
+      "priorSeverity": "P1",
+      "status": "RESOLVED_CURRENT_SOURCE",
+      "resolution": "The synchronized source creates one exact accepted-media descriptor only after server acceptance and successful native Answer queue acknowledgement. A channel error can settle only the exact attested iOS user, thread, invite, room, CallKit UUID and immutable provider through bounded native-end, authoritative terminal readback, exact-room leave, and local clear. Failed terminal confirmation remains retryable and cannot clear local state early.",
+      "evidence": [
+        "_lib/communicationCallMediaPolicy.mjs:81-159",
+        "app/chat/[threadId].tsx:496-509",
+        "app/chat/[threadId].tsx:817-849",
+        "scripts/test-ios-native-call-route-provenance.mjs:694-699",
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:40"
+      ],
+      "negativeControls": [
+        "IOS_ACCEPTED_CALLKIT_MEDIA_NONERROR_SETTLEMENT",
+        "IOS_ACCEPTED_CALLKIT_MEDIA_PROVIDER_MISMATCH",
+        "IOS_ACCEPTED_CALLKIT_MEDIA_REPLAY",
+        "IOS_ACCEPTED_CALLKIT_MEDIA_FAILED_TERMINAL_SETTLEMENT",
+        "IOS_ACCEPTED_CALLKIT_MEDIA_LOCAL_CLEAR_BEFORE_CONFIRMATION",
+        "IOS_ACCEPTED_CALLKIT_MEDIA_CONSUMED_BEFORE_TERMINAL_CONFIRMATION"
+      ]
+    },
+    {
+      "id": "IOS_NATIVE_CALL_CONSUMED_CLAIM_EXPIRY_AT_USE_MISSING",
+      "priorSeverity": "P1",
+      "status": "RESOLVED_CURRENT_SOURCE",
+      "resolution": "The policy revalidates the consumed claim's original monotonic expiry immediately before transition use; an expired claim fails closed.",
+      "evidence": [
+        "_lib/communicationCallMediaPolicy.mjs:42-79",
+        "app/chat/[threadId].tsx:1819-1840",
+        "scripts/test-ios-native-call-route-provenance.mjs:145-183"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "ANDROID_NATIVE_ACTION_PROVENANCE_PENDING_D2B",
+      "severity": "P2",
+      "status": "ASSIGNED_D2B",
+      "mergeBlockingForD2C": false,
+      "disposition": "D2B must add the exact authenticated android_native_action_store producer to the canonical registry. Until then Android route-derived Answer or Decline fails closed; no current signed binary is represented as changed or fixed.",
+      "evidence": [
+        "config/assurance/native-call-transition-provenance-v1.json:51-56",
+        "config/assurance/native-call-transition-provenance-v1.json:109-130"
+      ]
+    },
+    {
+      "id": "IOS_NATIVE_MUTE_EVENT_PER_CALL_UUID_BINDING_PENDING_D3",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "D3 must require exact per-call identity for mute, unmute and native audio events. The absent-event-UUID wildcard is not represented as per-call, physical or provider proof.",
+      "evidence": [
+        "app/chat/[threadId].tsx:1952-1972",
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:46"
+      ]
+    },
+    {
+      "id": "IOS_NATIVE_COMPLETION_QUEUE_ACK_NOT_PHYSICAL_FULFILLMENT",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "Native completion and end booleans are local bridge queue acknowledgements. They are not physical CXAction fulfillment, signed-artifact or provider proof.",
+      "evidence": [
+        "config/assurance/native-call-transition-provenance-v1.json:64",
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:34,45"
+      ]
+    },
+    {
+      "id": "IOS_COLD_PENDING_EVENT_NATIVE_GENERATION_PENDING_D3",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "Cold pending events receive the current JavaScript lifecycle generation after drainage; native timestamp/generation attestation remains D3 work.",
+      "evidence": [
+        "_lib/iosNativeCalls.ts:264-285",
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:45-46"
+      ]
+    },
+    {
+      "id": "IOS_ACCEPTED_MEDIA_REACT_EFFECT_NOT_MOUNTED_IN_RETAINED_HARNESS",
+      "severity": "P2",
+      "status": "ASSIGNED_D3",
+      "mergeBlockingForD2C": false,
+      "disposition": "Both provider helpers are executable and the production effect is source-audited, but the retained local integration harness does not mount that React effect. No installed or physical lifecycle proof is inferred.",
+      "evidence": [
+        "app/chat/[threadId].tsx:817-849",
+        "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:40,45"
+      ]
+    }
+  ],
+  "reviewResults": {
+    "foregroundUiAuthority": {
+      "status": "CLEAR",
+      "result": "App-wide Answer rereads the invite, requires the signed-in exact callee distinct from the caller, permits ringing or accepted state, requests the server transition before navigation, and creates a separate exact one-time foreground intent. Thread Answer and Decline remain mounted authenticated UI actions and cannot be impersonated by route text.",
+      "evidence": ["app/_layout.tsx:717-805", "_lib/nativeCallTransitionProvenance.mjs:366-480", "_lib/communicationCallMediaPolicy.mjs:161-189", "app/chat/[threadId].tsx:1678-1790"]
+    },
+    "exactCalleeInviteAndState": {
+      "status": "CLEAR",
+      "result": "Answer requires authoritative invite and room readback, exact thread, exact callee, non-caller identity, ringing or accepted state as appropriate, non-expiration, and active room state. Trusted native ownership is revalidated after asynchronous hydration and immediately before transition.",
+      "evidence": ["app/chat/[threadId].tsx:1572-1644", "app/chat/[threadId].tsx:1678-1704", "app/chat/[threadId].tsx:1819-1868", "_lib/communicationCallMediaPolicy.mjs:42-79"]
+    },
+    "serverAuthority": {
+      "status": "CLEAR",
+      "result": "A consumed native claim only permits the authenticated client to request a transition. It performs no invite update, token request or media activation. Existing exact server and database transition controls remain the authority.",
+      "evidence": ["_lib/nativeCallTransitionProvenance.mjs:228-345", "app/chat/[threadId].tsx:1689-1704", "supabase/functions/chilly-chat-call-transition/index.ts:139-188", "supabase/migrations/20260718103000_durable_chat_call_status_transition.sql:78-152"]
+    },
+    "acceptedBeforeTokenAndMedia": {
+      "status": "CLEAR_SOURCE_MODEL",
+      "result": "Media enables only for an accepted invite and exact room. Provider identity is fixed per invite, so only LiveKit or legacy WebRTC can activate. LiveKit independently validates accepted invite, exact thread, room, identity, membership and token claims before connection or publication.",
+      "evidence": ["app/chat/[threadId].tsx:777-788", "hooks/use-chat-call-media-session.ts:38-100", "hooks/use-livekit-chat-call-session.ts:471-515", "supabase/functions/livekit-token/index.ts:715-851"]
+    },
+    "nativeAnswerCompletionOrdering": {
+      "status": "CLEAR_LOCAL_QUEUE_ACK_BOUNDARY",
+      "result": "CallKit Answer completion is requested only after authoritative server acceptance. Generic live-channel state cannot complete Answer. Failure creates no media authority and enters bounded exact-call terminal recovery.",
+      "evidence": ["_lib/communicationCallMediaPolicy.mjs:81-150", "app/chat/[threadId].tsx:496-509", "app/chat/[threadId].tsx:1598-1704"]
+    },
+    "acceptedMediaFailureSettlement": {
+      "status": "CLEAR_HELPER_EXECUTION_SOURCE_AUDITED_REACT_EFFECT",
+      "result": "Both LiveKit and legacy descriptors bind exact user, platform, thread, invite, room, CallKit UUID and immutable provider. Only channel error can enter the active state machine; terminal confirmation precedes exact-room leave and local clear; retry and replay fail closed.",
+      "evidence": ["_lib/communicationCallMediaPolicy.mjs:81-159", "app/chat/[threadId].tsx:817-849", "scripts/test-ios-native-call-route-provenance.mjs:694-699"]
+    },
+    "terminalEvents": {
+      "status": "CLEAR",
+      "result": "Decline, timeout, ended, answerFailed, audioSessionFailed and providerReset remain direct, bounded, idempotent and server-authoritative. They never become route query authority.",
+      "evidence": ["app/_layout.tsx:1157-1269", "app/chat/[threadId].tsx:1974-2158"]
+    },
+    "muteAndUnmute": {
+      "status": "CLEAR_ROUTE_DENIAL_WITH_D3_P2",
+      "result": "Route text cannot request mute or unmute. Trusted mounted native events remain direct and do not navigate, request tokens, change provider or end the call. Exact per-call event identity remains assigned to D3.",
+      "evidence": ["app/_layout.tsx:1244-1249", "app/chat/[threadId].tsx:1952-1972", "scripts/test-ios-native-call-route-provenance.mjs"]
+    },
+    "liveKitLegacyCompatibility": {
+      "status": "CLEAR_SOURCE_MODEL",
+      "result": "The provider remains immutable per invite and the same exact bounded accepted-media settlement supports LiveKit and legacy WebRTC without provider crossover.",
+      "evidence": ["hooks/use-chat-call-media-session.ts:38-100", "_lib/communicationCallMediaPolicy.mjs:81-159", "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:40"]
+    },
+    "androidNonInterference": {
+      "status": "CLEAR_FAIL_CLOSED_PENDING_D2B",
+      "result": "Claims are platform-scoped, iOS lifecycle clearing preserves the Android namespace, D2C activates only the iOS producer, and no Android product/native file changed. Android route authority fails closed until D2B implements the exact canonical producer.",
+      "evidence": ["_lib/nativeCallTransitionProvenance.mjs:25-34", "_lib/nativeCallTransitionProvenance.mjs:118-131", "config/assurance/native-call-transition-provenance-v1.json:51-56,109-130"]
+    },
+    "osUrlCallbackLimitation": {
+      "status": "ACCEPTED_FOR_SOURCE_MODEL_LOCAL_EQUIVALENT_SCOPE_ONLY",
+      "result": "Production sanitization, native-intent denial and mounted route denial are accepted for this lane. The simulator OS URL callback was not observed and remains explicitly blocked; no physical, provider, signed-artifact or delivery inference is made.",
+      "evidence": ["docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json:21,40-45", "config/assurance/current-truth-v1.json:81-109"]
+    }
+  },
+  "testResults": {
+    "implementationRecordedAtExactSourceDelta": {
+      "preFixReproduction": "10/10",
+      "trustedPositive": "78/78",
+      "producerDenial": "8/8",
+      "routeDenial": "30/30",
+      "negativeControls": "48/48_EXECUTABLE_PRODUCTION_SOURCE_MUTANTS",
+      "mountedRouteBridge": "23/23",
+      "nativeIntentDenial": "5/5",
+      "generatedIosDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+      "generationDeterminism": "3/3",
+      "xcodeCompile": "PASS_DEBUG_IPHONESIMULATOR_26_5_NO_SIGNING"
+    },
+    "freshReviewChecks": {
+      "iosNativeCallPolicyGuard": "PASS",
+      "notificationRoomCallPolicyGuard": "PASS",
+      "gitDiffCheck": "PASS",
+      "independentReadOnlyReview": "P0_0_P1_0"
+    }
+  },
+  "proofBoundary": {
+    "clearedByThisLane": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "D2C_CALL_LIFECYCLE_SERVER_AUTHORITY_LANE"],
+    "integrationClassification": "LOCAL_EQUIVALENT_INTEGRATION_ACCEPTED_WITH_SOURCE_AUDITED_MEDIA_EFFECT_AND_OS_URL_CALLBACK_BLOCKED",
+    "mustRemainBlocked": ["IOS_EXTERNAL_OS_URL_CALLBACK_CLEAR", "IOS_PUSHKIT_PROVIDER_CLEAR", "IOS_APNS_DELIVERY_CLEAR", "IOS_PHYSICAL_CALLKIT_UI_CLEAR", "IOS_SIGNED_ARTIFACT_CLEAR", "IOS_TESTFLIGHT_FIX_DELIVERED", "PUBLIC_CANARY_CLEAR"],
+    "delivery": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "architectureCompatibilityOnly": "IOS_OTA_COMPATIBLE_SOURCE_CHANGE_NOT_PUBLISHED",
+    "noProofSubstitution": true
+  },
+  "searchedPaths": [
+    "_lib/nativeCallTransitionProvenance.mjs",
+    "_lib/nativeCallTransitionProvenance.d.ts",
+    "_lib/communicationCallMediaPolicy.mjs",
+    "_lib/communicationCallMediaPolicy.d.ts",
+    "_lib/iosNativeCalls.ts",
+    "_lib/chillyChatCalls.ts",
+    "app/+native-intent.tsx",
+    "app/_layout.tsx",
+    "app/chat/[threadId].tsx",
+    "app/chat/index.tsx",
+    "app/communication/[roomId].tsx",
+    "app/profile/[userId].tsx",
+    "hooks/use-chat-call-media-session.ts",
+    "hooks/use-livekit-chat-call-session.ts",
+    "hooks/use-communication-room-session.ts",
+    "supabase/functions/chilly-chat-call-transition/index.ts",
+    "supabase/functions/livekit-token/index.ts",
+    "supabase/functions/_shared/chat-call-livekit-authority.ts",
+    "supabase/migrations/20260718103000_durable_chat_call_status_transition.sql",
+    "config/assurance/native-call-transition-provenance-v1.json",
+    "docs/assurance/d2c-ios-native-action-route-provenance-report-v1.json",
+    "scripts/test-ios-native-call-route-provenance.mjs",
+    "scripts/test-chilly-chat-call-semantics.mjs",
+    "scripts/guard-ios-native-call-policy.mjs",
+    "scripts/guard-notification-room-call-policy.mjs"
+  ],
+  "nonInterference": {
+    "historicalEvidenceChanged": false,
+    "implementationFilesChanged": false,
+    "currentTruthFilesChangedByReview": false,
+    "androidImplementationChanged": false,
+    "iosNativeGeneratedSourceChanged": false,
+    "providerContact": false,
+    "databaseMutation": false,
+    "nativeOperation": false,
+    "buildOrInstall": false,
+    "physicalDevice": false,
+    "reviewPrMergeAuthorized": false
+  }
+}
