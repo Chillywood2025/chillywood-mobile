@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr163-post-d2c-current-truth-review-v26",
+  "reviewVersion": 26,
+  "reviewType": "persistent-isolated-automated-level-a-review-lane",
+  "reviewLevel": "A",
+  "reviewTimestamp": "2026-08-03T02:04:15Z",
+  "reviewBranch": "codex/first-pass-assurance-current-truth-after-b0-guard-review",
+  "reviewEvidenceParentHead": "5a70fd958cf7b16abcf892980d001cfe8f0a987a",
+  "reviewEvidenceParentTree": "702e37afc316d369ec69d26fba9071659bf3a4bd",
+  "historicalEvidencePreserved": [
+    "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10",
+    "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20",
+    "v21", "v22", "v23", "v24", "v25"
+  ],
+  "implementationPrNumber": 163,
+  "implementationBranch": "codex/first-pass-assurance-current-truth-post-d2c",
+  "implementationHead": "a78ba781f3edcf9b1f681e2546a06ae60710c03b",
+  "implementationTree": "8fd977fc3ba28d4cd66f34360f193ed9c70d39b8",
+  "baseHead": "c8a7c8cc426c6f532f2a3c25cdfc9cc3e9374dff",
+  "baseTree": "f276aee4a82348bc56ad46d2af9ba54da70388e6",
+  "sourceDeltaSha256": "6092327dfee3568cf352b38142733f674b6d9ca0cf6202ebcd3250e32eea7584",
+  "changedPathSetSha256": "246863974b7dc9633ab1448d13e918aad1577b7c34c324d1a1b0805c9330d465",
+  "changedNameStatusSha256": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+  "changedPaths": [
+    "CURRENT_STATE.md",
+    "NEXT_TASK.md",
+    "config/assurance/current-truth-v1.json"
+  ],
+  "sourceReview": {
+    "threeFileScope": "PASS_3_OF_3",
+    "scopeTotals": "41_ADDITIONS_40_DELETIONS_NET_1",
+    "deterministicGeneration": "PASS_3_OF_3_6092327dfee3568cf352b38142733f674b6d9ca0cf6202ebcd3250e32eea7584",
+    "combinedTrackedFileDigest3Of3": "416047acb9338b69d1fab3acdfe1bf03842b6c5368f6ad438aa04ca503369da0",
+    "generatedCurrentStateMatches": true,
+    "generatedNextTaskMatches": true,
+    "currentTruthSha256": "96baac905a4bee9e7f9f326df2aa37cc6023e60d16d6caeff1c12b45880d2f09",
+    "currentStateSha256": "693d8db25405b1a5ed5c135657156090015566dd38177f0f3572102eaa8231a8",
+    "nextTaskSha256": "8b576f66fe642f8d32f096ca6028e5ed564e799b2c0d04df47fc93a27fd89130",
+    "contractValidation": "PASS_13_CONTRACTS_20_FEATURES_25_ESCAPED_DEFECTS",
+    "prScope": "PASS_3_OF_15_FILES_1_OF_1200_NET_LINES",
+    "proofSubstitutionDenylist": "PASS_ZERO_FORBIDDEN_SUBSTITUTIONS",
+    "jsonValidation": "PASS",
+    "gitDiffCheck": "PASS",
+    "currentTruthVerifier": "PASS_ZERO_FINDINGS",
+    "recordedMainMatchesRemoteMain": true,
+    "recordedMain": "c8a7c8cc426c6f532f2a3c25cdfc9cc3e9374dff",
+    "freshnessDeadline": "2026-08-04T01:59:26Z"
+  },
+  "d2cMergeVerification": {
+    "implementationPr": 152,
+    "state": "MERGED",
+    "synchronizedHead": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580",
+    "synchronizedTree": "f276aee4a82348bc56ad46d2af9ba54da70388e6",
+    "mergeCommit": "c8a7c8cc426c6f532f2a3c25cdfc9cc3e9374dff",
+    "mergeParents": [
+      "33509b3edebf5628e41fc2c7c15b7aaa133d9b26",
+      "16e9bab2626df8db8eff5a3a64d30c57e4ff5580"
+    ],
+    "mergedTreeMatchesSynchronizedTree": true,
+    "postMergeSourceReadback": "PASS_EXACT_SYNCHRONIZED_TREE",
+    "immutableSourceHead": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+    "immutableSourceTree": "d78792b30a1b61b4673b7423f031cf586db22592",
+    "sourceDeltaSha256": "f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf",
+    "iosDelivery": "IOS_SOURCE_FIX_NOT_DELIVERED"
+  },
+  "d2cReviewVerification": {
+    "aggregateP0": 0,
+    "aggregateP1": 0,
+    "assignedP2": 14,
+    "p1Waived": 0,
+    "reviewLanes": [
+      {"pr": 157, "head": "1603feb8e63b46481875a71ba68f8a170278b669", "evidenceSha256": "bce2425a01c82ca4b862e9e408921c63a786220c8e190b11118b9e98cd1a163b", "P0": 0, "P1": 0, "P2": 3, "state": "CLOSED_DRAFT_UNMERGED_NEVER_MERGE"},
+      {"pr": 158, "head": "92443feeb191e38bf374f8cda21dbfdd28d5b538", "evidenceSha256": "bf65fe38a5483a842c481db44e01a7c6a5044e1ec51b5931900bc214f74aec9c", "P0": 0, "P1": 0, "P2": 2, "state": "CLOSED_DRAFT_UNMERGED_NEVER_MERGE"},
+      {"pr": 159, "head": "f2c3fb4015a93ab38f9dba6de73aae420832e5ac", "evidenceSha256": "454675324dc3c2bd163a77f0f74674d921bd20d5df0a4dcebafde92ab66825fe", "P0": 0, "P1": 0, "P2": 5, "state": "CLOSED_DRAFT_UNMERGED_NEVER_MERGE"},
+      {"pr": 160, "head": "22bf43bd17ca2d3e2a74cd7a3fc379311273a37f", "evidenceSha256": "288d90870e73a106098d8d19b3be73ef2154c9b52710dd6a93341ba71d880129", "P0": 0, "P1": 0, "P2": 4, "state": "CLOSED_DRAFT_UNMERGED_NEVER_MERGE"}
+    ]
+  },
+  "d2cPhase1Ci": {
+    "runId": 30777244198,
+    "attempt": 2,
+    "head": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580",
+    "workflow": "Phase 1 CI",
+    "conclusion": "success",
+    "jobs": "13/13"
+  },
+  "preservedDependencies": {
+    "d2a": {
+      "localHead": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
+      "remoteHead": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
+      "tree": "f9e102649b51da84324e97b576823e910340df9f",
+      "worktreeClean": true,
+      "implementationPr": null,
+      "state": "REMOTE_BLOCKED_CHECKPOINT_NO_PR_FROZEN_UNTIL_D2B_MERGES"
+    },
+    "d2b": {
+      "localHead": "44741942afb8062d9348e555b7d29a5dc9c2ca3a",
+      "remoteHead": "44741942afb8062d9348e555b7d29a5dc9c2ca3a",
+      "tree": "6bdc50191f6756271ccb050fa94d3045d6e9fa3e",
+      "worktreeClean": true,
+      "implementationPr": null,
+      "state": "REMOTE_BLOCKED_CHECKPOINT_NO_PR_READY_FOR_NORMAL_CURRENT_MAIN_MERGE_AFTER_POST_D2C_TRUTH"
+    }
+  },
+  "proofBoundaryReview": {
+    "iosSourceAndModel": "CLEAR_AT_MERGED_REVIEWED_HEAD",
+    "iosLocalIntegration": "LOCAL_EQUIVALENT_INTEGRATION_WITH_OS_URL_CALLBACK_BLOCKED",
+    "iosDelivery": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "pushKitAndApns": "BLOCKED_EXTERNAL",
+    "physicalCallKit": "BLOCKED_EXTERNAL",
+    "signedArtifact": "SIGNED_ARTIFACT_PROOF_MISSING",
+    "testFlight": "IOS_SOURCE_FIX_NOT_DELIVERED",
+    "publicCanary": "BLOCKED_EXTERNAL",
+    "b1B2B3": "SOURCE_CORRECTIONS_REPRESENTED_UNDEPLOYED",
+    "prE": "BLOCKED",
+    "proofOverclaimFound": false
+  },
+  "findings": [],
+  "severityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "waivedSeverityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "phase1Ci": {
+    "status": "PENDING_EXACT_HEAD_COMPLETION",
+    "implementationHead": "a78ba781f3edcf9b1f681e2546a06ae60710c03b",
+    "acceptedAsProof": false,
+    "requiredBeforeMerge": true
+  },
+  "implementationMergeGate": "LEVEL_A_CLEAR_PENDING_EXACT_PHASE1_CI",
+  "implementationMergeRecommendation": "ELIGIBLE_FOR_NORMAL_MERGE_ONLY_IF_EXACT_PHASE1_CI_PASSES_AND_HEAD_REMAINS_EXACT",
+  "reviewOnly": true,
+  "reviewPrMustNeverMerge": true,
+  "reviewPrMergeAuthorized": false,
+  "nonInterference": {
+    "implementationEditedByReview": false,
+    "currentTruthEditedByReview": false,
+    "providerContactOrMutation": false,
+    "databaseMutation": false,
+    "buildOrOta": false,
+    "physicalDeviceUsed": false,
+    "publicRelease": false,
+    "switchOrScheduleChanged": false,
+    "moneyEntitlementRoleRightAuthRlsChanged": false,
+    "generatedAndroidOrIosCommitted": false,
+    "denoLockTouched": false
+  },
+  "disposition": "LANE_CLEAR_P0_0_P1_0_P2_0_PENDING_EXACT_PHASE1_CI_REVIEW_PR_NEVER_MERGE"
+}
