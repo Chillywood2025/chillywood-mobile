@@ -189,6 +189,8 @@ requireText(chatThread, 'event.type === "applicationActive"', "The chat call scr
 requireText(chatThread, 'requestedNativeCallAction === "answer"', "Background audio permission must be scoped to a native Answer action.");
 requireText(chatThread, "consumeMountedIosNativeCallRoute", "The mounted thread must atomically consume the exact native claim after auth readiness.");
 requireText(chatThread, 'action: "answer"', "The mounted CallKit Answer consumer must supply its exact expected action.");
+for (const marker of ["completeIosAcceptedNativeAnswer", "settleIosAcceptedCallKitMediaFailure", 'accepted?.status === "accepted"', "descriptor.roomId === activeCallRoomId"]) requireText(chatThread, marker, `Accepted CallKit media failure settlement requires ${marker}.`);
+for (const marker of ["iosAcceptedMediaDescriptorStates", "terminateIosAcceptedNativeAnswer", "operations.readInvite", "settleIosAcceptedCallKitMediaFailure"]) requireText(nativeMediaPolicy, marker, `Accepted CallKit media policy requires ${marker}.`);
 if (/callChannelState\s*===\s*["']live["'][\s\S]{0,240}completeIosNativeCallAnswer/u.test(chatThread)) failures.push("An unrelated live media channel must never complete a newly routed CallKit claim.");
 requireText(chatThread, 'authority: trustedNativeCallClaim ? "trusted_native_claim" : "none"', "Route values without a consumed claim must have no authority.");
 rejectText(chatThread, "requestedOpenCall", "openCall route text must not open or join call media.");
