@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Main SHA observed at this assurance checkpoint: `d4e9df79fd724c432509b1e319538ed34cb656f5`.
+- Main SHA observed at this assurance checkpoint: `b3197e148756c994b859c889f3c264ba3a3fc331`.
 - Latest merged implementation: PR #143, `173f17ce3b481d3e61ea7af27c563cdc78530044`; merge `2c5f9d1622dd29c57b92996b1d7faf58762299f8`.
 - Assurance program: D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-FINAL-CORRECTIVE-BINDING; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131, CURRENT-TRUTH-SYNCHRONIZATION-PR-132, CURRENT-TRUTH-SYNCHRONIZATION-PR-135, PR-B1-LIVEKIT-SOURCE-BINDING-PR-70, CURRENT-TRUTH-SYNCHRONIZATION-PR-137, PR-B2-REVENUECAT-TRANSFER-PR-69, CURRENT-TRUTH-SYNCHRONIZATION-PR-139, CURRENT-TRUTH-SYNCHRONIZATION-PR-140, PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75, CURRENT-TRUTH-SYNCHRONIZATION-PR-142, PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION, PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143, CURRENT-TRUTH-SYNCHRONIZATION-PR-151.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
@@ -15,11 +15,11 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Chi'llywood autonomous app operating model is now documented and guarded at `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.
 - Installed Product QA closure retained: chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped; proof rows `ff81956d-94e3-49e9-8c80-fae2c12b0dd8`, `1dc00369-b5ca-4289-92bc-daf5bae00222`, `282fb154-101c-402b-9539-d3fb8080de51`; current matrix state `POLL_HTTP_FAILED`; the daily timer is enabled.
 - RevenueCat provider readback is closed: dashboard TEST returned HTTP `200` / `test_received` with `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`.
-- Evidence timestamp: `2026-08-02T22:51:20Z`; freshness deadline: `2026-08-03T22:51:20Z`; live provider readback: true.
+- Evidence timestamp: `2026-08-03T00:30:48Z`; freshness deadline: `2026-08-04T00:30:48Z`; live provider readback: true.
 
 ## Open implementation PRs
 
-- PR #152 at `01756602fa6fc92feb32adadb0fb11be8f304a85`: open-draft-final-corrective-immutable-source-pushed; merge-this-exact-three-file-corrected-current-truth-binding-then-base-synchronize-normally-refresh-four-review-lanes-additively-require-explicit-os-url-callback-limitation-acceptance-p0-0-p1-0-and-run-one-exact-ci-before-merging-only-pr-152.
+- PR #152 at `442852da70d723aedcf6ad1fa76c2f3eb23d3e0e`: open-draft-final-corrective-immutable-source-pushed; merge-this-exact-three-file-final-current-truth-rebinding-then-base-synchronize-normally-refresh-four-review-lanes-additively-require-explicit-source-audited-react-effect-and-os-url-callback-limitations-p0-0-p1-0-and-run-one-exact-ci-before-merging-only-pr-152.
 
 ## Open review-only PRs
 
