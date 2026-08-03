@@ -2,10 +2,10 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Merge this exact three-file final pre-synchronization source-head binding for draft PR #152 head 33d1d108ef35b7a5927d3c4c0c71aa4b9ca6ed4a only after persistent Level A PR #124 reports P0=0/P1=0 and the exact current-truth CI passes; close PR #124 unmerged and retain its branch.
-2. Then base-synchronize PR #152 exactly once through a normal --no-ff merge of current main, preserve immutable D2C source 442852da70d723aedcf6ad1fa76c2f3eb23d3e0e and byte-equivalent source delta f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf, rerun focused generation and local integration, and refresh the same four persistent Level C review-only lanes additively while retaining historical evidence.
-3. Require all four D2C review lanes to report P0=0/P1=0 and explicitly accept the local route-bridge and native-intent proof, source-audited accepted-media React effect, queue-acknowledgement boundary, and blocked OS URL callback limitation before one exact Phase 1 CI and merge of only PR #152.
-4. After D2C and its post-merge current-truth synchronization merge, resume D2B by normally merging current main into preserved checkpoint 44741942afb8062d9348e555b7d29a5dc9c2ca3a and retaining the canonical shared provenance architecture; keep D2A frozen until D2B merges.
+1. Merge this exact three-file post-D2C current-truth synchronization only after persistent Level A PR #124 reports P0=0/P1=0 and its exact Phase 1 CI passes; close PR #124 unmerged and retain its branch.
+2. Then resume D2B by normally merging current main into preserved checkpoint 44741942afb8062d9348e555b7d29a5dc9c2ca3a, preserve D2C's canonical shared provenance registry, and implement only the authenticated schema-v2 Android producer plus the already authorized backup and intent-origin correction.
+3. Resolve the three known D2B/D2C overlapping paths manually: retain D2C ownership policy and iOS/foreground producers, discard the obsolete duplicate Android registry, add positive captureGeneration and exact authenticated-user binding, and cover same-thread warm delivery without weakening route denial.
+4. Keep D2A frozen at 8c47a3a9bff9f9630ba14837652ec31c14be0629 until D2B merges; then merge current main normally and rerun the complete Android lifecycle, backup, external-origin and microphone program.
 5. Keep iOS PushKit/APNs provider, physical CallKit, signed-artifact, TestFlight delivery and public-canary proof blocked; no OTA, binary, provider contact, physical device, install, or release is authorized.
 6. Keep B1 20260730230022, B2 20260730170000, and B3 20260730230031 represented in Git and undeployed.
 7. Keep PR E blocked until every required PR D successor merges; keep PR F blocked until PR E merges.

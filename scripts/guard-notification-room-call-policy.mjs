@@ -161,10 +161,12 @@ assertIncludes(chatThread, "const latestInvite = await readChillyChatCallInvite(
 assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller timeout must preserve an invite accepted at the deadline");
 assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") return;", "caller timeout may only attempt a missed transition from ringing");
 assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\") return;", "caller timeout cleanup requires a confirmed missed transition");
-assertIncludes(chatThread, "nativeCallAction", "native Android notification actions must route through the chat thread");
-assertIncludes(chatThread, "requestedNativeCallOwnsTransition", "native Android actions must own acceptance without racing the openCall compatibility route");
-assertIncludes(chatThread, "|| requestedNativeCallOwnsTransition", "openCall compatibility handling must remain inert while a native action settles");
-assertIncludes(chatThread, "activeNativeCallActionRequestKeyRef", "native Android actions must survive unrelated rerenders while their exact request remains current");
+assertIncludes(chatThread, "trustedNativeCallClaim", "native call transitions must originate from a consumed platform-scoped claim");
+assertIncludes(chatThread, "consumeMountedIosNativeCallRoute", "CallKit Answer must be consumed once after mounted-thread auth readiness and before a transition request");
+assertIncludes(chatThread, "requestedNativeCallOwnsTransition", "trusted native actions must own acceptance without racing navigation-only openCall");
+assertNotIncludes(chatThread, "requestedOpenCall", "openCall route text must remain navigation-only");
+assertNotIncludes(chatThread, "requestedCallMode", "startCall route text must remain navigation-only");
+assertIncludes(chatThread, "activeNativeCallActionRequestKeyRef", "consumed native actions must survive unrelated rerenders while their exact claim remains current");
 assertIncludes(chatThread, "readChillyChatCallInvite(requestedCallInviteId)", "native Android notification actions must read the invite by id after cold/background launch");
 assertIncludes(chatThread, "invite.threadId !== threadId", "native Android notification actions must reject wrong-thread invite ids");
 assertIncludes(chatThread, "invite.calleeUserId !== currentUserId", "native Android notification actions must reject invites for another callee");
@@ -195,7 +197,8 @@ assertIncludes(chillyChatNativeCallRoutes, '["answer", "decline"].includes(nativ
 assertIncludes(chillyChatNativeCallRoutes, "UUID_PATTERN", "cold-start replay must reject malformed thread and invite identities");
 assertNotIncludes(chillyChatNativeCallRoutes, "access_token", "cold-start call routes must not carry authentication credentials");
 assertIncludes(nativeIntent, "redirectSystemPath", "Expo Router must normalize Android native call actions before initial route caching");
-assertIncludes(nativeIntent, 'Platform.OS !== "android"', "native-intent call normalization must not change iOS system-path handling");
+assertIncludes(nativeIntent, 'Platform.OS === "ios"', "native-intent handling must apply the iOS route-provenance sanitizer only on iOS");
+assertIncludes(nativeIntent, "sanitizeExternalIosNativeCallPath(path)", "external iOS paths must remain navigation-only after sensitive call parameters are stripped");
 assertIncludes(nativeIntent, "redirectEarlyAndroidNativeCallSystemPath", "Expo Router native-intent handling must install the early Android action buffer");
 assertNotIncludes(nativeIntent, "console.", "native call system-path normalization must not log private action URLs");
 assertIncludes(chillyChatNativeCallRouteBuffer, 'Platform.OS === "android"', "the early native call action buffer must remain Android-only");
