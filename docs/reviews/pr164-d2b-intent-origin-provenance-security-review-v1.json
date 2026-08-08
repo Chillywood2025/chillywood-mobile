@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr164-d2b-intent-origin-provenance-security-review-v1",
+  "reviewVersion": 1,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "android-action-origin-provenance-security",
+  "reviewLevel": "C",
+  "classification": "IMMUTABLE_SOURCE_HEAD_REVIEW",
+  "reviewTimestamp": "2026-08-08T20:44:54Z",
+  "reviewBranch": "codex/first-pass-assurance-d2b-review-intent-origin-provenance-security",
+  "reviewEvidenceParentHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 164,
+  "implementationBranch": "codex/first-pass-assurance-android-native-action-origin-backup-correction",
+  "immutableSourceHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
+  "immutableSourceTree": "9906f1d347c5f11696a6f914caf8d7b41325a20d",
+  "implementationHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
+  "implementationTree": "9906f1d347c5f11696a6f914caf8d7b41325a20d",
+  "baseHead": "fb65960c1bdd17f4823180da0d2f5c0db3a67b73",
+  "baseTree": "8fd977fc3ba28d4cd66f34360f193ed9c70d39b8",
+  "sourceDeltaHash": "a317f3473f43f893d6ab8a39e951b32f8774436bdb48a58aa3b17e1fb9971775",
+  "changedFileHash": "99c616da4215474bba57ce8780610b783adfb0e7f57da4f9a645dab23e488b2a",
+  "changedPathSetSha256": "1096f23830deb8b23c5316389f3d46b4c6f4ea08de7be60d29fb63e522e12305",
+  "sharedProvenanceContractHash": "23cdac3cb6384f0088b9bcd0e030b98b9120c1d4ff1d5ee96c07d02cddc24b72",
+  "scope": {
+    "status": "pass",
+    "changedFiles": 20,
+    "additions": 2793,
+    "deletions": 541,
+    "netChangedLines": 2252,
+    "authorizedWaiverMaximumFiles": 20,
+    "authorizedWaiverMaximumLines": 3000,
+    "implementationSourceChangedByReviewer": false
+  },
+  "severityCounts": {"P0": 0, "P1": 0, "P2": 1, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 1, "P3": 0},
+  "testResults": {
+    "sharedRegistry": {
+      "status": "pass",
+      "architecture": "D2C_CANONICAL_REGISTRY_REUSED_NO_COMPETING_ANDROID_REGISTRY",
+      "androidSource": "android_native_action_store",
+      "platform": "android",
+      "schemaVersion": 2
+    },
+    "claim": {
+      "status": "pass",
+      "bindings": ["authenticatedUserId", "threadId", "inviteId", "action", "requestKey", "captureGeneration", "schemaVersion", "platform", "source"],
+      "storage": "memory_only",
+      "ttlMs": 30000,
+      "deleteBeforeReturn": true,
+      "replayDenied": true
+    },
+    "nativeOrigin": {
+      "status": "pass",
+      "answerAndDeclinePendingIntents": "EXPLICIT_BROADCAST_IMMUTABLE",
+      "receiver": "EXPLICIT_NON_EXPORTED_UNKNOWN_ACTION_DENIED",
+      "ordering": "VALIDATE_THEN_PERSIST_BEFORE_EXPLICIT_NEUTRAL_ACTION_MAIN_LAUNCH"
+    },
+    "externalAuthority": {
+      "status": "pass",
+      "url": "DENIED",
+      "linking": "DENIED",
+      "initialUrl": "DENIED",
+      "nativeIntent": "DENIED",
+      "queryOnly": "DENIED",
+      "openCallAutoAccept": "DENIED",
+      "sameThreadWarmDelivery": "PENDING_ACTION_EVENT_CONSUMED_ONCE_WITHOUT_ROUTE_AUTHORITY_WEAKENING"
+    },
+    "serverAuthority": {
+      "status": "pass",
+      "exactAuthenticatedCalleeThreadInviteStateChecks": true,
+      "nativeAcceptsInvite": false,
+      "nativeIssuesToken": false,
+      "nativeStartsMedia": false,
+      "iosD2cPlatformSourceAttestationUnchanged": true
+    },
+    "focusedEvidence": {
+      "handoffAndNegativeControls": "23/23",
+      "mandatoryNegativeControls": "16/16",
+      "executableSecurityMutants": "6/6",
+      "diffCheck": "PASS"
+    },
+    "codexSecurity": {
+      "scanId": "508c30b1-cf43-4902-96f1-92563d490149",
+      "sourceReview": "COMPLETE_20_OF_20",
+      "sealedReport": "BLOCKED_TOOLING_CODEX_SECURITY_FINALIZATION_METADATA",
+      "independentExactHeadSecurityReview": "PASS",
+      "P0": 0,
+      "P1": 0,
+      "findingDiscarded": false,
+      "failedFinalizerRepresentedAsSuccess": false
+    }
+  },
+  "findings": [
+    {
+      "id": "CODEX_SECURITY_FINALIZATION_METADATA",
+      "severity": "P2",
+      "status": "blocked-tooling",
+      "assignedTo": "tooling-maintenance",
+      "detail": "The source-backed scan and independent exact-head security review have P0=0/P1=0, but the host produced no sealed report because snapshotDigest was absent."
+    }
+  ],
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 1,
+    "P3": 0,
+    "failureWaived": false,
+    "laneMergeGate": "PASS_LEVEL_C_LANE_2_P0_P1_ZERO",
+    "implementationMergeAuthorizedByThisReviewAlone": false,
+    "reviewDisposition": "REVIEW_BRANCH_NEVER_MERGES"
+  }
+}
