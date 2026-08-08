@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr164-d2b-generated-native-release-scope-review-v1",
+  "reviewVersion": 1,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "generated-native-compile-release-scope-negative-controls",
+  "reviewLevel": "C",
+  "classification": "IMMUTABLE_SOURCE_HEAD_REVIEW",
+  "reviewTimestamp": "2026-08-08T20:44:54Z",
+  "reviewBranch": "codex/first-pass-assurance-d2b-review-generated-native-release-scope",
+  "reviewEvidenceParentHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 164,
+  "implementationBranch": "codex/first-pass-assurance-android-native-action-origin-backup-correction",
+  "immutableSourceHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
+  "immutableSourceTree": "9906f1d347c5f11696a6f914caf8d7b41325a20d",
+  "implementationHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
+  "implementationTree": "9906f1d347c5f11696a6f914caf8d7b41325a20d",
+  "baseHead": "fb65960c1bdd17f4823180da0d2f5c0db3a67b73",
+  "baseTree": "8fd977fc3ba28d4cd66f34360f193ed9c70d39b8",
+  "sourceDeltaHash": "a317f3473f43f893d6ab8a39e951b32f8774436bdb48a58aa3b17e1fb9971775",
+  "sourceDeltaHashMethod": "sha256(raw git diff --binary --no-renames baseHead implementationHead)",
+  "changedFileHash": "99c616da4215474bba57ce8780610b783adfb0e7f57da4f9a645dab23e488b2a",
+  "changedFileHashMethod": "sha256(git diff --name-status -z --no-renames baseHead implementationHead)",
+  "changedPathSetSha256": "1096f23830deb8b23c5316389f3d46b4c6f4ea08de7be60d29fb63e522e12305",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "contractHash": "94ad102291f1d7f9fd95fb8fa0850bf4f4b226644f66be7d1e6de3ac88bb9be5",
+  "sharedProvenanceContractHash": "23cdac3cb6384f0088b9bcd0e030b98b9120c1d4ff1d5ee96c07d02cddc24b72",
+  "harnessHash": "e8c016203981c57f49aa58fcf8a5ec7cc693629ba86bbb7304a430bf26f8cc30",
+  "scope": {
+    "status": "pass",
+    "changedFiles": 20,
+    "additions": 2793,
+    "deletions": 541,
+    "netChangedLines": 2252,
+    "authorizedWaiverMaximumFiles": 20,
+    "authorizedWaiverMaximumLines": 3000,
+    "implementationSourceChangedByReviewer": false
+  },
+  "severityCounts": {"P0": 0, "P1": 0, "P2": 3, "P3": 0},
+  "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 3, "P3": 0},
+  "testResults": {
+    "generatedNative": {
+      "status": "pass",
+      "runs": "3/3_BYTE_IDENTICAL",
+      "oldD1AndroidDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+      "correctedAndroidDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+      "newAndroidBinaryRequired": true,
+      "build86ContainsCorrection": false
+    },
+    "gradleAndInstrumentation": {
+      "status": "pass",
+      "coreGradle": "PASS",
+      "kotlin": "PASS",
+      "unitTests": "5/5",
+      "instrumentation": "6/6",
+      "adversaryOrigins": 4,
+      "emulatorApi": 34,
+      "fatalScan": "CLEAR",
+      "cleanup": "CLEAR"
+    },
+    "negativeControls": {
+      "status": "pass",
+      "required": "16/16",
+      "additional": "7/7",
+      "total": "23/23",
+      "executableMutants": "6/6"
+    },
+    "proofClassification": {
+      "T3_INTEGRATION": "ANDROID_LOCAL_INTEGRATION_PARTIAL_BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+      "T4_NATIVE_PROVIDER": "ANDROID_NATIVE_COMPILE_EMULATOR_CLEAR_PARTIAL_BACKUP_RUNTIME_BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+      "runtimeBackupRestore": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+      "restoredValuesClaimed": false,
+      "signedArtifactProofClaimed": false,
+      "physicalProofClaimed": false,
+      "providerProofClaimed": false,
+      "publicProofClaimed": false
+    },
+    "codexSecurity": {
+      "scanId": "508c30b1-cf43-4902-96f1-92563d490149",
+      "sourceReview": "COMPLETE_20_OF_20",
+      "sealedReport": "BLOCKED_TOOLING_CODEX_SECURITY_FINALIZATION_METADATA",
+      "P0": 0,
+      "P1": 0,
+      "failedFinalizerRepresentedAsSuccess": false,
+      "independentExactHeadReview": "PASS_P0_P1_ZERO"
+    },
+    "nonInterference": {
+      "status": "pass",
+      "productSourceChangedByReviewer": false,
+      "generatedAndroidCommitted": false,
+      "providerContact": false,
+      "releaseOrDistributionBuild": false,
+      "otaPublished": false,
+      "databaseMutation": false,
+      "reviewOnlyPrMayMerge": false
+    }
+  },
+  "findings": [
+    {
+      "id": "D2A_ANDROID_RUNTIME_BACKUP_RESTORE",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "D2A",
+      "detail": "The local transport backed up successfully but did not provide a usable restore; runtime restored values remain unclaimed."
+    },
+    {
+      "id": "ANDROID_D2B_BINARY_DELIVERY",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "later-artifact-proof",
+      "detail": "Build 86 lacks the generated-native correction; a separately authorized new Android binary is required."
+    },
+    {
+      "id": "CODEX_SECURITY_FINALIZATION_METADATA",
+      "severity": "P2",
+      "status": "blocked-tooling",
+      "assignedTo": "tooling-maintenance",
+      "detail": "Source-backed security review completed with P0=0/P1=0, but the host could not seal a report because snapshotDigest metadata was absent."
+    }
+  ],
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 3,
+    "P3": 0,
+    "failureWaived": false,
+    "laneMergeGate": "PASS_LEVEL_C_LANE_4_P0_P1_ZERO",
+    "implementationMergeAuthorizedByThisReviewAlone": false,
+    "reviewDisposition": "REVIEW_BRANCH_NEVER_MERGES"
+  }
+}
