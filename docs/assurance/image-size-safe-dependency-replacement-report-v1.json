@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "reportId": "image-size-safe-dependency-replacement-v1",
+  "classification": "BOOTSTRAP_SECURITY_PREREQUISITE",
+  "base": {
+    "commit": "fb65960c1bdd17f4823180da0d2f5c0db3a67b73",
+    "tree": "8fd977fc3ba28d4cd66f34360f193ed9c70d39b8"
+  },
+  "replacement": {
+    "strategy": "A_VENDORED_LOCAL_COMPATIBILITY_PACKAGE",
+    "rootDependencyName": "image-size",
+    "packageIdentity": "@chillywood/image-size-safe@1.2.1-chillywood.1",
+    "sourcePath": "vendor/image-size-safe",
+    "tarballPath": "vendor/image-size-safe/chillywood-image-size-safe-1.2.1-chillywood.1.tgz",
+    "tarballSha256": "871b371b76700908b2de083cfe6f2b70aa70109f2346aaccf8bcbb2a9cd83e43",
+    "installedIntegrity": "sha512-cGvr+Whcqj51TOAJ1/WATSs9hwNrJtTgIGcqCJhEWueF/WdRwtRcMczBFjW00MI3J+gFLNFjZnyO6oeuco1S2w==",
+    "private": true,
+    "published": false,
+    "installScripts": [],
+    "runtimeDependencies": {
+      "queue": "6.0.2"
+    },
+    "resolution": "ROOT_FILE_TARBALL_WITH_DOLLAR_SPEC_OVERRIDE",
+    "vulnerableImageSizeCopies": 0
+  },
+  "upstream": {
+    "package": "image-size@1.2.1",
+    "repository": "git://github.com/image-size/image-size.git",
+    "gitHead": "a4178fbb334ddb22d94cb4228ed597c24fd02e10",
+    "tarball": "https://registry.npmjs.org/image-size/-/image-size-1.2.1.tgz",
+    "integrity": "sha512-rH+46sQJ2dlwfjfhCyNx5thzrv+dtmBIhPHk0zgRUukHzZ/kRueTJXoYYsclBaKcSMBWuGbOFXtioLpzTb5euw==",
+    "tarballSha256": "8d49e2e64cb3a52fec74d0ef9434069facae41a03833a6caec51c2d0da1c873d",
+    "license": "MIT",
+    "licenseSha256": "3109783dad7527b490aabc49c3cb148573c19b41b843e70cf9388a93f3d7fccd",
+    "pullRequest439Head": "bdbe560bfd98af6feab93b46aed67f2f0a77e4d5",
+    "pullRequest453Head": "0f6a6665a166c530ba126a8ab8608a0603cb49dc",
+    "upstreamPatchClassification": "REVIEWED_BUT_INSUFFICIENT_FOR_FULL_REQUIRED_PROGRESS_INVARIANTS"
+  },
+  "advisories": {
+    "correctedImageSize": [
+      {
+        "id": "GHSA-5p2g-fcmc-qvqq",
+        "class": "JXL_HEIF_JP2_ZERO_SIZE_BOX_INFINITE_LOOP"
+      },
+      {
+        "id": "GHSA-w3rx-r6r6-pgpr",
+        "class": "ICNS_ZERO_LENGTH_ENTRY_INFINITE_LOOP"
+      }
+    ],
+    "compatiblePatchedLeaves": [
+      {
+        "package": "brace-expansion",
+        "from": "5.0.8",
+        "to": "5.0.9",
+        "id": "GHSA-rgw5-rvv9-x895"
+      },
+      {
+        "package": "fast-uri",
+        "from": "3.1.4",
+        "to": "3.1.5",
+        "id": "GHSA-7p8r-x3mc-p8w7"
+      },
+      {
+        "package": "js-yaml",
+        "from": ["3.15.0", "4.3.0"],
+        "to": ["3.15.1", "4.3.1"],
+        "id": "GHSA-5p4m-2wfm-xmqj"
+      },
+      {
+        "package": "nanoid",
+        "from": "3.3.16",
+        "to": "3.3.17",
+        "id": "GHSA-2v37-7h3g-55p8"
+      }
+    ]
+  },
+  "parserInvariants": {
+    "genericBoxHeaderBytes": 8,
+    "jxlPartialBoxMinimumBytes": 12,
+    "heifSpatialExtentsMinimumBytes": 20,
+    "jp2ImageHeaderMinimumBytes": 16,
+    "icnsEntryMinimumBytes": 8,
+    "requiresSafeIntegerOffsets": true,
+    "requiresContainedDeclaredEnd": true,
+    "requiresStrictForwardProgress": true,
+    "invalidBehavior": "BOUNDED_TYPE_ERROR_OR_UNSUPPORTED"
+  },
+  "metroContract": {
+    "callsite": "metro/src/Assets.js",
+    "import": "DEFAULT_COMMONJS_INTEROP_REQUIRE_IMAGE_SIZE",
+    "operations": ["getAssetSize", "getAssetData"],
+    "inputs": ["Uint8Array", "Buffer", "filesystem path"],
+    "output": ["width", "height"],
+    "synchronous": true,
+    "formats": ["png", "jpg", "gif", "webp", "svg", "bmp"],
+    "ico": "PACKAGE_SUPPORTED_METRO_NOT_IMAGE_ASSET"
+  },
+  "focusedEvidence": {
+    "exactToolchain": {
+      "node": "20.20.2",
+      "npm": "10.8.2"
+    },
+    "upstreamReproduction": {
+      "isolatedTimeouts": 2,
+      "malformedAcceptances": 3,
+      "coordinatorHung": false
+    },
+    "correctedMaliciousFixtures": {
+      "total": 10,
+      "boundedRejections": 10,
+      "timeoutMilliseconds": 800,
+      "childOldSpaceMegabytes": 64
+    },
+    "benignFixtures": {
+      "directPackage": 7,
+      "metroGetAssetSize": 7,
+      "metroGetAssetData": 6,
+      "repositoryMetroAssets": 16
+    },
+    "independentCompatibilityAudit": {
+      "officialUpstreamCorpus": "66/66",
+      "metroGetAssetDataFormats": "9/9",
+      "metroIcoClassification": "NOT_AN_IMAGE_ASSET"
+    },
+    "packagePackDeterminism": "3/3",
+    "lockfileDeterminism": "3/3",
+    "lockfileSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c",
+    "braceExpansionCompatibility": "PASS",
+    "expoDoctor": "18/18_PASS",
+    "typescript": "PASS",
+    "repositoryLint": "PASS_0_ERRORS_87_EXISTING_WARNINGS",
+    "metroBundleSmoke": {
+      "platform": "android",
+      "mode": "LOCAL_OFFLINE_SERIAL_NO_BYTECODE_NO_MINIFY",
+      "status": "PASS",
+      "fileCount": 36,
+      "bundleFiles": 1,
+      "manifestPresent": true,
+      "outputSha256": "69ef40c4cc7bc925bf4e0720bd104b3db82505e43c89b36d9a99deaf1f7ecd81",
+      "receiptSha256": "4d35e8ab9af53d5faf6153096a98d48c86fa444631da9c70c7e7c38fdde89b37"
+    },
+    "generatedNativeParity": {
+      "runs": "3/3",
+      "androidDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+      "androidCapabilities": "21/21",
+      "iosDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+      "iosCapabilities": "26/26",
+      "negativeControls": "24/24",
+      "evidenceSha256": "3e6291e561ed55fdb46f48e9628f6ca29b782a099e86e0cfa06ee00f9c4c2120",
+      "deterministicOutputSha256": "d5ca808bf0abcd17e8a0e44680e0a01354585e9d3fb0c5867aa0a59b5fab021e",
+      "classification": "UNCHANGED_GENERATED_NATIVE_SOURCE_NO_NEW_BINARY_REQUIREMENT"
+    },
+    "npmLsProblems": 0,
+    "audit": {
+      "rootBefore": {
+        "critical": 0,
+        "highObserved": [17, 18],
+        "moderate": 18
+      },
+      "rootAfter": {
+        "critical": 0,
+        "high": 0,
+        "moderate": 21
+      },
+      "alertAutomationBefore": {
+        "critical": 0,
+        "high": 0,
+        "moderate": 0
+      },
+      "alertAutomationAfter": {
+        "critical": 0,
+        "high": 0,
+        "moderate": 0
+      },
+      "unchangedGuard": "PASS"
+    }
+  },
+  "pendingFrozenHeadEvidence": [
+    "four exact-head Level C reviews",
+    "Phase 1 CI 13/13"
+  ],
+  "nonInterference": {
+    "d2bProductSourceChanged": false,
+    "d2cSourceChanged": false,
+    "d2aResumed": false,
+    "advisoryGuardChanged": false,
+    "advisoryAllowlistAdded": false,
+    "broadExpoOrReactNativeUpgrade": false,
+    "nativeRuntimeDependencyAdded": false,
+    "generatedPlatformDirectoryCommitted": false,
+    "externalPackagePublished": false,
+    "providerOrDatabaseMutation": false,
+    "buildOtaOrReleaseAction": false
+  }
+}
