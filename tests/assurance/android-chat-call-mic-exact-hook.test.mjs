@@ -616,6 +616,18 @@ const cases = [
       assert.equal(result, false); assertRolloverContained(observed);
     },
   },
+  {
+    id: "STALE_A_FINALLY_CANNOT_CLEAR_B_PENDING_MIC",
+    custom: async () => {
+      let releaseA; let releaseB;
+      const gateA = new Promise((resolve) => { releaseA = resolve; }); const gateB = new Promise((resolve) => { releaseB = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["wait", "wait"], nativeGates: [undefined, gateA, gateB]});
+      const a = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls < 1; turn += 1) await Promise.resolve();
+      controls.retireLease(); const b = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      releaseA(); await a; assert.equal(controls.snapshot().pendingMic, true); assert.equal(controls.snapshot().busy, true);
+      releaseB(); await b; assert.equal(controls.snapshot().pendingMic, false); assert.equal(controls.snapshot().busy, false);
+    },
+  },
 ];
 
 test("exact product and serializer slices remain hash-bound", () => {
