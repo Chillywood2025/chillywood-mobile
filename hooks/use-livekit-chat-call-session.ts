@@ -554,17 +554,21 @@ export function useLiveKitChatCallSession({
           mediaControlOwnerRef.current?.sessionKey === leaseBinding.sessionKey
           && mediaControlOwnerRef.current.generation === leaseBinding.generation
         );
-        if (!originStillCurrent() || !leaseStillOwned()) {
+        const commitConfirmedMicrophoneTarget = () => {
+          if (!originStillCurrent() || !leaseStillOwned()) return false;
+          micRequestedRef.current = nextEnabled;
+          setMicEnabledState(nextEnabled);
+          setMediaPermissionMessage(null);
+          refreshParticipantViews();
+          if (nextEnabled) {
+            emitStage("local_audio_published", { connectionState: String(liveKitRoom.state) });
+            updateFirstMediaState({ localAudioPublished: true });
+          }
+          return true;
+        };
+        if (!commitConfirmedMicrophoneTarget()) {
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
           return false;
-        }
-        micRequestedRef.current = nextEnabled;
-        setMicEnabledState(nextEnabled);
-        setMediaPermissionMessage(null);
-        refreshParticipantViews();
-        if (nextEnabled) {
-          emitStage("local_audio_published", { connectionState: String(liveKitRoom.state) });
-          updateFirstMediaState({ localAudioPublished: true });
         }
         return true;
       } finally {

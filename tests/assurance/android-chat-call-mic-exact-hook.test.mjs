@@ -403,6 +403,12 @@ test("STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE", async () => {
   releaseB(); assert.equal(await b, "B"); assert.equal(controls.lease().busy, false); assert.equal(controls.lease().pending, null);
 });
 
+test("stale boundary matrix is exact and atomic commit is synchronous", () => {
+  assert.equal(contract.staleBoundaryMatrix.length, 14); assert.equal(new Set(contract.staleBoundaryMatrix).size, 14);
+  const commit = microphoneSlice.slice(microphoneSlice.indexOf("const commitConfirmedMicrophoneTarget"), microphoneSlice.indexOf("if (!commitConfirmedMicrophoneTarget())"));
+  assert.doesNotMatch(commit, /\bawait\b/u); assert.match(commit, /if \(!originStillCurrent\(\) \|\| !leaseStillOwned\(\)\) return false;/u);
+});
+
 const cases = [
   {
     id: "ENABLE_TARGET_CONFIRMED",
@@ -597,7 +603,7 @@ const cases = [
     id: "PRE_REQUESTED_COMMIT_ROLLOVER_DENIED",
     custom: async () => {
       const scenario = {initialMic: false, targetMic: true};
-      const mutated = mutateOnce(microphoneSlice, "        if (!originStillCurrent() || !leaseStillOwned()) {", "        scenario.beforeRequested?.();\n        if (!originStillCurrent() || !leaseStillOwned()) {", "before-requested");
+      const mutated = mutateOnce(microphoneSlice, "          if (!originStillCurrent() || !leaseStillOwned()) return false;", "          scenario.beforeRequested?.();\n          if (!originStillCurrent() || !leaseStillOwned()) return false;", "before-requested");
       const controls = createExactProductPath(scenario, {microphone: mutated});
       scenario.beforeRequested = () => controls.rollover();
       const result = await controls.setMicrophoneEnabled(true); const observed = controls.snapshot();
