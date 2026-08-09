@@ -15,6 +15,17 @@ function severityCounts(value, output = { p0: [], p1: [] }) {
   return output;
 }
 
+function unresolvedFindingCounts(findings) {
+  if (!Array.isArray(findings)) return null;
+  const counts = { p0: 0, p1: 0 };
+  for (const finding of findings) {
+    if (!finding || typeof finding !== "object" || !/^P[0-3]$/u.test(finding.severity) || typeof finding.status !== "string") return null;
+    if (finding.status !== "resolved" && finding.severity === "P0") counts.p0 += 1;
+    if (finding.status !== "resolved" && finding.severity === "P1") counts.p1 += 1;
+  }
+  return counts;
+}
+
 function gitEvidence(review, dependencies) {
   const runGit = dependencies.git ?? git;
   const readObject = dependencies.readObject ?? ((head, file) => execFileSync("git", ["show", `${head}:${file}`], { cwd: ROOT, encoding: "utf8" }));
@@ -29,6 +40,10 @@ function gitEvidence(review, dependencies) {
   try { parsed = JSON.parse(content); } catch { return { ok: false, finding: "REVIEW_EVIDENCE_UNPARSEABLE" }; }
   const counts = severityCounts(parsed);
   if (counts.p0.length !== 1 || counts.p1.length !== 1) return { ok: false, finding: "REVIEW_P0_P1_AMBIGUOUS" };
+  const semanticCounts = unresolvedFindingCounts(parsed.findings);
+  if (!semanticCounts || semanticCounts.p0 !== counts.p0[0] || semanticCounts.p1 !== counts.p1[0]) {
+    return { ok: false, finding: "REVIEW_DECLARED_FINDING_COUNTS_MISMATCH" };
+  }
   return {
     ok: true,
     file: paths[0],

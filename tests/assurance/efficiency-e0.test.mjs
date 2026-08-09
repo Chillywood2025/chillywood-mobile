@@ -194,6 +194,10 @@ test("review history emits only exact hash-bound stale closure candidates with r
   const firstEvidence = JSON.parse(spawnSync("git", ["show", `${first.head}:${firstFile}`], { cwd: root, encoding: "utf8" }).stdout);
   const identityForgery = reviewHistory(config, truth, { readObject: (reviewHead, file) => reviewHead === first.head ? JSON.stringify({ ...firstEvidence, implementationHead: "f".repeat(40) }) : spawnSync("git", ["show", `${reviewHead}:${file}`], { cwd: root, encoding: "utf8" }).stdout });
   assert.equal(identityForgery.closureList.some(({ pr }) => pr === first.pr), false, "identity-free or mismatched review evidence cannot close");
+  const hiddenP1 = structuredClone(firstEvidence); hiddenP1.summary.p1Open = 0;
+  const semanticForgery = reviewHistory(config, truth, { readObject: (reviewHead, file) => reviewHead === first.head ? JSON.stringify(hiddenP1) : spawnSync("git", ["show", `${reviewHead}:${file}`], { cwd: root, encoding: "utf8" }).stdout });
+  assert.equal(semanticForgery.closureList.some(({ pr }) => pr === first.pr), false, "declared totals cannot hide an open P1 finding");
+  assert.equal(semanticForgery.findings.some((finding) => finding === `REVIEW_DECLARED_FINDING_COUNTS_MISMATCH:${first.pr}`), true);
   const fakeMerge = structuredClone(config); fakeMerge.implementationDispositions[String(first.implementationPr)].mergeSha = "f".repeat(40);
   assert.equal(reviewHistory(fakeMerge, truth).closureList.some(({ pr }) => pr === first.pr), false, "nonexistent merge cannot close review");
 });
