@@ -2,9 +2,9 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Main SHA observed at this assurance checkpoint: `fa49e3ed96e4bdb92cdf0555680eda546cb0b279`.
+- Main SHA observed at this assurance checkpoint: `64c74c9f7dc76cf07bda5b26c6da8cc8c90337fb`.
 - Latest merged implementation: PR #170, `3f60ac52cdf514ebd061e7134d6fffd9319ac486`; merge `62af197070b997cfeaf949baab17ec6c56d8a64c`.
-- Assurance program: PR-D2B-FINAL-SYNCHRONIZED-SOURCE-BINDING-BEFORE-EXACT-PHASE1-CI; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131, CURRENT-TRUTH-SYNCHRONIZATION-PR-132, CURRENT-TRUTH-SYNCHRONIZATION-PR-135, PR-B1-LIVEKIT-SOURCE-BINDING-PR-70, CURRENT-TRUTH-SYNCHRONIZATION-PR-137, PR-B2-REVENUECAT-TRANSFER-PR-69, CURRENT-TRUTH-SYNCHRONIZATION-PR-139, CURRENT-TRUTH-SYNCHRONIZATION-PR-140, PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75, CURRENT-TRUTH-SYNCHRONIZATION-PR-142, PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION, PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143, CURRENT-TRUTH-SYNCHRONIZATION-PR-151, CURRENT-TRUTH-SYNCHRONIZATION-PR-156, CURRENT-TRUTH-SYNCHRONIZATION-PR-161, CURRENT-TRUTH-SYNCHRONIZATION-PR-162, PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152, BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170.
+- Assurance program: PR-D2B-TYPESCRIPT-CORRECTED-IMMUTABLE-SOURCE-BINDING-BEFORE-EXACT-PHASE1-CI; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131, CURRENT-TRUTH-SYNCHRONIZATION-PR-132, CURRENT-TRUTH-SYNCHRONIZATION-PR-135, PR-B1-LIVEKIT-SOURCE-BINDING-PR-70, CURRENT-TRUTH-SYNCHRONIZATION-PR-137, PR-B2-REVENUECAT-TRANSFER-PR-69, CURRENT-TRUTH-SYNCHRONIZATION-PR-139, CURRENT-TRUTH-SYNCHRONIZATION-PR-140, PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75, CURRENT-TRUTH-SYNCHRONIZATION-PR-142, PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION, PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143, CURRENT-TRUTH-SYNCHRONIZATION-PR-151, CURRENT-TRUTH-SYNCHRONIZATION-PR-156, CURRENT-TRUTH-SYNCHRONIZATION-PR-161, CURRENT-TRUTH-SYNCHRONIZATION-PR-162, PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152, BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
 - iOS internal: build 8, runtime `1.0.0-iosqa1`, channel `ios-qa`, update `019fb099-f7c3-7130-97aa-a4bb1c49792f`.
 - Remote migration head: `20260730161737`.
@@ -15,11 +15,11 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Chi'llywood autonomous app operating model is now documented and guarded at `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.
 - Installed Product QA closure retained: chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped; proof rows `ff81956d-94e3-49e9-8c80-fae2c12b0dd8`, `1dc00369-b5ca-4289-92bc-daf5bae00222`, `282fb154-101c-402b-9539-d3fb8080de51`; current matrix state `POLL_HTTP_FAILED`; the daily timer is enabled.
 - RevenueCat provider readback is closed: dashboard TEST returned HTTP `200` / `test_received` with `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`.
-- Evidence timestamp: `2026-08-09T01:19:00Z`; freshness deadline: `2026-08-10T01:19:00Z`; live provider readback: true.
+- Evidence timestamp: `2026-08-09T01:33:00Z`; freshness deadline: `2026-08-10T01:33:00Z`; live provider readback: true.
 
 ## Open implementation PRs
 
-- PR #164 at `aace642cf36adc9e885c50a4ba8b0af06cfa6feb`: open-final-synchronized-source-bound-pending-exact-ci; implementation-candidate-not-yet-merge-ready.
+- PR #164 at `de549e542427b6245f23537e691bb86440bba1fd`: open-typescript-corrected-immutable-source-bound-pending-exact-ci; implementation-candidate-not-yet-merge-ready.
 
 ## Open review-only PRs
 
@@ -48,10 +48,10 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - PR #98 at `278eb5e2326d2a7b7d12b6ba8b373541640d4e90`: open-draft-current, reviews `867af2a2c446c4cea5b38cc990bd0143dac446c3`; never-merge.
 - PR #104 at `a8f689702e83fab1b5c85119d9d638f8bfabda3b`: open-draft-current, reviews `2cf85211ca8f832bd929619423a04fb52dce275e`; never-merge.
 - PR #110 at `d43b460cc2f82cb296668117a0bf73648dacd701`: open-draft-current, reviews `502f9e2659d96389ae418b11f83171b171b5a708`; never-merge.
-- PR #165 at `8e4980c408a6b48c435f0b685b63568b2164ae0e`: open-draft-current-p0-0-p1-0-p2-1-d2a, reviews `aace642cf36adc9e885c50a4ba8b0af06cfa6feb`; never-merge.
-- PR #167 at `9553f10f59e2fc44cfdaad2025f1dfe011f383ac`: open-draft-current-p0-0-p1-0-p2-0, reviews `aace642cf36adc9e885c50a4ba8b0af06cfa6feb`; never-merge.
-- PR #168 at `54519e338a602b1c0348b399b8b6a07c8b414661`: open-draft-current-p0-0-p1-0-p2-3-assigned, reviews `aace642cf36adc9e885c50a4ba8b0af06cfa6feb`; never-merge.
-- PR #166 at `1909f00a715d5fedf5914ded4d0925d94ee95c75`: open-draft-current-p0-0-p1-0-p2-2-assigned, reviews `aace642cf36adc9e885c50a4ba8b0af06cfa6feb`; never-merge.
+- PR #165 at `c206c47c5d12c87b881b104fd2695f95ada400ac`: open-draft-current-p0-0-p1-0-p2-1-d2a, reviews `de549e542427b6245f23537e691bb86440bba1fd`; never-merge.
+- PR #167 at `5f6f57ef4ea1ff87e16a35b84ef73293d0d4b62a`: open-draft-current-p0-0-p1-0-p2-0, reviews `de549e542427b6245f23537e691bb86440bba1fd`; never-merge.
+- PR #168 at `c9cd1f6ba74c09271d4c58269a64303ab15bbfad`: open-draft-current-p0-0-p1-0-p2-3-assigned, reviews `de549e542427b6245f23537e691bb86440bba1fd`; never-merge.
+- PR #166 at `e4644c6740b29547a9e3facba242cc71fee6e9b8`: open-draft-current-p0-0-p1-0-p2-2-assigned, reviews `de549e542427b6245f23537e691bb86440bba1fd`; never-merge.
 
 ## Current external blockers
 
