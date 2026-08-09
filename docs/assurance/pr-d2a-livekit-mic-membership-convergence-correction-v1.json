@@ -35,14 +35,16 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "98485b62cfd2b8f30da98e582322e7478935ecd5",
-    "tree": "7ec3992034b5146a248d6fb492272b226d945b2a",
+    "head": "6c16f380468ebf542fd26fc0ca64493031b878df",
+    "tree": "7ade52a913c5a15ec58afb7e3fd75abaf8a24d3f",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
     "productSha256": "0678bb089bdf625e56fec1194cf1ae4336d40671ea938a99f397a9d5dad91d37",
-    "testSha256": "0c94bd4532e939126ddb5b187079ceba0db5f5a874e4f8424f724cc87f83af25",
-    "contractSha256": "952fce71e8a2f4001b73307bb62c944dfe84a723f806baa1f74d4616dcf6055e",
-    "convergenceMatrixSha256": "f60f2c5923ca19855f4c4124646fcadca0a0ffc5b17d16e037af219c5f4eb5ed",
-    "negativeControlsSha256": "c839926285efc1c2877973e2adf5bf86bf076fdd5ae40efd55138ea95a8caee8"
+    "testSha256": "7e6eb17af825663ff25f11978f4012112ce9df026bba2cf91b1b3d3a8ce22145",
+    "contractSha256": "98e6ca988fb6a4a5b45e1166c1e35bdb282b611a391c37b5225d2f7a100a06c7",
+    "convergenceMatrixSha256": "1c9c3e3a5a4e2dbb19c541fa83472167e453ffd3467a4530377295ccf09e5da1",
+    "negativeControlsSha256": "c839926285efc1c2877973e2adf5bf86bf076fdd5ae40efd55138ea95a8caee8",
+    "bindingNegativeControlsSha256": "46106e381ca4650d0f7c7112f6951dd3862a03baed35151840728102a1a6876b",
+    "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c"
   },
   "protocol": [
     "snapshot exact active room current-user durable requested UI actual mic and camera state",
@@ -57,14 +59,15 @@
     "bind the transaction to session key generation product room identity and LiveKit room before and after each awaited mutation or readback"
   ],
   "focusedProof": {
-    "receiptIdentityHash": "7e62441961d6c359ee534aae9d470bfe97d0541cc045c468355ad6b293bfe233",
-    "receiptFileSha256": "e4f5b0cab304b453550f9efb8629f14db0e5a2557a5d92314242912b8780b1ed",
-    "combinedOutputSha256": "e4f5b0cab304b453550f9efb8629f14db0e5a2557a5d92314242912b8780b1ed",
+    "receiptIdentityHash": "5fe7af12427f624dfb15d9b40a1449db14dd967840be7f617093698db758d262",
+    "receiptFileSha256": "90bd064a931898582265609914115b1b69605039c0912b557074e4b3b0e84be5",
+    "combinedOutputSha256": "90bd064a931898582265609914115b1b69605039c0912b557074e4b3b0e84be5",
     "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
-    "artifactLocation": "/tmp/d2a-rollover-focused-ordering.tap",
-    "result": "PASS_32_OF_32",
-    "convergenceCases": "PASS_15_OF_15",
+    "artifactLocation": "/tmp/d2a-binding-focused-6c16f380.tap",
+    "result": "PASS_35_OF_35",
+    "convergenceCases": "PASS_17_OF_17",
     "negativeControls": "PASS_13_OF_13_EXECUTABLE_MUTANTS",
+    "bindingNegativeControls": "PASS_4_OF_4_FAIL_CLOSED",
     "determinism": "PASS_3_OF_3",
     "pendingEventTelemetryGate": "PASS",
     "originalFinding": "CORRECTED_BY_VERIFIED_COMPENSATION"
@@ -85,7 +88,7 @@
   "proofBoundary": {
     "T0_REQUIREMENT": "CLEAR_FOR_BOUNDED_CORRECTION",
     "T1_SOURCE": "SOURCE_BOUND",
-    "T2_MODEL": "EXACT_HOOK_15_CASES_13_MUTANTS_CLEAR",
+    "T2_MODEL": "EXACT_HOOK_17_CASES_13_MUTANTS_4_BINDING_NEGATIVES_CLEAR",
     "T3_INTEGRATION": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T4_NATIVE_PROVIDER": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T5_SIGNED_ARTIFACT": "NOT_PROVED_NOT_REUSED",
