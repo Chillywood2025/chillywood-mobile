@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "c44482155feb22612e57e091b1f7da831a9f6e2a",
+  "mainSha": "fc1616d5da5bc0e521c2158c6ffb68d24b898e7a",
   "latestMergedImplementationPr": {"number": 185, "state": "merged", "head": "010cc8806380631b675bf3c01d834e0408084ad9", "mergeSha": "c44482155feb22612e57e091b1f7da831a9f6e2a", "title": "Add Assurance Efficiency E0 context and evidence infrastructure"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -382,7 +382,36 @@
     },
     "state": "E0_COMPLETE_D2A_READY_NOT_RESUMED"
   },
-  "openImplementationPrs": [],
+  "d2aMicrophoneCorrectionBinding": {
+    "implementationPr": 194,
+    "branch": "codex/d2a-livekit-mic-membership-convergence-correction",
+    "startingMain": "fc1616d5da5bc0e521c2158c6ffb68d24b898e7a",
+    "frozenHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+    "frozenTree": "4ce01fa17e4184f2523b82a10401e3b3f59dd641",
+    "scope": {"files": 4, "productFiles": 1, "additions": 1469, "deletions": 35, "netLines": 1434, "waiverMaximumNetLines": 1500, "status": "PASS"},
+    "security": {
+      "hostScanId": "a64456db-438c-4857-8f01-c40fcc965936",
+      "hostScanState": "UNSEALED_HOST_FINALIZATION_METADATA_FAILURE",
+      "hostError": "scan.target.snapshotDigest: expected a non-empty string",
+      "sourceReviewState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+      "coverage": "COMPLETE_4_OF_4",
+      "deferredWork": 0,
+      "codexSecuritySealedReportExists": false,
+      "repositoryClosureClassification": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+      "repositorySnapshotDigest": "0cc18db4d668628f7cddce9da6531403bc0b4f939dc3d2df6e46fb3129d99d86",
+      "repositorySecurityClosureSha256": "7ec97ec736324cc8d23f8905daf4737dc3fcb29a9759a7feb7074c73d56960b1",
+      "independentReviewSha256": "6c25e4db4d81b155eda1d6e20bfa2a776a7727ae26f221def7208e122184b105",
+      "findings": {"P0": 0, "P1": 0, "P2": 0, "P3": 1},
+      "remainingP3": "authority-metadata.t2-proof-boundary-conflict",
+      "completionRetried": false
+    },
+    "preservedD2A": {"head": "ebb0ac5e2dc6ba9005208b7e6b10474292e0972d", "tree": "c41a4d688e799483b67f35c956f1c95b273bf072", "state": "FROZEN_NOT_RESUMED"},
+    "mayProceed": {"formalReviews": true, "phase1Ci": false, "merge": false, "d2aResume": false, "buildOrOta": false, "providerOrProductionMutation": false},
+    "state": "FROZEN_CURRENT_TRUTH_BOUND_REVIEW_PENDING"
+  },
+  "openImplementationPrs": [
+    {"number": 194, "branch": "codex/d2a-livekit-mic-membership-convergence-correction", "head": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "tree": "4ce01fa17e4184f2523b82a10401e3b3f59dd641", "state": "open-draft-frozen-source-bound", "disposition": "merge-only-after-four-level-c-reviews-p0-0-p1-0-and-one-exact-phase1-ci-13-of-13"}
+  ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -463,10 +492,10 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185"],
-    "active": "E0_COMPLETE_D2A_READY_NOT_RESUMED",
+    "active": "D2A_MICROPHONE_CORRECTION_ACTIVE_D2A_FROZEN_S0_PENDING",
     "nextActions": [
-      "Use the merged Chi'llywood assurance skill and compact active-task packet to resume D2A from checkpoint 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f; resolve current truth first, run only the next eligible phase, and stop on any new P0/P1.",
-      "E0 is complete and D2A is ready but was not resumed during E0 or its post-merge current-truth synchronization.",
+      "Complete PR #194 through four exact-head Level C review lanes, one exact Phase 1 CI run, normal merge, and one post-correction three-file current-truth synchronization.",
+      "Then implement assurance-only Codex Security Scan Reliability S0, merge it with four exact-diff review lanes and one exact Phase 1 CI run, perform one post-S0 three-file current-truth synchronization, and stop with D2A ready but not resumed.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
@@ -480,9 +509,23 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-09T07:49:51Z",
-  "freshnessDeadline": "2026-08-10T07:49:51Z",
+  "timestamp": "2026-08-09T17:43:06Z",
+  "freshnessDeadline": "2026-08-10T17:43:06Z",
   "evidenceSources": [
+    {
+      "id": "d2a-microphone-correction-current-truth-binding-20260809-1743",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "draft PR #194 frozen correction head c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641",
+        "host scan a64456db-438c-4857-8f01-c40fcc965936 completed exact four-of-four source review with zero deferred work and zero findings but remains unsealed after terminal metadata error scan.target.snapshotDigest: expected a non-empty string",
+        "repository-owned snapshot digest 0cc18db4d668628f7cddce9da6531403bc0b4f939dc3d2df6e46fb3129d99d86 remains distinct from absent host snapshot metadata",
+        "authorized fallback classification REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED hash 7ec97ec736324cc8d23f8905daf4737dc3fcb29a9759a7feb7074c73d56960b1",
+        "independent exact-head review hash 6c25e4db4d81b155eda1d6e20bfa2a776a7727ae26f221def7208e122184b105 reports P0=0 P1=0 P2=0 P3=1 and zero deferred work",
+        "P3 authority-metadata.t2-proof-boundary-conflict is preserved fail closed because the contract remains blocked and no proof tier is promoted",
+        "D2A blocked evidence ebb0ac5e2dc6ba9005208b7e6b10474292e0972d tree c41a4d688e799483b67f35c956f1c95b273bf072 remains frozen and not resumed",
+        "no build OTA provider production database B1 B2 B3 deployment money entitlement role right auth RLS switch schedule user-derived memory or Level 2 mutation"
+      ]
+    },
     {
       "id": "e0-final-review-ancestry-merge-closeout-20260809-0749",
       "mode": "local-offline-and-github-read-only",
