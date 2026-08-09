@@ -198,6 +198,7 @@ function AndroidNativeCallRouteBridge() {
       void consumePendingAndroidNativeCallRoute({ authenticatedUserId })
         .then((nativeCallRoute) => {
           if (!nativeCallRoute || nativeCallRoute.status !== "created") return;
+          if (!("destination" in nativeCallRoute)) return;
           if (!active) {
             consumeTrustedAndroidNativeActionStoreClaim({
               authenticatedUserId,
