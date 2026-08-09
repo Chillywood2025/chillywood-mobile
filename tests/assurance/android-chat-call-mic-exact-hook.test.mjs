@@ -141,8 +141,8 @@ const reportRuntimeError = (_scope, errorValue) => {state.errors.push(String(err
 const cleanupSession = async () => {state.cleanupCalls += 1;};
 const requestLiveKitParticipantToken = async () => {state.tokenCalls += 1;};
 const setProvider = (value) => {state.provider = value;};
-${slices.mediaControl ?? __mediaControlSlice}
-${slices.microphone ?? __microphoneSlice}
+${slices.mediaControl ?? mediaControlSlice}
+${slices.microphone ?? microphoneSlice}
 const snapshot = () => ({
   result: null, actualMic: state.actualMic, requestedMic: micRequestedRef.current, uiMic: state.uiMic,
   membershipMic: state.durableMic, actualCamera: state.actualCamera, requestedCamera: cameraRequestedRef.current,
@@ -160,8 +160,6 @@ module.exports = {setMicrophoneEnabled, snapshot, state, targetMic};
   }).outputText;
   const sandbox = {
     __scenario: scenario,
-    __mediaControlSlice: mediaControlSlice,
-    __microphoneSlice: microphoneSlice,
     module: {exports: {}},
     exports: {},
     Promise,
@@ -333,8 +331,8 @@ module.exports = state;
 }
 
 test("pending LocalTrackPublished cannot emit premature success", () => {
-  assert.deepEqual(executeLocalPublished(true).telemetry, []);
-  assert.deepEqual(executeLocalPublished(false).telemetry, ["local_audio_published"]);
+  assert.deepEqual(Array.from(executeLocalPublished(true).telemetry), []);
+  assert.deepEqual(Array.from(executeLocalPublished(false).telemetry), ["local_audio_published"]);
 });
 
 const mutateOnce = (value, before, after, code) => {
@@ -424,7 +422,7 @@ for (const control of negativeControls) {
   test(`${control.code} executable mutant is rejected`, async () => {
     if (control.eventMutation) {
       const mutated = control.eventMutation(localPublishedSlice);
-      assert.deepEqual(executeLocalPublished(true, mutated).telemetry, ["local_audio_published"]);
+      assert.deepEqual(Array.from(executeLocalPublished(true, mutated).telemetry), ["local_audio_published"]);
       return;
     }
     const mutatedMicrophone = control.mutate ? control.mutate(microphoneSlice) : microphoneSlice;
