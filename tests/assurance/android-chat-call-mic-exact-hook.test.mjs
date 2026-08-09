@@ -212,6 +212,7 @@ const mediaControlRef = {current: null};
 const mediaControlOwnerRef = {current: null};
 const identityRef = {current: {userId: "local-user", displayName: "Local", avatarUrl: null}};
 const sessionKey = "invite-1:ROOM:audio:livekit";
+const inviteId = "invite-1";
 const sessionKeyRef = {current: sessionKey};
 const sessionGenerationRef = {current: 0};
 const productRoomRef = {current: {roomId: "room-1", status: "active"}};
@@ -816,6 +817,8 @@ const negativeControls = [
           && roomRef.current === liveKitRoom
           && productRoomRef.current === currentRoom
           && identityRef.current === currentIdentity
+          && currentRoom.roomId === originRoomId
+          && currentIdentity.userId === originUserId
         );`, "const originStillCurrent = () => true;", "accept-rollover");
       mutated = mutateOnce(mutated, "          originStillCurrent,\n          { room: currentRoom, identity: currentIdentity },", "          undefined,", "drop-captured-binding");
       let release; const gate = new Promise((resolve) => { release = resolve; });

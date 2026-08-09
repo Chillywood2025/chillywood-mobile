@@ -397,6 +397,8 @@ export function useLiveKitChatCallSession({
         ) return false;
         const currentRoom = productRoomRef.current;
         const currentIdentity = identityRef.current;
+        const originRoomId = currentRoom?.roomId ?? "";
+        const originUserId = currentIdentity?.userId ?? "";
         if (
           currentRoom?.status !== "active"
           || !currentIdentity
@@ -408,6 +410,8 @@ export function useLiveKitChatCallSession({
           && roomRef.current === liveKitRoom
           && productRoomRef.current === currentRoom
           && identityRef.current === currentIdentity
+          && currentRoom.roomId === originRoomId
+          && currentIdentity.userId === originUserId
         );
         if (!originStillCurrent()) return false;
 
