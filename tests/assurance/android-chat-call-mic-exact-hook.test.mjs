@@ -404,7 +404,9 @@ test("STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE", async () => {
 });
 
 test("stale boundary matrix is exact and atomic commit is synchronous", () => {
-  assert.equal(contract.staleBoundaryMatrix.length, 14); assert.equal(new Set(contract.staleBoundaryMatrix).size, 14);
+  const rows = contract.staleBoundaryMatrix; const caseIds = new Set([...cases.map(({id}) => id), "STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE"]);
+  assert.equal(rows.length, 14); assert.equal(new Set(rows.map((row) => row.boundaryId)).size, 14);
+  assert.equal(rows.every((row) => ["ASYNC_GUARD", "SYNCHRONOUS_ATOMIC_COMMIT_GUARD", "LEASE_FINALIZER_GUARD"].includes(row.classification) && caseIds.has(row.executableCaseId) && row.assertedReplacementEffect), true);
   const commit = microphoneSlice.slice(microphoneSlice.indexOf("const commitConfirmedMicrophoneTarget"), microphoneSlice.indexOf("if (!commitConfirmedMicrophoneTarget())"));
   assert.doesNotMatch(commit, /\bawait\b/u); assert.match(commit, /if \(!originStillCurrent\(\) \|\| !leaseStillOwned\(\)\) return false;/u);
 });

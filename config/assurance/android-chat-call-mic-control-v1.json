@@ -81,8 +81,20 @@
   ],
   "leaseCases": ["STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE"],
   "staleBoundaryMatrix": [
-    "AUDIO_START", "NATIVE_PENDING", "POST_NATIVE_PRE_WRITE", "DURABLE_WRITE", "DURABLE_READBACK", "PRE_REQUESTED_COMMIT",
-    "PRE_UI_COMMIT", "MEMBERSHIP_CACHE_GUARD", "PRE_REFRESH", "PRE_TELEMETRY", "NATIVE_COMPENSATION", "DURABLE_COMPENSATION", "PRE_FAILURE_WARNING", "STALE_FINALLY_B_LEASE"
+    {"boundaryId":"AUDIO_START","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_AUDIO_SESSION_ROLLOVER_DENIED_BEFORE_NATIVE","assertedReplacementEffect":"no_native"},
+    {"boundaryId":"NATIVE_PENDING","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_NATIVE_SESSION_ROLLOVER_ORIGIN_ONLY_COMPENSATED","assertedReplacementEffect":"no_durable_touch"},
+    {"boundaryId":"POST_NATIVE_PRE_WRITE","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_NATIVE_SESSION_ROLLOVER_ORIGIN_ONLY_COMPENSATED","assertedReplacementEffect":"no_replacement_write"},
+    {"boundaryId":"DURABLE_WRITE","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_FORWARD_DURABLE_WRITE_ROLLOVER_NO_REPLACEMENT_TOUCH","assertedReplacementEffect":"no_replacement_touch"},
+    {"boundaryId":"DURABLE_READBACK","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_FORWARD_READBACK_ROLLOVER_NO_REPLACEMENT_TOUCH","assertedReplacementEffect":"no_replacement_cache"},
+    {"boundaryId":"PRE_REQUESTED_COMMIT","classification":"SYNCHRONOUS_ATOMIC_COMMIT_GUARD","executableCaseId":"PRE_REQUESTED_COMMIT_ROLLOVER_DENIED","assertedReplacementEffect":"requested_zero"},
+    {"boundaryId":"PRE_UI_COMMIT","classification":"SYNCHRONOUS_ATOMIC_COMMIT_GUARD","executableCaseId":"PRE_REQUESTED_COMMIT_ROLLOVER_DENIED","assertedReplacementEffect":"ui_zero"},
+    {"boundaryId":"MEMBERSHIP_CACHE_GUARD","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_FORWARD_READBACK_ROLLOVER_NO_REPLACEMENT_TOUCH","assertedReplacementEffect":"cache_zero"},
+    {"boundaryId":"PRE_REFRESH","classification":"SYNCHRONOUS_ATOMIC_COMMIT_GUARD","executableCaseId":"PRE_REQUESTED_COMMIT_ROLLOVER_DENIED","assertedReplacementEffect":"refresh_zero"},
+    {"boundaryId":"PRE_TELEMETRY","classification":"SYNCHRONOUS_ATOMIC_COMMIT_GUARD","executableCaseId":"PRE_REQUESTED_COMMIT_ROLLOVER_DENIED","assertedReplacementEffect":"telemetry_zero"},
+    {"boundaryId":"NATIVE_COMPENSATION","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_NATIVE_COMPENSATION_ROLLOVER_NO_REPLACEMENT_TOUCH","assertedReplacementEffect":"no_replacement_touch"},
+    {"boundaryId":"DURABLE_COMPENSATION","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_DURABLE_COMPENSATION_READBACK_ROLLOVER_NO_REPLACEMENT_TOUCH","assertedReplacementEffect":"no_replacement_touch"},
+    {"boundaryId":"PRE_FAILURE_WARNING","classification":"ASYNC_GUARD","executableCaseId":"DEFERRED_NATIVE_COMPENSATION_ROLLOVER_NO_REPLACEMENT_TOUCH","assertedReplacementEffect":"warning_zero"},
+    {"boundaryId":"STALE_FINALLY_B_LEASE","classification":"LEASE_FINALIZER_GUARD","executableCaseId":"STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE","assertedReplacementEffect":"busy_owned_by_b"}
   ],
   "determinismControls": [
     "D2A_DETERMINISM_INSERTION_ORDER_SAME", "D2A_DETERMINISM_NESTED_BOOLEAN_DIFF", "D2A_DETERMINISM_NESTED_FIELD_ADDED_DIFF",
