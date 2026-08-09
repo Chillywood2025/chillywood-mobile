@@ -354,10 +354,21 @@ export function useLiveKitChatCallSession({
       try {
         const liveKitRoom = roomRef.current;
         if (!liveKitRoom || liveKitRoom.state !== ConnectionState.Connected) return false;
-        const currentRoom = productRoomRef.current;
-        const currentIdentity = identityRef.current;
         const originSessionKey = sessionKeyRef.current;
         const originSessionGeneration = sessionGenerationRef.current;
+        if (nextEnabled) {
+          const audioSessionReady = await LiveKitAudioSession.startAudioSession()
+            .then(() => true)
+            .catch(() => false);
+          if (!audioSessionReady) return false;
+        }
+        if (
+          sessionKeyRef.current !== originSessionKey
+          || sessionGenerationRef.current !== originSessionGeneration
+          || roomRef.current !== liveKitRoom
+        ) return false;
+        const currentRoom = productRoomRef.current;
+        const currentIdentity = identityRef.current;
         if (
           currentRoom?.status !== "active"
           || !currentIdentity
@@ -370,12 +381,6 @@ export function useLiveKitChatCallSession({
           && productRoomRef.current === currentRoom
           && identityRef.current === currentIdentity
         );
-        if (nextEnabled) {
-          const audioSessionReady = await LiveKitAudioSession.startAudioSession()
-            .then(() => true)
-            .catch(() => false);
-          if (!audioSessionReady) return false;
-        }
         if (!originStillCurrent()) return false;
 
         const priorRequested = micRequestedRef.current;
