@@ -309,7 +309,7 @@ const snapshot = () => ({
   touchTargets: [...state.touchTargets],
   busy: state.busy, reconciliationBlocked: micReconciliationBlockedRef.current,
 });
-module.exports = {setMicrophoneEnabled, snapshot, state, targetMic, rollover: () => {sessionKeyRef.current = "replacement"; sessionGenerationRef.current += 1; productRoomRef.current = {roomId: "room-2", status: "active"}; identityRef.current = {userId: "replacement-user"}; roomRef.current = {state: "connected", localParticipant};}};
+module.exports = {setMicrophoneEnabled, runMediaControl, snapshot, state, targetMic, lease: () => ({owner: mediaControlOwnerRef.current, pending: mediaControlRef.current, busy: state.busy}), retireLease: () => {mediaControlOwnerRef.current = null; mediaControlRef.current = null; setMediaControlsBusy(false);}, rollover: () => {sessionKeyRef.current = "replacement"; sessionGenerationRef.current += 1; productRoomRef.current = {roomId: "room-2", status: "active"}; identityRef.current = {userId: "replacement-user"}; roomRef.current = {state: "connected", localParticipant};}};
 `;
   const compiled = ts.transpileModule(wrapper, {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022},
@@ -358,6 +358,21 @@ const assertRolloverContained = (observed) => {
   assert.equal(JSON.stringify(observed.telemetry), "[]");
   assert.equal(JSON.stringify(observed.firstMedia), "[]");
 };
+
+test("STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE", async () => {
+  assert.deepEqual(contract.leaseCases, ["STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE"]);
+  let releaseA; let releaseB;
+  const gateA = new Promise((resolve) => { releaseA = resolve; });
+  const gateB = new Promise((resolve) => { releaseB = resolve; });
+  const controls = createExactProductPath();
+  const a = controls.runMediaControl(async () => { await gateA; return "A"; }, {sessionKey: "A", generation: 0});
+  controls.rollover(); controls.retireLease();
+  const b = controls.runMediaControl(async () => { await gateB; return "B"; }, {sessionKey: "B", generation: 1});
+  releaseA(); await a;
+  assert.equal(controls.lease().busy, true); assert.ok(controls.lease().pending);
+  assert.equal(controls.snapshot().requestedMic, false); assert.equal(controls.snapshot().uiMic, false);
+  releaseB(); assert.equal(await b, "B"); assert.equal(controls.lease().busy, false); assert.equal(controls.lease().pending, null);
+});
 
 const cases = [
   {
