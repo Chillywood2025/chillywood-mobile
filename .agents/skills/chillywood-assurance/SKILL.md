@@ -52,3 +52,11 @@ Never hardcode a model name in repository policy.
 Do not poll or keep a high-context agent alive for more than 15 minutes. Start a
 supported long task, preserve its receipt location, return, and resume from the
 compact receipt. Never promise unsupported background monitoring.
+
+## Codex Security reliability S0
+
+Freeze and hash the exact target before discovery. Preflight requires a
+nonempty observable host snapshot digest distinct from the repository digest;
+otherwise stop expensive work. Bind source leases exactly, permit one completion
+attempt, never retry terminal states, and label fallback only
+`REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED`.
