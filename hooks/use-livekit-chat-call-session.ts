@@ -469,9 +469,6 @@ export function useLiveKitChatCallSession({
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
           ) === priorActual;
           if (!restored) micReconciliationBlockedRef.current = true;
-          reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
-          setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
-          refreshParticipantViews();
           return false;
         }
 
@@ -490,19 +487,11 @@ export function useLiveKitChatCallSession({
           || liveKitRoom.state === ConnectionState.Reconnecting;
         if (!originStillCurrent()) {
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
-          reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
-          setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
-          refreshParticipantViews();
           return false;
         }
         if (!membership || !targetCameraUnchanged || !targetCallValid) {
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
-          if (!originStillCurrent()) {
-            reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
-            setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
-            refreshParticipantViews();
-            return false;
-          }
+          if (!originStillCurrent()) return false;
           const nativeRestored = publicationIsUsable(
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
           ) === priorActual;

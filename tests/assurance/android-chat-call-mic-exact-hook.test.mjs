@@ -13,7 +13,12 @@ const sourcePath = "hooks/use-livekit-chat-call-session.ts";
 const source = fs.readFileSync(sourcePath, "utf8");
 const contractRaw = fs.readFileSync("config/assurance/android-chat-call-mic-control-v1.json", "utf8");
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
-const stable = (value) => JSON.stringify(value, Object.keys(value).sort());
+const canonical = (value) => Array.isArray(value)
+  ? value.map(canonical)
+  : value && typeof value === "object"
+    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]))
+    : value;
+const stable = (value) => JSON.stringify(canonical(value));
 const count = (value, needle) => value.split(needle).length - 1;
 const fail = (code) => { const error = new Error(code); error.code = code; throw error; };
 const expectedPaths = [
@@ -460,8 +465,8 @@ const cases = [
       controls.rollover(); release();
       const result = await pending; const observed = controls.snapshot();
       assert.equal(result, false); assert.equal(observed.nativeCalls, 2); assert.equal(observed.touchCalls, 0); assertState(observed, false);
-      assert.equal(observed.errors.includes("mic_session_identity_rollover"), true);
-      assert.equal(observed.messages.includes("Microphone state could not be confirmed. The call remains connected."), true);
+      assert.equal(observed.errors.includes("mic_session_identity_rollover"), false);
+      assert.equal(observed.messages.includes("Microphone state could not be confirmed. The call remains connected."), false);
     },
   },
   {
@@ -757,13 +762,7 @@ const negativeControls = [
   {
     code: "ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE",
     custom: async () => {
-      let mutated = mutateOnce(microphoneSlice, `          if (!originStillCurrent()) {
-            reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
-            setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
-            refreshParticipantViews();
-            return false;
-          }
-          const nativeRestored`, "          const nativeRestored", "drop-post-native-compensation-guard");
+      let mutated = mutateOnce(microphoneSlice, "          if (!originStillCurrent()) return false;\n          const nativeRestored", "          const nativeRestored", "drop-post-native-compensation-guard");
       mutated = mutateOnce(mutated, `            true,
             originStillCurrent,
             { room: currentRoom, identity: currentIdentity },
