@@ -96,7 +96,7 @@ const localParticipant = {
   },
 };
 const roomRef = {current: {state: "connected", localParticipant}};
-const ConnectionState = {Connected: "connected"};
+const ConnectionState = {Connected: "connected", Reconnecting: "reconnecting"};
 const Track = {Source: {Microphone: "microphone", Camera: "camera"}};
 const publicationIsUsable = (publication) => !!publication?.track && !publication.isMuted;
 const setMediaControlsBusy = (value) => {state.busy = value;};

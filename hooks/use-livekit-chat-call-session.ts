@@ -395,7 +395,10 @@ export function useLiveKitChatCallSession({
         );
         const nativeTargetConfirmed = !forwardError
           && targetActual === nextEnabled
-          && (!nextEnabled || !!publication);
+          && (!nextEnabled || !!publication)
+          && publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+          ) === priorCameraActual;
         if (!nativeTargetConfirmed) {
           let nativeRestored = targetActual === priorActual;
           if (!nativeRestored) {
@@ -404,7 +407,10 @@ export function useLiveKitChatCallSession({
               liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
             ) === priorActual;
           }
-          if (!nativeRestored) micReconciliationBlockedRef.current = true;
+          const cameraUnchanged = publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+          ) === priorCameraActual;
+          if (!nativeRestored || !cameraUnchanged) micReconciliationBlockedRef.current = true;
           setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
           reportRuntimeError(
             "chat-call-livekit-microphone-membership-reconciliation",
@@ -417,10 +423,15 @@ export function useLiveKitChatCallSession({
         const membership = await updateMembershipMediaState(
           priorCameraRequested,
           nextEnabled,
-          "active",
+          priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
           true,
         );
-        if (!membership) {
+        const targetCameraUnchanged = publicationIsUsable(
+          liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+        ) === priorCameraActual;
+        const targetCallValid = liveKitRoom.state === ConnectionState.Connected
+          || liveKitRoom.state === ConnectionState.Reconnecting;
+        if (!membership || !targetCameraUnchanged || !targetCallValid) {
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
           const nativeRestored = publicationIsUsable(
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
@@ -440,7 +451,9 @@ export function useLiveKitChatCallSession({
             && durableRestored.userId === priorDurable.userId
             && durableRestored.micEnabled === priorDurable.micEnabled
             && durableRestored.cameraEnabled === priorDurable.cameraEnabled
-            && cameraUnchanged;
+            && cameraUnchanged
+            && (liveKitRoom.state === ConnectionState.Connected
+              || liveKitRoom.state === ConnectionState.Reconnecting);
           micReconciliationBlockedRef.current = !compensationProved;
           setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
           if (!compensationProved) {
