@@ -3,8 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const rootRequire = createRequire(path.join(root, "package.json"));
@@ -28,7 +27,7 @@ const braceExpansionRoot = path.dirname(
   minimatch3Require.resolve("brace-expansion/package.json"),
 );
 const braceExpansionEsm = await import(
-  pathToFileURL(path.join(braceExpansionRoot, "dist/esm/index.js")),
+  pathToFileURL(path.join(braceExpansionRoot, "dist/esm/index.js"))
 );
 assert.equal(typeof braceExpansionEsm.expand, "function");
 assert.equal(braceExpansionEsm.EXPANSION_MAX, 100_000);
@@ -70,7 +69,7 @@ const installedBraceExpansion = Object.entries(lock.packages ?? {}).filter(
 );
 assert.ok(installedBraceExpansion.length > 0);
 for (const [packagePath, metadata] of installedBraceExpansion) {
-  assert.equal(metadata.version, "5.0.8", packagePath);
+  assert.equal(metadata.version, "5.0.9", packagePath);
   assert.match(metadata.resolved, /^https:\/\/registry\.npmjs\.org\//);
   assert.equal(typeof metadata.integrity, "string");
   assert.equal(metadata.link, undefined);
@@ -94,7 +93,7 @@ for (const [packagePath] of lockedMinimatch10) {
     path.join(packageRoot, "dist/commonjs/index.js"),
   );
   const esm = await import(
-    pathToFileURL(path.join(packageRoot, "dist/esm/index.js")),
+    pathToFileURL(path.join(packageRoot, "dist/esm/index.js"))
   );
   assert.equal(commonJs.minimatch("a", "{a,b}"), true, packagePath);
   assert.equal(esm.minimatch("a", "{a,b}"), true, packagePath);
