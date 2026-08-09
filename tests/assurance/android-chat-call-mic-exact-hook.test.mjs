@@ -595,12 +595,25 @@ const cases = [
     },
   },
   {
+    id: "DEFERRED_NATIVE_RESTORATION_ROLLOVER_STATE_INERT",
+    custom: async () => {
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["throw-after", "wait"], nativeGates: [undefined, gate]});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 16 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      assert.ok(controls.snapshot().nativeCalls >= 2, "native restoration reached");
+      controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assertRolloverContained(observed);
+    },
+  },
+  {
     id: "DEFERRED_DURABLE_COMPENSATION_READBACK_ROLLOVER_NO_REPLACEMENT_TOUCH",
     custom: async () => {
       let release; const gate = new Promise((resolve) => { release = resolve; });
-      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["null", "null"], readbackGates: [undefined, undefined, gate]});
+      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["null", "null"], readbackGates: [undefined, undefined, undefined, gate]});
       const pending = controls.setMicrophoneEnabled(true);
-      for (let turn = 0; turn < 16 && controls.snapshot().readbackCalls < 3; turn += 1) await Promise.resolve();
+      for (let turn = 0; turn < 128 && controls.snapshot().readbackCalls < 3; turn += 1) await Promise.resolve();
+      assert.ok(controls.snapshot().readbackCalls >= 3, "durable compensation readback reached");
       controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
       assert.equal(result, false); assertRolloverContained(observed);
     },
@@ -849,6 +862,7 @@ const negativeControls = [
             originStillCurrent,
             { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },
           );
+          if (!originStillCurrent()) return false;
           const cameraUnchanged`, `            true,
           );
           const cameraUnchanged`, "drop-compensation-binding");
@@ -875,6 +889,40 @@ const negativeControls = [
       controls.retireLease(); const b = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
       releaseA(); await a; assert.equal(controls.snapshot().pendingMic, false);
       releaseB(); await b;
+    },
+  },
+  {
+    code: "ANDROID_MIC_STALE_NATIVE_RESTORATION_POST_AWAIT_STATE_WRITE",
+    custom: async () => {
+      const mutated = mutateOnce(microphoneSlice, `            await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+            if (!originStillCurrent()) return false;
+            nativeRestored`, `            await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+            nativeRestored`, "drop-native-restoration-post-await-guard");
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["throw-after", "wait"], nativeGates: [undefined, gate]}, {microphone: mutated});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 16 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      assert.ok(controls.snapshot().nativeCalls >= 2, "mutant native restoration reached");
+      controls.rollover(); release(); assert.equal(await pending, false);
+      const observed = controls.snapshot();
+      assert.equal(observed.reconciliationBlocked || observed.messages.length > 0 || observed.errors.length > 0 || observed.refreshCalls > 0, true);
+    },
+  },
+  {
+    code: "ANDROID_MIC_STALE_DURABLE_COMPENSATION_POST_AWAIT_STATE_WRITE",
+    custom: async () => {
+      const mutated = mutateOnce(microphoneSlice, `          );
+          if (!originStillCurrent()) return false;
+          const cameraUnchanged`, `          );
+          const cameraUnchanged`, "drop-durable-compensation-post-await-guard");
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["null", "null"], readbackGates: [undefined, undefined, undefined, gate]}, {microphone: mutated});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 128 && controls.snapshot().readbackCalls < 3; turn += 1) await Promise.resolve();
+      assert.ok(controls.snapshot().readbackCalls >= 3, "mutant durable compensation readback reached");
+      controls.rollover(); release(); assert.equal(await pending, false);
+      const observed = controls.snapshot();
+      assert.equal(observed.reconciliationBlocked || observed.messages.length > 0 || observed.errors.length > 0 || observed.refreshCalls > 0, true);
     },
   },
 ];

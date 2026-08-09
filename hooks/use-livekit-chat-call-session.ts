@@ -490,6 +490,7 @@ export function useLiveKitChatCallSession({
           let nativeRestored = targetActual === priorActual;
           if (!nativeRestored) {
             await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+            if (!originStillCurrent()) return false;
             nativeRestored = publicationIsUsable(
               liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
             ) === priorActual;
@@ -547,6 +548,7 @@ export function useLiveKitChatCallSession({
             originStillCurrent,
             { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },
           );
+          if (!originStillCurrent()) return false;
           const cameraUnchanged = publicationIsUsable(
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
           ) === priorCameraActual;
