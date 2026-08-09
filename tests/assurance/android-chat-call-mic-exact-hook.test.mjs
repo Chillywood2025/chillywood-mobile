@@ -777,7 +777,7 @@ const negativeControls = [
   {
     code: "ANDROID_MIC_MEMBERSHIP_IDENTITY_MISMATCH_ACCEPTED",
     scenario: {initialMic: false, targetMic: true, readbackQueue: ["current"], touchQueue: ["wrong-user"]},
-    mediaMutation: (value) => mutateOnce(value, "        && candidate.userId === currentIdentity.userId", "        && true", "accept-wrong-user"),
+    mediaMutation: (value) => mutateOnce(value, "        && candidate.userId === userId", "        && true", "accept-wrong-user"),
     detected: (value) => value.result === true,
   },
   {
@@ -820,7 +820,7 @@ const negativeControls = [
           && currentRoom.roomId === originRoomId
           && currentIdentity.userId === originUserId
         );`, "const originStillCurrent = () => true;", "accept-rollover");
-      mutated = mutateOnce(mutated, "          originStillCurrent,\n          { room: currentRoom, identity: currentIdentity },", "          undefined,", "drop-captured-binding");
+      mutated = mutateOnce(mutated, "          originStillCurrent,\n          { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },", "          undefined,", "drop-captured-binding");
       let release; const gate = new Promise((resolve) => { release = resolve; });
       const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["wait"], nativeGate: gate, touchQueue: ["success"]}, {microphone: mutated});
       const pending = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls === 0; turn += 1) await Promise.resolve(); controls.rollover(); release();
@@ -835,7 +835,7 @@ const negativeControls = [
       let mutated = mutateOnce(microphoneSlice, "          if (!originStillCurrent()) return false;\n          const nativeRestored", "          const nativeRestored", "drop-post-native-compensation-guard");
       mutated = mutateOnce(mutated, `            true,
             originStillCurrent,
-            { room: currentRoom, identity: currentIdentity },
+            { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },
           );
           const cameraUnchanged`, `            true,
           );

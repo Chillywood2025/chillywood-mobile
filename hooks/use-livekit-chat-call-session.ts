@@ -281,26 +281,28 @@ export function useLiveKitChatCallSession({
 
   const readCurrentMembershipMediaState = useCallback(async (
     originStillCurrent?: () => boolean,
-    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity },
+    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity; roomId: string; userId: string },
   ) => {
     const currentIdentity = binding?.identity ?? identityRef.current;
     const currentRoom = binding?.room ?? productRoomRef.current;
-    if (!currentIdentity || !currentRoom) return null;
+    const roomId = binding?.roomId ?? currentRoom?.roomId;
+    const userId = binding?.userId ?? currentIdentity?.userId;
+    if (!currentIdentity || !currentRoom || !roomId || !userId) return null;
     const remainsCurrent = () => (
       identityRef.current === currentIdentity
       && productRoomRef.current === currentRoom
       && (!originStillCurrent || originStillCurrent())
     );
-    const snapshot = await getCommunicationRoomSnapshot(currentRoom.roomId).catch(() => null);
+    const snapshot = await getCommunicationRoomSnapshot(roomId).catch(() => null);
     if (
       !remainsCurrent()
       || !snapshot
-      || snapshot.room.roomId !== currentRoom.roomId
+      || snapshot.room.roomId !== roomId
       || snapshot.room.status !== "active"
     ) return null;
     const membership = snapshot.memberships.find((entry) => (
-      entry.roomId === currentRoom.roomId
-      && entry.userId === currentIdentity.userId
+      entry.roomId === roomId
+      && entry.userId === userId
       && !entry.leftAt
       && (entry.membershipState === "active" || entry.membershipState === "reconnecting")
     )) ?? null;
@@ -318,11 +320,13 @@ export function useLiveKitChatCallSession({
     membershipState: "active" | "reconnecting" = "active",
     strict = false,
     originStillCurrent?: () => boolean,
-    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity },
+    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity; roomId: string; userId: string },
   ) => {
     const currentIdentity = binding?.identity ?? identityRef.current;
     const currentRoom = binding?.room ?? productRoomRef.current;
-    if (!currentIdentity || !currentRoom) return null;
+    const roomId = binding?.roomId ?? currentRoom?.roomId;
+    const userId = binding?.userId ?? currentIdentity?.userId;
+    if (!currentIdentity || !currentRoom || !roomId || !userId) return null;
     const remainsCurrent = () => (
       identityRef.current === currentIdentity
       && productRoomRef.current === currentRoom
@@ -330,8 +334,8 @@ export function useLiveKitChatCallSession({
     );
     const isExact = (candidate: CommunicationRoomMembership | null | undefined) => {
       return !!candidate
-        && candidate.roomId === currentRoom.roomId
-        && candidate.userId === currentIdentity.userId
+        && candidate.roomId === roomId
+        && candidate.userId === userId
         && candidate.cameraEnabled === cameraOn
         && candidate.micEnabled === micOn
         && !candidate.leftAt
@@ -339,8 +343,8 @@ export function useLiveKitChatCallSession({
     };
     if (!remainsCurrent()) return null;
     let membership = await touchCommunicationRoomSession({
-      roomId: currentRoom.roomId,
-      userId: currentIdentity.userId,
+      roomId,
+      userId,
       membershipState,
       cameraEnabled: cameraOn,
       micEnabled: micOn,
@@ -428,6 +432,8 @@ export function useLiveKitChatCallSession({
         const priorDurable = await readCurrentMembershipMediaState(originStillCurrent, {
           room: currentRoom,
           identity: currentIdentity,
+          roomId: originRoomId,
+          userId: originUserId,
         });
         if (!originStillCurrent()) return false;
         const priorConverged = !!priorDurable
@@ -512,7 +518,7 @@ export function useLiveKitChatCallSession({
           priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
           true,
           originStillCurrent,
-          { room: currentRoom, identity: currentIdentity },
+          { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },
         );
         const targetCameraUnchanged = publicationIsUsable(
           liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
@@ -535,7 +541,7 @@ export function useLiveKitChatCallSession({
             priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
             true,
             originStillCurrent,
-            { room: currentRoom, identity: currentIdentity },
+            { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },
           );
           const cameraUnchanged = publicationIsUsable(
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
