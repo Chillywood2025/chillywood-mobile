@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "bbfa59e35a9aaa81afc2a456dea247881dd71b19",
+  "mainSha": "70f5acde6af637892efe6964c0d876945dd37601",
   "latestMergedImplementationPr": {"number": 164, "state": "merged", "head": "add077921ce9ac4cd5cbf29e24b2b05d8b8fbcf1", "mergeSha": "18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7", "title": "Secure Android native call action origin and backup boundary"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -298,11 +298,15 @@
     "branch": "codex/assurance-efficiency-e0",
     "startingMain": "bbfa59e35a9aaa81afc2a456dea247881dd71b19",
     "startingMainTree": "6ef3a58a20a6fe3ffd15af263bd4666d46194093",
-    "immutableSourceHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0",
-    "immutableSourceTree": "27b3b0ec90455e1535dbbd45c6030a676bcb132e",
+    "initialImmutableSourceHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0",
+    "initialImmutableSourceTree": "27b3b0ec90455e1535dbbd45c6030a676bcb132e",
+    "prePrivacyCorrectionSynchronizedHead": "2167641d5bdceeb1a26db351a2d4c6f54bbaaf1b",
+    "prePrivacyCorrectionSynchronizedTree": "fc4c3bb7eedb2e354dff3220f02b4f6d9d403de9",
+    "immutableSourceHead": "a367da2eb673e550b15d61f20a90ebf9fe5a25b6",
+    "immutableSourceTree": "39345a6eacbc0ef38b6d99ef9531980bfee131dc",
     "scope": {
       "files": 18,
-      "additions": 1569,
+      "additions": 1575,
       "deletions": 0,
       "maximumFiles": 18,
       "maximumNetAuthoredLines": 2500,
@@ -310,7 +314,7 @@
       "generatedPlatformDirectories": 0,
       "status": "PASS"
     },
-    "compactPacket": {
+    "preCorrectionCompactPacket": {
       "sha256": "cc3767dd7185c4e3ebd3eac5a2c4ce01d3d55346e083679b41ad2e4870515e15",
       "bytes": 9116,
       "determinism": "3/3_BYTE_IDENTICAL",
@@ -318,11 +322,19 @@
       "historicalContextExcludedBytes": 64469
     },
     "security": {
-      "finalIncrementalRange": "4c057fb8e3e737659509dc20501197f12b518b87..03dde5746ab1d60b43d84af1c785ca271947d2c0",
-      "reportSha256": "98acf9cba6ce64f064674e1e8e72f1629f3c5eb39d0b63549ccfed781331daed",
+      "finalIncrementalRange": "2167641d5bdceeb1a26db351a2d4c6f54bbaaf1b..a367da2eb673e550b15d61f20a90ebf9fe5a25b6",
+      "reportSha256": "86a604b149c8bbf15238675da62ed10a81a603b8f068d5f0131cfe645af96a4e",
       "coverage": "COMPLETE_ONE_OF_ONE_SOURCE_LIKE_FILE",
       "findings": {"P0": 0, "P1": 0},
       "unchangedSealedDependencyScanRerun": false
+    },
+    "privacyCorrection": {
+      "findingId": "E0_DEVICE_IDENTIFIER_FAILURE_EXCERPT_LEAK",
+      "severity": "P1",
+      "state": "CORRECTED_INCREMENTAL_SECURITY_P0_0_P1_0",
+      "changedFiles": ["scripts/assurance/efficiency-lib.mjs", "tests/assurance/efficiency-e0.test.mjs"],
+      "deviceIdentifierNegativeControl": "PASS",
+      "benignDiagnosticRetention": "PASS"
     },
     "reviewLanes": [
       {"lane": "architecture-state", "pr": 186, "head": "3e5fc14cb9a3a14c012af25bbd8d3923afd6f1bd", "state": "OPEN_DRAFT_PENDING_FINAL_SYNCHRONIZED_REVIEW_NEVER_MERGE"},
@@ -336,8 +348,8 @@
       "state": "REMOTE_BLOCKED_CHECKPOINT_NO_PR_FROZEN_UNTIL_E0_MERGES"
     },
     "mayProceed": {
-      "currentTruthBinding": true,
-      "baseSynchronization": false,
+      "currentTruthBinding": false,
+      "baseSynchronization": true,
       "formalReviews": false,
       "phase1Ci": false,
       "merge": false,
@@ -345,10 +357,10 @@
       "buildOrOta": false,
       "providerOrProductionMutation": false
     },
-    "state": "IMMUTABLE_SOURCE_FROZEN_CURRENT_TRUTH_BINDING_PENDING"
+    "state": "CORRECTED_IMMUTABLE_SOURCE_FROZEN_CURRENT_TRUTH_CORRECTION_PENDING"
   },
   "openImplementationPrs": [
-    {"number": 185, "branch": "codex/assurance-efficiency-e0", "head": "03dde5746ab1d60b43d84af1c785ca271947d2c0", "tree": "27b3b0ec90455e1535dbbd45c6030a676bcb132e", "state": "open-draft-immutable-source-bound-pre-base-sync", "disposition": "merge-only-after-current-truth-binding-four-level-c-reviews-p0-0-p1-0-and-one-exact-phase1-ci-13-of-13"}
+    {"number": 185, "branch": "codex/assurance-efficiency-e0", "head": "a367da2eb673e550b15d61f20a90ebf9fe5a25b6", "tree": "39345a6eacbc0ef38b6d99ef9531980bfee131dc", "state": "open-draft-corrected-immutable-source-bound-pre-base-sync", "disposition": "merge-only-after-corrective-current-truth-binding-four-level-c-reviews-p0-0-p1-0-and-one-exact-phase1-ci-13-of-13"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -379,10 +391,10 @@
     {"number": 98, "branch": "codex/first-pass-assurance-current-truth-after-head-binding-review", "head": "278eb5e2326d2a7b7d12b6ba8b373541640d4e90", "reviewedImplementationHead": "867af2a2c446c4cea5b38cc990bd0143dac446c3", "state": "open-draft-current", "disposition": "never-merge"},
     {"number": 104, "branch": "codex/first-pass-assurance-current-truth-before-model-review-review", "head": "a8f689702e83fab1b5c85119d9d638f8bfabda3b", "reviewedImplementationHead": "2cf85211ca8f832bd929619423a04fb52dce275e", "state": "open-draft-current", "disposition": "never-merge"},
     {"number": 110, "branch": "codex/first-pass-assurance-current-truth-before-model-final-review-review", "head": "d43b460cc2f82cb296668117a0bf73648dacd701", "reviewedImplementationHead": "502f9e2659d96389ae418b11f83171b171b5a708", "state": "open-draft-current", "disposition": "never-merge"},
-    {"number": 186, "branch": "codex/assurance-efficiency-e0-review-architecture-state", "head": "3e5fc14cb9a3a14c012af25bbd8d3923afd6f1bd", "reviewedImplementationHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"},
-    {"number": 187, "branch": "codex/assurance-efficiency-e0-review-security-authority", "head": "1a8cb60cb17a443f714eb3dcfadc50da3bfea082", "reviewedImplementationHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"},
-    {"number": 188, "branch": "codex/assurance-efficiency-e0-review-proof-equivalence-native-provider", "head": "24fcc49b960b6c0c470e05a4c9ec3b862728dc32", "reviewedImplementationHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"},
-    {"number": 189, "branch": "codex/assurance-efficiency-e0-review-privacy-rollback-determinism", "head": "243d2720c09b9d8b99ecd34f9123fc8c8300aa3c", "reviewedImplementationHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"}
+    {"number": 186, "branch": "codex/assurance-efficiency-e0-review-architecture-state", "head": "3e5fc14cb9a3a14c012af25bbd8d3923afd6f1bd", "reviewedImplementationHead": "a367da2eb673e550b15d61f20a90ebf9fe5a25b6", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"},
+    {"number": 187, "branch": "codex/assurance-efficiency-e0-review-security-authority", "head": "1a8cb60cb17a443f714eb3dcfadc50da3bfea082", "reviewedImplementationHead": "a367da2eb673e550b15d61f20a90ebf9fe5a25b6", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"},
+    {"number": 188, "branch": "codex/assurance-efficiency-e0-review-proof-equivalence-native-provider", "head": "24fcc49b960b6c0c470e05a4c9ec3b862728dc32", "reviewedImplementationHead": "a367da2eb673e550b15d61f20a90ebf9fe5a25b6", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"},
+    {"number": 189, "branch": "codex/assurance-efficiency-e0-review-privacy-rollback-determinism", "head": "243d2720c09b9d8b99ecd34f9123fc8c8300aa3c", "reviewedImplementationHead": "a367da2eb673e550b15d61f20a90ebf9fe5a25b6", "state": "open-draft-current-pending-final-review", "disposition": "never-merge"}
   ],
   "closedReviewOnlyPrDispositions": [
     {"number": 165, "branch": "codex/first-pass-assurance-d2b-review-backup-restore-transfer", "head": "c396e33aec0fe73d6bbc9af6248d8763b658e102", "reviewedImplementationHead": "add077921ce9ac4cd5cbf29e24b2b05d8b8fbcf1", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"], "currentEvidenceVersion": "v9", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-1-assigned-d2a-branch-retained-never-merge"},
@@ -429,10 +441,10 @@
     {"number": 138, "branch": "codex/assurance-reconcile-revenuecat-transfer-review-concurrency-atomicity", "head": "ca69c38368be9bb1d65b717b94c039ebc8829e5a", "reviewedImplementationHead": "81892f3dae544713d8e35512da895cd99c610966", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164"],
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190"],
     "active": "E0_ACTIVE_D2A_FROZEN",
     "nextActions": [
-      "Complete E0 current-truth binding, synchronize PR #185, run the four compact Level C review lanes, run one exact Phase 1 CI at the final synchronized head, merge only PR #185, close its review PRs unmerged with branches retained, close only the exact hash-bound stale review list, then perform one post-E0 three-file current-truth synchronization and stop.",
+      "Synchronize corrected E0 source a367da2eb673e550b15d61f20a90ebf9fe5a25b6 after privacy P1 closure, rerun the four compact Level C review lanes, run one exact Phase 1 CI at the final synchronized head, merge only PR #185, close its review PRs unmerged with branches retained, close only the exact hash-bound stale review list, then perform one post-E0 three-file current-truth synchronization and stop.",
       "Keep D2A checkpoint 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f frozen until E0 merges; only then may the separately authorized D2A execution resume.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
