@@ -550,6 +550,14 @@ export function useLiveKitChatCallSession({
           return false;
         }
 
+        const leaseStillOwned = () => (
+          mediaControlOwnerRef.current?.sessionKey === leaseBinding.sessionKey
+          && mediaControlOwnerRef.current.generation === leaseBinding.generation
+        );
+        if (!originStillCurrent() || !leaseStillOwned()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          return false;
+        }
         micRequestedRef.current = nextEnabled;
         setMicEnabledState(nextEnabled);
         setMediaPermissionMessage(null);

@@ -564,6 +564,17 @@ const cases = [
       assert.equal(result, false); assertRolloverContained(observed);
     },
   },
+  {
+    id: "PRE_REQUESTED_COMMIT_ROLLOVER_DENIED",
+    custom: async () => {
+      const scenario = {initialMic: false, targetMic: true};
+      const mutated = mutateOnce(microphoneSlice, "        if (!originStillCurrent() || !leaseStillOwned()) {", "        scenario.beforeRequested?.();\n        if (!originStillCurrent() || !leaseStillOwned()) {", "before-requested");
+      const controls = createExactProductPath(scenario, {microphone: mutated});
+      scenario.beforeRequested = () => controls.rollover();
+      const result = await controls.setMicrophoneEnabled(true); const observed = controls.snapshot();
+      assert.equal(result, false); assertRolloverContained(observed);
+    },
+  },
 ];
 
 test("exact product and serializer slices remain hash-bound", () => {
@@ -689,7 +700,7 @@ const negativeControls = [
   {
     code: "ANDROID_MIC_LIVEKIT_MEMBERSHIP_FAILURE_RETURNS_SUCCESS",
     scenario: {initialMic: false, targetMic: true, readbackQueue: ["current", "current"], touchQueue: ["null", "success"]},
-    mutate: (value) => mutateOnce(value, "          refreshParticipantViews();\n          return false;\n        }\n\n        micRequestedRef.current", "          refreshParticipantViews();\n          return true;\n        }\n\n        micRequestedRef.current", "return-success"),
+    mutate: (value) => mutateOnce(value, "          refreshParticipantViews();\n          return false;\n        }\n\n        const leaseStillOwned", "          refreshParticipantViews();\n          return true;\n        }\n\n        const leaseStillOwned", "return-success"),
     detected: (value) => value.result === true,
   },
   {
@@ -735,7 +746,7 @@ const negativeControls = [
   {
     code: "ANDROID_MIC_FAILURE_TERMINATES_CALL",
     scenario: {initialMic: false, targetMic: true, readbackQueue: ["current", "current"], touchQueue: ["null", "success"]},
-    mutate: (value) => mutateOnce(value, "          refreshParticipantViews();\n          return false;\n        }\n\n        micRequestedRef.current", "          refreshParticipantViews();\n          await cleanupSession();\n          return false;\n        }\n\n        micRequestedRef.current", "cleanup-on-failure"),
+    mutate: (value) => mutateOnce(value, "          refreshParticipantViews();\n          return false;\n        }\n\n        const leaseStillOwned", "          refreshParticipantViews();\n          await cleanupSession();\n          return false;\n        }\n\n        const leaseStillOwned", "cleanup-on-failure"),
     detected: (value) => value.cleanupCalls > 0,
   },
   {
@@ -753,7 +764,7 @@ const negativeControls = [
   {
     code: "ANDROID_MIC_COMPENSATION_CAMERA_REGRESSION",
     scenario: {initialMic: false, targetMic: true, initialCamera: true, readbackQueue: ["current", "current"], touchQueue: ["null", "success"]},
-    mutate: (value) => mutateOnce(value, "          refreshParticipantViews();\n          return false;\n        }\n\n        micRequestedRef.current", "          refreshParticipantViews();\n          cameraRequestedRef.current = !priorCameraRequested;\n          return false;\n        }\n\n        micRequestedRef.current", "camera-change"),
+    mutate: (value) => mutateOnce(value, "          refreshParticipantViews();\n          return false;\n        }\n\n        const leaseStillOwned", "          refreshParticipantViews();\n          cameraRequestedRef.current = !priorCameraRequested;\n          return false;\n        }\n\n        const leaseStillOwned", "camera-change"),
     detected: (value) => value.requestedCamera !== true,
   },
   {
