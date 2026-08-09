@@ -201,6 +201,7 @@ const makeMembership = (mic = state.durableMic, camera = state.durableCamera, ov
   lastSeenAt: "2026-08-09T00:00:00.000Z", ...overrides,
 });
 const mediaControlRef = {current: null};
+const mediaControlOwnerRef = {current: null};
 const identityRef = {current: {userId: "local-user", displayName: "Local", avatarUrl: null}};
 const sessionKey = "invite-1:ROOM:audio:livekit";
 const sessionKeyRef = {current: sessionKey};

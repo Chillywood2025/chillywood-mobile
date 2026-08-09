@@ -141,6 +141,7 @@ export function useLiveKitChatCallSession({
   const cameraFacingRef = useRef<"user" | "environment">("user");
   const speakerRequestedRef = useRef(inviteCallType === "video");
   const mediaControlRef = useRef<Promise<unknown> | null>(null);
+  const mediaControlOwnerRef = useRef<{ token: symbol; sessionKey: string; generation: number } | null>(null);
   const pendingMicToggleRef = useRef(false);
   const micReconciliationBlockedRef = useRef(false);
   const ownsIosAudioConfigurationRef = useRef(false);
@@ -243,16 +244,24 @@ export function useLiveKitChatCallSession({
     setParticipants(views);
   }, []);
 
-  const runMediaControl = useCallback(async <T,>(operation: () => Promise<T>): Promise<T | null> => {
+  const runMediaControl = useCallback(async <T,>(
+    operation: () => Promise<T>,
+    binding?: { sessionKey: string; generation: number },
+  ): Promise<T | null> => {
     if (mediaControlRef.current) return null;
+    const owner = { token: Symbol("media-control"), sessionKey: binding?.sessionKey ?? "", generation: binding?.generation ?? -1 };
     setMediaControlsBusy(true);
     const pending = operation();
     mediaControlRef.current = pending;
+    mediaControlOwnerRef.current = owner;
     try {
       return await pending;
     } finally {
-      mediaControlRef.current = null;
-      setMediaControlsBusy(false);
+      if (mediaControlOwnerRef.current?.token === owner.token) {
+        mediaControlRef.current = null;
+        mediaControlOwnerRef.current = null;
+        setMediaControlsBusy(false);
+      }
     }
   }, []);
 
@@ -354,6 +363,7 @@ export function useLiveKitChatCallSession({
   }, []);
 
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
+    const leaseBinding = { sessionKey: sessionKeyRef.current, generation: sessionGenerationRef.current };
     const result = await runMediaControl(async () => {
       try {
         const liveKitRoom = roomRef.current;
@@ -539,7 +549,7 @@ export function useLiveKitChatCallSession({
       } finally {
         pendingMicToggleRef.current = false;
       }
-    });
+    }, leaseBinding);
     return result === true;
   }, [
     cameraEnabled,
