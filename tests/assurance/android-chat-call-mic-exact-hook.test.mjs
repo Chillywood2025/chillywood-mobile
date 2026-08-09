@@ -13,11 +13,19 @@ const sourcePath = "hooks/use-livekit-chat-call-session.ts";
 const source = fs.readFileSync(sourcePath, "utf8");
 const contractRaw = fs.readFileSync("config/assurance/android-chat-call-mic-control-v1.json", "utf8");
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
-const canonical = (value) => Array.isArray(value)
-  ? value.map(canonical)
-  : value && typeof value === "object"
-    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]))
-    : value;
+const canonical = (value, seen = new Set()) => {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "number") { if (!Number.isFinite(value)) fail("D2A_DETERMINISM_NON_FINITE_NUMBER"); return value; }
+  if (["undefined", "function", "symbol", "bigint"].includes(typeof value)) fail(`D2A_DETERMINISM_UNSUPPORTED_${(typeof value).toUpperCase()}`);
+  if (seen.has(value)) fail("D2A_DETERMINISM_CYCLE");
+  seen.add(value);
+  const result = Array.isArray(value)
+    ? value.map((entry) => canonical(entry, seen))
+    : Object.getPrototypeOf(value) === Object.prototype
+      ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key], seen)]))
+      : fail("D2A_DETERMINISM_UNSUPPORTED_CLASS");
+  seen.delete(value); return result;
+};
 const stable = (value) => JSON.stringify(canonical(value));
 const count = (value, needle) => value.split(needle).length - 1;
 const fail = (code) => { const error = new Error(code); error.code = code; throw error; };
@@ -358,6 +366,23 @@ const assertRolloverContained = (observed) => {
   assert.equal(JSON.stringify(observed.telemetry), "[]");
   assert.equal(JSON.stringify(observed.firstMedia), "[]");
 };
+
+const determinismControls = [
+  "D2A_DETERMINISM_NESTED_OUTCOME_COLLISION", "D2A_DETERMINISM_NULL", "D2A_DETERMINISM_BOOLEAN",
+  "D2A_DETERMINISM_STRING", "D2A_DETERMINISM_FINITE_NUMBER", "D2A_DETERMINISM_ARRAY_ORDER",
+  "D2A_DETERMINISM_UNDEFINED", "D2A_DETERMINISM_BIGINT", "D2A_DETERMINISM_NON_FINITE_NUMBER", "D2A_DETERMINISM_CYCLE",
+];
+
+test("deep canonical determinism controls", () => {
+  assert.deepEqual(contract.determinismControls, determinismControls);
+  assert.notEqual(stable({outcome: {accepted: true}}), stable({outcome: {accepted: false}}));
+  assert.equal(stable(null), "null"); assert.equal(stable(true), "true"); assert.equal(stable("x"), '"x"'); assert.equal(stable(1), "1");
+  assert.notEqual(stable([1, 2]), stable([2, 1]));
+  assert.throws(() => stable(undefined), {message: "D2A_DETERMINISM_UNSUPPORTED_UNDEFINED"});
+  assert.throws(() => stable(1n), {message: "D2A_DETERMINISM_UNSUPPORTED_BIGINT"});
+  assert.throws(() => stable(Infinity), {message: "D2A_DETERMINISM_NON_FINITE_NUMBER"});
+  const cycle = {}; cycle.self = cycle; assert.throws(() => stable(cycle), {message: "D2A_DETERMINISM_CYCLE"});
+});
 
 test("STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE", async () => {
   assert.deepEqual(contract.leaseCases, ["STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE"]);
