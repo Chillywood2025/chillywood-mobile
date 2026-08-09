@@ -35,16 +35,27 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "6aa119ff7ae4cd92d5799607fa9b7c7598206f0c",
-    "tree": "c0140433c9d288311b41994dc11dea1dff784558",
+    "head": "b85f07c8d7a1454dbb400bade862300e90e476f9",
+    "tree": "1a806e36d9b045ab3a8a26ce2f0ee2ee207d585b",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
-    "productSha256": "a668272cf1d6c44a5c9a58cfd0666bf0555323d165b2565930e92963cc2cb955",
-    "testSha256": "e4129d475cead516d7209a494591e74ec713248cd8be6ee470170b53166273fb",
-    "contractSha256": "f034ca85f6fa17a5996be8113b9c6b4f615cb4373250cf92054052af7efb8b23",
+    "productSha256": "dbf71151f0f9851dc8402a52a7e8d8aee748cd49aa48e20184306d47d7ed85bb",
+    "testSha256": "a5c827d4b3a5068944b0f85fdb1a67c6ecdfa872405a460cef04a7e7b32f1c18",
+    "contractSha256": "12d5efae6c054ccf10449c0374684ed7e7a9393af11c3c4592dbd0948b2ba8a4",
     "convergenceMatrixSha256": "60ff0ea64262940d4b6b741d694028b5af51053009f76707fc4499f0f388cebb",
-    "negativeControlsSha256": "c839926285efc1c2877973e2adf5bf86bf076fdd5ae40efd55138ea95a8caee8",
-    "bindingNegativeControlsSha256": "46106e381ca4650d0f7c7112f6951dd3862a03baed35151840728102a1a6876b",
+    "negativeControlsSha256": "c596d64dd725e97ed4c32e87cbe234162da5ef685d80f05663a9824655db6eab",
+    "bindingNegativeControlsSha256": "545cbee76139ba24d97f9f9526546a21cbe9b3c283874faf8c711afe54fbef55",
     "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c"
+  },
+  "historicalSecurityScan": {
+    "scanId": "c4bf0395-4bf4-4cd8-a795-99561a8963b5",
+    "reviewedBase": "fc1616d5da5bc0e521c2158c6ffb68d24b898e7a",
+    "reviewedHead": "40513e8d1016c4b99f51e83927123bedcdebd744",
+    "reviewedTree": "46331e219003c2ea2815f78fa597c5d5b1c2ddee",
+    "snapshotSha256": "9626e24b321c2703d9cb662dc64f724703c4476582599b2b79e229ee619accef",
+    "reportSha256": "b9a462ac40f24ddff0068fbb5f174cb425c1c88c4046468778e5f94c3fe3dc01",
+    "descendantCoverage": false,
+    "requiredIncrementalRange": "40513e8d1016c4b99f51e83927123bedcdebd744..FINAL_CORRECTED_HEAD",
+    "findings": ["race-condition.session-bound-microphone-reconciliation", "integrity-validation.partial-source-binding"]
   },
   "protocol": [
     "snapshot exact active room current-user durable requested UI actual mic and camera state",
@@ -59,20 +70,35 @@
     "bind the transaction to session key generation product room identity and LiveKit room before and after each awaited mutation or readback"
   ],
   "focusedProof": {
-    "receiptIdentityHash": "8b1550849e7773dee3c58726e1c2b6f52d8a173eca20901280485f68ed13f76c",
-    "receiptFileSha256": "1077f8d5a24d5dcb2353babec9953098a83f6507a3477093fa5cfc26702aad74",
-    "combinedOutputSha256": "1077f8d5a24d5dcb2353babec9953098a83f6507a3477093fa5cfc26702aad74",
+    "receiptIdentityHash": "7d6d2b4249a8ce626f75e08e083d201910eef1b454d2d665d92c7644ad8f6793",
+    "receiptFileSha256": "d6ae389232d54b303f4c8e761db842d327278602454f48dc65e7869938071e98",
+    "combinedOutputSha256": "d6ae389232d54b303f4c8e761db842d327278602454f48dc65e7869938071e98",
     "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
-    "artifactLocation": "/tmp/d2a-compensation-6aa119ff.tap",
-    "result": "PASS_40_OF_40",
+    "artifactLocation": "/tmp/d2a-security-closeout-b85f07c8.tap",
+    "result": "PASS_41_OF_41",
     "convergenceCases": "PASS_22_OF_22",
-    "negativeControls": "PASS_13_OF_13_EXECUTABLE_MUTANTS",
-    "bindingNegativeControls": "PASS_4_OF_4_FAIL_CLOSED",
+    "negativeControls": "PASS_14_OF_14_EXECUTABLE_MUTANTS",
+    "bindingNegativeControls": "PASS_14_OF_14_FAIL_CLOSED",
     "determinism": "PASS_3_OF_3",
     "pendingEventTelemetryGate": "PASS",
-    "originalFinding": "CORRECTED_BY_VERIFIED_COMPENSATION"
+    "originalFinding": "CORRECTED_BY_VERIFIED_COMPENSATION_AND_SESSION_ISOLATION"
   },
-  "sessionIdentityRollover": {"case":"DEFERRED_NATIVE_SESSION_ROLLOVER_ORIGIN_ONLY_COMPENSATED","code":"D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE","result":"PASS_ORIGIN_NATIVE_COMPENSATION_RETURN_FALSE","replacementSessionWrites":false,"recoverableMessage":true,"mutantBypassesFullOriginGuard":true},
+  "sessionIdentityRollover": {"cases":8,"forwardCode":"D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE","compensationCode":"ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE","result":"PASS_ORIGIN_ONLY_FALSE_NO_REPLACEMENT_TOUCH","replacementSessionWrites":false,"recoverableMessage":true,"capturedStrictReadback":true,"mutantsRejected":2},
+  "sourceBindingProof": {"expectedFullFiles":8,"declaredFullFiles":8,"validatedFullFiles":8,"expectedSlices":5,"declaredSlices":5,"validatedSlices":5,"rawDuplicateAware":true,"unvisitedBindings":0,"negativeControls":"PASS_14_OF_14"},
+  "scopeWaiver": {
+    "schemaVersion": 1,
+    "contractId": "d2a-livekit-mic-security-closeout-scope-waiver-v1",
+    "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+    "objective": "Close the two exact historical microphone security findings with one product file and executable proof.",
+    "exactReason": "The owner-required eight-window race matrix, fourteen convergence mutants, duplicate-aware eight-file and five-slice verifier, and fourteen binding negative controls exceed the default line budget while remaining one LiveKit microphone state-convergence objective.",
+    "reviewer": "d2a-livekit-mic-security-closeout-four-lane-level-c-review-set",
+    "supportingDomains": ["CI-test-infrastructure", "documentation-metadata"],
+    "secondHighRiskDomain": false,
+    "newTimeboxHours": 8,
+    "fileBudget": {"default": 15, "waivedMaximum": 15},
+    "lineBudget": {"default": 1200, "waivedMaximum": 1500},
+    "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE"
+  },
   "nonInterference": {
     "onlyProductPath": "hooks/use-livekit-chat-call-session.ts",
     "startupInitialConnectChanged": false,
@@ -88,7 +114,7 @@
   "proofBoundary": {
     "T0_REQUIREMENT": "CLEAR_FOR_BOUNDED_CORRECTION",
     "T1_SOURCE": "SOURCE_BOUND",
-    "T2_MODEL": "EXACT_HOOK_22_CASES_13_MUTANTS_4_BINDING_NEGATIVES_CLEAR",
+    "T2_MODEL": "EXACT_HOOK_22_CASES_14_MUTANTS_14_BINDING_NEGATIVES_CLEAR",
     "T3_INTEGRATION": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T4_NATIVE_PROVIDER": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T5_SIGNED_ARTIFACT": "NOT_PROVED_NOT_REUSED",
