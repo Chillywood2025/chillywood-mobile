@@ -35,12 +35,12 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "4168250b4b3682dd362695aff99c358e22de2445",
-    "tree": "8fa6652846134df0088065ecac7f7aec2fae57a9",
+    "head": "dd0837de9c8b9a5c2bb3d7a33a2a6be3500995ca",
+    "tree": "f151635c0a4e54888f97292e263c4ec57c2c653c",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
-    "productSha256": "9324e85777ece8a79628bd662ddd3477cbed3a13f92cfcb1c5cc055c77344c5d",
+    "productSha256": "02502d3e91a15b2ffeeac49ea04690d38a98662a0bef2e29b9eaf8a2cc9fa31e",
     "testSha256": "52d8f2280033ee7709aeccb4983d5e967feb9bd3b0db53d7e75418bd903b32cb",
-    "contractSha256": "e2a39dc2e7f331db3ca9d007cdf8eaea61011117bfbe662a2e638824417f8549",
+    "contractSha256": "e393ab6ba810626f7a41854bbcd846b9f9bcd608612beefbde6d5d36829a2eec",
     "convergenceMatrixSha256": "60ff0ea64262940d4b6b741d694028b5af51053009f76707fc4499f0f388cebb",
     "negativeControlsSha256": "c596d64dd725e97ed4c32e87cbe234162da5ef685d80f05663a9824655db6eab",
     "bindingNegativeControlsSha256": "545cbee76139ba24d97f9f9526546a21cbe9b3c283874faf8c711afe54fbef55",
@@ -70,11 +70,11 @@
     "bind the transaction to session key generation product room identity and LiveKit room before and after each awaited mutation or readback"
   ],
   "focusedProof": {
-    "receiptIdentityHash": "7d6d2b4249a8ce626f75e08e083d201910eef1b454d2d665d92c7644ad8f6793",
-    "receiptFileSha256": "d6ae389232d54b303f4c8e761db842d327278602454f48dc65e7869938071e98",
-    "combinedOutputSha256": "d6ae389232d54b303f4c8e761db842d327278602454f48dc65e7869938071e98",
+    "receiptIdentityHash": "13f8cf2c5fcf0e99116f78de342d246845ca8dbd86e9c247fca1423f109a26e3",
+    "receiptFileSha256": "4c1e2c8aef914ba9fa01493a181f6058fbd05dce2032737911ad500014a41f45",
+    "combinedOutputSha256": "4c1e2c8aef914ba9fa01493a181f6058fbd05dce2032737911ad500014a41f45",
     "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
-    "artifactLocation": "/tmp/d2a-security-closeout-b85f07c8.tap",
+    "artifactLocation": "/tmp/compat",
     "result": "PASS_47_OF_47",
     "convergenceCases": "PASS_25_OF_25",
     "negativeControls": "PASS_15_OF_15_EXECUTABLE_MUTANTS",
