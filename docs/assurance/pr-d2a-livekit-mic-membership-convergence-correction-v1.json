@@ -35,14 +35,14 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "dd0837de9c8b9a5c2bb3d7a33a2a6be3500995ca",
-    "tree": "f151635c0a4e54888f97292e263c4ec57c2c653c",
+    "head": "8b828aa59daf7c60353236b005cf465835edfbec",
+    "tree": "c0fff52180769c14feeeacf046d6007716a0b557",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
-    "productSha256": "02502d3e91a15b2ffeeac49ea04690d38a98662a0bef2e29b9eaf8a2cc9fa31e",
-    "testSha256": "52d8f2280033ee7709aeccb4983d5e967feb9bd3b0db53d7e75418bd903b32cb",
-    "contractSha256": "e393ab6ba810626f7a41854bbcd846b9f9bcd608612beefbde6d5d36829a2eec",
-    "convergenceMatrixSha256": "60ff0ea64262940d4b6b741d694028b5af51053009f76707fc4499f0f388cebb",
-    "negativeControlsSha256": "c596d64dd725e97ed4c32e87cbe234162da5ef685d80f05663a9824655db6eab",
+    "productSha256": "8d20ca5a8dd1d70d22ef4d312280f4284e150f16b3bc030e4801224f0456ff01",
+    "testSha256": "eaa1688a77e5bc37274f9a923f998f29c0f899f0e585d4ba9b6cdad0c9988c2d",
+    "contractSha256": "52aa7cace598894cba341dcb37308e462f7d2f3584833acb64aeb71646012df5",
+    "convergenceMatrixSha256": "3905b2aa17d9cd6d2f43cd7d47b692e35550b02c08d03a470acf379ce244c4cf",
+    "negativeControlsSha256": "0e53ba249745870329c49da16018d9feccde869b758c8b4147faf82066029f8a",
     "bindingNegativeControlsSha256": "545cbee76139ba24d97f9f9526546a21cbe9b3c283874faf8c711afe54fbef55",
     "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c"
   },
@@ -69,21 +69,31 @@
     "block replay and report a bounded runtime reconciliation error when compensation is unprovable",
     "bind the transaction to session key generation product room identity and LiveKit room before and after each awaited mutation or readback"
   ],
-  "focusedProof": {
-    "receiptIdentityHash": "13f8cf2c5fcf0e99116f78de342d246845ca8dbd86e9c247fca1423f109a26e3",
-    "receiptFileSha256": "4c1e2c8aef914ba9fa01493a181f6058fbd05dce2032737911ad500014a41f45",
-    "combinedOutputSha256": "4c1e2c8aef914ba9fa01493a181f6058fbd05dce2032737911ad500014a41f45",
-    "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
+  "historicalFocusedProof": {
+    "executionHead": "dd0837de9c8b9a5c2bb3d7a33a2a6be3500995ca",
     "artifactLocation": "/tmp/compat",
+    "combinedOutputSha256": "4c1e2c8aef914ba9fa01493a181f6058fbd05dce2032737911ad500014a41f45",
     "result": "PASS_47_OF_47",
+    "status": "HISTORICAL_PRE_POST_AWAIT_CORRECTION_NOT_CURRENT_PROOF"
+  },
+  "focusedProof": {
+    "executionHead": "8b828aa59daf7c60353236b005cf465835edfbec",
+    "executionTree": "c0fff52180769c14feeeacf046d6007716a0b557",
+    "receiptIdentityHash": "4806d8df06f8f0da41db13505f6f56dd155fe8e0c3be47cad5d84ab95aa4ba16",
+    "receiptFileSha256": "b67dbc164bcbf903b1ab20812429dd2b1004fddada34976f31c5f673ca03cd19",
+    "combinedOutputSha256": "b67dbc164bcbf903b1ab20812429dd2b1004fddada34976f31c5f673ca03cd19",
+    "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
+    "artifactLocation": "/tmp/d2a-evidence-8b828aa5.tap",
+    "result": "PASS_50_OF_50",
     "convergenceCases": "PASS_25_OF_25",
-    "negativeControls": "PASS_15_OF_15_EXECUTABLE_MUTANTS",
+    "negativeControls": "PASS_17_OF_17_EXECUTABLE_MUTANTS",
     "bindingNegativeControls": "PASS_14_OF_14_FAIL_CLOSED",
     "determinism": "PASS_3_OF_3",
     "pendingEventTelemetryGate": "PASS",
-    "originalFinding": "CORRECTED_BY_VERIFIED_COMPENSATION_AND_SESSION_ISOLATION"
+    "originalFinding": "CORRECTED_BY_VERIFIED_COMPENSATION_AND_SESSION_ISOLATION",
+    "postAwaitRollbackFinding": "D2A_STALE_FAILURE_COMPENSATION_SHARED_STATE / ANDROID_MIC_STALE_ROLLBACK_POST_AWAIT_STATE_WRITE_RESOLVED_BY_TWO_POST_AWAIT_ORIGIN_GUARDS"
   },
-  "sessionIdentityRollover": {"cases":14,"forwardCode":"D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE","compensationCode":"ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE","pendingOwnerCode":"ANDROID_MIC_STALE_FINALLY_CLEARS_REPLACEMENT_PENDING","result":"PASS_ORIGIN_ONLY_FALSE_NO_REPLACEMENT_TOUCH","replacementSessionWrites":false,"recoverableMessage":false,"capturedStrictReadback":true,"mutantsRejected":3},
+  "sessionIdentityRollover": {"cases":14,"forwardCode":"D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE","compensationCode":"ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE","pendingOwnerCode":"ANDROID_MIC_STALE_FINALLY_CLEARS_REPLACEMENT_PENDING","postAwaitRollbackCode":"ANDROID_MIC_STALE_ROLLBACK_POST_AWAIT_STATE_WRITE","result":"PASS_ORIGIN_ONLY_FALSE_NO_REPLACEMENT_TOUCH","replacementSessionWrites":false,"recoverableMessage":false,"capturedStrictReadback":true,"mutantsRejected":5},
   "sourceBindingProof": {"expectedFullFiles":8,"declaredFullFiles":8,"validatedFullFiles":8,"expectedSlices":5,"declaredSlices":5,"validatedSlices":5,"rawDuplicateAware":true,"unvisitedBindings":0,"negativeControls":"PASS_14_OF_14"},
   "scopeWaiver": {
     "schemaVersion": 1,
@@ -114,7 +124,7 @@
   "proofBoundary": {
     "T0_REQUIREMENT": "CLEAR_FOR_BOUNDED_CORRECTION",
     "T1_SOURCE": "SOURCE_BOUND",
-    "T2_MODEL": "EXACT_HOOK_22_CASES_14_MUTANTS_14_BINDING_NEGATIVES_CLEAR",
+    "T2_MODEL": "EXACT_HOOK_25_CASES_17_MUTANTS_14_BINDING_NEGATIVES_CLEAR",
     "T3_INTEGRATION": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T4_NATIVE_PROVIDER": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T5_SIGNED_ARTIFACT": "NOT_PROVED_NOT_REUSED",
