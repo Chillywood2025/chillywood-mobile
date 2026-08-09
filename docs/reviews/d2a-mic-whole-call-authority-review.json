@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "d2a-mic-whole-call-authority-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "whole-call-authority-and-non-regression",
+  "classification": "FINAL_EXACT_SOURCE_REVIEW",
+  "implementationPrNumber": 194,
+  "implementationBranch": "codex/d2a-livekit-mic-membership-convergence-correction",
+  "sourceBaseHead": "fc1616d5da5bc0e521c2158c6ffb68d24b898e7a",
+  "implementationHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+  "implementationTree": "4ce01fa17e4184f2523b82a10401e3b3f59dd641",
+  "currentTruthBindingMerge": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+  "reviewedRange": "fc1616d5da5bc0e521c2158c6ffb68d24b898e7a..c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+  "reviewedSourceDeltaSha256": "147c16bdc2017496d8f14e0b01c2ba30d714d587b3fcd4b35f79a90de377f679",
+  "changedFileSha256": "4c366a77f55f22512289147895f24139520ba11e60892ace566723013a098b9f",
+  "changedPathSetSha256": "9e59302c0e80c4f2d56c2beab2e693923dbf79e8423bb0e7d1c3fd70ee608343",
+  "activeTaskPacket": {"sha256": "408723eafea6222f3f7fb91bbb77bb613cc140b24370a98a90467f856adddab3", "bytes": 4865, "determinism": "3/3_BYTE_IDENTICAL"},
+  "ancestryVerification": {"sourceBaseIsAncestorOfImplementation": true, "implementationIsAncestorOfReviewBranch": true, "result": "PASS"},
+  "prProviderHeadMatch": {"expected": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "observed": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "result": "PASS"},
+  "securityEvidence": {"classification": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED", "sha256": "7ec97ec736324cc8d23f8905daf4737dc3fcb29a9759a7feb7074c73d56960b1", "codexSealed": false},
+  "laneChecks": {
+    "durableConfirmationBeforeCommit": "PASS",
+    "staleReplacementStateWrites": "DENIED",
+    "capturedOriginRollback": "PASS",
+    "leaseAndPendingOwnership": "PASS",
+    "callRemainsActiveOnFailure": "PASS",
+    "tokenReissue": "ABSENT",
+    "providerCrossover": "ABSENT",
+    "cleanupOrCallEnd": "ABSENT",
+    "cameraOrSpeakerMutation": "ABSENT",
+    "t3ThroughT7Substitution": "DENIED",
+    "scope": "PASS_ONE_PRODUCT_FILE"
+  },
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 1},
+  "findings": [
+    {"id": "authority-metadata.t2-proof-boundary-conflict", "severity": "P3", "status": "open-fail-closed", "evidence": "The authoritative contract retains T2_MODEL blocked while correction evidence labels exact-hook clear; the contract remains authoritative and no proof tier is promoted."}
+  ],
+  "remainingFindings": ["authority-metadata.t2-proof-boundary-conflict"],
+  "status": "FINAL_PASS_WITH_P3_EXACT_SOURCE_BOUND",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "disposition": "DRAFT_REVIEW_ONLY_NEVER_MERGE"
+}
