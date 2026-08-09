@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "contractId": "assurance-efficiency-e0-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Add deterministic context and evidence infrastructure that removes only provably duplicate assurance work while preserving every proof tier, mandatory gate, review lane and stop condition.",
+  "exactReason": "The Owner-authorized E0 packet, exact-key evidence index, allowlisted receipt runner, repository skill, review archive, shadow benchmark, tests and E1 read-only proposal require up to 18 authored files and 2500 net authored lines in one CI-test-infrastructure assurance domain.",
+  "reviewer": "e0-four-compact-level-c-exact-head-review-set",
+  "supportingDomains": ["CI-test-infrastructure", "documentation-metadata"],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {"default": 15, "waivedMaximum": 18},
+  "lineBudget": {"default": 1200, "waivedMaximum": 2500},
+  "reviewStatus": "FOUR_COMPACT_LEVEL_C_EXACT_HEAD_LANES_REQUIRED_BEFORE_MERGE",
+  "featureId": "assurance-efficiency-e0",
+  "canonicalTruth": "config/assurance/current-truth-v1.json",
+  "requiredOperations": ["resume", "plan", "run-focused", "freeze", "review", "current-truth", "closeout"],
+  "cacheKeyFields": ["sourceHead", "sourceTree", "commandContractId", "inputSetHash", "toolchainIdentity", "platform", "configurationHash"],
+  "neverReusableEvidence": ["provider", "signed-artifact", "installed-device", "physical", "public-canary", "time-limited"],
+  "reusableEvidence": ["exact-unchanged-source", "exact-unchanged-model", "exact-unchanged-security"],
+  "routingClasses": ["deterministic-low-cost", "focused-review", "strong-semantic"],
+  "modelToolRouting": {
+    "deterministic-low-cost": ["Git inventory", "hashes", "JSON generation", "allowlisted command execution", "current-truth rendering", "PR-body updates", "CI receipt formatting"],
+    "focused-review": ["bounded test triage", "exact-diff review", "routine compatibility analysis", "review-manifest generation"],
+    "strong-semantic": ["architecture", "security-sensitive corrections", "real P0/P1 investigation", "concurrency reasoning", "whole-app adversarial discovery", "ambiguous final failures"]
+  },
+  "codeReviewPolicy": {"maximumRunsPerFrozenSourceHead": 1, "classification": "additional-semantic-signal", "formalLaneReplacementPermitted": false, "e1GovernanceChangeOnly": true},
+  "reviewLanes": ["architecture-state", "security-authority", "proof-equivalence-native-provider", "privacy-rollback-determinism"],
+  "benchmarkBaselines": ["D2C", "D2B"],
+  "waitLimitMinutes": 15,
+  "negativeControls": ["different-tree", "different-toolchain", "android-for-ios", "historical-provider-as-fresh", "active-review-archived", "p1-omitted", "mandatory-test-dropped", "raw-success-log-in-context", "arbitrary-shell-command", "sealed-scan-after-source-change"],
+  "prohibitedScope": ["product source", "native source or behavior", "database or provider mutation", "money entitlements roles auth or RLS", "build OTA release or installed artifacts", "D2A", "E1 implementation", "Phase 1 job requirements", "Level C review-count semantics", "generated Android or iOS directories", "deno.lock"]
+}

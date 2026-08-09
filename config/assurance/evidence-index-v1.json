@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "contractId": "assurance-evidence-index-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/evidenceIndex",
+  "entries": [
+    {
+      "key": "f64fde6c7f67176796a1d6a1c3ed6f59ae20467d2c1479d6aa4891b00d570aee",
+      "sourceHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486",
+      "sourceTree": "7ab5c40dd1d667337001e2d501ddf87ab20ad889",
+      "commandContractId": "codex-security-sealed-scan-v1",
+      "inputSetHash": "5bcc1ba7ec5fd77c3466bdd0542822abe9fbd0b3404d302c825c72add4acb3f8",
+      "toolchainIdentity": "codex-security-sealed-metadata-v1",
+      "platform": "repository",
+      "configurationHash": "5bcc1ba7ec5fd77c3466bdd0542822abe9fbd0b3404d302c825c72add4acb3f8",
+      "integritySha256": "2dff7a4c6dbab3d780b49775538690bfdb0423e0546187caeb731ff3b084cdaa",
+      "receiptHash": "a31ddd6510e4498e82f8b30676edf1db8ff3527a8f46b011bd3c15bfa3d85117",
+      "scanId": "3f60ac52cdf514ebd061e7134d6fffd9319ac486_20260808T232208Z",
+      "evidenceClass": "exact-unchanged-security",
+      "immutable": true,
+      "artifactLocator": "git:bbfa59e35a9aaa81afc2a456dea247881dd71b19:config/assurance/current-truth-v1.json"
+    }
+  ]
+}
