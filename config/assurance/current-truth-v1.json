@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "fb65960c1bdd17f4823180da0d2f5c0db3a67b73",
-  "latestMergedImplementationPr": {"number": 152, "state": "merged", "head": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580", "mergeSha": "c8a7c8cc426c6f532f2a3c25cdfc9cc3e9374dff", "title": "Require trusted iOS CallKit provenance for native call transitions"},
+  "mainSha": "62af197070b997cfeaf949baab17ec6c56d8a64c",
+  "latestMergedImplementationPr": {"number": 170, "state": "merged", "head": "3f60ac52cdf514ebd061e7134d6fffd9319ac486", "mergeSha": "62af197070b997cfeaf949baab17ec6c56d8a64c", "title": "Replace unpatched Metro image-size dependency safely"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -136,6 +136,19 @@
   "d2bCurrentTruthBinding": {
     "implementationPr": 164,
     "branch": "codex/first-pass-assurance-android-native-action-origin-backup-correction",
+    "dependencyPrerequisite": {
+      "implementationPr": 170,
+      "sourceHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486",
+      "sourceTree": "7ab5c40dd1d667337001e2d501ddf87ab20ad889",
+      "mergeSha": "62af197070b997cfeaf949baab17ec6c56d8a64c",
+      "securityScanId": "3f60ac52cdf514ebd061e7134d6fffd9319ac486_20260808T232208Z",
+      "securityReportSha256": "5bcc1ba7ec5fd77c3466bdd0542822abe9fbd0b3404d302c825c72add4acb3f8",
+      "securityCoverage": "15/15_COMPLETE_FINDINGS_0_DEFERRED_0",
+      "phase1Ci": "RUN_31286322456_13/13_PASS",
+      "productionAudit": {"rootCritical": 0, "rootHigh": 0, "alertCritical": 0, "alertHigh": 0},
+      "reviewPrs": [171, 172, 173, 174],
+      "reviewDisposition": "CLOSED_UNMERGED_BRANCHES_RETAINED_P0_0_P1_0"
+    },
     "immutableSourceHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
     "immutableSourceTree": "9906f1d347c5f11696a6f914caf8d7b41325a20d",
     "parentPreservedCheckpoint": "44741942afb8062d9348e555b7d29a5dc9c2ca3a",
@@ -202,8 +215,8 @@
     "phase1Ci": null,
     "delivery": {"newAndroidBinaryRequired": true, "build86ContainsFix": false, "otaCompatibleFix": false, "sourceFixDelivered": false},
     "levelAReviewPr": 124,
-    "mayProceed": {"baseSynchronization": false, "merge": false, "binaryBuild": false, "otaPublication": false, "providerContact": false, "release": false},
-    "state": "IMMUTABLE_SOURCE_BOUND_PRE_BASE_SYNC_LEVEL_C_V1_P0_0_P1_0"
+    "mayProceed": {"baseSynchronization": true, "merge": false, "binaryBuild": false, "otaPublication": false, "providerContact": false, "release": false},
+    "state": "IMMUTABLE_SOURCE_BOUND_DEPENDENCY_PREREQUISITE_MERGED_BASE_SYNC_NEXT"
   },
   "enabledCognitiveSwitches": ["cognitive_android_visual_sentinel", "cognitive_ios_visual_sentinel"],
   "enabledSchedules": [],
@@ -239,7 +252,7 @@
   },
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
   "openImplementationPrs": [
-    {"number": 164, "branch": "codex/first-pass-assurance-android-native-action-origin-backup-correction", "head": "b046fd9aaca923927158bd2491e8daf4946cb94c", "tree": "9906f1d347c5f11696a6f914caf8d7b41325a20d", "state": "open-draft-immutable-source-bound-pre-base-sync", "disposition": "implementation-candidate-not-yet-merge-ready"}
+    {"number": 164, "branch": "codex/first-pass-assurance-android-native-action-origin-backup-correction", "head": "b046fd9aaca923927158bd2491e8daf4946cb94c", "tree": "9906f1d347c5f11696a6f914caf8d7b41325a20d", "state": "open-draft-immutable-source-bound-dependency-prerequisite-merged-base-sync-next", "disposition": "implementation-candidate-not-yet-merge-ready"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -276,6 +289,10 @@
     {"number": 166, "branch": "codex/first-pass-assurance-d2b-review-generated-native-release-scope", "head": "bbefc0f45a456d4b7b36759e7e1b7381094dac26", "reviewedImplementationHead": "b046fd9aaca923927158bd2491e8daf4946cb94c", "evidenceVersions": ["v1"], "currentEvidenceVersion": "v1", "state": "open-draft-current-p0-0-p1-0-p2-3", "disposition": "never-merge"}
   ],
   "closedReviewOnlyPrDispositions": [
+    {"number": 171, "branch": "codex/assurance-image-size-safe-review-vulnerability", "head": "9842cc3352749ea53c88b8e285da0a514a6248ec", "reviewedImplementationHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-branch-retained-never-merge"},
+    {"number": 172, "branch": "codex/assurance-image-size-safe-review-metro-api", "head": "c8c2542411a0048ca5898aa7bdcf7b6f7a5ac25b", "reviewedImplementationHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-1-assigned-dependency-maintenance-branch-retained-never-merge"},
+    {"number": 173, "branch": "codex/assurance-image-size-safe-review-supply-chain", "head": "aeb23d0cbed59945217e113cb9498e20925639c1", "reviewedImplementationHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-branch-retained-never-merge"},
+    {"number": 174, "branch": "codex/assurance-image-size-safe-review-scope-noninterference", "head": "363fab37d20c2ba50c31409758ad12f5967ba55e", "reviewedImplementationHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-branch-retained-never-merge"},
     {"number": 157, "branch": "codex/first-pass-assurance-d2c-review-native-event-claim", "head": "1603feb8e63b46481875a71ba68f8a170278b669", "reviewedImplementationHead": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-3-assigned-d3-branch-retained-never-merge"},
     {"number": 158, "branch": "codex/first-pass-assurance-d2c-review-url-route-security", "head": "92443feeb191e38bf374f8cda21dbfdd28d5b538", "reviewedImplementationHead": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-2-assigned-d3-branch-retained-never-merge"},
     {"number": 159, "branch": "codex/first-pass-assurance-d2c-review-call-server-authority", "head": "f2c3fb4015a93ab38f9dba6de73aae420832e5ac", "reviewedImplementationHead": "16e9bab2626df8db8eff5a3a64d30c57e4ff5580", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-5-assigned-d3-branch-retained-never-merge"},
@@ -312,15 +329,15 @@
     {"number": 138, "branch": "codex/assurance-reconcile-revenuecat-transfer-review-concurrency-atomicity", "head": "ca69c38368be9bb1d65b717b94c039ebc8829e5a", "reviewedImplementationHead": "81892f3dae544713d8e35512da895cd99c610966", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152"],
-    "active": "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-CURRENT-TRUTH-BINDING",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170"],
+    "active": "PR-D2B-BASE-SYNCHRONIZATION-AFTER-DEPENDENCY-PREREQUISITE-AND-TRUTH-PR-169",
     "nextActions": [
-      "Merge this exact three-file D2B current-truth binding only after persistent Level A PR #124 reports P0=0/P1=0, deterministic output passes 3/3, and its exact Phase 1 CI passes; close PR #124 unmerged and retain its branch.",
-      "Then merge current main normally into draft PR #164 without rebase or force-push, preserve immutable source b046fd9aaca923927158bd2491e8daf4946cb94c in ancestry, and rerun the synchronized-head focused Android gate because the tree changes.",
+      "Merge this refreshed exact three-file D2B current-truth binding only after persistent Level A PR #124 reports P0=0/P1=0, deterministic output passes 3/3, and its exact Phase 1 CI passes; close PR #124 unmerged and retain its branch.",
+      "Then merge current main including dependency prerequisite PR #170 normally into draft PR #164 without rebase or force-push, preserve immutable source b046fd9aaca923927158bd2491e8daf4946cb94c in ancestry, and rerun the synchronized-head focused Android gate because the tree changes.",
       "Reuse review PRs #165, #167, #168 and #166 additively for the synchronized implementation head; require each current Level C lane P0=0/P1=0 and one exact synchronized-head Phase 1 CI 13/13 before merging only PR #164.",
       "After PR #164 merges, create one exact three-file post-D2B current-truth synchronization, record NEW_ANDROID_BINARY_REQUIRED and build 86 lacks the fix, then stop with D2A frozen until E0 merges.",
       "E0 is the sole next implementation after post-D2B truth. Do not create E0, resume D2A, start W1-W3, or start D3 under the current authorization.",
-      "Keep the Codex Security source review and independent exact-head security review as complete P0=0/P1=0 evidence while accurately preserving the unsealed report as BLOCKED_TOOLING_CODEX_SECURITY_FINALIZATION_METADATA; do not invent snapshotDigest.",
+      "Keep the D2B Codex Security source review and independent exact-head security review as complete P0=0/P1=0 evidence while accurately preserving the unsealed D2B report as BLOCKED_TOOLING_CODEX_SECURITY_FINALIZATION_METADATA; separately retain the sealed dependency scan for exact PR #170 source.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
       "Keep B1 20260730230022, B2 20260730170000, and B3 20260730230031 represented in Git and undeployed.",
       "Keep PR E blocked until every required PR D successor merges; keep PR F blocked until PR E merges.",
@@ -332,9 +349,25 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-08T20:50:00Z",
-  "freshnessDeadline": "2026-08-09T20:50:00Z",
+  "timestamp": "2026-08-09T00:39:03Z",
+  "freshnessDeadline": "2026-08-10T00:39:03Z",
   "evidenceSources": [
+    {
+      "id": "image-size-safe-dependency-prerequisite-merge-20260809-0039",
+      "mode": "local-offline-official-npm-and-github-read-only",
+      "covers": [
+        "dependency prerequisite PR #170 source 3f60ac52cdf514ebd061e7134d6fffd9319ac486 tree 7ab5c40dd1d667337001e2d501ddf87ab20ad889 merged normally as 62af197070b997cfeaf949baab17ec6c56d8a64c",
+        "sealed Codex Security diff scan 3f60ac52cdf514ebd061e7134d6fffd9319ac486_20260808T232208Z report SHA-256 5bcc1ba7ec5fd77c3466bdd0542822abe9fbd0b3404d302c825c72add4acb3f8 coverage 15/15 reportable findings 0 deferred 0",
+        "exact Node 20.20.2 npm 10.8.2 root production audit critical 0 high 0 moderate 21 and alert automation critical 0 high 0",
+        "no vulnerable upstream image-size copy remains; Metro resolves private local @chillywood/image-size-safe 1.2.1-chillywood.1 and both supplied parser advisory classes reject boundedly",
+        "lock and package pack deterministic 3/3, Metro asset and offline bundle compatibility pass, Expo Doctor 18/18",
+        "generated Android digest remains 4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b and iOS digest remains e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0",
+        "Level C review PRs #171 through #174 P0=0 P1=0 and closed unmerged with branches retained",
+        "exact Phase 1 CI run 31286322456 passed 13/13 at source head",
+        "D2B immutable source b046fd9aaca923927158bd2491e8daf4946cb94c remained unchanged, D2C unchanged, D2A 8c47a3a9bff9f9630ba14837652ec31c14be0629 frozen",
+        "no external package publication provider build OTA database migration money entitlement role right auth RLS switch schedule user-derived memory or Level 2 action"
+      ]
+    },
     {"id": "d2b-immutable-source-security-and-level-c-v1-binding-20260808-2050", "mode": "local-offline-and-github-read-only", "covers": ["current main fb65960c1bdd17f4823180da0d2f5c0db3a67b73", "draft PR #164 immutable D2B source b046fd9aaca923927158bd2491e8daf4946cb94c tree 9906f1d347c5f11696a6f914caf8d7b41325a20d", "20 files with 2793 additions and 541 deletions net 2252 under the explicit 20-file 3000-line Android native-action trust-boundary waiver", "generated Android source stable 3/3 at d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0 while build 86 remains at 4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b and lacks the fix", "Gradle core Kotlin unit and Android instrumentation compile pass with unit 5/5 instrumentation 6/6 four adversary origins denied fatal scan clear and cleanup clear", "backup policy source generation and compile clear for legacy cloud device and cross-platform transfer with unrelated preferences retained", "runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored control action and replay values null and D2A as proof owner", "T3 partial and T4 compile/emulator partial; T5 T6 and T7 remain missing or blocked", "Codex Security scan 508c30b1-cf43-4902-96f1-92563d490149 source review complete 20/20 with P0=0 P1=0 but sealed report blocked by host snapshotDigest metadata; no digest invented and independent exact-head review P0=0 P1=0", "persistent Level C draft review PRs #165 #167 #168 and #166 report aggregate P0=0 P1=0 at immutable source v1 and must never merge", "D2A 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f remains frozen until E0 merges", "D2C remains unchanged and canonical shared provenance is reused", "NEW_ANDROID_BINARY_REQUIRED and no build OTA provider physical signed public database migration money entitlement role right auth RLS switch schedule memory or Level 2 action"]},
     {"id": "d2c-merge-closeout-20260803-0159", "mode": "local-offline-and-github-read-only", "covers": ["starting main ddc5bfa92d8bf70a3374e1dee6983c2bc8cf9874", "D2A local and remote checkpoint 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f preserved frozen with no PR", "D2B blocked remote checkpoint 44741942afb8062d9348e555b7d29a5dc9c2ca3a tree 6bdc50191f6756271ccb050fa94d3045d6e9fa3e preserved with no PR", "immutable D2C source 442852da70d723aedcf6ad1fa76c2f3eb23d3e0e tree d78792b30a1b61b4673b7423f031cf586db22592", "final synchronized D2C head 16e9bab2626df8db8eff5a3a64d30c57e4ff5580 tree f276aee4a82348bc56ad46d2af9ba54da70388e6 canonical with current main 33509b3edebf5628e41fc2c7c15b7aaa133d9b26", "PR #152 merged normally as c8a7c8cc426c6f532f2a3c25cdfc9cc3e9374dff with exact synchronized tree", "source delta raw SHA-256 f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf and path-set SHA-256 868570e117229720fbdc71a52b7030e1c824e1c35e5b04d01ffce7257c0a27bf", "pre-fix 10/10 trusted positives 78/78 producer denials 8/8 route denials 30/30 and executable mutants 48/48", "iOS generated-source digest unchanged 3/3 at e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0 with 26/26 capabilities", "focused unsigned ChillywoodNativeCalls simulator compile passed without signing at Xcode 26.5 sanitized log SHA-256 f2a0ef6d668b5b83a5bf3c446882f43ffcaa401329b784503eae3eb0fefc5d01", "review PRs #157 #158 #159 and #160 final aggregate P0=0 P1=0 and closed unmerged with branches retained", "exact Phase 1 CI run 30777244198 attempt 2 passed 13/13 at synchronized head", "iOS source fix not delivered and no provider physical device EAS TestFlight OTA binary database migration money entitlement role right auth RLS switch schedule memory Level 2 or public-release mutation"]},
     {"id": "d2c-final-pre-synchronization-source-head-binding-20260803-0126", "mode": "local-offline-and-github-read-only", "covers": ["current main b671fc21c8c512ce9a4d0c9176bfc42749b92f0b", "immutable D2C implementation source 442852da70d723aedcf6ad1fa76c2f3eb23d3e0e tree d78792b30a1b61b4673b7423f031cf586db22592 preserved in ancestry", "final pre-synchronization D2C source head 33d1d108ef35b7a5927d3c4c0c71aa4b9ca6ed4a tree 41766743f1df214a9fedf23b7775e787e28adfd1", "D2C source delta against parent main remains raw-byte SHA-256 f1939fee7909e629c4dd32b026c52024d2b319ee4aa359053a85aee64aca7ccf and changed-file SHA-256 d326b324add46a7610db1258253c56b65d8ff19c983269fc279c670a3ba9531c", "the additional D2C first-parent commit is the required reviewed three-file Level C lane current-truth merge only", "review PRs #157 through #160 remain draft never-merge with aggregate P0=0 P1=0 and historical evidence retained", "this binding restores an exact one-commit canonical base-synchronization shape from 33d1d108 to the next current main", "no provider physical EAS TestFlight OTA database migration money entitlement role right auth RLS switch schedule memory Level 2 or release mutation"]},
