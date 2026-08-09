@@ -48,10 +48,10 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - PR #98 at `278eb5e2326d2a7b7d12b6ba8b373541640d4e90`: open-draft-current, reviews `867af2a2c446c4cea5b38cc990bd0143dac446c3`; never-merge.
 - PR #104 at `a8f689702e83fab1b5c85119d9d638f8bfabda3b`: open-draft-current, reviews `2cf85211ca8f832bd929619423a04fb52dce275e`; never-merge.
 - PR #110 at `d43b460cc2f82cb296668117a0bf73648dacd701`: open-draft-current, reviews `502f9e2659d96389ae418b11f83171b171b5a708`; never-merge.
-- PR #186 at `3e5fc14cb9a3a14c012af25bbd8d3923afd6f1bd`: open-draft-current-pending-final-review, reviews `a367da2eb673e550b15d61f20a90ebf9fe5a25b6`; never-merge.
-- PR #187 at `1a8cb60cb17a443f714eb3dcfadc50da3bfea082`: open-draft-current-pending-final-review, reviews `a367da2eb673e550b15d61f20a90ebf9fe5a25b6`; never-merge.
-- PR #188 at `24fcc49b960b6c0c470e05a4c9ec3b862728dc32`: open-draft-current-pending-final-review, reviews `a367da2eb673e550b15d61f20a90ebf9fe5a25b6`; never-merge.
-- PR #189 at `243d2720c09b9d8b99ecd34f9123fc8c8300aa3c`: open-draft-current-pending-final-review, reviews `a367da2eb673e550b15d61f20a90ebf9fe5a25b6`; never-merge.
+- PR #186 at `3e5fc14cb9a3a14c012af25bbd8d3923afd6f1bd`: open-draft-stale-pending-corrected-final-review, reviews `03dde5746ab1d60b43d84af1c785ca271947d2c0`; never-merge.
+- PR #187 at `1a8cb60cb17a443f714eb3dcfadc50da3bfea082`: open-draft-stale-pending-corrected-final-review, reviews `03dde5746ab1d60b43d84af1c785ca271947d2c0`; never-merge.
+- PR #188 at `24fcc49b960b6c0c470e05a4c9ec3b862728dc32`: open-draft-stale-pending-corrected-final-review, reviews `03dde5746ab1d60b43d84af1c785ca271947d2c0`; never-merge.
+- PR #189 at `243d2720c09b9d8b99ecd34f9123fc8c8300aa3c`: open-draft-stale-pending-corrected-final-review, reviews `03dde5746ab1d60b43d84af1c785ca271947d2c0`; never-merge.
 
 ## Current external blockers
 
