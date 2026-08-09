@@ -46,7 +46,7 @@
   "findings": [],
   "severityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
   "openSeverityCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
-  "reviewHead": "d215f2997ae396f134bd0bd4e0532697cf78341d",
+  "reviewHead": "96cae90b285c2f715bc7a5b1926e6cdba89bc99f",
   "reviewOnly": true,
   "reviewPrMustNeverMerge": true,
   "reviewPrMergeAuthorized": false,
