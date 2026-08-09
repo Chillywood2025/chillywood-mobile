@@ -38,22 +38,27 @@ function gitEvidence(review, dependencies) {
   } catch { return { ok: false, finding: "REVIEW_EVIDENCE_OR_BRANCH_MISSING" }; }
   let parsed;
   try { parsed = JSON.parse(content); } catch { return { ok: false, finding: "REVIEW_EVIDENCE_UNPARSEABLE" }; }
+  const pending = review.state === "open-draft-stale-pending-corrected-final-review";
+  const status = parsed.status ?? parsed.state ?? "";
   const counts = severityCounts(parsed);
-  if (counts.p0.length !== 1 || counts.p1.length !== 1) return { ok: false, finding: "REVIEW_P0_P1_AMBIGUOUS" };
+  if (pending ? (typeof status !== "string" || !/^PENDING_/u.test(status) || counts.p0.length !== 0 || counts.p1.length !== 0) : counts.p0.length !== 1 || counts.p1.length !== 1) return { ok: false, finding: pending ? "PENDING_REVIEW_STATUS_OR_COUNTS_INVALID" : "REVIEW_P0_P1_AMBIGUOUS" };
+  let branchRetained = false;
+  try { branchRetained = pending ? runGit(["merge-base", "--is-ancestor", review.head, remoteHead]) === "" : remoteHead === review.head; } catch { return { ok: false, finding: "REVIEW_BRANCH_ANCESTRY_INVALID" }; }
   const semanticCounts = unresolvedFindingCounts(parsed.findings);
-  if (!semanticCounts || semanticCounts.p0 !== counts.p0[0] || semanticCounts.p1 !== counts.p1[0]) {
+  if (!pending && (!semanticCounts || semanticCounts.p0 !== counts.p0[0] || semanticCounts.p1 !== counts.p1[0])) {
     return { ok: false, finding: "REVIEW_DECLARED_FINDING_COUNTS_MISMATCH" };
   }
   return {
     ok: true,
     file: paths[0],
     evidenceSha256: sha256(content),
-    p0: counts.p0[0],
-    p1: counts.p1[0],
+    p0: pending ? null : counts.p0[0],
+    p1: pending ? null : counts.p1[0],
+    pending,
     implementationHead: parsed.implementationHead ?? null,
     implementationTree: parsed.implementationTree ?? null,
     implementationPr: parsed.implementationPrNumber ?? null,
-    branchRetained: remoteHead === review.head
+    branchRetained
   };
 }
 
@@ -93,6 +98,8 @@ export function reviewHistory(config, truth, dependencies = {}) {
       continue;
     }
     const candidate = candidateByPr.get(review.number);
+    const pending = evidence.pending === true;
+    if (pending && candidate) findings.push(`PENDING_REVIEW_STALE_CANDIDATE_COLLISION:${review.number}`);
     const protectedHead = (config?.protectedImplementationHeads ?? []).includes(review.reviewedImplementationHead);
     const implementationDisposition = candidate ? config?.implementationDispositions?.[candidate.implementationPr] : null;
     const unresolvedPreserved = candidate?.p1 === 0
@@ -138,6 +145,7 @@ export function reviewHistory(config, truth, dependencies = {}) {
       && review.state === "open-draft-stale"
       && review.disposition === "never-merge"
       && evidence.branchRetained
+      && !pending
       && evidence.p0 === 0
       && unresolvedPreserved
       && exactCandidate
@@ -158,6 +166,7 @@ export function reviewHistory(config, truth, dependencies = {}) {
       unresolvedDisposition: candidate?.unresolvedDisposition ?? "none",
       state: review.state,
       classification: candidate ? "historical" : "active",
+      pending,
       neverMerge: review.disposition === "never-merge",
       branchRetained: evidence.branchRetained,
       closureEligible
