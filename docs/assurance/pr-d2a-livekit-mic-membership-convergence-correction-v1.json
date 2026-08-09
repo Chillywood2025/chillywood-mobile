@@ -35,12 +35,12 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "b8dd2dd1a2bdfe955e50cf979961723f2676ab43",
-    "tree": "260f401a91a69be9c2d7e29be8ac7d3a729d122a",
+    "head": "98485b62cfd2b8f30da98e582322e7478935ecd5",
+    "tree": "7ec3992034b5146a248d6fb492272b226d945b2a",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
-    "productSha256": "4fead91b3eb67441656e1ad5cbef0bc96b58a56fbff9561bcfac430415611712",
+    "productSha256": "0678bb089bdf625e56fec1194cf1ae4336d40671ea938a99f397a9d5dad91d37",
     "testSha256": "0c94bd4532e939126ddb5b187079ceba0db5f5a874e4f8424f724cc87f83af25",
-    "contractSha256": "81f6b0aa4b6710ab0ac5c708505a9a1dbde8473a44bc374c07cbf3ca4c3eb8e5",
+    "contractSha256": "952fce71e8a2f4001b73307bb62c944dfe84a723f806baa1f74d4616dcf6055e",
     "convergenceMatrixSha256": "f60f2c5923ca19855f4c4124646fcadca0a0ffc5b17d16e037af219c5f4eb5ed",
     "negativeControlsSha256": "c839926285efc1c2877973e2adf5bf86bf076fdd5ae40efd55138ea95a8caee8"
   },
@@ -57,11 +57,11 @@
     "bind the transaction to session key generation product room identity and LiveKit room before and after each awaited mutation or readback"
   ],
   "focusedProof": {
-    "receiptIdentityHash": "35c6e418b79e472e76541ae101f7a7ea4e6cb8cea2cff87a46aedb88e8b34235",
-    "receiptFileSha256": "e78bba92a7317cbf87cfc58ac68c01b8eb5c779617a6b895a9b496d790cba6e0",
-    "combinedOutputSha256": "e78bba92a7317cbf87cfc58ac68c01b8eb5c779617a6b895a9b496d790cba6e0",
+    "receiptIdentityHash": "7e62441961d6c359ee534aae9d470bfe97d0541cc045c468355ad6b293bfe233",
+    "receiptFileSha256": "e4f5b0cab304b453550f9efb8629f14db0e5a2557a5d92314242912b8780b1ed",
+    "combinedOutputSha256": "e4f5b0cab304b453550f9efb8629f14db0e5a2557a5d92314242912b8780b1ed",
     "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
-    "artifactLocation": "/tmp/d2a-rollover-focused-b8dd2dd1.tap",
+    "artifactLocation": "/tmp/d2a-rollover-focused-ordering.tap",
     "result": "PASS_32_OF_32",
     "convergenceCases": "PASS_15_OF_15",
     "negativeControls": "PASS_13_OF_13_EXECUTABLE_MUTANTS",
