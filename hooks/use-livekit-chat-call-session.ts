@@ -260,13 +260,13 @@ export function useLiveKitChatCallSession({
   }, []);
 
   const runMediaControl = useCallback(async <T,>(
-    operation: () => Promise<T>,
+    operation: (owner: { token: symbol; sessionKey: string; generation: number }) => Promise<T>,
     binding?: { token?: symbol; sessionKey: string; generation: number },
   ): Promise<T | null> => {
     if (mediaControlRef.current) return null;
     const owner = { token: binding?.token ?? Symbol("media-control"), sessionKey: binding?.sessionKey ?? "", generation: binding?.generation ?? -1 };
     setMediaControlsBusy(true);
-    const pending = operation();
+    const pending = operation(owner);
     mediaControlRef.current = pending;
     mediaControlOwnerRef.current = owner;
     try {
@@ -386,8 +386,7 @@ export function useLiveKitChatCallSession({
   }, []);
 
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
-    const leaseBinding = { token: Symbol("mic-lease"), sessionKey: sessionKeyRef.current, generation: sessionGenerationRef.current };
-    const result = await runMediaControl(async () => {
+    const result = await runMediaControl(async (leaseBinding) => {
       try {
         const liveKitRoom = roomRef.current;
         if (!liveKitRoom || liveKitRoom.state !== ConnectionState.Connected) return false;
@@ -604,7 +603,7 @@ export function useLiveKitChatCallSession({
           pendingMicToggleRef.current = false;
         }
       }
-    }, leaseBinding);
+    }, { sessionKey: sessionKeyRef.current, generation: sessionGenerationRef.current });
     return result === true;
   }, [
     cameraEnabled,
