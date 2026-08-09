@@ -35,14 +35,14 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "d21f67c08304d5fe6609e5272b670e4a60d50809",
-    "tree": "650d315edaa19bb6476913daabae711ccf826058",
+    "head": "b8dd2dd1a2bdfe955e50cf979961723f2676ab43",
+    "tree": "260f401a91a69be9c2d7e29be8ac7d3a729d122a",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
-    "productSha256": "5f68f957d4185375c8425ffdffcd0235e53726ae694b91c9d0d2eac2fd469b05",
-    "testSha256": "6b9781a2d8ef0767c3c126ddba7cdf8fd42f19b2b296252e5a7be3587f4b7d21",
-    "contractSha256": "15a5c8b8568d7be9560147d56bd9bd55ce1a0650c8971232306d79272cb66532",
-    "convergenceMatrixSha256": "f42828547c45db851cd8f2d856692fa4d632fb6856d40495691fefc7afd28b96",
-    "negativeControlsSha256": "db0b293fa8cf87ed430e72a57510d36ca21d3a34a89e1b0a5d38687262a7bb42"
+    "productSha256": "4fead91b3eb67441656e1ad5cbef0bc96b58a56fbff9561bcfac430415611712",
+    "testSha256": "0c94bd4532e939126ddb5b187079ceba0db5f5a874e4f8424f724cc87f83af25",
+    "contractSha256": "81f6b0aa4b6710ab0ac5c708505a9a1dbde8473a44bc374c07cbf3ca4c3eb8e5",
+    "convergenceMatrixSha256": "f60f2c5923ca19855f4c4124646fcadca0a0ffc5b17d16e037af219c5f4eb5ed",
+    "negativeControlsSha256": "c839926285efc1c2877973e2adf5bf86bf076fdd5ae40efd55138ea95a8caee8"
   },
   "protocol": [
     "snapshot exact active room current-user durable requested UI actual mic and camera state",
@@ -53,20 +53,23 @@
     "on failure restore and verify prior actual microphone state",
     "restore and verify prior durable membership with one bounded ambiguity readback",
     "leave requested and UI state unchanged surface a recoverable message and keep the call active",
-    "block replay and report a bounded runtime reconciliation error when compensation is unprovable"
+    "block replay and report a bounded runtime reconciliation error when compensation is unprovable",
+    "bind the transaction to session key generation product room identity and LiveKit room before and after each awaited mutation or readback"
   ],
   "focusedProof": {
-    "receiptIdentityHash": "f1779ecac9a845a117f2a74618cec2469b2106390ce184ac71dde718e8b281f9",
-    "receiptFileSha256": "192ce8c6ee508673b0155e3819da94014f2266131003233af1129ac039d02bc5",
-    "combinedOutputSha256": "c2e970fc63742fcde380652d9ebb2c1cf197ba63596ea28513afe4f4ac3d4c54",
-    "result": "PASS_30_OF_30",
-    "convergenceCases": "PASS_14_OF_14",
-    "negativeControls": "PASS_12_OF_12_EXECUTABLE_MUTANTS",
+    "receiptIdentityHash": "35c6e418b79e472e76541ae101f7a7ea4e6cb8cea2cff87a46aedb88e8b34235",
+    "receiptFileSha256": "e78bba92a7317cbf87cfc58ac68c01b8eb5c779617a6b895a9b496d790cba6e0",
+    "combinedOutputSha256": "e78bba92a7317cbf87cfc58ac68c01b8eb5c779617a6b895a9b496d790cba6e0",
+    "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
+    "artifactLocation": "/tmp/d2a-rollover-focused-b8dd2dd1.tap",
+    "result": "PASS_32_OF_32",
+    "convergenceCases": "PASS_15_OF_15",
+    "negativeControls": "PASS_13_OF_13_EXECUTABLE_MUTANTS",
     "determinism": "PASS_3_OF_3",
     "pendingEventTelemetryGate": "PASS",
     "originalFinding": "CORRECTED_BY_VERIFIED_COMPENSATION"
   },
-  "sessionIdentityRollover": {"code":"D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE","result":"PASS_ORIGIN_ROOM_ONLY_COMPENSATION_RETURN_FALSE","replacementSessionWrites":false},
+  "sessionIdentityRollover": {"case":"DEFERRED_NATIVE_SESSION_ROLLOVER_ORIGIN_ONLY_COMPENSATED","code":"D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE","result":"PASS_ORIGIN_NATIVE_COMPENSATION_RETURN_FALSE","replacementSessionWrites":false,"recoverableMessage":true,"mutantBypassesFullOriginGuard":true},
   "nonInterference": {
     "onlyProductPath": "hooks/use-livekit-chat-call-session.ts",
     "startupInitialConnectChanged": false,
@@ -82,7 +85,7 @@
   "proofBoundary": {
     "T0_REQUIREMENT": "CLEAR_FOR_BOUNDED_CORRECTION",
     "T1_SOURCE": "SOURCE_BOUND",
-    "T2_MODEL": "EXACT_HOOK_14_CASES_12_MUTANTS_CLEAR",
+    "T2_MODEL": "EXACT_HOOK_15_CASES_13_MUTANTS_CLEAR",
     "T3_INTEGRATION": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T4_NATIVE_PROVIDER": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T5_SIGNED_ARTIFACT": "NOT_PROVED_NOT_REUSED",
