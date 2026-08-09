@@ -56,9 +56,20 @@ function safeRule(rule) {
     ["scripts/assurance/review-history.mjs"],
     ["scripts/assurance/benchmark.mjs", "--baseline=all"],
     ["--test", "tests/assurance/efficiency-e0.test.mjs"],
+    ["--test", "tests/assurance/android-generated-native-lifecycle.test.mjs"],
+    ["--test", "tests/assurance/android-chat-call-mic-control.test.mjs"],
+    ["--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
+    ["scripts/assurance/android-generated-native-lifecycle.mjs", "--native", "--json"],
+    ["scripts/assurance/android-generated-native-lifecycle.mjs", "--emulator", "--json"],
+    ["scripts/assurance/android-chat-call-mic-control.mjs", "--native", "--json"],
+    ["scripts/assurance/android-native-call-origin-backup.mjs", "--backup-restore", "--json"],
     ["--version"]
   ].map(JSON.stringify)).has(argv);
-  if (rule.file === "npm") return new Set(["lint", "typecheck", "test:chilly-chat-call-semantics", "test:chilly-chat-native-call-action-handoff"]).has(rule.args[1]) && argv === JSON.stringify(["run", rule.args[1]]);
+  if (rule.file === "npm") {
+    if (argv === JSON.stringify(["ci", "--no-audit", "--no-fund"])) return true;
+    return new Set(["lint", "typecheck", "test:chilly-chat-call-semantics", "test:chilly-chat-native-call-action-handoff"]).has(rule.args[1])
+      && argv === JSON.stringify(["run", rule.args[1]]);
+  }
   return argv === JSON.stringify(["diff", "--check"]);
 }
 
@@ -125,14 +136,31 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
     },
     cleanupState: "SYNCHRONOUS_CHILD_EXITED"
   };
+  const preserveFailure = (failureCategory, finding, includeExcerpt = false) => {
+    const failed = { ...base, failureCategory };
+    const identityHash = sha256({ ...failed, startedAtMs: null, endedAtMs: null, durationMs: null });
+    const writer = dependencies.artifactWriter ?? ((receipt, output) => externalize(identityHash, receipt, output));
+    try {
+      const artifactLocation = writer({ ...failed, identityHash }, redactText(raw));
+      if (typeof artifactLocation !== "string" || artifactLocation.length === 0) throw new Error("missing artifact");
+      return {
+        ok: false,
+        receipt: { ...failed, identityHash, artifactLocation },
+        ...(includeExcerpt ? { failureExcerpt: redactText(raw) } : {}),
+        finding
+      };
+    } catch {
+      return { ok: false, receipt: { ...failed, identityHash, failureCategory: "ARTIFACT_WRITE_FAILED" }, finding: "ARTIFACT_WRITE_FAILED" };
+    }
+  };
   if (execution.error?.code === "ETIMEDOUT") {
-    return { ok: false, receipt: { ...base, failureCategory: "COMMAND_TIMEOUT" }, finding: "COMMAND_TIMEOUT" };
+    return preserveFailure("COMMAND_TIMEOUT", "COMMAND_TIMEOUT");
   }
   if (execution.status !== 0) {
-    return { ok: false, receipt: { ...base, failureCategory: "COMMAND_FAILED" }, failureExcerpt: redactText(raw), finding: "COMMAND_FAILED" };
+    return preserveFailure("COMMAND_FAILED", "COMMAND_FAILED", true);
   }
   if (!parsed.ok) {
-    return { ok: false, receipt: { ...base, failureCategory: parsed.category }, failureExcerpt: redactText(raw), finding: parsed.category };
+    return preserveFailure(parsed.category, parsed.category, true);
   }
   if (successDiagnostic) {
     return { ok: false, receipt: { ...base, failureCategory: "SUCCESS_DIAGNOSTIC_REJECTED" }, failureExcerpt: redactText(raw), finding: "SUCCESS_DIAGNOSTIC_REJECTED" };
