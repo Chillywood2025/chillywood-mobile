@@ -35,13 +35,13 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "6c16f380468ebf542fd26fc0ca64493031b878df",
-    "tree": "7ade52a913c5a15ec58afb7e3fd75abaf8a24d3f",
+    "head": "6aa119ff7ae4cd92d5799607fa9b7c7598206f0c",
+    "tree": "c0140433c9d288311b41994dc11dea1dff784558",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
-    "productSha256": "0678bb089bdf625e56fec1194cf1ae4336d40671ea938a99f397a9d5dad91d37",
-    "testSha256": "7e6eb17af825663ff25f11978f4012112ce9df026bba2cf91b1b3d3a8ce22145",
-    "contractSha256": "98e6ca988fb6a4a5b45e1166c1e35bdb282b611a391c37b5225d2f7a100a06c7",
-    "convergenceMatrixSha256": "1c9c3e3a5a4e2dbb19c541fa83472167e453ffd3467a4530377295ccf09e5da1",
+    "productSha256": "a668272cf1d6c44a5c9a58cfd0666bf0555323d165b2565930e92963cc2cb955",
+    "testSha256": "e4129d475cead516d7209a494591e74ec713248cd8be6ee470170b53166273fb",
+    "contractSha256": "f034ca85f6fa17a5996be8113b9c6b4f615cb4373250cf92054052af7efb8b23",
+    "convergenceMatrixSha256": "60ff0ea64262940d4b6b741d694028b5af51053009f76707fc4499f0f388cebb",
     "negativeControlsSha256": "c839926285efc1c2877973e2adf5bf86bf076fdd5ae40efd55138ea95a8caee8",
     "bindingNegativeControlsSha256": "46106e381ca4650d0f7c7112f6951dd3862a03baed35151840728102a1a6876b",
     "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c"
@@ -59,13 +59,13 @@
     "bind the transaction to session key generation product room identity and LiveKit room before and after each awaited mutation or readback"
   ],
   "focusedProof": {
-    "receiptIdentityHash": "5fe7af12427f624dfb15d9b40a1449db14dd967840be7f617093698db758d262",
-    "receiptFileSha256": "90bd064a931898582265609914115b1b69605039c0912b557074e4b3b0e84be5",
-    "combinedOutputSha256": "90bd064a931898582265609914115b1b69605039c0912b557074e4b3b0e84be5",
+    "receiptIdentityHash": "8b1550849e7773dee3c58726e1c2b6f52d8a173eca20901280485f68ed13f76c",
+    "receiptFileSha256": "1077f8d5a24d5dcb2353babec9953098a83f6507a3477093fa5cfc26702aad74",
+    "combinedOutputSha256": "1077f8d5a24d5dcb2353babec9953098a83f6507a3477093fa5cfc26702aad74",
     "command": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
-    "artifactLocation": "/tmp/d2a-binding-focused-6c16f380.tap",
-    "result": "PASS_35_OF_35",
-    "convergenceCases": "PASS_17_OF_17",
+    "artifactLocation": "/tmp/d2a-compensation-6aa119ff.tap",
+    "result": "PASS_40_OF_40",
+    "convergenceCases": "PASS_22_OF_22",
     "negativeControls": "PASS_13_OF_13_EXECUTABLE_MUTANTS",
     "bindingNegativeControls": "PASS_4_OF_4_FAIL_CLOSED",
     "determinism": "PASS_3_OF_3",
@@ -88,7 +88,7 @@
   "proofBoundary": {
     "T0_REQUIREMENT": "CLEAR_FOR_BOUNDED_CORRECTION",
     "T1_SOURCE": "SOURCE_BOUND",
-    "T2_MODEL": "EXACT_HOOK_17_CASES_13_MUTANTS_4_BINDING_NEGATIVES_CLEAR",
+    "T2_MODEL": "EXACT_HOOK_22_CASES_13_MUTANTS_4_BINDING_NEGATIVES_CLEAR",
     "T3_INTEGRATION": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T4_NATIVE_PROVIDER": "D2A_NATIVE_AUDIO_MATRIX_REMAINS_SEPARATE",
     "T5_SIGNED_ARTIFACT": "NOT_PROVED_NOT_REUSED",
