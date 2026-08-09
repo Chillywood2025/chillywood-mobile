@@ -35,12 +35,12 @@
     "importedContractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
   },
   "correctedSource": {
-    "head": "28a58b487df4b91e3294b6b919d7c3d73632550a",
-    "tree": "2ee9e78ae6b299338f1b8b154aea714a6e342e49",
+    "head": "d21f67c08304d5fe6609e5272b670e4a60d50809",
+    "tree": "650d315edaa19bb6476913daabae711ccf826058",
     "productPath": "hooks/use-livekit-chat-call-session.ts",
-    "productSha256": "2f0490beffc50aed50e6d7cba50fe39e7c7ca0a8bb7b7f8f58b5255a64ebb5b2",
-    "testSha256": "e3af4dde56e864487821c4cd78870fe6b3819399a7ffa5e32b193408e34618d0",
-    "contractSha256": "5c7cd7a49f32f2316aecad9e13dc4128f2e8dc919111c74b8b754cfc2850583b",
+    "productSha256": "5f68f957d4185375c8425ffdffcd0235e53726ae694b91c9d0d2eac2fd469b05",
+    "testSha256": "6b9781a2d8ef0767c3c126ddba7cdf8fd42f19b2b296252e5a7be3587f4b7d21",
+    "contractSha256": "15a5c8b8568d7be9560147d56bd9bd55ce1a0650c8971232306d79272cb66532",
     "convergenceMatrixSha256": "f42828547c45db851cd8f2d856692fa4d632fb6856d40495691fefc7afd28b96",
     "negativeControlsSha256": "db0b293fa8cf87ed430e72a57510d36ca21d3a34a89e1b0a5d38687262a7bb42"
   },
@@ -58,7 +58,7 @@
   "focusedProof": {
     "receiptIdentityHash": "f1779ecac9a845a117f2a74618cec2469b2106390ce184ac71dde718e8b281f9",
     "receiptFileSha256": "192ce8c6ee508673b0155e3819da94014f2266131003233af1129ac039d02bc5",
-    "combinedOutputSha256": "dfb68ec63d8ce8f81636400a260f8ddf5a0fe803b94339e4e1feb4125f2a85a2",
+    "combinedOutputSha256": "c2e970fc63742fcde380652d9ebb2c1cf197ba63596ea28513afe4f4ac3d4c54",
     "result": "PASS_30_OF_30",
     "convergenceCases": "PASS_14_OF_14",
     "negativeControls": "PASS_12_OF_12_EXECUTABLE_MUTANTS",
@@ -66,6 +66,7 @@
     "pendingEventTelemetryGate": "PASS",
     "originalFinding": "CORRECTED_BY_VERIFIED_COMPENSATION"
   },
+  "sessionIdentityRollover": {"code":"D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE","result":"PASS_ORIGIN_ROOM_ONLY_COMPENSATION_RETURN_FALSE","replacementSessionWrites":false},
   "nonInterference": {
     "onlyProductPath": "hooks/use-livekit-chat-call-session.ts",
     "startupInitialConnectChanged": false,
