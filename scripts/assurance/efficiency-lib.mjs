@@ -137,6 +137,9 @@ export function redactText(text) {
     .replace(/(?:bearer\s+|(?:service_role|sk|pk|gh[opsu])_)[A-Za-z0-9._-]+/giu, "[REDACTED]")
     .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[REDACTED]")
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[REDACTED]")
+    .replace(/\b(?:device[-_ ]?serial|serial(?:number)?|android[-_ ]?id|udid|identifier[-_ ]?for[-_ ]?vendor)\s*[:=]\s*[^\s,;]+/giu, "[REDACTED]")
+    .replace(/\b0000[0-9a-f]{4}-[0-9a-f]{8,16}\b/giu, "[REDACTED]")
+    .replace(/\bR[0-9A-Z]{8,20}\b/gu, "[REDACTED]")
     .slice(0, 512);
 }
 
