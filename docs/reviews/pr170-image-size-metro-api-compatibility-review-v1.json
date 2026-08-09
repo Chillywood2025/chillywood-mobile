@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "pr170-image-size-metro-api-compatibility-review-v1",
+  "reviewVersion": 1,
+  "reviewType": "persistent-isolated-automated-level-c-review-lane",
+  "reviewDiscipline": "metro-expo-react-native-api-compatibility",
+  "reviewLevel": "C",
+  "classification": "IMMUTABLE_SOURCE_HEAD_REVIEW",
+  "reviewTimestamp": "2026-08-09T00:32:10Z",
+  "reviewBranch": "codex/assurance-image-size-safe-review-metro-api",
+  "reviewEvidenceParentHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "implementationPrNumber": 170,
+  "implementationBranch": "codex/assurance-image-size-safe-replacement",
+  "immutableSourceHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486",
+  "immutableSourceTree": "7ab5c40dd1d667337001e2d501ddf87ab20ad889",
+  "implementationHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486",
+  "implementationTree": "7ab5c40dd1d667337001e2d501ddf87ab20ad889",
+  "baseHead": "fb65960c1bdd17f4823180da0d2f5c0db3a67b73",
+  "baseTree": "8fd977fc3ba28d4cd66f34360f193ed9c70d39b8",
+  "sourceDeltaHash": "73eb8ab892c73df665905bec3d991e6baa835d4e2d8cae99788674eddbf68581",
+  "changedFileHash": "d6e62faaa0c9ab5d02bf2be8cbcc2ba1b3dff9d1299ae84826a4f71922c26c51",
+  "changedPathSetSha256": "e029e15b91a4a0d255f65ded748caecab5a6005f82c5e50357f90cd7c862c466",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "7f3da8c830a98623185df3e6240185b024e73b9072e27ead7c93ee7420b5e223",
+  "testResults": {
+    "phase1Ci": {"status": "pending", "implementationHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486"},
+    "api": {"commonJs": "PASS", "esmDefault": "PASS", "esmNamed": "PASS", "synchronousWidthHeight": "PASS", "errorBehavior": "PASS"},
+    "corpus": {"upstreamPath": "65/65", "upstreamBufferApplicable": "62/62", "metroGetAssetData": "9/9", "invalid": "5/5", "repositoryAssets": "16/16"},
+    "metroBundle": {"status": "PASS", "files": 36, "bundles": 1, "manifest": true, "receiptSha256": "4d35e8ab9af53d5faf6153096a98d48c86fa444631da9c70c7e7c38fdde89b37"},
+    "expo": {"sdk": "54.0.36_UNCHANGED", "reactNative": "0.81.5_UNCHANGED", "doctor": "18/18_PASS"},
+    "generatedNative": {"runs": "3/3", "androidDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b", "iosDigest": "e54f77b41840dcc00e89144b3c33dd7499e546d154acbb1d26e3b2717b84e4d0", "classification": "UNCHANGED_NO_NEW_BINARY_REQUIREMENT"}
+  },
+  "testResultHash": "286820a869f33f92800ddd8884b409d5de56e832cfdb0d9d636d7bd5fcfb67da",
+  "reviewHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486",
+  "reviewerLanes": ["architecture-state", "security-authority", "provider-native", "privacy-rollback"],
+  "findings": [
+    {
+      "id": "LOCAL_PACKAGE_REPACK_TOOLCHAIN_PIN",
+      "severity": "P2",
+      "status": "assigned-successor",
+      "assignedTo": "dependency-maintenance-or-E0",
+      "detail": "Exact CI toolchain Node 20.20.2/npm 10.8.2 is deterministic 3/3; npm 11 uses different tar compression with byte-identical extracted contents. Keep packaging pinned or compare normalized contents in future maintenance."
+    }
+  ],
+  "severityCounts": {"P0": 0, "P1": 0, "P2": 1, "P3": 0},
+  "conclusion": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 1,
+    "failureWaived": false,
+    "laneMergeGate": "PASS_LEVEL_C_LANE_2_P0_P1_ZERO_PENDING_PHASE1_CI",
+    "implementationMergeAuthorizedByThisReviewAlone": false,
+    "reviewDisposition": "REVIEW_BRANCH_NEVER_MERGES"
+  }
+}
