@@ -61,6 +61,7 @@ const makeMembership = (mic = state.durableMic, camera = state.durableCamera, ov
 });
 const mediaControlRef = {current: null};
 const identityRef = {current: {userId: "local-user", displayName: "Local", avatarUrl: null}};
+const sessionKey = "invite-1:ROOM:audio:livekit";
 const productRoomRef = {current: {roomId: "room-1", status: "active"}};
 const membershipsRef = {current: [makeMembership()]};
 let requestedMic = initialMic;

@@ -342,6 +342,7 @@ export function useLiveKitChatCallSession({
         }
         const currentRoom = productRoomRef.current;
         const currentIdentity = identityRef.current;
+        const originSessionKey = sessionKey;
         if (
           currentRoom?.status !== "active"
           || !currentIdentity
@@ -380,6 +381,12 @@ export function useLiveKitChatCallSession({
           }
           return false;
         }
+        const originStillCurrent = () => (
+          sessionKey === originSessionKey
+          && roomRef.current === liveKitRoom
+          && productRoomRef.current === currentRoom
+          && identityRef.current === currentIdentity
+        );
         micReconciliationBlockedRef.current = false;
         pendingMicToggleRef.current = true;
 
@@ -420,6 +427,17 @@ export function useLiveKitChatCallSession({
           return false;
         }
 
+        if (!originStillCurrent()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          const restored = publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+          ) === priorActual;
+          if (!restored) micReconciliationBlockedRef.current = true;
+          reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
+          refreshParticipantViews();
+          return false;
+        }
+
         const membership = await updateMembershipMediaState(
           priorCameraRequested,
           nextEnabled,
@@ -431,6 +449,12 @@ export function useLiveKitChatCallSession({
         ) === priorCameraActual;
         const targetCallValid = liveKitRoom.state === ConnectionState.Connected
           || liveKitRoom.state === ConnectionState.Reconnecting;
+        if (!originStillCurrent()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
+          refreshParticipantViews();
+          return false;
+        }
         if (!membership || !targetCameraUnchanged || !targetCallValid) {
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
           const nativeRestored = publicationIsUsable(
