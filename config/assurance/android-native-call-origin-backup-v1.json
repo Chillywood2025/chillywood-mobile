@@ -9,13 +9,17 @@
     "packageId": "com.chillywood.mobile",
     "priorGeneratedDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
     "correctedGeneratedDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+    "priorNativeCompatibilityDigest": "c8f385720b3d17cddf9f3a576d24109796288f454f8ada80a1b2c33576d89610",
+    "correctedNativeCompatibilityDigest": "601c547059926b5ba01f4bb8d3b4fb6522eefe411e066943e53f38a9af89b78c",
+    "historicalInstalledNativeBuild": "86",
+    "historicalInstalledBuildContainsFix": false,
     "newBinaryRequired": true
   },
   "scopeWaiver": {
     "authorized": true,
-    "maximumChangedFiles": 20,
+    "maximumChangedFiles": 21,
     "maximumNetChangedLines": 3000,
-    "reason": "One Android native-action provenance and backup security domain with focused JVM and instrumentation templates.",
+    "reason": "One Android native-action provenance and backup security domain with focused JVM and instrumentation templates, plus the exact native-compatibility guard needed to keep build 86 historical after the source digest changes.",
     "prohibitedScope": [
       "microphone product repair",
       "iOS product implementation",
@@ -26,6 +30,7 @@
   },
   "authoritativeInputs": [
     "plugins/withChillyChatNativeCallNotifications.js",
+    "scripts/guard-android-native-runtime-compatibility.mjs",
     "_lib/chillyChatNativeCallRoutes.mjs",
     "_lib/chillyChatNativeCallRouteBuffer.ts",
     "_lib/nativeCallTransitionProvenance.mjs",
