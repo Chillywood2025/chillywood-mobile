@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "contractId": "assurance-e0-shadow-benchmark-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/efficiencyBenchmark",
+  "normalContinuation": "Use the Chi'llywood assurance skill.\nResume the active task from current truth.\nRun only the next eligible phase.\nStop on any new P0/P1.",
+  "normalContinuationBytes": 136,
+  "unrecordedMetricPolicy": "null-with-explicit-status-never-zero-filled",
+  "baselines": [
+    {
+      "id": "D2C",
+      "head": "442852da70d723aedcf6ad1fa76c2f3eb23d3e0e",
+      "tree": "d78792b30a1b61b4673b7423f031cf586db22592",
+      "historicalCommitted": true,
+      "evidence": {
+        "path": "config/assurance/current-truth-v1.json",
+        "sha256": "49c1481fc803d4c9f643c174e103bc4af8032a9a9eec0d3c61c25f28a6bc37a4",
+        "bytes": 51577,
+        "implementationPr": 152,
+        "implementationPrBodySha256": "30c894b77c73aef39ccc932d28f54d5f93356fcf2a61e0a34fb423dc5886c105",
+        "implementationPrBodyBytes": 2367
+      },
+      "metrics": {
+        "promptBytes": {"value":null,"status":"NOT_RECORDED_PR_BODY_IS_NOT_A_PROMPT"},
+        "activeContextBytes": {"value":51577,"status":"MEASURED_COMMITTED_CURRENT_TRUTH"},
+        "excludedHistoryBytes": {"value":0,"status":"PRE_E0_FULL_TRUTH_BASELINE"},
+        "agentCount": {"value":null,"status":"NOT_RECORDED"},
+        "agentTurns": {"value":null,"status":"NOT_RECORDED"},
+        "reviewPrCount": {"value":4,"status":"CURRENT_TRUTH_REVIEW_LANES"},
+        "currentTruthPrCount": {"value":3,"status":"RECORDED_PRS_156_161_162"},
+        "fullCiCount": {"value":1,"status":"RECORDED_MINIMUM_EXACT_IMPLEMENTATION_RUN"},
+        "successfulLogBytesExposed": {"value":null,"status":"NOT_RECORDED"},
+        "securityScanReuse": {"value":0,"status":"NO_REUSABLE_SEALED_D2C_SCAN"},
+        "orchestrationSteps": {"value":null,"status":"NOT_RECORDED"}
+      },
+      "expected": {
+        "knownP0P1Classes": ["P0_STOP_THE_LINE","P1_STOP_THE_LINE"],
+        "mandatoryGates": ["T0_REQUIREMENT","T1_SOURCE","T2_MODEL","T3_INTEGRATION","T4_NATIVE_PROVIDER","T5_SIGNED_ARTIFACT","T6_INSTALLED_PHYSICAL","T7_PUBLIC_CANARY"],
+        "applicableDefects": ["ACCEPT_TIMEOUT_RACE","CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200","NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT","PUSHKIT_DELIVERY_SUPPRESSED","STALE_CLEANUP_CLEARS_NEW_CALL","TERMINAL_ROOM_ORPHAN"],
+        "mandatoryTests": ["pre-fix-reproduction-10/10","trusted-positive-78/78","producer-denial-8/8","route-denial-30/30","negative-controls-48/48","deterministic-3/3","generated-source-3/3","capability-parity-26/26","local-integration-23/23+5/5","unsigned-ios-simulator-compile"],
+        "blockers": ["IOS_SOURCE_FIX_NOT_DELIVERED","PUSHKIT_BLOCKED_EXTERNAL","SIGNED_ARTIFACT_PROOF_MISSING","INSTALLED_PHYSICAL_PROOF_MISSING","PUBLIC_CANARY_BLOCKED_EXTERNAL"]
+      },
+      "shadowPlan": {
+        "knownP0P1Classes": ["P0_STOP_THE_LINE","P1_STOP_THE_LINE"],
+        "mandatoryGates": ["T0_REQUIREMENT","T1_SOURCE","T2_MODEL","T3_INTEGRATION","T4_NATIVE_PROVIDER","T5_SIGNED_ARTIFACT","T6_INSTALLED_PHYSICAL","T7_PUBLIC_CANARY"],
+        "applicableDefects": ["ACCEPT_TIMEOUT_RACE","CALLKIT_PROOF_SUBSTITUTED_BY_APNS_200","NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT","PUSHKIT_DELIVERY_SUPPRESSED","STALE_CLEANUP_CLEARS_NEW_CALL","TERMINAL_ROOM_ORPHAN"],
+        "mandatoryTests": ["pre-fix-reproduction-10/10","trusted-positive-78/78","producer-denial-8/8","route-denial-30/30","negative-controls-48/48","deterministic-3/3","generated-source-3/3","capability-parity-26/26","local-integration-23/23+5/5","unsigned-ios-simulator-compile"],
+        "blockers": ["IOS_SOURCE_FIX_NOT_DELIVERED","PUSHKIT_BLOCKED_EXTERNAL","SIGNED_ARTIFACT_PROOF_MISSING","INSTALLED_PHYSICAL_PROOF_MISSING","PUBLIC_CANARY_BLOCKED_EXTERNAL"]
+      },
+      "shadowPlanSha256": "d496bc00952176575fc031789002da75afb9faec64d659f452a792bf54b7eb40"
+    },
+    {
+      "id": "D2B",
+      "head": "53957b73affd9393377e44f23ae04a7300480e80",
+      "tree": "e614d01f5b26df8b911f96c7501edf148b4a852d",
+      "historicalCommitted": true,
+      "evidence": {
+        "path": "config/assurance/current-truth-v1.json",
+        "sha256": "7b5153265c0c8ce9946c5a1305a6ab04f8512e76c4e6a4fb93eb2e0459ed50dc",
+        "bytes": 75330,
+        "implementationPr": 164,
+        "implementationPrBodySha256": "6b1ceb6df1735abfd57ce3d3ccf863731f2a55d354e0d218955e3044c7a0d11f",
+        "implementationPrBodyBytes": 1926
+      },
+      "metrics": {
+        "promptBytes": {"value":null,"status":"NOT_RECORDED_PR_BODY_IS_NOT_A_PROMPT"},
+        "activeContextBytes": {"value":75330,"status":"MEASURED_COMMITTED_CURRENT_TRUTH"},
+        "excludedHistoryBytes": {"value":0,"status":"PRE_E0_FULL_TRUTH_BASELINE"},
+        "agentCount": {"value":null,"status":"NOT_RECORDED"},
+        "agentTurns": {"value":null,"status":"NOT_RECORDED"},
+        "reviewPrCount": {"value":4,"status":"CURRENT_TRUTH_REVIEW_LANES"},
+        "currentTruthPrCount": {"value":6,"status":"RECORDED_PRS_169_175_177_179_181_183"},
+        "fullCiCount": {"value":4,"status":"RECORDED_MINIMUM_THREE_FAILED_PLUS_FINAL_EXACT_RUN"},
+        "successfulLogBytesExposed": {"value":null,"status":"NOT_RECORDED"},
+        "securityScanReuse": {"value":1,"status":"SEALED_PR170_EXACT_SOURCE_RECEIPT_AVAILABLE"},
+        "orchestrationSteps": {"value":null,"status":"NOT_RECORDED"}
+      },
+      "expected": {
+        "knownP0P1Classes": ["P0_STOP_THE_LINE","P1_STOP_THE_LINE"],
+        "mandatoryGates": ["T0_REQUIREMENT","T1_SOURCE","T2_MODEL","T3_INTEGRATION","T4_NATIVE_PROVIDER","T5_SIGNED_ARTIFACT","T6_INSTALLED_PHYSICAL","T7_PUBLIC_CANARY"],
+        "applicableDefects": ["ACCEPT_TIMEOUT_RACE","NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT","STALE_CLEANUP_CLEARS_NEW_CALL","TERMINAL_ROOM_ORPHAN"],
+        "mandatoryTests": ["generated-source-3/3","gradle-core","kotlin-compile","unit-tests-5/5","instrumentation-6/6","negative-controls-23/23","executable-mutants-16/16","policy-guards-6/6"],
+        "blockers": ["BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT","T3_INTEGRATION_PARTIAL","T4_NATIVE_PROVIDER_COMPILE_EMULATOR_PARTIAL","SIGNED_ARTIFACT_PROOF_MISSING","INSTALLED_PHYSICAL_PROOF_MISSING","PUBLIC_CANARY_BLOCKED_EXTERNAL","NEW_ANDROID_BINARY_REQUIRED"]
+      },
+      "shadowPlan": {
+        "knownP0P1Classes": ["P0_STOP_THE_LINE","P1_STOP_THE_LINE"],
+        "mandatoryGates": ["T0_REQUIREMENT","T1_SOURCE","T2_MODEL","T3_INTEGRATION","T4_NATIVE_PROVIDER","T5_SIGNED_ARTIFACT","T6_INSTALLED_PHYSICAL","T7_PUBLIC_CANARY"],
+        "applicableDefects": ["ACCEPT_TIMEOUT_RACE","NATIVE_ACTION_LOST_BEFORE_REACT_CONTEXT","STALE_CLEANUP_CLEARS_NEW_CALL","TERMINAL_ROOM_ORPHAN"],
+        "mandatoryTests": ["generated-source-3/3","gradle-core","kotlin-compile","unit-tests-5/5","instrumentation-6/6","negative-controls-23/23","executable-mutants-16/16","policy-guards-6/6"],
+        "blockers": ["BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT","T3_INTEGRATION_PARTIAL","T4_NATIVE_PROVIDER_COMPILE_EMULATOR_PARTIAL","SIGNED_ARTIFACT_PROOF_MISSING","INSTALLED_PHYSICAL_PROOF_MISSING","PUBLIC_CANARY_BLOCKED_EXTERNAL","NEW_ANDROID_BINARY_REQUIRED"]
+      },
+      "shadowPlanSha256": "c9da383f7d47e7ee63bd9b0250e2fc1a88f3e1b5ce7357e6a86e673290fcd347"
+    }
+  ]
+}

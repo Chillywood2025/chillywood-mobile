@@ -1,6 +1,17 @@
 export type ChillyChatNativeCallRoute = {
   destination: string;
   requestKey: string;
+  threadId: string;
+};
+
+export type AndroidNativeCallActionPayload = {
+  callInviteId: string;
+  captureGeneration: number;
+  createdAt: number;
+  nativeCallAction: "answer" | "decline";
+  requestKey: string;
+  schemaVersion: 2;
+  threadId: string;
 };
 
 export function resolveChillyChatNativeCallRoute(
@@ -9,7 +20,20 @@ export function resolveChillyChatNativeCallRoute(
 
 export function resolveChillyChatNativeCallActionPayload(
   value?: unknown,
-): ChillyChatNativeCallRoute | null;
+): AndroidNativeCallActionPayload | null;
+
+export function resolveAuthoritativeNativeCallDecline<T extends {
+  calleeUserId: string;
+  callerUserId: string;
+  id: string;
+  status: string;
+  threadId: string;
+}>(input?: {
+  currentUserId?: string;
+  expectedInviteId?: string;
+  expectedThreadId?: string;
+  invite?: T | null;
+} | null): T | null;
 
 export function redirectChillyChatNativeCallSystemPath(
   value?: string | null,
@@ -22,5 +46,4 @@ export type ChillyChatNativeCallRouteBuffer = {
   ): () => void;
 };
 
-export function createChillyChatNativeCallRouteBuffer():
-  ChillyChatNativeCallRouteBuffer;
+export function createChillyChatNativeCallRouteBuffer(): ChillyChatNativeCallRouteBuffer;

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-d2b-android-native-action-origin-backup-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Exclude transient Android native-call authority from backup and transfer, and require the immutable non-exported notification receiver plus canonical one-time shared provenance claim for Answer and Decline.",
+  "exactReason": "The owner-mandated legacy, cloud, device and cross-platform transfer rules, schema-v2 store, generated-native proof, receiver/claim lifecycle, security guards and focused negative controls exceed the default line budget while remaining one Android native-action trust domain. The one additional harness path is the exact native-compatibility guard that keeps historical build 86 distinct from the corrected source digest.",
+  "reviewer": "d2b-four-lane-level-c-exact-head-review-set",
+  "supportingDomains": ["CI-test-infrastructure", "documentation-metadata"],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {"default": 15, "waivedMaximum": 21},
+  "lineBudget": {"default": 1200, "waivedMaximum": 3000},
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": ["microphone product repair", "iOS product implementation", "provider contact", "release or distribution build", "database mutation", "package or workflow change", "current-truth files"]
+}

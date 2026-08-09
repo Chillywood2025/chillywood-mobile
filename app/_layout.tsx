@@ -43,13 +43,11 @@ import {
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
 import {
+  clearPendingAndroidNativeCallRouteClaims,
   consumePendingAndroidNativeCallRoute,
-  subscribeToEarlyAndroidNativeCallRoutes,
+  subscribeToPendingAndroidNativeCallActionAvailability,
 } from "../_lib/chillyChatNativeCallRouteBuffer";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
-import {
-  resolveChillyChatNativeCallRoute,
-} from "../_lib/chillyChatNativeCallRoutes.mjs";
 import { resolveIncomingCallPresentation } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
   clearApplicationNotificationBadge,
@@ -69,6 +67,7 @@ import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
 import {
+  completeIosNativeCallAnswer,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
   reportIosNativeCallRemoteEnd,
@@ -77,6 +76,13 @@ import {
   subscribeToIosNativeCallPresentation,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
+import {
+  containsSensitiveNativeCallClaimRouteParams,
+  consumeTrustedAndroidNativeActionStoreClaim,
+  createForegroundAuthenticatedUiCallIntent,
+  createIosCallKitAnswerRouteHandler,
+  sanitizeExternalIosNativeCallPath,
+} from "../_lib/nativeCallTransitionProvenance.mjs";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
@@ -132,13 +138,20 @@ const hasAuthLinkLikeParams = (params: Record<string, unknown>) => {
 };
 
 const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
+  "#",
   "access_token",
   "authorization",
   "code",
   "code_verifier",
+  "foregroundcallclaim",
+  "nativecallaction",
+  "nativecallclaim",
+  "nativecalluuid",
+  "opencall",
   "password",
   "refresh_token",
   "secret",
+  "startcall",
   "token",
   "token_hash",
 ]);
@@ -154,7 +167,9 @@ const sanitizeRouteAnalyticsParams = (pathname: string, params: Record<string, u
     if (normalizedKey.includes("token") || normalizedKey.includes("password") || normalizedKey.includes("secret")) return;
     if (value == null || Array.isArray(value)) return;
 
-    sanitized[key] = String(value);
+    const normalizedValue = String(value);
+    if (normalizedValue.includes("#")) return;
+    sanitized[key] = normalizedValue;
   });
 
   return sanitized;
@@ -170,72 +185,45 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => (
 
 function AndroidNativeCallRouteBridge() {
   const router = useRouter();
-  const { isLoading, isSignedIn } = useSession();
-  const handledNativeCallRouteKeysRef = useRef(new Set<string>());
-  const nativeCallActionAuthReadyRef = useRef(false);
-  const [pendingNativeCallRoute, setPendingNativeCallRoute] =
-    useState<ReturnType<typeof resolveChillyChatNativeCallRoute>>(null);
-  const captureResolvedNativeCallRoute = useCallback((
-    nativeCallRoute: NonNullable<ReturnType<typeof resolveChillyChatNativeCallRoute>>,
-  ) => {
-    if (
-      !nativeCallActionAuthReadyRef.current
-      || handledNativeCallRouteKeysRef.current.has(nativeCallRoute.requestKey)
-    ) {
-      return;
-    }
-    setPendingNativeCallRoute((current) => (
-      current?.requestKey === nativeCallRoute.requestKey
-        ? current
-        : nativeCallRoute
-    ));
-  }, []);
-
-  useEffect(() => {
-    nativeCallActionAuthReadyRef.current = !isLoading && isSignedIn;
-  }, [isLoading, isSignedIn]);
-
+  const { isLoading, isSignedIn, user } = useSession();
+  const authenticatedUserId = String(user?.id ?? "").trim();
   useEffect(() => {
     if (Platform.OS !== "android") return () => {};
-    let active = true;
-    const captureNativeCallRoute = (url: string | null) => {
-      if (!active) return;
-      const nativeCallRoute = resolveChillyChatNativeCallRoute(url);
-      if (
-        !nativeCallRoute
-        || handledNativeCallRouteKeysRef.current.has(nativeCallRoute.requestKey)
-      ) {
-        return;
-      }
-      captureResolvedNativeCallRoute(nativeCallRoute);
-    };
-    const unsubscribeEarlyNativeCallRoutes =
-      subscribeToEarlyAndroidNativeCallRoutes((nativeCallRoute) => {
-        if (active) captureResolvedNativeCallRoute(nativeCallRoute);
-      });
-
-    void Linking.getInitialURL()
-      .then(captureNativeCallRoute)
-      .catch((error) => {
-        reportRuntimeError("android-native-call-initial-route", error, {
-          source: "root-layout",
-        });
-      });
-
-    return () => {
-      active = false;
-      unsubscribeEarlyNativeCallRoutes();
-    };
-  }, [captureResolvedNativeCallRoute]);
-
-  useEffect(() => {
-    if (Platform.OS !== "android" || isLoading || !isSignedIn) return () => {};
+    if (isLoading || !isSignedIn || !authenticatedUserId) {
+      clearPendingAndroidNativeCallRouteClaims();
+      return () => {};
+    }
     let active = true;
     const consumePendingNativeCallAction = () => {
-      void consumePendingAndroidNativeCallRoute()
+      void consumePendingAndroidNativeCallRoute({ authenticatedUserId })
         .then((nativeCallRoute) => {
-          if (active && nativeCallRoute) {
-            captureResolvedNativeCallRoute(nativeCallRoute);
+          if (!nativeCallRoute || nativeCallRoute.status !== "created") return;
+          if (!("destination" in nativeCallRoute)) return;
+          if (!active) {
+            consumeTrustedAndroidNativeActionStoreClaim({
+              authenticatedUserId,
+              claimId: nativeCallRoute.claimId,
+              inviteId: nativeCallRoute.inviteId,
+              requestKey: nativeCallRoute.nativeIdentity,
+              threadId: nativeCallRoute.threadId,
+            });
+            return;
+          }
+          if (active && nativeCallRoute?.destination) {
+            try {
+              router.replace(
+                nativeCallRoute.destination as Parameters<typeof router.replace>[0],
+              );
+            } catch {
+              consumeTrustedAndroidNativeActionStoreClaim({
+                authenticatedUserId,
+                claimId: nativeCallRoute.claimId,
+                inviteId: nativeCallRoute.inviteId,
+                requestKey: nativeCallRoute.nativeIdentity,
+                threadId: nativeCallRoute.threadId,
+              });
+              throw new Error("Android native call route unavailable.");
+            }
           }
         })
         .catch((error) => {
@@ -245,43 +233,23 @@ function AndroidNativeCallRouteBridge() {
         });
     };
     consumePendingNativeCallAction();
+    const pendingActionSubscription =
+      subscribeToPendingAndroidNativeCallActionAvailability(
+        () => {
+          if (AppState.currentState === "active") {
+            consumePendingNativeCallAction();
+          }
+        },
+      );
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") consumePendingNativeCallAction();
     });
     return () => {
       active = false;
+      pendingActionSubscription();
       appStateSubscription.remove();
     };
-  }, [captureResolvedNativeCallRoute, isLoading, isSignedIn]);
-
-  useEffect(() => {
-    if (
-      Platform.OS !== "android"
-      || isLoading
-      || !isSignedIn
-      || !pendingNativeCallRoute
-    ) {
-      return;
-    }
-    if (handledNativeCallRouteKeysRef.current.has(pendingNativeCallRoute.requestKey)) {
-      setPendingNativeCallRoute(null);
-      return;
-    }
-    handledNativeCallRouteKeysRef.current.add(pendingNativeCallRoute.requestKey);
-    if (handledNativeCallRouteKeysRef.current.size > 40) {
-      const oldestRequestKey = handledNativeCallRouteKeysRef.current.values().next().value;
-      if (oldestRequestKey) handledNativeCallRouteKeysRef.current.delete(oldestRequestKey);
-    }
-    setPendingNativeCallRoute(null);
-    void consumePendingAndroidNativeCallRoute().catch((error) => {
-      reportRuntimeError("android-native-call-pending-action-clear", error, {
-        source: "root-layout",
-      });
-    });
-    router.replace(
-      pendingNativeCallRoute.destination as Parameters<typeof router.replace>[0],
-    );
-  }, [isLoading, isSignedIn, pendingNativeCallRoute, router]);
+  }, [authenticatedUserId, isLoading, isSignedIn, router]);
 
   return null;
 }
@@ -310,7 +278,8 @@ function RouteAnalyticsBridge() {
     void clearApplicationNotificationBadge();
     void refreshPushIfAllowed();
     const subscription = subscribeToNotificationResponses((path) => {
-      router.push(path as Parameters<typeof router.push>[0]);
+      const safePath = sanitizeExternalIosNativeCallPath(path);
+      router.push(safePath as Parameters<typeof router.push>[0]);
     });
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") return;
@@ -389,23 +358,12 @@ function RouteAnalyticsBridge() {
 const buildIncomingCallPath = (invite: ChillyChatCallInvite) => {
   const params = new URLSearchParams({
     callInviteId: invite.id,
-    openCall: "1",
   });
   return `/chat/${invite.threadId}?${params.toString()}`;
 };
 
 type IncomingCallAlert = ForegroundNotificationAlert & {
   invite?: ChillyChatCallInvite | null;
-};
-
-const buildIncomingCallAnswerPath = (alert: IncomingCallAlert) => {
-  const [routePath, query = ""] = String(alert.path ?? "").trim().split("?");
-  const params = new URLSearchParams(query);
-  const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
-  if (inviteId) params.set("callInviteId", inviteId);
-  params.set("nativeCallAction", "answer");
-  params.set("openCall", "1");
-  return `${routePath || "/chat"}?${params.toString()}`;
 };
 
 const ROOM_SAFE_CALL_PATH_PREFIXES = [
@@ -706,16 +664,62 @@ function IncomingCallNotificationBridge() {
     });
   };
 
-  const openCall = () => {
-    const path = buildIncomingCallAnswerPath(alert);
+  const openCall = async () => {
+    const actorUserId = String(user?.id ?? "").trim();
+    const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
+    const invite = inviteId
+      ? await readChillyChatCallInvite(inviteId).catch(() => null)
+      : null;
+    if (
+      !actorUserId
+      || !invite
+      || invite.calleeUserId !== actorUserId
+      || invite.callerUserId === actorUserId
+      || (invite.status !== "ringing" && invite.status !== "accepted")
+    ) {
+      Alert.alert("Call unavailable", "This Chi'lly Chat call can no longer be answered.");
+      return;
+    }
+    const acceptedInvite = invite.status === "accepted"
+      ? invite
+      : await updateChillyChatCallInviteStatus({
+        actorUserId,
+        invite,
+        status: "accepted",
+      }).catch(() => null);
+    if (!acceptedInvite || acceptedInvite.status !== "accepted") {
+      Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
+      return;
+    }
+    const trustedUiIntent = createForegroundAuthenticatedUiCallIntent({
+      action: "open_call",
+      authenticated: true,
+      authenticatedUserId: actorUserId,
+      inviteId: acceptedInvite.id,
+      roomId: acceptedInvite.communicationRoomId,
+      threadId: acceptedInvite.threadId,
+    });
+    if (trustedUiIntent.status !== "created" || !trustedUiIntent.claimId) {
+      Alert.alert("Unable to open", "The call remains accepted. Open it from the chat thread.");
+      return;
+    }
+    const path = `/chat/${encodeURIComponent(acceptedInvite.threadId)}`;
     cleanupChillyChatCallNotifications({
-      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
+      callInviteId: acceptedInvite.id,
       path,
       presentedNotificationId: alert.presentedNotificationId ?? null,
-      threadId: alert.invite?.threadId ?? null,
+      threadId: acceptedInvite.threadId,
     });
     clearAlert();
-    router.push(path as Parameters<typeof router.push>[0]);
+    router.push({
+      pathname: "/chat/[threadId]",
+      params: {
+        callInviteId: acceptedInvite.id,
+        foregroundCallClaim: trustedUiIntent.claimId,
+        openCall: "1",
+        threadId: acceptedInvite.threadId,
+      },
+    });
   };
 
   const decline = async () => {
@@ -771,7 +775,7 @@ function IncomingCallNotificationBridge() {
         : "Answering will leave or pause your current room media session. Returning will re-check your room access.",
       [
         { text: "Stay", style: "cancel" },
-        { text: "Leave room and answer", style: "destructive", onPress: openCall },
+        { text: "Leave room and answer", style: "destructive", onPress: () => { void openCall(); } },
       ],
     );
   };
@@ -860,7 +864,7 @@ function IncomingCallNotificationBridge() {
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.88}
-            onPress={openCall}
+            onPress={() => { void openCall(); }}
             style={[styles.incomingCallButton, styles.incomingCallPrimaryButton]}
             testID="app-wide-incoming-call-answer"
             accessibilityLabel="Answer incoming Chi'lly Chat call"
@@ -928,6 +932,7 @@ function RoomSafeActivityNotificationBridge() {
 
 const serializeRedirectTarget = (pathname: string, params: Record<string, unknown>) => {
   const search = new URLSearchParams();
+  const fragmentFreePathname = pathname.split("#", 1)[0] || "/";
 
   Object.entries(params).forEach(([key, value]) => {
     const normalizedKey = key.toLowerCase();
@@ -937,16 +942,18 @@ const serializeRedirectTarget = (pathname: string, params: Record<string, unknow
     if (Array.isArray(value)) {
       value.forEach((entry) => {
         if (entry == null) return;
+        if (String(entry).includes("#")) return;
         search.append(key, String(entry));
       });
       return;
     }
 
+    if (String(value).includes("#")) return;
     search.append(key, String(value));
   });
 
   const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
+  return query ? `${fragmentFreePathname}?${query}` : fragmentFreePathname;
 };
 
 function FirebaseRuntimeBridge() {
@@ -1088,16 +1095,14 @@ function IosNativeCallsBridge() {
       void reconcileInvite();
     };
 
-    const routeNativeAnswer = (event: SanitizedNativeCallEvent) => {
-      const threadId = String(event.threadId ?? "").trim();
-      const callInviteId = String(event.callInviteId ?? "").trim();
-      if (!threadId || !callInviteId) return;
-      const callUuid = String(event.callUuid ?? "").trim();
-      const params = new URLSearchParams({ callInviteId, nativeCallAction: "answer" });
-      if (callUuid) params.set("nativeCallUuid", callUuid);
-      const destination = `/chat/${encodeURIComponent(threadId)}?${params.toString()}`;
-      router.replace(destination as Parameters<typeof router.replace>[0]);
-    };
+    const routeNativeAnswer = createIosCallKitAnswerRouteHandler({
+      completeAnswerFailure: (callUuid: string) => completeIosNativeCallAnswer(callUuid, false),
+      getAuthenticatedUserId: () => currentUserId,
+      isActive: () => active && isSignedIn,
+      replace: (destination: string) => {
+        router.replace(destination as Parameters<typeof router.replace>[0]);
+      },
+    });
 
     const pendingNativeTerminalActions = new Map<string, {
       event: SanitizedNativeCallEvent;
@@ -1179,7 +1184,7 @@ function IosNativeCallsBridge() {
         return;
       }
       if (event.type === "answerRequested") {
-        routeNativeAnswer(event);
+        await routeNativeAnswer(event);
         return;
       }
       if (event.type === "declined") {
@@ -1256,6 +1261,8 @@ function DefaultOrientationLock() {
 }
 
 function RootNavigator() {
+  const params = useGlobalSearchParams<Record<string, string | string[]>>();
+  const hideDebugOverlay = containsSensitiveNativeCallClaimRouteParams(params);
   return (
     <>
       <RouteAnalyticsBridge />
@@ -1303,7 +1310,7 @@ function RootNavigator() {
         <Stack.Screen name="beta-support" />
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       </Stack>
-      <DevDebugOverlay />
+      {hideDebugOverlay ? null : <DevDebugOverlay />}
     </>
   );
 }

@@ -38,7 +38,7 @@ const minimatchPackages = Object.entries(lock.packages ?? {})
   }));
 
 const expectedVersions = new Set(["3.1.5", "9.0.9", "10.2.4", "10.2.5"]);
-for (const { packagePath, version } of minimatchPackages) {
+for (const { version } of minimatchPackages) {
   if (!expectedVersions.has(version)) {
     throw new Error(`unreviewed minimatch version in lock: ${version}`);
   }
@@ -91,5 +91,5 @@ replaceExact(
 );
 
 process.stdout.write(
-  "patched locked minimatch 3/9 consumers for brace-expansion 5.0.8\n",
+  "patched locked minimatch 3/9 consumers for brace-expansion 5.0.9\n",
 );

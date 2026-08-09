@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chi’LLYWOOD Assurance"
+  short_description: "Resume assurance work from exact current truth"
+  default_prompt: "Use $chillywood-assurance to resume the active task from current truth and run only the next eligible phase."

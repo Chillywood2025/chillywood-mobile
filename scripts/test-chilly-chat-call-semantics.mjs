@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
 import {
@@ -32,9 +32,11 @@ import {
 import {
   createChillyChatNativeCallRouteBuffer,
   redirectChillyChatNativeCallSystemPath,
+  resolveAuthoritativeNativeCallDecline,
   resolveChillyChatNativeCallActionPayload,
   resolveChillyChatNativeCallRoute,
 } from "../_lib/chillyChatNativeCallRoutes.mjs";
+import {createNativeCallTransitionProvenanceRegistry} from "../_lib/nativeCallTransitionProvenance.mjs";
 import {
   isPermanentFcmTokenError,
   readFcmProviderErrorCode,
@@ -42,34 +44,39 @@ import {
 
 const nativeRouteThreadId = "11111111-1111-4111-8111-111111111111";
 const nativeRouteInviteId = "22222222-2222-4222-8222-222222222222";
+const nativeRouteUserId = "77777777-7777-4777-8777-777777777777";
 assert.deepEqual(
   resolveChillyChatNativeCallRoute(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
   ),
   {
-    destination:
-      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
-    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:answer`,
+    destination: `/chat/${nativeRouteThreadId}`,
+    requestKey: `navigation:${nativeRouteThreadId}`,
+    threadId: nativeRouteThreadId,
   },
-  "a terminated Android native Answer is replayed into the exact authenticated call route",
+  "an external Android Answer-shaped URL is reduced to navigation-only state",
 );
 assert.deepEqual(
   resolveChillyChatNativeCallRoute(
     `chillywoodmobile:///chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
   ),
   {
-    destination:
-      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
-    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:decline`,
+    destination: `/chat/${nativeRouteThreadId}`,
+    requestKey: `navigation:${nativeRouteThreadId}`,
+    threadId: nativeRouteThreadId,
   },
-  "a cold-start native Decline is replayed without acquiring call media",
+  "an external Android Decline-shaped URL is reduced to navigation-only state",
 );
-assert.equal(
+assert.deepEqual(
   resolveChillyChatNativeCallRoute(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=incoming`,
   ),
-  null,
-  "ordinary notification opens cannot be upgraded into authoritative native actions",
+  {
+    destination: `/chat/${nativeRouteThreadId}`,
+    requestKey: `navigation:${nativeRouteThreadId}`,
+    threadId: nativeRouteThreadId,
+  },
+  "ordinary notification opens remain navigation-only",
 );
 assert.equal(
   resolveChillyChatNativeCallRoute(
@@ -102,26 +109,32 @@ assert.equal(
 assert.deepEqual(
   resolveChillyChatNativeCallActionPayload({
     callInviteId: nativeRouteInviteId.toUpperCase(),
+    captureGeneration: 7,
     createdAt: 1_722_000_000_000,
     nativeCallAction: "ANSWER",
     requestKey: "a".repeat(64),
-    schemaVersion: 1,
+    schemaVersion: 2,
     threadId: nativeRouteThreadId.toUpperCase(),
   }),
   {
-    destination:
-      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
-    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:answer`,
+    callInviteId: nativeRouteInviteId,
+    captureGeneration: 7,
+    createdAt: 1_722_000_000_000,
+    nativeCallAction: "answer",
+    requestKey: "a".repeat(64),
+    schemaVersion: 2,
+    threadId: nativeRouteThreadId,
   },
-  "the one-time native store payload is independently normalized before authenticated routing",
+  "the schema-v2 one-time native-store payload is independently normalized before provenance creation",
 );
 assert.equal(
   resolveChillyChatNativeCallActionPayload({
     callInviteId: nativeRouteInviteId,
+    captureGeneration: 8,
     createdAt: 1_722_000_000_000,
     nativeCallAction: "incoming",
     requestKey: "b".repeat(64),
-    schemaVersion: 1,
+    schemaVersion: 2,
     threadId: nativeRouteThreadId,
   }),
   null,
@@ -131,10 +144,11 @@ assert.equal(
   resolveChillyChatNativeCallActionPayload({
     access_token: "forbidden",
     callInviteId: nativeRouteInviteId,
+    captureGeneration: 9,
     createdAt: 1_722_000_000_000,
     nativeCallAction: "answer",
     requestKey: "c".repeat(64),
-    schemaVersion: 1,
+    schemaVersion: 2,
     threadId: "not-a-thread",
   }),
   null,
@@ -143,28 +157,65 @@ assert.equal(
 assert.equal(
   resolveChillyChatNativeCallActionPayload({
     callInviteId: nativeRouteInviteId,
+    captureGeneration: 10,
     createdAt: 1_722_000_000_000,
     nativeCallAction: "decline",
     requestKey: "not-a-hash",
-    schemaVersion: 1,
+    schemaVersion: 2,
     threadId: nativeRouteThreadId,
   }),
   null,
   "native-store payloads require the bounded native request-key hash contract",
 );
+const authoritativeDeclinedInvite = {
+  calleeUserId: nativeRouteUserId,
+  callerUserId: "88888888-8888-4888-8888-888888888888",
+  id: nativeRouteInviteId,
+  status: "declined",
+  threadId: nativeRouteThreadId,
+};
+assert.equal(
+  resolveAuthoritativeNativeCallDecline({
+    currentUserId: nativeRouteUserId,
+    expectedInviteId: nativeRouteInviteId,
+    expectedThreadId: nativeRouteThreadId,
+    invite: authoritativeDeclinedInvite,
+  }),
+  authoritativeDeclinedInvite,
+  "a server-confirmed exact-callee Decline may clear the incoming-call surface",
+);
+for (const deniedInvite of [
+  null,
+  {...authoritativeDeclinedInvite, status: "ringing"},
+  {...authoritativeDeclinedInvite, status: "accepted"},
+  {...authoritativeDeclinedInvite, status: "ended"},
+  {...authoritativeDeclinedInvite, threadId: "99999999-9999-4999-8999-999999999999"},
+  {...authoritativeDeclinedInvite, calleeUserId: "99999999-9999-4999-8999-999999999999"},
+]) {
+  assert.equal(
+    resolveAuthoritativeNativeCallDecline({
+      currentUserId: nativeRouteUserId,
+      expectedInviteId: nativeRouteInviteId,
+      expectedThreadId: nativeRouteThreadId,
+      invite: deniedInvite,
+    }),
+    null,
+    "a failed, raced, cross-thread, or wrong-user Decline must preserve call state",
+  );
+}
 assert.equal(
   redirectChillyChatNativeCallSystemPath(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
   ),
-  `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
-  "Expo Router rewrites a terminated Android Answer before caching its initial route",
+  `/chat/${nativeRouteThreadId}`,
+  "Expo Router strips authority-shaped parameters before caching an external route",
 );
 assert.equal(
   redirectChillyChatNativeCallSystemPath(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
   ),
-  `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
-  "Expo Router rewrites a terminated Android Decline without adding media intent",
+  `/chat/${nativeRouteThreadId}`,
+  "Expo Router strips external Decline authority while retaining thread navigation",
 );
 assert.equal(
   redirectChillyChatNativeCallSystemPath("chillywoodmobile://settings"),
@@ -183,7 +234,7 @@ assert.equal(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
   ),
   true,
-  "a valid Answer arriving before the authenticated bridge is retained",
+  "a valid thread navigation arriving before the router bridge is retained without action authority",
 );
 const unsubscribeEarlyNativeCallRoutes = earlyNativeCallRouteBuffer.subscribe(
   (route) => bufferedNativeCallRoutes.push(route),
@@ -191,23 +242,23 @@ const unsubscribeEarlyNativeCallRoutes = earlyNativeCallRouteBuffer.subscribe(
 assert.deepEqual(
   bufferedNativeCallRoutes,
   [{
-    destination:
-      `/chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=answer&openCall=1`,
-    requestKey: `${nativeRouteThreadId}:${nativeRouteInviteId}:answer`,
+    destination: `/chat/${nativeRouteThreadId}`,
+    requestKey: `navigation:${nativeRouteThreadId}`,
+    threadId: nativeRouteThreadId,
   }],
-  "the authenticated bridge receives the exact retained Answer once",
+  "the router bridge receives only the retained navigation target",
 );
 assert.equal(
   earlyNativeCallRouteBuffer.capture(
     `chillywoodmobile://chat/${nativeRouteThreadId}?callInviteId=${nativeRouteInviteId}&nativeCallAction=decline`,
   ),
   true,
-  "a valid live Decline reaches the mounted bridge",
+  "a live Decline-shaped URL reaches the mounted bridge as navigation only",
 );
 assert.equal(
   bufferedNativeCallRoutes.at(-1)?.requestKey,
-  `${nativeRouteThreadId}:${nativeRouteInviteId}:decline`,
-  "the mounted bridge receives the exact live Decline action",
+  `navigation:${nativeRouteThreadId}`,
+  "the mounted bridge receives no external action authority",
 );
 unsubscribeEarlyNativeCallRoutes();
 assert.equal(
@@ -529,10 +580,25 @@ assert.equal(resolveIncomingCallRoomJoinAction({
 }), "blocked", "missing or mismatched invite evidence cannot open callee media");
 for (const nativeCallAction of ["answer", "decline", "end", "mute", "unmute"]) {
   assert.equal(doesNativeCallActionOwnTransition({
-    callInviteId: "INVITE-ID",
+    callInviteId: nativeRouteInviteId,
     nativeCallAction,
-  }), true, `${nativeCallAction}: an invite-scoped native action owns the authoritative transition`);
+  }), false, `${nativeCallAction}: route values alone never own a native transition`);
 }
+const semanticsRegistry = createNativeCallTransitionProvenanceRegistry({claimIdFactory: () => "a".repeat(64), now: () => 100});
+const semanticsCreation = semanticsRegistry.create({action: "answer", authenticatedUserId: nativeRouteUserId, inviteId: nativeRouteInviteId, nativeEventGeneration: 1, nativeIdentity: "33333333-3333-4333-8333-333333333333", platform: "ios", source: "ios_callkit_native_event", threadId: nativeRouteThreadId});
+const consumedIosAnswerClaim = semanticsRegistry.consume({action: "answer", authenticatedUserId: nativeRouteUserId, claimId: semanticsCreation.claimId, inviteId: nativeRouteInviteId, nativeIdentity: semanticsCreation.nativeIdentity, platform: "ios", source: "ios_callkit_native_event", threadId: nativeRouteThreadId});
+assert.ok(consumedIosAnswerClaim, "semantics proof creates a structurally valid test-registry claim");
+assert.equal(doesNativeCallActionOwnTransition({
+  authority: "trusted_native_claim",
+  callInviteId: nativeRouteInviteId,
+  currentUserId: nativeRouteUserId,
+  monotonicNowMs: 100,
+  nativeCallAction: "answer",
+  nativeIdentity: consumedIosAnswerClaim.nativeIdentity,
+  platform: "ios",
+  threadId: nativeRouteThreadId,
+  trustedNativeClaim: consumedIosAnswerClaim,
+}), false, "an exported test registry cannot manufacture production native-transition attestation");
 assert.equal(doesNativeCallActionOwnTransition({
   callInviteId: "",
   nativeCallAction: "answer",
@@ -828,15 +894,23 @@ assert.match(
 assert.doesNotMatch(chatThreadSource, /styles\.incomingCallSheet/u, "same-thread foreground calls cannot use the large blocking modal");
 assert.match(rootLayoutSource, /testID="app-wide-incoming-call-banner"/u, "foreground calls outside the thread use the compact top banner");
 assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foreground calls cannot use the large app-wide modal");
+const androidNativeCallRouteBridgeSource = rootLayoutSource.match(
+  /function AndroidNativeCallRouteBridge\(\)[\s\S]*?\n\}\n\nfunction RouteAnalyticsBridge/u,
+)?.[0] ?? "";
 assert.match(
-  rootLayoutSource,
-  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,3000}Linking\.getInitialURL\(\)[\s\S]{0,180}captureNativeCallRoute/u,
-  "terminated Android native actions must be captured from the Activity initial URL before the authenticated navigator mounts",
+  androidNativeCallRouteBridgeSource,
+  /isLoading \|\| !isSignedIn \|\| !authenticatedUserId[\s\S]{0,700}consumePendingAndroidNativeCallRoute\(\{ authenticatedUserId \}\)/u,
+  "cold-start Android actions must wait for exact authenticated identity before consuming the private native store",
 );
 assert.match(
-  rootLayoutSource,
-  /function AndroidNativeCallRouteBridge\(\)[\s\S]{0,7000}\|\| isLoading[\s\S]{0,120}\|\| !isSignedIn[\s\S]{0,120}\|\| !pendingNativeCallRoute[\s\S]{0,1200}router\.replace/u,
-  "cold-start native actions must wait for the authenticated session before deterministic routing",
+  androidNativeCallRouteBridgeSource,
+  /nativeCallRoute\?\.destination[\s\S]{0,220}router\.replace/u,
+  "only a route created after trusted native-store consumption may navigate",
+);
+assert.doesNotMatch(
+  androidNativeCallRouteBridgeSource,
+  /Linking\.getInitialURL|Linking\.addEventListener|captureNativeCallRoute|pendingNativeCallRoute/u,
+  "external URL and legacy route-buffer state cannot manufacture Android transition authority",
 );
 const nativeCallRouteBridgeMountIndex = rootLayoutSource.indexOf("<AndroidNativeCallRouteBridge />");
 const authRouteGateMountIndex = rootLayoutSource.indexOf("<AuthRouteGate />");
@@ -894,22 +968,16 @@ assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting 
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
-assert.match(rootLayoutSource, /params\.set\("nativeCallAction", "answer"\)/u, "foreground Answer uses the durable callee accept route");
+assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
+assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
+assert.match(rootLayoutSource, /await updateChillyChatCallInviteStatus[\s\S]{0,500}status:\s*"accepted"/u, "foreground Answer requests the server-authoritative transition directly");
 assert.match(
   chatThreadSource,
-  /const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition\(\{[\s\S]{0,180}requestedCallInviteId[\s\S]{0,180}requestedNativeCallAction[\s\S]{0,80}\}\)/u,
+  /const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition\(\{[\s\S]{0,220}authority: trustedNativeCallClaim[\s\S]{0,400}trustedNativeClaim: trustedNativeCallClaim/u,
   "the chat thread must use the tested native-transition ownership policy",
 );
-assert.match(
-  chatThreadSource,
-  /!requestedOpenCall[\s\S]{0,120}\|\| requestedNativeCallOwnsTransition[\s\S]{0,520}void handleJoinOrCloseCall\(requestedCallInviteId\)/u,
-  "openCall compatibility routing must stay inert while a native action is settling",
-);
-assert.match(
-  chatThreadSource,
-  /normalizedExpectedInviteId && joinInvite\?\.id !== normalizedExpectedInviteId[\s\S]{0,900}!joinInvite && !normalizedExpectedInviteId/u,
-  "openCall compatibility must not fall through from a stale invite ID to a newer same-thread call",
-);
+assert.doesNotMatch(chatThreadSource, /requestedOpenCall|autoOpenCallRef/u, "openCall route text must never open or join call media");
+assert.doesNotMatch(chatThreadSource, /requestedCallMode|autoStartCallRef/u, "startCall route text must never create a call");
 assert.match(
   chatThreadSource,
   /activeNativeCallActionRequestKeyRef\.current = requestedNativeCallRequestKey[\s\S]{0,320}\[requestedNativeCallRequestKey\]/u,
@@ -955,9 +1023,10 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /requestedNativeCallAction === "answer"[\s\S]{0,420}completeIosNativeCallAnswer\([\s\S]{0,160}true[\s\S]{0,420}applyAcceptedIncomingInviteState\(acceptedInvite\)/u,
-  "a server-accepted CallKit answer is fulfilled before accepted media initialization can publish",
+  /const acceptedInvite = await updateChillyChatCallInviteStatus[\s\S]{0,620}completeTrustedIosNativeAnswer\(acceptedInvite\)[\s\S]{0,260}applyAcceptedIncomingInviteState\(acceptedInvite\)/u,
+  "a server-accepted CallKit answer completes the trusted native orchestrator before accepted media state can publish",
 );
+assert.match(chatThreadSource, /completeIosAcceptedNativeAnswer\([\s\S]{0,520}completeNative: completeIosNativeCallAnswer/u, "the trusted completion helper delegates to the executable provenance-bound CallKit orchestrator");
 assert.match(
   chatThreadSource,
   /const resumeAcceptedIncomingInvite = useCallback[\s\S]{0,2200}latestInvite\?\.status === "accepted"[\s\S]{0,700}latestThread\?\.activeCommunicationRoomId === roomId[\s\S]{0,320}snapshot\?\.room\.status === "active"/u,

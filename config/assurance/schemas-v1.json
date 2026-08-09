@@ -179,6 +179,26 @@
       "required": ["objective", "exactReason", "reviewer", "supportingDomains", "secondHighRiskDomain", "newTimeboxHours", "fileBudget", "lineBudget", "reviewStatus"],
       "properties": {"secondHighRiskDomain": {"const": false}, "newTimeboxHours": {"maximum": 8}}
     },
+    "commandAllowlist": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["commands"],
+      "properties": {"commands": {"type": "array", "minItems": 11}}
+    },
+    "evidenceIndex": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["entries"],
+      "properties": {"entries": {"type": "array", "minItems": 1}}
+    },
+    "reviewHistory": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["canonicalSource", "fieldContract", "protectedImplementationHeads", "closureCriteria", "implementationDispositions", "safeStaleCandidates"],
+      "properties": {"safeStaleCandidates": {"type": "array", "minItems": 12}}
+    },
+    "efficiencyBenchmark": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["normalContinuation", "normalContinuationBytes", "unrecordedMetricPolicy", "baselines"],
+      "properties": {"baselines": {"type": "array", "minItems": 2}}
+    },
     "dogfood": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
       "required": ["subjects", "requiredFindingIds"],

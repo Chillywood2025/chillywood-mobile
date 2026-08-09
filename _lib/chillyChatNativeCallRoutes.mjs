@@ -1,35 +1,11 @@
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const NATIVE_REQUEST_KEY_PATTERN = /^[0-9a-f]{64}$/u;
+const TRUSTED_ANDROID_ACTIONS = new Set(["answer", "decline"]);
 
 const normalizeUuid = (value) => {
   const normalized = String(value ?? "").trim();
   return UUID_PATTERN.test(normalized) ? normalized.toLowerCase() : "";
-};
-
-const buildResolvedNativeCallRoute = (
-  threadId,
-  callInviteId,
-  nativeCallAction,
-) => {
-  if (
-    !threadId
-    || !callInviteId
-    || !["answer", "decline"].includes(nativeCallAction)
-  ) {
-    return null;
-  }
-
-  const params = new URLSearchParams({
-    callInviteId,
-    nativeCallAction,
-  });
-  if (nativeCallAction === "answer") params.set("openCall", "1");
-
-  return {
-    destination: `/chat/${encodeURIComponent(threadId)}?${params.toString()}`,
-    requestKey: `${threadId}:${callInviteId}:${nativeCallAction}`,
-  };
 };
 
 const readChatThreadId = (parsedUrl) => {
@@ -46,17 +22,15 @@ const readChatThreadId = (parsedUrl) => {
   return "";
 };
 
-export const resolveChillyChatNativeCallRoute = (value) => {
+const parseChillyChatUrl = (value) => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return null;
-
   let parsedUrl;
   try {
     parsedUrl = new URL(normalized);
   } catch {
     return null;
   }
-
   if (
     parsedUrl.protocol.toLowerCase() !== "chillywoodmobile:"
     || parsedUrl.username
@@ -66,13 +40,19 @@ export const resolveChillyChatNativeCallRoute = (value) => {
   ) {
     return null;
   }
-
   const threadId = readChatThreadId(parsedUrl);
-  const callInviteId = normalizeUuid(parsedUrl.searchParams.get("callInviteId"));
-  const nativeCallAction = String(
-    parsedUrl.searchParams.get("nativeCallAction") ?? "",
-  ).trim().toLowerCase();
-  return buildResolvedNativeCallRoute(threadId, callInviteId, nativeCallAction);
+  return threadId ? { parsedUrl, threadId } : null;
+};
+
+const buildNavigationOnlyRoute = (threadId) => ({
+  destination: `/chat/${encodeURIComponent(threadId)}`,
+  requestKey: `navigation:${threadId}`,
+  threadId,
+});
+
+export const resolveChillyChatNativeCallRoute = (value) => {
+  const parsed = parseChillyChatUrl(value);
+  return parsed ? buildNavigationOnlyRoute(parsed.threadId) : null;
 };
 
 export const resolveChillyChatNativeCallActionPayload = (value) => {
@@ -80,18 +60,56 @@ export const resolveChillyChatNativeCallActionPayload = (value) => {
   const threadId = normalizeUuid(value.threadId);
   const callInviteId = normalizeUuid(value.callInviteId);
   const nativeCallAction = String(value.nativeCallAction ?? "").trim().toLowerCase();
-  const nativeRequestKey = String(value.requestKey ?? "").trim().toLowerCase();
+  const requestKey = String(value.requestKey ?? "").trim().toLowerCase();
   const createdAt = Number(value.createdAt);
+  const captureGeneration = Number(value.captureGeneration);
   const schemaVersion = Number(value.schemaVersion);
   if (
-    !NATIVE_REQUEST_KEY_PATTERN.test(nativeRequestKey)
+    !threadId
+    || !callInviteId
+    || !TRUSTED_ANDROID_ACTIONS.has(nativeCallAction)
+    || !NATIVE_REQUEST_KEY_PATTERN.test(requestKey)
     || !Number.isSafeInteger(createdAt)
     || createdAt <= 0
-    || schemaVersion !== 1
+    || !Number.isSafeInteger(captureGeneration)
+    || captureGeneration <= 0
+    || captureGeneration === createdAt
+    || schemaVersion !== 2
   ) {
     return null;
   }
-  return buildResolvedNativeCallRoute(threadId, callInviteId, nativeCallAction);
+  return {
+    callInviteId,
+    captureGeneration,
+    createdAt,
+    nativeCallAction,
+    requestKey,
+    schemaVersion,
+    threadId,
+  };
+};
+
+export const resolveAuthoritativeNativeCallDecline = (input) => {
+  const invite = input?.invite;
+  const expectedInviteId = normalizeUuid(input?.expectedInviteId);
+  const expectedThreadId = normalizeUuid(input?.expectedThreadId);
+  const currentUserId = normalizeUuid(input?.currentUserId);
+  if (
+    !invite
+    || typeof invite !== "object"
+    || Array.isArray(invite)
+    || !expectedInviteId
+    || !expectedThreadId
+    || !currentUserId
+    || normalizeUuid(invite.id) !== expectedInviteId
+    || normalizeUuid(invite.threadId) !== expectedThreadId
+    || normalizeUuid(invite.calleeUserId) !== currentUserId
+    || normalizeUuid(invite.callerUserId) === currentUserId
+    || invite.status !== "declined"
+  ) {
+    return null;
+  }
+  return invite;
 };
 
 export const redirectChillyChatNativeCallSystemPath = (value) => (
@@ -101,16 +119,12 @@ export const redirectChillyChatNativeCallSystemPath = (value) => (
 export const createChillyChatNativeCallRouteBuffer = () => {
   let bufferedRoute = null;
   const listeners = new Set();
-
   return {
     capture(value) {
       const route = resolveChillyChatNativeCallRoute(value);
       if (!route) return false;
-      if (listeners.size === 0) {
-        bufferedRoute = route;
-      } else {
-        listeners.forEach((listener) => listener(route));
-      }
+      if (listeners.size === 0) bufferedRoute = route;
+      else listeners.forEach((listener) => listener(route));
       return true;
     },
     subscribe(listener) {
@@ -120,9 +134,7 @@ export const createChillyChatNativeCallRouteBuffer = () => {
         bufferedRoute = null;
         listener(route);
       }
-      return () => {
-        listeners.delete(listener);
-      };
+      return () => listeners.delete(listener);
     },
   };
 };

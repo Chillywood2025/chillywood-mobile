@@ -1,33 +1,35 @@
-import { Linking, NativeModules, Platform } from "react-native";
+import { DeviceEventEmitter, NativeModules, Platform } from "react-native";
 
 import {
-  createChillyChatNativeCallRouteBuffer,
   redirectChillyChatNativeCallSystemPath,
   resolveChillyChatNativeCallActionPayload,
-  resolveChillyChatNativeCallRoute,
 } from "./chillyChatNativeCallRoutes.mjs";
-
-type NativeCallRouteListener = (
-  route: NonNullable<ReturnType<typeof resolveChillyChatNativeCallRoute>>,
-) => void;
-
-const earlyNativeCallRouteBuffer = createChillyChatNativeCallRouteBuffer();
+import {
+  clearNativeCallTransitionClaims,
+  registerTrustedAndroidNativeActionStorePayload,
+  sanitizeExternalIosNativeCallPath,
+} from "./nativeCallTransitionProvenance.mjs";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const nativeCallNotificationModule = NativeModules.ChillyChatCallNotifications as {
   consumePendingNativeCallAction?: () => Promise<unknown>;
   readPendingNativeCallActionStatus?: () => Promise<unknown>;
 } | undefined;
 
-if (Platform.OS === "android") {
-  Linking.addEventListener("url", ({ url }) => {
-    earlyNativeCallRouteBuffer.capture(url);
-  });
-}
-
-export async function consumePendingAndroidNativeCallRoute() {
+export async function consumePendingAndroidNativeCallRoute(input: {
+  authenticatedUserId: string;
+}) {
   if (Platform.OS !== "android") return null;
+  const authenticatedUserId = String(input?.authenticatedUserId ?? "").trim().toLowerCase();
+  if (!UUID_PATTERN.test(authenticatedUserId)) return null;
   const pendingAction =
     await nativeCallNotificationModule?.consumePendingNativeCallAction?.();
-  return resolveChillyChatNativeCallActionPayload(pendingAction);
+  const payload = resolveChillyChatNativeCallActionPayload(pendingAction);
+  if (!payload) return null;
+  return registerTrustedAndroidNativeActionStorePayload({
+    ...payload,
+    authenticated: true,
+    authenticatedUserId,
+  });
 }
 
 export async function readPendingAndroidNativeCallActionStatus() {
@@ -41,19 +43,30 @@ export async function readPendingAndroidNativeCallActionStatus() {
   );
   if (
     !["empty", "expired", "present"].includes(status)
-    || schemaVersion !== 1
+    || schemaVersion !== 2
   ) {
     return null;
   }
   return { schemaVersion, status };
 }
 
-export const subscribeToEarlyAndroidNativeCallRoutes = (
-  listener: NativeCallRouteListener,
-) => earlyNativeCallRouteBuffer.subscribe(listener);
+export const subscribeToPendingAndroidNativeCallActionAvailability = (
+  listener: () => void,
+) => {
+  if (Platform.OS !== "android" || typeof listener !== "function") {
+    return () => {};
+  }
+  const subscription = DeviceEventEmitter.addListener(
+    "pendingNativeCallActionAvailable",
+    listener,
+  );
+  return () => subscription.remove();
+};
 
 export const redirectEarlyAndroidNativeCallSystemPath = (path: string) => (
-  earlyNativeCallRouteBuffer.capture(path)
-    ? redirectChillyChatNativeCallSystemPath(path)
-    : path
+  redirectChillyChatNativeCallSystemPath(sanitizeExternalIosNativeCallPath(path))
 );
+
+export const clearPendingAndroidNativeCallRouteClaims = () => {
+  if (Platform.OS === "android") clearNativeCallTransitionClaims("android");
+};

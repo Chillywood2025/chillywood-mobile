@@ -57,12 +57,34 @@ if (!nativeCallPlugin.includes("NotificationCompat.CallStyle.forIncomingCall")) 
   fail("native Android incoming call plugin must render CallStyle notifications");
 }
 
-if (!nativeCallPlugin.includes('val answerIntent = buildActivityPendingIntent(context, data, "answer", 1)')) {
-  fail("native Android Answer action must start the app Activity with nativeCallAction=answer");
+if (!nativeCallPlugin.includes("val answerIntent = buildActionPendingIntent(context, data, ACTION_ANSWER, 1)")) {
+  fail("native Android Answer must use the immutable explicit notification-action receiver path");
 }
 
-if (nativeCallPlugin.includes("val answerIntent = buildActionPendingIntent")) {
-  fail("native Android Answer action must not rely on a broadcast receiver to launch the app from background");
+if (!nativeCallPlugin.includes("val declineIntent = buildActionPendingIntent(context, data, ACTION_DECLINE, 2)")) {
+  fail("native Android Decline must use the immutable explicit notification-action receiver path");
+}
+
+if (
+  !nativeCallPlugin.includes("PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE")
+  || nativeCallPlugin.includes("PendingIntent.FLAG_MUTABLE")
+) {
+  fail("native Android Answer and Decline PendingIntents must remain immutable");
+}
+
+if (
+  !nativeCallPlugin.includes('"android:name": ".ChillyChatCallNotificationActionReceiver"')
+  || !nativeCallPlugin.includes('"android:exported": "false"')
+) {
+  fail("native Android action receiver must remain explicit and non-exported");
+}
+
+if (
+  !nativeCallPlugin.includes("captureTrustedNotificationAction(")
+  || !nativeCallPlugin.includes("Intent(Intent.ACTION_MAIN)")
+  || nativeCallPlugin.includes("captureForActivity")
+) {
+  fail("native Android actions must persist trusted receiver state before a neutral Activity launch");
 }
 
 if (!dispatch.includes('const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls"')) {
