@@ -119,6 +119,12 @@ export function useLiveKitChatCallSession({
     && initialMediaPreferences?.cameraEnabled !== false;
   const initialMicEnabled = initialMediaPreferences?.micEnabled !== false;
   const roomRef = useRef<Room | null>(null);
+  const sessionKeyRef = useRef(sessionKey);
+  const sessionGenerationRef = useRef(0);
+  if (sessionKeyRef.current !== sessionKey) {
+    sessionKeyRef.current = sessionKey;
+    sessionGenerationRef.current += 1;
+  }
   const productRoomRef = useRef<CommunicationRoomState | null>(null);
   const identityRef = useRef<CommunicationIdentity | null>(null);
   const membershipsRef = useRef<CommunicationRoomMembership[]>([]);
@@ -250,13 +256,19 @@ export function useLiveKitChatCallSession({
     }
   }, []);
 
-  const readCurrentMembershipMediaState = useCallback(async () => {
+  const readCurrentMembershipMediaState = useCallback(async (originStillCurrent?: () => boolean) => {
     const currentIdentity = identityRef.current;
     const currentRoom = productRoomRef.current;
     if (!currentIdentity || !currentRoom) return null;
+    const remainsCurrent = () => (
+      identityRef.current === currentIdentity
+      && productRoomRef.current === currentRoom
+      && (!originStillCurrent || originStillCurrent())
+    );
     const snapshot = await getCommunicationRoomSnapshot(currentRoom.roomId).catch(() => null);
     if (
-      !snapshot
+      !remainsCurrent()
+      || !snapshot
       || snapshot.room.roomId !== currentRoom.roomId
       || snapshot.room.status !== "active"
     ) return null;
@@ -266,7 +278,7 @@ export function useLiveKitChatCallSession({
       && !entry.leftAt
       && (entry.membershipState === "active" || entry.membershipState === "reconnecting")
     )) ?? null;
-    if (!membership) return null;
+    if (!membership || !remainsCurrent()) return null;
     membershipsRef.current = [
       ...snapshot.memberships.filter((entry) => entry.userId !== membership.userId),
       membership,
@@ -279,10 +291,16 @@ export function useLiveKitChatCallSession({
     micOn: boolean,
     membershipState: "active" | "reconnecting" = "active",
     strict = false,
+    originStillCurrent?: () => boolean,
   ) => {
     const currentIdentity = identityRef.current;
     const currentRoom = productRoomRef.current;
     if (!currentIdentity || !currentRoom) return null;
+    const remainsCurrent = () => (
+      identityRef.current === currentIdentity
+      && productRoomRef.current === currentRoom
+      && (!originStillCurrent || originStillCurrent())
+    );
     const isExact = (candidate: CommunicationRoomMembership | null | undefined) => {
       return !!candidate
         && candidate.roomId === currentRoom.roomId
@@ -292,6 +310,7 @@ export function useLiveKitChatCallSession({
         && !candidate.leftAt
         && (candidate.membershipState === "active" || candidate.membershipState === "reconnecting");
     };
+    if (!remainsCurrent()) return null;
     let membership = await touchCommunicationRoomSession({
       roomId: currentRoom.roomId,
       userId: currentIdentity.userId,
@@ -301,11 +320,12 @@ export function useLiveKitChatCallSession({
       displayName: currentIdentity.displayName,
       avatarUrl: currentIdentity.avatarUrl,
     }).catch(() => null);
+    if (!remainsCurrent()) return null;
     if (strict && !isExact(membership)) {
-      const observed = await readCurrentMembershipMediaState();
+      const observed = await readCurrentMembershipMediaState(remainsCurrent);
       membership = isExact(observed) ? observed : null;
     }
-    if (!membership || (strict && !isExact(membership))) return null;
+    if (!membership || !remainsCurrent() || (strict && !isExact(membership))) return null;
     membershipsRef.current = [
       ...membershipsRef.current.filter((entry) => entry.userId !== membership.userId),
       membership,
@@ -334,20 +354,29 @@ export function useLiveKitChatCallSession({
       try {
         const liveKitRoom = roomRef.current;
         if (!liveKitRoom || liveKitRoom.state !== ConnectionState.Connected) return false;
+        const currentRoom = productRoomRef.current;
+        const currentIdentity = identityRef.current;
+        const originSessionKey = sessionKeyRef.current;
+        const originSessionGeneration = sessionGenerationRef.current;
+        if (
+          currentRoom?.status !== "active"
+          || !currentIdentity
+          || (channelState !== "live" && channelState !== "reconnecting")
+        ) return false;
+        const originStillCurrent = () => (
+          sessionKeyRef.current === originSessionKey
+          && sessionGenerationRef.current === originSessionGeneration
+          && roomRef.current === liveKitRoom
+          && productRoomRef.current === currentRoom
+          && identityRef.current === currentIdentity
+        );
         if (nextEnabled) {
           const audioSessionReady = await LiveKitAudioSession.startAudioSession()
             .then(() => true)
             .catch(() => false);
           if (!audioSessionReady) return false;
         }
-        const currentRoom = productRoomRef.current;
-        const currentIdentity = identityRef.current;
-        const originSessionKey = sessionKey;
-        if (
-          currentRoom?.status !== "active"
-          || !currentIdentity
-          || (channelState !== "live" && channelState !== "reconnecting")
-        ) return false;
+        if (!originStillCurrent()) return false;
 
         const priorRequested = micRequestedRef.current;
         const priorUi = micEnabled;
@@ -359,7 +388,7 @@ export function useLiveKitChatCallSession({
         const priorCameraActual = publicationIsUsable(
           liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
         );
-        const priorDurable = await readCurrentMembershipMediaState();
+        const priorDurable = await readCurrentMembershipMediaState(originStillCurrent);
         const priorConverged = !!priorDurable
           && priorDurable.roomId === currentRoom.roomId
           && priorDurable.userId === currentIdentity.userId
@@ -381,13 +410,8 @@ export function useLiveKitChatCallSession({
           }
           return false;
         }
-        const originStillCurrent = () => (
-          sessionKey === originSessionKey
-          && roomRef.current === liveKitRoom
-          && productRoomRef.current === currentRoom
-          && identityRef.current === currentIdentity
-        );
         micReconciliationBlockedRef.current = false;
+        if (!originStillCurrent()) return false;
         pendingMicToggleRef.current = true;
 
         let publication: TrackPublication | undefined;
@@ -434,6 +458,7 @@ export function useLiveKitChatCallSession({
           ) === priorActual;
           if (!restored) micReconciliationBlockedRef.current = true;
           reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
+          setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
           refreshParticipantViews();
           return false;
         }
@@ -443,6 +468,7 @@ export function useLiveKitChatCallSession({
           nextEnabled,
           priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
           true,
+          originStillCurrent,
         );
         const targetCameraUnchanged = publicationIsUsable(
           liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
@@ -452,6 +478,7 @@ export function useLiveKitChatCallSession({
         if (!originStillCurrent()) {
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
           reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
+          setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
           refreshParticipantViews();
           return false;
         }

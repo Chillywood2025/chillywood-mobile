@@ -52,7 +52,7 @@ const state = {
   actualMic: initialMic, actualCamera: initialCamera, durableMic: initialMic, durableCamera: initialCamera,
   uiMic: initialMic, uiCamera: initialCamera, busy: false, channelState: "live", provider: "livekit",
   nativeCalls: 0, touchCalls: 0, readbackCalls: 0, refreshCalls: 0, tokenCalls: 0, cleanupCalls: 0,
-  errors: [], messages: [], telemetry: [], firstMedia: [], log: [],
+  errors: [], messages: [], telemetry: [], firstMedia: [], log: [], touchTargets: [],
 };
 const makeMembership = (mic = state.durableMic, camera = state.durableCamera, overrides = {}) => ({
   roomId: "room-1", userId: "local-user", role: "participant", membershipState: "active",
@@ -62,6 +62,8 @@ const makeMembership = (mic = state.durableMic, camera = state.durableCamera, ov
 const mediaControlRef = {current: null};
 const identityRef = {current: {userId: "local-user", displayName: "Local", avatarUrl: null}};
 const sessionKey = "invite-1:ROOM:audio:livekit";
+const sessionKeyRef = {current: sessionKey};
+const sessionGenerationRef = {current: 0};
 const productRoomRef = {current: {roomId: "room-1", status: "active"}};
 const membershipsRef = {current: [makeMembership()]};
 let requestedMic = initialMic;
@@ -103,6 +105,7 @@ const publicationIsUsable = (publication) => !!publication?.track && !publicatio
 const setMediaControlsBusy = (value) => {state.busy = value;};
 const touchCommunicationRoomSession = async (options) => {
   state.touchCalls += 1;
+  state.touchTargets.push({roomId: options.roomId, userId: options.userId});
   state.log.push(\`touch:\${options.micEnabled}\`);
   const action = touchQueue.shift() ?? "success";
   if (action === "reject") throw new Error("membership_rejected");
@@ -118,7 +121,13 @@ const touchCommunicationRoomSession = async (options) => {
   state.durableMic = options.micEnabled;
   state.durableCamera = options.cameraEnabled;
   state.log.push(\`touch-confirmed:\${options.micEnabled}\`);
-  return makeMembership();
+  return makeMembership(options.micEnabled, options.cameraEnabled, {
+    roomId: options.roomId,
+    userId: options.userId,
+    membershipState: options.membershipState,
+    displayName: options.displayName,
+    avatarUrl: options.avatarUrl,
+  });
 };
 const getCommunicationRoomSnapshot = async () => {
   state.readbackCalls += 1;
@@ -152,9 +161,10 @@ const snapshot = () => ({
   readbackCalls: state.readbackCalls, refreshCalls: state.refreshCalls, tokenCalls: state.tokenCalls,
   cleanupCalls: state.cleanupCalls, errors: [...state.errors], messages: [...state.messages],
   telemetry: [...state.telemetry], firstMedia: [...state.firstMedia], log: [...state.log],
+  touchTargets: [...state.touchTargets],
   busy: state.busy, reconciliationBlocked: micReconciliationBlockedRef.current,
 });
-module.exports = {setMicrophoneEnabled, snapshot, state, targetMic};
+module.exports = {setMicrophoneEnabled, snapshot, state, targetMic, rollover: () => {sessionKeyRef.current = "replacement"; sessionGenerationRef.current += 1; productRoomRef.current = {roomId: "room-2", status: "active"}; identityRef.current = {userId: "replacement-user"}; roomRef.current = {state: "connected", localParticipant};}};
 `;
   const compiled = ts.transpileModule(wrapper, {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022},
@@ -290,6 +300,21 @@ const cases = [
     scenario: {initialMic: false, targetMic: true, readbackQueue: ["current", "current"], touchQueue: ["null", "success"]},
     verify: (value) => {assert.equal(value.result, false); assertCallUnchanged(value);},
   },
+  {
+    id: "DEFERRED_NATIVE_SESSION_ROLLOVER_ORIGIN_ONLY_COMPENSATED",
+    custom: async () => {
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["wait", "success"], nativeGate: gate});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls === 0; turn += 1) await Promise.resolve();
+      controls.rollover(); release();
+      const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assert.equal(observed.nativeCalls, 2); assert.equal(observed.touchCalls, 0); assertState(observed, false);
+      assert.equal(observed.errors.includes("mic_session_identity_rollover"), true);
+      assert.equal(observed.messages.includes("Microphone state could not be confirmed. The call remains connected."), true);
+    },
+  },
 ];
 
 test("exact product and serializer slices remain hash-bound", () => {
@@ -413,6 +438,24 @@ const negativeControls = [
     mutate: (value) => mutateOnce(value, "          refreshParticipantViews();\n          return false;\n        }\n\n        micRequestedRef.current", "          refreshParticipantViews();\n          cameraRequestedRef.current = !priorCameraRequested;\n          return false;\n        }\n\n        micRequestedRef.current", "camera-change"),
     detected: (value) => value.requestedCamera !== true,
   },
+  {
+    code: "D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE",
+    custom: async () => {
+      const mutated = mutateOnce(microphoneSlice, `const originStillCurrent = () => (
+          sessionKeyRef.current === originSessionKey
+          && sessionGenerationRef.current === originSessionGeneration
+          && roomRef.current === liveKitRoom
+          && productRoomRef.current === currentRoom
+          && identityRef.current === currentIdentity
+        );`, "const originStillCurrent = () => true;", "accept-rollover");
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["wait"], nativeGate: gate, touchQueue: ["success"]}, {microphone: mutated});
+      const pending = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls === 0; turn += 1) await Promise.resolve(); controls.rollover(); release();
+      const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, true); assert.equal(observed.touchCalls > 0, true);
+      assert.equal(JSON.stringify(observed.touchTargets), JSON.stringify([{roomId: "room-2", userId: "replacement-user"}]));
+    },
+  },
 ];
 
 test("negative-control contract names remain exact", () => {
@@ -421,6 +464,7 @@ test("negative-control contract names remain exact", () => {
 
 for (const control of negativeControls) {
   test(`${control.code} executable mutant is rejected`, async () => {
+    if (control.custom) return control.custom();
     if (control.eventMutation) {
       const mutated = control.eventMutation(localPublishedSlice);
       assert.deepEqual(Array.from(executeLocalPublished(true, mutated).telemetry), ["local_audio_published"]);
@@ -433,7 +477,7 @@ for (const control of negativeControls) {
   });
 }
 
-test("14-case evidence is deterministic 3/3", async () => {
+test("15-case evidence is deterministic 3/3", async () => {
   const hashes = [];
   for (let run = 0; run < 3; run += 1) {
     const evidence = [];
