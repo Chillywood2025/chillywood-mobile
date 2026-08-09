@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. The sole next implementation is CHI'LLYWOOD ASSURANCE EFFICIENCY E0. Start it only under its separate Owner prompt; this closeout does not create an E0 branch or source.
+1. Synchronize corrected E0 source a367da2eb673e550b15d61f20a90ebf9fe5a25b6 after privacy P1 closure, rerun the four compact Level C review lanes, run one exact Phase 1 CI at the final synchronized head, merge only PR #185, close its review PRs unmerged with branches retained, close only the exact hash-bound stale review list, then perform one post-E0 three-file current-truth synchronization and stop.
 2. Keep D2A checkpoint 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f frozen until E0 merges; only then may the separately authorized D2A execution resume.
 3. After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.
 4. D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.

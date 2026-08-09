@@ -169,6 +169,9 @@ test("runner rejects unknown commands, shell injection, missing results, secrets
   assert.equal(runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "Bearer sk_abcdefghijklmnop", stderr: "" }) }).finding, "SENSITIVE_OUTPUT_DETECTED", "raw successful log injection denied");
   const failed = runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "Bearer sk_abcdefghijklmnop" }) });
   assert.match(failed.failureExcerpt, /REDACTED/u, "failure excerpt redacted");
+  const deviceFailed = runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "deviceSerial=R58M1234ABC UDID=00008101-001234567890001E ordinary diagnostic" }) });
+  assert.doesNotMatch(deviceFailed.failureExcerpt, /R58M1234ABC|00008101-001234567890001E/u, "device identifiers redacted");
+  assert.match(deviceFailed.failureExcerpt, /ordinary diagnostic/u, "benign failure text retained");
   assert.equal(runReceipt(okRule, "ok", ["--version"], { ...deterministicDependencies, artifactWriter: () => { throw new Error("no"); } }).finding, "ARTIFACT_WRITE_FAILED");
   const cli = spawnSync(process.execPath, ["scripts/assurance/receipt.mjs", "--unknown=value"], { cwd: root, encoding: "utf8" });
   assert.equal(cli.status, 1, "unknown CLI flag rejected");
