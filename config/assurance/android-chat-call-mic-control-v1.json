@@ -7,7 +7,7 @@
     "components/communication/communication-control-bar.tsx": "6f510ac9074a1a5b8f965ce16da61bad39b2990bbc3a16d2de0b1cc6366bc3ca",
     "components/communication/in-room-communication-panel.tsx": "201fd733ee638956d5568d7faef794e9cf7afd2b9171abd2f8593c84a5c45327",
     "hooks/use-chat-call-media-session.ts": "1ccbf8def5d8506cde6c17bec4be86d0e71b6388fad57247f5c2aa4a6ea77cc2",
-    "hooks/use-livekit-chat-call-session.ts": "13d837633fcca99613e5a1f2e2eb44858dc50ae6046209089386e4029465fb7b",
+    "hooks/use-livekit-chat-call-session.ts": "5fca09dcffb005ad4f5dc23c830c47673fba54fab4b8de8102ded7c4c362a426",
     "hooks/use-communication-room-session.ts": "0da0e6dcd12875fd56f295f2f99d11a29a0a145a0b4c444f4f3a94d63096347d",
     "_lib/communication.ts": "efcdb6fc1151468928aea5bac45ca3c0a111782993b503ef49d744a67c122834",
     "_lib/chatCallMediaProviderPolicy.ts": "33b45618fea1b2850081fa1396146a6f58ff76d93c20efa90ffe66cf5e4c0cf9",
@@ -15,7 +15,7 @@
   },
   "sourceSlices": {
     "livekit-run-media-control": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const runMediaControl", "end": "  const updateMembershipMediaState", "sha256": "d8a23642b972a2b4f3d2ccc020fb43ac5ac4b3d0f7e5cec8685d18f12b0249ad"},
-    "livekit-set-microphone": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const setCameraEnabled", "sha256": "d5745ed1b661454e7a8815a079ee195b4230913cdb4002e9e3256c4b3636d8da"},
+    "livekit-set-microphone": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const setCameraEnabled", "sha256": "a46c9dac5ba2a7f50814a65613468308350c23d09c3b703469b99d9f04cf864a"},
     "legacy-run-serialized": {"path": "hooks/use-communication-room-session.ts", "start": "  const runSerializedMediaControl", "end": "  const ensureInitialLocalStream", "sha256": "3c9eb8ae860b0b967f34d8928b4b143a68546aed516ff57b7e5a19065f0c3388"},
     "legacy-ensure-track-kind": {"path": "hooks/use-communication-room-session.ts", "start": "  const ensureTrackKind", "end": "  const setCameraCaptureEnabled", "sha256": "cc976894698106d1e3f1c80ecd536f7b7657bfdc2467eca3d76ac57d8888040b"},
     "legacy-set-microphone": {"path": "hooks/use-communication-room-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const toggleMic", "sha256": "a19d6f5b16e1a362e955a19e1605600f50879f71d09053642b8a559598348b52"}

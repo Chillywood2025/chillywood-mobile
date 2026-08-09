@@ -333,21 +333,20 @@ export function useLiveKitChatCallSession({
     const result = await runMediaControl(async () => {
       try {
         const liveKitRoom = roomRef.current;
-        const currentRoom = productRoomRef.current;
-        const currentIdentity = identityRef.current;
-        if (
-          !liveKitRoom
-          || liveKitRoom.state !== ConnectionState.Connected
-          || currentRoom?.status !== "active"
-          || !currentIdentity
-          || (channelState !== "live" && channelState !== "reconnecting")
-        ) return false;
+        if (!liveKitRoom || liveKitRoom.state !== ConnectionState.Connected) return false;
         if (nextEnabled) {
           const audioSessionReady = await LiveKitAudioSession.startAudioSession()
             .then(() => true)
             .catch(() => false);
           if (!audioSessionReady) return false;
         }
+        const currentRoom = productRoomRef.current;
+        const currentIdentity = identityRef.current;
+        if (
+          currentRoom?.status !== "active"
+          || !currentIdentity
+          || (channelState !== "live" && channelState !== "reconnecting")
+        ) return false;
 
         const priorRequested = micRequestedRef.current;
         const priorUi = micEnabled;
