@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "reportId": "assurance-control-correction-a1-v1",
+  "classification": "ASSURANCE_INFRASTRUCTURE_ONLY",
+  "startingState": {
+    "operatorSuppliedMain": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+    "actualMainAtA1Start": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9",
+    "sequenceDiscrepancy": "PR_194_AND_POST_PR_194_TRUTH_PR_200_WERE_ALREADY_MERGED_BEFORE_A1_BEGAN",
+    "a1Disposition": "FORWARD_ASSURANCE_CORRECTION_WITH_PRODUCT_SOURCE_UNCHANGED"
+  },
+  "preFixReproduction": {
+    "frozenActiveState": "ACTIVE_TASK_AMBIGUOUS",
+    "matchingExplicitFeature": "ACTIVE_TASK_AMBIGUOUS",
+    "historicalD2aSourceHead": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
+    "historicalD2aSourceTree": "f9e102649b51da84324e97b576823e910340df9f",
+    "providerFreshnessDefect": "LOCAL_GITHUB_RENDER_REFRESH_EXTENDED_GLOBAL_ACCEPTANCE_WITH_LIVE_PROVIDER_READBACK_TRUE"
+  },
+  "structuredBinding": {
+    "authority": "activeTaskBinding",
+    "displayTextAuthority": false,
+    "featureId": "chilly-chat-call-lifecycle",
+    "implementationPr": 194,
+    "implementationBranch": "codex/d2a-livekit-mic-membership-convergence-correction",
+    "immutableSource": {
+      "head": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+      "tree": "4ce01fa17e4184f2523b82a10401e3b3f59dd641"
+    },
+    "currentSynchronizedSource": {
+      "head": "ada396a437e40a98acea75bf016c36fc3ea86739",
+      "tree": "662dc601bf54b8abdc78cc915d757a6c55c2b39d"
+    },
+    "executionState": "D2A_FROZEN"
+  },
+  "resolution": {
+    "matchingFeatureOverride": "ACCEPTED_ONLY_AFTER_CANONICAL_MATCH",
+    "conflictingFeatureOverride": "FEATURE_OVERRIDE_CONFLICT",
+    "historicalCheckpointFallback": "DENIED",
+    "genericChecks": [
+      "IMPLEMENTATION_PR",
+      "IMPLEMENTATION_BRANCH",
+      "IMMUTABLE_HEAD_TREE",
+      "CURRENT_SYNCHRONIZED_HEAD_TREE",
+      "REMOTE_BRANCH_HEAD",
+      "IMMUTABLE_ANCESTRY",
+      "PROVIDER_PR_HEAD_WHEN_AVAILABLE"
+    ]
+  },
+  "freshness": {
+    "classes": [
+      "REPOSITORY_SOURCE",
+      "PROVIDER_CRITICAL",
+      "SIGNED_ARTIFACT",
+      "INSTALLED_DEVICE",
+      "PHYSICAL_DEVICE",
+      "PUBLIC_CANARY"
+    ],
+    "globalDocumentTimestampAuthorizesClaims": false,
+    "providerCriticalHours": 8,
+    "lastRealProviderReadback": {
+      "evidenceSourceId": "b3-immutable-source-binding-20260802-0600",
+      "sourceCommit": "4a3ccafe3416c71338627c4f0fe05209c2243460",
+      "observedAt": "2026-08-02T06:00:44Z",
+      "expiresAt": "2026-08-02T14:00:44Z",
+      "classification": "STALE_BLOCKED"
+    },
+    "liveProviderReadback": false,
+    "sourceOnlyEligibility": true,
+    "providerDependentEligibility": false,
+    "localOrGithubMayRefreshProviderCritical": false
+  },
+  "regression": {
+    "requiredMatrix": "20/20_PASS",
+    "deterministicPacketRuns": "3/3_PASS",
+    "headBindingAndSynchronization": "PASS",
+    "contracts": "18/18_PASS",
+    "featureRegistry": "21_FEATURES_PASS",
+    "escapedDefects": "25_CLASSES_PASS"
+  },
+  "nonInterference": {
+    "providerContacted": false,
+    "productSourceChanged": false,
+    "nativeSourceChanged": false,
+    "databaseOrProviderMutation": false,
+    "buildOrOtaCreated": false,
+    "b1B2B3Deployed": false,
+    "userDerivedMemoryEnabled": false,
+    "level2Enabled": false,
+    "d2aResumed": false,
+    "denoLockTrackedOrStaged": false
+  }
+}
