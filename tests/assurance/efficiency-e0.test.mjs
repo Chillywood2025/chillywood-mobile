@@ -205,6 +205,30 @@ test("review history emits only exact hash-bound stale closure candidates with r
   assert.equal(reviewHistory(fakeMerge, truth).closureList.some(({ pr }) => pr === first.pr), false, "nonexistent merge cannot close review");
 });
 
+test("pending corrected final reviews remain active and fail closed outside their exact bootstrap state", () => {
+  const pendingHead = "1".repeat(40); const remoteHead = "2".repeat(40);
+  const pendingTruth = { openReviewOnlyPrs: [{ number: 999, branch: "codex/pending", head: pendingHead, reviewedImplementationHead: "3".repeat(40), state: "open-draft-stale-pending-corrected-final-review", disposition: "never-merge" }] };
+  const pendingConfig = { canonicalSource: "test", safeStaleCandidates: [], protectedImplementationHeads: [], implementationDispositions: {} };
+  const pendingEvidence = JSON.stringify({ status: "PENDING_CORRECTED_FINAL_REVIEW", implementationHead: "3".repeat(40) });
+  const dependencies = { readObject: () => pendingEvidence, git: (argv) => {
+    if (argv[0] === "show") return "docs/reviews/pending.json";
+    if (argv[0] === "show-ref") return remoteHead;
+    if (argv[0] === "merge-base") return "";
+    throw new Error("unexpected git");
+  } };
+  const accepted = reviewHistory(pendingConfig, pendingTruth, dependencies);
+  assert.equal(accepted.ok, true); assert.equal(accepted.records[0].p0, null); assert.equal(accepted.records[0].p1, null); assert.equal(accepted.records[0].closureEligible, false);
+  const nonpending = reviewHistory(pendingConfig, { openReviewOnlyPrs: [{ ...pendingTruth.openReviewOnlyPrs[0], state: "open-draft-current" }] }, dependencies);
+  assert.equal(nonpending.ok, false); assert.ok(nonpending.findings.includes("REVIEW_P0_P1_AMBIGUOUS:999"));
+  const nonAncestor = reviewHistory(pendingConfig, pendingTruth, { ...dependencies, git: (argv) => argv[0] === "merge-base" ? (() => { throw new Error("not ancestor"); })() : dependencies.git(argv) });
+  assert.equal(nonAncestor.ok, false); assert.ok(nonAncestor.findings.includes("REVIEW_BRANCH_ANCESTRY_INVALID:999"));
+  const declaredCounts = reviewHistory(pendingConfig, pendingTruth, { ...dependencies, readObject: () => JSON.stringify({ status: "PENDING_CORRECTED_FINAL_REVIEW", implementationHead: "3".repeat(40), p0: 0, p1: 1 }) });
+  assert.equal(declaredCounts.ok, false); assert.ok(declaredCounts.findings.includes("PENDING_REVIEW_STATUS_OR_COUNTS_INVALID:999"));
+  const colliding = reviewHistory({ ...pendingConfig, safeStaleCandidates: [{ pr: 999, branch: "codex/pending", head: pendingHead, reviewedImplementationHead: "3".repeat(40), evidenceSha256: sha256(pendingEvidence), p0: 0, p1: 0, implementationPr: 64, unresolvedDisposition: "none" }] }, pendingTruth, dependencies);
+  assert.equal(colliding.ok, false); assert.ok(colliding.findings.includes("PENDING_REVIEW_STALE_CANDIDATE_COLLISION:999"));
+  assert.equal(accepted.closureList.some(({ pr }) => pr === 999), false, "pending review cannot archive");
+});
+
 test("D2C and D2B shadow plans preserve P0/P1 classes, all gates, tests, defects and blockers", () => {
   const data = read("docs/assurance/e0-benchmark-v1.json");
   const result = benchmark(data);
