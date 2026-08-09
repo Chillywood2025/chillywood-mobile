@@ -1,0 +1,163 @@
+#!/usr/bin/env node
+import { execFileSync } from "node:child_process";
+import { ROOT, emit, readJson } from "./lib.mjs";
+import { git, sha40, sha64, sha256, strictOptions } from "./efficiency-lib.mjs";
+
+function severityCounts(value, output = { p0: [], p1: [] }) {
+  if (Array.isArray(value)) value.forEach((child) => severityCounts(child, output));
+  else if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value)) {
+      if (/^p0(?:Open)?$/iu.test(key) && Number.isInteger(child)) output.p0.push(child);
+      else if (/^p1(?:Open)?$/iu.test(key) && Number.isInteger(child)) output.p1.push(child);
+      else severityCounts(child, output);
+    }
+  }
+  return output;
+}
+
+function gitEvidence(review, dependencies) {
+  const runGit = dependencies.git ?? git;
+  const readObject = dependencies.readObject ?? ((head, file) => execFileSync("git", ["show", `${head}:${file}`], { cwd: ROOT, encoding: "utf8" }));
+  let paths; let content; let remoteHead;
+  try {
+    paths = runGit(["show", "--format=", "--name-only", review.head]).split("\n").filter(Boolean);
+    if (paths.length !== 1 || !/^docs\/reviews\/.+\.json$/u.test(paths[0])) return { ok: false, finding: "REVIEW_EVIDENCE_PATH_AMBIGUOUS" };
+    content = readObject(review.head, paths[0]);
+    remoteHead = runGit(["show-ref", "--verify", "--hash", `refs/remotes/origin/${review.branch}`]);
+  } catch { return { ok: false, finding: "REVIEW_EVIDENCE_OR_BRANCH_MISSING" }; }
+  let parsed;
+  try { parsed = JSON.parse(content); } catch { return { ok: false, finding: "REVIEW_EVIDENCE_UNPARSEABLE" }; }
+  const counts = severityCounts(parsed);
+  if (counts.p0.length !== 1 || counts.p1.length !== 1) return { ok: false, finding: "REVIEW_P0_P1_AMBIGUOUS" };
+  return {
+    ok: true,
+    file: paths[0],
+    evidenceSha256: sha256(content),
+    p0: counts.p0[0],
+    p1: counts.p1[0],
+    branchRetained: remoteHead === review.head
+  };
+}
+
+export function reviewHistory(config, truth, dependencies = {}) {
+  const findings = [];
+  const current = Array.isArray(truth?.openReviewOnlyPrs) ? truth.openReviewOnlyPrs : [];
+  if (!Array.isArray(truth?.openReviewOnlyPrs)) findings.push("CURRENT_REVIEW_INVENTORY_MALFORMED");
+  const candidateByPr = new Map((config?.safeStaleCandidates ?? []).map((candidate) => [candidate.pr, candidate]));
+  if (candidateByPr.size !== (config?.safeStaleCandidates ?? []).length) findings.push("STALE_CANDIDATE_DUPLICATE");
+  const currentByPr = new Map();
+  for (const review of current) {
+    if (currentByPr.has(review.number)) findings.push(`CURRENT_REVIEW_DUPLICATE:${review.number}`);
+    currentByPr.set(review.number, review);
+  }
+
+  const records = [];
+  const all = [...current];
+  for (const candidate of config?.safeStaleCandidates ?? []) {
+    if (!currentByPr.has(candidate.pr)) all.push({
+      number: candidate.pr,
+      branch: candidate.branch,
+      head: candidate.head,
+      reviewedImplementationHead: candidate.reviewedImplementationHead,
+      state: "not-open-in-current-truth",
+      disposition: "never-merge"
+    });
+  }
+
+  for (const review of all) {
+    if (!Number.isInteger(review.number) || !sha40(review.head) || !sha40(review.reviewedImplementationHead)) {
+      findings.push(`REVIEW_IDENTITY_INVALID:${review.number ?? "unknown"}`);
+      continue;
+    }
+    const evidence = gitEvidence(review, dependencies);
+    if (!evidence.ok) {
+      findings.push(`${evidence.finding}:${review.number}`);
+      continue;
+    }
+    const candidate = candidateByPr.get(review.number);
+    const protectedHead = (config?.protectedImplementationHeads ?? []).includes(review.reviewedImplementationHead);
+    const implementationDisposition = candidate ? config?.implementationDispositions?.[candidate.implementationPr] : null;
+    const unresolvedPreserved = candidate?.p1 === 0 || (typeof candidate?.unresolvedDisposition === "string" && candidate.unresolvedDisposition !== "none");
+    const exactCandidate = !candidate || [
+      candidate.branch === review.branch,
+      candidate.head === review.head,
+      candidate.reviewedImplementationHead === review.reviewedImplementationHead,
+      candidate.evidenceSha256 === evidence.evidenceSha256,
+      candidate.p0 === evidence.p0,
+      candidate.p1 === evidence.p1,
+      unresolvedPreserved
+    ].every(Boolean);
+    if (!exactCandidate) findings.push(`STALE_CANDIDATE_MISMATCH:${review.number}`);
+    if (candidate && (!implementationDisposition || !["merged", "superseded"].includes(implementationDisposition.state) || !sha40(implementationDisposition.mergeSha))) {
+      findings.push(`IMPLEMENTATION_DISPOSITION_UNRESOLVED:${review.number}`);
+    }
+    if (!evidence.branchRetained) findings.push(`REVIEW_BRANCH_NOT_RETAINED:${review.number}`);
+    if (review.disposition !== "never-merge") findings.push(`REVIEW_MERGE_DISPOSITION_INVALID:${review.number}`);
+    if (review.state === "open-draft-stale" && !candidate) findings.push(`STALE_REVIEW_UNCLASSIFIED:${review.number}`);
+    if (candidate && protectedHead) findings.push(`PROTECTED_REVIEW_CANNOT_ARCHIVE:${review.number}`);
+    const closureEligible = Boolean(
+      candidate
+      && currentByPr.has(review.number)
+      && review.state === "open-draft-stale"
+      && review.disposition === "never-merge"
+      && evidence.branchRetained
+      && evidence.p0 === 0
+      && unresolvedPreserved
+      && exactCandidate
+      && !protectedHead
+      && implementationDisposition
+    );
+    records.push({
+      pr: review.number,
+      branch: review.branch,
+      head: review.head,
+      reviewedImplementationHead: review.reviewedImplementationHead,
+      evidenceFile: evidence.file,
+      evidenceSha256: evidence.evidenceSha256,
+      p0: evidence.p0,
+      p1: evidence.p1,
+      implementationDisposition: implementationDisposition?.state ?? "active-or-canonical-current",
+      unresolvedDisposition: candidate?.unresolvedDisposition ?? "none",
+      state: review.state,
+      classification: candidate ? "historical" : "active",
+      neverMerge: review.disposition === "never-merge",
+      branchRetained: evidence.branchRetained,
+      closureEligible
+    });
+  }
+  const sorted = records.sort((left, right) => left.pr - right.pr);
+  const closureList = sorted.filter(({ closureEligible }) => closureEligible).map(({ pr, branch, evidenceSha256, p0, p1, unresolvedDisposition }) => ({ pr, branch, evidenceSha256, p0, p1, unresolvedDisposition }));
+  if (current.some(({ state }) => state === "open-draft-stale") && closureList.length !== current.filter(({ state }) => state === "open-draft-stale").length) {
+    findings.push("STALE_CLOSURE_LIST_INCOMPLETE");
+  }
+  return {
+    ok: findings.length === 0,
+    canonicalSource: config.canonicalSource,
+    records: sorted,
+    activeCount: sorted.filter(({ classification }) => classification === "active").length,
+    historicalCount: sorted.filter(({ classification }) => classification === "historical").length,
+    closureList,
+    closureHash: sha256(closureList),
+    manifestHash: sha256(sorted),
+    findings: findings.sort()
+  };
+}
+
+export function archive(input) {
+  const findings = [];
+  const records = input?.reviews ?? [];
+  for (const review of records) {
+    if (!review.lane || !sha40(review.head) || !sha40(review.tree) || !sha64(review.evidenceSha256)) findings.push(`REVIEW_INVALID:${review.lane ?? "unknown"}`);
+    if (review.state !== "CLOSED_UNMERGED" || review.retained !== true || review.mergePermitted !== false) findings.push(`REVIEW_NOT_ARCHIVABLE:${review.lane ?? "unknown"}`);
+  }
+  if (records.length !== 4 || new Set(records.map(({ lane }) => lane)).size !== 4) findings.push("FOUR_LANES_REQUIRED");
+  return { ok: findings.length === 0, records: [...records].sort((left, right) => left.lane.localeCompare(right.lane)), findings: findings.sort() };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const parsed = strictOptions(process.argv.slice(2), {});
+  const result = parsed.ok
+    ? reviewHistory(readJson("config/assurance/review-history-v1.json"), readJson("config/assurance/current-truth-v1.json"))
+    : { ok: false, findings: parsed.findings };
+  emit("assurance:review-history", result.ok, result);
+}
