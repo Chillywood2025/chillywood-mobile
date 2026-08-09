@@ -143,7 +143,7 @@ export function useLiveKitChatCallSession({
   const mediaControlRef = useRef<Promise<unknown> | null>(null);
   const mediaControlOwnerRef = useRef<{ token: symbol; sessionKey: string; generation: number } | null>(null);
   const pendingMicToggleRef = useRef(false);
-  const pendingMicOwnerRef = useRef<{ sessionKey: string; generation: number } | null>(null);
+  const pendingMicOwnerRef = useRef<{ token: symbol; sessionKey: string; generation: number } | null>(null);
   const micReconciliationBlockedRef = useRef(false);
   const ownsIosAudioConfigurationRef = useRef(false);
   const onRoomEndedRef = useRef(onRoomEnded);
@@ -256,10 +256,10 @@ export function useLiveKitChatCallSession({
 
   const runMediaControl = useCallback(async <T,>(
     operation: () => Promise<T>,
-    binding?: { sessionKey: string; generation: number },
+    binding?: { token?: symbol; sessionKey: string; generation: number },
   ): Promise<T | null> => {
     if (mediaControlRef.current) return null;
-    const owner = { token: Symbol("media-control"), sessionKey: binding?.sessionKey ?? "", generation: binding?.generation ?? -1 };
+    const owner = { token: binding?.token ?? Symbol("media-control"), sessionKey: binding?.sessionKey ?? "", generation: binding?.generation ?? -1 };
     setMediaControlsBusy(true);
     const pending = operation();
     mediaControlRef.current = pending;
@@ -377,7 +377,7 @@ export function useLiveKitChatCallSession({
   }, []);
 
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
-    const leaseBinding = { sessionKey: sessionKeyRef.current, generation: sessionGenerationRef.current };
+    const leaseBinding = { token: Symbol("mic-lease"), sessionKey: sessionKeyRef.current, generation: sessionGenerationRef.current };
     const result = await runMediaControl(async () => {
       try {
         const liveKitRoom = roomRef.current;
@@ -560,6 +560,7 @@ export function useLiveKitChatCallSession({
         const leaseStillOwned = () => (
           mediaControlOwnerRef.current?.sessionKey === leaseBinding.sessionKey
           && mediaControlOwnerRef.current.generation === leaseBinding.generation
+          && mediaControlOwnerRef.current.token === leaseBinding.token
         );
         const commitConfirmedMicrophoneTarget = () => {
           if (!originStillCurrent() || !leaseStillOwned()) return false;
@@ -582,6 +583,7 @@ export function useLiveKitChatCallSession({
         if (
           pendingMicOwnerRef.current?.sessionKey === leaseBinding.sessionKey
           && pendingMicOwnerRef.current.generation === leaseBinding.generation
+          && pendingMicOwnerRef.current.token === leaseBinding.token
         ) {
           pendingMicOwnerRef.current = null;
           pendingMicToggleRef.current = false;
