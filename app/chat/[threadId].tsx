@@ -91,6 +91,7 @@ import {
   consumeMountedForegroundAuthenticatedUiCallRoute,
   consumeMountedIosNativeCallRoute,
   subscribeToTrustedAndroidNativeActionRoutes,
+  type TrustedAndroidNativeActionRoute,
 } from "../../_lib/nativeCallTransitionProvenance.mjs";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
@@ -394,7 +395,7 @@ export default function ChillyChatThreadScreen() {
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== "android") return () => {};
-      return subscribeToTrustedAndroidNativeActionRoutes((route) => {
+      return subscribeToTrustedAndroidNativeActionRoutes((route: TrustedAndroidNativeActionRoute) => {
         if (
           authLoading
           || !isSignedIn
