@@ -91,8 +91,8 @@ import {
   consumeMountedForegroundAuthenticatedUiCallRoute,
   consumeMountedIosNativeCallRoute,
   subscribeToTrustedAndroidNativeActionRoutes,
-  type TrustedAndroidNativeActionRoute,
 } from "../../_lib/nativeCallTransitionProvenance.mjs";
+import type { TrustedAndroidNativeActionRoute } from "../../_lib/nativeCallTransitionProvenance.d.ts";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
   dismissChillyChatCallNotificationRows,
