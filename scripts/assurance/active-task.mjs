@@ -14,6 +14,7 @@ const laneIds = [
 
 function inferFeature(truth) {
   const active = truth?.assuranceProgram?.active ?? "";
+  if (/S0_(?:NEXT|ACTIVE)|CODEX_SECURITY_RELIABILITY_S0/iu.test(active)) return ["codex-security-scan-reliability-s0"];
   if (/E0_COMPLETE_D2A_READY_NOT_RESUMED/iu.test(active)) return ["chilly-chat-call-lifecycle"];
   if (/E0_READY|E0_ACTIVE/iu.test(active)) return ["assurance-efficiency-e0"];
   if (/\bD2A\b/iu.test(active) && !/D2A_FROZEN/iu.test(active)) return ["chilly-chat-call-lifecycle"];
@@ -59,8 +60,9 @@ function resolveImplementation(truth, identity, facts, featureId) {
   if (open.length === 1 && open[0].branch !== identity.branch) return { ok: false, finding: "ACTIVE_IMPLEMENTATION_BRANCH_MISMATCH" };
   const e0 = truth?.e0CurrentTruthBinding;
   const d2a = truth?.d2bCurrentTruthBinding?.preservedDependencies?.d2a;
-  const immutableSourceHead = featureId === "assurance-efficiency-e0" ? (e0?.immutableSourceHead ?? identity.head) : (d2a?.head ?? identity.head);
-  const immutableSourceTree = featureId === "assurance-efficiency-e0" ? (e0?.immutableSourceTree ?? identity.tree) : (d2a?.tree ?? identity.tree);
+  const assuranceInfrastructure = featureId === "assurance-efficiency-e0" || featureId === "codex-security-scan-reliability-s0";
+  const immutableSourceHead = assuranceInfrastructure ? (e0?.immutableSourceHead ?? identity.head) : (d2a?.head ?? identity.head);
+  const immutableSourceTree = assuranceInfrastructure ? (e0?.immutableSourceTree ?? identity.tree) : (d2a?.tree ?? identity.tree);
   return {
     ok: true,
     value: open.length === 1

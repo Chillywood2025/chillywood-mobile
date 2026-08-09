@@ -51,11 +51,16 @@ function safeRule(rule) {
     ["scripts/assurance/validate-contracts.mjs"],
     ["scripts/assurance/current-truth.mjs"],
     ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"],
+    ["scripts/assurance/plan.mjs", "--feature=codex-security-scan-reliability-s0"],
     ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"],
     ["scripts/assurance/active-task.mjs", "--feature=assurance-efficiency-e0"],
+    ["scripts/assurance/active-task.mjs", "--feature=codex-security-scan-reliability-s0"],
+    ["scripts/assurance/codex-security-target.mjs", "--base=origin/main", "--target=HEAD"],
+    ["scripts/assurance/codex-security-reliability.mjs", "--benchmark=all"],
     ["scripts/assurance/review-history.mjs"],
     ["scripts/assurance/benchmark.mjs", "--baseline=all"],
     ["--test", "tests/assurance/efficiency-e0.test.mjs"],
+    ["--test", "tests/assurance/codex-security-reliability-s0.test.mjs"],
     ["--version"]
   ].map(JSON.stringify)).has(argv);
   if (rule.file === "npm") return new Set(["lint", "typecheck", "test:chilly-chat-call-semantics", "test:chilly-chat-native-call-action-handoff"]).has(rule.args[1]) && argv === JSON.stringify(["run", rule.args[1]]);
