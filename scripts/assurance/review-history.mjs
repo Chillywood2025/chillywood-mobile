@@ -35,6 +35,9 @@ function gitEvidence(review, dependencies) {
     evidenceSha256: sha256(content),
     p0: counts.p0[0],
     p1: counts.p1[0],
+    implementationHead: parsed.implementationHead ?? null,
+    implementationTree: parsed.implementationTree ?? null,
+    implementationPr: parsed.implementationPrNumber ?? null,
     branchRetained: remoteHead === review.head
   };
 }
@@ -77,7 +80,18 @@ export function reviewHistory(config, truth, dependencies = {}) {
     const candidate = candidateByPr.get(review.number);
     const protectedHead = (config?.protectedImplementationHeads ?? []).includes(review.reviewedImplementationHead);
     const implementationDisposition = candidate ? config?.implementationDispositions?.[candidate.implementationPr] : null;
-    const unresolvedPreserved = candidate?.p1 === 0 || (typeof candidate?.unresolvedDisposition === "string" && candidate.unresolvedDisposition !== "none");
+    const unresolvedPreserved = candidate?.p1 === 0
+      ? candidate?.unresolvedDisposition === "none"
+      : ["historical-p1-preserved-implementation-merged", "historical-p1-preserved-implementation-superseded"].includes(candidate?.unresolvedDisposition);
+    let reviewedTree = null;
+    try { reviewedTree = (dependencies.git ?? git)(["rev-parse", `${review.reviewedImplementationHead}^{tree}`]); } catch { reviewedTree = null; }
+    const identityBound = !candidate || (
+      evidence.implementationHead === review.reviewedImplementationHead
+      && (evidence.implementationPr == null || evidence.implementationPr === candidate.implementationPr)
+      && typeof evidence.implementationTree === "string"
+      && evidence.implementationTree === reviewedTree
+      && (!candidate.reviewedImplementationTree || evidence.implementationTree === candidate.reviewedImplementationTree)
+    );
     const exactCandidate = !candidate || [
       candidate.branch === review.branch,
       candidate.head === review.head,
@@ -87,10 +101,18 @@ export function reviewHistory(config, truth, dependencies = {}) {
       candidate.p1 === evidence.p1,
       unresolvedPreserved
     ].every(Boolean);
+    if (!identityBound) findings.push(`REVIEWED_IDENTITY_EVIDENCE_MISMATCH:${review.number}`);
+    if (candidate?.reviewedImplementationTree && evidence.implementationTree !== candidate.reviewedImplementationTree) findings.push(`REVIEWED_TREE_EVIDENCE_MISMATCH:${review.number}`);
     if (!exactCandidate) findings.push(`STALE_CANDIDATE_MISMATCH:${review.number}`);
     if (candidate && (!implementationDisposition || !["merged", "superseded"].includes(implementationDisposition.state) || !sha40(implementationDisposition.mergeSha))) {
       findings.push(`IMPLEMENTATION_DISPOSITION_UNRESOLVED:${review.number}`);
     }
+    let dispositionBound = false;
+    if (implementationDisposition?.state === "merged") try {
+      dispositionBound = runGitAncestor(review.reviewedImplementationHead, implementationDisposition.mergeSha, dependencies);
+      if (!dispositionBound) findings.push(`IMPLEMENTATION_MERGE_ANCESTRY_INVALID:${review.number}`);
+    } catch { findings.push(`IMPLEMENTATION_MERGE_SHA_INVALID:${review.number}`); }
+    else if (implementationDisposition?.state === "superseded") findings.push(`IMPLEMENTATION_SUPERSESSION_PROOF_MISSING:${review.number}`);
     if (!evidence.branchRetained) findings.push(`REVIEW_BRANCH_NOT_RETAINED:${review.number}`);
     if (review.disposition !== "never-merge") findings.push(`REVIEW_MERGE_DISPOSITION_INVALID:${review.number}`);
     if (review.state === "open-draft-stale" && !candidate) findings.push(`STALE_REVIEW_UNCLASSIFIED:${review.number}`);
@@ -104,8 +126,9 @@ export function reviewHistory(config, truth, dependencies = {}) {
       && evidence.p0 === 0
       && unresolvedPreserved
       && exactCandidate
+      && identityBound
       && !protectedHead
-      && implementationDisposition
+      && dispositionBound
     );
     records.push({
       pr: review.number,
@@ -142,6 +165,8 @@ export function reviewHistory(config, truth, dependencies = {}) {
     findings: findings.sort()
   };
 }
+
+function runGitAncestor(head, merge, dependencies) { const run = dependencies.git ?? git; return run(["merge-base", "--is-ancestor", head, merge]) === ""; }
 
 export function archive(input) {
   const findings = [];

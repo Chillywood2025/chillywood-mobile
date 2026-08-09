@@ -12,12 +12,12 @@
       "toolchainIdentity": "codex-security-sealed-metadata-v1",
       "platform": "repository",
       "configurationHash": "5bcc1ba7ec5fd77c3466bdd0542822abe9fbd0b3404d302c825c72add4acb3f8",
-      "integritySha256": "d4ac7b5d4c778b9a4fcbe8a06559577b2cdc3e953e36ff2bef9114043e633ade",
-      "receiptHash": "5bcc1ba7ec5fd77c3466bdd0542822abe9fbd0b3404d302c825c72add4acb3f8",
+      "integritySha256": "2dff7a4c6dbab3d780b49775538690bfdb0423e0546187caeb731ff3b084cdaa",
+      "receiptHash": "a31ddd6510e4498e82f8b30676edf1db8ff3527a8f46b011bd3c15bfa3d85117",
       "scanId": "3f60ac52cdf514ebd061e7134d6fffd9319ac486_20260808T232208Z",
       "evidenceClass": "exact-unchanged-security",
       "immutable": true,
-      "artifactLocator": "external-sealed-metadata/current-truth"
+      "artifactLocator": "git:bbfa59e35a9aaa81afc2a456dea247881dd71b19:config/assurance/current-truth-v1.json"
     }
   ]
 }

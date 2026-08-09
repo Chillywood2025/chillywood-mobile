@@ -44,11 +44,29 @@ function externalize(identityHash, receipt, raw) {
   return root;
 }
 
+function safeRule(rule) {
+  if (!Array.isArray(rule?.args) || !["node", "npm", "git"].includes(rule.file)) return false;
+  const argv = JSON.stringify(rule.args);
+  if (rule.file === "node") return new Set([
+    ["scripts/assurance/validate-contracts.mjs"],
+    ["scripts/assurance/current-truth.mjs"],
+    ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"],
+    ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"],
+    ["scripts/assurance/active-task.mjs", "--feature=assurance-efficiency-e0"],
+    ["scripts/assurance/review-history.mjs"],
+    ["scripts/assurance/benchmark.mjs", "--baseline=all"],
+    ["--test", "tests/assurance/efficiency-e0.test.mjs"],
+    ["--version"]
+  ].map(JSON.stringify)).has(argv);
+  if (rule.file === "npm") return new Set(["lint", "typecheck", "test:chilly-chat-call-semantics", "test:chilly-chat-native-call-action-handoff"]).has(rule.args[1]) && argv === JSON.stringify(["run", rule.args[1]]);
+  return argv === JSON.stringify(["diff", "--check"]);
+}
+
 export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) {
   const matches = allowlist.commands?.filter((item) => item.id === id) ?? [];
   if (matches.length !== 1) return { ok: false, finding: matches.length ? "COMMAND_ID_AMBIGUOUS" : "COMMAND_NOT_ALLOWLISTED" };
   const rule = matches[0];
-  if (!["node", "npm", "git"].includes(rule.file) || !Number.isInteger(rule.timeoutMs) || rule.timeoutMs < 1 || rule.timeoutMs > 900000) {
+  if (!safeRule(rule) || !Number.isInteger(rule.timeoutMs) || rule.timeoutMs < 1 || rule.timeoutMs > 900000) {
     return { ok: false, finding: "COMMAND_CONTRACT_INVALID" };
   }
   if (!Array.isArray(suppliedArgs) || suppliedArgs.some((value) => typeof value !== "string")) {

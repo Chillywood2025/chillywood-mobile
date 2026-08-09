@@ -103,10 +103,11 @@ const exact = {
   receiptHash: "e".repeat(64),
   artifactLocator: "external:test"
 };
-exact.integritySha256 = evidenceMetadataHash(exact);
+const exactArtifact = JSON.stringify({ scanId: null, sourceHead: exact.sourceHead, sourceTree: exact.sourceTree });
+exact.receiptHash = sha256(exactArtifact); exact.integritySha256 = evidenceMetadataHash(exact);
 
 test("content-addressed evidence accepts only the exact full reusable key", () => {
-  assert.equal(lookup({ entries: [exact] }, request).ok, true, "exact hit accepted");
+  assert.equal(lookup({ entries: [exact] }, request, { currentIdentity: request, readArtifact: () => exactArtifact }).ok, true, "exact hit accepted");
   for (const [label, entry, query] of [
     ["different tree", exact, { ...request, sourceTree: "f".repeat(40) }],
     ["stale head", exact, { ...request, sourceHead: "0".repeat(40) }],
@@ -120,15 +121,17 @@ test("content-addressed evidence accepts only the exact full reusable key", () =
     ["time limited", { ...exact, evidenceClass: "time-limited" }, request],
     ["unknown evidence class", { ...exact, evidenceClass: "other" }, request],
     ["poisoned metadata", { ...exact, receiptHash: "9".repeat(64) }, request]
-  ]) assert.equal(lookup({ entries: [entry] }, query).ok, false, label);
+  ]) assert.equal(lookup({ entries: [entry] }, query, { currentIdentity: query, readArtifact: () => exactArtifact }).ok, false, label);
+  assert.equal(lookup({ entries: [exact] }, request, { currentIdentity: request, readArtifact: () => { throw new Error("missing"); } }).ok, false, "missing receipt artifact");
 });
 
 test("sealed security scan is reused once only for exact source and requests an incremental scan after source change", () => {
   const index = read("config/assurance/evidence-index-v1.json");
   const sealed = index.entries[0];
   const sealedRequest = Object.fromEntries(["sourceHead", "sourceTree", "commandContractId", "inputSetHash", "toolchainIdentity", "platform", "configurationHash"].map((key) => [key, sealed[key]]));
-  assert.equal(lookup(index, sealedRequest).ok, true, "unchanged sealed source reused");
-  const changed = lookup(index, { ...sealedRequest, sourceHead: "0".repeat(40), sourceTree: "1".repeat(40) });
+  assert.equal(lookup(index, sealedRequest, { currentIdentity: sealedRequest }).ok, true, "unchanged sealed source reused");
+  const changedRequest = { ...sealedRequest, sourceHead: "0".repeat(40), sourceTree: "1".repeat(40) };
+  const changed = lookup(index, changedRequest, { currentIdentity: changedRequest });
   assert.equal(changed.ok, false);
   assert.equal(changed.finding, "MISS_REQUIRE_INCREMENTAL_DIFF_SCAN", "sealed scan cannot be reused after source changes");
 });
@@ -156,12 +159,15 @@ test("compact receipt is deterministic 3/3 and exposes no successful raw log", (
 test("runner rejects unknown commands, shell injection, missing results, secrets and artifact failures", () => {
   assert.equal(runReceipt(okRule, "unknown", [], deterministicDependencies).ok, false, "unknown command");
   assert.equal(runReceipt(okRule, "ok", ["--version", "; rm -rf /"], deterministicDependencies).ok, false, "arbitrary shell command");
-  const jsonRule = { commands: [{ id: "json", file: "node", args: [], timeoutMs: 1000, resultContract: { type: "assurance-json-v1", command: "assurance:test" } }] };
-  assert.equal(runReceipt(jsonRule, "json", [], { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "", stderr: "" }) }).finding, "RESULT_MISSING");
-  assert.equal(runReceipt(jsonRule, "json", [], { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: '{"command":"assurance:test","ok":true}\n{"command":"assurance:test","ok":true}\n', stderr: "" }) }).finding, "RESULT_AMBIGUOUS");
-  const secretRule = { commands: [{ id: "secret", file: "node", args: [], timeoutMs: 1000, resultContract: { type: "exit-zero-v1" } }] };
-  assert.equal(runReceipt(secretRule, "secret", [], { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "Bearer sk_abcdefghijklmnop", stderr: "" }) }).finding, "SENSITIVE_OUTPUT_DETECTED", "raw successful log injection denied");
-  const failed = runReceipt(secretRule, "secret", [], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "Bearer sk_abcdefghijklmnop" }) });
+  const interpreterRule = { commands: [{ id: "eval", file: "node", args: ["-e", "process.exit(0)"], timeoutMs: 1000, resultContract: { type: "exit-zero-v1" } }] };
+  assert.equal(runReceipt(interpreterRule, "eval", ["-e", "process.exit(0)"], deterministicDependencies).finding, "COMMAND_CONTRACT_INVALID", "interpreter code denied");
+  const jsonArgs = ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"];
+  const jsonRule = { commands: [{ id: "json", file: "node", args: jsonArgs, timeoutMs: 1000, resultContract: { type: "assurance-json-v1", command: "assurance:test" } }] };
+  assert.equal(runReceipt(jsonRule, "json", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "", stderr: "" }) }).finding, "RESULT_MISSING");
+  assert.equal(runReceipt(jsonRule, "json", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: '{"command":"assurance:test","ok":true}\n{"command":"assurance:test","ok":true}\n', stderr: "" }) }).finding, "RESULT_AMBIGUOUS");
+  const secretRule = { commands: [{ id: "secret", file: "node", args: ["--version"], timeoutMs: 1000, resultContract: { type: "exit-zero-v1" } }] };
+  assert.equal(runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "Bearer sk_abcdefghijklmnop", stderr: "" }) }).finding, "SENSITIVE_OUTPUT_DETECTED", "raw successful log injection denied");
+  const failed = runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "Bearer sk_abcdefghijklmnop" }) });
   assert.match(failed.failureExcerpt, /REDACTED/u, "failure excerpt redacted");
   assert.equal(runReceipt(okRule, "ok", ["--version"], { ...deterministicDependencies, artifactWriter: () => { throw new Error("no"); } }).finding, "ARTIFACT_WRITE_FAILED");
   const cli = spawnSync(process.execPath, ["scripts/assurance/receipt.mjs", "--unknown=value"], { cwd: root, encoding: "utf8" });
@@ -177,11 +183,19 @@ test("review archive rejects active reviews and preserves four never-merge lanes
 });
 
 test("review history emits only exact hash-bound stale closure candidates with retained branches", () => {
-  const result = reviewHistory(read("config/assurance/review-history-v1.json"), truth);
+  const config = read("config/assurance/review-history-v1.json");
+  const result = reviewHistory(config, truth);
   assert.equal(result.ok, true, result.findings.join(","));
   assert.deepEqual(result.closureList.map(({ pr }) => pr), [80, 81, 82, 83, 84, 85, 88, 89, 91, 92, 93, 94]);
   assert.equal(result.closureList.every(({ p0 }) => p0 === 0), true);
   assert.equal(result.closureList.filter(({ p1 }) => p1 > 0).every(({ unresolvedDisposition }) => unresolvedDisposition !== "none"), true);
+  const first = config.safeStaleCandidates[0];
+  const firstFile = spawnSync("git", ["show", "--format=", "--name-only", first.head], { cwd: root, encoding: "utf8" }).stdout.trim();
+  const firstEvidence = JSON.parse(spawnSync("git", ["show", `${first.head}:${firstFile}`], { cwd: root, encoding: "utf8" }).stdout);
+  const identityForgery = reviewHistory(config, truth, { readObject: (reviewHead, file) => reviewHead === first.head ? JSON.stringify({ ...firstEvidence, implementationHead: "f".repeat(40) }) : spawnSync("git", ["show", `${reviewHead}:${file}`], { cwd: root, encoding: "utf8" }).stdout });
+  assert.equal(identityForgery.closureList.some(({ pr }) => pr === first.pr), false, "identity-free or mismatched review evidence cannot close");
+  const fakeMerge = structuredClone(config); fakeMerge.implementationDispositions[String(first.implementationPr)].mergeSha = "f".repeat(40);
+  assert.equal(reviewHistory(fakeMerge, truth).closureList.some(({ pr }) => pr === first.pr), false, "nonexistent merge cannot close review");
 });
 
 test("D2C and D2B shadow plans preserve P0/P1 classes, all gates, tests, defects and blockers", () => {
@@ -195,6 +209,11 @@ test("D2C and D2B shadow plans preserve P0/P1 classes, all gates, tests, defects
     mutated.baselines[0].shadowPlan[field] = mutated.baselines[0].shadowPlan[field].slice(1);
     assert.equal(benchmark(mutated).ok, false, `${field} omission denied`);
   }
+  const selfAuthored = structuredClone(data);
+  for (const field of ["knownP0P1Classes", "mandatoryGates", "applicableDefects", "mandatoryTests", "blockers"]) selfAuthored.baselines[0].expected[field] = selfAuthored.baselines[0].shadowPlan[field] = [];
+  selfAuthored.baselines[0].shadowPlanSha256 = sha256(selfAuthored.baselines[0].shadowPlan);
+  for (const metric of Object.values(selfAuthored.baselines[0].metrics)) if (metric.value !== null) metric.value = 0;
+  assert.equal(benchmark(selfAuthored).ok, false, "self-authored empty baseline and zero metrics denied");
 });
 
 test("all ten required named E0 negative controls are represented", () => {
