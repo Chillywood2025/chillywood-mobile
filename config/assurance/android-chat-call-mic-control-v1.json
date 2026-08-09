@@ -7,24 +7,25 @@
     "components/communication/communication-control-bar.tsx": "6f510ac9074a1a5b8f965ce16da61bad39b2990bbc3a16d2de0b1cc6366bc3ca",
     "components/communication/in-room-communication-panel.tsx": "201fd733ee638956d5568d7faef794e9cf7afd2b9171abd2f8593c84a5c45327",
     "hooks/use-chat-call-media-session.ts": "1ccbf8def5d8506cde6c17bec4be86d0e71b6388fad57247f5c2aa4a6ea77cc2",
-    "hooks/use-livekit-chat-call-session.ts": "a668272cf1d6c44a5c9a58cfd0666bf0555323d165b2565930e92963cc2cb955",
+    "hooks/use-livekit-chat-call-session.ts": "dbf71151f0f9851dc8402a52a7e8d8aee748cd49aa48e20184306d47d7ed85bb",
     "hooks/use-communication-room-session.ts": "0da0e6dcd12875fd56f295f2f99d11a29a0a145a0b4c444f4f3a94d63096347d",
     "_lib/communication.ts": "efcdb6fc1151468928aea5bac45ca3c0a111782993b503ef49d744a67c122834",
     "_lib/chatCallMediaProviderPolicy.ts": "33b45618fea1b2850081fa1396146a6f58ff76d93c20efa90ffe66cf5e4c0cf9",
     "package-lock.json": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c"
   },
   "sourceSlices": {
-    "livekit-run-media-control": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const runMediaControl", "end": "  const updateMembershipMediaState", "sha256": "0c44826a22e49e89edf00e16dc7a4fb8c3826b749015ff059a7dcd8a9eedb550"},
-    "livekit-set-microphone": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const setCameraEnabled", "sha256": "03058c8be50a4be75ea5e06abeeb1bf6d7b12b166cce0ee5aa5815e4fa2a24f1"},
+    "livekit-run-media-control": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const runMediaControl", "end": "  const updateMembershipMediaState", "sha256": "2167c8f41b20a07234240246794effde8db4518a55833c7629db33569ac50085"},
+    "livekit-set-microphone": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const setCameraEnabled", "sha256": "93d14216ec4ce92094f49f7a93b839f8325b22390d4210bc665f7040bc5ee13c"},
     "legacy-run-serialized": {"path": "hooks/use-communication-room-session.ts", "start": "  const runSerializedMediaControl", "end": "  const ensureInitialLocalStream", "sha256": "3c9eb8ae860b0b967f34d8928b4b143a68546aed516ff57b7e5a19065f0c3388"},
     "legacy-ensure-track-kind": {"path": "hooks/use-communication-room-session.ts", "start": "  const ensureTrackKind", "end": "  const setCameraCaptureEnabled", "sha256": "cc976894698106d1e3f1c80ecd536f7b7657bfdc2467eca3d76ac57d8888040b"},
     "legacy-set-microphone": {"path": "hooks/use-communication-room-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const toggleMic", "sha256": "a19d6f5b16e1a362e955a19e1605600f50879f71d09053642b8a559598348b52"}
   },
   "bindingNegativeControls": [
-    "D2A_BINDING_DUPLICATE_SLICE_MARKER",
-    "D2A_BINDING_DUPLICATE_SLICE_CONTRACT",
-    "D2A_BINDING_UNBOUND_SLICE_PATH",
-    "D2A_BINDING_STALE_SOURCE_DIGEST"
+    "D2A_BINDING_MISSING_FULL_FILE", "D2A_BINDING_EXTRA_FULL_FILE", "D2A_BINDING_DUPLICATE_FULL_FILE_JSON_KEY",
+    "D2A_BINDING_MISSING_SLICE_ID", "D2A_BINDING_EXTRA_SLICE_ID", "D2A_BINDING_DUPLICATE_SLICE_ID_JSON_KEY",
+    "D2A_BINDING_STALE_PACKAGE_LOCK", "D2A_BINDING_STALE_PRODUCT", "D2A_BINDING_UNVISITED_DECLARED_ENTRY",
+    "D2A_BINDING_PATH_TRAVERSAL", "D2A_BINDING_SYMLINK_ESCAPE", "D2A_BINDING_DUPLICATE_SLICE_MARKER",
+    "D2A_BINDING_STALE_SLICE_DIGEST", "D2A_BINDING_DUPLICATE_SLICE_TUPLE"
   ],
   "sharedUiCases": [
     "MIC_ON_LABEL", "MIC_MUTED_LABEL", "MUTE_ACCESSIBILITY", "UNMUTE_ACCESSIBILITY", "SELECTED_ON",
@@ -74,7 +75,8 @@
     "ANDROID_MIC_TOGGLE_TOKEN_AUTHORITY_VIOLATION",
     "ANDROID_MIC_TOGGLE_PROVIDER_IMMUTABILITY_VIOLATION",
     "ANDROID_MIC_COMPENSATION_CAMERA_REGRESSION",
-    "D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE"
+    "D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE",
+    "ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE"
   ],
   "legacyCases": [
     "EXISTING_TRACK_ENABLE", "EXISTING_TRACK_DISABLE", "MISSING_TRACK_CREATED", "MISSING_TRACK_CREATE_FAILURE",

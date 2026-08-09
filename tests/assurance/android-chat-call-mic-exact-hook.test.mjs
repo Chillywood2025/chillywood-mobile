@@ -3,16 +3,86 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
 const sourcePath = "hooks/use-livekit-chat-call-session.ts";
 const source = fs.readFileSync(sourcePath, "utf8");
-const contract = JSON.parse(fs.readFileSync("config/assurance/android-chat-call-mic-control-v1.json", "utf8"));
+const contractRaw = fs.readFileSync("config/assurance/android-chat-call-mic-control-v1.json", "utf8");
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const stable = (value) => JSON.stringify(value, Object.keys(value).sort());
 const count = (value, needle) => value.split(needle).length - 1;
+const fail = (code) => { const error = new Error(code); error.code = code; throw error; };
+const expectedPaths = [
+  "components/communication/communication-control-bar.tsx",
+  "components/communication/in-room-communication-panel.tsx",
+  "hooks/use-chat-call-media-session.ts",
+  "hooks/use-livekit-chat-call-session.ts",
+  "hooks/use-communication-room-session.ts",
+  "_lib/communication.ts",
+  "_lib/chatCallMediaProviderPolicy.ts",
+  "package-lock.json",
+];
+const expectedSlices = [
+  "livekit-run-media-control",
+  "livekit-set-microphone",
+  "legacy-run-serialized",
+  "legacy-ensure-track-kind",
+  "legacy-set-microphone",
+];
+
+const parseRawContract = (raw) => {
+  let offset = 0;
+  const skip = () => { while (/\s/u.test(raw[offset] ?? "")) offset += 1; };
+  const string = () => {
+    skip(); const start = offset;
+    if (raw[offset] !== '"') fail("D2A_BINDING_JSON_INVALID");
+    for (offset += 1; offset < raw.length; offset += 1) {
+      if (raw[offset] === "\\") { offset += 1; continue; }
+      if (raw[offset] === '"') { offset += 1; return JSON.parse(raw.slice(start, offset)); }
+    }
+    fail("D2A_BINDING_JSON_INVALID");
+  };
+  const value = (location = []) => {
+    skip();
+    if (raw[offset] === "{") {
+      offset += 1; const result = {}; const keys = new Set(); skip();
+      while (raw[offset] !== "}") {
+        const key = string();
+        if (keys.has(key)) {
+          if (location.at(-1) === "sourceBindings") fail("D2A_BINDING_DUPLICATE_FULL_FILE_JSON_KEY");
+          if (location.at(-1) === "sourceSlices") fail("D2A_BINDING_DUPLICATE_SLICE_ID_JSON_KEY");
+          fail("D2A_BINDING_DUPLICATE_JSON_KEY");
+        }
+        keys.add(key); skip(); if (raw[offset] !== ":") fail("D2A_BINDING_JSON_INVALID"); offset += 1;
+        Object.defineProperty(result, key, {value: value([...location, key]), enumerable: true, configurable: true, writable: true});
+        skip(); if (raw[offset] === ",") { offset += 1; skip(); continue; }
+        if (raw[offset] !== "}") fail("D2A_BINDING_JSON_INVALID");
+      }
+      offset += 1; return result;
+    }
+    if (raw[offset] === "[") {
+      offset += 1; const result = []; skip();
+      while (raw[offset] !== "]") {
+        result.push(value([...location, String(result.length)])); skip();
+        if (raw[offset] === ",") { offset += 1; skip(); continue; }
+        if (raw[offset] !== "]") fail("D2A_BINDING_JSON_INVALID");
+      }
+      offset += 1; return result;
+    }
+    if (raw[offset] === '"') return string();
+    const start = offset;
+    while (offset < raw.length && !/[\s,}\]]/u.test(raw[offset])) offset += 1;
+    try { return JSON.parse(raw.slice(start, offset)); } catch { fail("D2A_BINDING_JSON_INVALID"); }
+  };
+  const parsed = value(); skip();
+  if (offset !== raw.length) fail("D2A_BINDING_JSON_INVALID");
+  return parsed;
+};
+const contract = parseRawContract(contractRaw);
 const between = (value, start, end) => {
   const first = value.indexOf(start);
   const last = value.indexOf(end, first + start.length);
@@ -20,34 +90,69 @@ const between = (value, start, end) => {
   return value.slice(first, last);
 };
 
-const verifySourceAndSliceBindings = (candidate, readText = (path) => fs.readFileSync(path, "utf8")) => {
+const assertAllVisited = (expected, visited) => {
+  if (expected.some((entry) => !visited.has(entry))) fail("D2A_BINDING_UNVISITED_DECLARED_ENTRY");
+};
+const safeBindingPath = (root, bindingPath) => {
+  if (path.isAbsolute(bindingPath) || bindingPath.split(/[\\/]/u).includes("..")) fail("D2A_BINDING_PATH_TRAVERSAL");
+  const rootReal = fs.realpathSync(root);
+  const absolute = path.resolve(rootReal, bindingPath);
+  if (absolute !== rootReal && !absolute.startsWith(`${rootReal}${path.sep}`)) fail("D2A_BINDING_PATH_TRAVERSAL");
+  let real;
+  try { real = fs.realpathSync(absolute); } catch { fail("D2A_BINDING_PATH_UNREADABLE"); }
+  if (real !== rootReal && !real.startsWith(`${rootReal}${path.sep}`)) fail("D2A_BINDING_SYMLINK_ESCAPE");
+  return absolute;
+};
+
+const verifySourceAndSliceBindings = (candidate, options = {}) => {
   assert.equal(typeof candidate?.sourceBindings, "object", "source bindings required");
   assert.equal(typeof candidate?.sourceSlices, "object", "source slices required");
-  const boundPaths = Object.keys(candidate.sourceBindings).sort();
-  assert.equal(new Set(boundPaths).size, boundPaths.length, "duplicate source binding path");
-  for (const path of boundPaths) {
-    assert.match(candidate.sourceBindings[path], /^[a-f0-9]{64}$/u, `invalid source digest: ${path}`);
-    assert.equal(hash(readText(path)), candidate.sourceBindings[path], `source digest mismatch: ${path}`);
+  const root = options.root ?? ".";
+  const readText = options.readText ?? ((bindingPath) => fs.readFileSync(safeBindingPath(root, bindingPath), "utf8"));
+  const boundPaths = Object.keys(candidate.sourceBindings);
+  for (const bindingPath of boundPaths) safeBindingPath(root, bindingPath);
+  const pathSet = new Set(boundPaths);
+  for (const expected of expectedPaths) if (!pathSet.has(expected)) fail("D2A_BINDING_MISSING_FULL_FILE");
+  for (const declared of boundPaths) if (!expectedPaths.includes(declared)) fail("D2A_BINDING_EXTRA_FULL_FILE");
+  const sliceIds = Object.keys(candidate.sourceSlices);
+  const idSet = new Set(sliceIds);
+  for (const expected of expectedSlices) if (!idSet.has(expected)) fail("D2A_BINDING_MISSING_SLICE_ID");
+  for (const declared of sliceIds) if (!expectedSlices.includes(declared)) fail("D2A_BINDING_EXTRA_SLICE_ID");
+  const visitedPaths = new Set(); const texts = new Map();
+  for (const bindingPath of expectedPaths) {
+    const text = readText(bindingPath); const digest = hash(text);
+    if (!/^[a-f0-9]{64}$/u.test(candidate.sourceBindings[bindingPath])) fail("D2A_BINDING_DIGEST_MALFORMED");
+    if (bindingPath === "package-lock.json" && digest !== candidate.sourceBindings[bindingPath]) fail("D2A_BINDING_STALE_PACKAGE_LOCK");
+    if (bindingPath === sourcePath && digest !== candidate.sourceBindings[bindingPath]) fail("D2A_BINDING_STALE_PRODUCT");
+    if (digest !== candidate.sourceBindings[bindingPath]) fail("D2A_BINDING_STALE_FULL_FILE_DIGEST");
+    texts.set(bindingPath, text); visitedPaths.add(bindingPath);
   }
+  assertAllVisited(expectedPaths, visitedPaths);
   const seenSlices = new Set();
-  for (const [id, slice] of Object.entries(candidate.sourceSlices).sort(([left], [right]) => left.localeCompare(right))) {
-    assert.equal(typeof slice.path, "string", `slice path missing: ${id}`);
-    assert.ok(Object.hasOwn(candidate.sourceBindings, slice.path), `slice path unbound: ${id}`);
-    assert.equal(typeof slice.start, "string", `slice start missing: ${id}`);
-    assert.equal(typeof slice.end, "string", `slice end missing: ${id}`);
-    assert.notEqual(slice.start, slice.end, `slice markers collide: ${id}`);
-    assert.match(slice.sha256, /^[a-f0-9]{64}$/u, `invalid slice digest: ${id}`);
+  const visitedSlices = new Set();
+  for (const id of expectedSlices) {
+    const slice = candidate.sourceSlices[id];
+    if (typeof slice.path !== "string" || !Object.hasOwn(candidate.sourceBindings, slice.path)) fail("D2A_BINDING_SLICE_PATH_UNBOUND");
+    if (typeof slice.start !== "string" || !slice.start) fail("D2A_BINDING_SLICE_START_MISSING");
+    if (typeof slice.end !== "string" || !slice.end) fail("D2A_BINDING_SLICE_END_MISSING");
+    if (!/^[a-f0-9]{64}$/u.test(slice.sha256)) fail("D2A_BINDING_DIGEST_MALFORMED");
     const signature = `${slice.path}\u0000${slice.start}\u0000${slice.end}`;
-    assert.ok(!seenSlices.has(signature), `duplicate slice contract: ${id}`);
+    if (seenSlices.has(signature)) fail("D2A_BINDING_DUPLICATE_SLICE_TUPLE");
     seenSlices.add(signature);
-    const text = readText(slice.path);
-    assert.equal(count(text, slice.start), 1, `slice start must be unique: ${id}`);
-    assert.equal(count(text, slice.end), 1, `slice end must be unique: ${id}`);
+    const text = texts.get(slice.path) ?? readText(slice.path);
+    if (count(text, slice.start) === 0) fail("D2A_BINDING_SLICE_START_MISSING");
+    if (count(text, slice.end) === 0) fail("D2A_BINDING_SLICE_END_MISSING");
+    if (count(text, slice.start) !== 1 || count(text, slice.end) !== 1) fail("D2A_BINDING_DUPLICATE_SLICE_MARKER");
     const start = text.indexOf(slice.start);
     const end = text.indexOf(slice.end, start + slice.start.length);
-    assert.ok(start >= 0 && end > start, `slice order invalid: ${id}`);
-    assert.equal(hash(text.slice(start, end)), slice.sha256, `slice digest mismatch: ${id}`);
+    if (end <= start) fail("D2A_BINDING_SLICE_ORDER_INVALID");
+    if (hash(text.slice(start, end)) !== slice.sha256) fail("D2A_BINDING_STALE_SLICE_DIGEST");
+    visitedSlices.add(id);
   }
+  assertAllVisited(expectedSlices, visitedSlices);
+  assert.equal(visitedPaths.size, boundPaths.length); assert.equal(boundPaths.length, expectedPaths.length);
+  assert.equal(visitedSlices.size, sliceIds.length); assert.equal(sliceIds.length, expectedSlices.length);
+  return {validatedFullFiles: visitedPaths.size, validatedSlices: visitedSlices.size};
 };
 
 const mediaControlBindingSlice = between(source, "  const runMediaControl", "  const updateMembershipMediaState");
@@ -449,32 +554,71 @@ test("exact product and serializer slices remain hash-bound", () => {
 });
 
 const bindingNegativeControls = [
-  "D2A_BINDING_DUPLICATE_SLICE_MARKER",
-  "D2A_BINDING_DUPLICATE_SLICE_CONTRACT",
-  "D2A_BINDING_UNBOUND_SLICE_PATH",
-  "D2A_BINDING_STALE_SOURCE_DIGEST",
+  "D2A_BINDING_MISSING_FULL_FILE", "D2A_BINDING_EXTRA_FULL_FILE", "D2A_BINDING_DUPLICATE_FULL_FILE_JSON_KEY",
+  "D2A_BINDING_MISSING_SLICE_ID", "D2A_BINDING_EXTRA_SLICE_ID", "D2A_BINDING_DUPLICATE_SLICE_ID_JSON_KEY",
+  "D2A_BINDING_STALE_PACKAGE_LOCK", "D2A_BINDING_STALE_PRODUCT", "D2A_BINDING_UNVISITED_DECLARED_ENTRY",
+  "D2A_BINDING_PATH_TRAVERSAL", "D2A_BINDING_SYMLINK_ESCAPE", "D2A_BINDING_DUPLICATE_SLICE_MARKER",
+  "D2A_BINDING_STALE_SLICE_DIGEST", "D2A_BINDING_DUPLICATE_SLICE_TUPLE",
 ];
 
 test("source and slice binding negatives fail closed", () => {
   assert.deepEqual(contract.bindingNegativeControls, bindingNegativeControls);
   const clone = () => JSON.parse(JSON.stringify(contract));
-  const duplicateMarker = clone();
-  const marker = duplicateMarker.sourceSlices["livekit-set-microphone"].start;
-  const duplicateText = source.replace(marker, `${marker}\n${marker}`);
-  duplicateMarker.sourceBindings[sourcePath] = hash(duplicateText);
-  assert.throws(() => verifySourceAndSliceBindings(duplicateMarker, (path) => path === sourcePath ? duplicateText : fs.readFileSync(path, "utf8")), /slice start must be unique/u);
+  const expectCode = (code, operation) => assert.throws(operation, (error) => error?.code === code, code);
+  const duplicateRawEntry = (raw, key) => {
+    const lines = raw.split("\n"); const index = lines.findIndex((line) => line.startsWith(`    "${key}":`));
+    assert.ok(index >= 0, `raw entry missing: ${key}`); lines.splice(index, 0, lines[index]); return lines.join("\n");
+  };
 
-  const duplicateSlice = clone();
-  duplicateSlice.sourceSlices.duplicate = {...duplicateSlice.sourceSlices["livekit-set-microphone"]};
-  assert.throws(() => verifySourceAndSliceBindings(duplicateSlice), /duplicate slice contract/u);
+  const missingFull = clone(); delete missingFull.sourceBindings[expectedPaths[0]];
+  expectCode("D2A_BINDING_MISSING_FULL_FILE", () => verifySourceAndSliceBindings(missingFull));
+  const extraFull = clone(); extraFull.sourceBindings["README.md"] = hash(fs.readFileSync("README.md", "utf8"));
+  expectCode("D2A_BINDING_EXTRA_FULL_FILE", () => verifySourceAndSliceBindings(extraFull));
+  expectCode("D2A_BINDING_DUPLICATE_FULL_FILE_JSON_KEY", () => parseRawContract(duplicateRawEntry(contractRaw, expectedPaths[0])));
 
-  const unboundSlice = clone();
-  unboundSlice.sourceSlices["livekit-set-microphone"].path = "hooks/not-bound.ts";
-  assert.throws(() => verifySourceAndSliceBindings(unboundSlice), /slice path unbound/u);
+  const missingSlice = clone(); delete missingSlice.sourceSlices[expectedSlices[0]];
+  expectCode("D2A_BINDING_MISSING_SLICE_ID", () => verifySourceAndSliceBindings(missingSlice));
+  const extraSlice = clone(); extraSlice.sourceSlices.extra = {...extraSlice.sourceSlices[expectedSlices[0]]};
+  expectCode("D2A_BINDING_EXTRA_SLICE_ID", () => verifySourceAndSliceBindings(extraSlice));
+  expectCode("D2A_BINDING_DUPLICATE_SLICE_ID_JSON_KEY", () => parseRawContract(duplicateRawEntry(contractRaw, expectedSlices[0])));
 
-  const staleSource = clone();
-  staleSource.sourceBindings[sourcePath] = "0".repeat(64);
-  assert.throws(() => verifySourceAndSliceBindings(staleSource), /source digest mismatch/u);
+  const staleLock = clone(); staleLock.sourceBindings["package-lock.json"] = "0".repeat(64);
+  expectCode("D2A_BINDING_STALE_PACKAGE_LOCK", () => verifySourceAndSliceBindings(staleLock));
+  const staleProduct = clone(); staleProduct.sourceBindings[sourcePath] = "0".repeat(64);
+  expectCode("D2A_BINDING_STALE_PRODUCT", () => verifySourceAndSliceBindings(staleProduct));
+  expectCode("D2A_BINDING_UNVISITED_DECLARED_ENTRY", () => assertAllVisited(expectedPaths, new Set(expectedPaths.slice(1))));
+
+  const traversal = clone(); traversal.sourceBindings["../package-lock.json"] = traversal.sourceBindings["package-lock.json"]; delete traversal.sourceBindings["package-lock.json"];
+  expectCode("D2A_BINDING_PATH_TRAVERSAL", () => verifySourceAndSliceBindings(traversal));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "d2a-binding-root-"));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "d2a-binding-outside-"));
+  try {
+    for (const bindingPath of expectedPaths.filter((entry) => entry !== "package-lock.json")) {
+      const destination = path.join(root, bindingPath); fs.mkdirSync(path.dirname(destination), {recursive: true}); fs.writeFileSync(destination, fs.readFileSync(bindingPath));
+    }
+    const outsideLock = path.join(outside, "package-lock.json"); fs.writeFileSync(outsideLock, fs.readFileSync("package-lock.json"));
+    fs.symlinkSync(outsideLock, path.join(root, "package-lock.json"));
+    expectCode("D2A_BINDING_SYMLINK_ESCAPE", () => verifySourceAndSliceBindings(clone(), {root}));
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true}); fs.rmSync(outside, {recursive: true, force: true});
+  }
+
+  const duplicateMarker = clone(); const marker = duplicateMarker.sourceSlices["livekit-set-microphone"].start;
+  const duplicateText = source.replace(marker, `${marker}\n${marker}`); duplicateMarker.sourceBindings[sourcePath] = hash(duplicateText);
+  expectCode("D2A_BINDING_DUPLICATE_SLICE_MARKER", () => verifySourceAndSliceBindings(duplicateMarker, {readText: (bindingPath) => bindingPath === sourcePath ? duplicateText : fs.readFileSync(bindingPath, "utf8")}));
+  const staleSlice = clone(); staleSlice.sourceSlices["livekit-set-microphone"].sha256 = "0".repeat(64);
+  expectCode("D2A_BINDING_STALE_SLICE_DIGEST", () => verifySourceAndSliceBindings(staleSlice));
+  const duplicateTuple = clone(); duplicateTuple.sourceSlices[expectedSlices[1]] = {...duplicateTuple.sourceSlices[expectedSlices[0]]};
+  expectCode("D2A_BINDING_DUPLICATE_SLICE_TUPLE", () => verifySourceAndSliceBindings(duplicateTuple));
+
+  const startMissing = clone(); startMissing.sourceSlices[expectedSlices[0]].start = "missing-start-marker";
+  expectCode("D2A_BINDING_SLICE_START_MISSING", () => verifySourceAndSliceBindings(startMissing));
+  const endMissing = clone(); endMissing.sourceSlices[expectedSlices[0]].end = "missing-end-marker";
+  expectCode("D2A_BINDING_SLICE_END_MISSING", () => verifySourceAndSliceBindings(endMissing));
+  const wrongOrder = clone(); [wrongOrder.sourceSlices[expectedSlices[1]].start, wrongOrder.sourceSlices[expectedSlices[1]].end] = [wrongOrder.sourceSlices[expectedSlices[1]].end, wrongOrder.sourceSlices[expectedSlices[1]].start];
+  expectCode("D2A_BINDING_SLICE_ORDER_INVALID", () => verifySourceAndSliceBindings(wrongOrder));
+  const unboundSlice = clone(); unboundSlice.sourceSlices[expectedSlices[1]].path = "README.md";
+  expectCode("D2A_BINDING_SLICE_PATH_UNBOUND", () => verifySourceAndSliceBindings(unboundSlice));
 });
 
 for (const definition of cases) {
@@ -608,6 +752,35 @@ const negativeControls = [
       const result = await pending; const observed = controls.snapshot();
       assert.equal(result, true); assert.equal(observed.touchCalls > 0, true);
       assert.equal(JSON.stringify(observed.touchTargets), JSON.stringify([{roomId: "room-2", userId: "replacement-user"}]));
+    },
+  },
+  {
+    code: "ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE",
+    custom: async () => {
+      let mutated = mutateOnce(microphoneSlice, `          if (!originStillCurrent()) {
+            reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
+            setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
+            refreshParticipantViews();
+            return false;
+          }
+          const nativeRestored`, "          const nativeRestored", "drop-post-native-compensation-guard");
+      mutated = mutateOnce(mutated, `            true,
+            originStillCurrent,
+            { room: currentRoom, identity: currentIdentity },
+          );
+          const cameraUnchanged`, `            true,
+          );
+          const cameraUnchanged`, "drop-compensation-binding");
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({
+        initialMic: false, targetMic: true, nativeQueue: ["success", "wait"], nativeGates: [undefined, gate],
+        touchQueue: ["null", "success"], readbackQueue: ["current", "current"],
+      }, {microphone: mutated});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 16 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false);
+      assert.equal(observed.touchTargets.some((target) => target.roomId === "room-2" && target.userId === "replacement-user"), true);
     },
   },
 ];

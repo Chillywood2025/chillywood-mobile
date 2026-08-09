@@ -256,9 +256,12 @@ export function useLiveKitChatCallSession({
     }
   }, []);
 
-  const readCurrentMembershipMediaState = useCallback(async (originStillCurrent?: () => boolean) => {
-    const currentIdentity = identityRef.current;
-    const currentRoom = productRoomRef.current;
+  const readCurrentMembershipMediaState = useCallback(async (
+    originStillCurrent?: () => boolean,
+    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity },
+  ) => {
+    const currentIdentity = binding?.identity ?? identityRef.current;
+    const currentRoom = binding?.room ?? productRoomRef.current;
     if (!currentIdentity || !currentRoom) return null;
     const remainsCurrent = () => (
       identityRef.current === currentIdentity
@@ -323,7 +326,7 @@ export function useLiveKitChatCallSession({
     }).catch(() => null);
     if (!remainsCurrent()) return null;
     if (strict && !isExact(membership)) {
-      const observed = await readCurrentMembershipMediaState(remainsCurrent);
+      const observed = await readCurrentMembershipMediaState(remainsCurrent, binding);
       membership = isExact(observed) ? observed : null;
     }
     if (!membership || !remainsCurrent() || (strict && !isExact(membership))) return null;
@@ -394,7 +397,10 @@ export function useLiveKitChatCallSession({
         const priorCameraActual = publicationIsUsable(
           liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
         );
-        const priorDurable = await readCurrentMembershipMediaState(originStillCurrent);
+        const priorDurable = await readCurrentMembershipMediaState(originStillCurrent, {
+          room: currentRoom,
+          identity: currentIdentity,
+        });
         const priorConverged = !!priorDurable
           && priorDurable.roomId === currentRoom.roomId
           && priorDurable.userId === currentIdentity.userId
