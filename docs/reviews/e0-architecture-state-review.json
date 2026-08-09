@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "e0-architecture-state-v1",
+  "reviewType": "isolated-automated-review-lane",
+  "assignedLane": "architecture-state",
+  "implementationPrNumber": 185,
+  "implementationBranch": "codex/assurance-efficiency-e0",
+  "immutableSourceHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0",
+  "immutableSourceTree": "27b3b0ec90455e1535dbbd45c6030a676bcb132e",
+  "status": "PENDING_CURRENT_TRUTH_BINDING",
+  "disposition": "DRAFT_NEVER_MERGE",
+  "findings": []
+}
