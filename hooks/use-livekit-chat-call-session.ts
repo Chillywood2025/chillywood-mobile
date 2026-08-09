@@ -164,6 +164,15 @@ export function useLiveKitChatCallSession({
     onRoomEndedRef.current = onRoomEnded;
   }, [onRoomEnded]);
 
+  useEffect(() => {
+    const owner = mediaControlOwnerRef.current;
+    if (owner && (owner.sessionKey !== sessionKeyRef.current || owner.generation !== sessionGenerationRef.current)) {
+      mediaControlOwnerRef.current = null;
+      mediaControlRef.current = null;
+      setMediaControlsBusy(false);
+    }
+  }, [sessionKey]);
+
   const telemetryBinding = useMemo(() => ({
     callInviteId: inviteId,
     communicationRoomId: normalizedRoomId,
@@ -257,7 +266,11 @@ export function useLiveKitChatCallSession({
     try {
       return await pending;
     } finally {
-      if (mediaControlOwnerRef.current?.token === owner.token) {
+      if (
+        mediaControlOwnerRef.current?.token === owner.token
+        && mediaControlOwnerRef.current.sessionKey === owner.sessionKey
+        && mediaControlOwnerRef.current.generation === owner.generation
+      ) {
         mediaControlRef.current = null;
         mediaControlOwnerRef.current = null;
         setMediaControlsBusy(false);
