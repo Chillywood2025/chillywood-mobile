@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "62af197070b997cfeaf949baab17ec6c56d8a64c",
+  "mainSha": "6dc0456bfd40a03ded9605006058cef4d422ee23",
   "latestMergedImplementationPr": {"number": 170, "state": "merged", "head": "3f60ac52cdf514ebd061e7134d6fffd9319ac486", "mergeSha": "62af197070b997cfeaf949baab17ec6c56d8a64c", "title": "Replace unpatched Metro image-size dependency safely"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -149,18 +149,20 @@
       "reviewPrs": [171, 172, 173, 174],
       "reviewDisposition": "CLOSED_UNMERGED_BRANCHES_RETAINED_P0_0_P1_0"
     },
-    "immutableSourceHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
-    "immutableSourceTree": "9906f1d347c5f11696a6f914caf8d7b41325a20d",
+    "originalImmutableProductHead": "b046fd9aaca923927158bd2491e8daf4946cb94c",
+    "originalImmutableProductTree": "9906f1d347c5f11696a6f914caf8d7b41325a20d",
+    "immutableSourceHead": "45c209888b0bf39a49249ae8af81b7cb5dd94a47",
+    "immutableSourceTree": "bb97bbff8eac7e25e63d06f32544e8790f0cb4e1",
     "parentPreservedCheckpoint": "44741942afb8062d9348e555b7d29a5dc9c2ca3a",
-    "parentMain": "fb65960c1bdd17f4823180da0d2f5c0db3a67b73",
-    "sourceDeltaSha256": "a317f3473f43f893d6ab8a39e951b32f8774436bdb48a58aa3b17e1fb9971775",
-    "changedFileSha256": "99c616da4215474bba57ce8780610b783adfb0e7f57da4f9a645dab23e488b2a",
-    "changedPathSetSha256": "1096f23830deb8b23c5316389f3d46b4c6f4ea08de7be60d29fb63e522e12305",
-    "contractSha256": "94ad102291f1d7f9fd95fb8fa0850bf4f4b226644f66be7d1e6de3ac88bb9be5",
+    "parentMain": "6dc0456bfd40a03ded9605006058cef4d422ee23",
+    "sourceDeltaSha256": "81c44e37ded4bd762b41c7c1b6e5c012dabd68dc8129c86801631a77a6ea3696",
+    "changedFileSha256": "70fd2454892ce8c2627740e2622910445aa96c215eeeee06f39262f681c1d5f4",
+    "changedPathSetSha256": "471bc707bae31353be60267dadf6644a827e1a08b81f012033b2c3525e797dc2",
+    "contractSha256": "e964f2d43536b6813f5a8614d92f108de057268bb8890a586675ec2f283eb7a5",
     "sharedProvenanceContractSha256": "23cdac3cb6384f0088b9bcd0e030b98b9120c1d4ff1d5ee96c07d02cddc24b72",
     "generatedAndroidDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
     "oldD1AndroidDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
-    "scope": {"changedFiles": 20, "additions": 2793, "deletions": 541, "netChangedLines": 2252, "maximumFiles": 20, "maximumLines": 3000, "status": "PASS"},
+    "scope": {"changedFiles": 21, "additions": 2817, "deletions": 543, "netChangedLines": 2274, "maximumFiles": 21, "maximumLines": 3000, "status": "PASS"},
     "proof": {
       "generatedSource": "3/3_BYTE_IDENTICAL",
       "gradleCore": "PASS",
@@ -179,6 +181,16 @@
       "restoredPendingNativeAction": null,
       "restoredReplayState": null,
       "runtimeRestoreProofOwner": "D2A"
+    },
+    "correctiveHarness": {
+      "failedRun": 31287126186,
+      "failure": "HISTORICAL_CHAT_QA_NATIVE_COMPATIBILITY_DIGEST_WAS_REQUIRED_TO_EQUAL_CORRECTED_D2B_SOURCE",
+      "correctedGuardSha256": "e7927c2f0c72329c3df796bfb2ddbf2a6e56a185ccadc850e1e4d5f57d3805ce",
+      "priorNativeCompatibilityDigest": "c8f385720b3d17cddf9f3a576d24109796288f454f8ada80a1b2c33576d89610",
+      "correctedNativeCompatibilityDigest": "601c547059926b5ba01f4bb8d3b4fb6522eefe411e066943e53f38a9af89b78c",
+      "releaseManifestChanged": false,
+      "productSourceChanged": false,
+      "newAndroidBinaryRequired": true
     },
     "proofTiers": {
       "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
@@ -207,16 +219,16 @@
       "d2c": {"implementationPr": 152, "mergeSha": "c8a7c8cc426c6f532f2a3c25cdfc9cc3e9374dff", "state": "MERGED_UNCHANGED_CANONICAL_SHARED_PROVENANCE"}
     },
     "reviewLanes": [
-      {"lane": "backup-restore-proof-classification", "pr": 165, "head": "aa26f6e5e24600bf528f1b34cd8d39088cfc814e", "evidenceSha256": "a1b8e81a008d1326011ac525f64d6a20dfa19c88e966efda4705b812701c05f9", "state": "OPEN_DRAFT_V1_P0_0_P1_0_P2_2_NEVER_MERGE"},
-      {"lane": "android-action-origin-provenance-security", "pr": 167, "head": "424311ee6ee880adcd431ba559731f0adb44d3f0", "evidenceSha256": "f12359f578e74379fce23a9a098bc9b4138dff936a0487935e059aee9beff18a", "state": "OPEN_DRAFT_V1_P0_0_P1_0_P2_1_NEVER_MERGE"},
-      {"lane": "call-lifecycle-server-authority-non-regression", "pr": 168, "head": "d0e4aaaf89e65e1073e1d42ac308acc4c1748c16", "evidenceSha256": "ecf598375965a1b5fda36e16666ddce413971b637a56af09f309ffc9872a3731", "state": "OPEN_DRAFT_V1_P0_0_P1_0_P2_3_NEVER_MERGE"},
-      {"lane": "generated-native-compile-release-scope-negative-controls", "pr": 166, "head": "bbefc0f45a456d4b7b36759e7e1b7381094dac26", "evidenceSha256": "96bb47d20d73e45e7b8987e15bffc39e7c7b9c66b2bf0add3936ba8270a6fa3d", "state": "OPEN_DRAFT_V1_P0_0_P1_0_P2_3_NEVER_MERGE"}
+      {"lane": "backup-restore-proof-classification", "pr": 165, "head": "5c0bf59a81d8c13e21b7b48c563871658b28e6d0", "evidenceSha256": "c83d6ab6a2785dfc45734c342d2a8f6972546422d85d10a0c05c809573c1c08e", "state": "OPEN_DRAFT_V3_CORRECTED_IMMUTABLE_SOURCE_P0_0_P1_0_P2_1_D2A_NEVER_MERGE"},
+      {"lane": "android-action-origin-provenance-security", "pr": 167, "head": "bcd82316fded86f9dc1ec0a60fc62d8f4b1a18f0", "evidenceSha256": "80eeaa0a442a029e230e41e1d50c159716a990a368ff53200218666569171ae1", "state": "OPEN_DRAFT_V3_CORRECTED_IMMUTABLE_SOURCE_P0_0_P1_0_P2_0_NEVER_MERGE"},
+      {"lane": "call-lifecycle-server-authority-non-regression", "pr": 168, "head": "24f310581e022f439e637956f6237b61021ae960", "evidenceSha256": "188f81a4cde2f14526038657f877437281c9d66dcbf6dd259aee29858cb28c68", "state": "OPEN_DRAFT_V3_CORRECTED_IMMUTABLE_SOURCE_P0_0_P1_0_P2_3_ASSIGNED_NEVER_MERGE"},
+      {"lane": "generated-native-compile-release-scope-negative-controls", "pr": 166, "head": "46fc82fe443f27fb9c75451aec0ff51df348737e", "evidenceSha256": "0e64223d247b4f44bcb7527286d913f51d2bf7269c6c857c966824586fa35ef2", "state": "OPEN_DRAFT_V3_CORRECTED_IMMUTABLE_SOURCE_P0_0_P1_0_P2_2_ASSIGNED_NEVER_MERGE"}
     ],
-    "phase1Ci": null,
+    "phase1Ci": {"historicalFailedRun": 31287126186, "historicalHead": "6b90eb17b6f3acb85386f50c203e7f6d4cdcb91f", "historicalJobs": "11/13", "failureClassification": "HARNESS_RELEASE_PROOF_CLASSIFICATION_DEFECT", "correctedExactRun": null, "state": "CORRECTED_EXACT_PHASE1_CI_PENDING"},
     "delivery": {"newAndroidBinaryRequired": true, "build86ContainsFix": false, "otaCompatibleFix": false, "sourceFixDelivered": false},
-    "levelAReviewPr": 124,
+    "levelAReviewPr": null,
     "mayProceed": {"baseSynchronization": true, "merge": false, "binaryBuild": false, "otaPublication": false, "providerContact": false, "release": false},
-    "state": "IMMUTABLE_SOURCE_BOUND_DEPENDENCY_PREREQUISITE_MERGED_BASE_SYNC_NEXT"
+    "state": "CORRECTED_IMMUTABLE_SOURCE_BOUND_PENDING_EXACT_PHASE1_CI"
   },
   "enabledCognitiveSwitches": ["cognitive_android_visual_sentinel", "cognitive_ios_visual_sentinel"],
   "enabledSchedules": [],
@@ -252,7 +264,7 @@
   },
   "blockedProviders": [{"provider": "Apple PushKit", "scope": "iOS terminated/background incoming-call physical delivery", "status": "BLOCKED_EXTERNAL", "resumptionAction": "Use a separately authorized current signed iOS artifact and physical device window; do not retry delivery in this program."}],
   "openImplementationPrs": [
-    {"number": 164, "branch": "codex/first-pass-assurance-android-native-action-origin-backup-correction", "head": "b046fd9aaca923927158bd2491e8daf4946cb94c", "tree": "9906f1d347c5f11696a6f914caf8d7b41325a20d", "state": "open-draft-immutable-source-bound-dependency-prerequisite-merged-base-sync-next", "disposition": "implementation-candidate-not-yet-merge-ready"}
+    {"number": 164, "branch": "codex/first-pass-assurance-android-native-action-origin-backup-correction", "head": "45c209888b0bf39a49249ae8af81b7cb5dd94a47", "tree": "bb97bbff8eac7e25e63d06f32544e8790f0cb4e1", "state": "open-draft-corrected-immutable-source-bound-pending-exact-ci", "disposition": "implementation-candidate-not-yet-merge-ready"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -283,10 +295,10 @@
     {"number": 98, "branch": "codex/first-pass-assurance-current-truth-after-head-binding-review", "head": "278eb5e2326d2a7b7d12b6ba8b373541640d4e90", "reviewedImplementationHead": "867af2a2c446c4cea5b38cc990bd0143dac446c3", "state": "open-draft-current", "disposition": "never-merge"},
     {"number": 104, "branch": "codex/first-pass-assurance-current-truth-before-model-review-review", "head": "a8f689702e83fab1b5c85119d9d638f8bfabda3b", "reviewedImplementationHead": "2cf85211ca8f832bd929619423a04fb52dce275e", "state": "open-draft-current", "disposition": "never-merge"},
     {"number": 110, "branch": "codex/first-pass-assurance-current-truth-before-model-final-review-review", "head": "d43b460cc2f82cb296668117a0bf73648dacd701", "reviewedImplementationHead": "502f9e2659d96389ae418b11f83171b171b5a708", "state": "open-draft-current", "disposition": "never-merge"},
-    {"number": 165, "branch": "codex/first-pass-assurance-d2b-review-backup-restore-transfer", "head": "aa26f6e5e24600bf528f1b34cd8d39088cfc814e", "reviewedImplementationHead": "b046fd9aaca923927158bd2491e8daf4946cb94c", "evidenceVersions": ["v1"], "currentEvidenceVersion": "v1", "state": "open-draft-current-p0-0-p1-0-p2-2", "disposition": "never-merge"},
-    {"number": 167, "branch": "codex/first-pass-assurance-d2b-review-intent-origin-provenance-security", "head": "424311ee6ee880adcd431ba559731f0adb44d3f0", "reviewedImplementationHead": "b046fd9aaca923927158bd2491e8daf4946cb94c", "evidenceVersions": ["v1"], "currentEvidenceVersion": "v1", "state": "open-draft-current-p0-0-p1-0-p2-1", "disposition": "never-merge"},
-    {"number": 168, "branch": "codex/first-pass-assurance-d2b-review-call-lifecycle-server-authority", "head": "d0e4aaaf89e65e1073e1d42ac308acc4c1748c16", "reviewedImplementationHead": "b046fd9aaca923927158bd2491e8daf4946cb94c", "evidenceVersions": ["v1"], "currentEvidenceVersion": "v1", "state": "open-draft-current-p0-0-p1-0-p2-3", "disposition": "never-merge"},
-    {"number": 166, "branch": "codex/first-pass-assurance-d2b-review-generated-native-release-scope", "head": "bbefc0f45a456d4b7b36759e7e1b7381094dac26", "reviewedImplementationHead": "b046fd9aaca923927158bd2491e8daf4946cb94c", "evidenceVersions": ["v1"], "currentEvidenceVersion": "v1", "state": "open-draft-current-p0-0-p1-0-p2-3", "disposition": "never-merge"}
+    {"number": 165, "branch": "codex/first-pass-assurance-d2b-review-backup-restore-transfer", "head": "5c0bf59a81d8c13e21b7b48c563871658b28e6d0", "reviewedImplementationHead": "45c209888b0bf39a49249ae8af81b7cb5dd94a47", "evidenceVersions": ["v1", "v2", "v3"], "currentEvidenceVersion": "v3", "state": "open-draft-current-p0-0-p1-0-p2-1-d2a", "disposition": "never-merge"},
+    {"number": 167, "branch": "codex/first-pass-assurance-d2b-review-intent-origin-provenance-security", "head": "bcd82316fded86f9dc1ec0a60fc62d8f4b1a18f0", "reviewedImplementationHead": "45c209888b0bf39a49249ae8af81b7cb5dd94a47", "evidenceVersions": ["v1", "v2", "v3"], "currentEvidenceVersion": "v3", "state": "open-draft-current-p0-0-p1-0-p2-0", "disposition": "never-merge"},
+    {"number": 168, "branch": "codex/first-pass-assurance-d2b-review-call-lifecycle-server-authority", "head": "24f310581e022f439e637956f6237b61021ae960", "reviewedImplementationHead": "45c209888b0bf39a49249ae8af81b7cb5dd94a47", "evidenceVersions": ["v1", "v2", "v3"], "currentEvidenceVersion": "v3", "state": "open-draft-current-p0-0-p1-0-p2-3-assigned", "disposition": "never-merge"},
+    {"number": 166, "branch": "codex/first-pass-assurance-d2b-review-generated-native-release-scope", "head": "46fc82fe443f27fb9c75451aec0ff51df348737e", "reviewedImplementationHead": "45c209888b0bf39a49249ae8af81b7cb5dd94a47", "evidenceVersions": ["v1", "v2", "v3"], "currentEvidenceVersion": "v3", "state": "open-draft-current-p0-0-p1-0-p2-2-assigned", "disposition": "never-merge"}
   ],
   "closedReviewOnlyPrDispositions": [
     {"number": 171, "branch": "codex/assurance-image-size-safe-review-vulnerability", "head": "9842cc3352749ea53c88b8e285da0a514a6248ec", "reviewedImplementationHead": "3f60ac52cdf514ebd061e7134d6fffd9319ac486", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-branch-retained-never-merge"},
@@ -313,7 +325,7 @@
     {"number": 120, "branch": "codex/assurance-reconcile-chat-call-history-review-semantics", "head": "13364df442781bee7a2876119afc3024d8856ead", "reviewedImplementationHead": "4c0a2619da79d3109bfbcb19c1e30a2645f85211", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
     {"number": 121, "branch": "codex/assurance-reconcile-chat-call-history-review-scope", "head": "ce1d4561183b6bb4faabf68553339c736ba35572", "reviewedImplementationHead": "4c0a2619da79d3109bfbcb19c1e30a2645f85211", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
     {"number": 122, "branch": "codex/assurance-reconcile-chat-call-history-review-dry-run", "head": "e67f873deb8dc475ab5bfef1c6414d22b0e7f51b", "reviewedImplementationHead": "4c0a2619da79d3109bfbcb19c1e30a2645f85211", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5"], "currentEvidenceVersion": "v5", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
-    {"number": 124, "branch": "codex/first-pass-assurance-current-truth-after-b0-guard-review", "head": "e7e1dd8eed5bd8ac7545901a6c548312e2017459", "reviewedImplementationHead": "a38d212ba6bf3d0926507bfb9348c01d30c700f4", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25"], "currentEvidenceVersion": "v25", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-branch-retained-never-merge"},
+    {"number": 124, "branch": "codex/first-pass-assurance-current-truth-after-b0-guard-review", "head": "80c8f5b4f07b69c3c72f7ff38b2ecbaa39e5dec4", "reviewedImplementationHead": "36e40857c5aab7294899ca56074a60a4a795325e", "evidenceVersions": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29"], "currentEvidenceVersion": "v29", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-branch-retained-never-merge"},
     {"number": 53, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation-review", "head": "4ce691197be7438a12877725cc75810d4080e10a", "reviewedImplementationHead": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "evidenceVersions": ["historical", "coverage-v1"], "currentEvidenceVersion": "coverage-v1", "state": "closed-unmerged", "disposition": "stale-review-and-supersession-matrix-complete-branch-retained-never-merge"},
     {"number": 77, "branch": "codex/assurance-reconcile-room-host-block-check-review-db-parity", "head": "4e153e3881016d1061a4a5e11eda617f7ee5c57f", "reviewedImplementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
     {"number": 78, "branch": "codex/assurance-reconcile-room-host-block-check-review-function-security", "head": "345844b24dbd15be5e0a5d78494fe5176dbc5272", "reviewedImplementationHead": "463c9160c403e466555702e1c9cc4cd4a8a53cc9", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"},
@@ -330,11 +342,11 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170"],
-    "active": "PR-D2B-BASE-SYNCHRONIZATION-AFTER-DEPENDENCY-PREREQUISITE-AND-TRUTH-PR-169",
+    "active": "PR-D2B-CORRECTED-IMMUTABLE-SOURCE-BINDING-AFTER-HARNESS-PROOF-CLASSIFICATION-FIX",
     "nextActions": [
-      "Merge this refreshed exact three-file D2B current-truth binding only after persistent Level A PR #124 reports P0=0/P1=0, deterministic output passes 3/3, and its exact Phase 1 CI passes; close PR #124 unmerged and retain its branch.",
-      "Then merge current main including dependency prerequisite PR #170 normally into draft PR #164 without rebase or force-push, preserve immutable source b046fd9aaca923927158bd2491e8daf4946cb94c in ancestry, and rerun the synchronized-head focused Android gate because the tree changes.",
-      "Reuse review PRs #165, #167, #168 and #166 additively for the synchronized implementation head; require each current Level C lane P0=0/P1=0 and one exact synchronized-head Phase 1 CI 13/13 before merging only PR #164.",
+      "Merge this corrective exact three-file D2B current-truth binding only after its new persistent Level A review reports P0=0/P1=0, deterministic output passes 3/3, and its exact Phase 1 CI passes; close that Level A review unmerged and retain its branch.",
+      "Then merge current main normally into draft PR #164 without rebase or force-push, preserve corrected immutable source 45c209888b0bf39a49249ae8af81b7cb5dd94a47 and original product source b046fd9aaca923927158bd2491e8daf4946cb94c in ancestry, and preserve the historical build-86 native digest without claiming the corrected source is delivered.",
+      "Reuse review PRs #165, #167, #168 and #166 additively for the final synchronized implementation head; require each current Level C lane P0=0/P1=0 and one exact synchronized-head Phase 1 CI 13/13 before merging only PR #164.",
       "After PR #164 merges, create one exact three-file post-D2B current-truth synchronization, record NEW_ANDROID_BINARY_REQUIRED and build 86 lacks the fix, then stop with D2A frozen until E0 merges.",
       "E0 is the sole next implementation after post-D2B truth. Do not create E0, resume D2A, start W1-W3, or start D3 under the current authorization.",
       "Keep the D2B Codex Security source review and independent exact-head security review as complete P0=0/P1=0 evidence while accurately preserving the unsealed D2B report as BLOCKED_TOOLING_CODEX_SECURITY_FINALIZATION_METADATA; separately retain the sealed dependency scan for exact PR #170 source.",
@@ -349,8 +361,8 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-09T00:39:03Z",
-  "freshnessDeadline": "2026-08-10T00:39:03Z",
+  "timestamp": "2026-08-09T01:03:53Z",
+  "freshnessDeadline": "2026-08-10T01:03:53Z",
   "evidenceSources": [
     {
       "id": "image-size-safe-dependency-prerequisite-merge-20260809-0039",
