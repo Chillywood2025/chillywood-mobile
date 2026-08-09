@@ -548,6 +548,7 @@
     "guard:cognitive-credential-path-policy-parity": "node ./scripts/guard-cognitive-network-path-policy-parity.mjs",
     "guard:cognitive-dependency-advisories": "node ./scripts/guard-cognitive-dependency-advisories.mjs",
     "test:brace-expansion-compat": "node ./scripts/test-brace-expansion-compat.mjs",
+    "test:image-size-safe-compat": "node ./scripts/test-image-size-safe-compat.mjs",
     "test:cognitive-collective-governance": "node ./scripts/test-cognitive-collective-governance.mjs",
     "test:cognitive-governance-adversarial": "node ./scripts/test-cognitive-governance-adversarial.mjs",
     "test:cognitive-two-party-handoff": "node ./scripts/test-cognitive-two-party-handoff.mjs",
@@ -638,6 +639,7 @@
     "expo-updates": "~29.0.19",
     "expo-video": "~3.0.16",
     "expo-web-browser": "~15.0.11",
+    "image-size": "file:vendor/image-size-safe/chillywood-image-size-safe-1.2.1-chillywood.1.tgz",
     "livekit-client": "^2.18.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -673,7 +675,14 @@
     }
   },
   "overrides": {
-    "brace-expansion": "5.0.8",
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "3.15.1"
+    },
+    "brace-expansion": "5.0.9",
+    "fast-uri": "3.1.5",
+    "image-size": "$image-size",
+    "js-yaml": "4.3.1",
+    "nanoid": "3.3.17",
     "postcss": "8.5.22"
   },
   "private": true
