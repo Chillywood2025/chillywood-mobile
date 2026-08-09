@@ -172,6 +172,11 @@ export function useLiveKitChatCallSession({
       mediaControlRef.current = null;
       setMediaControlsBusy(false);
     }
+    const pendingOwner = pendingMicOwnerRef.current;
+    if (pendingOwner && (pendingOwner.sessionKey !== sessionKeyRef.current || pendingOwner.generation !== sessionGenerationRef.current)) {
+      pendingMicOwnerRef.current = null;
+      pendingMicToggleRef.current = false;
+    }
   }, [sessionKey]);
 
   const telemetryBinding = useMemo(() => ({

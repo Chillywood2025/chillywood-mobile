@@ -864,6 +864,19 @@ const negativeControls = [
       assert.equal(observed.touchTargets.some((target) => target.roomId === "room-2" && target.userId === "replacement-user"), true);
     },
   },
+  {
+    code: "ANDROID_MIC_STALE_FINALLY_CLEARS_REPLACEMENT_PENDING",
+    custom: async () => {
+      const mutated = mutateOnce(microphoneSlice, "          && pendingMicOwnerRef.current.token === leaseBinding.token", "          && true", "drop-pending-token");
+      let releaseA; let releaseB;
+      const gateA = new Promise((resolve) => { releaseA = resolve; }); const gateB = new Promise((resolve) => { releaseB = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["wait", "wait"], nativeGates: [undefined, gateA, gateB]}, {microphone: mutated});
+      const a = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls < 1; turn += 1) await Promise.resolve();
+      controls.retireLease(); const b = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      releaseA(); await a; assert.equal(controls.snapshot().pendingMic, false);
+      releaseB(); await b;
+    },
+  },
 ];
 
 test("negative-control contract names remain exact", () => {

@@ -7,7 +7,7 @@
     "components/communication/communication-control-bar.tsx": "6f510ac9074a1a5b8f965ce16da61bad39b2990bbc3a16d2de0b1cc6366bc3ca",
     "components/communication/in-room-communication-panel.tsx": "201fd733ee638956d5568d7faef794e9cf7afd2b9171abd2f8593c84a5c45327",
     "hooks/use-chat-call-media-session.ts": "1ccbf8def5d8506cde6c17bec4be86d0e71b6388fad57247f5c2aa4a6ea77cc2",
-    "hooks/use-livekit-chat-call-session.ts": "3f2acbdcba975538d1d0025365755e27b062fc40f0c081fa402566ad3e201e8a",
+    "hooks/use-livekit-chat-call-session.ts": "9324e85777ece8a79628bd662ddd3477cbed3a13f92cfcb1c5cc055c77344c5d",
     "hooks/use-communication-room-session.ts": "0da0e6dcd12875fd56f295f2f99d11a29a0a145a0b4c444f4f3a94d63096347d",
     "_lib/communication.ts": "efcdb6fc1151468928aea5bac45ca3c0a111782993b503ef49d744a67c122834",
     "_lib/chatCallMediaProviderPolicy.ts": "33b45618fea1b2850081fa1396146a6f58ff76d93c20efa90ffe66cf5e4c0cf9",
@@ -78,7 +78,8 @@
     "ANDROID_MIC_TOGGLE_PROVIDER_IMMUTABILITY_VIOLATION",
     "ANDROID_MIC_COMPENSATION_CAMERA_REGRESSION",
     "D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE",
-    "ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE"
+    "ANDROID_MIC_COMPENSATION_ROLLOVER_REPLACEMENT_WRITE",
+    "ANDROID_MIC_STALE_FINALLY_CLEARS_REPLACEMENT_PENDING"
   ],
   "leaseCases": ["STALE_A_FINALLY_CANNOT_CLEAR_B_LEASE"],
   "staleBoundaryMatrix": [
