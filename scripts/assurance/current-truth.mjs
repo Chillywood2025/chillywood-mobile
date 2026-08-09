@@ -20,6 +20,7 @@ import {
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization
 } from "./lib.mjs";
+import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
 
 function safeGit(gitArgs, fallback = null) {
   try {
@@ -235,7 +236,7 @@ if (mode) {
     claimFreshness,
     record.activeTaskBinding?.requiredFreshnessClaims ?? []
   );
-  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers];
+  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
@@ -281,6 +282,14 @@ if (mode) {
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
     liveProviderReadback: claimFreshness.liveProviderReadback,
+    lateReviewSentinels: (record.lateReviewSentinels ?? []).map(({ classification, prNumber, reviewedSha, successorCorrectionOwner, findings: lateFindings, blocks }) => ({
+      classification,
+      prNumber,
+      reviewedSha,
+      successorCorrectionOwner,
+      unresolvedFindings: (lateFindings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length,
+      blocks
+    })),
     freshnessClaims: {
       current: claimFreshness.currentClaims.map(({ id, freshnessClass, platform }) => ({ id, freshnessClass, platform })),
       blocked: claimFreshness.blockedClaims.map(({ id, freshnessClass, platform, expiresAt }) => ({ id, freshnessClass, platform, expiresAt }))

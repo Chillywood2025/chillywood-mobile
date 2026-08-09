@@ -43,7 +43,10 @@
       "REMOTE_BRANCH_HEAD",
       "IMMUTABLE_ANCESTRY",
       "PROVIDER_PR_HEAD_WHEN_AVAILABLE"
-    ]
+    ],
+    "completedBindingDisposition": "ACTIVE_TASK_NONE",
+    "legacyOwnership": "EXACT_OPEN_STATE_PR_BRANCH_HEAD_TREE_AND_REMOTE",
+    "callerSelectedDiffBase": "DENIED"
   },
   "freshness": {
     "classes": [
@@ -66,13 +69,54 @@
     "liveProviderReadback": false,
     "sourceOnlyEligibility": true,
     "providerDependentEligibility": false,
-    "localOrGithubMayRefreshProviderCritical": false
+    "localOrGithubMayRefreshProviderCritical": false,
+    "repositoryClaimFactsMustBeSourceCovered": true,
+    "crossPlatformClaimLabelAllowed": false,
+    "providerTtlPinnedInExecutablePolicy": true,
+    "committedProseMayAuthorizeExternalTier": false,
+    "externalTierCurrentState": "REQUIRES_TRUSTED_IN_PROCESS_EXTERNAL_RECEIPT_VERIFIER",
+    "staleOperationalValuesRenderedAsHistorical": true
+  },
+  "exactHeadCodexReview": {
+    "contractId": "codex-review-exact-head-v1",
+    "checkName": "Chi'llywood / Codex Review Exact Head",
+    "trustedEvaluatorSource": "protected-default-branch-only",
+    "boundedReadback": true,
+    "polling": false,
+    "sourcePushInvalidatesReceipt": true,
+    "requiresExactHeadAndTree": true,
+    "requiresReviewAfterLatestSourcePush": true,
+    "requiresAllConversationsResolved": true,
+    "blocksP0P1P2": true,
+    "rulesetPatch": "config/assurance/github-main-ruleset-codex-review-v1.json",
+    "rulesetApplicationState": "PENDING_POST_A1_MERGE_READBACK"
+  },
+  "lateReviewSentinel": {
+    "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+    "prNumber": 194,
+    "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+    "mergedAt": "2026-08-09T18:04:06Z",
+    "reviewId": 4892095448,
+    "reviewedCommit": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+    "reviewCompletedAt": "2026-08-09T18:11:34Z",
+    "postTruthMerge": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9",
+    "postTruthMergedAt": "2026-08-09T18:12:44Z",
+    "liveReadbackCodes": ["CODEX_REVIEW_LATE_POST_MERGE", "CODEX_REVIEW_LATE_SENTINEL_BLOCKED", "CODEX_REVIEW_STALE_HEAD"],
+    "unresolvedThreads": [
+      {"commentId": 3744746865, "threadId": "PRRT_kwDORRwZUc6XqB8L", "severity": "P1"},
+      {"commentId": 3744746868, "threadId": "PRRT_kwDORRwZUc6XqB8O", "severity": "P2"},
+      {"commentId": 3744746869, "threadId": "PRRT_kwDORRwZUc6XqB8P", "severity": "P1"},
+      {"commentId": 3744746872, "threadId": "PRRT_kwDORRwZUc6XqB8S", "severity": "P2"},
+      {"commentId": 3744746873, "threadId": "PRRT_kwDORRwZUc6XqB8T", "severity": "P2"}
+    ],
+    "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction",
+    "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
   },
   "regression": {
-    "requiredMatrix": "20/20_PASS",
+    "requiredMatrix": "34/34_PASS",
     "deterministicPacketRuns": "3/3_PASS",
     "headBindingAndSynchronization": "PASS",
-    "contracts": "18/18_PASS",
+    "contracts": "19/19_PASS",
     "featureRegistry": "21_FEATURES_PASS",
     "escapedDefects": "25_CLASSES_PASS"
   },

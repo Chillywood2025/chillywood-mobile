@@ -347,9 +347,11 @@ for (const codePoint of [...Array.from({ length: 33 }, (_, index) => index), 127
 }
 const numberSchema = schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.number;
 assert.deepEqual(numberSchema, { type: "integer", minimum: 1 });
-const statePattern = new RegExp(schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.state.pattern, "u");
-for (const validState of ["open", "open-draft", "open draft"]) assert.equal(statePattern.test(validState), true);
-for (const invalidState of ["", " ", " open", "open ", "\topen"]) assert.equal(statePattern.test(invalidState), false);
+const stateValues = schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.state.enum;
+assert.deepEqual(stateValues, ["open", "open-draft-current"]);
+for (const invalidState of ["", " ", " open", "open ", "\topen", "closed-unopened", "open-draft-stale"]) {
+  assert.equal(stateValues.includes(invalidState), false);
+}
 
 const baseSyncContract = readJson("config/assurance/current-truth-contract-v1.json").implementationHeadBinding.baseSynchronization;
 assert.equal(baseSyncContract.classification, "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH");

@@ -18,6 +18,7 @@ const allowlist = read("config/assurance/command-allowlist-v1.json");
 const feature = registry.features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
 const legacyTruth = structuredClone(truth);
 delete legacyTruth.activeTaskBinding;
+legacyTruth.lateReviewSentinels = [];
 legacyTruth.openImplementationPrs = [{
   number: 185,
   branch: "codex/assurance-efficiency-e0",
@@ -38,13 +39,12 @@ const identity = {
   pathHash: "f".repeat(64),
   changedFiles: ["scripts/assurance/active-task.mjs", "tests/assurance/efficiency-e0.test.mjs"]
 };
-const implementation = { pr: null, branch: identity.branch, state: "LOCAL_PRE_PR", immutableSourceHead: head, immutableSourceTree: tree };
 const packetFacts = {
   currentTruth: legacyTruth,
   registry,
   allowlist,
   identity,
-  implementation,
+  legacyImplementationObservations: { remoteHead: head, currentTree: tree },
   truthCheck: { ok: true },
   directlyAffectedSymbols: ["scripts/assurance/active-task.mjs#activeTask"],
   blockers: [{ id: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT" }]
@@ -56,7 +56,7 @@ test("active-task packet is deterministic 3/3 and compact", () => {
   assert.equal(JSON.stringify(packets[0]), JSON.stringify(packets[1]));
   assert.equal(JSON.stringify(packets[1]), JSON.stringify(packets[2]));
   assert.equal(packets[0].packet.authority.contractId, "current-truth-record-v1");
-  assert.equal(packets[0].packet.implementation.state, "LOCAL_PRE_PR");
+  assert.equal(packets[0].packet.implementation.state, "open");
   assert.equal(packets[0].packet.requiredCommandIds.length, feature.commands.length);
   assert.deepEqual(Object.keys(packets[0].packet.proofTiers).sort(), ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]);
   assert.equal(JSON.stringify(packets[0].packet).includes("assuranceProgram"), false, "unrelated historical truth excluded");
@@ -104,7 +104,7 @@ const repositorySource = {
   factsCovered: ["exact source identity"],
   freshnessClass: "REPOSITORY_SOURCE",
   authorityAllowed: "REPOSITORY_ONLY",
-  platform: "CROSS_PLATFORM"
+  platform: "NONE"
 };
 const staleProvider = {
   id: "provider-critical-fixture",
@@ -116,27 +116,27 @@ const staleProvider = {
   factsCovered: ["historical provider fact"],
   freshnessClass: "PROVIDER_CRITICAL",
   authorityAllowed: "PROVIDER_READBACK_ONLY",
-  platform: "CROSS_PLATFORM"
+  platform: "NONE"
 };
 const freshnessSources = [
-  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt },
-  { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt }
+  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt, covers: repositorySource.factsCovered, freshnessClass: repositorySource.freshnessClass, authorityAllowed: repositorySource.authorityAllowed, platform: repositorySource.platform },
+  { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt, covers: staleProvider.factsCovered, freshnessClass: staleProvider.freshnessClass, authorityAllowed: staleProvider.authorityAllowed, platform: staleProvider.platform }
 ];
 const sourceRequirement = {
   freshnessClass: "REPOSITORY_SOURCE",
-  platform: "CROSS_PLATFORM",
+  platform: "NONE",
   evidenceSourceId: repositorySource.evidenceSourceId,
   authorityAllowed: "REPOSITORY_ONLY",
   requiredFacts: [repositorySource.factsCovered[0]]
 };
 const providerRequirement = {
   freshnessClass: "PROVIDER_CRITICAL",
-  platform: "CROSS_PLATFORM",
+  platform: "NONE",
   evidenceSourceId: staleProvider.evidenceSourceId,
   authorityAllowed: "PROVIDER_READBACK_ONLY",
   requiredFacts: [staleProvider.factsCovered[0]]
 };
-const evaluateClaims = (input) => evaluateFreshnessClaims({ ...input, evidenceSourceVerifier: () => true });
+const evaluateClaims = (input) => evaluateFreshnessClaims({ ...input, evidenceSourceVerifier: () => true, externalEvidenceVerifier: () => true });
 
 test("claim-scoped freshness denies crossover and keeps stale provider state scoped", () => {
   const baseline = evaluateClaims({
@@ -177,6 +177,21 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
   });
   assert.equal(widenedProviderWindow.ok, false, "the named eight-hour provider window cannot be widened through its class rule");
   assert.equal(widenedProviderWindow.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_CLASS_RULE_MISMATCH"), true);
+  const pairedWidening = evaluateClaims({
+    claims: [{ ...staleProvider, status: "CURRENT", expiresAt: "2026-08-03T06:00:44Z" }],
+    evidenceSources: [freshnessSources[1]],
+    freshness: {
+      ...freshnessContract,
+      providerCriticalHours: 24,
+      classes: {
+        ...freshnessContract.classes,
+        PROVIDER_CRITICAL: { ...freshnessContract.classes.PROVIDER_CRITICAL, maximumHours: 24 }
+      }
+    },
+    now: new Date("2026-08-02T20:00:44Z")
+  });
+  assert.equal(pairedWidening.ok, false, "provider TTL and class rule cannot be widened together");
+  assert.equal(pairedWidening.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_POLICY_MISMATCH"), true);
   const forgedProviderTimestamp = evaluateFreshnessClaims({
     claims: [staleProvider],
     evidenceSources: [freshnessSources[1]],
@@ -213,7 +228,7 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     };
     const result = evaluateClaims({
       claims: [claim],
-      evidenceSources: [{ id: claim.evidenceSourceId, mode: claim.evidenceMode, observedAt: claim.observedAt }],
+      evidenceSources: [{ id: claim.evidenceSourceId, mode: claim.evidenceMode, observedAt: claim.observedAt, covers: claim.factsCovered, freshnessClass: claim.freshnessClass, authorityAllowed: claim.authorityAllowed, platform: claim.platform }],
       freshness: freshnessContract,
       now: freshnessNow
     });
@@ -232,7 +247,7 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
   };
   const androidEvaluation = evaluateClaims({
     claims: [androidSigned],
-    evidenceSources: [{ id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt }],
+    evidenceSources: [{ id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt, covers: androidSigned.factsCovered, freshnessClass: androidSigned.freshnessClass, authorityAllowed: androidSigned.authorityAllowed, platform: androidSigned.platform }],
     freshness: freshnessContract,
     now: freshnessNow
   });
@@ -245,7 +260,33 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     requiredFacts: [androidSigned.factsCovered[0]]
   };
   assert.equal(evaluateTaskFreshness(androidEvaluation, [{ ...androidRequirement, platform: "IOS" }]).eligible, false, "Android evidence cannot refresh iOS evidence");
-  assert.equal(evaluateTaskFreshness(androidEvaluation, ["SIGNED_ARTIFACT"]).eligible, false, "single-platform evidence cannot satisfy a cross-platform requirement");
+  const forgedCrossPlatform = evaluateClaims({
+    claims: [{ ...androidSigned, platform: "CROSS_PLATFORM" }],
+    evidenceSources: [{ id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt, covers: androidSigned.factsCovered, freshnessClass: androidSigned.freshnessClass, authorityAllowed: androidSigned.authorityAllowed, platform: "CROSS_PLATFORM" }],
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(forgedCrossPlatform.ok, false, "a claim cannot self-attest cross-platform coverage");
+  assert.equal(forgedCrossPlatform.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_PLATFORM_MALFORMED"), true);
+
+  const unboundRepositoryFact = evaluateClaims({
+    claims: [{ ...repositorySource, factsCovered: ["unobserved source fact"] }],
+    evidenceSources: freshnessSources,
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(unboundRepositoryFact.ok, false, "repository facts must be covered by the exact source");
+  assert.equal(unboundRepositoryFact.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_BINDING_MISMATCH"), true);
+
+  const selfAttestedProvider = evaluateFreshnessClaims({
+    claims: [{ ...staleProvider, status: "CURRENT" }],
+    evidenceSources: [freshnessSources[1]],
+    freshness: freshnessContract,
+    now: new Date(staleProvider.expiresAt),
+    evidenceSourceVerifier: () => true
+  });
+  assert.equal(selfAttestedProvider.ok, false, "committed prose alone cannot mint external authority");
+  assert.equal(selfAttestedProvider.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_EXTERNAL_RECEIPT_UNVERIFIED"), true);
 
   for (const [label, claim] of [
     ["missing observedAt", Object.fromEntries(Object.entries(repositorySource).filter(([key]) => key !== "observedAt"))],

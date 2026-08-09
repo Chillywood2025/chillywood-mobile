@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { activeTask } from "../../scripts/assurance/active-task.mjs";
 
@@ -10,6 +11,7 @@ const allowlist = read("config/assurance/command-allowlist-v1.json");
 const binding = { ...canonicalTruth.activeTaskBinding, phase: "FORMAL_REVIEW" };
 const truth = {
   ...canonicalTruth,
+  lateReviewSentinels: [],
   activeTaskBinding: binding,
   openImplementationPrs: [{
     number: binding.implementationPr,
@@ -94,6 +96,20 @@ test("legacy fallback requires exactly one open implementation owner", () => {
       ]
     }
   }).findings, ["MULTIPLE_ACTIVE_IMPLEMENTATIONS"]);
+
+  const legacy = { ...withoutBinding, openImplementationPrs: [{
+    number: binding.implementationPr,
+    branch: binding.implementationBranch,
+    head: binding.currentImplementationHead,
+    state: "open",
+    featureId: binding.featureId
+  }] };
+  assert.equal(activeTask({ ...facts, currentTruth: legacy }).ok, true);
+  const wrongHead = activeTask({ ...facts, currentTruth: legacy, identity: { ...identity, head: "d".repeat(40) } });
+  assert.equal(wrongHead.ok, false);
+  assert.equal(wrongHead.findings.includes("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH"), true);
+  const falseOpen = activeTask({ ...facts, currentTruth: { ...legacy, openImplementationPrs: [{ ...legacy.openImplementationPrs[0], state: "closed-unopened" }] } });
+  assert.deepEqual(falseOpen.findings, ["IMPLEMENTATION_INVENTORY_STATE_MALFORMED"]);
 });
 
 test("malformed structured binding and display disagreement fail closed", () => {
@@ -150,7 +166,7 @@ test("freshness claim scopes must match declared classes and proof tiers", () =>
   assert.deepEqual(activeTask(withTruth((value) => ({ ...value, activeTaskBinding: proofSubstitution }))).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
 });
 
-test("a completed binding cannot mask a different control branch or open implementation", () => {
+test("a completed binding is not an active task and no override can revive it", () => {
   const completeIdentity = {
     ...identity,
     branch: "codex/assurance-active-task-and-claim-freshness-a1"
@@ -169,6 +185,14 @@ test("a completed binding cannot mask a different control branch or open impleme
     identity: completeIdentity
   });
   assert.equal(competing.ok, false);
-  assert.equal(competing.findings.includes("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"), true);
-  assert.equal(competing.findings.includes("COMPLETED_IMPLEMENTATION_CONTROL_BRANCH_MISMATCH"), true);
+  assert.deepEqual(competing.findings, ["ACTIVE_TASK_NONE"]);
+  assert.deepEqual(activeTask({ ...facts, currentTruth: canonicalTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+});
+
+test("active-task CLI rejects caller-selected diff bases", () => {
+  const cli = spawnSync(process.execPath, ["scripts/assurance/active-task.mjs", "--base=HEAD"], { encoding: "utf8" });
+  assert.notEqual(cli.status, 0);
+  const output = JSON.parse(cli.stdout);
+  assert.equal(output.ok, false);
+  assert.equal(JSON.stringify(output).includes("UNKNOWN_FLAG:--base"), true);
 });

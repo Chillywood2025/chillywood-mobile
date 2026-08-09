@@ -36,6 +36,8 @@ const structuredBindingFields = [
   "proofTiersUnderEvaluation"
 ];
 const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
+const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
+const activeImplementationStates = new Set(["open", "open-draft-current"]);
 const proofTiers = new Set(["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]);
 
 function validateStructuredBinding(value) {
@@ -48,7 +50,7 @@ function validateStructuredBinding(value) {
       && typeof requirement === "object"
       && !Array.isArray(requirement)
       && freshnessClasses.has(requirement.freshnessClass)
-      && ["CROSS_PLATFORM", "ANDROID", "IOS", "NONE"].includes(requirement.platform)
+      && freshnessPlatforms.has(requirement.platform)
       && typeof requirement.evidenceSourceId === "string"
       && requirement.evidenceSourceId.length > 0
       && typeof requirement.authorityAllowed === "string"
@@ -104,6 +106,7 @@ function resolveFeature(truth, facts, registry) {
     const binding = truth.activeTaskBinding;
     const findings = validateStructuredBinding(binding);
     if (findings.length) return { ok: false, findings };
+    if (binding.phase === "COMPLETE") return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
     const displayCandidates = displayFeatureCandidates(truth, registry);
     if (displayCandidates.length > 1 || (displayCandidates.length === 1 && displayCandidates[0] !== binding.featureId)) {
       return { ok: false, findings: ["ACTIVE_TASK_STRUCTURED_DISPLAY_CONFLICT"] };
@@ -114,6 +117,9 @@ function resolveFeature(truth, facts, registry) {
 
   const open = truth?.openImplementationPrs;
   if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
+  if (open.some((entry) => !activeImplementationStates.has(entry?.state))) {
+    return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_STATE_MALFORMED"] };
+  }
   if (open.length === 0) return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
   if (open.length > 1) return { ok: false, findings: ["MULTIPLE_ACTIVE_IMPLEMENTATIONS"] };
   const featureId = open[0]?.featureId;
@@ -143,6 +149,16 @@ function affectedSymbols(files) {
 
 function inheritedBlockers(truth) {
   const blockers = (truth?.blockedProviders ?? []).map(({ provider, scope, status }) => ({ provider, scope, status }));
+  for (const sentinel of truth?.lateReviewSentinels ?? []) {
+    blockers.push({
+      id: sentinel.classification,
+      pr: sentinel.prNumber,
+      reviewedSha: sentinel.reviewedSha,
+      unresolvedFindings: (sentinel.findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length,
+      successorCorrectionOwner: sentinel.successorCorrectionOwner,
+      blocks: sentinel.blocks
+    });
+  }
   const d2b = truth?.d2bCurrentTruthBinding;
   if (d2b?.proof?.runtimeBackupRestore?.startsWith("BLOCKED_")) {
     blockers.push({ id: d2b.proof.runtimeBackupRestore, owner: d2b.proof.runtimeRestoreProofOwner });
@@ -182,20 +198,11 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
     if (open.length > 1) findings.push("MULTIPLE_ACTIVE_IMPLEMENTATIONS");
     if (matches.length !== 1) findings.push("ACTIVE_IMPLEMENTATION_OWNERSHIP_MISMATCH");
     if (matches[0]?.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_HEAD_MISMATCH");
-    if (!/open/iu.test(matches[0]?.state ?? "")) findings.push("ACTIVE_IMPLEMENTATION_STATE_MISMATCH");
+    if (!activeImplementationStates.has(matches[0]?.state)) findings.push("ACTIVE_IMPLEMENTATION_STATE_MISMATCH");
     if (identity.branch !== binding.implementationBranch) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_BRANCH_MISMATCH");
     if (identity.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
     if (identity.tree !== binding.currentImplementationTree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
-  } else {
-    const merged = truth?.latestMergedImplementationPr;
-    if (open.length) findings.push("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION");
-    if (![binding.implementationBranch, "main", "DETACHED"].includes(identity.branch)) {
-      findings.push("COMPLETED_IMPLEMENTATION_CONTROL_BRANCH_MISMATCH");
-    }
-    if (merged?.number !== binding.implementationPr || merged?.head !== binding.currentImplementationHead || merged?.state !== "merged") {
-      findings.push("COMPLETED_IMPLEMENTATION_MERGE_MISMATCH");
-    }
-  }
+  } else findings.push("ACTIVE_TASK_NONE");
 
   const observed = facts.implementationObservations ?? {
     remoteHead: safeImplementationGit(["show-ref", "--verify", "--hash", `refs/remotes/origin/${binding.implementationBranch}`]),
@@ -231,23 +238,36 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
 
 function resolveImplementation(truth, identity, facts, resolution) {
   if (resolution.binding) return resolveStructuredImplementation(truth, identity, facts, resolution.binding);
-  if (facts.implementation) return { ok: true, value: facts.implementation };
   const open = truth?.openImplementationPrs ?? [];
   if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
   if (open.length !== 1) return { ok: false, findings: [open.length > 1 ? "MULTIPLE_ACTIVE_IMPLEMENTATIONS" : "ACTIVE_TASK_NONE"] };
-  if (open[0].branch !== identity.branch) return { ok: false, findings: ["ACTIVE_IMPLEMENTATION_BRANCH_MISMATCH"] };
+  const owner = open[0];
+  const findings = [];
+  if (!Number.isInteger(owner.number) || owner.number < 1 || !isValidGitBranchName(owner.branch) || !sha40(owner.head)) {
+    findings.push("ACTIVE_IMPLEMENTATION_OWNER_MALFORMED");
+  }
+  if (!activeImplementationStates.has(owner.state)) findings.push("IMPLEMENTATION_INVENTORY_STATE_MALFORMED");
+  if (owner.branch !== identity.branch) findings.push("ACTIVE_IMPLEMENTATION_BRANCH_MISMATCH");
+  if (owner.head !== identity.head) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
+  const observed = facts.legacyImplementationObservations ?? facts.implementationObservations ?? {
+    remoteHead: safeImplementationGit(["show-ref", "--verify", "--hash", `refs/remotes/origin/${owner.branch}`]),
+    currentTree: safeImplementationGit(["rev-parse", `${owner.head}^{tree}`])
+  };
+  if (observed.remoteHead !== owner.head) findings.push("ACTIVE_IMPLEMENTATION_REMOTE_HEAD_MISMATCH");
+  if (!sha40(observed.currentTree) || observed.currentTree !== identity.tree) findings.push("ACTIVE_IMPLEMENTATION_CURRENT_TREE_MISMATCH");
+  if (findings.length) return { ok: false, findings: [...new Set(findings)].sort() };
   return {
     ok: true,
     value: {
-      pr: open[0].number,
-      branch: open[0].branch,
-      state: open[0].state,
-      immutableSourceHead: identity.head,
-      immutableSourceTree: identity.tree,
-      currentSynchronizedHead: identity.head,
-      currentSynchronizedTree: identity.tree,
-      immutableSource: { head: identity.head, tree: identity.tree },
-      currentSynchronizedSource: { head: identity.head, tree: identity.tree }
+      pr: owner.number,
+      branch: owner.branch,
+      state: owner.state,
+      immutableSourceHead: owner.head,
+      immutableSourceTree: observed.currentTree,
+      currentSynchronizedHead: owner.head,
+      currentSynchronizedTree: observed.currentTree,
+      immutableSource: { head: owner.head, tree: observed.currentTree },
+      currentSynchronizedSource: { head: owner.head, tree: observed.currentTree }
     }
   };
 }
@@ -273,7 +293,7 @@ export function activeTask(facts = {}) {
   try {
     if (!identity) {
       if (git(["status", "--porcelain"])) return { ok: false, findings: ["WORKING_TREE_NOT_IMMUTABLE"] };
-      const base = facts.base ?? "origin/main";
+      const base = "origin/main";
       const baseHead = git(["rev-parse", "--verify", `${base}^{commit}`]);
       const changedFiles = git(["diff", "--no-ext-diff", "--name-only", `${baseHead}..HEAD`]).split("\n").filter(Boolean).sort();
       identity = {
@@ -290,6 +310,12 @@ export function activeTask(facts = {}) {
       };
     }
   } catch { return { ok: false, findings: ["SOURCE_IDENTITY_UNRESOLVED"] }; }
+
+  const lateReviewBlocksCurrentBranch = (truth?.lateReviewSentinels ?? []).some((sentinel) => {
+    const unresolved = (sentinel?.findings ?? []).some(({ disposition }) => disposition !== "RESOLVED");
+    return unresolved && ![sentinel?.successorCorrectionOwner, sentinel?.assuranceControlOwner].includes(identity.branch);
+  });
+  if (lateReviewBlocksCurrentBranch) return { ok: false, findings: ["LATE_REVIEW_SUCCESSOR_BLOCKED"] };
 
   const implementation = resolveImplementation(truth, identity, facts, resolution);
   if (!implementation.ok) return { ok: false, findings: implementation.findings };
@@ -346,7 +372,7 @@ export function activeTask(facts = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const parsed = strictOptions(process.argv.slice(2), { "--feature": "featureId", "--base": "base" });
+  const parsed = strictOptions(process.argv.slice(2), { "--feature": "featureId" });
   const result = parsed.ok ? activeTask(parsed.values) : { ok: false, findings: parsed.findings };
   if (result.ok) {
     const text = stableJson(result.packet);

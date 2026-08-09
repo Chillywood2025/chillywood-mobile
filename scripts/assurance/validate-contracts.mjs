@@ -9,6 +9,7 @@ const contracts = [
   ["config/assurance/proof-substitution-denylist-v1.json", "proofSubstitutionDenylist"],
   ["config/assurance/pr-scope-policy-v1.json", "prScopePolicy"],
   ["config/assurance/review-contract-v1.json", "reviewContract"],
+  ["config/assurance/codex-review-exact-head-v1.json", "codexReviewExactHeadContract"],
   ["config/assurance/test-impact-map-v1.json", "testImpactMap"],
   ["config/assurance/current-truth-contract-v1.json", "currentTruthContract"],
   ["config/assurance/current-truth-v1.json", "currentTruthRecord"],
@@ -27,7 +28,7 @@ const contracts = [
 function validate(value, schema, at, errors) {
   if (schema.$ref) return validate(value, schemas.$defs[schema.$ref.split("/").at(-1)], at, errors);
   for (const member of schema.allOf ?? []) validate(value, member, at, errors);
-  if (schema.const !== undefined && value !== schema.const) errors.push(`${at} must equal ${JSON.stringify(schema.const)}`);
+  if (schema.const !== undefined && JSON.stringify(value) !== JSON.stringify(schema.const)) errors.push(`${at} must equal ${JSON.stringify(schema.const)}`);
   if (schema.enum && !schema.enum.includes(value)) errors.push(`${at} must be one of ${schema.enum.join(",")}`);
   if (schema.type === "object" && (!value || typeof value !== "object" || Array.isArray(value))) errors.push(`${at} must be object`);
   if (schema.type === "array" && !Array.isArray(value)) errors.push(`${at} must be array`);
@@ -42,7 +43,16 @@ function validate(value, schema, at, errors) {
   }
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems) errors.push(`${at} needs at least ${schema.minItems} items`);
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) errors.push(`${at} allows at most ${schema.maxItems} items`);
     if (schema.uniqueItems && new Set(value.map(JSON.stringify)).size !== value.length) errors.push(`${at} items must be unique`);
+    if (schema.contains) {
+      const found = value.some((entry, index) => {
+        const candidateErrors = [];
+        validate(entry, schema.contains, `${at}[${index}]`, candidateErrors);
+        return candidateErrors.length === 0;
+      });
+      if (!found) errors.push(`${at} does not contain required value`);
+    }
     if (schema.items) value.forEach((entry, index) => validate(entry, schema.items, `${at}[${index}]`, errors));
   }
 }

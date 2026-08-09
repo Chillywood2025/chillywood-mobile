@@ -1,0 +1,49 @@
+name: Chi'llywood / Codex Review Exact Head
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  pull_request_review_thread:
+    types: [resolved, unresolved]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to evaluate once
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  checks: write
+  actions: read
+
+concurrency:
+  group: codex-review-exact-head-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Evaluate exact head and publish receipt
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout assurance evaluator
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Evaluate bounded GitHub readback and publish exact-head check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
+        run: node scripts/assurance/codex-review-exact-head.mjs --event="$GITHUB_EVENT_PATH" --pr-number="$PR_NUMBER"

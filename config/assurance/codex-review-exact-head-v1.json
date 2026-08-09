@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "contractId": "codex-review-exact-head-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/codexReviewExactHeadContract",
+  "checkName": "Chi'llywood / Codex Review Exact Head",
+  "reviewProviders": [
+    "chatgpt-codex-connector",
+    "chatgpt-codex-connector[bot]"
+  ],
+  "acceptableReviewStates": ["COMMENTED", "APPROVED"],
+  "blockingSeverities": ["P0", "P1", "P2"],
+  "requiredEvents": [
+    "pull_request.opened",
+    "pull_request.synchronize",
+    "pull_request.reopened",
+    "pull_request.ready_for_review",
+    "pull_request_review.submitted",
+    "pull_request_review_comment.created",
+    "pull_request_review_comment.edited",
+    "pull_request_review_thread.resolved",
+    "pull_request_review_thread.unresolved",
+    "issue_comment.created",
+    "issue_comment.edited",
+    "workflow_dispatch"
+  ],
+  "receiptRequiredFields": [
+    "schemaVersion",
+    "contractId",
+    "repository",
+    "prNumber",
+    "prHeadSha",
+    "prHeadTree",
+    "reviewProvider",
+    "reviewId",
+    "reviewState",
+    "reviewedCommit",
+    "reviewStartedAt",
+    "reviewCompletedAt",
+    "latestSourcePushAt",
+    "reviewComments",
+    "reviewThreads",
+    "receiptHash"
+  ],
+  "receiptHash": {
+    "algorithm": "sha256",
+    "canonicalization": "stable-json-without-receiptHash"
+  },
+  "boundedReadback": {
+    "reviews": 100,
+    "threads": 100,
+    "commentsPerThread": 100,
+    "checkRuns": 100,
+    "polling": false
+  },
+  "passRequirements": [
+    "reviewed-commit-equals-current-pr-head",
+    "current-pr-tree-equals-recorded-tree",
+    "review-completed-after-latest-source-push",
+    "no-source-commit-after-review",
+    "all-review-conversations-resolved",
+    "no-unresolved-blocking-finding",
+    "exact-receipt-hash-valid"
+  ],
+  "resultCodes": [
+    "CODEX_REVIEW_MISSING",
+    "CODEX_REVIEW_STALE_HEAD",
+    "CODEX_REVIEW_INCOMPLETE",
+    "CODEX_REVIEW_BLOCKING_THREAD_OPEN",
+    "CODEX_REVIEW_UNRESOLVED_FINDING",
+    "CODEX_REVIEW_RECEIPT_INVALID",
+    "CODEX_REVIEW_LATE_POST_MERGE",
+    "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"
+  ],
+  "lateReviewClassification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+  "lateReviewBlocks": [
+    "post-merge-completion-claim",
+    "next-implementation",
+    "release",
+    "proof-tier-promotion"
+  ]
+}

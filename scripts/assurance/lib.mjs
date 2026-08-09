@@ -92,43 +92,55 @@ const claimRequiredFields = [
   "platform"
 ];
 const claimStatuses = new Set(["CURRENT", "STALE_BLOCKED"]);
-const claimPlatforms = new Set(["CROSS_PLATFORM", "ANDROID", "IOS", "NONE"]);
+const claimPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const claimClassPolicy = {
   REPOSITORY_SOURCE: {
     evidenceModes: ["local-source", "git-read-only", "github-read-only", "exact-ci", "local-offline", "local-read-only", "local-and-github-read-only", "local-offline-and-github-read-only"],
     authorityAllowed: "REPOSITORY_ONLY",
-    maximumHoursField: "defaultHours",
-    requiresCommittedEvidence: false
+    maximumHours: 24,
+    allowedPlatforms: ["NONE", "ANDROID", "IOS"],
+    requiresCommittedEvidence: false,
+    requiresExternalReceipt: false
   },
   PROVIDER_CRITICAL: {
     evidenceModes: ["local-and-linked-read-only"],
     authorityAllowed: "PROVIDER_READBACK_ONLY",
-    maximumHoursField: "providerCriticalHours",
-    requiresCommittedEvidence: true
+    maximumHours: 8,
+    allowedPlatforms: ["NONE", "ANDROID", "IOS"],
+    requiresCommittedEvidence: true,
+    requiresExternalReceipt: true
   },
   SIGNED_ARTIFACT: {
     evidenceModes: ["signed-artifact-inspection"],
     authorityAllowed: "SIGNED_ARTIFACT_ONLY",
-    maximumHoursField: "defaultHours",
-    requiresCommittedEvidence: true
+    maximumHours: 24,
+    allowedPlatforms: ["ANDROID", "IOS"],
+    requiresCommittedEvidence: true,
+    requiresExternalReceipt: true
   },
   INSTALLED_DEVICE: {
     evidenceModes: ["installed-device-readback"],
     authorityAllowed: "INSTALLED_DEVICE_ONLY",
-    maximumHoursField: "defaultHours",
-    requiresCommittedEvidence: true
+    maximumHours: 24,
+    allowedPlatforms: ["ANDROID", "IOS"],
+    requiresCommittedEvidence: true,
+    requiresExternalReceipt: true
   },
   PHYSICAL_DEVICE: {
     evidenceModes: ["physical-device-observation"],
     authorityAllowed: "PHYSICAL_DEVICE_ONLY",
-    maximumHoursField: "defaultHours",
-    requiresCommittedEvidence: true
+    maximumHours: 24,
+    allowedPlatforms: ["ANDROID", "IOS"],
+    requiresCommittedEvidence: true,
+    requiresExternalReceipt: true
   },
   PUBLIC_CANARY: {
     evidenceModes: ["public-canary-readback"],
     authorityAllowed: "PUBLIC_CANARY_ONLY",
-    maximumHoursField: "defaultHours",
-    requiresCommittedEvidence: true
+    maximumHours: 24,
+    allowedPlatforms: ["ANDROID", "IOS"],
+    requiresCommittedEvidence: true,
+    requiresExternalReceipt: true
   }
 };
 
@@ -147,7 +159,7 @@ function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
 }
 
-export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null }) {
+export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null, externalEvidenceVerifier = null }) {
   const findings = [];
   const evaluated = [];
   const seenClaimIds = new Set();
@@ -159,10 +171,17 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
   if (!classRules || typeof classRules !== "object" || Array.isArray(classRules)) {
     findings.push(claimFinding("ASSURANCE_FRESHNESS_CLASS_RULES_MALFORMED"));
   }
+  if (freshness?.defaultHours !== 24
+    || freshness?.providerCriticalHours !== 8
+    || freshness?.clock !== "UTC"
+    || freshness?.failClosed !== true
+    || !sameStringSet(Object.keys(classRules ?? {}), Object.keys(claimClassPolicy))) {
+    findings.push(claimFinding("ASSURANCE_FRESHNESS_POLICY_MISMATCH"));
+  }
   for (const [freshnessClass, expected] of Object.entries(claimClassPolicy)) {
     const rule = classRules?.[freshnessClass];
     if (!rule
-      || rule.maximumHours !== freshness?.[expected.maximumHoursField]
+      || rule.maximumHours !== expected.maximumHours
       || rule.authorityAllowed !== expected.authorityAllowed
       || !sameStringSet(rule.allowedEvidenceModes, expected.evidenceModes)
       || (rule.requiresCommittedEvidence === true) !== expected.requiresCommittedEvidence) {
@@ -216,7 +235,9 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
     if (claim.authorityAllowed !== rule.authorityAllowed) {
       findings.push(claimFinding("ASSURANCE_FRESHNESS_AUTHORITY_MISMATCH", claimId));
     }
-    if (!claimPlatforms.has(claim.platform)) findings.push(claimFinding("ASSURANCE_FRESHNESS_PLATFORM_MALFORMED", claimId));
+    if (!claimPlatforms.has(claim.platform) || !expectedPlatformAllowed(rule, claim.freshnessClass, claim.platform)) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_PLATFORM_MALFORMED", claimId));
+    }
     if (!Array.isArray(claim.factsCovered) || claim.factsCovered.length === 0 || claim.factsCovered.some((fact) => typeof fact !== "string" || !fact.trim())) {
       findings.push(claimFinding("ASSURANCE_FRESHNESS_FACTS_MALFORMED", claimId));
     }
@@ -225,7 +246,15 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
       findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_UNRESOLVED", claimId));
     } else {
       const [source] = matchingSources;
-      if (source.observedAt !== claim.observedAt || source.mode !== claim.evidenceMode) {
+      const sourceFactsBound = Array.isArray(source.covers)
+        && Array.isArray(claim.factsCovered)
+        && claim.factsCovered.every((fact) => source.covers.includes(fact));
+      if (source.observedAt !== claim.observedAt
+        || source.mode !== claim.evidenceMode
+        || source.freshnessClass !== claim.freshnessClass
+        || source.authorityAllowed !== claim.authorityAllowed
+        || source.platform !== claim.platform
+        || !sourceFactsBound) {
         findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_BINDING_MISMATCH", claimId));
       }
       if (rule.requiresCommittedEvidence === true) {
@@ -236,6 +265,17 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
           verified = false;
         }
         if (!verified) findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_PROVENANCE_UNVERIFIED", claimId));
+      }
+      const derivedStatus = evaluationTime <= expiresAt ? "CURRENT" : "STALE_BLOCKED";
+      if (derivedStatus === "CURRENT" && claimClassPolicy[claim.freshnessClass]?.requiresExternalReceipt === true) {
+        let externallyVerified = false;
+        try {
+          externallyVerified = typeof externalEvidenceVerifier === "function"
+            && externalEvidenceVerifier({ claim, source }) === true;
+        } catch {
+          externallyVerified = false;
+        }
+        if (!externallyVerified) findings.push(claimFinding("ASSURANCE_FRESHNESS_EXTERNAL_RECEIPT_UNVERIFIED", claimId));
       }
     }
     const derivedStatus = evaluationTime <= expiresAt ? "CURRENT" : "STALE_BLOCKED";
@@ -260,6 +300,10 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
     blockedClaims,
     liveProviderReadback: currentClaims.some(({ freshnessClass }) => freshnessClass === "PROVIDER_CRITICAL")
   };
+}
+
+function expectedPlatformAllowed(_rule, freshnessClass, platform) {
+  return claimClassPolicy[freshnessClass]?.allowedPlatforms.includes(platform) === true;
 }
 
 export function evaluateTaskFreshness(claimEvaluation, requirements) {
@@ -804,7 +848,10 @@ export function renderCurrentState(record) {
     .filter(({ status }) => status !== "CURRENT")
     .map(({ id, freshnessClass, expiresAt }) => `\`${id}\` (${freshnessClass}, ${record.freshnessClaims.find((claim) => claim.id === id).status}, expired \`${expiresAt}\`)`)
     .join(", ") || "none";
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Enabled Cognitive switches: ${enabled}.\n- Cognitive schedules: ${record.scheduleState.enabled}/${record.scheduleState.total} enabled. Effective baseline count: ${record.effectiveBaselineCount}.\n- Cognitive LiveKit: ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, ${record.safety.livekitSwitchesEnabled} enabled switches.\n- PUBLIC schema \`net\` USAGE: ${record.safety.publicSchemaNetUsage}. User-derived memory: ${record.safety.userDerivedMemory}. Level 2 repair: ${record.safety.level2Repair}.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  const lateReviews = (record.lateReviewSentinels ?? [])
+    .map(({ prNumber, reviewedSha, findings, successorCorrectionOwner }) => `PR #${prNumber} reviewed \`${reviewedSha}\` after merge with ${(findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length} unresolved findings; successor \`${successorCorrectionOwner}\``)
+    .join("; ") || "none";
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Late exact-head Codex Review sentinels: ${lateReviews}. These block post-merge completion claims, unrelated successor work, release, and proof-tier promotion.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {
