@@ -1,13 +1,109 @@
 {
-  "schemaVersion": 1,
-  "reviewId": "e0-privacy-rollback-determinism-v1",
+  "schemaVersion": 2,
+  "reviewId": "e0-privacy-rollback-determinism-v2",
   "reviewType": "isolated-automated-review-lane",
   "assignedLane": "privacy-rollback-determinism",
+  "classification": "FINAL_IMPLEMENTATION_ANCESTRY_REVIEW",
   "implementationPrNumber": 185,
   "implementationBranch": "codex/assurance-efficiency-e0",
-  "immutableSourceHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0",
-  "immutableSourceTree": "27b3b0ec90455e1535dbbd45c6030a676bcb132e",
-  "status": "PENDING_CURRENT_TRUTH_BINDING",
-  "disposition": "DRAFT_NEVER_MERGE",
-  "findings": []
+  "initialImmutableSourceHead": "03dde5746ab1d60b43d84af1c785ca271947d2c0",
+  "initialImmutableSourceTree": "27b3b0ec90455e1535dbbd45c6030a676bcb132e",
+  "privacyCorrectedImmutableSourceHead": "a367da2eb673e550b15d61f20a90ebf9fe5a25b6",
+  "privacyCorrectedImmutableSourceTree": "39345a6eacbc0ef38b6d99ef9531980bfee131dc",
+  "finalImplementationHead": "010cc8806380631b675bf3c01d834e0408084ad9",
+  "finalImplementationTree": "73bb85b56a85c8dcbe42bf39bba1ccbeadfd96cb",
+  "implementationHead": "010cc8806380631b675bf3c01d834e0408084ad9",
+  "implementationTree": "73bb85b56a85c8dcbe42bf39bba1ccbeadfd96cb",
+  "currentMainHead": "ea0dcb30629ed3ef20d536ec7406d6c554b57c77",
+  "reviewedRange": "ea0dcb30629ed3ef20d536ec7406d6c554b57c77..010cc8806380631b675bf3c01d834e0408084ad9",
+  "reviewedSourceDeltaSha256": "9fe35a903fd071fcfb9d6357255c2dc385430ef711b2213720abc0f2eb8bf3d2",
+  "changedFileSha256": "7afc5039f7e53ca8cfb89419cf3be516735aaabe8d07ceec4629963a5038f3ef",
+  "changedPathSetSha256": "5485b37a0976e176040738675fc53ec502a83ac6eb79a2f6f335788453533c77",
+  "ancestryVerification": {
+    "result": "PASS_7_OF_7_GIT_MERGE_BASE_IS_ANCESTOR",
+    "relationships": [
+      "03dde5746ab1d60b43d84af1c785ca271947d2c0->a367da2eb673e550b15d61f20a90ebf9fe5a25b6",
+      "a367da2eb673e550b15d61f20a90ebf9fe5a25b6->f4ac9b1eb5e1c07b8a2968d48f8d15e1f9611e79",
+      "f4ac9b1eb5e1c07b8a2968d48f8d15e1f9611e79->010cc8806380631b675bf3c01d834e0408084ad9",
+      "ea0dcb30629ed3ef20d536ec7406d6c554b57c77->f4ac9b1eb5e1c07b8a2968d48f8d15e1f9611e79",
+      "ea0dcb30629ed3ef20d536ec7406d6c554b57c77->010cc8806380631b675bf3c01d834e0408084ad9",
+      "03dde5746ab1d60b43d84af1c785ca271947d2c0->010cc8806380631b675bf3c01d834e0408084ad9",
+      "a367da2eb673e550b15d61f20a90ebf9fe5a25b6->010cc8806380631b675bf3c01d834e0408084ad9"
+    ],
+    "implementationHeadIsAncestorOfReviewHead": true,
+    "currentMainIsAncestorOfFinalImplementation": true
+  },
+  "prProviderHeadMatch": {"expected": "010cc8806380631b675bf3c01d834e0408084ad9", "observed": "010cc8806380631b675bf3c01d834e0408084ad9", "result": "PASS"},
+  "sealedSecurityScan": {
+    "scanId": "6e12734b-d01c-4d92-943e-9c6a8179f76d",
+    "reviewedRange": "f4ac9b1eb5e1c07b8a2968d48f8d15e1f9611e79..010cc8806380631b675bf3c01d834e0408084ad9",
+    "reportSha256": "b2cd2678855e1cd3c6dc69e52770795358903a5fcba73504ed48b63a1d00d888",
+    "manifestSha256": "5e048af6d1694bf0492aae12576cbeed8da4147d64a78795546cb5abbc413d6b",
+    "rerun": false
+  },
+  "coverageReconciliation": {
+    "canonicalWorkbenchCoverage": "PARTIAL_HOST_METADATA",
+    "ledgerFileCoverage": "COMPLETE_2_OF_2_NO_DEFERRED_WORK",
+    "hostArtifactModified": false,
+    "idAlgorithm": "assurance-surface-v1|surface-type|canonical-path|sha256(UTF8(assurance-surface-v1\\0surface-type\\0canonical-path))",
+    "ledgerArtifactSha256": "653d8ce1d4ca2149bd600e848c4ea4b1823b8ba0cb115c90351bb558235f0780",
+    "surfaces": [
+      {
+        "surfaceId": "assurance-surface-v1|script|scripts/assurance/review-history.mjs|25c1b94b04d0d1672248765eae116f496bd21c586dffa2b1349759a00f7a9155",
+        "surfaceType": "script",
+        "canonicalPath": "scripts/assurance/review-history.mjs",
+        "reviewedRange": "f4ac9b1eb5e1c07b8a2968d48f8d15e1f9611e79..010cc8806380631b675bf3c01d834e0408084ad9",
+        "ledgerReceiptLine": 1,
+        "ledgerStatus": "complete"
+      },
+      {
+        "surfaceId": "assurance-surface-v1|test|tests/assurance/efficiency-e0.test.mjs|05da93016942e6231db8118e975d01603dbf32f8b2fb97c6e0ebfac863262526",
+        "surfaceType": "test",
+        "canonicalPath": "tests/assurance/efficiency-e0.test.mjs",
+        "reviewedRange": "f4ac9b1eb5e1c07b8a2968d48f8d15e1f9611e79..010cc8806380631b675bf3c01d834e0408084ad9",
+        "ledgerReceiptLine": 2,
+        "ledgerStatus": "complete"
+      }
+    ],
+    "changedFilesDeferred": 0,
+    "duplicateCoverageEntries": 0,
+    "uniqueCanonicalInputs": "2_OF_2",
+    "uniqueSurfaceIds": "2_OF_2",
+    "collisionResult": "PASS_FULL_CANONICAL_TUPLE_AND_FULL_SHA256_UNIQUE"
+  },
+  "relevantFocusedEvidenceHashes": {
+    "focusedTestSourceSha256": "43491fca9294d037ecf21335e1f4937d51e3d3df02638478c8a65b432e6ce3e4",
+    "reviewHistorySourceSha256": "81f7d652dfff018fc68b62060920274df1a17adf6edd52e3a710bdc1c92240d2",
+    "efficiencyLibrarySha256": "40ffcf22a58d1d70948240e0458ecb93fc4c24f417348057f423e5e047dd5280",
+    "benchmarkEvidenceSha256": "7b3833e9741498736f908588d5764d84fe15e053fd5b55df1f7cb612e5b860e4"
+  },
+  "laneChecks": {
+    "deviceIdentifiersRedactedFromFailures": "PASS",
+    "benignDiagnosticsPreserved": "PASS",
+    "failureLogsBounded": "PASS_512_BYTES_MAX",
+    "packetAndReceiptDeterminism": "PASS_3_OF_3",
+    "rollbackToPreE0AssuranceBehavior": "PASS",
+    "staleReviewClosureFailClosed": "PASS",
+    "reviewEvidenceDeletion": "ABSENT"
+  },
+  "priorPendingEvidence": {"head": "decdffe20053f95d29f46a18b90a8903a5a3b7d4", "sha256": "d5763a304227e9feeccee8c9b072180cd56f30c1e1dbedd1868acfe39b9b44c1", "preservedInGitHistory": true},
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "findings": [
+    {
+      "id": "PENDING_REVIEW_EVIDENCE_LACKS_EXACT_IMPLEMENTATION_ANCESTRY_BINDING",
+      "severity": "P3",
+      "status": "resolved",
+      "resolution": "The final exact ancestry-bound manifest replaces the pending E0 state without deleting its history; retained branches and fail-closed closure rules preserve rollback and evidence integrity."
+    }
+  ],
+  "resolvedFindings": ["PENDING_REVIEW_EVIDENCE_LACKS_EXACT_IMPLEMENTATION_ANCESTRY_BINDING"],
+  "remainingFindings": [],
+  "futurePendingStateReuse": "PROHIBITED_WITHOUT_EXACT_IMPLEMENTATION_IDENTITY_BINDING",
+  "reviewTimestamp": "2026-08-09T07:38:52Z",
+  "status": "FINAL_PASS_EXACT_IMPLEMENTATION_ANCESTRY_BOUND",
+  "finalStatus": "FINAL_PASS_EXACT_IMPLEMENTATION_ANCESTRY_BOUND",
+  "scopeStatus": "pass",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "disposition": "DRAFT_REVIEW_ONLY_NEVER_MERGE"
 }
