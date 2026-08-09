@@ -117,7 +117,7 @@ const localParticipant = {
     state.nativeCalls += 1;
     state.log.push(\`native:\${value}\`);
     const action = nativeQueue.shift() ?? "success";
-    if (action === "wait") await scenario.nativeGate;
+    if (action === "wait") await (scenario.nativeGates?.[state.nativeCalls] ?? scenario.nativeGate);
     if (action === "throw-before") throw new Error("native_forward_rejected");
     state.actualMic = action === "mismatch" ? !value : value;
     if (action === "throw-after") throw new Error("native_forward_ambiguous");
@@ -139,6 +139,7 @@ const touchCommunicationRoomSession = async (options) => {
   state.touchTargets.push({roomId: options.roomId, userId: options.userId});
   state.log.push(\`touch:\${options.micEnabled}\`);
   const action = touchQueue.shift() ?? "success";
+  if (action === "wait") await (scenario.touchGates?.[state.touchCalls] ?? scenario.touchGate);
   if (action === "reject") throw new Error("membership_rejected");
   if (action === "null") return null;
   if (action === "lost") {
@@ -152,6 +153,7 @@ const touchCommunicationRoomSession = async (options) => {
   state.durableMic = options.micEnabled;
   state.durableCamera = options.cameraEnabled;
   state.log.push(\`touch-confirmed:\${options.micEnabled}\`);
+  scenario.onTouchBeforeReturn?.();
   return makeMembership(options.micEnabled, options.cameraEnabled, {
     roomId: options.roomId,
     userId: options.userId,
@@ -163,7 +165,7 @@ const touchCommunicationRoomSession = async (options) => {
 const getCommunicationRoomSnapshot = async () => {
   state.readbackCalls += 1;
   state.log.push("readback");
-  if (scenario.readbackGate) await scenario.readbackGate;
+  if (scenario.readbackGate || scenario.readbackGates?.[state.readbackCalls]) await (scenario.readbackGates?.[state.readbackCalls] ?? scenario.readbackGate);
   const action = readbackQueue.shift() ?? "current";
   if (action === "null") return null;
   if (action === "target") state.durableMic = targetMic;
@@ -234,6 +236,16 @@ const assertCallUnchanged = (observed, initialCamera = false) => {
   assert.equal(observed.tokenCalls, 0, "no token request");
   assert.equal(observed.cleanupCalls, 0, "no cleanup/end");
   assert.equal(observed.busy, false, "serializer releases busy state");
+};
+
+const assertRolloverContained = (observed) => {
+  assert.equal(observed.touchTargets.some((target) => target.roomId === "room-2" || target.userId === "replacement-user"), false, "replacement durable session untouched");
+  assert.equal(observed.actualMic, false);
+  assert.equal(observed.requestedMic, false);
+  assert.equal(observed.uiMic, false);
+  assertCallUnchanged(observed);
+  assert.equal(JSON.stringify(observed.telemetry), "[]");
+  assert.equal(JSON.stringify(observed.firstMedia), "[]");
 };
 
 const cases = [
@@ -372,6 +384,60 @@ const cases = [
       assert.equal(result, false); assert.equal(observed.nativeCalls, 0); assert.equal(observed.touchCalls, 0); assertState(observed, false);
     },
   },
+  {
+    id: "DEFERRED_FORWARD_DURABLE_WRITE_ROLLOVER_NO_REPLACEMENT_TOUCH",
+    custom: async () => {
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["wait"], touchGate: gate});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 12 && controls.snapshot().touchCalls === 0; turn += 1) await Promise.resolve();
+      controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assertRolloverContained(observed);
+    },
+  },
+  {
+    id: "DEFERRED_FORWARD_READBACK_ROLLOVER_NO_REPLACEMENT_TOUCH",
+    custom: async () => {
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["wrong-mic"], readbackGates: [undefined, gate]});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 12 && controls.snapshot().readbackCalls < 2; turn += 1) await Promise.resolve();
+      controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assertRolloverContained(observed);
+    },
+  },
+  {
+    id: "PRECOMMIT_ROLLOVER_NO_REPLACEMENT_TOUCH",
+    custom: async () => {
+      const scenario = {initialMic: false, targetMic: true};
+      const controls = createExactProductPath(scenario);
+      scenario.onTouchBeforeReturn = () => controls.rollover();
+      const result = await controls.setMicrophoneEnabled(true); const observed = controls.snapshot();
+      assert.equal(result, false); assertRolloverContained(observed);
+    },
+  },
+  {
+    id: "DEFERRED_NATIVE_COMPENSATION_ROLLOVER_NO_REPLACEMENT_TOUCH",
+    custom: async () => {
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["success", "wait"], nativeGates: [undefined, gate], touchQueue: ["null"]});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assertRolloverContained(observed);
+    },
+  },
+  {
+    id: "DEFERRED_DURABLE_COMPENSATION_READBACK_ROLLOVER_NO_REPLACEMENT_TOUCH",
+    custom: async () => {
+      let release; const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["null", "null"], readbackGates: [undefined, undefined, gate]});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 16 && controls.snapshot().readbackCalls < 3; turn += 1) await Promise.resolve();
+      controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assertRolloverContained(observed);
+    },
+  },
 ];
 
 test("exact product and serializer slices remain hash-bound", () => {
@@ -476,7 +542,7 @@ const negativeControls = [
   {
     code: "ANDROID_MIC_MEMBERSHIP_FAILURE_TRACK_DIVERGENCE",
     scenario: {initialMic: false, targetMic: true, readbackQueue: ["current", "current"], touchQueue: ["null", "success"]},
-    mutate: (value) => mutateOnce(value, "          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);\n          const nativeRestored", "          void priorActual;\n          const nativeRestored", "remove-native-compensation"),
+    mutate: (value) => value.replaceAll("          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);", "          void priorActual;"),
     detected: (value) => value.actualMic !== value.requestedMic,
   },
   {
@@ -528,13 +594,14 @@ const negativeControls = [
   {
     code: "D2A_MIC_TOGGLE_SESSION_IDENTITY_ROLLOVER_FALSE_CONVERGENCE",
     custom: async () => {
-      const mutated = mutateOnce(microphoneSlice, `const originStillCurrent = () => (
+      let mutated = mutateOnce(microphoneSlice, `const originStillCurrent = () => (
           sessionKeyRef.current === originSessionKey
           && sessionGenerationRef.current === originSessionGeneration
           && roomRef.current === liveKitRoom
           && productRoomRef.current === currentRoom
           && identityRef.current === currentIdentity
         );`, "const originStillCurrent = () => true;", "accept-rollover");
+      mutated = mutateOnce(mutated, "          originStillCurrent,\n          { room: currentRoom, identity: currentIdentity },", "          undefined,", "drop-captured-binding");
       let release; const gate = new Promise((resolve) => { release = resolve; });
       const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["wait"], nativeGate: gate, touchQueue: ["success"]}, {microphone: mutated});
       const pending = controls.setMicrophoneEnabled(true); for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls === 0; turn += 1) await Promise.resolve(); controls.rollover(); release();
@@ -564,7 +631,7 @@ for (const control of negativeControls) {
   });
 }
 
-test("17-case evidence is deterministic 3/3", async () => {
+test("22-case evidence is deterministic 3/3", async () => {
   const hashes = [];
   for (let run = 0; run < 3; run += 1) {
     const evidence = [];

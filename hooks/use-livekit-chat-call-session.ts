@@ -292,9 +292,10 @@ export function useLiveKitChatCallSession({
     membershipState: "active" | "reconnecting" = "active",
     strict = false,
     originStillCurrent?: () => boolean,
+    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity },
   ) => {
-    const currentIdentity = identityRef.current;
-    const currentRoom = productRoomRef.current;
+    const currentIdentity = binding?.identity ?? identityRef.current;
+    const currentRoom = binding?.room ?? productRoomRef.current;
     if (!currentIdentity || !currentRoom) return null;
     const remainsCurrent = () => (
       identityRef.current === currentIdentity
@@ -474,6 +475,7 @@ export function useLiveKitChatCallSession({
           priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
           true,
           originStillCurrent,
+          { room: currentRoom, identity: currentIdentity },
         );
         const targetCameraUnchanged = publicationIsUsable(
           liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
@@ -489,6 +491,12 @@ export function useLiveKitChatCallSession({
         }
         if (!membership || !targetCameraUnchanged || !targetCallValid) {
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          if (!originStillCurrent()) {
+            reportRuntimeError("chat-call-livekit-microphone-membership-reconciliation", new Error("mic_session_identity_rollover"));
+            setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
+            refreshParticipantViews();
+            return false;
+          }
           const nativeRestored = publicationIsUsable(
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
           ) === priorActual;
@@ -497,6 +505,8 @@ export function useLiveKitChatCallSession({
             priorDurable.micEnabled,
             priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
             true,
+            originStillCurrent,
+            { room: currentRoom, identity: currentIdentity },
           );
           const cameraUnchanged = publicationIsUsable(
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
