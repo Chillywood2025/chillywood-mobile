@@ -19,7 +19,7 @@
   "changedNameStatusSha256": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
   "changedFileHash": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
   "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "configHash": "479b29ea6b8947ad11449ff4932a3c4bd01971a95cbed3a4166558efa8f03ae9",
+  "configHash": "a44193203b924c818be460d4fb42a562054d33ba926dd90fabce37bb57949c6c",
   "changedPaths": ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
   "reviewerLanes": ["independent"],
   "testResults": {
@@ -35,7 +35,7 @@
     "phase1Ci": "PASS_13_OF_13_RUN_31287552663_HEAD_9E058E88",
     "reviewFindings": "P0_0_P1_0"
   },
-  "testResultHash": "5fad728fa4f7b7f522e9bdf3e4f2d8961481e224523ac1355a30a8f656628727",
+  "testResultHash": "5f63963b84b7b2769cbd9714c5d71197d02a98844f0251576ee25a1439db4dac",
   "phase1Ci": {
     "status": "pass",
     "runId": 31287552663,
