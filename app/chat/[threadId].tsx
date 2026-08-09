@@ -30,6 +30,7 @@ import {
   type ChillyChatCallInvite,
 } from "../../_lib/chillyChatCalls";
 import { getChillyChatCallDeliveryMessage } from "../../_lib/chillyChatCallDeliveryCopy";
+import { resolveAuthoritativeNativeCallDecline } from "../../_lib/chillyChatNativeCallRoutes.mjs";
 import {
   playChillyChatCallSound,
   stopChillyChatCallSound,
@@ -86,9 +87,12 @@ import {
   subscribeToIosNativeCallPresentation,
 } from "../../_lib/iosNativeCalls";
 import {
+  consumeMountedAndroidNativeCallRoute,
   consumeMountedForegroundAuthenticatedUiCallRoute,
   consumeMountedIosNativeCallRoute,
+  subscribeToTrustedAndroidNativeActionRoutes,
 } from "../../_lib/nativeCallTransitionProvenance.mjs";
+import type { TrustedAndroidNativeActionRoute } from "../../_lib/nativeCallTransitionProvenance.d.ts";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
   dismissChillyChatCallNotificationRows,
@@ -257,12 +261,15 @@ export default function ChillyChatThreadScreen() {
   const [trustedForegroundUiIntent, setTrustedForegroundUiIntent] = useState<ReturnType<typeof consumeMountedForegroundAuthenticatedUiCallRoute>>(null);
   const requestedCallInviteId = trustedNativeCallClaim?.inviteId ?? routeCallInviteId;
   const requestedNativeCallAction = trustedNativeCallClaim?.action ?? "";
-  const requestedNativeCallUuid = trustedNativeCallClaim?.nativeIdentity ?? "";
+  const requestedNativeCallIdentity = trustedNativeCallClaim?.nativeIdentity ?? "";
+  const requestedNativeCallUuid = trustedNativeCallClaim?.platform === "ios"
+    ? requestedNativeCallIdentity
+    : "";
   const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition({
     authority: trustedNativeCallClaim ? "trusted_native_claim" : "none",
     callInviteId: requestedCallInviteId,
     currentUserId,
-    nativeIdentity: requestedNativeCallUuid,
+    nativeIdentity: requestedNativeCallIdentity,
     nativeCallAction: requestedNativeCallAction,
     monotonicNowMs: globalThis.performance?.now?.(),
     platform: Platform.OS,
@@ -352,6 +359,70 @@ export default function ChillyChatThreadScreen() {
       nativeCallUuid: undefined,
     });
   }, [authLoading, currentUserId, isSignedIn, routeCallInviteId, routeNativeCallClaim, routeNativeCallUuid, router, threadId]);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== "android"
+      || authLoading
+      || !isSignedIn
+      || !currentUserId
+      || !routeNativeCallClaim
+    ) return;
+    const consumptionKey = `android:${threadId}:${routeCallInviteId}:${routeNativeCallUuid}:${routeNativeCallClaim}`;
+    if (nativeCallClaimConsumptionRef.current === consumptionKey) return;
+    nativeCallClaimConsumptionRef.current = consumptionKey;
+    const claim = consumeMountedAndroidNativeCallRoute({
+      authenticatedUserId: currentUserId,
+      authLoading,
+      claimId: routeNativeCallClaim,
+      inviteId: routeCallInviteId,
+      isSignedIn,
+      platform: Platform.OS,
+      requestKey: routeNativeCallUuid,
+      threadId,
+    });
+    if (claim) {
+      setTrustedNativeCallClaim(claim);
+      setTrustedNativeCallClaimAccountId(currentUserId);
+    }
+    router.setParams({
+      nativeCallAction: undefined,
+      nativeCallClaim: undefined,
+      nativeCallUuid: undefined,
+    });
+  }, [authLoading, currentUserId, isSignedIn, routeCallInviteId, routeNativeCallClaim, routeNativeCallUuid, router, threadId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return () => {};
+      return subscribeToTrustedAndroidNativeActionRoutes((route: TrustedAndroidNativeActionRoute) => {
+        if (
+          authLoading
+          || !isSignedIn
+          || !currentUserId
+          || route.status !== "created"
+          || route.threadId !== threadId
+          || !route.claimId
+          || !route.inviteId
+          || !route.nativeIdentity
+        ) return;
+        const claim = consumeMountedAndroidNativeCallRoute({
+          authenticatedUserId: currentUserId,
+          authLoading,
+          claimId: route.claimId,
+          inviteId: route.inviteId,
+          isSignedIn,
+          platform: Platform.OS,
+          requestKey: route.nativeIdentity,
+          threadId,
+        });
+        if (!claim) return false;
+        setTrustedNativeCallClaim(claim);
+        setTrustedNativeCallClaimAccountId(currentUserId);
+        return true;
+      });
+    }, [authLoading, currentUserId, isSignedIn, threadId]),
+  );
 
   useEffect(() => {
     if (authLoading || !isSignedIn || !currentUserId || !routeForegroundCallClaim) return;
@@ -1742,6 +1813,24 @@ export default function ChillyChatThreadScreen() {
     await acceptIncomingInvite(incomingCallInvite);
   }, [acceptIncomingInvite, incomingCallInvite]);
 
+  const requestAuthoritativeIncomingCallDecline = useCallback(async (
+    invite: ChillyChatCallInvite,
+  ) => {
+    const updatedInvite = await updateChillyChatCallInviteStatus({
+      actorUserId: currentUserId!,
+      invite,
+      status: "declined",
+    });
+    const candidateInvite = updatedInvite
+      ?? await readChillyChatCallInvite(invite.id).catch(() => null);
+    return resolveAuthoritativeNativeCallDecline({
+      currentUserId,
+      expectedInviteId: invite.id,
+      expectedThreadId: threadId,
+      invite: candidateInvite,
+    });
+  }, [currentUserId, threadId]);
+
   const handleDeclineIncomingCall = useCallback(async () => {
     if (!incomingCallInvite || callBusy || !currentUserId) return;
     Vibration.cancel();
@@ -1749,20 +1838,11 @@ export default function ChillyChatThreadScreen() {
     incomingCallSoundRef.current = null;
     setCallBusy(true);
     try {
-      const declinedInvite = await updateChillyChatCallInviteStatus({
-        actorUserId: currentUserId,
-        invite: incomingCallInvite,
-        status: "declined",
-      });
+      const declinedInvite = await requestAuthoritativeIncomingCallDecline(incomingCallInvite);
       if (!declinedInvite) {
-        const latestInvite = await readChillyChatCallInvite(incomingCallInvite.id).catch(() => null);
-        if (!latestInvite || latestInvite.status === "ringing") {
-          throw new Error("Unable to decline this Chi'lly Chat call right now.");
-        }
-        rememberHandledIncomingInvite(latestInvite, { clearRoom: true });
-      } else {
-        rememberHandledIncomingInvite(declinedInvite, { clearRoom: true });
+        throw new Error("Unable to decline this Chi'lly Chat call right now.");
       }
+      rememberHandledIncomingInvite(declinedInvite, { clearRoom: true });
       await dismissPresentedChillyChatCallNotifications({
         callInviteId: incomingCallInvite.id,
         dismissAllPresentedNotificationsFallback: true,
@@ -1787,7 +1867,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [callBusy, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, rememberHandledIncomingInvite, threadId]);
+  }, [callBusy, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, rememberHandledIncomingInvite, requestAuthoritativeIncomingCallDecline, threadId]);
 
   useEffect(() => {
     const action = ["answer", "decline", "end", "mute", "unmute"].includes(requestedNativeCallAction)
@@ -1823,7 +1903,7 @@ export default function ChillyChatThreadScreen() {
         authority: trustedNativeCallClaim ? "trusted_native_claim" : "none",
         callInviteId: requestedCallInviteId,
         currentUserId,
-        nativeIdentity: requestedNativeCallUuid,
+        nativeIdentity: requestedNativeCallIdentity,
         nativeCallAction: requestedNativeCallAction,
         monotonicNowMs: globalThis.performance?.now?.(),
         platform: Platform.OS,
@@ -1904,12 +1984,12 @@ export default function ChillyChatThreadScreen() {
         return;
       }
 
-      const declinedInvite = await updateChillyChatCallInviteStatus({
-        actorUserId: currentUserId,
-        invite,
-        status: "declined",
-      });
-      rememberHandledIncomingInvite(declinedInvite ?? invite, { clearRoom: true });
+      const declinedInvite = await requestAuthoritativeIncomingCallDecline(invite);
+      if (!declinedInvite) {
+        setError("Unable to confirm that the call was declined. The active call remains unchanged.");
+        return;
+      }
+      rememberHandledIncomingInvite(declinedInvite, { clearRoom: true });
       await dismissPresentedChillyChatCallNotifications({
         callInviteId: invite.id,
         dismissAllPresentedNotificationsFallback: true,
@@ -1939,8 +2019,10 @@ export default function ChillyChatThreadScreen() {
     rememberHandledIncomingInvite,
     requestedCallInviteId,
     requestedNativeCallAction,
+    requestedNativeCallIdentity,
     requestedNativeCallRequestKey,
     requestedNativeCallUuid,
+    requestAuthoritativeIncomingCallDecline,
     resumeAcceptedIncomingInvite,
     setMicrophoneEnabled,
     callRoom?.hostUserId,

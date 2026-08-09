@@ -38,6 +38,10 @@ const trackedProductionPaths = execFileSync("git", ["ls-files", "-z"], {cwd: rep
 ));
 const trackedProductionSources = Object.fromEntries(await Promise.all(trackedProductionPaths.map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
 const PROVENANCE_CREATOR_POLICIES = Object.freeze({
+  registerTrustedAndroidNativeActionStorePayload: Object.freeze({"_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}), "_lib/chillyChatNativeCallRouteBuffer.ts": Object.freeze({calls: 1, references: 2, specifier: "./nativeCallTransitionProvenance.mjs"})}),
+  consumeTrustedAndroidNativeActionStoreClaim: Object.freeze({"_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}), "app/_layout.tsx": Object.freeze({calls: 2, references: 3, specifier: "../_lib/nativeCallTransitionProvenance.mjs"})}),
+  consumeMountedAndroidNativeCallRoute: Object.freeze({"_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}), "app/chat/[threadId].tsx": Object.freeze({calls: 2, references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"})}),
+  subscribeToTrustedAndroidNativeActionRoutes: Object.freeze({"_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}), "app/chat/[threadId].tsx": Object.freeze({calls: 1, references: 2, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"})}),
   consumeNativeCallTransitionClaim: Object.freeze({"_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1})}),
   createNativeCallTransitionProvenanceRegistry: Object.freeze({"_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2})}),
   createForegroundAuthenticatedUiCallIntentRegistry: Object.freeze({"_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2})}),
@@ -79,7 +83,7 @@ const productionCreatorPolicyPasses = (overrides = {}) => {
       if (Object.hasOwn(expectedByPath, path)) {
         if (containsComputedSymbolReference(source, symbol)) return false;
         if (path === "_lib/nativeCallTransitionProvenance.mjs") return true;
-        return (stripComments(source).match(new RegExp(`\\b${symbol}\\s*\\(`, "gu")) ?? []).length === 1;
+        return (stripComments(source).match(new RegExp(`\\b${symbol}\\s*\\(`, "gu")) ?? []).length === (expectedByPath[path].calls ?? 1);
       }
       return countSymbolReferences(source, symbol) === 0
         && !containsComputedSymbolReference(source, symbol);
@@ -301,7 +305,7 @@ const platformScopedRegistry = createRegistry({
 });
 const scopedIos = platformScopedRegistry.create(iosEvent({nativeEventGeneration: 11}));
 const androidRequestKey = "b".repeat(64);
-const scopedAndroid = platformScopedRegistry.create({action: "answer", authenticatedUserId: USER, inviteId: OTHER_INVITE, nativeEventGeneration: 12, nativeIdentity: androidRequestKey, platform: "android", source: "android_native_action_store", threadId: OTHER_THREAD});
+const scopedAndroid = platformScopedRegistry.create({action: "answer", authenticatedUserId: USER, inviteId: OTHER_INVITE, nativeEventGeneration: 12, nativeIdentity: androidRequestKey, nativePayloadSchemaVersion: 2, platform: "android", source: "android_native_action_store", threadId: OTHER_THREAD});
 pass(scopedIos.status === "created" && scopedAndroid.status === "created", "both platform namespaces can coexist in the shared registry");
 pass(platformScopedRegistry.clear() === false, "an absent platform scope cannot clear either namespace");
 pass(platformScopedRegistry.inspectCounts().active === 2, "a denied unscoped clear preserves all active claims");
@@ -652,7 +656,7 @@ const negativeControls = [
   control("IOS_ROUTE_ONLY_TRANSITION_AUTHORITY", "_lib/communicationCallMediaPolicy.mjs", routeOnlyMutation("answer")),
   replaceControl("IOS_CALL_UUID_WITHOUT_PROVENANCE_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", "if (!claim || claim.consumed !== true) return false;", 'if (!claim || claim.consumed !== true) return String(input?.nativeIdentity ?? "").trim().length > 0;', "UUID without provenance"),
   control("IOS_EXTERNAL_URL_CREATES_NATIVE_CLAIM", "components/UnsafeExternalUrlCreator.mjs", "import {createIosCallKitAnswerRouteHandler as createFromExternalUrl} from '../_lib/nativeCallTransitionProvenance.mjs';\ncreateFromExternalUrl({});\n"),
-  replaceControl("IOS_INITIAL_URL_CREATES_NATIVE_CLAIM", "app/_layout.tsx", "void Linking.getInitialURL()", "createIosCallKitAnswerRouteHandler({});\n    void Linking.getInitialURL()", "initial URL creator"),
+  replaceControl("IOS_INITIAL_URL_CREATES_NATIVE_CLAIM", "app/_layout.tsx", "Linking.getInitialURL()\n        .then", "createIosCallKitAnswerRouteHandler({});\n      Linking.getInitialURL()\n        .then", "initial URL creator"),
   replaceControl("IOS_LINKING_EVENT_CREATES_NATIVE_CLAIM", "app/_layout.tsx", 'const subscription = Linking.addEventListener("url", ({ url }) => {', 'createIosCallKitAnswerRouteHandler({});\n    const subscription = Linking.addEventListener("url", ({ url }) => {', "live Linking creator"),
   control("IOS_QUERY_ONLY_ANSWER_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", routeOnlyMutation("answer")),
   control("IOS_QUERY_ONLY_DECLINE_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", routeOnlyMutation("decline")),

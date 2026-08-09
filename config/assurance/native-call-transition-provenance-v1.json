@@ -50,10 +50,10 @@
   },
   "platforms": {
     "ios": {"source": "ios_callkit_native_event", "nativeIdentity": "canonical_callkit_uuid", "enabledProducer": true, "claimActions": ["answer"]},
-    "android": {"source": "android_native_action_store", "nativeIdentity": "native_store_request_key", "enabledProducer": false, "owner": "D2B", "claimActions": ["answer", "decline"]}
+    "android": {"source": "android_native_action_store", "nativeIdentity": "native_store_request_key", "nativePayloadSchemaVersion": 2, "enabledProducer": true, "owner": "D2B", "claimActions": ["answer", "decline"]}
   },
   "actionVocabulary": ["answer", "decline", "end", "mute", "unmute"],
-  "claimFields": ["claimId", "platform", "source", "authenticatedUserId", "nativeEventGeneration", "nativeIdentity", "threadId", "inviteId", "action", "createdAtMonotonicMs", "expiresAtMonotonicMs", "consumed", "consumedAtMonotonicMs"],
+  "claimFields": ["claimId", "platform", "source", "authenticatedUserId", "nativeEventGeneration", "nativeIdentity", "nativePayloadSchemaVersion", "threadId", "inviteId", "action", "createdAtMonotonicMs", "expiresAtMonotonicMs", "consumed", "consumedAtMonotonicMs"],
   "iosProducer": {
     "event": "answerRequested",
     "creatorCallsite": "app/_layout.tsx:IosNativeCallsBridge",
@@ -79,6 +79,8 @@
   "creatorGuard": {
     "scan": "repository_wide_tracked_production_source",
     "iosNativeCreatorAllowlist": ["app/_layout.tsx"],
+    "androidNativeProducerAllowlist": ["_lib/chillyChatNativeCallRouteBuffer.ts"],
+    "androidNativeMountedConsumerAllowlist": ["app/chat/[threadId].tsx"],
     "foregroundUiCreatorAllowlist": ["app/_layout.tsx", "app/chat/index.tsx", "app/profile/[userId].tsx"],
     "exactDirectImportAndCallCounts": true,
     "aliasNamespaceComputedReferenceDenied": true,

@@ -8,6 +8,7 @@ export type NativeCallTransitionClaimInput = {
   inviteId: string;
   nativeEventGeneration: number;
   nativeIdentity: string;
+  nativePayloadSchemaVersion?: 2 | null;
   platform: NativeCallTransitionPlatform;
   source: NativeCallTransitionSource;
   threadId: string;
@@ -100,6 +101,46 @@ export function consumeMountedIosNativeCallRoute(input?: {
   inviteId?: string;
   isSignedIn?: boolean;
   platform?: string;
+  threadId?: string;
+} | null): NativeCallTransitionClaim | null;
+export type TrustedAndroidNativeActionRoute = Readonly<{
+  action?: "answer" | "decline";
+  claimId?: string;
+  destination?: string;
+  inviteId?: string;
+  mountedConsumed?: boolean;
+  nativeIdentity?: string;
+  status: "created" | "denied" | "duplicate" | "capacity_denied" | "claim_id_denied";
+  threadId?: string;
+}>;
+export function registerTrustedAndroidNativeActionStorePayload(input?: {
+  authenticated?: boolean;
+  authenticatedUserId?: string;
+  callInviteId?: string;
+  captureGeneration?: number;
+  nativeCallAction?: "answer" | "decline" | string;
+  requestKey?: string;
+  schemaVersion?: number;
+  threadId?: string;
+} | null): TrustedAndroidNativeActionRoute;
+export function subscribeToTrustedAndroidNativeActionRoutes(
+  listener: (route: TrustedAndroidNativeActionRoute) => boolean | void,
+): () => void;
+export function consumeTrustedAndroidNativeActionStoreClaim(input?: {
+  authenticatedUserId?: string;
+  claimId?: string;
+  inviteId?: string;
+  requestKey?: string;
+  threadId?: string;
+} | null): NativeCallTransitionClaim | null;
+export function consumeMountedAndroidNativeCallRoute(input?: {
+  authenticatedUserId?: string;
+  authLoading?: boolean;
+  claimId?: string;
+  inviteId?: string;
+  isSignedIn?: boolean;
+  platform?: string;
+  requestKey?: string;
   threadId?: string;
 } | null): NativeCallTransitionClaim | null;
 export function isAttestedNativeCallTransitionClaim(value?: unknown): value is NativeCallTransitionClaim;

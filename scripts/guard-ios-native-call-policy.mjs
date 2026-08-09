@@ -25,6 +25,22 @@ const trackedProductionSources = Object.fromEntries(trackedProductionPaths.map((
   fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8"),
 ]));
 const PROVENANCE_CREATOR_POLICIES = Object.freeze({
+  registerTrustedAndroidNativeActionStorePayload: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "_lib/chillyChatNativeCallRouteBuffer.ts": Object.freeze({calls: 1, references: 2, specifier: "./nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeTrustedAndroidNativeActionStoreClaim: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 2}),
+    "app/_layout.tsx": Object.freeze({calls: 2, references: 3, specifier: "../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  consumeMountedAndroidNativeCallRoute: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({calls: 2, references: 3, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
+  subscribeToTrustedAndroidNativeActionRoutes: Object.freeze({
+    "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
+    "app/chat/[threadId].tsx": Object.freeze({calls: 1, references: 2, specifier: "../../_lib/nativeCallTransitionProvenance.mjs"}),
+  }),
   consumeNativeCallTransitionClaim: Object.freeze({
     "_lib/nativeCallTransitionProvenance.mjs": Object.freeze({references: 1}),
   }),
@@ -87,7 +103,7 @@ const provenanceCreatorAllowlistPasses = (productionSources) => Object.entries(P
         if (containsComputedSymbolReference(source, symbol)) return false;
         if (path !== "_lib/nativeCallTransitionProvenance.mjs") {
           const directCalls = stripComments(source).match(new RegExp(`\\b${symbol}\\s*\\(`, "gu")) ?? [];
-          return directCalls.length === 1;
+          return directCalls.length === (expectedByPath[path].calls ?? 1);
         }
         return true;
       }
@@ -175,7 +191,9 @@ requireText(provenance, "attestationCapability === INTERNAL_FOREGROUND_INTENT_AT
 requireText(provenance, "const expectedAction = normalizeText(expected.action);", "Native claim consumption must normalize a caller-supplied expected action.");
 requireText(provenance, "expectedAction !== claim.action", "Native claim consumption must atomically bind the expected action with the other identities.");
 requireText(provenance, "nativeCallTransitionRegistry.consume({", "Router failure must discard its exact native claim before failing CallKit Answer.");
-if ((provenance.match(/nativeCallTransitionRegistry\.create\(\{/gu) ?? []).length !== 1) failures.push("The private iOS bridge must be the sole canonical native claim creator.");
+if ((provenance.match(/nativeCallTransitionRegistry\.create\(\{/gu) ?? []).length !== 2) failures.push("Exactly one private producer per reviewed iOS and Android native source must create canonical claims.");
+requireText(provenance, 'source: "ios_callkit_native_event"', "The private CallKit bridge must remain the sole iOS native claim source.");
+requireText(provenance, 'source: "android_native_action_store"', "The private Android store bridge must remain the sole Android native claim source.");
 rejectText(rootLayout, 'nativeCallAction: "answer"', "CallKit navigation must not carry authoritative action text.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline must use a direct server-authoritative transition.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End must use a direct server-authoritative transition.");

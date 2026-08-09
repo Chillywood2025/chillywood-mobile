@@ -25,10 +25,12 @@ const FOREGROUND_UI_ACTIONS = new Set(["open_call", "start_video", "start_voice"
 const SOURCE_POLICIES = Object.freeze({
   android_native_action_store: Object.freeze({
     actions: new Set(["answer", "decline"]),
+    nativePayloadSchemaVersion: 2,
     platform: "android",
   }),
   ios_callkit_native_event: Object.freeze({
     actions: new Set(["answer"]),
+    nativePayloadSchemaVersion: null,
     platform: "ios",
   }),
 });
@@ -59,6 +61,9 @@ const normalizeClaimInput = (input) => {
   const threadId = normalizeUuid(input.threadId);
   const inviteId = normalizeUuid(input.inviteId);
   const nativeEventGeneration = Number(input.nativeEventGeneration);
+  const nativePayloadSchemaVersion = platform === "android"
+    ? Number(input.nativePayloadSchemaVersion)
+    : null;
   const nativeIdentity = platform === "ios"
     ? normalizeUuid(input.nativeIdentity)
     : normalizeText(input.nativeIdentity);
@@ -71,12 +76,13 @@ const normalizeClaimInput = (input) => {
     || !inviteId
     || !Number.isSafeInteger(nativeEventGeneration)
     || nativeEventGeneration <= 0
+    || nativePayloadSchemaVersion !== sourcePolicy.nativePayloadSchemaVersion
     || (platform === "ios" && !nativeIdentity)
     || (platform === "android" && !ANDROID_REQUEST_KEY_PATTERN.test(nativeIdentity))
   ) {
     return null;
   }
-  return {action, authenticatedUserId, inviteId, nativeEventGeneration, nativeIdentity, platform, source, threadId};
+  return {action, authenticatedUserId, inviteId, nativeEventGeneration, nativeIdentity, nativePayloadSchemaVersion, platform, source, threadId};
 };
 
 const buildEventKey = (claim) => [
@@ -84,6 +90,7 @@ const buildEventKey = (claim) => [
   claim.source,
   claim.authenticatedUserId,
   claim.nativeEventGeneration,
+  claim.nativePayloadSchemaVersion ?? "none",
   claim.nativeIdentity,
   claim.threadId,
   claim.inviteId,
@@ -224,6 +231,78 @@ const nativeCallTransitionRegistry = createNativeCallTransitionProvenanceRegistr
   undefined,
   INTERNAL_NATIVE_CLAIM_ATTESTATION,
 );
+const trustedAndroidNativeActionRouteListeners = new Set();
+
+const buildTrustedAndroidNativeActionRoute = (input) => {
+  const authenticatedUserId = normalizeAuthenticatedUserId(input?.authenticatedUserId);
+  if (
+    input?.authenticated !== true
+    || !authenticatedUserId
+    || Number(input?.schemaVersion) !== 2
+    || !Number.isSafeInteger(Number(input?.captureGeneration))
+    || Number(input?.captureGeneration) <= 0
+  ) {
+    return Object.freeze({status: "denied"});
+  }
+  const created = nativeCallTransitionRegistry.create({
+    action: input?.nativeCallAction,
+    authenticatedUserId,
+    inviteId: input?.callInviteId,
+    nativeEventGeneration: input?.captureGeneration,
+    nativeIdentity: input?.requestKey,
+    nativePayloadSchemaVersion: input?.schemaVersion,
+    platform: "android",
+    source: "android_native_action_store",
+    threadId: input?.threadId,
+  });
+  if (
+    created.status !== "created"
+    || !created.claimId
+    || !created.threadId
+    || !created.inviteId
+    || !created.nativeIdentity
+    || !created.action
+  ) {
+    return created;
+  }
+  const params = new URLSearchParams({
+    callInviteId: created.inviteId,
+    nativeCallClaim: created.claimId,
+    nativeCallUuid: created.nativeIdentity,
+  });
+  const route = Object.freeze({
+    action: created.action,
+    claimId: created.claimId,
+    destination: `/chat/${encodeURIComponent(created.threadId)}?${params.toString()}`,
+    inviteId: created.inviteId,
+    nativeIdentity: created.nativeIdentity,
+    status: "created",
+    threadId: created.threadId,
+  });
+  let mountedConsumed = false;
+  trustedAndroidNativeActionRouteListeners.forEach((listener) => {
+    try {
+      if (listener(route) === true) mountedConsumed = true;
+    } catch {
+      // A mounted navigation listener cannot revoke or replace native authority.
+    }
+  });
+  return Object.freeze({
+    ...route,
+    destination: mountedConsumed ? undefined : route.destination,
+    mountedConsumed,
+  });
+};
+
+export const registerTrustedAndroidNativeActionStorePayload = (input) => (
+  buildTrustedAndroidNativeActionRoute(input)
+);
+
+export const subscribeToTrustedAndroidNativeActionRoutes = (listener) => {
+  if (typeof listener !== "function") return () => {};
+  trustedAndroidNativeActionRouteListeners.add(listener);
+  return () => trustedAndroidNativeActionRouteListeners.delete(listener);
+};
 
 const registerTrustedIosCallKitNativeEvent = (event) => {
   const authenticatedUserId = normalizeAuthenticatedUserId(event?.authenticatedUserId);
@@ -359,6 +438,38 @@ export const consumeMountedIosNativeCallRoute = (input) => {
     claimId: input?.claimId,
     authenticatedUserId: input?.authenticatedUserId,
     inviteId: input?.inviteId,
+    threadId: input?.threadId,
+  });
+};
+
+export const consumeTrustedAndroidNativeActionStoreClaim = (expected) => {
+  const common = {
+    authenticatedUserId: expected?.authenticatedUserId,
+    claimId: expected?.claimId,
+    inviteId: expected?.inviteId,
+    nativeIdentity: expected?.requestKey,
+    platform: "android",
+    source: "android_native_action_store",
+    threadId: expected?.threadId,
+  };
+  return nativeCallTransitionRegistry.consume({...common, action: "answer"})
+    ?? nativeCallTransitionRegistry.consume({...common, action: "decline"});
+};
+
+export const consumeMountedAndroidNativeCallRoute = (input) => {
+  if (
+    input?.platform !== "android"
+    || input?.authLoading === true
+    || input?.isSignedIn !== true
+    || !normalizeAuthenticatedUserId(input?.authenticatedUserId)
+  ) {
+    return null;
+  }
+  return consumeTrustedAndroidNativeActionStoreClaim({
+    authenticatedUserId: input?.authenticatedUserId,
+    claimId: input?.claimId,
+    inviteId: input?.inviteId,
+    requestKey: input?.requestKey,
     threadId: input?.threadId,
   });
 };
