@@ -238,6 +238,7 @@ const localParticipant = {
     state.nativeCalls += 1;
     state.log.push(\`native:\${value}\`);
     const action = nativeQueue.shift() ?? "success";
+    // Gate arrays are deliberately one-based: call N is gates[N], not gates[N - 1].
     if (action === "wait") await (scenario.nativeGates?.[state.nativeCalls] ?? scenario.nativeGate);
     if (action === "throw-before") throw new Error("native_forward_rejected");
     state.actualMic = action === "mismatch" ? !value : value;
@@ -566,9 +567,10 @@ const cases = [
     id: "DEFERRED_FORWARD_READBACK_ROLLOVER_NO_REPLACEMENT_TOUCH",
     custom: async () => {
       let release; const gate = new Promise((resolve) => { release = resolve; });
-      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["wrong-mic"], readbackGates: [undefined, gate]});
+      const controls = createExactProductPath({initialMic: false, targetMic: true, touchQueue: ["wrong-mic"], readbackGates: [undefined, undefined, gate]});
       const pending = controls.setMicrophoneEnabled(true);
       for (let turn = 0; turn < 12 && controls.snapshot().readbackCalls < 2; turn += 1) await Promise.resolve();
+      assert.ok(controls.snapshot().readbackCalls >= 2, "forward readback reached");
       controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
       assert.equal(result, false); assertRolloverContained(observed);
     },
@@ -587,9 +589,10 @@ const cases = [
     id: "DEFERRED_NATIVE_COMPENSATION_ROLLOVER_NO_REPLACEMENT_TOUCH",
     custom: async () => {
       let release; const gate = new Promise((resolve) => { release = resolve; });
-      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["success", "wait"], nativeGates: [undefined, gate], touchQueue: ["null"]});
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["success", "wait"], nativeGates: [undefined, undefined, gate], touchQueue: ["null"]});
       const pending = controls.setMicrophoneEnabled(true);
-      for (let turn = 0; turn < 12 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      for (let turn = 0; turn < 128 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      assert.ok(controls.snapshot().nativeCalls >= 2, "native compensation reached");
       controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
       assert.equal(result, false); assertRolloverContained(observed);
     },
@@ -598,9 +601,9 @@ const cases = [
     id: "DEFERRED_NATIVE_RESTORATION_ROLLOVER_STATE_INERT",
     custom: async () => {
       let release; const gate = new Promise((resolve) => { release = resolve; });
-      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["throw-after", "wait"], nativeGates: [undefined, gate]});
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["throw-after", "wait"], nativeGates: [undefined, undefined, gate]});
       const pending = controls.setMicrophoneEnabled(true);
-      for (let turn = 0; turn < 16 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      for (let turn = 0; turn < 128 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
       assert.ok(controls.snapshot().nativeCalls >= 2, "native restoration reached");
       controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
       assert.equal(result, false); assertRolloverContained(observed);
@@ -868,11 +871,12 @@ const negativeControls = [
           const cameraUnchanged`, "drop-compensation-binding");
       let release; const gate = new Promise((resolve) => { release = resolve; });
       const controls = createExactProductPath({
-        initialMic: false, targetMic: true, nativeQueue: ["success", "wait"], nativeGates: [undefined, gate],
+        initialMic: false, targetMic: true, nativeQueue: ["success", "wait"], nativeGates: [undefined, undefined, gate],
         touchQueue: ["null", "success"], readbackQueue: ["current", "current"],
       }, {microphone: mutated});
       const pending = controls.setMicrophoneEnabled(true);
       for (let turn = 0; turn < 16 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
+      assert.ok(controls.snapshot().nativeCalls >= 2, "mutant native compensation reached");
       controls.rollover(); release(); const result = await pending; const observed = controls.snapshot();
       assert.equal(result, false);
       assert.equal(observed.touchTargets.some((target) => target.roomId === "room-2" && target.userId === "replacement-user"), true);
@@ -899,7 +903,7 @@ const negativeControls = [
             nativeRestored`, `            await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
             nativeRestored`, "drop-native-restoration-post-await-guard");
       let release; const gate = new Promise((resolve) => { release = resolve; });
-      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["throw-after", "wait"], nativeGates: [undefined, gate]}, {microphone: mutated});
+      const controls = createExactProductPath({initialMic: false, targetMic: true, nativeQueue: ["throw-after", "wait"], nativeGates: [undefined, undefined, gate]}, {microphone: mutated});
       const pending = controls.setMicrophoneEnabled(true);
       for (let turn = 0; turn < 16 && controls.snapshot().nativeCalls < 2; turn += 1) await Promise.resolve();
       assert.ok(controls.snapshot().nativeCalls >= 2, "mutant native restoration reached");
