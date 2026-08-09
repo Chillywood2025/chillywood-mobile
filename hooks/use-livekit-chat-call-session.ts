@@ -143,6 +143,7 @@ export function useLiveKitChatCallSession({
   const mediaControlRef = useRef<Promise<unknown> | null>(null);
   const mediaControlOwnerRef = useRef<{ token: symbol; sessionKey: string; generation: number } | null>(null);
   const pendingMicToggleRef = useRef(false);
+  const pendingMicOwnerRef = useRef<{ sessionKey: string; generation: number } | null>(null);
   const micReconciliationBlockedRef = useRef(false);
   const ownsIosAudioConfigurationRef = useRef(false);
   const onRoomEndedRef = useRef(onRoomEnded);
@@ -424,6 +425,7 @@ export function useLiveKitChatCallSession({
           room: currentRoom,
           identity: currentIdentity,
         });
+        if (!originStillCurrent()) return false;
         const priorConverged = !!priorDurable
           && priorDurable.roomId === currentRoom.roomId
           && priorDurable.userId === currentIdentity.userId
@@ -448,6 +450,7 @@ export function useLiveKitChatCallSession({
         micReconciliationBlockedRef.current = false;
         if (!originStillCurrent()) return false;
         pendingMicToggleRef.current = true;
+        pendingMicOwnerRef.current = leaseBinding;
 
         let publication: TrackPublication | undefined;
         let forwardError: unknown = null;
@@ -459,6 +462,10 @@ export function useLiveKitChatCallSession({
         const targetActual = publicationIsUsable(
           liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
         );
+        if (!originStillCurrent()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          return false;
+        }
         const nativeTargetConfirmed = !forwardError
           && targetActual === nextEnabled
           && (!nextEnabled || !!publication)
@@ -572,7 +579,13 @@ export function useLiveKitChatCallSession({
         }
         return true;
       } finally {
-        pendingMicToggleRef.current = false;
+        if (
+          pendingMicOwnerRef.current?.sessionKey === leaseBinding.sessionKey
+          && pendingMicOwnerRef.current.generation === leaseBinding.generation
+        ) {
+          pendingMicOwnerRef.current = null;
+          pendingMicToggleRef.current = false;
+        }
       }
     }, leaseBinding);
     return result === true;

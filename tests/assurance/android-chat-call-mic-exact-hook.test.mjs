@@ -224,6 +224,7 @@ Object.defineProperty(micRequestedRef, "current", {
 });
 const micEnabled = initialMic;
 const pendingMicToggleRef = {current: false};
+const pendingMicOwnerRef = {current: null};
 const micReconciliationBlockedRef = {current: false};
 const cameraRequestedRef = {current: initialCamera};
 const cameraEnabled = initialCamera;
@@ -315,7 +316,7 @@ const snapshot = () => ({
   cleanupCalls: state.cleanupCalls, errors: [...state.errors], messages: [...state.messages],
   telemetry: [...state.telemetry], firstMedia: [...state.firstMedia], log: [...state.log],
   touchTargets: [...state.touchTargets],
-  busy: state.busy, reconciliationBlocked: micReconciliationBlockedRef.current,
+  busy: state.busy, pendingMic: pendingMicToggleRef.current, reconciliationBlocked: micReconciliationBlockedRef.current,
 });
 module.exports = {setMicrophoneEnabled, runMediaControl, snapshot, state, targetMic, lease: () => ({owner: mediaControlOwnerRef.current, pending: mediaControlRef.current, busy: state.busy}), retireLease: () => {mediaControlOwnerRef.current = null; mediaControlRef.current = null; setMediaControlsBusy(false);}, rollover: () => {sessionKeyRef.current = "replacement"; sessionGenerationRef.current += 1; productRoomRef.current = {roomId: "room-2", status: "active"}; identityRef.current = {userId: "replacement-user"}; roomRef.current = {state: "connected", localParticipant};}};
 `;
@@ -363,6 +364,8 @@ const assertRolloverContained = (observed) => {
   assert.equal(observed.requestedMic, false);
   assert.equal(observed.uiMic, false);
   assertCallUnchanged(observed);
+  assert.equal(observed.refreshCalls, 0); assert.equal(observed.errors.length, 0); assert.equal(observed.messages.length, 0);
+  assert.equal(observed.reconciliationBlocked, false); assert.equal(observed.pendingMic, false);
   assert.equal(JSON.stringify(observed.telemetry), "[]");
   assert.equal(JSON.stringify(observed.firstMedia), "[]");
 };
