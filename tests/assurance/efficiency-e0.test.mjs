@@ -122,6 +122,20 @@ const freshnessSources = [
   { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt },
   { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt }
 ];
+const sourceRequirement = {
+  freshnessClass: "REPOSITORY_SOURCE",
+  platform: "CROSS_PLATFORM",
+  evidenceSourceId: repositorySource.evidenceSourceId,
+  authorityAllowed: "REPOSITORY_ONLY",
+  requiredFacts: [repositorySource.factsCovered[0]]
+};
+const providerRequirement = {
+  freshnessClass: "PROVIDER_CRITICAL",
+  platform: "CROSS_PLATFORM",
+  evidenceSourceId: staleProvider.evidenceSourceId,
+  authorityAllowed: "PROVIDER_READBACK_ONLY",
+  requiredFacts: [staleProvider.factsCovered[0]]
+};
 const evaluateClaims = (input) => evaluateFreshnessClaims({ ...input, evidenceSourceVerifier: () => true });
 
 test("claim-scoped freshness denies crossover and keeps stale provider state scoped", () => {
@@ -162,7 +176,7 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     now: freshnessNow
   });
   assert.equal(widenedProviderWindow.ok, false, "the named eight-hour provider window cannot be widened through its class rule");
-  assert.equal(widenedProviderWindow.findings.some(({ id }) => id === "ASSURANCE_PROVIDER_CRITICAL_WINDOW_MISMATCH"), true);
+  assert.equal(widenedProviderWindow.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_CLASS_RULE_MISMATCH"), true);
   const forgedProviderTimestamp = evaluateFreshnessClaims({
     claims: [staleProvider],
     evidenceSources: [freshnessSources[1]],
@@ -178,8 +192,11 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     now: freshnessNow, timestamp: "2099-01-01T00:00:00Z", freshnessDeadline: "2099-01-02T00:00:00Z"
   });
   assert.equal(extendedDocumentOnly.liveProviderReadback, false, "global document time cannot extend provider claims");
-  assert.equal(evaluateTaskFreshness(baseline, ["PROVIDER_CRITICAL"]).eligible, false, "provider-dependent task fails closed");
-  assert.equal(evaluateTaskFreshness(baseline, ["REPOSITORY_SOURCE"]).eligible, true, "source-only review remains eligible");
+  assert.equal(evaluateTaskFreshness(baseline, [providerRequirement]).eligible, false, "provider-dependent task fails closed");
+  assert.equal(evaluateTaskFreshness(baseline, [sourceRequirement]).eligible, true, "source-only review remains eligible");
+  assert.equal(evaluateTaskFreshness(providerAtDeadline, [providerRequirement]).eligible, true, "provider task accepts only its exact current fact and evidence identity");
+  assert.equal(evaluateTaskFreshness(providerAtDeadline, [{ ...providerRequirement, requiredFacts: ["unrelated provider fact"] }]).eligible, false, "unrelated provider evidence cannot authorize the task");
+  assert.equal(evaluateTaskFreshness(providerAtDeadline, ["PROVIDER_CRITICAL"]).eligible, false, "class-only provider requirements fail closed");
 
   for (const [label, freshnessClass, evidenceMode, authorityAllowed] of [
     ["signed cannot refresh installed", "INSTALLED_DEVICE", "signed-artifact-inspection", "INSTALLED_DEVICE_ONLY"],
@@ -220,7 +237,15 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     now: freshnessNow
   });
   assert.equal(androidEvaluation.ok, true);
-  assert.equal(evaluateTaskFreshness(androidEvaluation, [{ freshnessClass: "SIGNED_ARTIFACT", platform: "IOS" }]).eligible, false, "Android evidence cannot refresh iOS evidence");
+  const androidRequirement = {
+    freshnessClass: "SIGNED_ARTIFACT",
+    platform: "ANDROID",
+    evidenceSourceId: androidSigned.evidenceSourceId,
+    authorityAllowed: "SIGNED_ARTIFACT_ONLY",
+    requiredFacts: [androidSigned.factsCovered[0]]
+  };
+  assert.equal(evaluateTaskFreshness(androidEvaluation, [{ ...androidRequirement, platform: "IOS" }]).eligible, false, "Android evidence cannot refresh iOS evidence");
+  assert.equal(evaluateTaskFreshness(androidEvaluation, ["SIGNED_ARTIFACT"]).eligible, false, "single-platform evidence cannot satisfy a cross-platform requirement");
 
   for (const [label, claim] of [
     ["missing observedAt", Object.fromEntries(Object.entries(repositorySource).filter(([key]) => key !== "observedAt"))],

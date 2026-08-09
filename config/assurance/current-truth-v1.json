@@ -432,6 +432,7 @@
     "phase": "COMPLETE",
     "executionState": "D2A_FROZEN",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "CROSS_PLATFORM", "evidenceSourceId": "d2a-microphone-correction-merge-closeout-20260809-1805", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["PR #194 immutable and synchronized source identity"]}],
     "proofTiersUnderEvaluation": ["T1_SOURCE"]
   },
   "freshnessClaims": [
@@ -454,7 +455,7 @@
       "expiresAt": "2026-08-02T14:00:44Z",
       "evidenceSourceId": "b3-immutable-source-binding-20260802-0600",
       "evidenceMode": "local-and-linked-read-only",
-      "factsCovered": ["deployed migration 20260730161737", "absence of undeployed forward corrections", "historical live pre-correction ACL readback"],
+      "factsCovered": ["exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765", "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38", "live pre-correction ACL explicitly includes anon but source correction revokes it"],
       "freshnessClass": "PROVIDER_CRITICAL",
       "authorityAllowed": "PROVIDER_READBACK_ONLY",
       "platform": "CROSS_PLATFORM"

@@ -20,8 +20,8 @@ const truth = {
 };
 const identity = {
   branch: binding.implementationBranch,
-  head: "1".repeat(40),
-  tree: "2".repeat(40),
+  head: binding.currentImplementationHead,
+  tree: binding.currentImplementationTree,
   originMainHead: "3".repeat(40),
   originMainTree: "4".repeat(40),
   baseHead: "3".repeat(40),
@@ -136,4 +136,39 @@ test("formal review requires a synchronized identity", () => {
   const result = activeTask(withTruth((value) => ({ ...value, activeTaskBinding: incomplete })));
   assert.equal(result.ok, false);
   assert.deepEqual(result.findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+});
+
+test("freshness claim scopes must match declared classes and proof tiers", () => {
+  const missingScope = { ...binding };
+  delete missingScope.requiredFreshnessClaims;
+  assert.deepEqual(activeTask(withTruth((value) => ({ ...value, activeTaskBinding: missingScope }))).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+
+  const proofSubstitution = {
+    ...binding,
+    proofTiersUnderEvaluation: ["T5_SIGNED_ARTIFACT"]
+  };
+  assert.deepEqual(activeTask(withTruth((value) => ({ ...value, activeTaskBinding: proofSubstitution }))).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+});
+
+test("a completed binding cannot mask a different control branch or open implementation", () => {
+  const completeIdentity = {
+    ...identity,
+    branch: "codex/assurance-active-task-and-claim-freshness-a1"
+  };
+  const competing = activeTask({
+    ...facts,
+    currentTruth: {
+      ...canonicalTruth,
+      openImplementationPrs: [{
+        number: 201,
+        branch: completeIdentity.branch,
+        head: "c".repeat(40),
+        state: "open"
+      }]
+    },
+    identity: completeIdentity
+  });
+  assert.equal(competing.ok, false);
+  assert.equal(competing.findings.includes("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"), true);
+  assert.equal(competing.findings.includes("COMPLETED_IMPLEMENTATION_CONTROL_BRANCH_MISMATCH"), true);
 });

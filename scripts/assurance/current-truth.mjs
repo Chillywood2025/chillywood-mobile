@@ -36,11 +36,28 @@ function splitNullTerminated(value) {
 function verifyCommittedClaimEvidence({ claim, source }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "")) return false;
   try {
+    git(["merge-base", "--is-ancestor", source.sourceCommit, "HEAD"]);
     const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
     const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
+    const committedSource = committedSources[0];
+    const factsBound = Array.isArray(source.covers)
+      && Array.isArray(committedSource?.covers)
+      && claim.factsCovered.every((fact) => source.covers.includes(fact) && committedSource.covers.includes(fact));
+    const parents = git(["show", "-s", "--format=%P", source.sourceCommit]).split(/\s+/u).filter(Boolean);
+    const introducedHere = parents.every((parent) => {
+      try {
+        const parentRecord = JSON.parse(git(["show", `${parent}:config/assurance/current-truth-v1.json`]));
+        return !(parentRecord.evidenceSources ?? []).some(({ id }) => id === source.id);
+      } catch {
+        return true;
+      }
+    });
     return committedRecord.timestamp === claim.observedAt
       && committedSources.length === 1
-      && committedSources[0].mode === claim.evidenceMode;
+      && committedSource.mode === claim.evidenceMode
+      && committedRecord.liveProviderReadback === true
+      && factsBound
+      && introducedHere;
   } catch {
     return false;
   }
@@ -216,7 +233,7 @@ if (mode) {
   });
   const taskFreshness = evaluateTaskFreshness(
     claimFreshness,
-    record.activeTaskBinding?.requiredFreshnessClasses ?? []
+    record.activeTaskBinding?.requiredFreshnessClaims ?? []
   );
   const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers];
   let providerImplementationSnapshot = null;

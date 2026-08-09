@@ -93,6 +93,51 @@ const claimRequiredFields = [
 ];
 const claimStatuses = new Set(["CURRENT", "STALE_BLOCKED"]);
 const claimPlatforms = new Set(["CROSS_PLATFORM", "ANDROID", "IOS", "NONE"]);
+const claimClassPolicy = {
+  REPOSITORY_SOURCE: {
+    evidenceModes: ["local-source", "git-read-only", "github-read-only", "exact-ci", "local-offline", "local-read-only", "local-and-github-read-only", "local-offline-and-github-read-only"],
+    authorityAllowed: "REPOSITORY_ONLY",
+    maximumHoursField: "defaultHours",
+    requiresCommittedEvidence: false
+  },
+  PROVIDER_CRITICAL: {
+    evidenceModes: ["local-and-linked-read-only"],
+    authorityAllowed: "PROVIDER_READBACK_ONLY",
+    maximumHoursField: "providerCriticalHours",
+    requiresCommittedEvidence: true
+  },
+  SIGNED_ARTIFACT: {
+    evidenceModes: ["signed-artifact-inspection"],
+    authorityAllowed: "SIGNED_ARTIFACT_ONLY",
+    maximumHoursField: "defaultHours",
+    requiresCommittedEvidence: true
+  },
+  INSTALLED_DEVICE: {
+    evidenceModes: ["installed-device-readback"],
+    authorityAllowed: "INSTALLED_DEVICE_ONLY",
+    maximumHoursField: "defaultHours",
+    requiresCommittedEvidence: true
+  },
+  PHYSICAL_DEVICE: {
+    evidenceModes: ["physical-device-observation"],
+    authorityAllowed: "PHYSICAL_DEVICE_ONLY",
+    maximumHoursField: "defaultHours",
+    requiresCommittedEvidence: true
+  },
+  PUBLIC_CANARY: {
+    evidenceModes: ["public-canary-readback"],
+    authorityAllowed: "PUBLIC_CANARY_ONLY",
+    maximumHoursField: "defaultHours",
+    requiresCommittedEvidence: true
+  }
+};
+
+function sameStringSet(left, right) {
+  return Array.isArray(left)
+    && left.length === right.length
+    && new Set(left).size === left.length
+    && left.every((entry) => right.includes(entry));
+}
 
 function validInstant(value) {
   return typeof value === "string" && value.length > 0 && Number.isFinite(new Date(value).valueOf());
@@ -114,8 +159,15 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
   if (!classRules || typeof classRules !== "object" || Array.isArray(classRules)) {
     findings.push(claimFinding("ASSURANCE_FRESHNESS_CLASS_RULES_MALFORMED"));
   }
-  if (classRules?.PROVIDER_CRITICAL?.maximumHours !== freshness?.providerCriticalHours) {
-    findings.push(claimFinding("ASSURANCE_PROVIDER_CRITICAL_WINDOW_MISMATCH"));
+  for (const [freshnessClass, expected] of Object.entries(claimClassPolicy)) {
+    const rule = classRules?.[freshnessClass];
+    if (!rule
+      || rule.maximumHours !== freshness?.[expected.maximumHoursField]
+      || rule.authorityAllowed !== expected.authorityAllowed
+      || !sameStringSet(rule.allowedEvidenceModes, expected.evidenceModes)
+      || (rule.requiresCommittedEvidence === true) !== expected.requiresCommittedEvidence) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLASS_RULE_MISMATCH", null, { freshnessClass }));
+    }
   }
   if (!Number.isFinite(evaluationTime.valueOf())) findings.push(claimFinding("ASSURANCE_FRESHNESS_EVALUATION_TIME_MALFORMED"));
 
@@ -211,21 +263,41 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
 }
 
 export function evaluateTaskFreshness(claimEvaluation, requirements) {
-  const normalizedRequirements = Array.isArray(requirements)
-    ? requirements.map((requirement) => typeof requirement === "string"
-      ? { freshnessClass: requirement, platform: "CROSS_PLATFORM" }
-      : requirement)
-    : [];
   const blockers = [];
-  for (const requirement of normalizedRequirements) {
-    const platform = requirement?.platform ?? "CROSS_PLATFORM";
+  if (!Array.isArray(requirements) || requirements.length === 0) {
+    return {
+      eligible: false,
+      blockers: [{ id: "ASSURANCE_REQUIRED_FRESHNESS_SCOPE_MISSING", status: "BLOCKED_INTERNAL" }]
+    };
+  }
+  for (const requirement of requirements) {
+    const requiredFacts = requirement?.requiredFacts;
+    const scoped = requirement
+      && typeof requirement === "object"
+      && !Array.isArray(requirement)
+      && claimClassPolicy[requirement.freshnessClass]
+      && claimPlatforms.has(requirement.platform)
+      && typeof requirement.evidenceSourceId === "string"
+      && requirement.evidenceSourceId.length > 0
+      && requirement.authorityAllowed === claimClassPolicy[requirement.freshnessClass].authorityAllowed
+      && Array.isArray(requiredFacts)
+      && requiredFacts.length > 0
+      && requiredFacts.every((fact) => typeof fact === "string" && fact.length > 0);
+    if (!scoped) {
+      blockers.push({ id: "ASSURANCE_REQUIRED_FRESHNESS_SCOPE_MALFORMED", status: "BLOCKED_INTERNAL" });
+      continue;
+    }
     const matched = (claimEvaluation?.currentClaims ?? []).some((claim) => claim.freshnessClass === requirement?.freshnessClass
-      && (platform === "CROSS_PLATFORM" || claim.platform === platform));
+      && claim.platform === requirement.platform
+      && claim.evidenceSourceId === requirement.evidenceSourceId
+      && claim.authorityAllowed === requirement.authorityAllowed
+      && requiredFacts.every((fact) => claim.factsCovered.includes(fact)));
     if (!matched) blockers.push({
       id: "ASSURANCE_REQUIRED_FRESHNESS_CLASS_BLOCKED",
       status: "BLOCKED_INTERNAL",
       freshnessClass: requirement?.freshnessClass ?? null,
-      platform
+      platform: requirement?.platform ?? null,
+      evidenceSourceId: requirement?.evidenceSourceId ?? null
     });
   }
   return { eligible: Boolean(claimEvaluation?.ok) && blockers.length === 0, blockers };

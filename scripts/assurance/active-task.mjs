@@ -32,6 +32,7 @@ const structuredBindingFields = [
   "phase",
   "executionState",
   "requiredFreshnessClasses",
+  "requiredFreshnessClaims",
   "proofTiersUnderEvaluation"
 ];
 const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
@@ -41,6 +42,34 @@ function validateStructuredBinding(value) {
   const findings = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
   if (structuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  const requiredFreshnessClaimsValid = Array.isArray(value.requiredFreshnessClaims)
+    && value.requiredFreshnessClaims.length > 0
+    && value.requiredFreshnessClaims.every((requirement) => requirement
+      && typeof requirement === "object"
+      && !Array.isArray(requirement)
+      && freshnessClasses.has(requirement.freshnessClass)
+      && ["CROSS_PLATFORM", "ANDROID", "IOS", "NONE"].includes(requirement.platform)
+      && typeof requirement.evidenceSourceId === "string"
+      && requirement.evidenceSourceId.length > 0
+      && typeof requirement.authorityAllowed === "string"
+      && Array.isArray(requirement.requiredFacts)
+      && requirement.requiredFacts.length > 0
+      && requirement.requiredFacts.every((fact) => typeof fact === "string" && fact.length > 0));
+  const declaredFreshnessClasses = requiredFreshnessClaimsValid
+    ? new Set(value.requiredFreshnessClaims.map(({ freshnessClass }) => freshnessClass))
+    : new Set();
+  const tierFreshness = {
+    T4_NATIVE_PROVIDER: ["PROVIDER_CRITICAL"],
+    T5_SIGNED_ARTIFACT: ["SIGNED_ARTIFACT"],
+    T6_INSTALLED_PHYSICAL: ["INSTALLED_DEVICE", "PHYSICAL_DEVICE"],
+    T7_PUBLIC_CANARY: ["PUBLIC_CANARY"]
+  };
+  const proofFreshnessAligned = Object.entries(tierFreshness).every(([tier, classes]) => {
+    const tierActive = Array.isArray(value.proofTiersUnderEvaluation) && value.proofTiersUnderEvaluation.includes(tier);
+    return tierActive
+      ? classes.every((freshnessClass) => declaredFreshnessClasses.has(freshnessClass))
+      : classes.every((freshnessClass) => !declaredFreshnessClasses.has(freshnessClass));
+  });
   if (value.schemaVersion !== 1
     || typeof value.featureId !== "string"
     || !Number.isInteger(value.implementationPr)
@@ -59,10 +88,14 @@ function validateStructuredBinding(value) {
     || value.requiredFreshnessClasses.length === 0
     || new Set(value.requiredFreshnessClasses).size !== value.requiredFreshnessClasses.length
     || value.requiredFreshnessClasses.some((entry) => !freshnessClasses.has(entry))
+    || !requiredFreshnessClaimsValid
+    || value.requiredFreshnessClasses.length !== declaredFreshnessClasses.size
+    || value.requiredFreshnessClasses.some((entry) => !declaredFreshnessClasses.has(entry))
     || !Array.isArray(value.proofTiersUnderEvaluation)
     || value.proofTiersUnderEvaluation.length === 0
     || new Set(value.proofTiersUnderEvaluation).size !== value.proofTiersUnderEvaluation.length
-    || value.proofTiersUnderEvaluation.some((entry) => !proofTiers.has(entry))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+    || value.proofTiersUnderEvaluation.some((entry) => !proofTiers.has(entry))
+    || !proofFreshnessAligned) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
   return [...new Set(findings)].sort();
 }
 
@@ -149,10 +182,16 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
     if (open.length > 1) findings.push("MULTIPLE_ACTIVE_IMPLEMENTATIONS");
     if (matches.length !== 1) findings.push("ACTIVE_IMPLEMENTATION_OWNERSHIP_MISMATCH");
     if (matches[0]?.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_HEAD_MISMATCH");
+    if (!/open/iu.test(matches[0]?.state ?? "")) findings.push("ACTIVE_IMPLEMENTATION_STATE_MISMATCH");
     if (identity.branch !== binding.implementationBranch) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_BRANCH_MISMATCH");
+    if (identity.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
+    if (identity.tree !== binding.currentImplementationTree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
   } else {
     const merged = truth?.latestMergedImplementationPr;
-    if (matches.length) findings.push("COMPLETED_IMPLEMENTATION_STILL_OPEN");
+    if (open.length) findings.push("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION");
+    if (![binding.implementationBranch, "main", "DETACHED"].includes(identity.branch)) {
+      findings.push("COMPLETED_IMPLEMENTATION_CONTROL_BRANCH_MISMATCH");
+    }
     if (merged?.number !== binding.implementationPr || merged?.head !== binding.currentImplementationHead || merged?.state !== "merged") {
       findings.push("COMPLETED_IMPLEMENTATION_MERGE_MISMATCH");
     }
