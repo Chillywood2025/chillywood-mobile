@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "pr-d2a-android-mic-p1-reproduction-v1",
+  "classification": "STOP_PRODUCT_P1_REPRODUCED",
+  "startingMain": "fc1616d5da5bc0e521c2158c6ffb68d24b898e7a",
+  "preservedCheckpoint": {
+    "head": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
+    "tree": "f9e102649b51da84324e97b576823e910340df9f"
+  },
+  "synchronizedCheckpoint": {
+    "head": "26fd5f6e4c4d3e833469178d62cb5808d95f5c98",
+    "tree": "96ffd4ab7775fb39640acce9001404b548b06f31",
+    "mergeMode": "NORMAL_NO_FF",
+    "preservedCheckpointIsAncestor": true,
+    "startingMainIsAncestor": true
+  },
+  "reproductionSource": {
+    "head": "56df688e333934fcc98817981a5e5af04ec16810",
+    "tree": "ae5daf162c237f374cd066af80753a993c2305b5",
+    "productPath": "hooks/use-livekit-chat-call-session.ts",
+    "productSha256": "80d3919d0d80123e02df97c7d3d5ae69f6c959a46a1b291adb050c6d57c4f07b",
+    "testPath": "tests/assurance/android-chat-call-mic-exact-hook.test.mjs",
+    "testSha256": "dd2789095abd23da0aab8d70df4bdf636f8aada8c004f7d7e3b51196c4afa387",
+    "contractPath": "config/assurance/android-chat-call-mic-control-v1.json",
+    "contractSha256": "f9ac28c7d8481462f70b74638cfbd3e393f561c799a3c6038a98ecd96b27f0b8"
+  },
+  "activeTaskPacket": {
+    "sha256": "0b70cee2414dcfa190aeabded5368891a1a62628c1d11bb750fc4dd2596f6b63",
+    "bytes": 10075,
+    "determinism": "3/3_BYTE_IDENTICAL",
+    "featureId": "chilly-chat-call-lifecycle",
+    "uniqueD2ASelection": true
+  },
+  "evidenceReuse": {
+    "requestKey": "4442cc885a282c55fc7f76822b45a27b563757b712331deda566fa88569d4faa",
+    "result": "EVIDENCE_EXACT_HIT_MISSING",
+    "reusedEvidence": []
+  },
+  "receipt": {
+    "commandId": "d2a-mic-exact-hook",
+    "exactCommand": ["node", "--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
+    "identityHash": "582ea25a388bb6e5f2a1e9c85bb98db28de6040342ccf431a815ff2c4ca713f2",
+    "configurationHash": "83a440b96b9a4a6bce85db5f25e30d3afd6bbbb5d1663679f30568890e5d59e8",
+    "combinedOutputSha256": "8567fa51f71fb04bf62d9823de42cc4e0f3531b88693dc109db34a048c956930",
+    "exitStatus": 1,
+    "failureCategory": "COMMAND_FAILED",
+    "artifactRetainedOutsideGit": true,
+    "artifactContainsOnlyRedactedBoundedFailureText": true
+  },
+  "finding": {
+    "code": "ANDROID_MIC_LIVEKIT_MEMBERSHIP_FAILURE_RETURNS_SUCCESS",
+    "severity": "P1",
+    "productPathExecuted": "setMicrophoneEnabled through exact bound runMediaControl and updateMembershipMediaState source slices",
+    "nativeFacingMicrophoneOperationCalls": 1,
+    "membershipReconciliationAttempts": 1,
+    "actualTrackEnabled": true,
+    "requestedMicEnabled": true,
+    "uiMicEnabled": true,
+    "durableMembershipMicEnabled": false,
+    "productReturnValue": true,
+    "invariant": "A successful toggle must not report success while durable membership mic state differs from actual track state.",
+    "state": "REPRODUCED_NOT_REPAIRED"
+  },
+  "proofBoundary": {
+    "exactProductHookLogic": "REPRODUCED",
+    "sharedUiControl": "NOT_EXECUTED_AFTER_P1_STOP",
+    "legacyWebRtcHook": "NOT_EXECUTED_AFTER_P1_STOP",
+    "androidNativeAudio": "NOT_EXECUTED_AFTER_P1_STOP",
+    "lifecycleInstrumentation": "NOT_EXECUTED_AFTER_P1_STOP",
+    "runtimeBackupRestore": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT_NOT_REATTEMPTED_AFTER_P1_STOP",
+    "signedArtifact": "NOT_PROVED",
+    "physicalDevice": "NOT_USED",
+    "provider": "NOT_CONTACTED"
+  },
+  "boundedCorrectionAuthorization": {
+    "state": "PREPARED_NOT_AUTHORIZED_NOT_EXECUTED",
+    "objective": "Make the LiveKit microphone toggle fail closed or reconcile atomically when durable membership update fails after the native microphone operation.",
+    "maximumProductFiles": ["hooks/use-livekit-chat-call-session.ts"],
+    "requiredPreservedTest": "tests/assurance/android-chat-call-mic-exact-hook.test.mjs",
+    "mustProve": [
+      "failed membership reconciliation never returns toggle success",
+      "actual track, requested mic, UI mic and membership mic converge",
+      "camera state remains unchanged",
+      "call remains active or validly reconnecting",
+      "no token reissue, provider crossover, room cleanup or terminal membership",
+      "rejected native and JavaScript operations remain recoverable"
+    ],
+    "mustNotInclude": [
+      "legacy WebRTC correction",
+      "native Android behavior change",
+      "build or OTA",
+      "provider contact",
+      "database or production mutation"
+    ],
+    "stopRule": "No product repair may begin without a separate bounded correction authorization."
+  },
+  "nonInterference": {
+    "productSourceModified": false,
+    "buildCreated": false,
+    "otaPublished": false,
+    "physicalDeviceUsed": false,
+    "providerContacted": false,
+    "productionMutated": false,
+    "b1B2B3Deployed": false,
+    "d2aMerged": false,
+    "generatedAndroidOrIosCommitted": false,
+    "denoLockStaged": false
+  }
+}
