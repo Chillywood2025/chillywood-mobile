@@ -18,6 +18,7 @@ const between = (start, end) => {
   return source.slice(first, last);
 };
 
+const mediaControlBindingSlice = between("  const runMediaControl", "  const updateMembershipMediaState");
 const mediaControlSlice = between("  const runMediaControl", "  const setSpeaker");
 const microphoneSlice = between("  const setMicrophoneEnabled", "  const setCameraEnabled");
 
@@ -65,7 +66,7 @@ module.exports = {setMicrophoneEnabled, micRequestedRef, membershipsRef, state};
 
 test("ANDROID_MIC_LIVEKIT_MEMBERSHIP_FAILURE_RETURNS_SUCCESS exact hook execution", async () => {
   assert.equal(hash(source), contract.sourceBindings[sourcePath], "full product hook source binding");
-  assert.equal(hash(mediaControlSlice), contract.sourceSlices["livekit-run-media-control"].sha256, "media serializer slice binding");
+  assert.equal(hash(mediaControlBindingSlice), contract.sourceSlices["livekit-run-media-control"].sha256, "media serializer slice binding");
   assert.equal(hash(microphoneSlice), contract.sourceSlices["livekit-set-microphone"].sha256, "microphone hook slice binding");
 
   const observed = await executeExactProductPath();
