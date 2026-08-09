@@ -429,7 +429,7 @@ export function useLiveKitChatCallSession({
           const durableRestored = await updateMembershipMediaState(
             priorDurable.cameraEnabled,
             priorDurable.micEnabled,
-            priorDurable.membershipState,
+            priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
             true,
           );
           const cameraUnchanged = publicationIsUsable(
