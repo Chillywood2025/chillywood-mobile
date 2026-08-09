@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "e0-post-truth-level-a-v1",
+  "reviewLevel": "A",
+  "reviewType": "review-only-never-merge",
+  "implementationPrNumber": 192,
+  "implementationBranch": "codex/assurance-efficiency-e0-post-truth",
+  "implementationHead": "ae01293b3f43d8e74f9bd9e5187325e270cdc963",
+  "implementationTree": "4141bed61ce4bf4a6f012037f599a9243d0c30a7",
+  "parentMain": "c44482155feb22612e57e091b1f7da831a9f6e2a",
+  "scope": {
+    "result": "PASS_EXACT_THREE_FILES",
+    "files": [
+      "CURRENT_STATE.md",
+      "NEXT_TASK.md",
+      "config/assurance/current-truth-v1.json"
+    ],
+    "additions": 87,
+    "deletions": 52,
+    "sourceDeltaSha256": "d5fd1708aeab42bd3db26f8ac195ca2ab38c91467a30ce4f9b58e1a7e6890422",
+    "changedFileSha256": "123adc5733f40203241ed4ad1f67c14ebbee5ea4c0c10958440aa403b2074947",
+    "changedPathSetSha256": "246863974b7dc9633ab1448d13e918aad1577b7c34c324d1a1b0805c9330d465"
+  },
+  "fileHashes": {
+    "currentTruthSha256": "b70333aa9b287f00d671929ee5bb6e9c67c237a7239aabc2f59b871dc9bef2c0",
+    "currentStateSha256": "9a69c5a9ea04ddef68754fe3a09048ac1c2d3f79cc8859c2c5fe98fe34c8499b",
+    "nextTaskSha256": "765f51a3f972c16ad35ea5390f8c2b0a7faf4511fa34b9883bf3a0271bd66968"
+  },
+  "determinism": {
+    "currentTruth": "PASS_3_OF_3_BYTE_IDENTICAL",
+    "currentTruthOutputSha256": "ace1e747e48369a58dc8899a98fd7c887f9bf0bcddca1ab54ed267fd126201e6",
+    "activeTaskPacket": "PASS_3_OF_3_BYTE_IDENTICAL",
+    "activeTaskOutputSha256": "7920507023551f6b0eab39f4a631d401087a66ec24128829a462ed883a4fa3e9",
+    "activeTaskPacketSha256": "63f5ce85685528d3f464acf5b8ef98ae7f034cf514e09d36ea1c429f105247ac"
+  },
+  "e0": {
+    "finalImplementationHead": "010cc8806380631b675bf3c01d834e0408084ad9",
+    "finalImplementationTree": "73bb85b56a85c8dcbe42bf39bba1ccbeadfd96cb",
+    "mergeSha": "c44482155feb22612e57e091b1f7da831a9f6e2a",
+    "sealedScanId": "6e12734b-d01c-4d92-943e-9c6a8179f76d",
+    "sealedReportSha256": "b2cd2678855e1cd3c6dc69e52770795358903a5fcba73504ed48b63a1d00d888",
+    "ancestryP3": "RESOLVED_FOR_E0_EXACT_EVIDENCE_AND_PENDING_STATE_RETIRED",
+    "reviewPrs": [186, 187, 188, 189],
+    "reviewDisposition": "CLOSED_UNMERGED_BRANCHES_RETAINED_NEVER_MERGE"
+  },
+  "d2a": {
+    "head": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
+    "tree": "f9e102649b51da84324e97b576823e910340df9f",
+    "state": "READY_NOT_RESUMED"
+  },
+  "nonInterference": {
+    "b1B2B3Undeployed": true,
+    "buildOrOta": false,
+    "providerOrProductionMutation": false,
+    "userDerivedMemory": "off",
+    "level2": "off"
+  },
+  "criticalFindingCounts": {"P0": 0, "P1": 0, "P2": 0, "P3": 0},
+  "findings": [],
+  "status": "PASS",
+  "reviewOnly": true,
+  "mergePermitted": false,
+  "disposition": "DRAFT_REVIEW_ONLY_NEVER_MERGE_BRANCH_RETAINED"
+}
