@@ -368,19 +368,23 @@ const assertRolloverContained = (observed) => {
 };
 
 const determinismControls = [
-  "D2A_DETERMINISM_NESTED_OUTCOME_COLLISION", "D2A_DETERMINISM_NULL", "D2A_DETERMINISM_BOOLEAN",
-  "D2A_DETERMINISM_STRING", "D2A_DETERMINISM_FINITE_NUMBER", "D2A_DETERMINISM_ARRAY_ORDER",
-  "D2A_DETERMINISM_UNDEFINED", "D2A_DETERMINISM_BIGINT", "D2A_DETERMINISM_NON_FINITE_NUMBER", "D2A_DETERMINISM_CYCLE",
+  "D2A_DETERMINISM_INSERTION_ORDER_SAME", "D2A_DETERMINISM_NESTED_BOOLEAN_DIFF", "D2A_DETERMINISM_NESTED_FIELD_ADDED_DIFF",
+  "D2A_DETERMINISM_NESTED_FIELD_REMOVED_DIFF", "D2A_DETERMINISM_NESTED_NUMBER_DIFF", "D2A_DETERMINISM_ARRAY_ORDER_DIFF",
+  "D2A_DETERMINISM_NESTED_NULL_MISSING_DIFF", "D2A_DETERMINISM_UNSUPPORTED_REJECTS", "D2A_DETERMINISM_CYCLE_REJECTS", "D2A_DETERMINISM_HISTORICAL_ARRAY_OBJECT_COLLISION_ELIMINATED",
 ];
 
 test("deep canonical determinism controls", () => {
   assert.deepEqual(contract.determinismControls, determinismControls);
-  assert.notEqual(stable({outcome: {accepted: true}}), stable({outcome: {accepted: false}}));
-  assert.equal(stable(null), "null"); assert.equal(stable(true), "true"); assert.equal(stable("x"), '"x"'); assert.equal(stable(1), "1");
-  assert.notEqual(stable([1, 2]), stable([2, 1]));
+  const sameLeft = stable({outcome: {a: 1, b: 2}}); const sameRight = stable({outcome: {b: 2, a: 1}});
+  assert.equal(sameLeft, sameRight); assert.equal(hash(sameLeft), hash(sameRight));
+  for (const [left, right] of [[{outcome: {accepted: true}}, {outcome: {accepted: false}}], [{outcome: {}}, {outcome: {added: 1}}], [{outcome: {removed: 1}}, {outcome: {}}], [{outcome: {n: 1}}, {outcome: {n: 2}}], [{outcome: [1, 2]}, {outcome: [2, 1]}], [{outcome: {value: null}}, {outcome: {}}], [[{}], [{x: 1}]]]) {
+    assert.notEqual(stable(left), stable(right)); assert.notEqual(hash(stable(left)), hash(stable(right)));
+  }
   assert.throws(() => stable(undefined), {message: "D2A_DETERMINISM_UNSUPPORTED_UNDEFINED"});
+  assert.throws(() => stable(() => {}), {message: "D2A_DETERMINISM_UNSUPPORTED_FUNCTION"}); assert.throws(() => stable(Symbol("x")), {message: "D2A_DETERMINISM_UNSUPPORTED_SYMBOL"});
   assert.throws(() => stable(1n), {message: "D2A_DETERMINISM_UNSUPPORTED_BIGINT"});
   assert.throws(() => stable(Infinity), {message: "D2A_DETERMINISM_NON_FINITE_NUMBER"});
+  assert.throws(() => stable(new Date()), {message: "D2A_DETERMINISM_UNSUPPORTED_CLASS"});
   const cycle = {}; cycle.self = cycle; assert.throws(() => stable(cycle), {message: "D2A_DETERMINISM_CYCLE"});
 });
 
@@ -855,15 +859,15 @@ for (const control of negativeControls) {
   });
 }
 
-test("22-case evidence is deterministic 3/3", async () => {
-  const hashes = [];
+test("canonical evidence is deterministic 3/3", async () => {
+  const bytes = []; const hashes = []; const counts = [];
   for (let run = 0; run < 3; run += 1) {
     const evidence = [];
     for (const definition of cases.filter(({custom}) => !custom)) {
       const observed = await executeScenario(definition.scenario);
       evidence.push({id: definition.id, result: observed.result, actual: observed.actualMic, durable: observed.membershipMic});
     }
-    hashes.push(hash(stable(evidence)));
+    const canonicalBytes = stable(evidence); bytes.push(canonicalBytes); hashes.push(hash(canonicalBytes)); counts.push(evidence.length);
   }
-  assert.equal(new Set(hashes).size, 1);
+  assert.equal(new Set(bytes).size, 1); assert.equal(new Set(hashes).size, 1); assert.deepEqual(counts, [counts[0], counts[0], counts[0]]);
 });
