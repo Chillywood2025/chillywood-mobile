@@ -2,8 +2,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, readJson, redact, stableJson } from "./lib.mjs";
-import { git, packet, privateArtifactDirectory, sha256, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
+import { ROOT, emit, isValidGitBranchName, readJson, redact, stableJson } from "./lib.mjs";
+import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 
 const laneIds = [
   "architecture-state",
@@ -12,12 +12,81 @@ const laneIds = [
   "privacy-rollback-determinism"
 ];
 
-function inferFeature(truth) {
+function displayFeatureCandidates(truth, registry) {
   const active = truth?.assuranceProgram?.active ?? "";
-  if (/E0_COMPLETE_D2A_READY_NOT_RESUMED/iu.test(active)) return ["chilly-chat-call-lifecycle"];
-  if (/E0_READY|E0_ACTIVE/iu.test(active)) return ["assurance-efficiency-e0"];
-  if (/\bD2A\b/iu.test(active) && !/D2A_FROZEN/iu.test(active)) return ["chilly-chat-call-lifecycle"];
-  return [];
+  return (registry?.features ?? [])
+    .map(({ featureId }) => featureId)
+    .filter((featureId) => typeof featureId === "string" && active.includes(featureId));
+}
+
+const structuredBindingFields = [
+  "schemaVersion",
+  "featureId",
+  "implementationPr",
+  "implementationBranch",
+  "implementationBindingId",
+  "immutableSourceHead",
+  "immutableSourceTree",
+  "currentImplementationHead",
+  "currentImplementationTree",
+  "phase",
+  "executionState",
+  "requiredFreshnessClasses",
+  "proofTiersUnderEvaluation"
+];
+const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
+const proofTiers = new Set(["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]);
+
+function validateStructuredBinding(value) {
+  const findings = [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
+  if (structuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  if (value.schemaVersion !== 1
+    || typeof value.featureId !== "string"
+    || !Number.isInteger(value.implementationPr)
+    || value.implementationPr < 1
+    || !isValidGitBranchName(value.implementationBranch)
+    || typeof value.implementationBindingId !== "string"
+    || !value.implementationBindingId
+    || !sha40(value.immutableSourceHead)
+    || !sha40(value.immutableSourceTree)
+    || !sha40(value.currentImplementationHead)
+    || !sha40(value.currentImplementationTree)
+    || !["IMPLEMENTATION", "FORMAL_REVIEW", "FINAL_CI", "MERGE_ELIGIBLE", "COMPLETE"].includes(value.phase)
+    || typeof value.executionState !== "string"
+    || !value.executionState
+    || !Array.isArray(value.requiredFreshnessClasses)
+    || value.requiredFreshnessClasses.length === 0
+    || new Set(value.requiredFreshnessClasses).size !== value.requiredFreshnessClasses.length
+    || value.requiredFreshnessClasses.some((entry) => !freshnessClasses.has(entry))
+    || !Array.isArray(value.proofTiersUnderEvaluation)
+    || value.proofTiersUnderEvaluation.length === 0
+    || new Set(value.proofTiersUnderEvaluation).size !== value.proofTiersUnderEvaluation.length
+    || value.proofTiersUnderEvaluation.some((entry) => !proofTiers.has(entry))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  return [...new Set(findings)].sort();
+}
+
+function resolveFeature(truth, facts, registry) {
+  if (Object.hasOwn(truth ?? {}, "activeTaskBinding")) {
+    const binding = truth.activeTaskBinding;
+    const findings = validateStructuredBinding(binding);
+    if (findings.length) return { ok: false, findings };
+    const displayCandidates = displayFeatureCandidates(truth, registry);
+    if (displayCandidates.length > 1 || (displayCandidates.length === 1 && displayCandidates[0] !== binding.featureId)) {
+      return { ok: false, findings: ["ACTIVE_TASK_STRUCTURED_DISPLAY_CONFLICT"] };
+    }
+    if (facts.featureId && facts.featureId !== binding.featureId) return { ok: false, findings: ["FEATURE_OVERRIDE_CONFLICT"] };
+    return { ok: true, binding, featureId: binding.featureId, source: "structured" };
+  }
+
+  const open = truth?.openImplementationPrs;
+  if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
+  if (open.length === 0) return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
+  if (open.length > 1) return { ok: false, findings: ["MULTIPLE_ACTIVE_IMPLEMENTATIONS"] };
+  const featureId = open[0]?.featureId;
+  if (typeof featureId !== "string" || !featureId) return { ok: false, findings: ["ACTIVE_TASK_AMBIGUOUS"] };
+  if (facts.featureId && facts.featureId !== featureId) return { ok: false, findings: ["FEATURE_OVERRIDE_CONFLICT"] };
+  return { ok: true, binding: null, featureId, source: "legacy" };
 }
 
 function affectedSymbols(files) {
@@ -48,24 +117,99 @@ function inheritedBlockers(truth) {
   for (const [tier, status] of Object.entries(d2b?.proofTiers ?? {})) {
     if (/PARTIAL|MISSING|BLOCKED/iu.test(status)) blockers.push({ tier, status });
   }
+  for (const claim of truth?.freshnessClaims ?? []) {
+    if (claim?.status !== "CURRENT") blockers.push({
+      id: claim?.id ?? "FRESHNESS_CLAIM_BLOCKED",
+      freshnessClass: claim?.freshnessClass ?? null,
+      status: claim?.status ?? "BLOCKED_INTERNAL",
+      expiresAt: claim?.expiresAt ?? null
+    });
+  }
   return blockers;
 }
 
-function resolveImplementation(truth, identity, facts, featureId) {
-  if (facts.implementation) return { ok: true, value: facts.implementation };
+function safeImplementationGit(argv, fallback = null) {
+  try { return git(argv); } catch { return fallback; }
+}
+
+function sourceIsAncestor(sourceHead, currentHead) {
+  try {
+    git(["merge-base", "--is-ancestor", sourceHead, currentHead]);
+    return true;
+  } catch { return false; }
+}
+
+function resolveStructuredImplementation(truth, identity, facts, binding) {
+  const findings = [];
   const open = truth?.openImplementationPrs ?? [];
-  if (!Array.isArray(open)) return { ok: false, finding: "IMPLEMENTATION_INVENTORY_MALFORMED" };
-  if (open.length > 1) return { ok: false, finding: "MULTIPLE_ACTIVE_IMPLEMENTATIONS" };
-  if (open.length === 1 && open[0].branch !== identity.branch) return { ok: false, finding: "ACTIVE_IMPLEMENTATION_BRANCH_MISMATCH" };
-  const e0 = truth?.e0CurrentTruthBinding;
-  const d2a = truth?.d2bCurrentTruthBinding?.preservedDependencies?.d2a;
-  const immutableSourceHead = featureId === "assurance-efficiency-e0" ? (e0?.immutableSourceHead ?? identity.head) : (d2a?.head ?? identity.head);
-  const immutableSourceTree = featureId === "assurance-efficiency-e0" ? (e0?.immutableSourceTree ?? identity.tree) : (d2a?.tree ?? identity.tree);
+  if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
+  const matches = open.filter((entry) => entry?.number === binding.implementationPr && entry?.branch === binding.implementationBranch);
+  const activePhase = ["IMPLEMENTATION", "FORMAL_REVIEW", "FINAL_CI", "MERGE_ELIGIBLE"].includes(binding.phase);
+  if (activePhase) {
+    if (open.length > 1) findings.push("MULTIPLE_ACTIVE_IMPLEMENTATIONS");
+    if (matches.length !== 1) findings.push("ACTIVE_IMPLEMENTATION_OWNERSHIP_MISMATCH");
+    if (matches[0]?.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_HEAD_MISMATCH");
+    if (identity.branch !== binding.implementationBranch) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_BRANCH_MISMATCH");
+  } else {
+    const merged = truth?.latestMergedImplementationPr;
+    if (matches.length) findings.push("COMPLETED_IMPLEMENTATION_STILL_OPEN");
+    if (merged?.number !== binding.implementationPr || merged?.head !== binding.currentImplementationHead || merged?.state !== "merged") {
+      findings.push("COMPLETED_IMPLEMENTATION_MERGE_MISMATCH");
+    }
+  }
+
+  const observed = facts.implementationObservations ?? {
+    remoteHead: safeImplementationGit(["show-ref", "--verify", "--hash", `refs/remotes/origin/${binding.implementationBranch}`]),
+    immutableTree: safeImplementationGit(["rev-parse", `${binding.immutableSourceHead}^{tree}`]),
+    currentTree: safeImplementationGit(["rev-parse", `${binding.currentImplementationHead}^{tree}`]),
+    immutableSourceIsAncestor: sourceIsAncestor(binding.immutableSourceHead, binding.currentImplementationHead),
+    providerPrHead: facts.providerPrHead ?? null
+  };
+  if (observed.remoteHead !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_REMOTE_HEAD_MISMATCH");
+  if (observed.immutableTree !== binding.immutableSourceTree) findings.push("ACTIVE_IMPLEMENTATION_IMMUTABLE_TREE_MISMATCH");
+  if (observed.currentTree !== binding.currentImplementationTree) findings.push("ACTIVE_IMPLEMENTATION_CURRENT_TREE_MISMATCH");
+  if (observed.immutableSourceIsAncestor !== true) findings.push("ACTIVE_IMPLEMENTATION_IMMUTABLE_ANCESTRY_MISMATCH");
+  if (observed.providerPrHead !== null && observed.providerPrHead !== undefined && observed.providerPrHead !== binding.currentImplementationHead) {
+    findings.push("ACTIVE_IMPLEMENTATION_PROVIDER_HEAD_MISMATCH");
+  }
+  if (findings.length) return { ok: false, findings: [...new Set(findings)].sort() };
   return {
     ok: true,
-    value: open.length === 1
-      ? { pr: open[0].number, branch: open[0].branch, state: open[0].state, immutableSourceHead, immutableSourceTree }
-      : { pr: null, branch: identity.branch, state: "LOCAL_PRE_PR", immutableSourceHead, immutableSourceTree }
+    value: {
+      pr: binding.implementationPr,
+      branch: binding.implementationBranch,
+      state: binding.phase,
+      implementationBindingId: binding.implementationBindingId,
+      immutableSourceHead: binding.immutableSourceHead,
+      immutableSourceTree: binding.immutableSourceTree,
+      currentSynchronizedHead: binding.currentImplementationHead,
+      currentSynchronizedTree: binding.currentImplementationTree,
+      immutableSource: { head: binding.immutableSourceHead, tree: binding.immutableSourceTree },
+      currentSynchronizedSource: { head: binding.currentImplementationHead, tree: binding.currentImplementationTree }
+    }
+  };
+}
+
+function resolveImplementation(truth, identity, facts, resolution) {
+  if (resolution.binding) return resolveStructuredImplementation(truth, identity, facts, resolution.binding);
+  if (facts.implementation) return { ok: true, value: facts.implementation };
+  const open = truth?.openImplementationPrs ?? [];
+  if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
+  if (open.length !== 1) return { ok: false, findings: [open.length > 1 ? "MULTIPLE_ACTIVE_IMPLEMENTATIONS" : "ACTIVE_TASK_NONE"] };
+  if (open[0].branch !== identity.branch) return { ok: false, findings: ["ACTIVE_IMPLEMENTATION_BRANCH_MISMATCH"] };
+  return {
+    ok: true,
+    value: {
+      pr: open[0].number,
+      branch: open[0].branch,
+      state: open[0].state,
+      immutableSourceHead: identity.head,
+      immutableSourceTree: identity.tree,
+      currentSynchronizedHead: identity.head,
+      currentSynchronizedTree: identity.tree,
+      immutableSource: { head: identity.head, tree: identity.tree },
+      currentSynchronizedSource: { head: identity.head, tree: identity.tree }
+    }
   };
 }
 
@@ -79,11 +223,10 @@ export function activeTask(facts = {}) {
   })();
   if (!checked.ok) return { ok: false, findings: ["CURRENT_TRUTH_STALE_OR_UNPARSEABLE"] };
 
-  const inferred = facts.inferredFeatures ?? inferFeature(truth);
-  if (inferred.length !== 1) return { ok: false, findings: ["ACTIVE_TASK_AMBIGUOUS"] };
-  if (facts.featureId && facts.featureId !== inferred[0]) return { ok: false, findings: ["FEATURE_OVERRIDE_CONFLICT"] };
   const registry = facts.registry ?? readJson("config/assurance/feature-registry-v1.json");
-  const matches = registry.features?.filter(({ featureId }) => featureId === inferred[0]) ?? [];
+  const resolution = resolveFeature(truth, facts, registry);
+  if (!resolution.ok) return { ok: false, findings: resolution.findings };
+  const matches = registry.features?.filter(({ featureId }) => featureId === resolution.featureId) ?? [];
   if (matches.length !== 1) return { ok: false, findings: ["ACTIVE_FEATURE_UNRESOLVED"] };
   const feature = facts.feature ?? matches[0];
 
@@ -109,8 +252,8 @@ export function activeTask(facts = {}) {
     }
   } catch { return { ok: false, findings: ["SOURCE_IDENTITY_UNRESOLVED"] }; }
 
-  const implementation = resolveImplementation(truth, identity, facts, feature.featureId);
-  if (!implementation.ok) return { ok: false, findings: [implementation.finding] };
+  const implementation = resolveImplementation(truth, identity, facts, resolution);
+  if (!implementation.ok) return { ok: false, findings: implementation.findings };
   const allowlist = facts.allowlist ?? readJson("config/assurance/command-allowlist-v1.json");
   const required = feature.commands ?? [];
   const rules = allowlist.commands ?? [];

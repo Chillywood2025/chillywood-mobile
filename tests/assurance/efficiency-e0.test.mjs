@@ -8,6 +8,7 @@ import { runReceipt } from "../../scripts/assurance/receipt.mjs";
 import { archive, reviewHistory } from "../../scripts/assurance/review-history.mjs";
 import { benchmark } from "../../scripts/assurance/benchmark.mjs";
 import { exactKey, sha256 } from "../../scripts/assurance/efficiency-lib.mjs";
+import { evaluateFreshnessClaims, evaluateTaskFreshness } from "../../scripts/assurance/lib.mjs";
 
 const root = process.cwd();
 const read = (file) => JSON.parse(fs.readFileSync(`${root}/${file}`, "utf8"));
@@ -15,6 +16,15 @@ const truth = read("config/assurance/current-truth-v1.json");
 const registry = read("config/assurance/feature-registry-v1.json");
 const allowlist = read("config/assurance/command-allowlist-v1.json");
 const feature = registry.features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
+const legacyTruth = structuredClone(truth);
+delete legacyTruth.activeTaskBinding;
+legacyTruth.openImplementationPrs = [{
+  number: 185,
+  branch: "codex/assurance-efficiency-e0",
+  head: "a".repeat(40),
+  state: "open",
+  featureId: "assurance-efficiency-e0"
+}];
 const head = "a".repeat(40); const tree = "b".repeat(40);
 const identity = {
   branch: "codex/assurance-efficiency-e0",
@@ -30,13 +40,12 @@ const identity = {
 };
 const implementation = { pr: null, branch: identity.branch, state: "LOCAL_PRE_PR", immutableSourceHead: head, immutableSourceTree: tree };
 const packetFacts = {
-  currentTruth: truth,
+  currentTruth: legacyTruth,
   registry,
   allowlist,
   identity,
   implementation,
   truthCheck: { ok: true },
-  inferredFeatures: [feature.featureId],
   directlyAffectedSymbols: ["scripts/assurance/active-task.mjs#activeTask"],
   blockers: [{ id: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT" }]
 };
@@ -56,16 +65,16 @@ test("active-task packet is deterministic 3/3 and compact", () => {
 test("active-task identity, authority, ownership, P1 and mandatory-command controls fail closed", () => {
   assert.equal(activeTask({ ...packetFacts, truthCheck: { ok: false } }).ok, false, "stale current truth");
   assert.equal(activeTask({ ...packetFacts, featureId: "nope" }).ok, false, "active feature conflict");
-  assert.equal(activeTask({ ...packetFacts, inferredFeatures: [feature.featureId, "chilly-chat-call-lifecycle"] }).ok, false, "ambiguous task");
-  assert.equal(activeTask({ ...packetFacts, currentTruth: { ...truth, openImplementationPrs: [{ number: 1 }, { number: 2 }] }, implementation: undefined }).ok, false, "duplicate implementation ownership");
+  assert.equal(activeTask({ ...packetFacts, currentTruth: { ...legacyTruth, openImplementationPrs: [{ ...legacyTruth.openImplementationPrs[0], featureId: undefined }] } }).ok, false, "ambiguous task");
+  assert.equal(activeTask({ ...packetFacts, currentTruth: { ...legacyTruth, openImplementationPrs: [{ number: 1 }, { number: 2 }] }, implementation: undefined }).ok, false, "duplicate implementation ownership");
   assert.equal(activeTask({ ...packetFacts, stopConditions: { P0: "STOP" } }).ok, false, "P1 omitted");
   const missingCommand = { ...allowlist, commands: allowlist.commands.filter(({ id }) => id !== "focused-test") };
   assert.equal(activeTask({ ...packetFacts, allowlist: missingCommand }).ok, false, "mandatory test dropped");
 });
 
-test("post-E0 current truth resolves the frozen D2A checkpoint without resuming it", () => {
+test("legacy status text cannot substitute a historical frozen D2A checkpoint", () => {
   const d2aTruth = {
-    ...truth,
+    ...legacyTruth,
     openImplementationPrs: [],
     assuranceProgram: { ...truth.assuranceProgram, active: "E0_COMPLETE_D2A_READY_NOT_RESUMED" }
   };
@@ -79,11 +88,147 @@ test("post-E0 current truth resolves the frozen D2A checkpoint without resuming 
     directlyAffectedSymbols: [],
     blockers: [{ id: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT" }]
   });
-  assert.equal(result.ok, true, result.findings?.join(","));
-  assert.equal(result.packet.featureId, "chilly-chat-call-lifecycle");
-  assert.equal(result.packet.implementation.immutableSourceHead, "8c47a3a9bff9f9630ba14837652ec31c14be0629");
-  assert.equal(result.packet.implementation.immutableSourceTree, "f9e102649b51da84324e97b576823e910340df9f");
-  assert.equal(result.packet.commands.some(({ id, resultContract }) => id.startsWith("deferred:") && resultContract.executable === false), true, "generic pgTAP remains explicit and non-executable until D2A resolves it");
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.findings, ["ACTIVE_TASK_NONE"]);
+});
+
+const freshnessContract = read("config/assurance/current-truth-contract-v1.json").freshness;
+const freshnessNow = new Date("2026-08-09T18:05:09Z");
+const repositorySource = {
+  id: "repository-source-fixture",
+  status: "CURRENT",
+  observedAt: "2026-08-09T18:05:08Z",
+  expiresAt: "2026-08-10T18:05:08Z",
+  evidenceSourceId: "repository-source-evidence",
+  evidenceMode: "local-offline-and-github-read-only",
+  factsCovered: ["exact source identity"],
+  freshnessClass: "REPOSITORY_SOURCE",
+  authorityAllowed: "REPOSITORY_ONLY",
+  platform: "CROSS_PLATFORM"
+};
+const staleProvider = {
+  id: "provider-critical-fixture",
+  status: "STALE_BLOCKED",
+  observedAt: "2026-08-02T06:00:44Z",
+  expiresAt: "2026-08-02T14:00:44Z",
+  evidenceSourceId: "provider-readback-evidence",
+  evidenceMode: "local-and-linked-read-only",
+  factsCovered: ["historical provider fact"],
+  freshnessClass: "PROVIDER_CRITICAL",
+  authorityAllowed: "PROVIDER_READBACK_ONLY",
+  platform: "CROSS_PLATFORM"
+};
+const freshnessSources = [
+  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt },
+  { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt }
+];
+const evaluateClaims = (input) => evaluateFreshnessClaims({ ...input, evidenceSourceVerifier: () => true });
+
+test("claim-scoped freshness denies crossover and keeps stale provider state scoped", () => {
+  const baseline = evaluateClaims({
+    claims: [repositorySource, staleProvider],
+    evidenceSources: freshnessSources,
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(baseline.ok, true);
+  assert.equal(baseline.liveProviderReadback, false);
+  assert.deepEqual(baseline.currentClaims.map(({ freshnessClass }) => freshnessClass), ["REPOSITORY_SOURCE"], "local/GitHub evidence refreshes repository truth only");
+  assert.deepEqual(baseline.blockedClaims.map(({ freshnessClass }) => freshnessClass), ["PROVIDER_CRITICAL"], "GitHub-only evidence does not refresh provider truth");
+
+  const providerAtDeadline = evaluateClaims({
+    claims: [{ ...staleProvider, status: "CURRENT" }],
+    evidenceSources: [freshnessSources[1]],
+    freshness: freshnessContract,
+    now: new Date(staleProvider.expiresAt)
+  });
+  assert.equal(providerAtDeadline.liveProviderReadback, true);
+  const providerAfterDeadline = evaluateClaims({
+    claims: [staleProvider], evidenceSources: [freshnessSources[1]], freshness: freshnessContract,
+    now: new Date(new Date(staleProvider.expiresAt).valueOf() + 1)
+  });
+  assert.equal(providerAfterDeadline.liveProviderReadback, false, "provider deadline expires after exactly eight hours");
+
+  const widenedProviderWindow = evaluateClaims({
+    claims: [staleProvider],
+    evidenceSources: [freshnessSources[1]],
+    freshness: {
+      ...freshnessContract,
+      classes: {
+        ...freshnessContract.classes,
+        PROVIDER_CRITICAL: { ...freshnessContract.classes.PROVIDER_CRITICAL, maximumHours: 24 }
+      }
+    },
+    now: freshnessNow
+  });
+  assert.equal(widenedProviderWindow.ok, false, "the named eight-hour provider window cannot be widened through its class rule");
+  assert.equal(widenedProviderWindow.findings.some(({ id }) => id === "ASSURANCE_PROVIDER_CRITICAL_WINDOW_MISMATCH"), true);
+  const forgedProviderTimestamp = evaluateFreshnessClaims({
+    claims: [staleProvider],
+    evidenceSources: [freshnessSources[1]],
+    freshness: freshnessContract,
+    now: freshnessNow,
+    evidenceSourceVerifier: () => false
+  });
+  assert.equal(forgedProviderTimestamp.ok, false, "provider timestamp requires immutable committed provenance");
+  assert(forgedProviderTimestamp.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_EVIDENCE_PROVENANCE_UNVERIFIED"));
+
+  const extendedDocumentOnly = evaluateClaims({
+    claims: [staleProvider], evidenceSources: [freshnessSources[1]], freshness: freshnessContract,
+    now: freshnessNow, timestamp: "2099-01-01T00:00:00Z", freshnessDeadline: "2099-01-02T00:00:00Z"
+  });
+  assert.equal(extendedDocumentOnly.liveProviderReadback, false, "global document time cannot extend provider claims");
+  assert.equal(evaluateTaskFreshness(baseline, ["PROVIDER_CRITICAL"]).eligible, false, "provider-dependent task fails closed");
+  assert.equal(evaluateTaskFreshness(baseline, ["REPOSITORY_SOURCE"]).eligible, true, "source-only review remains eligible");
+
+  for (const [label, freshnessClass, evidenceMode, authorityAllowed] of [
+    ["signed cannot refresh installed", "INSTALLED_DEVICE", "signed-artifact-inspection", "INSTALLED_DEVICE_ONLY"],
+    ["installed cannot refresh physical", "PHYSICAL_DEVICE", "installed-device-readback", "PHYSICAL_DEVICE_ONLY"],
+    ["GitHub cannot refresh provider", "PROVIDER_CRITICAL", repositorySource.evidenceMode, "PROVIDER_READBACK_ONLY"]
+  ]) {
+    const claim = {
+      ...repositorySource,
+      id: label.replaceAll(" ", "-"),
+      freshnessClass,
+      evidenceMode,
+      authorityAllowed,
+      evidenceSourceId: `${label.replaceAll(" ", "-")}-evidence`
+    };
+    const result = evaluateClaims({
+      claims: [claim],
+      evidenceSources: [{ id: claim.evidenceSourceId, mode: claim.evidenceMode, observedAt: claim.observedAt }],
+      freshness: freshnessContract,
+      now: freshnessNow
+    });
+    assert.equal(result.ok, false, label);
+    assert(result.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_CLASS_CROSSOVER"), label);
+  }
+
+  const androidSigned = {
+    ...repositorySource,
+    id: "android-signed",
+    freshnessClass: "SIGNED_ARTIFACT",
+    evidenceMode: "signed-artifact-inspection",
+    authorityAllowed: "SIGNED_ARTIFACT_ONLY",
+    platform: "ANDROID",
+    evidenceSourceId: "android-signed-evidence"
+  };
+  const androidEvaluation = evaluateClaims({
+    claims: [androidSigned],
+    evidenceSources: [{ id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt }],
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(androidEvaluation.ok, true);
+  assert.equal(evaluateTaskFreshness(androidEvaluation, [{ freshnessClass: "SIGNED_ARTIFACT", platform: "IOS" }]).eligible, false, "Android evidence cannot refresh iOS evidence");
+
+  for (const [label, claim] of [
+    ["missing observedAt", Object.fromEntries(Object.entries(repositorySource).filter(([key]) => key !== "observedAt"))],
+    ["missing evidence source", { ...repositorySource, evidenceSourceId: "absent" }]
+  ]) {
+    const result = evaluateClaims({ claims: [claim], evidenceSources: freshnessSources, freshness: freshnessContract, now: freshnessNow });
+    assert.equal(result.ok, false, label);
+  }
 });
 
 const request = {

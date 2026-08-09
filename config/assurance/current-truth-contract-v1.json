@@ -4,7 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
-  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
   "synchronizationMerge": {
     "required": true,
     "parentCount": 2,
@@ -73,7 +73,49 @@
       "failureStatus": "BLOCKED_INTERNAL"
     }
   },
-  "freshness": {"defaultHours": 24, "providerCriticalHours": 8, "clock": "UTC", "failClosed": true},
+  "freshness": {
+    "defaultHours": 24,
+    "providerCriticalHours": 8,
+    "clock": "UTC",
+    "failClosed": true,
+    "classes": {
+      "REPOSITORY_SOURCE": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["local-source", "git-read-only", "github-read-only", "exact-ci", "local-offline", "local-read-only", "local-and-github-read-only", "local-offline-and-github-read-only"],
+        "authorityAllowed": "REPOSITORY_ONLY"
+      },
+      "PROVIDER_CRITICAL": {
+        "maximumHours": 8,
+        "allowedEvidenceModes": ["local-and-linked-read-only"],
+        "authorityAllowed": "PROVIDER_READBACK_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "SIGNED_ARTIFACT": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["signed-artifact-inspection"],
+        "authorityAllowed": "SIGNED_ARTIFACT_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "INSTALLED_DEVICE": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["installed-device-readback"],
+        "authorityAllowed": "INSTALLED_DEVICE_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "PHYSICAL_DEVICE": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["physical-device-observation"],
+        "authorityAllowed": "PHYSICAL_DEVICE_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "PUBLIC_CANARY": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["public-canary-readback"],
+        "authorityAllowed": "PUBLIC_CANARY_ONLY",
+        "requiresCommittedEvidence": true
+      }
+    }
+  },
   "staleFindingIds": {
     "mainSha": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
     "mergedPrState": "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE",

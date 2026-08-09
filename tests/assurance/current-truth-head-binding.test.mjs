@@ -143,6 +143,7 @@ const baseSyncFacts = {
   evaluationTime: "2026-08-01T20:30:00Z"
 };
 const verifyBaseSync = (facts = {}) => verify({
+  evaluationTime: baseSyncFacts.evaluationTime,
   observedRefs: { ...exactRefs, [implementationRemoteRef(pr64Branch)]: pr64Observed },
   baseSynchronizations: {
     [implementationRemoteRef(pr64Branch)]: { ...baseSyncFacts, ...facts }
@@ -425,10 +426,12 @@ try {
     return JSON.parse(cli.stdout.trim().split(/\r?\n/u).at(-1));
   };
 
-  const payload = runSnapshotCli("empty-open-implementation-inventory.json", `${JSON.stringify({ openImplementationPrs: [] })}\n`);
+  const payload = runSnapshotCli("unexpected-open-implementation-inventory.json", `${JSON.stringify({
+    openImplementationPrs: [{ number: 999, branch: "codex/unexpected-provider-implementation", head: "9".repeat(40), state: "open-draft" }]
+  })}\n`);
   assert.equal(payload.headBindings.context, "unlisted-control-branch");
   assert.equal(payload.providerImplementationSnapshot.ok, false);
-  assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"));
+  assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_EXTRA"));
 
   const invalidJsonPayload = runSnapshotCli("invalid.json", "{");
   assert.equal(invalidJsonPayload.ok, false);

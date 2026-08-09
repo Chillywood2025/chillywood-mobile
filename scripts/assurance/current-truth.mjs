@@ -4,6 +4,8 @@ import {
   args,
   baseSynchronizationFirstParentDistance,
   emit,
+  evaluateFreshnessClaims,
+  evaluateTaskFreshness,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
@@ -29,6 +31,19 @@ function safeGit(gitArgs, fallback = null) {
 
 function splitNullTerminated(value) {
   return typeof value === "string" ? value.split("\0").filter(Boolean) : [];
+}
+
+function verifyCommittedClaimEvidence({ claim, source }) {
+  if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "")) return false;
+  try {
+    const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
+    const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
+    return committedRecord.timestamp === claim.observedAt
+      && committedSources.length === 1
+      && committedSources[0].mode === claim.evidenceMode;
+  } catch {
+    return false;
+  }
 }
 
 function collectBaseSynchronizationReviewEvidence(reviewEntries) {
@@ -191,11 +206,30 @@ if (mode) {
   const claimsMain = (branch || explicitImplementationBranch) === "main";
   const explicitMainMatches = explicitImplementationBranch !== "main" || explicitImplementationHead === remoteMain;
   const mainMatches = synchronization.ok && (claimsMain ? head === remoteMain && explicitMainMatches : mergeBase === remoteMain);
-  const freshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
-  const findings = [...headBindings.findings];
+  const documentFreshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
+  const claimFreshness = evaluateFreshnessClaims({
+    claims: record.freshnessClaims,
+    evidenceSources: record.evidenceSources,
+    freshness: currentTruthContract.freshness,
+    now,
+    evidenceSourceVerifier: verifyCommittedClaimEvidence
+  });
+  const taskFreshness = evaluateTaskFreshness(
+    claimFreshness,
+    record.activeTaskBinding?.requiredFreshnessClasses ?? []
+  );
+  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
-  if (!freshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
+  if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
+  if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
+    findings.push({
+      id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_FRESHNESS_DERIVATION_MISMATCH",
+      status: "BLOCKED_INTERNAL",
+      recorded: record.liveProviderReadback,
+      derived: claimFreshness.liveProviderReadback
+    });
+  }
   for (const [file, expected] of Object.entries(expectedDocs)) {
     if (readText(file) !== expected) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_DOC_DRIFT", status: "BLOCKED_INTERNAL", file });
   }
@@ -229,6 +263,12 @@ if (mode) {
   }
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
-    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
+    liveProviderReadback: claimFreshness.liveProviderReadback,
+    freshnessClaims: {
+      current: claimFreshness.currentClaims.map(({ id, freshnessClass, platform }) => ({ id, freshnessClass, platform })),
+      blocked: claimFreshness.blockedClaims.map(({ id, freshnessClass, platform, expiresAt }) => ({ id, freshnessClass, platform, expiresAt }))
+    },
+    taskFreshness,
+    generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
   }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — main ${record.mainSha.slice(0, 8)}, remote migration ${record.remoteMigrationHead}, deadline ${record.freshnessDeadline}`]);
 }

@@ -79,6 +79,158 @@ export function requiredKeys(value, keys, label) {
   return keys.flatMap((key) => Object.hasOwn(value, key) ? [] : [`${label} missing ${key}`]);
 }
 
+const claimRequiredFields = [
+  "id",
+  "status",
+  "observedAt",
+  "expiresAt",
+  "evidenceSourceId",
+  "evidenceMode",
+  "factsCovered",
+  "freshnessClass",
+  "authorityAllowed",
+  "platform"
+];
+const claimStatuses = new Set(["CURRENT", "STALE_BLOCKED"]);
+const claimPlatforms = new Set(["CROSS_PLATFORM", "ANDROID", "IOS", "NONE"]);
+
+function validInstant(value) {
+  return typeof value === "string" && value.length > 0 && Number.isFinite(new Date(value).valueOf());
+}
+
+function claimFinding(id, claimId, detail = {}) {
+  return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
+}
+
+export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null }) {
+  const findings = [];
+  const evaluated = [];
+  const seenClaimIds = new Set();
+  const sources = Array.isArray(evidenceSources) ? evidenceSources : [];
+  const classRules = freshness?.classes;
+  const evaluationTime = now instanceof Date ? now : new Date(now);
+  if (!Array.isArray(claims)) findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIMS_MALFORMED"));
+  if (!Array.isArray(evidenceSources)) findings.push(claimFinding("ASSURANCE_EVIDENCE_SOURCES_MALFORMED"));
+  if (!classRules || typeof classRules !== "object" || Array.isArray(classRules)) {
+    findings.push(claimFinding("ASSURANCE_FRESHNESS_CLASS_RULES_MALFORMED"));
+  }
+  if (classRules?.PROVIDER_CRITICAL?.maximumHours !== freshness?.providerCriticalHours) {
+    findings.push(claimFinding("ASSURANCE_PROVIDER_CRITICAL_WINDOW_MISMATCH"));
+  }
+  if (!Number.isFinite(evaluationTime.valueOf())) findings.push(claimFinding("ASSURANCE_FRESHNESS_EVALUATION_TIME_MALFORMED"));
+
+  for (const claim of Array.isArray(claims) ? claims : []) {
+    const claimId = typeof claim?.id === "string" ? claim.id : null;
+    const missing = claim && typeof claim === "object" && !Array.isArray(claim)
+      ? claimRequiredFields.filter((field) => !Object.hasOwn(claim, field))
+      : claimRequiredFields;
+    if (missing.length) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_REQUIRED_FIELD_MISSING", claimId, { fields: missing }));
+      continue;
+    }
+    if (seenClaimIds.has(claimId)) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_DUPLICATE", claimId));
+      continue;
+    }
+    seenClaimIds.add(claimId);
+    const rule = classRules?.[claim.freshnessClass];
+    if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLASS_UNKNOWN", claimId, { freshnessClass: claim.freshnessClass }));
+      continue;
+    }
+    const observedAt = new Date(claim.observedAt);
+    const expiresAt = new Date(claim.expiresAt);
+    if (!validInstant(claim.observedAt) || !validInstant(claim.expiresAt)) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_TIME_MALFORMED", claimId));
+      continue;
+    }
+    if (observedAt > evaluationTime) findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_OBSERVED_IN_FUTURE", claimId));
+    const maximumHours = Number(rule.maximumHours);
+    const maximumExpiry = Number.isFinite(maximumHours)
+      ? new Date(observedAt.valueOf() + maximumHours * 60 * 60 * 1000)
+      : null;
+    if (!maximumExpiry || expiresAt.valueOf() !== maximumExpiry.valueOf()) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_EXPIRY_INVALID", claimId, {
+        expected: maximumExpiry?.toISOString() ?? null,
+        recorded: claim.expiresAt
+      }));
+    }
+    if (!Array.isArray(rule.allowedEvidenceModes) || !rule.allowedEvidenceModes.includes(claim.evidenceMode)) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLASS_CROSSOVER", claimId, {
+        freshnessClass: claim.freshnessClass,
+        evidenceMode: claim.evidenceMode
+      }));
+    }
+    if (claim.authorityAllowed !== rule.authorityAllowed) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_AUTHORITY_MISMATCH", claimId));
+    }
+    if (!claimPlatforms.has(claim.platform)) findings.push(claimFinding("ASSURANCE_FRESHNESS_PLATFORM_MALFORMED", claimId));
+    if (!Array.isArray(claim.factsCovered) || claim.factsCovered.length === 0 || claim.factsCovered.some((fact) => typeof fact !== "string" || !fact.trim())) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_FACTS_MALFORMED", claimId));
+    }
+    const matchingSources = sources.filter(({ id }) => id === claim.evidenceSourceId);
+    if (matchingSources.length !== 1) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_UNRESOLVED", claimId));
+    } else {
+      const [source] = matchingSources;
+      if (source.observedAt !== claim.observedAt || source.mode !== claim.evidenceMode) {
+        findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_BINDING_MISMATCH", claimId));
+      }
+      if (rule.requiresCommittedEvidence === true) {
+        let verified = false;
+        try {
+          verified = typeof evidenceSourceVerifier === "function" && evidenceSourceVerifier({ claim, source }) === true;
+        } catch {
+          verified = false;
+        }
+        if (!verified) findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_PROVENANCE_UNVERIFIED", claimId));
+      }
+    }
+    const derivedStatus = evaluationTime <= expiresAt ? "CURRENT" : "STALE_BLOCKED";
+    if (!claimStatuses.has(claim.status) || claim.status !== derivedStatus) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_STATUS_MISMATCH", claimId, {
+        expected: derivedStatus,
+        recorded: claim.status
+      }));
+    }
+    evaluated.push({ ...claim, derivedStatus });
+  }
+
+  const invalidClaimIds = new Set(findings.map(({ claimId }) => claimId).filter(Boolean));
+  const usableClaims = evaluated.filter(({ id }) => !invalidClaimIds.has(id));
+  const currentClaims = usableClaims.filter(({ derivedStatus }) => derivedStatus === "CURRENT");
+  const blockedClaims = usableClaims.filter(({ derivedStatus }) => derivedStatus !== "CURRENT");
+  return {
+    ok: findings.length === 0,
+    findings,
+    claims: evaluated,
+    currentClaims,
+    blockedClaims,
+    liveProviderReadback: currentClaims.some(({ freshnessClass }) => freshnessClass === "PROVIDER_CRITICAL")
+  };
+}
+
+export function evaluateTaskFreshness(claimEvaluation, requirements) {
+  const normalizedRequirements = Array.isArray(requirements)
+    ? requirements.map((requirement) => typeof requirement === "string"
+      ? { freshnessClass: requirement, platform: "CROSS_PLATFORM" }
+      : requirement)
+    : [];
+  const blockers = [];
+  for (const requirement of normalizedRequirements) {
+    const platform = requirement?.platform ?? "CROSS_PLATFORM";
+    const matched = (claimEvaluation?.currentClaims ?? []).some((claim) => claim.freshnessClass === requirement?.freshnessClass
+      && (platform === "CROSS_PLATFORM" || claim.platform === platform));
+    if (!matched) blockers.push({
+      id: "ASSURANCE_REQUIRED_FRESHNESS_CLASS_BLOCKED",
+      status: "BLOCKED_INTERNAL",
+      freshnessClass: requirement?.freshnessClass ?? null,
+      platform
+    });
+  }
+  return { eligible: Boolean(claimEvaluation?.ok) && blockers.length === 0, blockers };
+}
+
 const gitShaPattern = /^[0-9a-f]{40}$/u;
 const forbiddenGitBranchCharacters = /[\u0000-\u0020~^:?*[\]\\\u007f]/u;
 
@@ -571,7 +723,16 @@ export function renderCurrentState(record) {
     : "- None.";
   const installedQa = record.operationalClosures.installedProductQa;
   const revenueCat = record.operationalClosures.revenueCat;
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Assurance program: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Remote migration head: \`${record.remoteMigrationHead}\`.\n- Enabled Cognitive switches: ${enabled}.\n- Cognitive schedules: ${record.scheduleState.enabled}/${record.scheduleState.total} enabled. Effective baseline count: ${record.effectiveBaselineCount}.\n- Cognitive LiveKit: ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, ${record.safety.livekitSwitchesEnabled} enabled switches.\n- PUBLIC schema \`net\` USAGE: ${record.safety.publicSchemaNetUsage}. User-derived memory: ${record.safety.userDerivedMemory}. Level 2 repair: ${record.safety.level2Repair}.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure retained: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; current matrix state \`${installedQa.currentMatrixState}\`; the daily timer is enabled.\n- RevenueCat provider readback is closed: dashboard TEST returned HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Evidence timestamp: \`${record.timestamp}\`; freshness deadline: \`${record.freshnessDeadline}\`; live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  const active = record.activeTaskBinding;
+  const currentClaims = record.freshnessClaims
+    .filter(({ status }) => status === "CURRENT")
+    .map(({ id, freshnessClass, expiresAt }) => `\`${id}\` (${freshnessClass}, expires \`${expiresAt}\`)`)
+    .join(", ") || "none";
+  const blockedClaims = record.freshnessClaims
+    .filter(({ status }) => status !== "CURRENT")
+    .map(({ id, freshnessClass, expiresAt }) => `\`${id}\` (${freshnessClass}, ${record.freshnessClaims.find((claim) => claim.id === id).status}, expired \`${expiresAt}\`)`)
+    .join(", ") || "none";
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Enabled Cognitive switches: ${enabled}.\n- Cognitive schedules: ${record.scheduleState.enabled}/${record.scheduleState.total} enabled. Effective baseline count: ${record.effectiveBaselineCount}.\n- Cognitive LiveKit: ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, ${record.safety.livekitSwitchesEnabled} enabled switches.\n- PUBLIC schema \`net\` USAGE: ${record.safety.publicSchemaNetUsage}. User-derived memory: ${record.safety.userDerivedMemory}. Level 2 repair: ${record.safety.level2Repair}.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {

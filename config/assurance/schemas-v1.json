@@ -86,16 +86,69 @@
             "detachedCi": {"const": "explicit-branch-and-head-required-unless-head-is-origin-main"},
             "unlistedBranchPolicy": {"const": "deferred-to-pr-e"}
           }
+        },
+        "freshness": {
+          "type": "object",
+          "required": ["defaultHours", "providerCriticalHours", "clock", "failClosed", "classes"],
+          "properties": {
+            "defaultHours": {"const": 24},
+            "providerCriticalHours": {"const": 8},
+            "clock": {"const": "UTC"},
+            "failClosed": {"const": true},
+            "classes": {
+              "type": "object",
+              "required": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]
+            }
+          }
         }
       }
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
       "properties": {
         "mainSha": {"$ref": "#/$defs/gitSha"},
         "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
         "liveProviderReadback": {"type": "boolean"},
+        "activeTaskBinding": {
+          "type": "object",
+          "required": ["schemaVersion", "featureId", "implementationPr", "implementationBranch", "implementationBindingId", "immutableSourceHead", "immutableSourceTree", "currentImplementationHead", "currentImplementationTree", "phase", "executionState", "requiredFreshnessClasses", "proofTiersUnderEvaluation"],
+          "properties": {
+            "schemaVersion": {"const": 1},
+            "featureId": {"$ref": "#/$defs/lowerId"},
+            "implementationPr": {"type": "integer", "minimum": 1},
+            "implementationBranch": {"$ref": "#/$defs/gitBranch"},
+            "implementationBindingId": {"$ref": "#/$defs/lowerId"},
+            "immutableSourceHead": {"$ref": "#/$defs/gitSha"},
+            "immutableSourceTree": {"$ref": "#/$defs/gitSha"},
+            "currentImplementationHead": {"$ref": "#/$defs/gitSha"},
+            "currentImplementationTree": {"$ref": "#/$defs/gitSha"},
+            "phase": {"enum": ["IMPLEMENTATION", "FORMAL_REVIEW", "FINAL_CI", "MERGE_ELIGIBLE", "COMPLETE"]},
+            "executionState": {"type": "string", "minLength": 1},
+            "requiredFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}},
+            "proofTiersUnderEvaluation": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]}}
+          }
+        },
+        "freshnessClaims": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "status", "observedAt", "expiresAt", "evidenceSourceId", "evidenceMode", "factsCovered", "freshnessClass", "authorityAllowed", "platform"],
+            "properties": {
+              "id": {"$ref": "#/$defs/lowerId"},
+              "status": {"enum": ["CURRENT", "STALE_BLOCKED"]},
+              "observedAt": {"type": "string", "format": "date-time"},
+              "expiresAt": {"type": "string", "format": "date-time"},
+              "evidenceSourceId": {"$ref": "#/$defs/lowerId"},
+              "evidenceMode": {"type": "string", "minLength": 1},
+              "factsCovered": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+              "freshnessClass": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
+              "authorityAllowed": {"enum": ["REPOSITORY_ONLY", "PROVIDER_READBACK_ONLY", "SIGNED_ARTIFACT_ONLY", "INSTALLED_DEVICE_ONLY", "PHYSICAL_DEVICE_ONLY", "PUBLIC_CANARY_ONLY"]},
+              "platform": {"enum": ["CROSS_PLATFORM", "ANDROID", "IOS", "NONE"]}
+            }
+          }
+        },
         "openImplementationPrs": {
           "type": "array",
           "items": {

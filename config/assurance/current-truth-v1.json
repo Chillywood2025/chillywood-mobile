@@ -419,6 +419,47 @@
     "mayProceed": {"formalReviews": true, "phase1Ci": true, "merge": true, "d2aResume": false, "buildOrOta": false, "providerOrProductionMutation": false},
     "state": "CORRECTION_MERGED_S0_NEXT_D2A_FROZEN"
   },
+  "activeTaskBinding": {
+    "schemaVersion": 1,
+    "featureId": "chilly-chat-call-lifecycle",
+    "implementationPr": 194,
+    "implementationBranch": "codex/d2a-livekit-mic-membership-convergence-correction",
+    "implementationBindingId": "d2a-microphone-correction-pr194-v1",
+    "immutableSourceHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+    "immutableSourceTree": "4ce01fa17e4184f2523b82a10401e3b3f59dd641",
+    "currentImplementationHead": "ada396a437e40a98acea75bf016c36fc3ea86739",
+    "currentImplementationTree": "662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+    "phase": "COMPLETE",
+    "executionState": "D2A_FROZEN",
+    "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
+    "proofTiersUnderEvaluation": ["T1_SOURCE"]
+  },
+  "freshnessClaims": [
+    {
+      "id": "repository-source-d2a-microphone-correction-merge-closeout",
+      "status": "CURRENT",
+      "observedAt": "2026-08-09T18:05:08Z",
+      "expiresAt": "2026-08-10T18:05:08Z",
+      "evidenceSourceId": "d2a-microphone-correction-merge-closeout-20260809-1805",
+      "evidenceMode": "local-offline-and-github-read-only",
+      "factsCovered": ["PR #194 immutable and synchronized source identity", "PR #194 merge identity", "review-only PR disposition", "exact Phase 1 CI identity", "D2A frozen state"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "CROSS_PLATFORM"
+    },
+    {
+      "id": "provider-critical-b3-linked-readback",
+      "status": "STALE_BLOCKED",
+      "observedAt": "2026-08-02T06:00:44Z",
+      "expiresAt": "2026-08-02T14:00:44Z",
+      "evidenceSourceId": "b3-immutable-source-binding-20260802-0600",
+      "evidenceMode": "local-and-linked-read-only",
+      "factsCovered": ["deployed migration 20260730161737", "absence of undeployed forward corrections", "historical live pre-correction ACL readback"],
+      "freshnessClass": "PROVIDER_CRITICAL",
+      "authorityAllowed": "PROVIDER_READBACK_ONLY",
+      "platform": "CROSS_PLATFORM"
+    }
+  ],
   "openImplementationPrs": [],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -526,6 +567,7 @@
     {
       "id": "d2a-microphone-correction-merge-closeout-20260809-1805",
       "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-09T18:05:08Z",
       "covers": [
         "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
         "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree",
@@ -614,7 +656,7 @@
     {"id": "pr-d-read-only-inventory-handoff-20260802-0647", "mode": "local-offline", "covers": ["draft PR #143", "branch codex/first-pass-assurance-native-provider-runtime-artifact", "worktree /Users/loverslane/chillywood-assurance-worktrees/d-native-provider-runtime-artifact", "base 62d4b526675e5a10177d37c53670709d63062293", "inventory head 165533d50a58947140982f1a5dbe3fd13add30a5 tree d76676e7ddff74c09ffa4bc2994153772b69b73a", "inventory SHA-256 0bc1e8e6f16cd6bc391ab93380742090ada68c7adbcd307f486b3dc977ab0582", "assurance plan eas-build-update-release requirements and architecture clear", "Android instrumentation and unit-test gaps mapped", "iOS generated-project and native-call XCTest gaps mapped", "EAS profile/runtime/channel/native-capability parity gap mapped", "provider fixture and signed-artifact proof gaps mapped", "first objective limited to offline deterministic T0/T1/T2 parity and eight negative controls", "no build, OTA, provider contact, signed artifact, install, physical proof, or public-canary claim"]},
     {"id": "pr52-pr53-source-coverage-disposition-20260802-0647", "mode": "local-and-github-read-only", "covers": ["PR #52 head 2b7f9fa491180cb1f2b9a883c07b317eb39ae43a tree ce08584a062185252885a825267f3481a9dbf5a1", "15/15 changed paths and 34/34 hunks classified", "B1 PR #70 preserves or hardens 17 hunks", "B2 PR #69 preserves or hardens 13 hunks", "four activation-contract bundle hunks intentionally rejected atomically with manifest, test, workflow registration, and package registration absent from main", "B3 PR #75 overlap zero", "zero unresolved required source, migrations, RevenueCat corrections, LiveKit corrections, room-host corrections, tests, workflow behavior, or package behavior", "machine-readable review-only matrix docs/reviews/pr52-source-coverage-matrix-v1.json at retained PR #53 head 4ce691197be7438a12877725cc75810d4080e10a", "matrix evidence SHA-256 2dab297aa099b2ade02f4411ae25a0f708c13529ad48b3c262c98fadea4c87d0", "P0=0 and P1=0", "PR #52 closed unmerged as superseded and PR #53 closed unmerged as stale review-only", "both branches retained", "no database, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
     {"id": "b3-merge-closeout-20260802-0634", "mode": "local-and-github-read-only", "covers": ["PR #75 merged normally at expected synchronized head 463c9160c403e466555702e1c9cc4cd4a8a53cc9", "merge b72ed6a5f1b9897504dccf14edad9df107d573b6 and canonical tree 2405577c7215140a3d731bff7b53012997a4d635", "immutable source a24efd543c5f19290879e7089c1c57768bc03a4d tree 7e473537accb4b2fd9a7ac1c6097ed46fa562a53 preserved", "deployed predecessor SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765 unchanged", "forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38 represented in Git and undeployed", "local pgTAP 48/48 plus compatibility 4/4", "linked dry-run PASS_NO_APPLY_SCOPED with B2 20260730170000, B1 20260730230022, and B3 20260730230031 pending exactly once", "review PRs #77, #78, #79, and #141 P0=0/P1=0 and closed unmerged with branches retained", "exact Phase 1 CI run 30735474318 attempt 2 passed 13/13", "post-merge source/readback 14/14 passed", "no migration, ACL, production row, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
-    {"id": "b3-immutable-source-binding-20260802-0600", "mode": "local-and-linked-read-only", "covers": ["starting main 483175fc1b3784fdc4db670c1aea2311d5d80e4f", "preserved successor b2cd931802329d3aee82a0ab2bad6ce843950387 tree 046f390851a2eec18d398a0599e8fea0124f502b without reset", "immutable B3 source a24efd543c5f19290879e7089c1c57768bc03a4d tree 7e473537accb4b2fd9a7ac1c6097ed46fa562a53 pushed normally to PR #75", "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765", "20260725224000 confirmed source-only and absent from executable source", "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38", "live pre-correction ACL explicitly includes anon but source correction revokes it", "null auth denied and never inferred as service role", "exact authenticated self or exact-room host contract", "explicit dual-provenance service_role contract", "empty SECURITY DEFINER search path and fully qualified objects", "source/model 14/14, deterministic 3/3, negative controls 8/8", "isolated local pgTAP 48/48 plus compatibility 4/4", "post-rollback fixture and pgTAP counts zero", "scope 7/8 files and 2122/2400 net lines in one database/RLS domain", "PRs #77-#79 retained historical/stale pending additive synchronized review", "B1 and B2 remain merged with forward corrections undeployed", "no linked migration, ACL, row, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
+    {"id": "b3-immutable-source-binding-20260802-0600", "mode": "local-and-linked-read-only", "observedAt": "2026-08-02T06:00:44Z", "sourceCommit": "4a3ccafe3416c71338627c4f0fe05209c2243460", "covers": ["starting main 483175fc1b3784fdc4db670c1aea2311d5d80e4f", "preserved successor b2cd931802329d3aee82a0ab2bad6ce843950387 tree 046f390851a2eec18d398a0599e8fea0124f502b without reset", "immutable B3 source a24efd543c5f19290879e7089c1c57768bc03a4d tree 7e473537accb4b2fd9a7ac1c6097ed46fa562a53 pushed normally to PR #75", "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765", "20260725224000 confirmed source-only and absent from executable source", "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38", "live pre-correction ACL explicitly includes anon but source correction revokes it", "null auth denied and never inferred as service role", "exact authenticated self or exact-room host contract", "explicit dual-provenance service_role contract", "empty SECURITY DEFINER search path and fully qualified objects", "source/model 14/14, deterministic 3/3, negative controls 8/8", "isolated local pgTAP 48/48 plus compatibility 4/4", "post-rollback fixture and pgTAP counts zero", "scope 7/8 files and 2122/2400 net lines in one database/RLS domain", "PRs #77-#79 retained historical/stale pending additive synchronized review", "B1 and B2 remain merged with forward corrections undeployed", "no linked migration, ACL, row, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
     {"id": "b2-merge-closeout-20260802-0431", "mode": "local-and-github-read-only", "covers": ["main and PR #69 merge 5bcfa8cd7d3ed6ce733dae1483bda6e8eb4e62d6", "immutable source fc451c509c7af5c220c11ab9f3d34a0db608f35d", "synchronized head 81892f3dae544713d8e35512da895cd99c610966", "synchronized and merged tree 50e49282a4087c9a784fec74b0f6bfa1ce2aa00a", "source delta 0ff30d73629020ac985c9bafb21100f7a6f6bf7df4f70cbfe0182b8dfd462c46", "changed-file hash 93f357c635ec14c8a357cd9bf7cee37c45bf6aeb584ee24a9484a9d61f289a4d", "migration-set hash 864a53d7732f014684f031eb30db908912fd8b49d6dd86f2eb25557d0fe6da37", "12 files with 3302 additions and 2 deletions in one RevenueCat/database domain", "deployed predecessor migrations byte-exact", "forward correction 5ecd5159055a704f0e76842ab56ff20fe98a760cdf001eea08abe25407ee30c9 merged to source but not deployed", "focused source tests 22/22 with store policy 14/14 and sanitized provider fixtures 8/8", "local pgTAP 120/120", "deterministic concurrency and atomicity 10/10", "all cleanup counters zero", "direct no-apply BLOCKED_INTERNAL_SOURCE_ASSEMBLY_REQUIRES_PRESERVED_B3 before planning with no apply", "assembled tree 47be54602eb3c9cc614e29aa21034237284a1d19 PASS_NO_APPLY_SCOPED with B2, B1, and B3 pending exactly once", "PRs #71, #72, #73, and #138 P0=0/P1=0, formal review-head PASS, closed unmerged with branches retained", "exact post-review Phase 1 CI run 30732164462 passed 13/13", "B3 successor b2cd931802329d3aee82a0ab2bad6ce843950387 tree 046f390851a2eec18d398a0599e8fea0124f502b clean and unpushed", "no migration apply, RevenueCat request, provider, production database, entitlement, money, payable-balance, or LiveKit mutation"]},
     {"id": "b1-merge-closeout-20260802-0151", "mode": "local-and-github-read-only", "covers": ["main 33674105cdbe5ffb72caefbde6a275e0425c8c29", "PR #70 merged normally from synchronized head d1840447c0bb5b069e78e1d2f03e6824170f2f16", "canonical tree 4d367db2eb70d08fa5be5688769c2171e099eddd", "CI run 30727344351 passed 13/13", "local pgTAP 28/28 and corrected predecessor 23/23", "concurrency 19/19", "linked dry-run PASS_NO_APPLY_SCOPED", "PRs #74, #76, #133, and #134 P0=0/P1=0 and closed unmerged", "no migration apply or provider/database mutation"]},
     {"id": "b1-ci-correction-readback-20260802-0120", "mode": "local-and-github-read-only", "covers": ["main 5a34a1da27cd7b1689d55889f966bfc3708541b7", "PR #70 corrected source 4425554ed713d05e17ef117c6fe33985b9800912", "CI run 30725970541 failed 12/13 only because predecessor pgTAP still expected retired v2 trigger", "corrected pgTAP requires enabled v3 and absent v2 and passes 23/23", "source contract 4/4", "scope 10/10 and 2500/2500", "migration-set unchanged", "no provider or database mutation"]},
@@ -626,6 +668,6 @@
     {"id": "supabase-migration-readback-and-no-apply-dry-run-20260731", "mode": "read-only", "covers": ["remote migration versions", "names", "statement arrays", "hashes", "assembled source parity", "pending forward-only migrations", "no-apply dry-run"]},
     {"id": "owner-supplied-safety-snapshot-20260730", "mode": "provided", "covers": ["switches", "schedules", "effective baseline", "sentinel counts", "non-interference"]}
   ],
-  "liveProviderReadback": true,
-  "providerReadback": {"github": true, "supabase": true, "eas": false, "apple": false, "googlePlay": false, "revenueCat": false, "liveKit": false}
+  "liveProviderReadback": false,
+  "providerReadback": {"github": true, "supabase": false, "eas": false, "apple": false, "googlePlay": false, "revenueCat": false, "liveKit": false}
 }
