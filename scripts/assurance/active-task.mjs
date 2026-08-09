@@ -60,9 +60,16 @@ function resolveImplementation(truth, identity, facts, featureId) {
   if (open.length === 1 && open[0].branch !== identity.branch) return { ok: false, finding: "ACTIVE_IMPLEMENTATION_BRANCH_MISMATCH" };
   const e0 = truth?.e0CurrentTruthBinding;
   const d2a = truth?.d2bCurrentTruthBinding?.preservedDependencies?.d2a;
-  const assuranceInfrastructure = featureId === "assurance-efficiency-e0" || featureId === "codex-security-scan-reliability-s0";
-  const immutableSourceHead = assuranceInfrastructure ? (e0?.immutableSourceHead ?? identity.head) : (d2a?.head ?? identity.head);
-  const immutableSourceTree = assuranceInfrastructure ? (e0?.immutableSourceTree ?? identity.tree) : (d2a?.tree ?? identity.tree);
+  const immutableSourceHead = featureId === "assurance-efficiency-e0"
+    ? (e0?.immutableSourceHead ?? identity.head)
+    : featureId === "codex-security-scan-reliability-s0"
+      ? identity.head
+      : (d2a?.head ?? identity.head);
+  const immutableSourceTree = featureId === "assurance-efficiency-e0"
+    ? (e0?.immutableSourceTree ?? identity.tree)
+    : featureId === "codex-security-scan-reliability-s0"
+      ? identity.tree
+      : (d2a?.tree ?? identity.tree);
   return {
     ok: true,
     value: open.length === 1
