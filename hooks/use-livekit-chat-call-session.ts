@@ -119,6 +119,12 @@ export function useLiveKitChatCallSession({
     && initialMediaPreferences?.cameraEnabled !== false;
   const initialMicEnabled = initialMediaPreferences?.micEnabled !== false;
   const roomRef = useRef<Room | null>(null);
+  const sessionKeyRef = useRef(sessionKey);
+  const sessionGenerationRef = useRef(0);
+  if (sessionKeyRef.current !== sessionKey) {
+    sessionKeyRef.current = sessionKey;
+    sessionGenerationRef.current += 1;
+  }
   const productRoomRef = useRef<CommunicationRoomState | null>(null);
   const identityRef = useRef<CommunicationIdentity | null>(null);
   const membershipsRef = useRef<CommunicationRoomMembership[]>([]);
@@ -135,6 +141,10 @@ export function useLiveKitChatCallSession({
   const cameraFacingRef = useRef<"user" | "environment">("user");
   const speakerRequestedRef = useRef(inviteCallType === "video");
   const mediaControlRef = useRef<Promise<unknown> | null>(null);
+  const mediaControlOwnerRef = useRef<{ token: symbol; sessionKey: string; generation: number } | null>(null);
+  const pendingMicToggleRef = useRef(false);
+  const pendingMicOwnerRef = useRef<{ token: symbol; sessionKey: string; generation: number } | null>(null);
+  const micReconciliationBlockedRef = useRef(false);
   const ownsIosAudioConfigurationRef = useRef(false);
   const onRoomEndedRef = useRef(onRoomEnded);
   const telemetryStartedAtRef = useRef(Date.now());
@@ -154,6 +164,20 @@ export function useLiveKitChatCallSession({
   useEffect(() => {
     onRoomEndedRef.current = onRoomEnded;
   }, [onRoomEnded]);
+
+  useEffect(() => {
+    const owner = mediaControlOwnerRef.current;
+    if (owner && (owner.sessionKey !== sessionKeyRef.current || owner.generation !== sessionGenerationRef.current)) {
+      mediaControlOwnerRef.current = null;
+      mediaControlRef.current = null;
+      setMediaControlsBusy(false);
+    }
+    const pendingOwner = pendingMicOwnerRef.current;
+    if (pendingOwner && (pendingOwner.sessionKey !== sessionKeyRef.current || pendingOwner.generation !== sessionGenerationRef.current)) {
+      pendingMicOwnerRef.current = null;
+      pendingMicToggleRef.current = false;
+    }
+  }, [sessionKey]);
 
   const telemetryBinding = useMemo(() => ({
     callInviteId: inviteId,
@@ -235,42 +259,115 @@ export function useLiveKitChatCallSession({
     setParticipants(views);
   }, []);
 
-  const runMediaControl = useCallback(async <T,>(operation: () => Promise<T>): Promise<T | null> => {
+  const runMediaControl = useCallback(async <T,>(
+    operation: (owner: { token: symbol; sessionKey: string; generation: number }) => Promise<T>,
+    binding?: { token?: symbol; sessionKey: string; generation: number },
+  ): Promise<T | null> => {
     if (mediaControlRef.current) return null;
+    const owner = { token: binding?.token ?? Symbol("media-control"), sessionKey: binding?.sessionKey ?? "", generation: binding?.generation ?? -1 };
     setMediaControlsBusy(true);
-    const pending = operation();
+    const pending = operation(owner);
     mediaControlRef.current = pending;
+    mediaControlOwnerRef.current = owner;
     try {
       return await pending;
     } finally {
-      mediaControlRef.current = null;
-      setMediaControlsBusy(false);
+      if (
+        mediaControlOwnerRef.current?.token === owner.token
+        && mediaControlOwnerRef.current.sessionKey === owner.sessionKey
+        && mediaControlOwnerRef.current.generation === owner.generation
+      ) {
+        mediaControlRef.current = null;
+        mediaControlOwnerRef.current = null;
+        setMediaControlsBusy(false);
+      }
     }
+  }, []);
+
+  const readCurrentMembershipMediaState = useCallback(async (
+    originStillCurrent?: () => boolean,
+    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity; roomId: string; userId: string },
+  ) => {
+    const currentIdentity = binding?.identity ?? identityRef.current;
+    const currentRoom = binding?.room ?? productRoomRef.current;
+    const roomId = binding?.roomId ?? currentRoom?.roomId;
+    const userId = binding?.userId ?? currentIdentity?.userId;
+    if (!currentIdentity || !currentRoom || !roomId || !userId) return null;
+    const remainsCurrent = () => (
+      identityRef.current === currentIdentity
+      && productRoomRef.current === currentRoom
+      && (!originStillCurrent || originStillCurrent())
+    );
+    const snapshot = await getCommunicationRoomSnapshot(roomId).catch(() => null);
+    if (
+      !remainsCurrent()
+      || !snapshot
+      || snapshot.room.roomId !== roomId
+      || snapshot.room.status !== "active"
+    ) return null;
+    const membership = snapshot.memberships.find((entry) => (
+      entry.roomId === roomId
+      && entry.userId === userId
+      && !entry.leftAt
+      && (entry.membershipState === "active" || entry.membershipState === "reconnecting")
+    )) ?? null;
+    if (!membership || !remainsCurrent()) return null;
+    membershipsRef.current = [
+      ...snapshot.memberships.filter((entry) => entry.userId !== membership.userId),
+      membership,
+    ];
+    return membership;
   }, []);
 
   const updateMembershipMediaState = useCallback(async (
     cameraOn: boolean,
     micOn: boolean,
     membershipState: "active" | "reconnecting" = "active",
+    strict = false,
+    originStillCurrent?: () => boolean,
+    binding?: { room: CommunicationRoomState; identity: CommunicationIdentity; roomId: string; userId: string },
   ) => {
-    const currentIdentity = identityRef.current;
-    const currentRoom = productRoomRef.current;
-    if (!currentIdentity || !currentRoom) return;
-    const membership = await touchCommunicationRoomSession({
-      roomId: currentRoom.roomId,
-      userId: currentIdentity.userId,
+    const currentIdentity = binding?.identity ?? identityRef.current;
+    const currentRoom = binding?.room ?? productRoomRef.current;
+    const roomId = binding?.roomId ?? currentRoom?.roomId;
+    const userId = binding?.userId ?? currentIdentity?.userId;
+    if (!currentIdentity || !currentRoom || !roomId || !userId) return null;
+    const remainsCurrent = () => (
+      identityRef.current === currentIdentity
+      && productRoomRef.current === currentRoom
+      && (!originStillCurrent || originStillCurrent())
+    );
+    const isExact = (candidate: CommunicationRoomMembership | null | undefined) => {
+      return !!candidate
+        && candidate.roomId === roomId
+        && candidate.userId === userId
+        && candidate.cameraEnabled === cameraOn
+        && candidate.micEnabled === micOn
+        && !candidate.leftAt
+        && (candidate.membershipState === "active" || candidate.membershipState === "reconnecting");
+    };
+    if (!remainsCurrent()) return null;
+    let membership = await touchCommunicationRoomSession({
+      roomId,
+      userId,
       membershipState,
       cameraEnabled: cameraOn,
       micEnabled: micOn,
       displayName: currentIdentity.displayName,
       avatarUrl: currentIdentity.avatarUrl,
     }).catch(() => null);
-    if (!membership) return;
+    if (!remainsCurrent()) return null;
+    if (strict && !isExact(membership)) {
+      const observed = await readCurrentMembershipMediaState(remainsCurrent, binding);
+      membership = isExact(observed) ? observed : null;
+    }
+    if (!membership || !remainsCurrent() || (strict && !isExact(membership))) return null;
     membershipsRef.current = [
       ...membershipsRef.current.filter((entry) => entry.userId !== membership.userId),
       membership,
     ];
-  }, []);
+    return membership;
+  }, [readCurrentMembershipMediaState]);
 
   const setSpeaker = useCallback(async (nextSpeakerEnabled: boolean) => {
     const audioSessionReady = await LiveKitAudioSession.startAudioSession()
@@ -289,30 +386,238 @@ export function useLiveKitChatCallSession({
   }, []);
 
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
-    const result = await runMediaControl(async () => {
-      const liveKitRoom = roomRef.current;
-      if (!liveKitRoom || liveKitRoom.state !== ConnectionState.Connected) return false;
-      if (nextEnabled) {
-        const audioSessionReady = await LiveKitAudioSession.startAudioSession()
-          .then(() => true)
-          .catch(() => false);
-        if (!audioSessionReady) return false;
+    const result = await runMediaControl(async (leaseBinding) => {
+      try {
+        const liveKitRoom = roomRef.current;
+        if (!liveKitRoom || liveKitRoom.state !== ConnectionState.Connected) return false;
+        const originSessionKey = sessionKeyRef.current;
+        const originSessionGeneration = sessionGenerationRef.current;
+        if (nextEnabled) {
+          const audioSessionReady = await LiveKitAudioSession.startAudioSession()
+            .then(() => true)
+            .catch(() => false);
+          if (!audioSessionReady) return false;
+        }
+        if (
+          sessionKeyRef.current !== originSessionKey
+          || sessionGenerationRef.current !== originSessionGeneration
+          || roomRef.current !== liveKitRoom
+        ) return false;
+        const currentRoom = productRoomRef.current;
+        const currentIdentity = identityRef.current;
+        const originRoomId = currentRoom?.roomId ?? "";
+        const originUserId = currentIdentity?.userId ?? "";
+        if (
+          currentRoom?.status !== "active"
+          || !currentIdentity
+          || (channelState !== "live" && channelState !== "reconnecting")
+        ) return false;
+        const originStillCurrent = () => (
+          sessionKeyRef.current === originSessionKey
+          && sessionGenerationRef.current === originSessionGeneration
+          && roomRef.current === liveKitRoom
+          && productRoomRef.current === currentRoom
+          && identityRef.current === currentIdentity
+          && currentRoom.roomId === originRoomId
+          && currentIdentity.userId === originUserId
+        );
+        if (!originStillCurrent()) return false;
+
+        const priorRequested = micRequestedRef.current;
+        const priorUi = micEnabled;
+        const priorCameraRequested = cameraRequestedRef.current;
+        const priorCameraUi = cameraEnabled;
+        const priorActual = publicationIsUsable(
+          liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+        );
+        const priorCameraActual = publicationIsUsable(
+          liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+        );
+        const priorDurable = await readCurrentMembershipMediaState(originStillCurrent, {
+          room: currentRoom,
+          identity: currentIdentity,
+          roomId: originRoomId,
+          userId: originUserId,
+        });
+        if (!originStillCurrent()) return false;
+        const priorConverged = !!priorDurable
+          && priorDurable.roomId === currentRoom.roomId
+          && priorDurable.userId === currentIdentity.userId
+          && !priorDurable.leftAt
+          && (priorDurable.membershipState === "active" || priorDurable.membershipState === "reconnecting")
+          && priorDurable.micEnabled === priorActual
+          && priorActual === priorRequested
+          && priorRequested === priorUi
+          && priorDurable.cameraEnabled === priorCameraActual
+          && priorCameraActual === priorCameraRequested
+          && priorCameraRequested === priorCameraUi;
+        if (!priorConverged) {
+          setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
+          if (micReconciliationBlockedRef.current) {
+            reportRuntimeError(
+              "chat-call-livekit-microphone-membership-reconciliation",
+              new Error("microphone_reconciliation_still_unprovable"),
+            );
+          }
+          return false;
+        }
+        micReconciliationBlockedRef.current = false;
+        if (!originStillCurrent()) return false;
+        pendingMicToggleRef.current = true;
+        pendingMicOwnerRef.current = leaseBinding;
+
+        let publication: TrackPublication | undefined;
+        let forwardError: unknown = null;
+        try {
+          publication = await liveKitRoom.localParticipant.setMicrophoneEnabled(nextEnabled);
+        } catch (errorValue) {
+          forwardError = errorValue;
+        }
+        const targetActual = publicationIsUsable(
+          liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+        );
+        if (!originStillCurrent()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          return false;
+        }
+        const nativeTargetConfirmed = !forwardError
+          && targetActual === nextEnabled
+          && (!nextEnabled || !!publication)
+          && publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+          ) === priorCameraActual;
+        if (!nativeTargetConfirmed) {
+          let nativeRestored = targetActual === priorActual;
+          if (!nativeRestored) {
+            await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+            if (!originStillCurrent()) return false;
+            nativeRestored = publicationIsUsable(
+              liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+            ) === priorActual;
+          }
+          const cameraUnchanged = publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+          ) === priorCameraActual;
+          if (!nativeRestored || !cameraUnchanged) micReconciliationBlockedRef.current = true;
+          setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
+          reportRuntimeError(
+            "chat-call-livekit-microphone-membership-reconciliation",
+            forwardError ?? new Error(nativeRestored ? "microphone_target_unconfirmed" : "microphone_compensation_unprovable"),
+          );
+          refreshParticipantViews();
+          return false;
+        }
+
+        if (!originStillCurrent()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          const restored = publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+          ) === priorActual;
+          if (!restored) micReconciliationBlockedRef.current = true;
+          return false;
+        }
+
+        const membership = await updateMembershipMediaState(
+          priorCameraRequested,
+          nextEnabled,
+          priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
+          true,
+          originStillCurrent,
+          { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },
+        );
+        const targetCameraUnchanged = publicationIsUsable(
+          liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+        ) === priorCameraActual;
+        const targetCallValid = liveKitRoom.state === ConnectionState.Connected
+          || liveKitRoom.state === ConnectionState.Reconnecting;
+        if (!originStillCurrent()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          return false;
+        }
+        if (!membership || !targetCameraUnchanged || !targetCallValid) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          if (!originStillCurrent()) return false;
+          const nativeRestored = publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+          ) === priorActual;
+          const durableRestored = await updateMembershipMediaState(
+            priorDurable.cameraEnabled,
+            priorDurable.micEnabled,
+            priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
+            true,
+            originStillCurrent,
+            { room: currentRoom, identity: currentIdentity, roomId: originRoomId, userId: originUserId },
+          );
+          if (!originStillCurrent()) return false;
+          const cameraUnchanged = publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+          ) === priorCameraActual;
+          const compensationProved = nativeRestored
+            && !!durableRestored
+            && durableRestored.roomId === priorDurable.roomId
+            && durableRestored.userId === priorDurable.userId
+            && durableRestored.micEnabled === priorDurable.micEnabled
+            && durableRestored.cameraEnabled === priorDurable.cameraEnabled
+            && cameraUnchanged
+            && (liveKitRoom.state === ConnectionState.Connected
+              || liveKitRoom.state === ConnectionState.Reconnecting);
+          micReconciliationBlockedRef.current = !compensationProved;
+          setMediaPermissionMessage("Microphone state could not be confirmed. The call remains connected.");
+          if (!compensationProved) {
+            reportRuntimeError(
+              "chat-call-livekit-microphone-membership-reconciliation",
+              new Error("microphone_compensation_unprovable"),
+            );
+          }
+          refreshParticipantViews();
+          return false;
+        }
+
+        const leaseStillOwned = () => (
+          mediaControlOwnerRef.current?.sessionKey === leaseBinding.sessionKey
+          && mediaControlOwnerRef.current.generation === leaseBinding.generation
+          && mediaControlOwnerRef.current.token === leaseBinding.token
+        );
+        const commitConfirmedMicrophoneTarget = () => {
+          if (!originStillCurrent() || !leaseStillOwned()) return false;
+          micRequestedRef.current = nextEnabled;
+          setMicEnabledState(nextEnabled);
+          setMediaPermissionMessage(null);
+          refreshParticipantViews();
+          if (nextEnabled) {
+            emitStage("local_audio_published", { connectionState: String(liveKitRoom.state) });
+            updateFirstMediaState({ localAudioPublished: true });
+          }
+          return true;
+        };
+        if (!commitConfirmedMicrophoneTarget()) {
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
+          return false;
+        }
+        return true;
+      } finally {
+        if (
+          pendingMicOwnerRef.current?.sessionKey === leaseBinding.sessionKey
+          && pendingMicOwnerRef.current.generation === leaseBinding.generation
+          && pendingMicOwnerRef.current.token === leaseBinding.token
+        ) {
+          pendingMicOwnerRef.current = null;
+          pendingMicToggleRef.current = false;
+        }
       }
-      const publication = await liveKitRoom.localParticipant.setMicrophoneEnabled(nextEnabled);
-      if (nextEnabled && !publication) return false;
-      micRequestedRef.current = nextEnabled;
-      setMicEnabledState(nextEnabled);
-      setMediaPermissionMessage(null);
-      await updateMembershipMediaState(cameraRequestedRef.current, nextEnabled);
-      refreshParticipantViews();
-      if (nextEnabled) {
-        emitStage("local_audio_published", { connectionState: String(liveKitRoom.state) });
-        updateFirstMediaState({ localAudioPublished: true });
-      }
-      return true;
-    });
+    }, { sessionKey: sessionKeyRef.current, generation: sessionGenerationRef.current });
     return result === true;
-  }, [emitStage, refreshParticipantViews, runMediaControl, updateFirstMediaState, updateMembershipMediaState]);
+  }, [
+    cameraEnabled,
+    channelState,
+    emitStage,
+    micEnabled,
+    readCurrentMembershipMediaState,
+    refreshParticipantViews,
+    runMediaControl,
+    updateFirstMediaState,
+    updateMembershipMediaState,
+  ]);
 
   const setCameraEnabled = useCallback(async (nextEnabled: boolean) => {
     const result = await runMediaControl(async () => {
@@ -597,7 +902,7 @@ export function useLiveKitChatCallSession({
         .on(RoomEvent.TrackMuted, refresh)
         .on(RoomEvent.TrackUnmuted, refresh)
         .on(RoomEvent.LocalTrackPublished, (publication) => {
-          if (publication.source === Track.Source.Microphone) {
+          if (publication.source === Track.Source.Microphone && !pendingMicToggleRef.current) {
             updateFirstMediaState({ localAudioPublished: true });
             emitStage("local_audio_published", { connectionState: String(liveKitRoom.state) });
           }
