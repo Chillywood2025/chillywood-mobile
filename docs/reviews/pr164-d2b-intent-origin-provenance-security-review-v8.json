@@ -5,7 +5,7 @@
   "reviewType": "persistent-isolated-level-c-review-lane",
   "reviewLevel": "C",
   "classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
-  "reviewTimestamp": "2026-08-09T02:15:00Z",
+  "reviewTimestamp": "2026-08-09T02:05:00Z",
   "reviewBranch": "codex/first-pass-assurance-d2b-review-intent-origin-provenance-security",
   "reviewEvidenceParentHead": "cd47e83cb119f6bf5d80ae09d97d5534ace96a5d",
   "historicalEvidencePreserved": ["v1", "v2", "v3", "v4", "v5", "v6", "v7"],
