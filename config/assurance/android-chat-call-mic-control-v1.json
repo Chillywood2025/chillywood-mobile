@@ -11,7 +11,7 @@
     "hooks/use-communication-room-session.ts": "0da0e6dcd12875fd56f295f2f99d11a29a0a145a0b4c444f4f3a94d63096347d",
     "_lib/communication.ts": "efcdb6fc1151468928aea5bac45ca3c0a111782993b503ef49d744a67c122834",
     "_lib/chatCallMediaProviderPolicy.ts": "33b45618fea1b2850081fa1396146a6f58ff76d93c20efa90ffe66cf5e4c0cf9",
-    "package-lock.json": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28"
+    "package-lock.json": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c"
   },
   "sourceSlices": {
     "livekit-run-media-control": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const runMediaControl", "end": "  const updateMembershipMediaState", "sha256": "0c44826a22e49e89edf00e16dc7a4fb8c3826b749015ff059a7dcd8a9eedb550"},
@@ -20,6 +20,12 @@
     "legacy-ensure-track-kind": {"path": "hooks/use-communication-room-session.ts", "start": "  const ensureTrackKind", "end": "  const setCameraCaptureEnabled", "sha256": "cc976894698106d1e3f1c80ecd536f7b7657bfdc2467eca3d76ac57d8888040b"},
     "legacy-set-microphone": {"path": "hooks/use-communication-room-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const toggleMic", "sha256": "a19d6f5b16e1a362e955a19e1605600f50879f71d09053642b8a559598348b52"}
   },
+  "bindingNegativeControls": [
+    "D2A_BINDING_DUPLICATE_SLICE_MARKER",
+    "D2A_BINDING_DUPLICATE_SLICE_CONTRACT",
+    "D2A_BINDING_UNBOUND_SLICE_PATH",
+    "D2A_BINDING_STALE_SOURCE_DIGEST"
+  ],
   "sharedUiCases": [
     "MIC_ON_LABEL", "MIC_MUTED_LABEL", "MUTE_ACCESSIBILITY", "UNMUTE_ACCESSIBILITY", "SELECTED_ON",
     "SELECTED_OFF", "DISABLED_BUSY", "DISABLED_LOADING", "DISABLED_ERROR_BOUNDARY", "PRESS_INVERTS_ONCE"
@@ -46,7 +52,9 @@
     "DUPLICATE_OVERLAPPING_OPERATION_SERIALIZED",
     "CAMERA_STATE_UNCHANGED_DURING_COMPENSATION",
     "TOKEN_PROVIDER_CLEANUP_NON_INTERFERENCE",
-    "DEFERRED_NATIVE_SESSION_ROLLOVER_ORIGIN_ONLY_COMPENSATED"
+    "DEFERRED_NATIVE_SESSION_ROLLOVER_ORIGIN_ONLY_COMPENSATED",
+    "DEFERRED_AUDIO_SESSION_ROLLOVER_DENIED_BEFORE_NATIVE",
+    "DEFERRED_PRIOR_READBACK_ROLLOVER_DENIED_BEFORE_NATIVE"
   ],
   "convergenceNegativeControls": [
     "ANDROID_MIC_LIVEKIT_MEMBERSHIP_FAILURE_RETURNS_SUCCESS",

@@ -12,11 +12,42 @@ const source = fs.readFileSync(sourcePath, "utf8");
 const contract = JSON.parse(fs.readFileSync("config/assurance/android-chat-call-mic-control-v1.json", "utf8"));
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const stable = (value) => JSON.stringify(value, Object.keys(value).sort());
+const count = (value, needle) => value.split(needle).length - 1;
 const between = (value, start, end) => {
   const first = value.indexOf(start);
   const last = value.indexOf(end, first + start.length);
   assert.ok(first >= 0 && last > first, `exact product slice missing: ${start}`);
   return value.slice(first, last);
+};
+
+const verifySourceAndSliceBindings = (candidate, readText = (path) => fs.readFileSync(path, "utf8")) => {
+  assert.equal(typeof candidate?.sourceBindings, "object", "source bindings required");
+  assert.equal(typeof candidate?.sourceSlices, "object", "source slices required");
+  const boundPaths = Object.keys(candidate.sourceBindings).sort();
+  assert.equal(new Set(boundPaths).size, boundPaths.length, "duplicate source binding path");
+  for (const path of boundPaths) {
+    assert.match(candidate.sourceBindings[path], /^[a-f0-9]{64}$/u, `invalid source digest: ${path}`);
+    assert.equal(hash(readText(path)), candidate.sourceBindings[path], `source digest mismatch: ${path}`);
+  }
+  const seenSlices = new Set();
+  for (const [id, slice] of Object.entries(candidate.sourceSlices).sort(([left], [right]) => left.localeCompare(right))) {
+    assert.equal(typeof slice.path, "string", `slice path missing: ${id}`);
+    assert.ok(Object.hasOwn(candidate.sourceBindings, slice.path), `slice path unbound: ${id}`);
+    assert.equal(typeof slice.start, "string", `slice start missing: ${id}`);
+    assert.equal(typeof slice.end, "string", `slice end missing: ${id}`);
+    assert.notEqual(slice.start, slice.end, `slice markers collide: ${id}`);
+    assert.match(slice.sha256, /^[a-f0-9]{64}$/u, `invalid slice digest: ${id}`);
+    const signature = `${slice.path}\u0000${slice.start}\u0000${slice.end}`;
+    assert.ok(!seenSlices.has(signature), `duplicate slice contract: ${id}`);
+    seenSlices.add(signature);
+    const text = readText(slice.path);
+    assert.equal(count(text, slice.start), 1, `slice start must be unique: ${id}`);
+    assert.equal(count(text, slice.end), 1, `slice end must be unique: ${id}`);
+    const start = text.indexOf(slice.start);
+    const end = text.indexOf(slice.end, start + slice.start.length);
+    assert.ok(start >= 0 && end > start, `slice order invalid: ${id}`);
+    assert.equal(hash(text.slice(start, end)), slice.sha256, `slice digest mismatch: ${id}`);
+  }
 };
 
 const mediaControlBindingSlice = between(source, "  const runMediaControl", "  const updateMembershipMediaState");
@@ -132,6 +163,7 @@ const touchCommunicationRoomSession = async (options) => {
 const getCommunicationRoomSnapshot = async () => {
   state.readbackCalls += 1;
   state.log.push("readback");
+  if (scenario.readbackGate) await scenario.readbackGate;
   const action = readbackQueue.shift() ?? "current";
   if (action === "null") return null;
   if (action === "target") state.durableMic = targetMic;
@@ -141,7 +173,7 @@ const getCommunicationRoomSnapshot = async () => {
   state.log.push(\`readback-observed:\${current.micEnabled}\`);
   return {room, memberships: [current]};
 };
-const LiveKitAudioSession = {startAudioSession: async () => scenario.audioSessionReady !== false};
+const LiveKitAudioSession = {startAudioSession: async () => {if (scenario.audioGate) await scenario.audioGate; return scenario.audioSessionReady !== false;}};
 const setMicEnabledState = (value) => {state.uiMic = value; state.log.push(\`ui:\${value}\`);};
 const setMediaPermissionMessage = (value) => {state.messages.push(value);};
 const refreshParticipantViews = () => {state.refreshCalls += 1;};
@@ -315,13 +347,68 @@ const cases = [
       assert.equal(observed.messages.includes("Microphone state could not be confirmed. The call remains connected."), true);
     },
   },
+  {
+    id: "DEFERRED_AUDIO_SESSION_ROLLOVER_DENIED_BEFORE_NATIVE",
+    custom: async () => {
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, audioGate: gate});
+      const pending = controls.setMicrophoneEnabled(true);
+      await Promise.resolve(); controls.rollover(); release();
+      const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assert.equal(observed.nativeCalls, 0); assert.equal(observed.touchCalls, 0); assertState(observed, false);
+    },
+  },
+  {
+    id: "DEFERRED_PRIOR_READBACK_ROLLOVER_DENIED_BEFORE_NATIVE",
+    custom: async () => {
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      const controls = createExactProductPath({initialMic: false, targetMic: true, readbackGate: gate});
+      const pending = controls.setMicrophoneEnabled(true);
+      for (let turn = 0; turn < 12 && controls.snapshot().readbackCalls === 0; turn += 1) await Promise.resolve();
+      controls.rollover(); release();
+      const result = await pending; const observed = controls.snapshot();
+      assert.equal(result, false); assert.equal(observed.nativeCalls, 0); assert.equal(observed.touchCalls, 0); assertState(observed, false);
+    },
+  },
 ];
 
 test("exact product and serializer slices remain hash-bound", () => {
+  verifySourceAndSliceBindings(contract);
   assert.equal(hash(source), contract.sourceBindings[sourcePath]);
   assert.equal(hash(mediaControlBindingSlice), contract.sourceSlices["livekit-run-media-control"].sha256);
   assert.equal(hash(microphoneSlice), contract.sourceSlices["livekit-set-microphone"].sha256);
   assert.deepEqual(contract.convergenceCases, cases.map(({id}) => id));
+});
+
+const bindingNegativeControls = [
+  "D2A_BINDING_DUPLICATE_SLICE_MARKER",
+  "D2A_BINDING_DUPLICATE_SLICE_CONTRACT",
+  "D2A_BINDING_UNBOUND_SLICE_PATH",
+  "D2A_BINDING_STALE_SOURCE_DIGEST",
+];
+
+test("source and slice binding negatives fail closed", () => {
+  assert.deepEqual(contract.bindingNegativeControls, bindingNegativeControls);
+  const clone = () => JSON.parse(JSON.stringify(contract));
+  const duplicateMarker = clone();
+  const marker = duplicateMarker.sourceSlices["livekit-set-microphone"].start;
+  const duplicateText = source.replace(marker, `${marker}\n${marker}`);
+  duplicateMarker.sourceBindings[sourcePath] = hash(duplicateText);
+  assert.throws(() => verifySourceAndSliceBindings(duplicateMarker, (path) => path === sourcePath ? duplicateText : fs.readFileSync(path, "utf8")), /slice start must be unique/u);
+
+  const duplicateSlice = clone();
+  duplicateSlice.sourceSlices.duplicate = {...duplicateSlice.sourceSlices["livekit-set-microphone"]};
+  assert.throws(() => verifySourceAndSliceBindings(duplicateSlice), /duplicate slice contract/u);
+
+  const unboundSlice = clone();
+  unboundSlice.sourceSlices["livekit-set-microphone"].path = "hooks/not-bound.ts";
+  assert.throws(() => verifySourceAndSliceBindings(unboundSlice), /slice path unbound/u);
+
+  const staleSource = clone();
+  staleSource.sourceBindings[sourcePath] = "0".repeat(64);
+  assert.throws(() => verifySourceAndSliceBindings(staleSource), /source digest mismatch/u);
 });
 
 for (const definition of cases) {
@@ -477,7 +564,7 @@ for (const control of negativeControls) {
   });
 }
 
-test("15-case evidence is deterministic 3/3", async () => {
+test("17-case evidence is deterministic 3/3", async () => {
   const hashes = [];
   for (let run = 0; run < 3; run += 1) {
     const evidence = [];
