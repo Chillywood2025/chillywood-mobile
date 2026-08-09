@@ -10,6 +10,7 @@ const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, re
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const manifest = readJson("config/release/android-production.json");
 const chatQaManifest = readJson("config/release/android-chat-livekit-qa.json");
+const d2bContract = readJson("config/assurance/android-native-call-origin-backup-v1.json");
 const appJson = readJson("app.json").expo;
 const packageJson = readJson("package.json");
 const expoImageManipulatorModuleConfig = readJson("node_modules/expo-image-manipulator/expo-module.config.json");
@@ -48,8 +49,24 @@ assert.equal(historicalBinding.runtimeVersion, manifest.runtimeVersion);
 assert.equal(chatQaManifest.platform, "android");
 assert.equal(chatQaManifest.packageIdentifier, manifest.packageIdentifier);
 assert.equal(chatQaManifest.nativeCompatibility?.schemaVersion, 1);
-assert.equal(chatQaManifest.nativeCompatibility?.digest, compatibility.digest,
-  "the replacement Android native inputs must bind to the isolated Chat QA runtime");
+assert.equal(
+  chatQaManifest.nativeCompatibility?.digest,
+  d2bContract.target?.priorNativeCompatibilityDigest,
+  "the installed Chat QA manifest must remain bound to its historical native source",
+);
+assert.equal(
+  compatibility.digest,
+  d2bContract.target?.correctedNativeCompatibilityDigest,
+  "the corrected Android native inputs must bind to the reviewed D2B source digest",
+);
+assert.notEqual(
+  compatibility.digest,
+  chatQaManifest.nativeCompatibility?.digest,
+  "D2B changes native source and must not be represented as present in build 86",
+);
+assert.equal(chatQaManifest.expectedNativeBuild, d2bContract.target?.historicalInstalledNativeBuild);
+assert.equal(d2bContract.target?.historicalInstalledBuildContainsFix, false);
+assert.equal(d2bContract.target?.newBinaryRequired, true);
 assert.notEqual(chatQaManifest.runtimeVersion, manifest.runtimeVersion);
 assert.notEqual(chatQaManifest.runtimeVersion, manifest.legacyBuild?.runtimeVersion);
 assert.equal(chatQaManifest.requiredNativeBehavior?.validatedAnswerDeclinePersistence, true);
