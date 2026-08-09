@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "contractId": "image-size-safe-dependency-replacement-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Replace every production Metro image-size node with one auditable local compatibility package that closes both unpatched denial-of-service advisory classes without changing Expo or React Native.",
+  "exactReason": "The owner-authorized verified upstream runtime snapshot contains 52 generated CommonJS and declaration files that Metro loads as one package. Tracking the complete package plus its deterministic local tarball is necessary for clean-checkout auditability and exceeds the repository's default file budget while remaining one dependency-security domain.",
+  "reviewer": "image-size-safe-four-lane-level-c-exact-head-review-set",
+  "supportingDomains": [
+    "dependency-test-infrastructure",
+    "documentation-metadata"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 70
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 3000
+  },
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "D2B product source",
+    "D2C provenance source",
+    "D2A source or resumption",
+    "Expo SDK or React Native major upgrade",
+    "dependency advisory exception or threshold change",
+    "native plugin or generated platform source",
+    "provider or database mutation",
+    "build, OTA or release action",
+    "current-truth files"
+  ]
+}
