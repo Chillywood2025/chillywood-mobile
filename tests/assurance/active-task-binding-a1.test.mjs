@@ -466,9 +466,22 @@ test("a completed binding is not an active task and no override can revive it", 
   assert.equal(competing.ok, false);
   assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
   assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: completedBinding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
-  const sentinelBlockedTruth = {
+  const unrelatedSentinelTruth = {
     ...completeTruth,
     lateReviewSentinels: canonicalTruth.lateReviewSentinels
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: unrelatedSentinelTruth,
+    protectedMainTruth: unrelatedSentinelTruth,
+    featureId: completedBinding.featureId
+  }).findings, ["ACTIVE_TASK_NONE"]);
+  const sentinelBlockedTruth = {
+    ...completeTruth,
+    lateReviewSentinels: [{
+      ...canonicalTruth.lateReviewSentinels[0],
+      successorCorrectionOwner: completedBinding.implementationBranch
+    }]
   };
   assert.deepEqual(activeTask({
     ...facts,

@@ -178,7 +178,8 @@ export function validateLateReviewSentinelState(record, options = {}) {
     if (lateReviewAllowedOwners(sentinel).length === 0) findings.push({ id: "LATE_REVIEW_OWNER_POLICY_INVALID", prNumber: sentinel.prNumber });
     if (claimsResolution && !resolved) findings.push({ id: "LATE_REVIEW_RESOLUTION_EVIDENCE_INVALID", prNumber: sentinel.prNumber });
     if (resolved) continue;
-    if (record?.activeTaskBinding?.phase === "COMPLETE") {
+    if (record?.activeTaskBinding?.phase === "COMPLETE"
+      && sentinel.successorCorrectionOwner === record.activeTaskBinding.implementationBranch) {
       findings.push({ id: "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", prNumber: sentinel.prNumber });
     }
     const binding = typeof sentinel.bindingPath === "string" ? record?.[sentinel.bindingPath] : null;
