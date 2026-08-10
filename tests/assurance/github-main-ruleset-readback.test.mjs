@@ -24,6 +24,19 @@ test("ruleset condition substitution away from main fails", () => {
   assert.ok(validate(candidate).some((error) => error.includes("protected main condition")));
 });
 
+test("publisher authority and pull-request policy widening fail", () => {
+  for (const mutate of [
+    (candidate) => candidate.requiredCheckPublisherBoundary.trustedRepositoryWriteActors.push("attacker"),
+    (candidate) => { candidate.requiredCheckPublisherBoundary.forkWorkflowWriteTokensAllowed = true; },
+    (candidate) => candidate.pullRequestRequirements.bypassActors.push("attacker"),
+    (candidate) => { candidate.pullRequestRequirements.requiredReviewThreadResolution = false; }
+  ]) {
+    const candidate = structuredClone(contract);
+    mutate(candidate);
+    assert.notDeepEqual(validate(candidate), []);
+  }
+});
+
 test("owner authorization substitution fails", () => {
   const receipt = structuredClone(authorizationReceipt);
   receipt.bodySha256 = "0".repeat(64);

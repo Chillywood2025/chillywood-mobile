@@ -498,6 +498,8 @@
         "requiredStatusCheckToAdd": {"const": "Chi'llywood / Codex Review Exact Head"},
         "preserveExistingRequiredStatusChecks": {"const": true},
         "strictRequiredStatusChecksPolicy": {"const": true},
+        "requiredCheckPublisherBoundary": {"const": {"expectedGitHubApp": "github-actions", "repositoryOwnerType": "User", "rootAuthority": "Chillywood2025", "trustedRepositoryWriteActors": ["Chillywood2025"], "unexpectedWriteActorResult": "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR", "forkWorkflowWriteTokensAllowed": false}},
+        "pullRequestRequirements": {"const": {"requiredReviewThreadResolution": true, "dismissStaleReviewsOnPush": true, "bypassActors": []}},
         "applicationState": {"const": "APPLIED_AND_READ_BACK_POST_A1_MERGE"},
         "applicationReadback": {
           "type": "object",

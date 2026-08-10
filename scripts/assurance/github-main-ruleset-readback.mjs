@@ -18,6 +18,19 @@ export const phase1Checks = [
 ];
 export const requiredChecks = [exactHeadCheck, ...phase1Checks];
 export const mainBranchCondition = { ref_name: { exclude: [], include: ["refs/heads/main"] } };
+export const requiredCheckPublisherBoundary = {
+  expectedGitHubApp: "github-actions",
+  repositoryOwnerType: "User",
+  rootAuthority: "Chillywood2025",
+  trustedRepositoryWriteActors: ["Chillywood2025"],
+  unexpectedWriteActorResult: "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
+  forkWorkflowWriteTokensAllowed: false
+};
+export const pullRequestRequirements = {
+  requiredReviewThreadResolution: true,
+  dismissStaleReviewsOnPush: true,
+  bypassActors: []
+};
 export const ownerAuthorizationReceiptPath = "config/assurance/a1-owner-bootstrap-authorization-v1.json";
 export const canonicalOwnerAuthorizationReceipt = {
   schemaVersion: 1,
@@ -67,6 +80,8 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
 
   if (contract?.applicationState !== "APPLIED_AND_READ_BACK_POST_A1_MERGE") add("application state mismatch");
   if (!same(contract?.conditions, mainBranchCondition)) add("protected main condition mismatch");
+  if (!same(contract?.requiredCheckPublisherBoundary, requiredCheckPublisherBoundary)) add("required-check publisher boundary mismatch");
+  if (!same(contract?.pullRequestRequirements, pullRequestRequirements)) add("pull-request protection requirements mismatch");
   if (!same(readback?.requiredStatusChecks, requiredChecks)) add("required status-check identities mismatch");
   if (readback?.requiredStatusCheckCount !== requiredChecks.length) add("required status-check count mismatch");
   if (readback?.requiredStatusCheckPresent !== readback?.requiredStatusChecks?.includes(exactHeadCheck)) add("exact-head presence derivation mismatch");
