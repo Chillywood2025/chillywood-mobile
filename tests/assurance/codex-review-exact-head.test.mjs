@@ -168,11 +168,11 @@ test("clean issue-comment fixture replay resolves commits only from explicit off
       createdAt: "2026-08-09T12:00:00Z",
       updatedAt: "2026-08-09T12:00:00Z"
     };
-    const runFixture = (name, resolutions) => {
+    const runFixture = (name, resolutions, reviews = []) => {
       const fixture = path.join(fixtureDirectory, name);
       fs.writeFileSync(fixture, `${JSON.stringify({
         current: baseCurrent,
-        reviews: [],
+        reviews,
         threads: [],
         issueComments: [cleanComment],
         cleanIssueCommentCommitResolutions: resolutions
@@ -183,7 +183,7 @@ test("clean issue-comment fixture replay resolves commits only from explicit off
         env: { ...process.env, GITHUB_TOKEN: "fixture-must-not-use-network" }
       });
     };
-    const explicit = runFixture("explicit.json", [{ commentId: cleanComment.commentId, prefix: headA.slice(0, 10), resolvedCommit: headA }]);
+    const explicit = runFixture("explicit.json", [{ commentId: cleanComment.commentId, prefix: headA.slice(0, 10), resolvedCommit: headA, headClassification: "CURRENT_HEAD" }]);
     assert.equal(explicit.status, 0, explicit.stdout || explicit.stderr);
     assert.equal(JSON.parse(explicit.stdout.trim().split(/\r?\n/u).at(-1)).ok, true);
 
@@ -191,6 +191,24 @@ test("clean issue-comment fixture replay resolves commits only from explicit off
     assert.notEqual(missing.status, 0);
     const missingResult = JSON.parse(missing.stdout.trim().split(/\r?\n/u).at(-1));
     assert(missingResult.codes.includes("CODEX_REVIEW_INCOMPLETE"));
+
+    const collidingOldCommit = `${headA.slice(0, 10)}${"f".repeat(30)}`;
+    const forgedCurrent = runFixture("forged-current.json", [{
+      commentId: cleanComment.commentId,
+      prefix: headA.slice(0, 10),
+      resolvedCommit: collidingOldCommit,
+      headClassification: "CURRENT_HEAD"
+    }], [exactReview]);
+    assert.notEqual(forgedCurrent.status, 0);
+    assert(JSON.parse(forgedCurrent.stdout.trim().split(/\r?\n/u).at(-1)).codes.includes("CODEX_REVIEW_INCOMPLETE"));
+
+    const historical = runFixture("historical.json", [{
+      commentId: cleanComment.commentId,
+      prefix: headA.slice(0, 10),
+      resolvedCommit: collidingOldCommit,
+      headClassification: "STALE_HEAD"
+    }], [exactReview]);
+    assert.equal(historical.status, 0, historical.stdout || historical.stderr);
   } finally {
     fs.rmSync(fixtureDirectory, { recursive: true });
   }

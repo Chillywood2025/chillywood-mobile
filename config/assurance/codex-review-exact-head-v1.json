@@ -112,7 +112,7 @@
     "editedCommentAllowed": false,
     "blockingSeverityAllowed": false,
     "repositoryObjectResolutionRequired": true,
-    "fixtureResolutionMode": "explicit-offline-data-only",
+    "fixtureResolutionMode": "explicit-offline-data-with-head-classification",
     "exactCurrentHeadExpansionRequired": true
   },
   "protectedBaseBranch": "main",

@@ -1534,7 +1534,12 @@ async function main() {
     if (matches.length !== 1
       || matches[0].prefix !== prefix
       || !validGitSha(matches[0].resolvedCommit)
-      || !matches[0].resolvedCommit.startsWith(prefix)) throw new Error("CODEX_REVIEW_FIXTURE_COMMIT_RESOLUTION_INVALID");
+      || !matches[0].resolvedCommit.startsWith(prefix)
+      || !["CURRENT_HEAD", "STALE_HEAD"].includes(matches[0].headClassification)
+      || (matches[0].headClassification === "CURRENT_HEAD" && matches[0].resolvedCommit !== current.headSha)
+      || (matches[0].headClassification === "STALE_HEAD" && matches[0].resolvedCommit === current.headSha)) {
+      throw new Error("CODEX_REVIEW_FIXTURE_COMMIT_RESOLUTION_INVALID");
+    }
     return matches[0].resolvedCommit;
   } : null;
   const cleanIssueCommentReviews = await readCleanProviderIssueCommentReviews({
