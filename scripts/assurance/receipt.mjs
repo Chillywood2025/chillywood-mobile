@@ -44,22 +44,28 @@ function externalize(identityHash, receipt, raw) {
   return root;
 }
 
+const canonicalRules = new Map([
+  { id: "contracts", contractCommand: "node scripts/assurance/validate-contracts.mjs", file: "node", args: ["scripts/assurance/validate-contracts.mjs"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:validate-contracts" } },
+  { id: "current-truth", contractCommand: "node scripts/assurance/current-truth.mjs", file: "node", args: ["scripts/assurance/current-truth.mjs"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:current-truth" } },
+  { id: "plan", contractCommand: "node scripts/assurance/plan.mjs --feature=assurance-efficiency-e0", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } },
+  { id: "active-task", contractCommand: "node scripts/assurance/active-task.mjs --feature=assurance-efficiency-e0", file: "node", args: ["scripts/assurance/active-task.mjs", "--feature=assurance-efficiency-e0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:active-task" } },
+  { id: "review-history", contractCommand: "node scripts/assurance/review-history.mjs", file: "node", args: ["scripts/assurance/review-history.mjs"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:review-history" } },
+  { id: "benchmark", contractCommand: "node scripts/assurance/benchmark.mjs --baseline=all", file: "node", args: ["scripts/assurance/benchmark.mjs", "--baseline=all"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:benchmark" } },
+  { id: "focused-test", contractCommand: "node --test tests/assurance/efficiency-e0.test.mjs", file: "node", args: ["--test", "tests/assurance/efficiency-e0.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "github-main-ruleset-readback-test", contractCommand: "node --test tests/assurance/github-main-ruleset-readback.test.mjs", file: "node", args: ["--test", "tests/assurance/github-main-ruleset-readback.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "codex-review-exact-head-test", contractCommand: "node --test tests/assurance/codex-review-exact-head.test.mjs", file: "node", args: ["--test", "tests/assurance/codex-review-exact-head.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "lint", contractCommand: "npm run lint", file: "npm", args: ["run", "lint"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "typecheck", contractCommand: "npm run typecheck", file: "npm", args: ["run", "typecheck"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "diff-check", contractCommand: "git diff --check", file: "git", args: ["diff", "--check"], timeoutMs: 30000, resultContract: { type: "exit-zero-empty-v1" } },
+  { id: "node-version", contractCommand: "node --version", file: "node", args: ["--version"], timeoutMs: 10000, resultContract: { type: "node-version-v1" } },
+  { id: "d2a-call-semantics", contractCommand: "npm run test:chilly-chat-call-semantics", file: "npm", args: ["run", "test:chilly-chat-call-semantics"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-native-handoff", contractCommand: "npm run test:chilly-chat-native-call-action-handoff", file: "npm", args: ["run", "test:chilly-chat-native-call-action-handoff"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-plan", contractCommand: "assurance:plan", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } }
+].map((rule) => [rule.id, rule]));
+
 function safeRule(rule) {
-  if (!Array.isArray(rule?.args) || !["node", "npm", "git"].includes(rule.file)) return false;
-  const argv = JSON.stringify(rule.args);
-  if (rule.file === "node") return new Set([
-    ["scripts/assurance/validate-contracts.mjs"],
-    ["scripts/assurance/current-truth.mjs"],
-    ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"],
-    ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"],
-    ["scripts/assurance/active-task.mjs", "--feature=assurance-efficiency-e0"],
-    ["scripts/assurance/review-history.mjs"],
-    ["scripts/assurance/benchmark.mjs", "--baseline=all"],
-    ["--test", "tests/assurance/efficiency-e0.test.mjs"],
-    ["--version"]
-  ].map(JSON.stringify)).has(argv);
-  if (rule.file === "npm") return new Set(["lint", "typecheck", "test:chilly-chat-call-semantics", "test:chilly-chat-native-call-action-handoff"]).has(rule.args[1]) && argv === JSON.stringify(["run", rule.args[1]]);
-  return argv === JSON.stringify(["diff", "--check"]);
+  const canonical = canonicalRules.get(rule?.id);
+  return canonical !== undefined && stableJson(rule) === stableJson(canonical);
 }
 
 export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) {
