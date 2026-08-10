@@ -41,6 +41,29 @@ const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIG
 const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const activeImplementationStates = new Set(["open", "open-draft-current"]);
 const proofTiers = new Set(["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]);
+const bootstrapActiveTaskRegistry = [{
+  featureId: "assurance-efficiency-e0",
+  implementationPr: 201,
+  implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1",
+  implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
+  executionState: "ASSURANCE_CONTROL_A1"
+}];
+
+function sameBinding(left, right) {
+  return structuredBindingFields.every((field) => JSON.stringify(left?.[field]) === JSON.stringify(right?.[field]));
+}
+
+function structuredBindingAuthority(truth, facts) {
+  let protectedMainTruth = facts.protectedMainTruth;
+  if (!protectedMainTruth) {
+    try { protectedMainTruth = JSON.parse(git(["show", "origin/main:config/assurance/current-truth-v1.json"])); } catch { return null; }
+  }
+  if (sameBinding(truth?.activeTaskBinding, protectedMainTruth?.activeTaskBinding)) return "PROTECTED_MAIN_CURRENT_TRUTH";
+  const binding = truth?.activeTaskBinding;
+  const bootstrapMatches = bootstrapActiveTaskRegistry.filter((entry) => Object.entries(entry)
+    .every(([field, expected]) => binding?.[field] === expected));
+  return bootstrapMatches.length === 1 ? "OWNER_BOOTSTRAP_REGISTRY" : null;
+}
 
 function validateStructuredBinding(value) {
   const findings = [];
@@ -108,6 +131,8 @@ function resolveFeature(truth, facts, registry) {
     const binding = truth.activeTaskBinding;
     const findings = validateStructuredBinding(binding);
     if (findings.length) return { ok: false, findings };
+    const authority = structuredBindingAuthority(truth, facts);
+    if (!authority) return { ok: false, findings: ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"] };
     if (binding.phase === "COMPLETE") {
       const open = truth?.openImplementationPrs;
       if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
@@ -119,7 +144,7 @@ function resolveFeature(truth, facts, registry) {
       return { ok: false, findings: ["ACTIVE_TASK_STRUCTURED_DISPLAY_CONFLICT"] };
     }
     if (facts.featureId && facts.featureId !== binding.featureId) return { ok: false, findings: ["FEATURE_OVERRIDE_CONFLICT"] };
-    return { ok: true, binding, featureId: binding.featureId, source: "structured" };
+    return { ok: true, binding, featureId: binding.featureId, source: "structured", authority };
   }
 
   const open = truth?.openImplementationPrs;
@@ -202,7 +227,7 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
   const matches = open.filter((entry) => entry?.number === binding.implementationPr && entry?.branch === binding.implementationBranch);
   const acceptedSynchronization = facts.acceptedBaseSynchronizations?.[binding.implementationPr];
   const synchronizedIdentityAccepted = acceptedSynchronization?.ok === true
-    && acceptedSynchronization.classification === "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH"
+    && ["BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH", "CURRENT_TRUTH_BINDING_COMMIT"].includes(acceptedSynchronization.classification)
     && acceptedSynchronization.sourceHead === binding.currentImplementationHead
     && sha40(acceptedSynchronization.synchronizedHead)
     && sha40(acceptedSynchronization.synchronizedTree)

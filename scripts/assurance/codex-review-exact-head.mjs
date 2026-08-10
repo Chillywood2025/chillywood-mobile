@@ -165,7 +165,8 @@ function normalizeProviderFindings({ contract, current, reviews = [], threads = 
     && acceptableStates.has(candidate.state)
     && reviewCleanDispositionCommit(candidate) === current.headSha
     && validInstant(candidate.submittedAt)
-    && new Date(candidate.submittedAt) > new Date(after));
+    && new Date(candidate.submittedAt) > new Date(after)
+    && (!validInstant(current.mergedAt) || new Date(candidate.submittedAt) <= new Date(current.mergedAt)));
   const findings = [];
   const unboundProviderCommentIds = [];
 
@@ -268,6 +269,50 @@ export function exactReceiptHash(receipt) {
   return sha256(stableValue(payload));
 }
 
+function normalizedSuccessorFiles(files) {
+  return (files ?? []).map((file) => ({
+    path: file?.filename,
+    status: file?.status,
+    blobSha: file?.sha,
+    additions: file?.additions,
+    deletions: file?.deletions,
+    changes: file?.changes
+  })).sort((left, right) => String(left.path).localeCompare(String(right.path)));
+}
+
+export function lateReviewCorrectionEvidenceHash({ repository, successorPr, baseSha, successorHead, successorTree, successorMergeSha, files }) {
+  return sha256(stableValue({
+    schemaVersion: 1,
+    repository,
+    successorPr,
+    baseSha,
+    successorHead,
+    successorTree,
+    successorMergeSha,
+    files: normalizedSuccessorFiles(files)
+  }));
+}
+
+export function lateReviewDispositionEvidenceHash({ repository, sentinel, exactHeadReceiptHash, resolvedThreadIds }) {
+  return sha256(stableValue({
+    schemaVersion: 1,
+    repository,
+    originalPr: sentinel?.prNumber,
+    originalMergeSha: sentinel?.mergeSha,
+    findings: (sentinel?.findings ?? []).map(({ sourceType, sourceId, bodyHash, severity, threadId, disposition, threadResolutionState }) => ({
+      sourceType,
+      sourceId,
+      bodyHash,
+      severity,
+      threadId: threadId ?? null,
+      disposition,
+      threadResolutionState
+    })).sort((left, right) => `${left.sourceType}:${left.sourceId}`.localeCompare(`${right.sourceType}:${right.sourceId}`)),
+    exactHeadReceiptHash,
+    resolvedThreadIds: [...new Set(resolvedThreadIds ?? [])].sort()
+  }));
+}
+
 export function buildExactHeadReceipt({ contract, current, review, reviews = null, threads, issueComments = [], persistentFindings = [] }) {
   const allReviews = Array.isArray(reviews) ? reviews : [review];
   const providerNames = new Set(contract.reviewProviders ?? []);
@@ -355,7 +400,8 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
     reviewThreads: normalizedThreads,
     providerIssueComments,
     reviewFindings: normalized.findings,
-    providerCommentHeadUnbound: normalized.unboundProviderCommentIds
+    providerCommentHeadUnbound: normalized.unboundProviderCommentIds,
+    repositoryWriteActors: [...(current.repositoryWriteActors ?? [])].sort()
   };
   receipt.receiptHash = exactReceiptHash(receipt);
   return receipt;
@@ -399,6 +445,7 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
     || !Array.isArray(receipt.providerIssueComments)
     || !Array.isArray(receipt.reviewFindings)
     || !Array.isArray(receipt.providerCommentHeadUnbound)
+    || !Array.isArray(receipt.repositoryWriteActors)
     || receipt.receiptHash !== exactReceiptHash(receipt)) {
     codes.push("CODEX_REVIEW_RECEIPT_INVALID");
   }
@@ -416,6 +463,11 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
     codes.push("CODEX_REVIEW_INCOMPLETE");
   }
   if ((receipt.providerCommentHeadUnbound ?? []).length) codes.push(providerCommentHeadUnboundCode);
+  const trustedWriteActors = [...(contract.trustedRepositoryWriteActors ?? [])].sort();
+  if (JSON.stringify(receipt.repositoryWriteActors ?? []) !== JSON.stringify(trustedWriteActors)
+    || JSON.stringify([...(current.repositoryWriteActors ?? [])].sort()) !== JSON.stringify(trustedWriteActors)) {
+    codes.push("CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR");
+  }
   const unresolvedThreads = (receipt.reviewThreads ?? []).filter(({ resolutionState }) => resolutionState !== "RESOLVED");
   if (unresolvedThreads.length) codes.push("CODEX_REVIEW_BLOCKING_THREAD_OPEN");
   const blocking = new Set(contract.blockingSeverities ?? []);
@@ -724,27 +776,33 @@ export async function recordReviewOnlyLease({ repository, prNumber, headSha, hea
   if (!Number.isInteger(prNumber) || !validGitSha(headSha) || typeof headBranch !== "string" || !headBranch) {
     throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
   }
+  const registryAnchorSha = readJson(contractPath).reviewOnlyClassification?.registryAnchorSha;
+  if (!validGitSha(registryAnchorSha)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
   return recordCheckLedger({
     repository,
-    headSha,
+    headSha: registryAnchorSha,
     checkName: reviewOnlyLeaseCheckName,
     externalPrefix: `codex-review-only:v1:pr=${prNumber}`,
-    payload: { prNumber, headBranch },
+    payload: { prNumber, headBranch, classifiedHeadSha: headSha },
     token,
     request
   });
 }
 
-export async function readReviewOnlyLeases(repository, prNumber, headSha, token, options = {}) {
-  const checks = await readNamedCheckRuns(repository, headSha, reviewOnlyLeaseCheckName, token, options);
+export async function readReviewOnlyLeases(repository, prNumber, _headSha, token, options = {}) {
+  const registryAnchorSha = (options.contract ?? readJson(contractPath)).reviewOnlyClassification?.registryAnchorSha;
+  if (!validGitSha(registryAnchorSha)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  const checks = await readNamedCheckRuns(repository, registryAnchorSha, reviewOnlyLeaseCheckName, token, options);
   const parsed = checks.map((check) => parseCheckLedger(check, {
     repository,
     prNumber,
-    headSha,
+    headSha: registryAnchorSha,
     checkName: reviewOnlyLeaseCheckName,
     externalPrefix: `codex-review-only:v1:pr=${prNumber}`
   }));
-  if (parsed.some((entry) => entry === false)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  if (parsed.some((entry) => entry === false || !validGitSha(entry?.classifiedHeadSha) || typeof entry?.headBranch !== "string" || !entry.headBranch)) {
+    throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  }
   return parsed;
 }
 
@@ -768,29 +826,10 @@ export async function readMergedLateReviewLedgerSentinels(repository, token, opt
     const commit = pr.commits?.nodes?.[0]?.commit;
     const headSha = pr.headRefOid ?? commit?.oid;
     if (!validGitSha(headSha)) throw new Error("CODEX_REVIEW_FINDING_LEDGER_INVALID");
-    const persistentFindings = await readProviderFindingLedger(repository, pr.number, headSha, token, { maxPages, request: options.request });
-    if (!persistentFindings.length) continue;
-    const reviewsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviews(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}state body createdAt updatedAt submittedAt commit{oid}}}}}}`;
-    const reviewNodes = await paginateGraphConnection({
-      query: reviewsQuery,
-      variables: { owner, name, number: pr.number, first: 100 },
-      select: (data) => data?.repository?.pullRequest?.reviews,
-      token,
-      maxPages,
-      request: graphRequestFn
-    });
-    const reviews = reviewNodes.map((review) => ({
-      reviewId: review.databaseId,
-      reviewNodeId: review.id,
-      author: review.author?.login ?? null,
-      state: review.state,
-      body: review.body,
-      createdAt: review.createdAt,
-      updatedAt: review.updatedAt,
-      startedAt: review.createdAt,
-      submittedAt: review.submittedAt,
-      commit: review.commit?.oid ?? null
-    }));
+    const [persistentFindings, surfaces] = await Promise.all([
+      readProviderFindingLedger(repository, pr.number, headSha, token, { maxPages, request: options.request }),
+      readProviderReviewSurfaces(repository, pr.number, token, { maxPages, graphRequestFn })
+    ]);
     const sentinel = detectLateReview({
       contract,
       current: {
@@ -802,7 +841,9 @@ export async function readMergedLateReviewLedgerSentinels(repository, token, opt
         mergeSha: pr.mergeCommit?.oid ?? null,
         successorCorrectionOwner: "UNASSIGNED_BLOCKED"
       },
-      reviews,
+      reviews: surfaces.reviews,
+      threads: surfaces.threads,
+      issueComments: surfaces.issueComments,
       persistentFindings
     });
     if (sentinel) sentinels.push(sentinel);
@@ -938,6 +979,33 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
     const commit = (await request(`https://api.github.com/repos/${repository}/git/commits/${evidence.successorHead}`, token, { method: "GET" })).body;
     if (commit?.tree?.sha !== evidence.successorTree) return failed("SUCCESSOR_TREE");
 
+    const successorFiles = [];
+    for (let page = 1; page <= maxPages; page += 1) {
+      const response = await request(`https://api.github.com/repos/${repository}/pulls/${evidence.successorPr}/files?per_page=100&page=${page}`, token, { method: "GET" });
+      if (!Array.isArray(response?.body)
+        || response.body.some((file) => typeof file?.filename !== "string"
+          || !file.filename
+          || typeof file?.status !== "string"
+          || !validGitSha(file?.sha)
+          || !Number.isInteger(file?.additions)
+          || !Number.isInteger(file?.deletions)
+          || !Number.isInteger(file?.changes))) return failed("SUCCESSOR_FILES");
+      successorFiles.push(...response.body);
+      if (!hasNextRestPage(response.link)) break;
+      if (page === maxPages) return failed("SUCCESSOR_FILES_PAGINATION");
+    }
+    if (!successorFiles.length) return failed("SUCCESSOR_FILES");
+    const correctionEvidenceHash = lateReviewCorrectionEvidenceHash({
+      repository,
+      successorPr: evidence.successorPr,
+      baseSha: successor?.base?.sha,
+      successorHead: evidence.successorHead,
+      successorTree: evidence.successorTree,
+      successorMergeSha: evidence.successorMergeSha,
+      files: successorFiles
+    });
+    if (evidence.correctionEvidenceHash !== correctionEvidenceHash) return failed("CORRECTION_EVIDENCE");
+
     const checkRuns = [];
     let totalCount = null;
     for (let page = 1; page <= maxPages; page += 1) {
@@ -975,6 +1043,31 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
       || receipt?.reviewedCommit !== evidence.successorHead
       || receipt?.reviewCompletedAt !== evidence.exactHeadReviewCompletedAt) return failed("EXACT_HEAD_RECEIPT");
 
+    const sourcePushLeases = await readSourcePushLeases(repository, evidence.successorPr, evidence.successorHead, token, { request, maxPages });
+    const sourcePushLeaseHashes = sourcePushLeases.map(({ digest }) => digest).sort();
+    const latestSourcePushAt = sourcePushLeases.map(({ pushedAt }) => pushedAt).sort().at(-1);
+    const receiptEvaluation = evaluateExactHeadReceipt({
+      contract: readJson(contractPath),
+      current: {
+        repository,
+        prNumber: evidence.successorPr,
+        headSha: evidence.successorHead,
+        headTree: evidence.successorTree,
+        baseBranch: successor?.base?.ref,
+        baseSha: successor?.base?.sha,
+        latestSourcePushAt,
+        sourcePushLeaseHashes,
+        mergedAt: evidence.successorMergedAt,
+        mergeSha: evidence.successorMergeSha,
+        providerReviewsExist: true,
+        reviewOnly: false,
+        lateReviewBlocked: false,
+        repositoryWriteActors: readJson(contractPath).trustedRepositoryWriteActors
+      },
+      receipt
+    });
+    if (!receiptEvaluation.ok) return failed(`EXACT_HEAD_RECEIPT_EVALUATION:${receiptEvaluation.codes.join(",")}`);
+
     const [owner, name] = repository.split("/");
     const query = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{id isResolved}}}}}`;
     const threads = await paginateGraphConnection({
@@ -988,6 +1081,13 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
     const requiredThreads = [...new Set((evidence.resolvedThreadIds ?? []))].sort();
     const resolvedThreads = threads.filter(({ id, isResolved }) => requiredThreads.includes(id) && isResolved === true).map(({ id }) => id).sort();
     if (JSON.stringify(requiredThreads) !== JSON.stringify(resolvedThreads)) return failed("ORIGINAL_THREADS");
+    const dispositionEvidenceHash = lateReviewDispositionEvidenceHash({
+      repository,
+      sentinel,
+      exactHeadReceiptHash: receipt.receiptHash,
+      resolvedThreadIds: resolvedThreads
+    });
+    if (evidence.dispositionEvidenceHash !== dispositionEvidenceHash) return failed("DISPOSITION_EVIDENCE");
     const subjectHash = lateReviewResolutionSubjectHash(sentinel);
     const repositoryVerificationHash = sha256(stableValue({
       schemaVersion: 1,
@@ -1003,7 +1103,9 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
       exactHeadCheckRunId: exactChecks[0].id,
       exactHeadReceiptHash: receipt.receiptHash,
       exactHeadReviewCompletedAt: receipt.reviewCompletedAt,
-      resolvedThreadIds: resolvedThreads
+      resolvedThreadIds: resolvedThreads,
+      correctionEvidenceHash,
+      dispositionEvidenceHash
     }));
     return { ok: true, subjectHash, repositoryVerificationHash };
   } catch (error) {
@@ -1011,23 +1113,18 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
   }
 }
 
-async function readPullRequest(repository, prNumber, token, contract, sourcePushFloorAt = null) {
+export async function readProviderReviewSurfaces(repository, prNumber, token, options = {}) {
   const [owner, name] = repository.split("/");
-  const maxPages = contract.boundedReadback?.maxPages ?? 20;
-  const metadataQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){number merged mergedAt mergeCommit{oid} headRefName headRefOid baseRefName baseRefOid commits(last:1){nodes{commit{oid committedDate tree{oid}}}}}}}`;
-  const metadata = await graphRequest(metadataQuery, { owner, name, number: prNumber }, token);
-  const pr = metadata?.repository?.pullRequest;
-  if (!pr) throw new Error("GITHUB_PULL_REQUEST_MISSING");
+  const maxPages = options.maxPages ?? 20;
+  const request = options.graphRequestFn ?? graphRequest;
   const baseVariables = { owner, name, number: prNumber, first: 100 };
-  const labelsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){labels(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{name}}}}}`;
   const reviewsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviews(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}state body createdAt updatedAt submittedAt commit{oid}}}}}}`;
   const threadQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{id isResolved comments(first:$first){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt path commit{oid}pullRequestReview{databaseId submittedAt commit{oid}}}}}}}}}`;
   const issueCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt}}}}}`;
-  const [labelNodes, reviewNodes, threadNodes, issueCommentNodes] = await Promise.all([
-    paginateGraphConnection({ query: labelsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.labels, token, maxPages }),
-    paginateGraphConnection({ query: reviewsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.reviews, token, maxPages }),
-    paginateGraphConnection({ query: threadQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.reviewThreads, token, maxPages }),
-    paginateGraphConnection({ query: issueCommentsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.comments, token, maxPages })
+  const [reviewNodes, threadNodes, issueCommentNodes] = await Promise.all([
+    paginateGraphConnection({ query: reviewsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.reviews, token, maxPages, request }),
+    paginateGraphConnection({ query: threadQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.reviewThreads, token, maxPages, request }),
+    paginateGraphConnection({ query: issueCommentsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.comments, token, maxPages, request })
   ]);
   const threadCommentsQuery = `query($id:ID!,$first:Int!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt path commit{oid}pullRequestReview{databaseId submittedAt commit{oid}}}}}}`;
   for (const thread of threadNodes) {
@@ -1045,11 +1142,78 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
       select: (data) => data?.node?.comments,
       token,
       maxPages: maxPages - 1,
-      initialAfter: pageInfo.endCursor
+      initialAfter: pageInfo.endCursor,
+      request
     });
     const firstPageIds = new Set((thread.comments.nodes ?? []).map(({ id }) => id));
     thread.comments.nodes.push(...remaining.filter(({ id }) => !firstPageIds.has(id)));
   }
+  return {
+    threads: threadNodes.map((thread) => ({
+      threadId: thread.id,
+      isResolved: thread.isResolved,
+      comments: (thread.comments?.nodes ?? []).map((comment) => ({
+        commentId: comment.databaseId,
+        commentNodeId: comment.id,
+        author: comment.author?.login ?? null,
+        body: comment.body,
+        createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
+        submittedAt: comment.pullRequestReview?.submittedAt ?? null,
+        reviewId: comment.pullRequestReview?.databaseId ?? null,
+        reviewCommit: comment.pullRequestReview?.commit?.oid ?? null,
+        path: comment.path,
+        commit: comment.commit?.oid ?? null
+      }))
+    })),
+    reviews: reviewNodes.map((review) => ({
+      reviewId: review.databaseId,
+      reviewNodeId: review.id,
+      author: review.author?.login ?? null,
+      state: review.state,
+      body: review.body,
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
+      startedAt: review.createdAt,
+      submittedAt: review.submittedAt,
+      commit: review.commit?.oid ?? null
+    })),
+    issueComments: issueCommentNodes.map((comment) => ({
+      commentId: comment.databaseId,
+      commentNodeId: comment.id,
+      author: comment.author?.login ?? null,
+      body: comment.body,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt
+    }))
+  };
+}
+
+async function readPullRequest(repository, prNumber, token, contract, sourcePushFloorAt = null) {
+  const [owner, name] = repository.split("/");
+  const maxPages = contract.boundedReadback?.maxPages ?? 20;
+  const metadataQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){number merged mergedAt mergeCommit{oid} headRefName headRefOid baseRefName baseRefOid commits(last:1){nodes{commit{oid committedDate tree{oid}}}}}}}`;
+  const metadata = await graphRequest(metadataQuery, { owner, name, number: prNumber }, token);
+  const pr = metadata?.repository?.pullRequest;
+  if (!pr) throw new Error("GITHUB_PULL_REQUEST_MISSING");
+  const baseVariables = { owner, name, number: prNumber, first: 100 };
+  const labelsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){labels(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{name}}}}}`;
+  const writeActorsPromise = (async () => {
+    const actors = [];
+    for (let page = 1; page <= maxPages; page += 1) {
+      const response = await githubRequestPage(`https://api.github.com/repos/${repository}/collaborators?affiliation=all&per_page=100&page=${page}`, token, { method: "GET" });
+      if (!Array.isArray(response?.body)) throw paginationError();
+      actors.push(...response.body.filter((actor) => actor?.permissions?.push === true || actor?.permissions?.maintain === true || actor?.permissions?.admin === true));
+      if (!hasNextRestPage(response.link)) return [...new Set(actors.map(({ login }) => login).filter(Boolean))].sort();
+      if (page === maxPages) throw paginationError();
+    }
+    throw paginationError();
+  })();
+  const [labelNodes, surfaces, repositoryWriteActors] = await Promise.all([
+    paginateGraphConnection({ query: labelsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.labels, token, maxPages }),
+    readProviderReviewSurfaces(repository, prNumber, token, { maxPages }),
+    writeActorsPromise
+  ]);
   const commit = pr.commits?.nodes?.[0]?.commit;
   let sourcePushLeases = [];
   let persistentProviderFindings = [];
@@ -1080,43 +1244,7 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
     .filter(validInstant)
     .sort()
     .at(-1);
-  const threads = threadNodes.map((thread) => ({
-    threadId: thread.id,
-    isResolved: thread.isResolved,
-    comments: (thread.comments?.nodes ?? []).map((comment) => ({
-      commentId: comment.databaseId,
-      commentNodeId: comment.id,
-      author: comment.author?.login ?? null,
-      body: comment.body,
-      createdAt: comment.createdAt,
-      updatedAt: comment.updatedAt,
-      submittedAt: comment.pullRequestReview?.submittedAt ?? null,
-      reviewId: comment.pullRequestReview?.databaseId ?? null,
-      reviewCommit: comment.pullRequestReview?.commit?.oid ?? null,
-      path: comment.path,
-      commit: comment.commit?.oid ?? null
-    }))
-  }));
-  const reviews = reviewNodes.map((review) => ({
-    reviewId: review.databaseId,
-    reviewNodeId: review.id,
-    author: review.author?.login ?? null,
-    state: review.state,
-    body: review.body,
-    createdAt: review.createdAt,
-    updatedAt: review.updatedAt,
-    startedAt: review.createdAt,
-    submittedAt: review.submittedAt,
-    commit: review.commit?.oid ?? null
-  }));
-  const issueComments = issueCommentNodes.map((comment) => ({
-    commentId: comment.databaseId,
-    commentNodeId: comment.id,
-    author: comment.author?.login ?? null,
-    body: comment.body,
-    createdAt: comment.createdAt,
-    updatedAt: comment.updatedAt
-  }));
+  const { reviews, threads, issueComments } = surfaces;
   return {
     current: {
       repository,
@@ -1134,7 +1262,8 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
       labels: labelNodes.map(({ name: label }) => label).filter(Boolean).sort(),
       reviewOnlyLeasePresent: reviewOnlyLeases.length > 0,
       sourceReadbackIncomplete,
-      sourceReadbackCode
+      sourceReadbackCode,
+      repositoryWriteActors
     },
     reviews,
     threads,

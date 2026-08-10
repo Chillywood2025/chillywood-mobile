@@ -50,6 +50,14 @@
     "completedBindingDisposition": "ACTIVE_TASK_NONE",
     "legacyOwnership": "EXACT_OPEN_STATE_PR_BRANCH_HEAD_TREE_AND_REMOTE",
     "callerSelectedDiffBase": "DENIED"
+    ,"branchLocalTaskSubstitution": "DENIED_UNLESS_PROTECTED_MAIN_BINDING_OR_EXACT_OWNER_BOOTSTRAP_REGISTRY"
+    ,"a1BootstrapAuthority": {
+      "featureId": "assurance-efficiency-e0",
+      "implementationPr": 201,
+      "implementationBranch": "codex/assurance-active-task-and-claim-freshness-a1",
+      "implementationBindingId": "assurance-active-task-claim-freshness-a1-pr201-v1",
+      "executionState": "ASSURANCE_CONTROL_A1"
+    }
   },
   "freshness": {
     "classes": [
@@ -99,6 +107,17 @@
     "sourcePushLeaseBinding": "repository-pr-head-pushedAt-sha256",
     "sourceAdmissionEvents": ["opened", "synchronize", "reopened", "ready_for_review", "edited-base"],
     "protectedDiffBaseBound": true,
+    "strictBaseUpToDateRequired": true,
+    "repositoryWriteAuthority": {
+      "ownerType": "User",
+      "rootAuthority": "Chillywood2025",
+      "trustedWriteActors": ["Chillywood2025"],
+      "readback": "EXACT_ONE_ADMIN_OWNER_ZERO_OTHER_COLLABORATORS",
+      "newWriterFailsClosed": "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
+      "forkWorkflowWriteTokensAllowed": false,
+      "rootCanAlterRepositoryRules": true,
+      "threatBoundary": "The gate prevents accidental and non-root late-review merges; the sole repository owner is the root authority and is not represented as cryptographically isolated from repository administration."
+    },
     "synchronizeEventCancellationAllowed": false,
     "requiresExactHeadAndTree": true,
     "requiresReviewAfterLatestSourcePush": true,
@@ -118,6 +137,8 @@
     "mergedPrLedgerReadbackIgnoresMutableIssueLabels": true,
     "durableSentinelResolutionRequiresTypedSuccessorAndExactHeadEvidence": true,
     "durableSentinelResolutionRequiresAuthoritativeGithubReadback": true,
+    "durableSentinelResolutionRecomputesSuccessorDiffAndDispositionHashes": true,
+    "verifiedResolvedSentinelRemainsReleaseBlocker": false,
     "sentinelOwnerExceptionsAreExecutablePolicyBound": true,
     "reviewOnlyLabel": "assurance-review-only",
     "reviewOnlyLabelIsAuthority": false,
@@ -164,14 +185,17 @@
   },
   "regression": {
     "requiredMatrix": "PENDING_FINAL_EXACT_HEAD_REPOSITORY_REVIEW",
-    "activeTaskExactHeadProviderFocused": "43/43_PASS",
-    "efficiencyAndClaimFreshness": "18/18_PASS",
-    "combinedFocused": "61/61_PASS",
+    "activeTaskExactHeadProviderFocused": "52/52_PASS",
+    "efficiencyAndClaimFreshness": "19/19_PASS",
+    "combinedFocused": "71/71_PASS",
     "deterministicPacketRuns": "3/3_PASS",
     "headBindingAndSynchronization": "PASS_27_FAIL_CLOSED_BASE_SYNC_REJECTIONS",
     "contracts": "20/20_PASS",
     "featureRegistry": "21_FEATURES_PASS",
-    "escapedDefects": "25_CLASSES_PASS"
+    "escapedDefects": "25_CLASSES_PASS",
+    "completeAssuranceSuite": "132/133_PASS_ONE_PREEXISTING_OUT_OF_SCOPE_RELEASE_PARITY_ASSERTION_66_EXPECTED_67_ACTUAL_PRESENT_ON_BASE_60A6",
+    "lint": "PASS_ZERO_ERRORS_88_PREEXISTING_WARNINGS",
+    "localTypecheck": "BLOCKED_ENVIRONMENT_SHARED_INSTALL_MISSING_ALERT_AUTOMATION_WORKSPACE_PACKAGES"
   },
   "nonInterference": {
     "providerContacted": false,

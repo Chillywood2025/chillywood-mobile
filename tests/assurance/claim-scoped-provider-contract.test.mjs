@@ -6,7 +6,8 @@ import {
   evaluateFreshnessClaims,
   evaluateTaskFreshness,
   externalEvidenceBindingHash,
-  externalEvidenceReceiptHash
+  externalEvidenceReceiptHash,
+  verifyCommittedClaimEvidence
 } from "../../scripts/assurance/lib.mjs";
 
 const read = (path) => JSON.parse(fs.readFileSync(path, "utf8"));
@@ -233,8 +234,34 @@ test("historical Installed QA and RevenueCat facts remain recorded while source-
   assert(relabeled.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_FACT_REGISTRY_POLICY_MISMATCH"));
 });
 
+test("repository-source authority requires exact committed fact provenance", () => {
+  const truth = read("config/assurance/current-truth-v1.json");
+  const repositoryClaim = truth.freshnessClaims.find(({ freshnessClass }) => freshnessClass === "REPOSITORY_SOURCE");
+  const repositorySource = truth.evidenceSources.find(({ id }) => id === repositoryClaim.evidenceSourceId);
+  assert.equal(verifyCommittedClaimEvidence({
+    claim: repositoryClaim,
+    source: repositorySource,
+    factRegistry: canonicalFreshness.factRegistry
+  }), true);
+  assert.equal(verifyCommittedClaimEvidence({
+    claim: repositoryClaim,
+    source: { ...repositorySource, sourceCommit: undefined },
+    factRegistry: canonicalFreshness.factRegistry
+  }), false);
+  const forgedCoverage = { ...repositorySource, covers: [...repositorySource.covers] };
+  forgedCoverage.covers = forgedCoverage.covers.filter((fact) => fact !== "repository.phase1-ci.identity");
+  assert.equal(verifyCommittedClaimEvidence({
+    claim: repositoryClaim,
+    source: forgedCoverage,
+    factRegistry: canonicalFreshness.factRegistry
+  }), false);
+});
+
 test("all-platform, iOS and Cognitive lanes share the same historical-provider/source-current semantics", () => {
   for (const command of ["scripts/guard-autonomous-systems-contract.mjs", "scripts/proof-autonomous-systems-contract.mjs"]) {
+    const source = fs.readFileSync(command, "utf8");
+    assert.match(source, /now: new Date\(\)/u);
+    assert.doesNotMatch(source, /now: new Date\(currentTruth\.timestamp\)/u);
     const result = spawnSync(process.execPath, [command], { encoding: "utf8" });
     assert.equal(result.status, 0, `${command}: ${result.stderr}`);
     const output = JSON.parse(result.stdout);

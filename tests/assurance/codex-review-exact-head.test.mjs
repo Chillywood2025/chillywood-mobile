@@ -7,18 +7,24 @@ import {
   evaluateExactHeadReceipt,
   exactReceiptHash,
   isReviewOnlyPullRequest,
+  lateReviewCorrectionEvidenceHash,
+  lateReviewDispositionEvidenceHash,
   normalizeLateReviewEvent,
   paginateGraphConnection,
   parseLateReviewIssue,
   readOpenLateReviewIssues,
+  readMergedLateReviewLedgerSentinels,
   readProviderFindingLedger,
+  readReviewOnlyLeases,
   readSourcePushLeases,
   recordLateReviewIssue,
   recordProviderFindingLedger,
+  recordReviewOnlyLease,
   recordSourcePushLease,
-  sourcePushLeaseCheckName
+  sourcePushLeaseCheckName,
+  verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
-import { readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
+import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
 import { lateReviewResolutionSubjectHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
@@ -38,7 +44,8 @@ const baseCurrent = {
   mergedAt: null,
   mergeSha: null,
   providerReviewsExist: true,
-  reviewOnly: false
+  reviewOnly: false,
+  repositoryWriteActors: ["Chillywood2025"]
 };
 const exactReview = {
   reviewId: 9001,
@@ -76,6 +83,14 @@ test("exact-head no-suggestion review produces a valid current receipt", () => {
   assert.equal(receipt.reviewedCommit, headA);
   assert.equal(receipt.prHeadTree, treeA);
   assert.equal(receipt.reviewSubmissions[0].bodyHash.length, 64);
+});
+
+test("repository write authority is exact and a newly admitted writer fails closed", () => {
+  const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, threads: [] });
+  const expanded = { ...baseCurrent, repositoryWriteActors: ["Chillywood2025", "unexpected-writer"] };
+  const result = evaluateExactHeadReceipt({ contract, current: expanded, receipt });
+  assert.equal(result.ok, false);
+  assert(result.codes.includes("CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR"));
 });
 
 test("old-head review and a new source commit invalidate the receipt immediately", () => {
@@ -439,6 +454,32 @@ test("review-only PRs never become merge eligible", () => {
   }), true, "the canonical review-only branch prefix is independently fail closed");
 });
 
+test("review-only classification remains PR-scoped across a branch rename and every future head", async () => {
+  let posted;
+  const recorded = await recordReviewOnlyLease({
+    repository: baseCurrent.repository,
+    prNumber: 301,
+    headSha: headA,
+    headBranch: "codex/assurance-review-only/a1-lane",
+    token: "token",
+    request: async (_url, _token, init) => {
+      posted = JSON.parse(init.body);
+      return { body: { id: 82 }, link: "" };
+    }
+  });
+  assert.equal(posted.head_sha, contract.reviewOnlyClassification.registryAnchorSha);
+  const leases = await readReviewOnlyLeases(baseCurrent.repository, 301, headB, "token", {
+    request: async () => ({ body: { total_count: 1, check_runs: [{ ...posted, app: { slug: "github-actions" } }] }, link: "" })
+  });
+  assert.deepEqual(leases, [recorded.payload]);
+  assert.equal(isReviewOnlyPullRequest({
+    headBranch: "codex/renamed-ordinary-looking-branch",
+    reviewOnlyLeasePresent: leases.length > 0,
+    truthEntries: [],
+    prNumber: 301
+  }), true);
+});
+
 test("PR 194 late-review timeline denies merge, post-truth closure, and successor work", () => {
   const current = {
     ...baseCurrent,
@@ -543,6 +584,86 @@ test("edited or deleted late event bodies remain append-only sentinel evidence",
     assert.equal(sentinel.findings.length, 1, action);
     assert.equal(sentinel.findings[0].bodyHash, eventFinding.bodyHash);
   }
+});
+
+test("merged-PR recovery reads inline and issue-comment surfaces even when the event ledger is empty", async () => {
+  const mergedAt = "2026-08-09T11:45:00Z";
+  const graphRequestFn = async (query) => {
+    if (query.includes("pullRequests(states:MERGED")) {
+      return { repository: { pullRequests: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
+        number: 201,
+        mergedAt,
+        mergeCommit: { oid: "e".repeat(40) },
+        headRefName: baseCurrent.headBranch,
+        headRefOid: headA,
+        commits: { nodes: [{ commit: { oid: headA, tree: { oid: treeA } } }] }
+      }] } } };
+    }
+    if (query.includes("reviewThreads")) {
+      return { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
+        id: "THREAD_GLOBAL",
+        isResolved: false,
+        comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
+          databaseId: 8101,
+          id: "INLINE_GLOBAL",
+          author: { login: "chatgpt-codex-connector" },
+          body: "P1 global inline recovery",
+          createdAt: "2026-08-09T12:00:00Z",
+          updatedAt: "2026-08-09T12:00:00Z",
+          path: "scripts/assurance/lib.mjs",
+          commit: { oid: headA },
+          pullRequestReview: { databaseId: 8100, submittedAt: "2026-08-09T12:00:00Z", commit: { oid: headA } }
+        }] }
+      }] } } } };
+    }
+    if (query.includes("reviews(first")) {
+      return { repository: { pullRequest: { reviews: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } } };
+    }
+    if (query.includes("comments(first")) {
+      return { repository: { pullRequest: { comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
+        databaseId: 8201,
+        id: "ISSUE_GLOBAL",
+        author: { login: "chatgpt-codex-connector" },
+        body: `P2 global issue recovery\n<!-- codex-review-reviewed-commit:${headA} -->`,
+        createdAt: "2026-08-09T12:01:00Z",
+        updatedAt: "2026-08-09T12:01:00Z"
+      }] } } } };
+    }
+    throw new Error(`unexpected graph query: ${query}`);
+  };
+  const sentinels = await readMergedLateReviewLedgerSentinels(baseCurrent.repository, "token", {
+    contract,
+    graphRequestFn,
+    request: async () => ({ body: { total_count: 0, check_runs: [] }, link: "" })
+  });
+  assert.equal(sentinels.length, 1);
+  assert.deepEqual(sentinels[0].findings.map(({ sourceType, severity }) => ({ sourceType, severity })), [
+    { sourceType: "INLINE_THREAD", severity: "P1" },
+    { sourceType: "ISSUE_COMMENT", severity: "P2" }
+  ]);
+});
+
+test("a clean review submitted after merge cannot erase an append-only late finding on the merged PR", () => {
+  const current = { ...baseCurrent, mergedAt: "2026-08-09T11:45:00Z", mergeSha: "e".repeat(40) };
+  const persistent = normalizeLateReviewEvent({
+    eventName: "pull_request_review",
+    event: {
+      action: "submitted",
+      review: {
+        id: 8301,
+        node_id: "REVIEW_8301",
+        user: { login: "chatgpt-codex-connector" },
+        body: "P1 late immutable finding",
+        commit_id: headA,
+        submitted_at: "2026-08-09T12:00:00Z"
+      }
+    },
+    contract
+  });
+  const postMergeClean = { ...exactReview, reviewId: 8302, state: "APPROVED", submittedAt: "2026-08-09T12:30:00Z" };
+  const sentinel = detectLateReview({ contract, current, reviews: [postMergeClean], persistentFindings: [persistent] });
+  assert.equal(sentinel.findings.length, 1);
+  assert.equal(sentinel.findings[0].disposition, "UNRESOLVED");
 });
 
 test("delivery delay alone cannot relabel a pre-merge finding as post-merge", () => {
@@ -721,6 +842,175 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   );
 });
 
+test("GitHub resolution readback recomputes the successor diff, full exact-head receipt and original dispositions", async () => {
+  const repository = "Chillywood2025/chillywood-mobile";
+  const successorPr = 203;
+  const successorHead = "1".repeat(40);
+  const successorTree = "2".repeat(40);
+  const successorMergeSha = "3".repeat(40);
+  const successorBase = "4".repeat(40);
+  const pushedAt = "2026-08-10T01:00:00Z";
+  let sourceLeaseBody;
+  const recordedLease = await recordSourcePushLease({
+    repository,
+    prNumber: successorPr,
+    headSha: successorHead,
+    baseBranch: "main",
+    baseSha: successorBase,
+    pushedAt,
+    token: "token",
+    request: async (_url, _token, init) => {
+      sourceLeaseBody = JSON.parse(init.body);
+      return { body: { id: 9100, ...sourceLeaseBody, app: { slug: "github-actions" } }, link: "" };
+    }
+  });
+  const successorCurrent = {
+    repository,
+    prNumber: successorPr,
+    headSha: successorHead,
+    headTree: successorTree,
+    baseBranch: "main",
+    baseSha: successorBase,
+    latestSourcePushAt: pushedAt,
+    sourcePushLeaseHashes: [recordedLease.payload.digest],
+    mergedAt: "2026-08-10T02:45:00Z",
+    mergeSha: successorMergeSha,
+    providerReviewsExist: true,
+    reviewOnly: false,
+    lateReviewBlocked: false,
+    repositoryWriteActors: ["Chillywood2025"]
+  };
+  const successorReview = {
+    ...exactReview,
+    reviewId: 9200,
+    commit: successorHead,
+    startedAt: "2026-08-10T01:30:00Z",
+    submittedAt: "2026-08-10T02:00:00Z"
+  };
+  const receipt = buildExactHeadReceipt({ contract, current: successorCurrent, review: successorReview, threads: [] });
+  const files = [{
+    filename: "hooks/use-livekit-chat-call-session.ts",
+    status: "modified",
+    sha: "5".repeat(40),
+    additions: 20,
+    deletions: 5,
+    changes: 25
+  }];
+  const sentinel = {
+    classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+    repository,
+    prNumber: 194,
+    mergeSha: "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+    successorCorrectionOwner: "codex/d2a-livekit-mic-post-merge-review-correction",
+    assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+    authorizedBootstrapOwners: [
+      "codex/assurance-active-task-and-claim-freshness-a1",
+      "codex/assurance-codex-security-scan-reliability-s0"
+    ],
+    findings: [{
+      sourceType: "INLINE_THREAD",
+      sourceId: 3744746865,
+      bodyHash: "6".repeat(64),
+      severity: "P1",
+      threadId: "THREAD_ORIGINAL",
+      disposition: "RESOLVED",
+      threadResolutionState: "RESOLVED"
+    }],
+    resolutionEvidence: {
+      schemaVersion: 1,
+      successorPr,
+      successorBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
+      successorHead,
+      successorTree,
+      successorMergeSha,
+      successorMergedAt: successorCurrent.mergedAt,
+      correctedSourceIds: [3744746865],
+      resolvedThreadIds: ["THREAD_ORIGINAL"],
+      allThreadsResolved: true,
+      githubThreadResolutionReadbackAt: "2026-08-10T03:00:00Z",
+      exactHeadReviewedCommit: successorHead,
+      exactHeadReviewedTree: successorTree,
+      exactHeadReviewReceiptHash: receipt.receiptHash,
+      exactHeadCheckRunId: 9300,
+      exactHeadReviewCompletedAt: receipt.reviewCompletedAt,
+      correctionEvidenceHash: lateReviewCorrectionEvidenceHash({
+        repository,
+        successorPr,
+        baseSha: successorBase,
+        successorHead,
+        successorTree,
+        successorMergeSha,
+        files
+      }),
+      dispositionEvidenceHash: "7".repeat(64),
+      verificationSubjectHash: "8".repeat(64),
+      repositoryVerificationHash: "9".repeat(64),
+      completedAt: "2026-08-10T03:05:00Z"
+    }
+  };
+  sentinel.resolutionEvidence.dispositionEvidenceHash = lateReviewDispositionEvidenceHash({
+    repository,
+    sentinel,
+    exactHeadReceiptHash: receipt.receiptHash,
+    resolvedThreadIds: ["THREAD_ORIGINAL"]
+  });
+  sentinel.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(sentinel);
+  const exactCheck = {
+    id: 9300,
+    name: contract.checkName,
+    status: "completed",
+    conclusion: "success",
+    head_sha: successorHead,
+    app: { slug: "github-actions" },
+    external_id: receipt.receiptHash,
+    output: { text: JSON.stringify({ codes: [], receipt }) }
+  };
+  const sourceLeaseCheck = { id: 9100, ...sourceLeaseBody, app: { slug: "github-actions" } };
+  const request = async (url) => {
+    if (url.endsWith(`/pulls/${successorPr}`)) return { body: {
+      merged: true,
+      head: { ref: sentinel.successorCorrectionOwner, sha: successorHead },
+      base: { ref: "main", sha: successorBase },
+      merge_commit_sha: successorMergeSha,
+      merged_at: successorCurrent.mergedAt
+    }, link: "" };
+    if (url.endsWith(`/git/commits/${successorHead}`)) return { body: { tree: { sha: successorTree } }, link: "" };
+    if (url.includes(`/pulls/${successorPr}/files`)) return { body: files, link: "" };
+    if (url.includes(encodeURIComponent(contract.checkName))) return { body: { total_count: 1, check_runs: [exactCheck] }, link: "" };
+    if (url.includes(encodeURIComponent(sourcePushLeaseCheckName))) return { body: { total_count: 1, check_runs: [sourceLeaseCheck] }, link: "" };
+    throw new Error(`unexpected request ${url}`);
+  };
+  const graphRequestFn = async () => ({ repository: { pullRequest: { reviewThreads: {
+    pageInfo: { hasNextPage: false, endCursor: null },
+    nodes: [{ id: "THREAD_ORIGINAL", isResolved: true }]
+  } } } });
+  const verified = await verifyLateReviewResolutionGithub({ repository, token: "token", sentinel, request, graphRequestFn });
+  assert.equal(verified.ok, true, verified.reason);
+  sentinel.resolutionEvidence.repositoryVerificationHash = verified.repositoryVerificationHash;
+  assert.equal(lateReviewResolutionSubjectHash(sentinel), sentinel.resolutionEvidence.verificationSubjectHash);
+
+  const forgedCorrection = structuredClone(sentinel);
+  forgedCorrection.resolutionEvidence.correctionEvidenceHash = "a".repeat(64);
+  assert.equal((await verifyLateReviewResolutionGithub({ repository, token: "token", sentinel: forgedCorrection, request, graphRequestFn })).reason, "CORRECTION_EVIDENCE");
+  const forgedDisposition = structuredClone(sentinel);
+  forgedDisposition.resolutionEvidence.dispositionEvidenceHash = "b".repeat(64);
+  assert.equal((await verifyLateReviewResolutionGithub({ repository, token: "token", sentinel: forgedDisposition, request, graphRequestFn })).reason, "DISPOSITION_EVIDENCE");
+  const minimalReceipt = structuredClone(exactCheck);
+  minimalReceipt.output.text = JSON.stringify({ codes: [], receipt: {
+    receiptHash: receipt.receiptHash,
+    repository,
+    prNumber: successorPr,
+    prHeadSha: successorHead,
+    prHeadTree: successorTree,
+    reviewedCommit: successorHead,
+    reviewCompletedAt: receipt.reviewCompletedAt
+  } });
+  const minimalRequest = async (url) => url.includes(encodeURIComponent(contract.checkName))
+    ? { body: { total_count: 1, check_runs: [minimalReceipt] }, link: "" }
+    : request(url);
+  assert.equal((await verifyLateReviewResolutionGithub({ repository, token: "token", sentinel, request: minimalRequest, graphRequestFn })).reason, "EXACT_HEAD_RECEIPT");
+});
+
 test("durable sentinel payloads are marker-bound and malformed payloads fail closed", async () => {
   const sentinel = {
     classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
@@ -737,6 +1027,20 @@ test("durable sentinel payloads are marker-bound and malformed payloads fail clo
     }),
     { message: "CODEX_REVIEW_RECEIPT_INVALID" }
   );
+});
+
+test("only an independently verified durable resolution clears the same canonical and global sentinel", () => {
+  const sentinel = { prNumber: 194, mergeSha: "4".repeat(40), findings: [{ disposition: "RESOLVED" }] };
+  assert.equal(mergeUnresolvedLateReviewSentinels({
+    globalLedgerSentinels: [sentinel],
+    canonicalSentinels: [sentinel],
+    durable: [{ sentinel, resolutionVerified: true }]
+  }).length, 0);
+  assert.equal(mergeUnresolvedLateReviewSentinels({
+    globalLedgerSentinels: [sentinel],
+    canonicalSentinels: [sentinel],
+    durable: [{ sentinel, resolutionVerified: false }]
+  }).length, 1);
 });
 
 test("canonical PR 194 sentinel blocks release and preserves every unresolved thread identity", () => {

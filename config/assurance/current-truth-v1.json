@@ -598,6 +598,14 @@
   "freshnessDeadline": "2026-08-10T18:05:08Z",
   "evidenceSources": [
     {
+      "id": "a1-assurance-control-source-freeze-20260809-1805",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
       "id": "d2a-microphone-correction-merge-closeout-20260809-1805",
       "mode": "local-offline-and-github-read-only",
       "observedAt": "2026-08-09T18:05:08Z",
@@ -605,6 +613,7 @@
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
+      "sourceCommit": "718373286cb61efbcbafadb707f401ae3399d674",
       "covers": [
         "PR #194 immutable and synchronized source identity",
         "repository.active-implementation.immutable-synchronized-source",

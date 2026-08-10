@@ -91,6 +91,7 @@ function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEv
   const synchronizedChangedFileBytes = safeGit(["diff", "--name-status", "-z", "--no-renames", currentMain, observedHead]);
   const reviewedChangedPaths = mergeBase ? splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", mergeBase, entry.head], "")) : null;
   const synchronizedChangedPaths = splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", currentMain, observedHead], ""));
+  const currentTruthBindingChangedPaths = splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", entry.head, observedHead], ""));
   return {
     sourceIsAncestor,
     commitDistance,
@@ -104,6 +105,12 @@ function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEv
     synchronizedChangedFileHash: synchronizedChangedFileBytes === null ? null : sha256(synchronizedChangedFileBytes),
     reviewedChangedPaths,
     synchronizedChangedPaths,
+    currentTruthBinding: {
+      parents,
+      commitDistance,
+      synchronizedTree: observedTree,
+      changedPaths: currentTruthBindingChangedPaths
+    },
     providerHead: observedHead,
     reviewEvidence
   };

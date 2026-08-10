@@ -10,6 +10,7 @@
   "acceptableReviewStates": ["COMMENTED", "APPROVED"],
   "blockingSeverities": ["P0", "P1", "P2"],
   "reviewOnlyLabel": "assurance-review-only",
+  "trustedRepositoryWriteActors": ["Chillywood2025"],
   "requiredEvents": [
     "pull_request_target.opened",
     "pull_request_target.synchronize",
@@ -52,6 +53,7 @@
     "providerIssueComments",
     "reviewFindings",
     "providerCommentHeadUnbound",
+    "repositoryWriteActors",
     "receiptHash"
   ],
   "receiptHash": {
@@ -76,6 +78,7 @@
     "every-synchronize-event-recorded-by-exact-source-push-lease",
     "all-review-conversations-resolved",
     "all-provider-review-surfaces-read-and-head-bound",
+    "repository-write-authority-equals-owner-root-authority",
     "resolved-thread-findings-require-later-exact-head-provider-rereview",
     "no-unresolved-blocking-finding",
     "exact-receipt-hash-valid"
@@ -91,6 +94,7 @@
     "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE",
     "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID",
     "CODEX_REVIEW_FINDING_LEDGER_INVALID",
+    "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
     "CODEX_REVIEW_RECEIPT_INVALID",
     "CODEX_REVIEW_LATE_POST_MERGE",
     "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"
@@ -116,7 +120,9 @@
     "checkName": "Chi'llywood / Review Only Never Merge",
     "trustedAppSlug": "github-actions",
     "appendOnly": true,
-    "labelAuthority": false
+    "labelAuthority": false,
+    "registryAnchorSha": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9",
+    "registryScope": "repository-pr-number-across-all-future-heads"
   },
   "findingResolution": {
     "approvedReviewIsExplicitCleanDisposition": true,

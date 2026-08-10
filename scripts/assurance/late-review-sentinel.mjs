@@ -55,6 +55,16 @@ export async function readDurableLateReviewSentinels(repository, token, options 
   return parsed;
 }
 
+export function mergeUnresolvedLateReviewSentinels({ globalLedgerSentinels = [], canonicalSentinels = [], durable = [] }) {
+  const verifiedResolvedKeys = new Set(durable
+    .filter(({ resolutionVerified }) => resolutionVerified === true)
+    .map(({ sentinel }) => `${sentinel.prNumber}:${sentinel.mergeSha}`));
+  const durableSentinels = durable.filter(({ resolutionVerified }) => resolutionVerified !== true).map(({ sentinel }) => sentinel);
+  return [...new Map([...globalLedgerSentinels, ...canonicalSentinels, ...durableSentinels]
+    .filter((sentinel) => !verifiedResolvedKeys.has(`${sentinel.prNumber}:${sentinel.mergeSha}`))
+    .map((sentinel) => [`${sentinel.prNumber}:${sentinel.mergeSha}`, sentinel])).values()];
+}
+
 async function main() {
   const options = args();
   const record = readJson("config/assurance/current-truth-v1.json");
@@ -73,9 +83,7 @@ async function main() {
     });
     globalLedgerSentinels = await readMergedLateReviewLedgerSentinels(repository, token, { maxPages: 20 });
   }
-  const durableSentinels = durable.map(({ sentinel }) => sentinel);
-  const allSentinels = [...new Map([...globalLedgerSentinels, ...sentinels, ...durableSentinels]
-    .map((sentinel) => [`${sentinel.prNumber}:${sentinel.mergeSha}`, sentinel])).values()];
+  const allSentinels = mergeUnresolvedLateReviewSentinels({ globalLedgerSentinels, canonicalSentinels: sentinels, durable });
   emit("assurance:late-review-sentinel", allSentinels.length === 0 && findings.length === 0, {
     classification: allSentinels.length ? "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW" : "NO_UNRESOLVED_LATE_REVIEW",
     findings,

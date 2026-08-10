@@ -112,7 +112,7 @@ const claimClassPolicy = {
     authorityAllowed: "REPOSITORY_ONLY",
     maximumHours: 24,
     allowedPlatforms: ["NONE", "ANDROID", "IOS"],
-    requiresCommittedEvidence: false,
+    requiresCommittedEvidence: true,
     requiresExternalReceipt: false
   },
   PROVIDER_CRITICAL: {
@@ -157,11 +157,12 @@ const claimClassPolicy = {
   }
 };
 const canonicalFactRegistry = [
-  { factId: "repository.active-implementation.immutable-synchronized-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
-  { factId: "repository.active-implementation.merge-identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
-  { factId: "repository.review-only-pr.disposition", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
-  { factId: "repository.phase1-ci.identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
-  { factId: "repository.d2a.frozen-state", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+  { factId: "repository.assurance-control.a1.source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification" },
+  { factId: "repository.active-implementation.immutable-synchronized-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d" },
+  { factId: "repository.active-implementation.merge-identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree" },
+  { factId: "repository.review-only-pr.disposition", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained" },
+  { factId: "repository.phase1-ci.identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "Phase 1 CI run 31327771533 passed 13/13 at synchronized head ada396a437e40a98acea75bf016c36fc3ea86739" },
+  { factId: "repository.d2a.frozen-state", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "D2A blocked evidence ebb0ac5e2dc6ba9005208b7e6b10474292e0972d tree c41a4d688e799483b67f35c956f1c95b273bf072 remains frozen and not resumed" },
   { factId: "provider.supabase.b3.deployed-predecessor", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE", historicalEvidence: "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765" },
   { factId: "provider.supabase.b3.forward-correction", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE", historicalEvidence: "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38" },
   { factId: "provider.supabase.b3.live-acl", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE", historicalEvidence: "live pre-correction ACL explicitly includes anon but source correction revokes it" }
@@ -303,7 +304,7 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
       && source.authorityAllowed === claim.authorityAllowed
       && source.platform === claim.platform
       && source.provider === claim.provider
-      && committedRecord.liveProviderReadback === true
+      && (claim.freshnessClass === "REPOSITORY_SOURCE" || committedRecord.liveProviderReadback === true)
       && factsBound
       && introducedHere;
   } catch {
@@ -823,6 +824,33 @@ export function baseSynchronizationReviewReceiptHash(manifest) {
   return sha256(stableValue(receipt));
 }
 
+export function verifyCurrentTruthBindingSynchronization({ sourceHead, synchronizedHead, synchronizedTree, currentMain, parents, commitDistance, changedPaths }) {
+  const findings = [];
+  const allowedPaths = ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"];
+  if (!gitShaPattern.test(sourceHead ?? "")
+    || !gitShaPattern.test(synchronizedHead ?? "")
+    || !gitShaPattern.test(synchronizedTree ?? "")
+    || !gitShaPattern.test(currentMain ?? "")) findings.push(baseSynchronizationFinding("ASSURANCE_CURRENT_TRUTH_BINDING_IDENTITY_MALFORMED"));
+  if (commitDistance !== 1) findings.push(baseSynchronizationFinding("ASSURANCE_CURRENT_TRUTH_BINDING_DISTANCE_INVALID"));
+  if (!Array.isArray(parents) || parents.length !== 1 || parents[0] !== sourceHead) {
+    findings.push(baseSynchronizationFinding("ASSURANCE_CURRENT_TRUTH_BINDING_PARENT_INVALID"));
+  }
+  const normalizedPaths = Array.isArray(changedPaths) ? [...new Set(changedPaths)].sort() : null;
+  if (!normalizedPaths || stableJson(normalizedPaths) !== stableJson(allowedPaths)) {
+    findings.push(baseSynchronizationFinding("ASSURANCE_CURRENT_TRUTH_BINDING_SCOPE_INVALID", { changedPaths: normalizedPaths }));
+  }
+  const sortedFindings = sortStable(findings);
+  return {
+    ok: sortedFindings.length === 0,
+    classification: "CURRENT_TRUTH_BINDING_COMMIT",
+    sourceHead,
+    synchronizedHead,
+    synchronizedTree,
+    currentMain,
+    findings: sortedFindings
+  };
+}
+
 export function verifyBaseSynchronizedImplementationHead({
   number,
   branch,
@@ -993,17 +1021,26 @@ export function verifyCurrentTruthHeadBindings({
     let classification = observed === entry?.head ? "EXACT_SOURCE_HEAD" : "UNVERIFIED_HEAD";
     let synchronization = null;
     if (observedValid && headValid && observed !== entry.head) {
-      synchronization = verifyBaseSynchronizedImplementationHead({
-        ...(baseSynchronizations?.[ref] ?? {}),
-        number: entry.number,
-        branch: entry.branch,
-        sourceHead: entry.head,
-        synchronizedHead: observed,
-        currentMain: remoteMain,
-        minimumReviewEvidence: minimumBaseSynchronizationReviewEvidence,
-        reviewFreshnessHours: baseSynchronizationReviewFreshnessHours,
-        evaluationTime
-      });
+      const inspection = baseSynchronizations?.[ref] ?? {};
+      const truthBinding = inspection.currentTruthBinding
+        ? verifyCurrentTruthBindingSynchronization({
+          ...inspection.currentTruthBinding,
+          sourceHead: entry.head,
+          synchronizedHead: observed,
+          currentMain: remoteMain
+        })
+        : null;
+      synchronization = truthBinding?.ok ? truthBinding : verifyBaseSynchronizedImplementationHead({
+          ...inspection,
+          number: entry.number,
+          branch: entry.branch,
+          sourceHead: entry.head,
+          synchronizedHead: observed,
+          currentMain: remoteMain,
+          minimumReviewEvidence: minimumBaseSynchronizationReviewEvidence,
+          reviewFreshnessHours: baseSynchronizationReviewFreshnessHours,
+          evaluationTime
+        });
       if (synchronization.ok) classification = synchronization.classification;
     }
     bindings.push({
@@ -1088,7 +1125,7 @@ export function verifyCurrentTruthHeadBindings({
   const currentEntry = entries.find((entry) => entry?.branch === contextBranch);
   const currentRef = currentEntry && isValidGitBranchName(currentEntry.branch) ? implementationRemoteRef(currentEntry.branch) : null;
   const currentBinding = bindings.find((binding) => binding.ref === currentRef);
-  const acceptedCheckoutHead = currentBinding?.classification === "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH"
+  const acceptedCheckoutHead = ["BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH", "CURRENT_TRUTH_BINDING_COMMIT"].includes(currentBinding?.classification)
     ? currentBinding.observedHead
     : currentEntry?.head;
   if (currentEntry && checkoutHeadValid && gitShaPattern.test(currentEntry.head) && head !== acceptedCheckoutHead) {

@@ -15,6 +15,7 @@ import {
   sha256,
   stableJson,
   verifyBaseSynchronizedImplementationHead,
+  verifyCurrentTruthBindingSynchronization,
   verifyCurrentTruthHeadBindings,
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization
@@ -163,6 +164,24 @@ const synchronizedBinding = matrix.baseSynchronized.bindings.find(({ number }) =
 assert.equal(synchronizedBinding.classification, "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH");
 assert.equal(synchronizedBinding.recordedHead, pr64Recorded);
 assert.equal(synchronizedBinding.observedHead, pr64Observed);
+
+const currentTruthBinding = verifyCurrentTruthBindingSynchronization({
+  sourceHead: pr64Recorded,
+  synchronizedHead: pr64Observed,
+  synchronizedTree: "f".repeat(40),
+  currentMain: main,
+  parents: [pr64Recorded],
+  commitDistance: 1,
+  changedPaths: ["NEXT_TASK.md", "config/assurance/current-truth-v1.json", "CURRENT_STATE.md"]
+});
+assert.equal(currentTruthBinding.ok, true);
+assert.equal(currentTruthBinding.classification, "CURRENT_TRUTH_BINDING_COMMIT");
+assert.equal(verifyCurrentTruthBindingSynchronization({
+  ...currentTruthBinding,
+  parents: [pr64Recorded],
+  commitDistance: 1,
+  changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json", "scripts/assurance/lib.mjs"]
+}).ok, false);
 
 const rejectionCases = [
   ["arbitraryCommit", { parents: [pr64Recorded] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],

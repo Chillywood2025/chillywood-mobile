@@ -41,6 +41,7 @@ const implementationObservations = {
 };
 const facts = {
   currentTruth: truth,
+  protectedMainTruth: truth,
   registry,
   allowlist,
   truthCheck: { ok: true },
@@ -74,6 +75,56 @@ test("matching feature override succeeds but cannot bypass canonical truth", () 
   const result = activeTask({ ...withTruth((value) => ({ ...value, activeTaskBinding: malformed })), featureId: binding.featureId });
   assert.equal(result.ok, false);
   assert.deepEqual(result.findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+});
+
+test("branch-local structured authority cannot replace protected-main truth outside the exact bootstrap registry", () => {
+  const substituted = structuredClone(truth);
+  substituted.activeTaskBinding = {
+    ...substituted.activeTaskBinding,
+    featureId: "assurance-efficiency-e0",
+    implementationPr: 999,
+    implementationBranch: "codex/unrelated-self-authorized",
+    implementationBindingId: "self-authored-task-substitution",
+    executionState: "SELF_AUTHORED"
+  };
+  substituted.openImplementationPrs = [{
+    number: 999,
+    branch: "codex/unrelated-self-authorized",
+    head: substituted.activeTaskBinding.currentImplementationHead,
+    state: "open"
+  }];
+  const result = activeTask({ ...facts, currentTruth: substituted, protectedMainTruth: truth });
+  assert.deepEqual(result.findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"]);
+});
+
+test("the exact owner-authorized A1 bootstrap identity is narrow and cannot widen feature, PR, branch or execution state", () => {
+  const a1 = structuredClone(truth);
+  a1.activeTaskBinding = {
+    ...a1.activeTaskBinding,
+    featureId: "assurance-efficiency-e0",
+    implementationPr: 201,
+    implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1",
+    implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
+    executionState: "ASSURANCE_CONTROL_A1"
+  };
+  a1.openImplementationPrs = [{
+    number: 201,
+    branch: a1.activeTaskBinding.implementationBranch,
+    head: a1.activeTaskBinding.currentImplementationHead,
+    state: "open"
+  }];
+  const a1Identity = { ...identity, branch: a1.activeTaskBinding.implementationBranch };
+  assert.equal(activeTask({ ...facts, currentTruth: a1, protectedMainTruth: canonicalTruth, identity: a1Identity }).ok, true);
+  for (const [field, value] of [
+    ["featureId", "chilly-chat-call-lifecycle"],
+    ["implementationPr", 999],
+    ["implementationBranch", "codex/unrelated"],
+    ["executionState", "UNRELATED"]
+  ]) {
+    const forged = structuredClone(a1);
+    forged.activeTaskBinding[field] = value;
+    assert.deepEqual(activeTask({ ...facts, currentTruth: forged, protectedMainTruth: canonicalTruth, identity: a1Identity }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"], field);
+  }
 });
 
 test("conflicting feature override fails closed", () => {
@@ -179,6 +230,33 @@ test("a current-truth-verified base synchronization becomes the exact packet ide
   });
 });
 
+test("one exact generated three-file current-truth binding commit becomes the packet identity", () => {
+  const synchronizedHead = "b".repeat(40);
+  const synchronizedTree = "c".repeat(40);
+  const accepted = {
+    ok: true,
+    classification: "CURRENT_TRUTH_BINDING_COMMIT",
+    sourceHead: binding.currentImplementationHead,
+    synchronizedHead,
+    synchronizedTree,
+    currentMain: identity.originMainHead
+  };
+  const result = activeTask({
+    ...facts,
+    truthCheck: { ok: true, headBindings: { acceptedBaseSynchronizations: { [binding.implementationPr]: accepted } } },
+    identity: { ...identity, head: synchronizedHead, tree: synchronizedTree },
+    implementationObservations: {
+      ...implementationObservations,
+      remoteHead: synchronizedHead,
+      currentTree: synchronizedTree,
+      providerPrHead: synchronizedHead
+    }
+  });
+  assert.equal(result.ok, true, result.findings?.join(","));
+  assert.equal(result.packet.implementation.currentSynchronizedHead, synchronizedHead);
+  assert.equal(result.packet.implementation.currentSynchronizedTree, synchronizedTree);
+});
+
 test("unverified or substituted base synchronization identities fail closed", () => {
   const synchronizedHead = "7".repeat(40);
   const synchronizedTree = "8".repeat(40);
@@ -242,6 +320,7 @@ test("a completed binding is not an active task and no override can revive it", 
   };
   const competing = activeTask({
     ...facts,
+    protectedMainTruth: canonicalTruth,
     currentTruth: {
       ...canonicalTruth,
       openImplementationPrs: [{
@@ -255,7 +334,7 @@ test("a completed binding is not an active task and no override can revive it", 
   });
   assert.equal(competing.ok, false);
   assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
-  assert.deepEqual(activeTask({ ...facts, currentTruth: canonicalTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+  assert.deepEqual(activeTask({ ...facts, currentTruth: canonicalTruth, protectedMainTruth: canonicalTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
 });
 
 test("active-task CLI rejects caller-selected diff bases", () => {

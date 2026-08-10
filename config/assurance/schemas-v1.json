@@ -98,11 +98,12 @@
             "clock": {"const": "UTC"},
             "failClosed": {"const": true},
             "factRegistry": {"const": [
-              {"factId": "repository.active-implementation.immutable-synchronized-source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
-              {"factId": "repository.active-implementation.merge-identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
-              {"factId": "repository.review-only-pr.disposition", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
-              {"factId": "repository.phase1-ci.identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
-              {"factId": "repository.d2a.frozen-state", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+              {"factId": "repository.assurance-control.a1.source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"},
+              {"factId": "repository.active-implementation.immutable-synchronized-source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d"},
+              {"factId": "repository.active-implementation.merge-identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree"},
+              {"factId": "repository.review-only-pr.disposition", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained"},
+              {"factId": "repository.phase1-ci.identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "Phase 1 CI run 31327771533 passed 13/13 at synchronized head ada396a437e40a98acea75bf016c36fc3ea86739"},
+              {"factId": "repository.d2a.frozen-state", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "D2A blocked evidence ebb0ac5e2dc6ba9005208b7e6b10474292e0972d tree c41a4d688e799483b67f35c956f1c95b273bf072 remains frozen and not resumed"},
               {"factId": "provider.supabase.b3.deployed-predecessor", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765"},
               {"factId": "provider.supabase.b3.forward-correction", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38"},
               {"factId": "provider.supabase.b3.live-acl", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "live pre-correction ACL explicitly includes anon but source correction revokes it"}
@@ -372,7 +373,7 @@
     },
     "codexReviewExactHeadContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["checkName", "reviewProviders", "acceptableReviewStates", "blockingSeverities", "reviewOnlyLabel", "requiredEvents", "receiptRequiredFields", "receiptHash", "boundedReadback", "passRequirements", "resultCodes", "protectedBaseBranch", "sourcePushLease", "providerFindingLedger", "reviewOnlyClassification", "lateReviewClassification", "lateReviewBlocks"],
+      "required": ["checkName", "reviewProviders", "acceptableReviewStates", "blockingSeverities", "reviewOnlyLabel", "trustedRepositoryWriteActors", "requiredEvents", "receiptRequiredFields", "receiptHash", "boundedReadback", "passRequirements", "resultCodes", "protectedBaseBranch", "sourcePushLease", "providerFindingLedger", "reviewOnlyClassification", "lateReviewClassification", "lateReviewBlocks"],
       "properties": {
         "contractId": {"const": "codex-review-exact-head-v1"},
         "checkName": {"const": "Chi'llywood / Codex Review Exact Head"},
@@ -380,23 +381,24 @@
         "acceptableReviewStates": {"const": ["COMMENTED", "APPROVED"]},
         "blockingSeverities": {"const": ["P0", "P1", "P2"]},
         "reviewOnlyLabel": {"const": "assurance-review-only"},
+        "trustedRepositoryWriteActors": {"const": ["Chillywood2025"]},
         "requiredEvents": {"const": ["pull_request_target.opened", "pull_request_target.synchronize", "pull_request_target.reopened", "pull_request_target.ready_for_review", "pull_request_target.edited", "pull_request_target.labeled", "pull_request_target.unlabeled", "pull_request_review.submitted", "pull_request_review.edited", "pull_request_review.dismissed", "pull_request_review_comment.created", "pull_request_review_comment.edited", "pull_request_review_comment.deleted", "issue_comment.created", "issue_comment.edited", "issue_comment.deleted", "workflow_dispatch"]},
-        "receiptRequiredFields": {"type": "array", "minItems": 22, "uniqueItems": true, "allOf": [
+        "receiptRequiredFields": {"type": "array", "minItems": 23, "uniqueItems": true, "allOf": [
           {"contains": {"const": "repository"}}, {"contains": {"const": "prNumber"}}, {"contains": {"const": "prHeadSha"}}, {"contains": {"const": "prHeadTree"}},
           {"contains": {"const": "prBaseBranch"}}, {"contains": {"const": "prBaseSha"}},
           {"contains": {"const": "reviewProvider"}}, {"contains": {"const": "reviewId"}}, {"contains": {"const": "reviewState"}}, {"contains": {"const": "reviewedCommit"}},
           {"contains": {"const": "reviewStartedAt"}}, {"contains": {"const": "reviewCompletedAt"}}, {"contains": {"const": "latestSourcePushAt"}}, {"contains": {"const": "sourcePushLeaseHashes"}},
           {"contains": {"const": "reviewSubmissions"}}, {"contains": {"const": "reviewComments"}}, {"contains": {"const": "reviewThreads"}},
-          {"contains": {"const": "providerIssueComments"}}, {"contains": {"const": "reviewFindings"}}, {"contains": {"const": "receiptHash"}}
+          {"contains": {"const": "providerIssueComments"}}, {"contains": {"const": "reviewFindings"}}, {"contains": {"const": "repositoryWriteActors"}}, {"contains": {"const": "receiptHash"}}
         ]},
         "receiptHash": {"const": {"algorithm": "sha256", "canonicalization": "stable-json-without-receiptHash"}},
         "boundedReadback": {"const": {"reviews": 100, "threads": 100, "commentsPerThread": 100, "issueComments": 100, "maxPages": 20, "checkRuns": 100, "polling": false}},
-        "passRequirements": {"const": ["reviewed-commit-equals-current-pr-head", "current-pr-tree-equals-recorded-tree", "protected-base-branch-and-head-equal-recorded-diff-base", "review-completed-after-latest-source-push", "no-source-commit-after-review", "every-synchronize-event-recorded-by-exact-source-push-lease", "all-review-conversations-resolved", "all-provider-review-surfaces-read-and-head-bound", "resolved-thread-findings-require-later-exact-head-provider-rereview", "no-unresolved-blocking-finding", "exact-receipt-hash-valid"]},
-        "resultCodes": {"const": ["CODEX_REVIEW_MISSING", "CODEX_REVIEW_STALE_HEAD", "CODEX_REVIEW_STALE_BASE", "CODEX_REVIEW_INCOMPLETE", "CODEX_REVIEW_BLOCKING_THREAD_OPEN", "CODEX_REVIEW_UNRESOLVED_FINDING", "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND", "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE", "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID", "CODEX_REVIEW_FINDING_LEDGER_INVALID", "CODEX_REVIEW_RECEIPT_INVALID", "CODEX_REVIEW_LATE_POST_MERGE", "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"]},
+        "passRequirements": {"const": ["reviewed-commit-equals-current-pr-head", "current-pr-tree-equals-recorded-tree", "protected-base-branch-and-head-equal-recorded-diff-base", "review-completed-after-latest-source-push", "no-source-commit-after-review", "every-synchronize-event-recorded-by-exact-source-push-lease", "all-review-conversations-resolved", "all-provider-review-surfaces-read-and-head-bound", "repository-write-authority-equals-owner-root-authority", "resolved-thread-findings-require-later-exact-head-provider-rereview", "no-unresolved-blocking-finding", "exact-receipt-hash-valid"]},
+        "resultCodes": {"const": ["CODEX_REVIEW_MISSING", "CODEX_REVIEW_STALE_HEAD", "CODEX_REVIEW_STALE_BASE", "CODEX_REVIEW_INCOMPLETE", "CODEX_REVIEW_BLOCKING_THREAD_OPEN", "CODEX_REVIEW_UNRESOLVED_FINDING", "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND", "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE", "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID", "CODEX_REVIEW_FINDING_LEDGER_INVALID", "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR", "CODEX_REVIEW_RECEIPT_INVALID", "CODEX_REVIEW_LATE_POST_MERGE", "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"]},
         "protectedBaseBranch": {"const": "main"},
         "sourcePushLease": {"const": {"checkName": "Chi'llywood / Codex Review Source Push Lease", "trustedAppSlug": "github-actions", "events": ["opened", "synchronize", "reopened", "ready_for_review", "edited-base"], "receiptBinding": "repository-pr-head-pushedAt-sha256", "eventRunCancellationAllowed": false, "reuseAfterRepeatedHeadPush": false}},
         "providerFindingLedger": {"const": {"checkName": "Chi'llywood / Codex Review Finding Ledger", "trustedAppSlug": "github-actions", "appendOnly": true, "minimumTrackedMergedPr": 194}},
-        "reviewOnlyClassification": {"const": {"branchPrefix": "codex/assurance-review-only/", "checkName": "Chi'llywood / Review Only Never Merge", "trustedAppSlug": "github-actions", "appendOnly": true, "labelAuthority": false}},
+        "reviewOnlyClassification": {"const": {"branchPrefix": "codex/assurance-review-only/", "checkName": "Chi'llywood / Review Only Never Merge", "trustedAppSlug": "github-actions", "appendOnly": true, "labelAuthority": false, "registryAnchorSha": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9", "registryScope": "repository-pr-number-across-all-future-heads"}},
         "lateReviewClassification": {"const": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"},
         "lateReviewBlocks": {"const": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]}
       }

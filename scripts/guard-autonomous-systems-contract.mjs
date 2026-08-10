@@ -47,7 +47,7 @@ const claimFreshness = evaluateFreshnessClaims({
   claims: currentTruth.freshnessClaims,
   evidenceSources: currentTruth.evidenceSources,
   freshness: currentTruthContract.freshness,
-  now: new Date(currentTruth.timestamp),
+  now: new Date(),
   evidenceSourceVerifier: ({ claim, source }) => verifyCommittedClaimEvidence({
     claim,
     source,

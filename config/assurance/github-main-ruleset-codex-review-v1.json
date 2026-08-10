@@ -9,6 +9,15 @@
   "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
   "requiredStatusCheckToAdd": "Chi'llywood / Codex Review Exact Head",
   "preserveExistingRequiredStatusChecks": true,
+  "strictRequiredStatusChecksPolicy": true,
+  "requiredCheckPublisherBoundary": {
+    "expectedGitHubApp": "github-actions",
+    "repositoryOwnerType": "User",
+    "rootAuthority": "Chillywood2025",
+    "trustedRepositoryWriteActors": ["Chillywood2025"],
+    "unexpectedWriteActorResult": "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
+    "forkWorkflowWriteTokensAllowed": false
+  },
   "pullRequestRequirements": {
     "requiredReviewThreadResolution": true,
     "dismissStaleReviewsOnPush": true,
