@@ -609,7 +609,8 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
   assert.equal(fs.readFileSync("scripts/assurance/current-truth.mjs", "utf8").includes("validateStructuredBinding("), true, "canonical truth reuses exact structured binding validation");
 
   const validMergeGit = (argv) => {
-    if (argv[0] === "show") return `${"a".repeat(40)} ${complete.currentImplementationHead}`;
+    if (argv[0] === "show" && argv.includes("--format=%P")) return `${"a".repeat(40)} ${complete.currentImplementationHead}`;
+    if (argv[0] === "show" && argv.includes("--format=%s")) return `Merge pull request #${complete.implementationPr} from Chillywood2025/${complete.implementationBranch}`;
     if (argv[0] === "rev-parse") return complete.currentImplementationTree;
     if (argv[0] === "merge-base") return "";
     throw new Error("unexpected git command");
@@ -632,6 +633,12 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
     remoteMain: "f".repeat(40),
     gitCommand: (argv) => argv[0] === "rev-parse" ? "c".repeat(40) : validMergeGit(argv)
   }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH"), true);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv.includes("--format=%s") ? "Merge pull request #999 from Chillywood2025/codex/substitution" : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PR_BRANCH_MISMATCH"), true);
 
   const applicabilitySubstitution = structuredClone(complete);
   const substitutedRegistry = structuredClone(registry);

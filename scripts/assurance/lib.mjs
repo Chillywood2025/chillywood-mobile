@@ -1401,12 +1401,17 @@ export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, 
   try {
     const mergeSha = latestMergedImplementationPr.mergeSha;
     const parents = gitCommand(["show", "-s", "--format=%P", mergeSha]).split(/\s+/u).filter(Boolean);
+    const mergeSubject = gitCommand(["show", "-s", "--format=%s", mergeSha]);
     const mergeTree = gitCommand(["rev-parse", `${mergeSha}^{tree}`]);
     gitCommand(["merge-base", "--is-ancestor", activeTaskBinding.currentImplementationHead, mergeSha]);
     gitCommand(["merge-base", "--is-ancestor", mergeSha, remoteMain]);
     const findings = [];
     if (parents.length !== 2 || parents[1] !== activeTaskBinding.currentImplementationHead) {
       findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PARENT_MISMATCH", { parents }));
+    }
+    const expectedSubject = `Merge pull request #${activeTaskBinding.implementationPr} from Chillywood2025/${activeTaskBinding.implementationBranch}`;
+    if (mergeSubject !== expectedSubject) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PR_BRANCH_MISMATCH", { expected: expectedSubject, recorded: mergeSubject }));
     }
     if (mergeTree !== activeTaskBinding.currentImplementationTree) {
       findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH", { expected: activeTaskBinding.currentImplementationTree, recorded: mergeTree }));
