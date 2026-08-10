@@ -145,7 +145,7 @@ function structuredBindingAuthority(truth, facts) {
   return verifyOwnerBootstrapAuthorization(binding, observation) ? "OWNER_BOOTSTRAP_GITHUB_COMMENT" : null;
 }
 
-function validateStructuredBinding(value, gateCatalog, registry) {
+export function validateStructuredBinding(value, gateCatalog, registry) {
   const findings = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
   if (requiredStructuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");

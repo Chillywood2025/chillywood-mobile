@@ -23,6 +23,7 @@ import {
   verifyCurrentTruthSynchronization,
   validateProofTierStatuses
 } from "./lib.mjs";
+import { validateStructuredBinding } from "./active-task.mjs";
 import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
 
 function safeGit(gitArgs, fallback = null) {
@@ -229,7 +230,12 @@ if (mode) {
     readJson("config/assurance/gate-catalog-v1.json"),
     readJson("config/assurance/feature-registry-v1.json")
   );
-  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...proofTierStatusFindings, ...validateLateReviewSentinelState(record)];
+  const structuredBindingFindings = validateStructuredBinding(
+    record.activeTaskBinding,
+    readJson("config/assurance/gate-catalog-v1.json"),
+    readJson("config/assurance/feature-registry-v1.json")
+  ).map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });

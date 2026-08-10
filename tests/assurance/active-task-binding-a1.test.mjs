@@ -7,6 +7,7 @@ import {
   activeTask,
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject,
+  validateStructuredBinding,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
 import { renderCurrentState, stableJson, validateProofTierStatuses } from "../../scripts/assurance/lib.mjs";
@@ -30,6 +31,12 @@ const completedProofTierStatuses = {
   T6_INSTALLED_PHYSICAL: "NOT_APPLICABLE",
   T7_PUBLIC_CANARY: "NOT_APPLICABLE"
 };
+const e0CompletionFacts = [
+  "repository.assurance-control.a1.requirements",
+  "repository.assurance-control.a1.source",
+  "repository.assurance-control.a1.model",
+  "repository.assurance-control.a1.integration"
+];
 const binding = {
   schemaVersion: 1,
   featureId: "chilly-chat-call-lifecycle",
@@ -54,6 +61,11 @@ const binding = {
   }],
   proofTiersUnderEvaluation: ["T1_SOURCE"]
 };
+const e0CompletionClaims = () => binding.requiredFreshnessClaims.map((claim) => ({
+  ...claim,
+  provider: "NONE",
+  requiredFacts: e0CompletionFacts
+}));
 const truth = {
   ...canonicalTruth,
   lateReviewSentinels: [],
@@ -418,10 +430,7 @@ test("a completed binding is not an active task and no override can revive it", 
     proofTierStatuses: completedProofTierStatuses,
     proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
     proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
-    requiredFreshnessClaims: binding.requiredFreshnessClaims.map((claim) => ({
-      ...claim,
-      requiredFacts: ["repository.assurance-control.a1.source"]
-    }))
+    requiredFreshnessClaims: e0CompletionClaims()
   };
   const completeTruth = {
     ...truth,
@@ -459,10 +468,7 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
     proofTierStatuses: completedProofTierStatuses,
     proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
     proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
-    requiredFreshnessClaims: binding.requiredFreshnessClaims.map((claim) => ({
-      ...claim,
-      requiredFacts: ["repository.assurance-control.a1.source"]
-    }))
+    requiredFreshnessClaims: e0CompletionClaims()
   };
   assert.deepEqual(validateProofTierStatuses(complete, gateCatalog, registry), []);
 
@@ -568,6 +574,29 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
     assert.equal(unrelatedFactFindings.some(({ id, tier: findingTier }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED" && findingTier === tier), true, tier);
   }
 
+  for (const [tier, omittedFact] of [
+    ["T0_REQUIREMENT", "repository.assurance-control.a1.requirements"],
+    ["T1_SOURCE", "repository.assurance-control.a1.source"],
+    ["T2_MODEL", "repository.assurance-control.a1.model"],
+    ["T3_INTEGRATION", "repository.assurance-control.a1.integration"]
+  ]) {
+    const omitted = structuredClone(complete);
+    omitted.requiredFreshnessClaims[0].requiredFacts = e0CompletionFacts.filter((factId) => factId !== omittedFact);
+    assert.equal(validateProofTierStatuses(omitted, gateCatalog, registry).some(({ id, tier: findingTier }) =>
+      id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED" && findingTier === tier), true, `${tier} requires ${omittedFact}`);
+  }
+
+  for (const [field, value] of [["authorityAllowed", "PROVIDER_READBACK_ONLY"], ["provider", "SUPABASE"]]) {
+    const crossover = structuredClone(complete);
+    crossover.requiredFreshnessClaims[0][field] = value;
+    assert.equal(validateProofTierStatuses(crossover, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED"), true, field);
+  }
+
+  const mismatchedRepositorySubject = structuredClone(complete);
+  mismatchedRepositorySubject.immutableSourceHead = "d".repeat(40);
+  assert.deepEqual(validateStructuredBinding(mismatchedRepositorySubject, gateCatalog, registry), ["ACTIVE_TASK_BINDING_MALFORMED"]);
+  assert.equal(fs.readFileSync("scripts/assurance/current-truth.mjs", "utf8").includes("validateStructuredBinding("), true, "canonical truth reuses exact structured binding validation");
+
   const applicabilitySubstitution = structuredClone(complete);
   const substitutedRegistry = structuredClone(registry);
   substitutedRegistry.features.find(({ featureId }) => featureId === complete.featureId).proofTierApplicability.T0_REQUIREMENT = "not-applicable";
@@ -577,7 +606,9 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
     (catalog) => { catalog.gates.find(({ id }) => id === "T4_NATIVE_PROVIDER").completionFreshnessClasses = ["REPOSITORY_SOURCE"]; },
     (catalog) => { catalog.applicabilityPolicies.REQUIRE_CLEAR = catalog.applicabilityPolicies.REQUIRE_CLEAR.filter((value) => value !== "provider-required"); },
     (catalog) => { catalog.completionFactAuthorities[0].platform = "IOS"; },
-    (catalog) => { catalog.completionFactAuthorities[0].factId = "provider.supabase.b3.live-acl"; }
+    (catalog) => { catalog.completionFactAuthorities[0].factId = "provider.supabase.b3.live-acl"; },
+    (catalog) => { catalog.completionFactAuthorities[0].authorityAllowed = "PROVIDER_READBACK_ONLY"; },
+    (catalog) => { catalog.completionFactAuthorities[0].provider = "SUPABASE"; }
   ]) {
     const substitutedCatalog = structuredClone(gateCatalog);
     mutateCatalog(substitutedCatalog);
@@ -593,10 +624,7 @@ test("Owner task authority binds the complete proof status and applicability sub
     proofTierStatuses: completedProofTierStatuses,
     proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
     proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
-    requiredFreshnessClaims: binding.requiredFreshnessClaims.map((claim) => ({
-      ...claim,
-      requiredFacts: ["repository.assurance-control.a1.source"]
-    }))
+    requiredFreshnessClaims: e0CompletionClaims()
   };
   const observation = authorizeOwnerBootstrap(completed);
   assert.equal(verifyOwnerBootstrapAuthorization(completed, observation), true);

@@ -167,7 +167,10 @@ const claimClassPolicy = {
   }
 };
 const canonicalFactRegistry = [
+  { factId: "repository.assurance-control.a1.requirements", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 Owner control requirements, prohibited mutations, review-gate, claim-freshness, and bootstrap boundaries are recorded as executable assurance requirements" },
   { factId: "repository.assurance-control.a1.source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification" },
+  { factId: "repository.assurance-control.a1.model", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 executable focused regressions reject task, head, review-surface, pagination, freshness, receipt, and proof-status substitutions" },
+  { factId: "repository.assurance-control.a1.integration", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 integration contracts connect active-task and current-truth validation with the exact-head review gate and Phase 1 workflow" },
   { factId: "repository.assurance-control.a1.post-merge-control-readback", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub" },
   { factId: "repository.assurance-control.a1.complete-late-sentinel-inventory", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records" },
   { factId: "repository.assurance-control.a1.late-review-tombstone-admission", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor" },
@@ -1404,9 +1407,37 @@ const proofTierCompletionPolicies = {
 export const proofTierCompletionFactAuthorities = [
   {
     featureId: "assurance-efficiency-e0",
-    factId: "repository.assurance-control.a1.source",
-    proofTiers: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    factId: "repository.assurance-control.a1.requirements",
+    proofTiers: ["T0_REQUIREMENT"],
     freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.source",
+    proofTiers: ["T1_SOURCE"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.model",
+    proofTiers: ["T2_MODEL"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.integration",
+    proofTiers: ["T3_INTEGRATION"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
     platform: "NONE",
     provider: "NONE"
   }
@@ -1533,7 +1564,9 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
         .filter(({ featureId, proofTiers: authorizedTiers }) => featureId === binding.featureId && authorizedTiers.includes(tier));
       const factAuthorized = authorities.some((authority) => (binding.requiredFreshnessClaims ?? []).some((claim) =>
         claim?.freshnessClass === authority.freshnessClass
+        && claim?.authorityAllowed === authority.authorityAllowed
         && claim?.platform === authority.platform
+        && claim?.provider === authority.provider
         && Array.isArray(claim.requiredFacts)
         && claim.requiredFacts.includes(authority.factId)));
       if (!factAuthorized) {

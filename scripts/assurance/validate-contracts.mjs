@@ -94,6 +94,7 @@ for (const authority of proofTierCompletionFactAuthorities) {
   if (!registeredFactIds.has(authority.factId)) errors.push(`completion fact authority unknown fact ${authority.factId}`);
   const registeredFact = currentTruthContract.freshness.factRegistry.find(({ factId }) => factId === authority.factId);
   if (registeredFact && (registeredFact.freshnessClass !== authority.freshnessClass
+    || registeredFact.authorityAllowed !== authority.authorityAllowed
     || registeredFact.platform !== authority.platform
     || registeredFact.provider !== authority.provider)) {
     errors.push(`completion fact authority metadata mismatch ${authority.factId}`);
