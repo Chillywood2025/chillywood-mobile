@@ -30,8 +30,15 @@ export const requiredCheckPublisherBoundary = {
   forkWorkflowWriteTokensAllowed: false
 };
 export const pullRequestRequirements = {
+  allowedMergeMethods: ["merge", "squash", "rebase"],
+  requiredApprovingReviewCount: 1,
   requiredReviewThreadResolution: true,
   dismissStaleReviewsOnPush: true,
+  requireCodeOwnerReview: false,
+  requireLastPushApproval: true,
+  requiredReviewers: [],
+  preventDeletion: true,
+  preventNonFastForward: true,
   bypassActors: []
 };
 export const ownerAuthorizationReceiptPath = "config/assurance/a1-owner-bootstrap-authorization-v1.json";
@@ -54,7 +61,7 @@ export const canonicalOwnerAuthorizationReceipt = {
 export const protectedMainReadback = {
   ref: "refs/heads/main",
   observedHead: "a9bd887606f74996a9f5920e6fad922e7f20598b",
-  observedAt: "2026-08-10T05:05:40Z",
+  observedAt: "2026-08-10T05:33:01Z",
   evidenceMode: "github-read-only",
   bootstrapMergeReachable: true
 };
@@ -109,15 +116,23 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (readback?.requiredStatusCheckPresent !== readback?.requiredStatusChecks?.includes(exactHeadCheck)) add("exact-head presence derivation mismatch");
   if (readback?.requiredStatusCheckSetSha256 !== setHash(requiredChecks)) add("required status-check digest mismatch");
   if (readback?.requiredStatusCheckBindingSetSha256 !== bindingSetHash(requiredCheckBindings)) add("required status-check integration digest mismatch");
-  if (readback?.rulesetVersionId !== 46046307
-    || readback?.rulesetUpdatedAt !== "2026-08-10T00:05:04.604-05:00"
-    || readback?.changeClassification !== "BOUND_REQUIRED_CHECKS_TO_GITHUB_ACTIONS_APP_15368") add("current ruleset identity mismatch");
+  if (readback?.rulesetVersionId !== 46047691
+    || readback?.rulesetUpdatedAt !== "2026-08-10T00:32:55.241-05:00"
+    || readback?.changeClassification !== "ENFORCED_CANONICAL_PULL_REQUEST_POLICY_AND_PRESERVED_EXACT_CHECK_BINDINGS") add("current ruleset identity mismatch");
   if (!same(readback?.protectedMainReadback, protectedMainReadback)
     || protectedMainReadback.observedHead !== exception?.mergeSha) add("protected main readback mismatch");
   if (readback?.enforcement !== "active"
     || readback?.strictRequiredStatusChecksPolicy !== true
+    || !same(readback?.ruleTypes, ["deletion", "non_fast_forward", "pull_request", "required_status_checks"])
+    || !same(readback?.allowedMergeMethods, pullRequestRequirements.allowedMergeMethods)
+    || readback?.requiredApprovingReviewCount !== pullRequestRequirements.requiredApprovingReviewCount
     || readback?.requiredReviewThreadResolution !== true
     || readback?.dismissStaleReviewsOnPush !== true
+    || readback?.requireCodeOwnerReview !== false
+    || readback?.requireLastPushApproval !== true
+    || !same(readback?.requiredReviewers, [])
+    || readback?.preventDeletion !== true
+    || readback?.preventNonFastForward !== true
     || !Array.isArray(readback?.bypassActors)
     || readback.bypassActors.length !== 0) add("required protection state mismatch");
 

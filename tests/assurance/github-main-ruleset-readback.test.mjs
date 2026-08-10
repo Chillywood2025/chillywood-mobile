@@ -37,7 +37,14 @@ test("publisher authority and pull-request policy widening fail", () => {
     (candidate) => candidate.requiredCheckPublisherBoundary.trustedRepositoryWriteActors.push("attacker"),
     (candidate) => { candidate.requiredCheckPublisherBoundary.forkWorkflowWriteTokensAllowed = true; },
     (candidate) => candidate.pullRequestRequirements.bypassActors.push("attacker"),
-    (candidate) => { candidate.pullRequestRequirements.requiredReviewThreadResolution = false; }
+    (candidate) => { candidate.pullRequestRequirements.requiredReviewThreadResolution = false; },
+    (candidate) => { candidate.pullRequestRequirements.requiredApprovingReviewCount = 0; },
+    (candidate) => { candidate.pullRequestRequirements.requireLastPushApproval = false; },
+    (candidate) => { candidate.pullRequestRequirements.preventDeletion = false; },
+    (candidate) => { candidate.pullRequestRequirements.preventNonFastForward = false; },
+    (candidate) => { candidate.applicationReadback.requiredApprovingReviewCount = 0; },
+    (candidate) => { candidate.applicationReadback.requireLastPushApproval = false; },
+    (candidate) => { candidate.applicationReadback.ruleTypes = ["pull_request", "required_status_checks"]; }
   ]) {
     const candidate = structuredClone(contract);
     mutate(candidate);
