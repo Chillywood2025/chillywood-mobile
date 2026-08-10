@@ -440,8 +440,8 @@
     {
       "id": "repository-source-assurance-control-a1-frozen",
       "status": "CURRENT",
-      "observedAt": "2026-08-09T23:55:00Z",
-      "expiresAt": "2026-08-10T23:55:00Z",
+      "observedAt": "2026-08-09T23:55:01Z",
+      "expiresAt": "2026-08-10T23:55:01Z",
       "evidenceSourceId": "assurance-control-a1-frozen-source-20260809-2355",
       "evidenceMode": "local-offline-and-github-read-only",
       "factsCovered": ["PR #201 frozen assurance-control source identity", "A1 source-only formal review eligibility", "D2A frozen state"],
@@ -606,13 +606,13 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-09T23:55:00Z",
-  "freshnessDeadline": "2026-08-10T23:55:00Z",
+  "timestamp": "2026-08-09T23:55:01Z",
+  "freshnessDeadline": "2026-08-10T23:55:01Z",
   "evidenceSources": [
     {
       "id": "assurance-control-a1-frozen-source-20260809-2355",
       "mode": "local-offline-and-github-read-only",
-      "observedAt": "2026-08-09T23:55:00Z",
+      "observedAt": "2026-08-09T23:55:01Z",
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",

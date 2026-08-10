@@ -16,10 +16,10 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Chi'llywood autonomous app operating model is now documented and guarded at `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.
 - Installed Product QA closure is retained as historical evidence only: chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped; proof rows `ff81956d-94e3-49e9-8c80-fae2c12b0dd8`, `1dc00369-b5ca-4289-92bc-daf5bae00222`, `282fb154-101c-402b-9539-d3fb8080de51`; last recorded matrix state `POLL_HTTP_FAILED`. It is not fresh installed or physical proof.
 - RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP `200` / `test_received` with `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`.
-- Current freshness claims: `repository-source-assurance-control-a1-frozen` (REPOSITORY_SOURCE, expires `2026-08-10T23:55:00Z`), `repository-source-d2a-microphone-correction-merge-closeout` (REPOSITORY_SOURCE, expires `2026-08-10T18:05:08Z`).
+- Current freshness claims: `repository-source-assurance-control-a1-frozen` (REPOSITORY_SOURCE, expires `2026-08-10T23:55:01Z`), `repository-source-d2a-microphone-correction-merge-closeout` (REPOSITORY_SOURCE, expires `2026-08-10T18:05:08Z`).
 - Blocked freshness claims: `provider-critical-b3-linked-readback` (PROVIDER_CRITICAL, STALE_BLOCKED, expired `2026-08-02T14:00:44Z`).
 - Late exact-head Codex Review sentinels: PR #194 reviewed `c15a58039b67d65eabdcaa03a9422ebc8d6dd95e` after merge with 5 unresolved findings; successor `codex/d2a-livekit-mic-post-merge-review-correction`. These block post-merge completion claims, unrelated successor work, release, and proof-tier promotion.
-- Document rendered at `2026-08-09T23:55:00Z`; document deadline `2026-08-10T23:55:00Z`. This deadline authorizes no claim. Derived live provider readback: false.
+- Document rendered at `2026-08-09T23:55:01Z`; document deadline `2026-08-10T23:55:01Z`. This deadline authorizes no claim. Derived live provider readback: false.
 
 ## Open implementation PRs
 
