@@ -109,6 +109,51 @@ test("provider no-suggestion issue comment binds its unique commit prefix to the
   assert.equal(providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: collidingOldCommit, contract }), null);
 });
 
+test("an exact provider no-suggestion issue comment is a clean rereview disposition", () => {
+  const cleanComment = {
+    commentId: 9101,
+    commentNodeId: "ISSUE_COMMENT_9101",
+    author: "chatgpt-codex-connector",
+    body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+    createdAt: "2026-08-09T12:00:00Z",
+    updatedAt: "2026-08-09T12:00:00Z"
+  };
+  const cleanReview = providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: headA, contract });
+  const priorFinding = {
+    ...exactReview,
+    reviewId: 9000,
+    body: "P1 prior-head finding",
+    commit: headB,
+    startedAt: "2026-08-09T11:10:00Z",
+    submittedAt: "2026-08-09T11:20:00Z"
+  };
+  const receipt = buildExactHeadReceipt({
+    contract,
+    current: baseCurrent,
+    review: cleanReview,
+    reviews: [priorFinding, cleanReview],
+    threads: [],
+    issueComments: [cleanComment]
+  });
+  assert.deepEqual(receipt.reviewFindings.map(({ severity, disposition }) => ({ severity, disposition })), [{
+    severity: "P1",
+    disposition: "RESOLVED_BY_LATER_PROVIDER_REREVIEW"
+  }]);
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt }).ok, true);
+
+  const untrustedLookalike = { ...cleanReview, sourceType: "REVIEW_SUBMISSION" };
+  const blockedReceipt = buildExactHeadReceipt({
+    contract,
+    current: baseCurrent,
+    review: untrustedLookalike,
+    reviews: [priorFinding, untrustedLookalike],
+    threads: [],
+    issueComments: [cleanComment]
+  });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: blockedReceipt }).ok, false);
+  assert(blockedReceipt.reviewFindings.some(({ disposition }) => disposition === "UNRESOLVED"));
+});
+
 test("repository write authority is exact and a newly admitted writer fails closed", () => {
   const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, threads: [] });
   const expanded = { ...baseCurrent, repositoryWriteActors: ["Chillywood2025", "unexpected-writer"] };

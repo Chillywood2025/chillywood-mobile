@@ -80,6 +80,7 @@
     "all-review-conversations-resolved",
     "all-provider-review-surfaces-read-and-head-bound",
     "provider-clean-issue-comment-prefix-expands-only-to-current-head",
+    "provider-clean-issue-comment-is-clean-rereview-disposition",
     "exactly-one-open-pr-owns-current-head",
     "repository-write-authority-equals-owner-root-authority",
     "resolved-thread-findings-require-later-exact-head-provider-rereview",

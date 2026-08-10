@@ -108,8 +108,21 @@ async function readCleanProviderIssueCommentReviews({ repository, token, issueCo
   return reviews;
 }
 
-function reviewCleanDispositionCommit(review) {
+function reviewCleanDispositionCommit(review, contract) {
   if (review?.state === "APPROVED" && validGitSha(review.commit)) return review.commit;
+  if (review?.sourceType === "PROVIDER_CLEAN_ISSUE_COMMENT"
+    && review?.state === "COMMENTED"
+    && validGitSha(review.commit)
+    && providerCleanIssueCommentPrefix({
+      comment: {
+        author: review.author,
+        commentId: review.reviewId,
+        body: review.body,
+        createdAt: review.createdAt ?? review.startedAt,
+        updatedAt: review.updatedAt ?? review.submittedAt
+      },
+      contract
+    })?.length > 0) return review.commit;
   const matches = [...String(review?.body ?? "").matchAll(/<!--\s*codex-review-disposition:blocking-findings-resolved\s+reviewed-commit:([0-9a-f]{40})\s*-->/gu)]
     .map((match) => match[1]);
   return matches.length === 1 ? matches[0] : null;
@@ -217,7 +230,7 @@ function normalizeProviderFindings({ contract, current, reviews = [], threads = 
   const providerReviews = reviews.filter(({ author }) => providers.has(author));
   const laterExactProviderReview = (after) => validInstant(after) && providerReviews.some((candidate) => candidate.commit === current.headSha
     && acceptableStates.has(candidate.state)
-    && reviewCleanDispositionCommit(candidate) === current.headSha
+    && reviewCleanDispositionCommit(candidate, contract) === current.headSha
     && validInstant(candidate.submittedAt)
     && new Date(candidate.submittedAt) > new Date(after)
     && (!validInstant(current.mergedAt) || new Date(candidate.submittedAt) <= new Date(current.mergedAt)));
