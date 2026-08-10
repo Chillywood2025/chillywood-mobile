@@ -91,14 +91,16 @@ export function providerCleanIssueCommentReview({ comment, currentHead, resolved
   };
 }
 
-async function readCleanProviderIssueCommentReviews({ repository, token, issueComments, currentHead, contract, current }) {
+async function readCleanProviderIssueCommentReviews({ repository, token, issueComments, currentHead, contract, current, resolveCommit = null }) {
   const reviews = [];
   for (const comment of issueComments) {
     const prefix = providerCleanIssueCommentPrefix({ comment, contract });
     if (!prefix) continue;
     try {
-      const resolved = await githubRequest(`https://api.github.com/repos/${repository}/commits/${prefix}`, token);
-      const review = providerCleanIssueCommentReview({ comment, currentHead, resolvedCommit: resolved?.sha, contract });
+      const resolvedCommit = resolveCommit
+        ? await resolveCommit({ comment, prefix })
+        : (await githubRequest(`https://api.github.com/repos/${repository}/commits/${prefix}`, token))?.sha;
+      const review = providerCleanIssueCommentReview({ comment, currentHead, resolvedCommit, contract });
       if (review) reviews.push(review);
     } catch {
       current.sourceReadbackIncomplete = true;
@@ -1427,12 +1429,13 @@ async function main() {
   let threads;
   let issueComments;
   let persistentProviderFindings = [];
+  let cleanIssueCommentCommitResolutions = [];
   let readbackIncomplete = false;
   let token = null;
   let event = {};
   let eventName = options.eventName ?? process.env.GITHUB_EVENT_NAME ?? "";
   if (options.fixture) {
-    ({ current, reviews = [], threads = [], issueComments = [], persistentProviderFindings = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
+    ({ current, reviews = [], threads = [], issueComments = [], persistentProviderFindings = [], cleanIssueCommentCommitResolutions = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
   } else {
     const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
     token = process.env.GITHUB_TOKEN;
@@ -1525,13 +1528,23 @@ async function main() {
     });
   }
   const providers = new Set(contract.reviewProviders);
+  const fixtureCommitResolver = options.fixture ? async ({ comment, prefix }) => {
+    const matches = (Array.isArray(cleanIssueCommentCommitResolutions) ? cleanIssueCommentCommitResolutions : [])
+      .filter((entry) => entry?.commentId === comment.commentId);
+    if (matches.length !== 1
+      || matches[0].prefix !== prefix
+      || !validGitSha(matches[0].resolvedCommit)
+      || !matches[0].resolvedCommit.startsWith(prefix)) throw new Error("CODEX_REVIEW_FIXTURE_COMMIT_RESOLUTION_INVALID");
+    return matches[0].resolvedCommit;
+  } : null;
   const cleanIssueCommentReviews = await readCleanProviderIssueCommentReviews({
     repository: current.repository,
     token,
     issueComments,
     currentHead: current.headSha,
     contract,
-    current
+    current,
+    resolveCommit: fixtureCommitResolver
   });
   const reviewCandidates = [...reviews, ...cleanIssueCommentReviews];
   const providerReviews = reviewCandidates.filter(({ author }) => providers.has(author));

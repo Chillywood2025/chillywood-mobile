@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   buildExactHeadReceipt,
@@ -152,6 +155,45 @@ test("an exact provider no-suggestion issue comment is a clean rereview disposit
   });
   assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: blockedReceipt }).ok, false);
   assert(blockedReceipt.reviewFindings.some(({ disposition }) => disposition === "UNRESOLVED"));
+});
+
+test("clean issue-comment fixture replay resolves commits only from explicit offline data", () => {
+  const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-codex-review-fixture-"));
+  try {
+    const cleanComment = {
+      commentId: 9102,
+      commentNodeId: "ISSUE_COMMENT_9102",
+      author: "chatgpt-codex-connector",
+      body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+      createdAt: "2026-08-09T12:00:00Z",
+      updatedAt: "2026-08-09T12:00:00Z"
+    };
+    const runFixture = (name, resolutions) => {
+      const fixture = path.join(fixtureDirectory, name);
+      fs.writeFileSync(fixture, `${JSON.stringify({
+        current: baseCurrent,
+        reviews: [],
+        threads: [],
+        issueComments: [cleanComment],
+        cleanIssueCommentCommitResolutions: resolutions
+      })}\n`, { mode: 0o600 });
+      return spawnSync(process.execPath, ["scripts/assurance/codex-review-exact-head.mjs", `--fixture=${fixture}`], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, GITHUB_TOKEN: "fixture-must-not-use-network" }
+      });
+    };
+    const explicit = runFixture("explicit.json", [{ commentId: cleanComment.commentId, prefix: headA.slice(0, 10), resolvedCommit: headA }]);
+    assert.equal(explicit.status, 0, explicit.stdout || explicit.stderr);
+    assert.equal(JSON.parse(explicit.stdout.trim().split(/\r?\n/u).at(-1)).ok, true);
+
+    const missing = runFixture("missing.json", []);
+    assert.notEqual(missing.status, 0);
+    const missingResult = JSON.parse(missing.stdout.trim().split(/\r?\n/u).at(-1));
+    assert(missingResult.codes.includes("CODEX_REVIEW_INCOMPLETE"));
+  } finally {
+    fs.rmSync(fixtureDirectory, { recursive: true });
+  }
 });
 
 test("repository write authority is exact and a newly admitted writer fails closed", () => {
