@@ -454,19 +454,7 @@
     "executionState": "ASSURANCE_CONTROL_A1_MERGED_T0_REQUIREMENTS_CLEAR_T1_SOURCE_CLEAR_T2_MODEL_CLEAR_T3_INTEGRATION_CLEAR_T4_METADATA_BOUNDARY_ONLY_NO_PROVIDER_PROOF_T5_T7_NOT_APPLICABLE_S0_BOOTSTRAP_BINDING_NEXT_D2A_FROZEN",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
     "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-exact-carrier-full-history-source-freeze-20260810-0407", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.late-review-tombstone-admission"], "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955", "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"}],
-    "proofTiersUnderEvaluation": ["T1_SOURCE"],
-    "ownerBootstrapAuthorization": {
-      "schemaVersion": 1,
-      "repository": "Chillywood2025/chillywood-mobile",
-      "prNumber": 205,
-      "commentId": 5235753938,
-      "author": "Chillywood2025",
-      "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T04:08:34Z",
-      "updatedAt": "2026-08-10T04:08:34Z",
-      "bodySha256": "f7733b9190d9b8eac12c8cee3ca587e7b240908e0aba7e5b639c7bfc65be247c",
-      "subjectHash": "d2d96e2316692e33972c2a3f7e0340a9bf1ede0e8c8c4a38164ba4b33cfb02fe"
-    }
+    "proofTiersUnderEvaluation": ["T1_SOURCE"]
   },
   "freshnessClaims": [
     {
