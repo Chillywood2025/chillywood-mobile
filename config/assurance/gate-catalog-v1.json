@@ -14,10 +14,12 @@
     {"id": "T7_PUBLIC_CANARY", "passStatus": "RELEASE_CLEAR", "requiredBefore": ["public-release"], "missingStatus": "BLOCKED_EXTERNAL", "completionFreshnessClasses": ["PUBLIC_CANARY"]}
   ],
   "applicabilityPolicies": {
-    "REQUIRE_CLEAR": ["layout-matrix", "provider-required", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow"],
-    "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"],
-    "CONDITIONAL": ["admin-display-only", "control-ui-only", "provider-when-used", "release-only", "setup-display-only", "store-flow-only", "when-delivered"]
+    "REQUIRE_CLEAR": ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
+    "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
   },
+  "completionFactAuthorities": [
+    {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.source", "proofTiers": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "provider": "NONE"}
+  ],
   "phaseBlockers": {
     "implementation": ["T0_REQUIREMENT"],
     "buildOrOta": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER"],

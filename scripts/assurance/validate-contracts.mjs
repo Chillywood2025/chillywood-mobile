@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, featureRequired, proofTierApplicabilityPolicies, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
+import { args, emit, featureRequired, proofTierApplicabilityPolicies, proofTierCompletionFactAuthorities, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
 import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
 
 const options = args();
@@ -74,6 +74,7 @@ for (const [file, definition] of contracts) {
 
 const gates = readJson("config/assurance/gate-catalog-v1.json");
 const currentTruth = readJson("config/assurance/current-truth-v1.json");
+const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
 const proof = readJson("config/assurance/proof-strength-v1.json");
 const defects = readJson("config/assurance/escaped-defect-catalog-v1.json").defects;
 const registryContract = readJson("config/assurance/feature-registry-v1.json");
@@ -88,6 +89,18 @@ errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadba
 errors.push(...validateProofTierStatuses(currentTruth.activeTaskBinding, gates, registryContract).map(({ id, tier, value }) => [id, tier, value].filter((entry) => entry !== undefined).join(":")));
 const applicabilityValues = Object.values(proofTierApplicabilityPolicies).flat();
 if (new Set(applicabilityValues).size !== applicabilityValues.length) errors.push("proof tier applicability policy values must be unique");
+const registeredFactIds = new Set(currentTruthContract.freshness.factRegistry.map(({ factId }) => factId));
+for (const authority of proofTierCompletionFactAuthorities) {
+  if (!registeredFactIds.has(authority.factId)) errors.push(`completion fact authority unknown fact ${authority.factId}`);
+  const registeredFact = currentTruthContract.freshness.factRegistry.find(({ factId }) => factId === authority.factId);
+  if (registeredFact && (registeredFact.freshnessClass !== authority.freshnessClass
+    || registeredFact.platform !== authority.platform
+    || registeredFact.provider !== authority.provider)) {
+    errors.push(`completion fact authority metadata mismatch ${authority.factId}`);
+  }
+  if (!registry.some(({ featureId }) => featureId === authority.featureId)) errors.push(`completion fact authority unknown feature ${authority.featureId}`);
+  if (authority.proofTiers.some((tier) => !tierIds.includes(tier))) errors.push(`completion fact authority unknown tier for ${authority.factId}`);
+}
 if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
 if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");
 const defectFields = ["id", "tags", "affectedDomains", "preImplementationQuestions", "requiredProofTier", "detectionRule", "testTemplate", "runtimeSignature", "rollback", "prevention", "blocks"];

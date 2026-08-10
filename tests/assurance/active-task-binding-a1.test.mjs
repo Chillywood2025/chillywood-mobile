@@ -19,6 +19,7 @@ const gateCatalog = read("config/assurance/gate-catalog-v1.json");
 const e0Feature = registry.features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
 const callFeature = registry.features.find(({ featureId }) => featureId === "chilly-chat-call-lifecycle");
 const creatorFeature = registry.features.find(({ featureId }) => featureId === "creator-money-ledger");
+const cognitiveFeature = registry.features.find(({ featureId }) => featureId === "autonomous-cognitive-governance");
 const completedProofTierStatuses = {
   T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
   T1_SOURCE: "SOURCE_CLEAR",
@@ -416,7 +417,11 @@ test("a completed binding is not an active task and no override can revive it", 
     phase: "COMPLETE",
     proofTierStatuses: completedProofTierStatuses,
     proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
-    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    requiredFreshnessClaims: binding.requiredFreshnessClaims.map((claim) => ({
+      ...claim,
+      requiredFacts: ["repository.assurance-control.a1.source"]
+    }))
   };
   const completeTruth = {
     ...truth,
@@ -453,11 +458,16 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
     phase: "COMPLETE",
     proofTierStatuses: completedProofTierStatuses,
     proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
-    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    requiredFreshnessClaims: binding.requiredFreshnessClaims.map((claim) => ({
+      ...claim,
+      requiredFacts: ["repository.assurance-control.a1.source"]
+    }))
   };
   assert.deepEqual(validateProofTierStatuses(complete, gateCatalog, registry), []);
 
   assert.equal(validateProofTierStatuses({ ...binding, proofTierStatuses: completedProofTierStatuses }, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE"), true);
+  assert.equal(validateProofTierStatuses({ ...binding, proofTierApplicabilityHash: "f".repeat(64) }, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE"), true);
 
   const missingMap = { ...binding, phase: "COMPLETE" };
   assert.deepEqual(validateProofTierStatuses(missingMap, gateCatalog, registry), [{
@@ -522,7 +532,9 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
       T7_PUBLIC_CANARY: "NOT_APPLICABLE"
     }
   };
-  assert.deepEqual(validateProofTierStatuses(compositeRequired, gateCatalog, registry), []);
+  const compositeFindings = validateProofTierStatuses(compositeRequired, gateCatalog, registry);
+  assert.equal(compositeFindings.some(({ id }) => id === "ASSURANCE_PROOF_TIER_STATUS_INVALID"), false);
+  assert.equal(compositeFindings.some(({ id }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED"), true);
   assert.equal(validateProofTierStatuses(compositeRequired, gateCatalog, { features: [] }).some(({ id }) => id === "ASSURANCE_PROOF_TIER_APPLICABILITY_MISSING"), true);
 
   const sourceOnlyHigherTierClaim = structuredClone(compositeRequired);
@@ -542,6 +554,20 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
   };
   assert.equal(validateProofTierStatuses(providerRequiredNotApplicable, gateCatalog, registry).some(({ id, tier }) => id === "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR" && tier === "T4_NATIVE_PROVIDER"), true);
 
+  const conditionalNotApplicable = {
+    ...providerRequiredNotApplicable,
+    featureId: cognitiveFeature.featureId,
+    proofTierApplicabilityHash: digest(stableJson(cognitiveFeature.proofTierApplicability))
+  };
+  assert.equal(validateProofTierStatuses(conditionalNotApplicable, gateCatalog, registry).some(({ id, tier }) => id === "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR" && tier === "T4_NATIVE_PROVIDER"), true);
+
+  const unrelatedFactCompletion = structuredClone(complete);
+  unrelatedFactCompletion.requiredFreshnessClaims[0].requiredFacts = ["provider.supabase.b3.live-acl"];
+  const unrelatedFactFindings = validateProofTierStatuses(unrelatedFactCompletion, gateCatalog, registry);
+  for (const tier of ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]) {
+    assert.equal(unrelatedFactFindings.some(({ id, tier: findingTier }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED" && findingTier === tier), true, tier);
+  }
+
   const applicabilitySubstitution = structuredClone(complete);
   const substitutedRegistry = structuredClone(registry);
   substitutedRegistry.features.find(({ featureId }) => featureId === complete.featureId).proofTierApplicability.T0_REQUIREMENT = "not-applicable";
@@ -549,7 +575,9 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
 
   for (const mutateCatalog of [
     (catalog) => { catalog.gates.find(({ id }) => id === "T4_NATIVE_PROVIDER").completionFreshnessClasses = ["REPOSITORY_SOURCE"]; },
-    (catalog) => { catalog.applicabilityPolicies.REQUIRE_CLEAR = catalog.applicabilityPolicies.REQUIRE_CLEAR.filter((value) => value !== "provider-required"); }
+    (catalog) => { catalog.applicabilityPolicies.REQUIRE_CLEAR = catalog.applicabilityPolicies.REQUIRE_CLEAR.filter((value) => value !== "provider-required"); },
+    (catalog) => { catalog.completionFactAuthorities[0].platform = "IOS"; },
+    (catalog) => { catalog.completionFactAuthorities[0].factId = "provider.supabase.b3.live-acl"; }
   ]) {
     const substitutedCatalog = structuredClone(gateCatalog);
     mutateCatalog(substitutedCatalog);
@@ -564,7 +592,11 @@ test("Owner task authority binds the complete proof status and applicability sub
     phase: "COMPLETE",
     proofTierStatuses: completedProofTierStatuses,
     proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
-    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    requiredFreshnessClaims: binding.requiredFreshnessClaims.map((claim) => ({
+      ...claim,
+      requiredFacts: ["repository.assurance-control.a1.source"]
+    }))
   };
   const observation = authorizeOwnerBootstrap(completed);
   assert.equal(verifyOwnerBootstrapAuthorization(completed, observation), true);

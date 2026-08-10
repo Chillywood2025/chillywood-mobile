@@ -1388,9 +1388,8 @@ export function verifyCurrentTruthSynchronization({
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
 export const featureRequired = ["featureId", "currentState", "ownerSystems", "productOwner", "routes", "components", "edgeFunctions", "tablesRpcs", "nativeModulesPlugins", "providers", "platformScope", "environments", "riskLevel", "requirements", "nonGoals", "states", "transitions", "invariants", "knownDefectTags", "threatFailureModes", "proofTierApplicability", "commands", "artifactRequirements", "installedRequirements", "physicalGoldenCases", "rollback", "emergencyStop", "evidenceRetention", "reviewRequirements", "unresolvedBlockers"];
 export const proofTierApplicabilityPolicies = {
-  REQUIRE_CLEAR: ["layout-matrix", "provider-required", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow"],
-  REQUIRE_NOT_APPLICABLE: ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"],
-  CONDITIONAL: ["admin-display-only", "control-ui-only", "provider-when-used", "release-only", "setup-display-only", "store-flow-only", "when-delivered"]
+  REQUIRE_CLEAR: ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
+  REQUIRE_NOT_APPLICABLE: ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
 };
 const proofTierCompletionPolicies = {
   T0_REQUIREMENT: { passStatus: "REQUIREMENTS_CLEAR", missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["REPOSITORY_SOURCE"] },
@@ -1402,10 +1401,23 @@ const proofTierCompletionPolicies = {
   T6_INSTALLED_PHYSICAL: { passStatus: ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"], missingStatus: "BLOCKED_EXTERNAL", freshnessClasses: ["INSTALLED_DEVICE", "PHYSICAL_DEVICE"] },
   T7_PUBLIC_CANARY: { passStatus: "RELEASE_CLEAR", missingStatus: "BLOCKED_EXTERNAL", freshnessClasses: ["PUBLIC_CANARY"] }
 };
+export const proofTierCompletionFactAuthorities = [
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.source",
+    proofTiers: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    platform: "NONE",
+    provider: "NONE"
+  }
+];
 
 export function validateProofTierStatuses(binding, gateCatalog, featureRegistry) {
   const value = binding?.proofTierStatuses;
   if (value === undefined) {
+    if (binding?.proofTierApplicabilityHash !== undefined) {
+      return [{ id: "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE", status: "BLOCKED_INTERNAL", phase: binding?.phase ?? null }];
+    }
     return binding?.phase === "COMPLETE"
       ? [{ id: "ASSURANCE_PROOF_TIER_STATUSES_MISSING", status: "BLOCKED_INTERNAL" }]
       : [];
@@ -1428,7 +1440,8 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
   if (gates.size !== tierIds.length
     || catalogStatuses.size === 0
     || !gatePolicyExact
-    || stableJson(gateCatalog?.applicabilityPolicies) !== stableJson(proofTierApplicabilityPolicies)) {
+    || stableJson(gateCatalog?.applicabilityPolicies) !== stableJson(proofTierApplicabilityPolicies)
+    || stableJson(gateCatalog?.completionFactAuthorities) !== stableJson(proofTierCompletionFactAuthorities)) {
     return [{ id: "ASSURANCE_GATE_CATALOG_MALFORMED", status: "BLOCKED_INTERNAL" }];
   }
   const registeredFeatures = Array.isArray(featureRegistry) ? featureRegistry : featureRegistry?.features;
@@ -1513,6 +1526,18 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
     for (const freshnessClass of requiredCompletionClasses) {
       if (!declaredClasses.includes(freshnessClass)) {
         findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_FRESHNESS_MISSING", status: "BLOCKED_INTERNAL", freshnessClass });
+      }
+    }
+    for (const tier of clearTiers) {
+      const authorities = proofTierCompletionFactAuthorities
+        .filter(({ featureId, proofTiers: authorizedTiers }) => featureId === binding.featureId && authorizedTiers.includes(tier));
+      const factAuthorized = authorities.some((authority) => (binding.requiredFreshnessClaims ?? []).some((claim) =>
+        claim?.freshnessClass === authority.freshnessClass
+        && claim?.platform === authority.platform
+        && Array.isArray(claim.requiredFacts)
+        && claim.requiredFacts.includes(authority.factId)));
+      if (!factAuthorized) {
+        findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED", status: "BLOCKED_INTERNAL", tier, featureId: binding.featureId });
       }
     }
   }
