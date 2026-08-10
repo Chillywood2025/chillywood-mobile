@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "contractId": "github-main-ruleset-codex-review-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/githubMainRulesetReadbackContract",
   "patchId": "main-pr-review-protection-codex-review-exact-head-v1",
   "repository": "Chillywood2025/chillywood-mobile",
   "rulesetId": 18940814,
@@ -25,10 +27,28 @@
   },
   "applicationState": "APPLIED_AND_READ_BACK_POST_A1_MERGE",
   "applicationReadback": {
-    "rulesetUpdatedAt": "2026-08-09T23:17:33.905-05:00",
+    "rulesetVersionId": 46044257,
+    "rulesetUpdatedAt": "2026-08-09T23:17:33.976-05:00",
     "enforcement": "active",
     "requiredStatusCheckCount": 14,
     "requiredStatusCheckPresent": true,
+    "requiredStatusChecks": [
+      "Chi'llywood / Codex Review Exact Head",
+      "Phase 1 / Android Regression Guards",
+      "Phase 1 / Autonomous Systems All-Platform Contract",
+      "Phase 1 / Autonomous Systems iOS Contract",
+      "Phase 1 / Cognitive Execution Safety",
+      "Phase 1 / Cognitive Intelligence Contract",
+      "Phase 1 / Expo Doctor",
+      "Phase 1 / Repository Lint",
+      "Phase 1 / Research and Memory Integrity",
+      "Phase 1 / Route Contracts",
+      "Phase 1 / Runtime Validation",
+      "Phase 1 / Supabase Database Integration",
+      "Phase 1 / TypeScript",
+      "Phase 1 / iOS Configuration"
+    ],
+    "requiredStatusCheckSetSha256": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d",
     "strictRequiredStatusChecksPolicy": true,
     "requiredReviewThreadResolution": true,
     "dismissStaleReviewsOnPush": true,
@@ -39,12 +59,35 @@
     "mergeSha": "a9bd887606f74996a9f5920e6fad922e7f20598b",
     "mergedAt": "2026-08-10T04:17:26Z",
     "temporarilyRemovedStatusCheck": "Chi'llywood / Codex Review Exact Head",
+    "ownerAuthorization": {
+      "prNumber": 205,
+      "commentId": 5235753938,
+      "author": "Chillywood2025",
+      "authorAssociation": "OWNER",
+      "bodySha256": "f7733b9190d9b8eac12c8cee3ca587e7b240908e0aba7e5b639c7bfc65be247c",
+      "subjectHash": "d2d96e2316692e33972c2a3f7e0340a9bf1ede0e8c8c4a38164ba4b33cfb02fe"
+    },
+    "protectionWindow": {
+      "preRemovalVersionId": 46039477,
+      "preRemovalUpdatedAt": "2026-08-09T21:46:21.570-05:00",
+      "preRemovalStatusCheckSetSha256": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d",
+      "removalVersionId": 46044242,
+      "removedAt": "2026-08-09T23:17:13.809-05:00",
+      "removalStatusCheckSetSha256": "0132e85ed8b4d563e37520ea07caf214bb4fba3a653f6193d6244355b08304be",
+      "restorationVersionId": 46044257,
+      "restoredAt": "2026-08-09T23:17:33.976-05:00",
+      "restoredStatusCheckSetSha256": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d",
+      "mainBeforeRemoval": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+      "mainAfterRestoration": "a9bd887606f74996a9f5920e6fad922e7f20598b",
+      "admittedMergeShas": ["a9bd887606f74996a9f5920e6fad922e7f20598b"],
+      "additionalMergesAdmitted": 0
+    },
     "phase1ChecksPreserved": 13,
     "strictPolicyPreserved": true,
     "conversationResolutionPreserved": true,
     "staleReviewDismissalPreserved": true,
     "bypassActorsPreservedEmpty": true,
     "restoredImmediatelyAfterMerge": true,
-    "restoredRulesetUpdatedAt": "2026-08-09T23:17:33.905-05:00"
+    "restoredRulesetUpdatedAt": "2026-08-09T23:17:33.976-05:00"
   }
 }
