@@ -4,14 +4,27 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/gateCatalog",
   "statuses": ["REQUIREMENTS_CLEAR", "ARCHITECTURE_CLEAR", "SOURCE_CLEAR", "MODEL_CLEAR", "INTEGRATION_CLEAR", "NATIVE_CLEAR", "PROVIDER_CLEAR", "ARTIFACT_CLEAR", "INSTALLED_CLEAR", "PHYSICAL_CLEAR", "RELEASE_CLEAR", "BLOCKED_INTERNAL", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"],
   "gates": [
-    {"id": "T0_REQUIREMENT", "passStatus": "REQUIREMENTS_CLEAR", "requiredBefore": ["implementation"], "missingStatus": "BLOCKED_INTERNAL"},
-    {"id": "T1_SOURCE", "passStatus": "SOURCE_CLEAR", "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL"},
-    {"id": "T2_MODEL", "passStatus": "MODEL_CLEAR", "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL"},
-    {"id": "T3_INTEGRATION", "passStatus": "INTEGRATION_CLEAR", "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL"},
-    {"id": "T4_NATIVE_PROVIDER", "passStatus": ["NATIVE_CLEAR", "PROVIDER_CLEAR"], "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL"},
-    {"id": "T5_SIGNED_ARTIFACT", "passStatus": "ARTIFACT_CLEAR", "requiredBefore": ["installed"], "missingStatus": "BLOCKED_EXTERNAL"},
-    {"id": "T6_INSTALLED_PHYSICAL", "passStatus": ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"], "requiredBefore": ["release"], "missingStatus": "BLOCKED_EXTERNAL"},
-    {"id": "T7_PUBLIC_CANARY", "passStatus": "RELEASE_CLEAR", "requiredBefore": ["public-release"], "missingStatus": "BLOCKED_EXTERNAL"}
+    {"id": "T0_REQUIREMENT", "passStatus": "REQUIREMENTS_CLEAR", "requiredBefore": ["implementation"], "missingStatus": "BLOCKED_INTERNAL", "completionFreshnessClasses": ["REPOSITORY_SOURCE"]},
+    {"id": "T1_SOURCE", "passStatus": "SOURCE_CLEAR", "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL", "completionFreshnessClasses": ["REPOSITORY_SOURCE"]},
+    {"id": "T2_MODEL", "passStatus": "MODEL_CLEAR", "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL", "completionFreshnessClasses": ["REPOSITORY_SOURCE"]},
+    {"id": "T3_INTEGRATION", "passStatus": "INTEGRATION_CLEAR", "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL", "completionFreshnessClasses": ["REPOSITORY_SOURCE"]},
+    {"id": "T4_NATIVE_PROVIDER", "passStatus": ["NATIVE_CLEAR", "PROVIDER_CLEAR"], "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL", "completionFreshnessClasses": ["PROVIDER_CRITICAL"]},
+    {"id": "T5_SIGNED_ARTIFACT", "passStatus": "ARTIFACT_CLEAR", "requiredBefore": ["installed"], "missingStatus": "BLOCKED_EXTERNAL", "completionFreshnessClasses": ["SIGNED_ARTIFACT"]},
+    {"id": "T6_INSTALLED_PHYSICAL", "passStatus": ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"], "requiredBefore": ["release"], "missingStatus": "BLOCKED_EXTERNAL", "completionFreshnessClasses": ["INSTALLED_DEVICE", "PHYSICAL_DEVICE"]},
+    {"id": "T7_PUBLIC_CANARY", "passStatus": "RELEASE_CLEAR", "requiredBefore": ["public-release"], "missingStatus": "BLOCKED_EXTERNAL", "completionFreshnessClasses": ["PUBLIC_CANARY"]}
+  ],
+  "applicabilityPolicies": {
+    "REQUIRE_CLEAR": ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
+    "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
+  },
+  "completionFeatureApplicability": {
+    "assurance-efficiency-e0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required-shadow-workflow", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable-no-artifact-change", "T6_INSTALLED_PHYSICAL": "not-applicable-no-installed-change", "T7_PUBLIC_CANARY": "not-applicable-no-release"}
+  },
+  "completionFactAuthorities": [
+    {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.requirements", "proofTiers": ["T0_REQUIREMENT"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+    {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.source", "proofTiers": ["T1_SOURCE"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+    {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.model", "proofTiers": ["T2_MODEL"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+    {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"}
   ],
   "phaseBlockers": {
     "implementation": ["T0_REQUIREMENT"],

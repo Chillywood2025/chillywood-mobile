@@ -16,8 +16,41 @@
     },
     "gateCatalog": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["statuses", "gates", "phaseBlockers"],
-      "properties": {"statuses": {"type": "array", "items": {"$ref": "#/$defs/status"}, "uniqueItems": true}, "gates": {"type": "array", "minItems": 8}, "phaseBlockers": {"type": "object"}}
+      "required": ["statuses", "gates", "applicabilityPolicies", "completionFeatureApplicability", "completionFactAuthorities", "phaseBlockers"],
+      "properties": {
+        "statuses": {"type": "array", "items": {"$ref": "#/$defs/status"}, "uniqueItems": true},
+        "gates": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": ["id", "passStatus", "requiredBefore", "missingStatus", "completionFreshnessClasses"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]},
+              "passStatus": {"oneOf": [{"$ref": "#/$defs/status"}, {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/status"}}]},
+              "requiredBefore": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+              "missingStatus": {"enum": ["BLOCKED_INTERNAL", "BLOCKED_EXTERNAL"]},
+              "completionFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}}
+            }
+          }
+        },
+        "applicabilityPolicies": {"const": {
+          "REQUIRE_CLEAR": ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
+          "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
+        }},
+        "completionFeatureApplicability": {"const": {
+          "assurance-efficiency-e0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required-shadow-workflow", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable-no-artifact-change", "T6_INSTALLED_PHYSICAL": "not-applicable-no-installed-change", "T7_PUBLIC_CANARY": "not-applicable-no-release"}
+        }},
+        "completionFactAuthorities": {"const": [
+          {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.requirements", "proofTiers": ["T0_REQUIREMENT"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+          {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.source", "proofTiers": ["T1_SOURCE"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+          {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.model", "proofTiers": ["T2_MODEL"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+          {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"}
+        ]},
+        "phaseBlockers": {"type": "object"}
+      }
     },
     "proofStrength": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
@@ -99,7 +132,10 @@
             "clock": {"const": "UTC"},
             "failClosed": {"const": true},
             "factRegistry": {"const": [
+              {"factId": "repository.assurance-control.a1.requirements", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 Owner control requirements, prohibited mutations, review-gate, claim-freshness, and bootstrap boundaries are recorded as executable assurance requirements"},
               {"factId": "repository.assurance-control.a1.source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"},
+              {"factId": "repository.assurance-control.a1.model", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 executable focused regressions reject task, head, review-surface, pagination, freshness, receipt, and proof-status substitutions"},
+              {"factId": "repository.assurance-control.a1.integration", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 integration contracts connect active-task and current-truth validation with the exact-head review gate and Phase 1 workflow"},
               {"factId": "repository.assurance-control.a1.post-merge-control-readback", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "requiresReadbackHash": true, "historicalEvidence": "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub"},
               {"factId": "repository.assurance-control.a1.complete-late-sentinel-inventory", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "requiresReadbackHash": true, "historicalEvidence": "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records"},
               {"factId": "repository.assurance-control.a1.late-review-tombstone-admission", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "requiresReadbackHash": true, "historicalEvidence": "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"},
@@ -204,7 +240,23 @@
             "executionState": {"type": "string", "minLength": 1},
             "requiredFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}},
             "requiredFreshnessClaims": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/requiredFreshnessClaim"}},
-            "proofTiersUnderEvaluation": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]}}
+            "proofTiersUnderEvaluation": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]}},
+            "proofTierStatuses": {
+              "type": "object",
+              "required": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"],
+              "additionalProperties": false,
+              "properties": {
+                "T0_REQUIREMENT": {"enum": ["REQUIREMENTS_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T1_SOURCE": {"enum": ["SOURCE_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T2_MODEL": {"enum": ["MODEL_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T3_INTEGRATION": {"enum": ["INTEGRATION_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T4_NATIVE_PROVIDER": {"oneOf": [{"const": ["NATIVE_CLEAR", "PROVIDER_CLEAR"]}, {"enum": ["BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]}]},
+                "T5_SIGNED_ARTIFACT": {"enum": ["ARTIFACT_CLEAR", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T6_INSTALLED_PHYSICAL": {"oneOf": [{"const": ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"]}, {"enum": ["BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]}]},
+                "T7_PUBLIC_CANARY": {"enum": ["RELEASE_CLEAR", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]}
+              }
+            },
+            "proofTierApplicabilityHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
             ,"ownerBootstrapAuthorization": {
               "type": "object",
               "required": ["schemaVersion", "repository", "prNumber", "commentId", "author", "authorAssociation", "createdAt", "updatedAt", "bodySha256", "subjectHash"],
@@ -221,7 +273,8 @@
                 "subjectHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
               }
             }
-          }
+          },
+          "allOf": [{"if": {"properties": {"phase": {"const": "COMPLETE"}}, "required": ["phase"]}, "then": {"required": ["proofTierStatuses", "proofTierApplicabilityHash"]}, "else": {"not": {"anyOf": [{"required": ["proofTierStatuses"]}, {"required": ["proofTierApplicabilityHash"]}]}}}]
         },
         "freshnessClaims": {
           "type": "array",
