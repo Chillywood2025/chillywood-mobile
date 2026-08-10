@@ -16,12 +16,16 @@
     "pull_request_target.reopened",
     "pull_request_target.ready_for_review",
     "pull_request_review.submitted",
+    "pull_request_review.edited",
+    "pull_request_review.dismissed",
     "pull_request_review_comment.created",
     "pull_request_review_comment.edited",
+    "pull_request_review_comment.deleted",
     "pull_request_review_thread.resolved",
     "pull_request_review_thread.unresolved",
     "issue_comment.created",
     "issue_comment.edited",
+    "issue_comment.deleted",
     "workflow_dispatch"
   ],
   "receiptRequiredFields": [
@@ -38,6 +42,7 @@
     "reviewStartedAt",
     "reviewCompletedAt",
     "latestSourcePushAt",
+    "sourcePushLeaseHashes",
     "reviewSubmissions",
     "reviewComments",
     "reviewThreads",
@@ -64,6 +69,7 @@
     "current-pr-tree-equals-recorded-tree",
     "review-completed-after-latest-source-push",
     "no-source-commit-after-review",
+    "every-synchronize-event-recorded-by-exact-source-push-lease",
     "all-review-conversations-resolved",
     "all-provider-review-surfaces-read-and-head-bound",
     "resolved-thread-findings-require-later-exact-head-provider-rereview",
@@ -78,11 +84,25 @@
     "CODEX_REVIEW_UNRESOLVED_FINDING",
     "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND",
     "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE",
+    "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID",
     "CODEX_REVIEW_RECEIPT_INVALID",
     "CODEX_REVIEW_LATE_POST_MERGE",
     "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"
   ],
   "issueCommentReviewedCommitMarker": "<!-- codex-review-reviewed-commit:<40-lowercase-hex-sha> -->",
+  "sourcePushLease": {
+    "checkName": "Chi'llywood / Codex Review Source Push Lease",
+    "trustedAppSlug": "github-actions",
+    "event": "pull_request_target.synchronize",
+    "receiptBinding": "repository-pr-head-pushedAt-sha256",
+    "eventRunCancellationAllowed": false,
+    "reuseAfterRepeatedHeadPush": false
+  },
+  "findingResolution": {
+    "approvedReviewIsExplicitCleanDisposition": true,
+    "cleanDispositionMarker": "<!-- codex-review-disposition:blocking-findings-resolved reviewed-commit:<40-lowercase-hex-sha> -->",
+    "ambiguousCommentedRereviewMayResolveFindings": false
+  },
   "lateReviewIssue": {
     "label": "codex-review-late-sentinel",
     "titlePrefix": "[Codex Review Late Sentinel]",

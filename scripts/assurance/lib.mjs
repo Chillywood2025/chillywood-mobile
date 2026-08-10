@@ -89,10 +89,12 @@ const claimRequiredFields = [
   "factsCovered",
   "freshnessClass",
   "authorityAllowed",
-  "platform"
+  "platform",
+  "provider"
 ];
 const claimStatuses = new Set(["CURRENT", "STALE_BLOCKED"]);
 const claimPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
+export const HISTORICAL_PROVIDER_FACT = "HISTORICAL_PROVIDER_FACT";
 const claimClassPolicy = {
   REPOSITORY_SOURCE: {
     evidenceModes: ["local-source", "git-read-only", "github-read-only", "exact-ci", "local-offline", "local-read-only", "local-and-github-read-only", "local-offline-and-github-read-only"],
@@ -143,6 +145,16 @@ const claimClassPolicy = {
     requiresExternalReceipt: true
   }
 };
+const canonicalFactRegistry = [
+  { factId: "repository.active-implementation.immutable-synchronized-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+  { factId: "repository.active-implementation.merge-identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+  { factId: "repository.review-only-pr.disposition", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+  { factId: "repository.phase1-ci.identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+  { factId: "repository.d2a.frozen-state", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+  { factId: "provider.supabase.b3.deployed-predecessor", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE", historicalEvidence: "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765" },
+  { factId: "provider.supabase.b3.forward-correction", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE", historicalEvidence: "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38" },
+  { factId: "provider.supabase.b3.live-acl", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE", historicalEvidence: "live pre-correction ACL explicitly includes anon but source correction revokes it" }
+];
 
 function sameStringSet(left, right) {
   return Array.isArray(left)
@@ -157,6 +169,52 @@ function validInstant(value) {
 
 function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
+}
+
+function factRegistryEntryMatchesClaim(entry, claim) {
+  return entry?.freshnessClass === claim?.freshnessClass
+    && entry?.authorityAllowed === claim?.authorityAllowed
+    && entry?.platform === claim?.platform
+    && entry?.provider === claim?.provider;
+}
+
+export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
+  if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
+  try {
+    git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
+    const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
+    const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
+    const committedSource = committedSources[0];
+    const factsBound = Array.isArray(source.covers)
+      && Array.isArray(committedSource?.covers)
+      && claim.factsCovered.every((factId) => {
+        const entries = factRegistry.filter(({ factId: registered }) => registered === factId);
+        if (entries.length !== 1 || !factRegistryEntryMatchesClaim(entries[0], claim)) return false;
+        const historicalEvidence = entries[0].historicalEvidence ?? factId;
+        return source.covers.includes(factId) && committedSource.covers.includes(historicalEvidence);
+      });
+    const parents = git(["show", "-s", "--format=%P", source.sourceCommit]).split(/\s+/u).filter(Boolean);
+    const introducedHere = parents.every((parent) => {
+      try {
+        const parentRecord = JSON.parse(git(["show", `${parent}:config/assurance/current-truth-v1.json`]));
+        return !(parentRecord.evidenceSources ?? []).some(({ id }) => id === source.id);
+      } catch {
+        return true;
+      }
+    });
+    return committedRecord.timestamp === claim.observedAt
+      && committedSources.length === 1
+      && committedSource.mode === claim.evidenceMode
+      && source.freshnessClass === claim.freshnessClass
+      && source.authorityAllowed === claim.authorityAllowed
+      && source.platform === claim.platform
+      && source.provider === claim.provider
+      && committedRecord.liveProviderReadback === true
+      && factsBound
+      && introducedHere;
+  } catch {
+    return false;
+  }
 }
 
 const externalReceiptHashPattern = /^[0-9a-f]{64}$/u;
@@ -235,17 +293,42 @@ export function verifyExternalEvidenceReceipt({ claim, source, receipt, policy, 
   return { ok: findings.length === 0, findings };
 }
 
-export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null, externalEvidenceVerifier = null }) {
+export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null, externalEvidenceVerifier = null, allowSyntheticFactRegistry = false }) {
   const findings = [];
   const evaluated = [];
   const seenClaimIds = new Set();
   const sources = Array.isArray(evidenceSources) ? evidenceSources : [];
   const classRules = freshness?.classes;
+  const factRegistry = freshness?.factRegistry;
   const evaluationTime = now instanceof Date ? now : new Date(now);
   if (!Array.isArray(claims)) findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIMS_MALFORMED"));
   if (!Array.isArray(evidenceSources)) findings.push(claimFinding("ASSURANCE_EVIDENCE_SOURCES_MALFORMED"));
   if (!classRules || typeof classRules !== "object" || Array.isArray(classRules)) {
     findings.push(claimFinding("ASSURANCE_FRESHNESS_CLASS_RULES_MALFORMED"));
+  }
+  if (!Array.isArray(factRegistry) || factRegistry.length === 0) {
+    findings.push(claimFinding("ASSURANCE_FRESHNESS_FACT_REGISTRY_MALFORMED"));
+  } else {
+    if (!allowSyntheticFactRegistry
+      && JSON.stringify(stableValue(factRegistry)) !== JSON.stringify(stableValue(canonicalFactRegistry))) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_FACT_REGISTRY_POLICY_MISMATCH"));
+    }
+    const seenFactIds = new Set();
+    for (const entry of factRegistry) {
+      const factId = typeof entry?.factId === "string" ? entry.factId : "";
+      const classPolicy = claimClassPolicy[entry?.freshnessClass];
+      const malformed = !factId
+        || seenFactIds.has(factId)
+        || !classPolicy
+        || entry.authorityAllowed !== classPolicy.authorityAllowed
+        || !classPolicy.allowedPlatforms.includes(entry.platform)
+        || typeof entry.provider !== "string"
+        || !entry.provider
+        || (entry.freshnessClass === "REPOSITORY_SOURCE" && entry.provider !== "NONE")
+        || (entry.freshnessClass !== "REPOSITORY_SOURCE" && entry.provider === "NONE");
+      if (malformed) findings.push(claimFinding("ASSURANCE_FRESHNESS_FACT_REGISTRY_ENTRY_INVALID", null, { factId: factId || null }));
+      seenFactIds.add(factId);
+    }
   }
   if (freshness?.defaultHours !== 24
     || freshness?.providerCriticalHours !== 8
@@ -316,6 +399,15 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
     }
     if (!Array.isArray(claim.factsCovered) || claim.factsCovered.length === 0 || claim.factsCovered.some((fact) => typeof fact !== "string" || !fact.trim())) {
       findings.push(claimFinding("ASSURANCE_FRESHNESS_FACTS_MALFORMED", claimId));
+    } else {
+      for (const factId of claim.factsCovered) {
+        const registered = Array.isArray(factRegistry) ? factRegistry.filter(({ factId: candidate }) => candidate === factId) : [];
+        if (registered.length !== 1) {
+          findings.push(claimFinding("ASSURANCE_FRESHNESS_FACT_UNKNOWN", claimId, { factId }));
+        } else if (!factRegistryEntryMatchesClaim(registered[0], claim)) {
+          findings.push(claimFinding("ASSURANCE_FRESHNESS_FACT_BINDING_MISMATCH", claimId, { factId }));
+        }
+      }
     }
     const matchingSources = sources.filter(({ id }) => id === claim.evidenceSourceId);
     if (matchingSources.length !== 1) {
@@ -330,6 +422,7 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
         || source.freshnessClass !== claim.freshnessClass
         || source.authorityAllowed !== claim.authorityAllowed
         || source.platform !== claim.platform
+        || source.provider !== claim.provider
         || !sourceFactsBound) {
         findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_BINDING_MISMATCH", claimId));
       }
@@ -376,7 +469,9 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
 
   const invalidClaimIds = new Set(findings.map(({ claimId }) => claimId).filter(Boolean));
   const usableClaims = evaluated.filter(({ id }) => !invalidClaimIds.has(id));
-  const currentClaims = usableClaims.filter(({ derivedStatus }) => derivedStatus === "CURRENT");
+  const currentClaims = findings.length === 0
+    ? usableClaims.filter(({ derivedStatus }) => derivedStatus === "CURRENT")
+    : [];
   const blockedClaims = usableClaims.filter(({ derivedStatus }) => derivedStatus !== "CURRENT");
   return {
     ok: findings.length === 0,

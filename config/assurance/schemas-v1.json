@@ -89,12 +89,22 @@
         },
         "freshness": {
           "type": "object",
-          "required": ["defaultHours", "providerCriticalHours", "clock", "failClosed", "classes"],
+          "required": ["defaultHours", "providerCriticalHours", "clock", "failClosed", "classes", "factRegistry"],
           "properties": {
             "defaultHours": {"const": 24},
             "providerCriticalHours": {"const": 8},
             "clock": {"const": "UTC"},
             "failClosed": {"const": true},
+            "factRegistry": {"const": [
+              {"factId": "repository.active-implementation.immutable-synchronized-source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+              {"factId": "repository.active-implementation.merge-identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+              {"factId": "repository.review-only-pr.disposition", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+              {"factId": "repository.phase1-ci.identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+              {"factId": "repository.d2a.frozen-state", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+              {"factId": "provider.supabase.b3.deployed-predecessor", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765"},
+              {"factId": "provider.supabase.b3.forward-correction", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38"},
+              {"factId": "provider.supabase.b3.live-acl", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "live pre-correction ACL explicitly includes anon but source correction revokes it"}
+            ]},
             "classes": {
               "type": "object",
               "required": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"],
@@ -192,7 +202,7 @@
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["id", "status", "observedAt", "expiresAt", "evidenceSourceId", "evidenceMode", "factsCovered", "freshnessClass", "authorityAllowed", "platform"],
+            "required": ["id", "status", "observedAt", "expiresAt", "evidenceSourceId", "evidenceMode", "factsCovered", "freshnessClass", "authorityAllowed", "platform", "provider"],
             "properties": {
               "id": {"$ref": "#/$defs/lowerId"},
               "status": {"enum": ["CURRENT", "STALE_BLOCKED"]},
@@ -203,7 +213,8 @@
               "factsCovered": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
               "freshnessClass": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
               "authorityAllowed": {"enum": ["REPOSITORY_ONLY", "PROVIDER_READBACK_ONLY", "SIGNED_ARTIFACT_ONLY", "INSTALLED_DEVICE_ONLY", "PHYSICAL_DEVICE_ONLY", "PUBLIC_CANARY_ONLY"]},
-              "platform": {"enum": ["ANDROID", "IOS", "NONE"]}
+              "platform": {"enum": ["ANDROID", "IOS", "NONE"]},
+              "provider": {"type": "string", "minLength": 1}
             }
           }
         },
@@ -252,7 +263,7 @@
                     "reviewedHeadClassification": {"enum": ["CURRENT_HEAD", "STALE_HEAD", "UNBOUND"]},
                     "threadResolutionState": {"enum": ["UNRESOLVED", "RESOLVED", "NOT_APPLICABLE"]},
                     "affectedPaths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-                    "disposition": {"type": "string", "minLength": 1}
+                    "disposition": {"enum": ["UNRESOLVED", "RESOLVED"]}
                   }
                 }
               },
@@ -260,6 +271,28 @@
               "successorCorrectionOwner": {"type": "string", "minLength": 1},
               "assuranceControlOwner": {"type": "string", "minLength": 1},
               "authorizedBootstrapOwners": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/gitBranch"}},
+              "resolutionEvidence": {
+                "type": "object",
+                "required": ["schemaVersion", "successorPr", "successorBranch", "successorHead", "successorTree", "successorMergeSha", "correctedSourceIds", "resolvedThreadIds", "allThreadsResolved", "githubThreadResolutionReadbackAt", "exactHeadReviewedCommit", "exactHeadReviewedTree", "exactHeadReviewReceiptHash", "correctionEvidenceHash", "dispositionEvidenceHash", "completedAt"],
+                "properties": {
+                  "schemaVersion": {"const": 1},
+                  "successorPr": {"type": "integer", "minimum": 1},
+                  "successorBranch": {"$ref": "#/$defs/gitBranch"},
+                  "successorHead": {"$ref": "#/$defs/gitSha"},
+                  "successorTree": {"$ref": "#/$defs/gitSha"},
+                  "successorMergeSha": {"$ref": "#/$defs/gitSha"},
+                  "correctedSourceIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "number"}},
+                  "resolvedThreadIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                  "allThreadsResolved": {"const": true},
+                  "githubThreadResolutionReadbackAt": {"type": "string", "format": "date-time"},
+                  "exactHeadReviewedCommit": {"$ref": "#/$defs/gitSha"},
+                  "exactHeadReviewedTree": {"$ref": "#/$defs/gitSha"},
+                  "exactHeadReviewReceiptHash": {"pattern": "^[0-9a-f]{64}$"},
+                  "correctionEvidenceHash": {"pattern": "^[0-9a-f]{64}$"},
+                  "dispositionEvidenceHash": {"pattern": "^[0-9a-f]{64}$"},
+                  "completedAt": {"type": "string", "format": "date-time"}
+                }
+              },
               "blocks": {"type": "array", "minItems": 4, "uniqueItems": true}
             }
           }
@@ -332,7 +365,7 @@
     },
     "codexReviewExactHeadContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["checkName", "reviewProviders", "acceptableReviewStates", "blockingSeverities", "reviewOnlyLabel", "requiredEvents", "receiptRequiredFields", "receiptHash", "boundedReadback", "passRequirements", "resultCodes", "lateReviewClassification", "lateReviewBlocks"],
+      "required": ["checkName", "reviewProviders", "acceptableReviewStates", "blockingSeverities", "reviewOnlyLabel", "requiredEvents", "receiptRequiredFields", "receiptHash", "boundedReadback", "passRequirements", "resultCodes", "sourcePushLease", "lateReviewClassification", "lateReviewBlocks"],
       "properties": {
         "contractId": {"const": "codex-review-exact-head-v1"},
         "checkName": {"const": "Chi'llywood / Codex Review Exact Head"},
@@ -340,18 +373,19 @@
         "acceptableReviewStates": {"const": ["COMMENTED", "APPROVED"]},
         "blockingSeverities": {"const": ["P0", "P1", "P2"]},
         "reviewOnlyLabel": {"const": "assurance-review-only"},
-        "requiredEvents": {"const": ["pull_request_target.opened", "pull_request_target.synchronize", "pull_request_target.reopened", "pull_request_target.ready_for_review", "pull_request_review.submitted", "pull_request_review_comment.created", "pull_request_review_comment.edited", "pull_request_review_thread.resolved", "pull_request_review_thread.unresolved", "issue_comment.created", "issue_comment.edited", "workflow_dispatch"]},
+        "requiredEvents": {"const": ["pull_request_target.opened", "pull_request_target.synchronize", "pull_request_target.reopened", "pull_request_target.ready_for_review", "pull_request_review.submitted", "pull_request_review.edited", "pull_request_review.dismissed", "pull_request_review_comment.created", "pull_request_review_comment.edited", "pull_request_review_comment.deleted", "pull_request_review_thread.resolved", "pull_request_review_thread.unresolved", "issue_comment.created", "issue_comment.edited", "issue_comment.deleted", "workflow_dispatch"]},
         "receiptRequiredFields": {"type": "array", "minItems": 16, "uniqueItems": true, "allOf": [
           {"contains": {"const": "repository"}}, {"contains": {"const": "prNumber"}}, {"contains": {"const": "prHeadSha"}}, {"contains": {"const": "prHeadTree"}},
           {"contains": {"const": "reviewProvider"}}, {"contains": {"const": "reviewId"}}, {"contains": {"const": "reviewState"}}, {"contains": {"const": "reviewedCommit"}},
-          {"contains": {"const": "reviewStartedAt"}}, {"contains": {"const": "reviewCompletedAt"}}, {"contains": {"const": "latestSourcePushAt"}},
+          {"contains": {"const": "reviewStartedAt"}}, {"contains": {"const": "reviewCompletedAt"}}, {"contains": {"const": "latestSourcePushAt"}}, {"contains": {"const": "sourcePushLeaseHashes"}},
           {"contains": {"const": "reviewSubmissions"}}, {"contains": {"const": "reviewComments"}}, {"contains": {"const": "reviewThreads"}},
           {"contains": {"const": "providerIssueComments"}}, {"contains": {"const": "reviewFindings"}}, {"contains": {"const": "receiptHash"}}
         ]},
         "receiptHash": {"const": {"algorithm": "sha256", "canonicalization": "stable-json-without-receiptHash"}},
         "boundedReadback": {"const": {"reviews": 100, "threads": 100, "commentsPerThread": 100, "issueComments": 100, "maxPages": 20, "checkRuns": 100, "polling": false}},
-        "passRequirements": {"const": ["reviewed-commit-equals-current-pr-head", "current-pr-tree-equals-recorded-tree", "review-completed-after-latest-source-push", "no-source-commit-after-review", "all-review-conversations-resolved", "all-provider-review-surfaces-read-and-head-bound", "resolved-thread-findings-require-later-exact-head-provider-rereview", "no-unresolved-blocking-finding", "exact-receipt-hash-valid"]},
-        "resultCodes": {"const": ["CODEX_REVIEW_MISSING", "CODEX_REVIEW_STALE_HEAD", "CODEX_REVIEW_INCOMPLETE", "CODEX_REVIEW_BLOCKING_THREAD_OPEN", "CODEX_REVIEW_UNRESOLVED_FINDING", "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND", "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE", "CODEX_REVIEW_RECEIPT_INVALID", "CODEX_REVIEW_LATE_POST_MERGE", "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"]},
+        "passRequirements": {"const": ["reviewed-commit-equals-current-pr-head", "current-pr-tree-equals-recorded-tree", "review-completed-after-latest-source-push", "no-source-commit-after-review", "every-synchronize-event-recorded-by-exact-source-push-lease", "all-review-conversations-resolved", "all-provider-review-surfaces-read-and-head-bound", "resolved-thread-findings-require-later-exact-head-provider-rereview", "no-unresolved-blocking-finding", "exact-receipt-hash-valid"]},
+        "resultCodes": {"const": ["CODEX_REVIEW_MISSING", "CODEX_REVIEW_STALE_HEAD", "CODEX_REVIEW_INCOMPLETE", "CODEX_REVIEW_BLOCKING_THREAD_OPEN", "CODEX_REVIEW_UNRESOLVED_FINDING", "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND", "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE", "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID", "CODEX_REVIEW_RECEIPT_INVALID", "CODEX_REVIEW_LATE_POST_MERGE", "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"]},
+        "sourcePushLease": {"const": {"checkName": "Chi'llywood / Codex Review Source Push Lease", "trustedAppSlug": "github-actions", "event": "pull_request_target.synchronize", "receiptBinding": "repository-pr-head-pushedAt-sha256", "eventRunCancellationAllowed": false, "reuseAfterRepeatedHeadPush": false}},
         "lateReviewClassification": {"const": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"},
         "lateReviewBlocks": {"const": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]}
       }

@@ -17,6 +17,7 @@ import {
   renderNextTask,
   sha256,
   verifyCurrentTruthHeadBindings,
+  verifyCommittedClaimEvidence,
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization
 } from "./lib.mjs";
@@ -32,36 +33,6 @@ function safeGit(gitArgs, fallback = null) {
 
 function splitNullTerminated(value) {
   return typeof value === "string" ? value.split("\0").filter(Boolean) : [];
-}
-
-function verifyCommittedClaimEvidence({ claim, source }) {
-  if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "")) return false;
-  try {
-    git(["merge-base", "--is-ancestor", source.sourceCommit, "HEAD"]);
-    const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
-    const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
-    const committedSource = committedSources[0];
-    const factsBound = Array.isArray(source.covers)
-      && Array.isArray(committedSource?.covers)
-      && claim.factsCovered.every((fact) => source.covers.includes(fact) && committedSource.covers.includes(fact));
-    const parents = git(["show", "-s", "--format=%P", source.sourceCommit]).split(/\s+/u).filter(Boolean);
-    const introducedHere = parents.every((parent) => {
-      try {
-        const parentRecord = JSON.parse(git(["show", `${parent}:config/assurance/current-truth-v1.json`]));
-        return !(parentRecord.evidenceSources ?? []).some(({ id }) => id === source.id);
-      } catch {
-        return true;
-      }
-    });
-    return committedRecord.timestamp === claim.observedAt
-      && committedSources.length === 1
-      && committedSource.mode === claim.evidenceMode
-      && committedRecord.liveProviderReadback === true
-      && factsBound
-      && introducedHere;
-  } catch {
-    return false;
-  }
 }
 
 function collectBaseSynchronizationReviewEvidence(reviewEntries) {
@@ -230,7 +201,11 @@ if (mode) {
     evidenceSources: record.evidenceSources,
     freshness: currentTruthContract.freshness,
     now,
-    evidenceSourceVerifier: verifyCommittedClaimEvidence
+    evidenceSourceVerifier: ({ claim, source }) => verifyCommittedClaimEvidence({
+      claim,
+      source,
+      factRegistry: currentTruthContract.freshness.factRegistry
+    })
   });
   const taskFreshness = evaluateTaskFreshness(
     claimFreshness,

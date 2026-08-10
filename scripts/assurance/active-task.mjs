@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { ROOT, emit, isValidGitBranchName, readJson, redact, stableJson } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
+import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
 const laneIds = [
   "architecture-state",
@@ -199,6 +200,17 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
   const open = truth?.openImplementationPrs ?? [];
   if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
   const matches = open.filter((entry) => entry?.number === binding.implementationPr && entry?.branch === binding.implementationBranch);
+  const acceptedSynchronization = facts.acceptedBaseSynchronizations?.[binding.implementationPr];
+  const synchronizedIdentityAccepted = acceptedSynchronization?.ok === true
+    && acceptedSynchronization.classification === "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH"
+    && acceptedSynchronization.sourceHead === binding.currentImplementationHead
+    && sha40(acceptedSynchronization.synchronizedHead)
+    && sha40(acceptedSynchronization.synchronizedTree)
+    && acceptedSynchronization.synchronizedHead === identity.head
+    && acceptedSynchronization.synchronizedTree === identity.tree
+    && acceptedSynchronization.currentMain === identity.originMainHead;
+  const effectiveHead = synchronizedIdentityAccepted ? acceptedSynchronization.synchronizedHead : binding.currentImplementationHead;
+  const effectiveTree = synchronizedIdentityAccepted ? acceptedSynchronization.synchronizedTree : binding.currentImplementationTree;
   const activePhase = ["IMPLEMENTATION", "FORMAL_REVIEW", "FINAL_CI", "MERGE_ELIGIBLE"].includes(binding.phase);
   if (activePhase) {
     if (open.length > 1) findings.push("MULTIPLE_ACTIVE_IMPLEMENTATIONS");
@@ -206,22 +218,22 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
     if (matches[0]?.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_HEAD_MISMATCH");
     if (!activeImplementationStates.has(matches[0]?.state)) findings.push("ACTIVE_IMPLEMENTATION_STATE_MISMATCH");
     if (identity.branch !== binding.implementationBranch) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_BRANCH_MISMATCH");
-    if (identity.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
-    if (identity.tree !== binding.currentImplementationTree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
+    if (identity.head !== effectiveHead) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
+    if (identity.tree !== effectiveTree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
   } else findings.push("ACTIVE_TASK_NONE");
 
   const observed = facts.implementationObservations ?? {
     remoteHead: safeImplementationGit(["show-ref", "--verify", "--hash", `refs/remotes/origin/${binding.implementationBranch}`]),
     immutableTree: safeImplementationGit(["rev-parse", `${binding.immutableSourceHead}^{tree}`]),
-    currentTree: safeImplementationGit(["rev-parse", `${binding.currentImplementationHead}^{tree}`]),
-    immutableSourceIsAncestor: sourceIsAncestor(binding.immutableSourceHead, binding.currentImplementationHead),
+    currentTree: safeImplementationGit(["rev-parse", `${effectiveHead}^{tree}`]),
+    immutableSourceIsAncestor: sourceIsAncestor(binding.immutableSourceHead, effectiveHead),
     providerPrHead: facts.providerPrHead ?? null
   };
-  if (observed.remoteHead !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_REMOTE_HEAD_MISMATCH");
+  if (observed.remoteHead !== effectiveHead) findings.push("ACTIVE_IMPLEMENTATION_REMOTE_HEAD_MISMATCH");
   if (observed.immutableTree !== binding.immutableSourceTree) findings.push("ACTIVE_IMPLEMENTATION_IMMUTABLE_TREE_MISMATCH");
-  if (observed.currentTree !== binding.currentImplementationTree) findings.push("ACTIVE_IMPLEMENTATION_CURRENT_TREE_MISMATCH");
+  if (observed.currentTree !== effectiveTree) findings.push("ACTIVE_IMPLEMENTATION_CURRENT_TREE_MISMATCH");
   if (observed.immutableSourceIsAncestor !== true) findings.push("ACTIVE_IMPLEMENTATION_IMMUTABLE_ANCESTRY_MISMATCH");
-  if (observed.providerPrHead !== null && observed.providerPrHead !== undefined && observed.providerPrHead !== binding.currentImplementationHead) {
+  if (observed.providerPrHead !== null && observed.providerPrHead !== undefined && observed.providerPrHead !== effectiveHead) {
     findings.push("ACTIVE_IMPLEMENTATION_PROVIDER_HEAD_MISMATCH");
   }
   if (findings.length) return { ok: false, findings: [...new Set(findings)].sort() };
@@ -234,10 +246,10 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
       implementationBindingId: binding.implementationBindingId,
       immutableSourceHead: binding.immutableSourceHead,
       immutableSourceTree: binding.immutableSourceTree,
-      currentSynchronizedHead: binding.currentImplementationHead,
-      currentSynchronizedTree: binding.currentImplementationTree,
+      currentSynchronizedHead: effectiveHead,
+      currentSynchronizedTree: effectiveTree,
       immutableSource: { head: binding.immutableSourceHead, tree: binding.immutableSourceTree },
-      currentSynchronizedSource: { head: binding.currentImplementationHead, tree: binding.currentImplementationTree }
+      currentSynchronizedSource: { head: effectiveHead, tree: effectiveTree }
     }
   };
 }
@@ -284,7 +296,10 @@ export function activeTask(facts = {}) {
     const run = spawnSync(process.execPath, ["scripts/assurance/current-truth.mjs"], {
       cwd: ROOT, encoding: "utf8", shell: false
     });
-    try { return { ok: run.status === 0 && JSON.parse(run.stdout).ok === true }; } catch { return { ok: false }; }
+    try {
+      const result = JSON.parse(run.stdout);
+      return { ...result, ok: run.status === 0 && result.ok === true };
+    } catch { return { ok: false }; }
   })();
   if (!checked.ok) return { ok: false, findings: ["CURRENT_TRUTH_STALE_OR_UNPARSEABLE"] };
 
@@ -317,14 +332,16 @@ export function activeTask(facts = {}) {
     }
   } catch { return { ok: false, findings: ["SOURCE_IDENTITY_UNRESOLVED"] }; }
 
-  const lateReviewBlocksCurrentBranch = (truth?.lateReviewSentinels ?? []).some((sentinel) => {
-    const unresolved = (sentinel?.findings ?? []).some(({ disposition }) => disposition !== "RESOLVED");
+  const lateReviewBlocksCurrentBranch = unresolvedLateReviewSentinels(truth).some((sentinel) => {
     const allowedOwners = [sentinel?.successorCorrectionOwner, sentinel?.assuranceControlOwner, ...(sentinel?.authorizedBootstrapOwners ?? [])];
-    return unresolved && !allowedOwners.includes(identity.branch);
+    return !allowedOwners.includes(identity.branch);
   });
   if (lateReviewBlocksCurrentBranch) return { ok: false, findings: ["LATE_REVIEW_SUCCESSOR_BLOCKED"] };
 
-  const implementation = resolveImplementation(truth, identity, facts, resolution);
+  const implementation = resolveImplementation(truth, identity, {
+    ...facts,
+    acceptedBaseSynchronizations: facts.acceptedBaseSynchronizations ?? checked.headBindings?.acceptedBaseSynchronizations ?? {}
+  }, resolution);
   if (!implementation.ok) return { ok: false, findings: implementation.findings };
   const allowlist = facts.allowlist ?? readJson("config/assurance/command-allowlist-v1.json");
   const required = feature.commands ?? [];

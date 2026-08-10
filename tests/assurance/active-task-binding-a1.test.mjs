@@ -146,6 +146,75 @@ test("tree and immutable ancestry substitutions fail closed", () => {
   assert.equal(ancestry.findings.includes("ACTIVE_IMPLEMENTATION_IMMUTABLE_ANCESTRY_MISMATCH"), true);
 });
 
+test("a current-truth-verified base synchronization becomes the exact packet identity", () => {
+  const synchronizedHead = "7".repeat(40);
+  const synchronizedTree = "8".repeat(40);
+  const accepted = {
+    ok: true,
+    classification: "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+    sourceHead: binding.currentImplementationHead,
+    synchronizedHead,
+    synchronizedTree,
+    currentMain: identity.originMainHead
+  };
+  const result = activeTask({
+    ...facts,
+    truthCheck: { ok: true, headBindings: { acceptedBaseSynchronizations: { [binding.implementationPr]: accepted } } },
+    identity: { ...identity, head: synchronizedHead, tree: synchronizedTree },
+    implementationObservations: {
+      ...implementationObservations,
+      remoteHead: synchronizedHead,
+      currentTree: synchronizedTree,
+      providerPrHead: synchronizedHead
+    }
+  });
+  assert.equal(result.ok, true, result.findings?.join(","));
+  assert.deepEqual(result.packet.implementation.immutableSource, {
+    head: binding.immutableSourceHead,
+    tree: binding.immutableSourceTree
+  });
+  assert.deepEqual(result.packet.implementation.currentSynchronizedSource, {
+    head: synchronizedHead,
+    tree: synchronizedTree
+  });
+});
+
+test("unverified or substituted base synchronization identities fail closed", () => {
+  const synchronizedHead = "7".repeat(40);
+  const synchronizedTree = "8".repeat(40);
+  const accepted = {
+    ok: true,
+    classification: "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH",
+    sourceHead: binding.currentImplementationHead,
+    synchronizedHead,
+    synchronizedTree,
+    currentMain: identity.originMainHead
+  };
+  const synchronizedFacts = {
+    ...facts,
+    identity: { ...identity, head: synchronizedHead, tree: synchronizedTree },
+    implementationObservations: {
+      ...implementationObservations,
+      remoteHead: synchronizedHead,
+      currentTree: synchronizedTree,
+      providerPrHead: synchronizedHead
+    }
+  };
+  for (const substituted of [
+    { ...accepted, sourceHead: "9".repeat(40) },
+    { ...accepted, currentMain: "a".repeat(40) },
+    { ...accepted, synchronizedTree: "b".repeat(40) },
+    { ...accepted, classification: "EXACT_SOURCE_HEAD" }
+  ]) {
+    const result = activeTask({
+      ...synchronizedFacts,
+      truthCheck: { ok: true, headBindings: { acceptedBaseSynchronizations: { [binding.implementationPr]: substituted } } }
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.findings.includes("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH"), true);
+  }
+});
+
 test("formal review requires a synchronized identity", () => {
   const incomplete = { ...binding };
   delete incomplete.currentImplementationHead;

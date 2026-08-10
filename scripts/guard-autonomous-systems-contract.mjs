@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  evaluateFreshnessClaims,
+  evaluateTaskFreshness,
+  HISTORICAL_PROVIDER_FACT,
+  verifyCommittedClaimEvidence
+} from "./assurance/lib.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -11,6 +17,7 @@ const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md")
 const currentState = read("CURRENT_STATE.md");
 const nextTask = read("NEXT_TASK.md");
 const currentTruth = JSON.parse(read("config/assurance/current-truth-v1.json"));
+const currentTruthContract = JSON.parse(read("config/assurance/current-truth-contract-v1.json"));
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
 const approvalFunction = read("supabase/functions/autonomous-approval-request/index.ts");
 const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
@@ -36,11 +43,29 @@ const includes = (source, needle, label) => {
 const notIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
 };
-const providerCriticalCurrent = currentTruth.freshnessClaims.some(({ freshnessClass, status }) => freshnessClass === "PROVIDER_CRITICAL" && status === "CURRENT");
-const repositorySourceCurrent = currentTruth.freshnessClaims.some(({ freshnessClass, status }) => freshnessClass === "REPOSITORY_SOURCE" && status === "CURRENT");
-if (currentTruth.liveProviderReadback !== providerCriticalCurrent) fail("live provider readback must derive only from a current provider-critical claim");
-if (!repositorySourceCurrent) fail("source-only autonomous contract requires a current repository-source claim");
-if (providerCriticalCurrent) fail("source-only autonomous contract must not promote stale provider evidence to current proof");
+const claimFreshness = evaluateFreshnessClaims({
+  claims: currentTruth.freshnessClaims,
+  evidenceSources: currentTruth.evidenceSources,
+  freshness: currentTruthContract.freshness,
+  now: new Date(currentTruth.timestamp),
+  evidenceSourceVerifier: ({ claim, source }) => verifyCommittedClaimEvidence({
+    claim,
+    source,
+    factRegistry: currentTruthContract.freshness.factRegistry
+  })
+});
+const sourceOnlyFreshness = evaluateTaskFreshness(claimFreshness, currentTruth.activeTaskBinding.requiredFreshnessClaims);
+const providerDependentFreshness = evaluateTaskFreshness(claimFreshness, [{
+  freshnessClass: "PROVIDER_CRITICAL",
+  platform: "NONE",
+  evidenceSourceId: "b3-immutable-source-binding-20260802-0600",
+  authorityAllowed: "PROVIDER_READBACK_ONLY",
+  requiredFacts: ["provider.supabase.b3.live-acl"]
+}]);
+if (!claimFreshness.ok) fail(`shared freshness evaluation failed: ${claimFreshness.findings.map(({ id }) => id).join(",")}`);
+if (currentTruth.liveProviderReadback !== claimFreshness.liveProviderReadback) fail("live provider readback must derive from the shared freshness evaluator");
+if (!sourceOnlyFreshness.eligible) fail("source-only autonomous contract requires shared evaluator eligibility");
+if (providerDependentFreshness.eligible) fail("provider-dependent autonomous contract must remain blocked on stale provider evidence");
 
 const requiredActiveSystems = [
   "media_automation",
@@ -603,8 +628,9 @@ console.log(JSON.stringify({
   foundationOnlySystems,
   scopedWriteSystemsAdded: [...newlyScopedSystems.map((system) => system.id), ...manualScopedSystems.map((system) => system.id)],
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
-  providerEvidenceClassification: "HISTORICAL_PROVIDER_FACT",
-  currentProviderProof: false,
-  sourceOnlyEligible: true,
+  providerEvidenceClassification: HISTORICAL_PROVIDER_FACT,
+  currentProviderProof: claimFreshness.liveProviderReadback,
+  sourceOnlyEligible: sourceOnlyFreshness.eligible,
+  providerDependentEligible: providerDependentFreshness.eligible,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));

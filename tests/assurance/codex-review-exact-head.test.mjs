@@ -6,10 +6,14 @@ import {
   detectLateReview,
   evaluateExactHeadReceipt,
   exactReceiptHash,
+  normalizeLateReviewEvent,
   paginateGraphConnection,
   parseLateReviewIssue,
   readOpenLateReviewIssues,
-  recordLateReviewIssue
+  readSourcePushLeases,
+  recordLateReviewIssue,
+  recordSourcePushLease,
+  sourcePushLeaseCheckName
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
 
@@ -24,6 +28,7 @@ const baseCurrent = {
   headSha: headA,
   headTree: treeA,
   latestSourcePushAt: "2026-08-09T11:00:00Z",
+  sourcePushLeaseHashes: [],
   mergedAt: null,
   mergeSha: null,
   providerReviewsExist: true,
@@ -137,6 +142,13 @@ test("provider issue comments require an exact reviewed-commit marker and block 
   const unboundReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [unbound] });
   const unboundResult = evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: unboundReceipt });
   assert(unboundResult.codes.includes("CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND"));
+
+  const informational = { ...unbound, commentId: 4, commentNodeId: "IC_4", body: "Review queued; no disposition yet." };
+  const informationalReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [informational] });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: informationalReceipt }).ok, true);
+  const p3 = { ...unbound, commentId: 5, commentNodeId: "IC_5", body: "P3 informational note" };
+  const p3Receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [p3] });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: p3Receipt }).ok, true);
 });
 
 test("resolving a provider finding requires a later exact-head provider rereview", () => {
@@ -150,7 +162,7 @@ test("resolving a provider finding requires a later exact-head provider rereview
   const rereview = {
     ...exactReview,
     reviewId: 9002,
-    body: "No blocking findings",
+    body: `<!-- codex-review-disposition:blocking-findings-resolved reviewed-commit:${headA} -->`,
     startedAt: "2026-08-09T12:10:00Z",
     submittedAt: "2026-08-09T12:15:00Z"
   };
@@ -158,6 +170,12 @@ test("resolving a provider finding requires a later exact-head provider rereview
   const closedResult = evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: closed });
   assert.equal(closedResult.ok, true, closedResult.codes.join(","));
   assert.equal(closed.reviewFindings[0].disposition, "RESOLVED_BY_LATER_PROVIDER_REREVIEW");
+
+  const ambiguousRereview = { ...rereview, body: "Review still in progress; disposition not established." };
+  const ambiguous = buildExactHeadReceipt({ contract, current: baseCurrent, review: ambiguousRereview, reviews: [exactReview, ambiguousRereview], threads: [resolvedThread] });
+  const ambiguousResult = evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: ambiguous });
+  assert.equal(ambiguousResult.ok, false);
+  assert(ambiguousResult.codes.includes("CODEX_REVIEW_UNRESOLVED_FINDING"));
 });
 
 test("an unread provider metadata page has one exact fail-closed code", () => {
@@ -196,6 +214,71 @@ test("every GraphQL provider surface follows all pages and fails closed at the b
       request: async () => ({ connection: { nodes: [], pageInfo: { hasNextPage: true, endCursor: "truncated" } } })
     }),
     { message: "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE" }
+  );
+  for (const pageInfo of [undefined, {}, { hasNextPage: null, endCursor: null }]) {
+    await assert.rejects(
+      paginateGraphConnection({
+        query: "reviews",
+        variables: { first: 100 },
+        select: (data) => data.connection,
+        token: "token",
+        maxPages: 2,
+        request: async () => ({ connection: { nodes: [{ id: 1 }], ...(pageInfo === undefined ? {} : { pageInfo }) } })
+      }),
+      { message: "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE" }
+    );
+  }
+});
+
+test("every synchronize event creates an exact append-only source-push lease", async () => {
+  let posted;
+  const recorded = await recordSourcePushLease({
+    repository: baseCurrent.repository,
+    prNumber: baseCurrent.prNumber,
+    headSha: headA,
+    pushedAt: "2026-08-09T12:20:00Z",
+    token: "token",
+    request: async (_url, _token, init) => {
+      posted = JSON.parse(init.body);
+      return { body: { id: 55 }, link: "" };
+    }
+  });
+  assert.equal(posted.name, sourcePushLeaseCheckName);
+  assert.equal(posted.head_sha, headA);
+  assert.equal(posted.conclusion, "neutral");
+  const check = {
+    ...posted,
+    head_sha: posted.head_sha,
+    app: { slug: "github-actions" }
+  };
+  const leases = await readSourcePushLeases(baseCurrent.repository, baseCurrent.prNumber, headA, "token", {
+    request: async () => ({ body: { total_count: 1, check_runs: [check] }, link: "" })
+  });
+  assert.deepEqual(leases, [recorded.payload]);
+
+  const repeated = { ...recorded.payload, pushedAt: "2026-08-09T12:30:00Z" };
+  const receipt = buildExactHeadReceipt({ contract, current: { ...baseCurrent, latestSourcePushAt: recorded.payload.pushedAt, sourcePushLeaseHashes: [recorded.payload.digest] }, review: exactReview, threads: [] });
+  const invalidated = evaluateExactHeadReceipt({
+    contract,
+    current: { ...baseCurrent, latestSourcePushAt: repeated.pushedAt, sourcePushLeaseHashes: ["f".repeat(64)] },
+    receipt
+  });
+  assert.equal(invalidated.ok, false);
+  assert(invalidated.codes.includes("CODEX_REVIEW_INCOMPLETE"));
+
+  await assert.rejects(
+    readSourcePushLeases(baseCurrent.repository, baseCurrent.prNumber, headA, "token", {
+      request: async () => ({ body: { total_count: 2, check_runs: [check] }, link: "" })
+    }),
+    { message: "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE" }
+  );
+  const altered = structuredClone(check);
+  altered.output.summary = altered.output.summary.replace(recorded.payload.pushedAt, "2026-08-09T12:21:00Z");
+  await assert.rejects(
+    readSourcePushLeases(baseCurrent.repository, baseCurrent.prNumber, headA, "token", {
+      request: async () => ({ body: { total_count: 1, check_runs: [altered] }, link: "" })
+    }),
+    { message: "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID" }
   );
 });
 
@@ -278,6 +361,71 @@ test("a review created before merge but submitted after merge is a late finding"
   assert.equal(sentinel.findings[0].timestamp, lateSubmission.submittedAt);
 });
 
+test("a pending inline finding becomes late when its parent review is submitted after merge", () => {
+  const current = { ...baseCurrent, mergedAt: "2026-08-09T11:45:00Z", mergeSha: "e".repeat(40) };
+  const pendingComment = {
+    ...comment({ severity: "P1", createdAt: "2026-08-09T11:30:00Z" }),
+    updatedAt: "2026-08-09T11:30:00Z",
+    submittedAt: "2026-08-09T12:00:00Z",
+    reviewCommit: headA,
+    reviewId: 999
+  };
+  const sentinel = detectLateReview({ contract, current, threads: [thread({ resolved: false, comments: [pendingComment] })] });
+  assert.equal(sentinel.findings.length, 1);
+  assert.equal(sentinel.findings[0].timestamp, pendingComment.submittedAt);
+});
+
+test("edited or deleted late event bodies remain append-only sentinel evidence", () => {
+  const current = { ...baseCurrent, mergedAt: "2026-08-09T11:45:00Z", mergeSha: "e".repeat(40) };
+  for (const action of ["edited", "deleted"]) {
+    const event = {
+      action,
+      changes: action === "edited" ? { body: { from: "P1 late event finding" } } : undefined,
+      comment: {
+        id: 88,
+        node_id: `NODE_${action}`,
+        user: { login: "chatgpt-codex-connector" },
+        body: action === "edited" ? "clean replacement" : "P1 late event finding",
+        created_at: "2026-08-09T11:30:00Z",
+        updated_at: "2026-08-09T11:40:00Z",
+        commit_id: headA,
+        path: "scripts/assurance/lib.mjs"
+      }
+    };
+    const eventFinding = normalizeLateReviewEvent({
+      eventName: "pull_request_review_comment",
+      event,
+      contract,
+      observedAt: "2026-08-09T12:01:00Z"
+    });
+    const sentinel = detectLateReview({ contract, current, eventFindings: [eventFinding] });
+    assert.equal(sentinel.findings.length, 1, action);
+    assert.equal(sentinel.findings[0].bodyHash, eventFinding.bodyHash);
+  }
+});
+
+test("delivery delay alone cannot relabel a pre-merge finding as post-merge", () => {
+  const current = { ...baseCurrent, mergedAt: "2026-08-09T11:45:00Z", mergeSha: "e".repeat(40) };
+  const eventFinding = normalizeLateReviewEvent({
+    eventName: "issue_comment",
+    event: {
+      action: "created",
+      comment: {
+        id: 91,
+        node_id: "NODE_DELAYED_CREATED",
+        user: { login: "chatgpt-codex-connector" },
+        body: `P1 pre-merge finding\n<!-- codex-review-reviewed-commit:${headA} -->`,
+        created_at: "2026-08-09T11:40:00Z",
+        updated_at: "2026-08-09T11:40:00Z"
+      }
+    },
+    contract,
+    observedAt: "2026-08-09T12:01:00Z"
+  });
+  assert.equal(eventFinding.updatedAt, "2026-08-09T11:40:00Z");
+  assert.equal(detectLateReview({ contract, current, eventFindings: [eventFinding] }), null);
+});
+
 test("durable late-review issue readback includes every state, paginates and fails closed at its bound", async () => {
   const requests = [];
   const request = async (url) => {
@@ -301,9 +449,10 @@ test("durable late-review issue readback includes every state, paginates and fai
 
 test("durable late-review issue recording is idempotent and never closes issues", async () => {
   const sentinel = {
+    classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
     prNumber: 201,
     mergeSha: "f".repeat(40),
-    findings: [{ sourceType: "REVIEW_BODY", severity: "P1" }]
+    findings: [{ sourceType: "REVIEW_BODY", sourceId: 91, bodyHash: "1".repeat(64), severity: "P1", disposition: "UNRESOLVED" }]
   };
   const calls = [];
   const request = async (url, _token, init) => {
@@ -320,6 +469,7 @@ test("durable late-review issue recording is idempotent and never closes issues"
   assert.deepEqual(posted.labels, ["codex-review-late-sentinel"]);
 
   const marker = `<!-- codex-review-late-sentinel:v1 pr=201 merge=${sentinel.mergeSha} -->`;
+  const existingBody = `${marker}\n\n\`\`\`json\n${JSON.stringify(sentinel)}\n\`\`\``;
   const idempotentCalls = [];
   const existing = await recordLateReviewIssue({
     repository: "owner/repository",
@@ -327,11 +477,94 @@ test("durable late-review issue recording is idempotent and never closes issues"
     sentinel,
     request: async (_url, _token, init) => {
       idempotentCalls.push(init.method);
-      return { body: [{ number: 44, title: "existing", body: marker, state: "open" }], link: "" };
+      return { body: [{ number: 44, title: "existing", body: existingBody, state: "open" }], link: "" };
     }
   });
   assert.equal(existing.created, false);
   assert.deepEqual(idempotentCalls, ["GET"]);
+
+  const appended = {
+    ...sentinel,
+    findings: [{ sourceType: "ISSUE_COMMENT", sourceId: 92, bodyHash: "2".repeat(64), severity: "P2", disposition: "UNRESOLVED" }]
+  };
+  const appendCalls = [];
+  const appendedResult = await recordLateReviewIssue({
+    repository: "owner/repository",
+    token: "token",
+    sentinel: appended,
+    request: async (_url, _token, init) => {
+      appendCalls.push({ method: init.method, body: init.body ?? null });
+      if (init.method === "GET") return { body: [{ number: 44, title: "existing", body: existingBody, state: "open" }], link: "" };
+      return { body: { number: 44, title: "updated", body: JSON.parse(init.body).body, state: "open" }, link: "" };
+    }
+  });
+  assert.equal(appendedResult.updated, true);
+  assert.equal(parseLateReviewIssue({ body: appendedResult.issue.body }).findings.length, 2);
+  assert.equal(appendCalls.some(({ method }) => method === "PATCH"), true);
+});
+
+test("a durable sentinel accepts only a typed exact-head correction transition", async () => {
+  const successorHead = "1".repeat(40);
+  const successorTree = "2".repeat(40);
+  const sentinel = {
+    classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+    prNumber: 194,
+    mergeSha: "3".repeat(40),
+    successorCorrectionOwner: "codex/product-successor",
+    findings: [{
+      sourceId: 77,
+      threadId: "THREAD_77",
+      disposition: "RESOLVED",
+      threadResolutionState: "RESOLVED"
+    }],
+    resolutionEvidence: {
+      schemaVersion: 1,
+      successorPr: 203,
+      successorBranch: "codex/product-successor",
+      successorHead,
+      successorTree,
+      successorMergeSha: "4".repeat(40),
+      correctedSourceIds: [77],
+      resolvedThreadIds: ["THREAD_77"],
+      allThreadsResolved: true,
+      githubThreadResolutionReadbackAt: "2026-08-10T03:00:00Z",
+      exactHeadReviewedCommit: successorHead,
+      exactHeadReviewedTree: successorTree,
+      exactHeadReviewReceiptHash: "5".repeat(64),
+      correctionEvidenceHash: "6".repeat(64),
+      dispositionEvidenceHash: "7".repeat(64),
+      completedAt: "2026-08-10T03:05:00Z"
+    }
+  };
+  const marker = `<!-- codex-review-late-sentinel:v1 pr=194 merge=${sentinel.mergeSha} -->`;
+  const calls = [];
+  const result = await recordLateReviewIssue({
+    repository: "owner/repository",
+    token: "token",
+    sentinel,
+    request: async (url, _token, init) => {
+      calls.push({ url, method: init.method, body: init.body ?? null });
+      if (init.method === "GET") return { body: [{ number: 77, title: "existing", body: marker, state: "open" }], link: "" };
+      return { body: { number: 77, title: "updated", body: JSON.parse(init.body).body, state: "open" }, link: "" };
+    }
+  });
+  assert.equal(result.updated, true);
+  const patchCall = calls.find(({ method }) => method === "PATCH");
+  assert(patchCall);
+  assert.equal(Object.hasOwn(JSON.parse(patchCall.body), "state"), false);
+  assert.deepEqual(parseLateReviewIssue({ body: result.issue.body }), sentinel);
+
+  const forged = structuredClone(sentinel);
+  forged.resolutionEvidence.exactHeadReviewedCommit = headA;
+  await assert.rejects(
+    recordLateReviewIssue({
+      repository: "owner/repository",
+      token: "token",
+      sentinel: forged,
+      request: async (_url, _token, init) => ({ body: init.method === "GET" ? [{ number: 77, title: "existing", body: marker, state: "open" }] : {}, link: "" })
+    }),
+    { message: "CODEX_REVIEW_RECEIPT_INVALID" }
+  );
 });
 
 test("durable sentinel payloads are marker-bound and malformed payloads fail closed", async () => {
@@ -370,6 +603,41 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
   assert.deepEqual(validateLateReviewSentinelState(promoted).map(({ id }) => id).sort(), ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", "LATE_REVIEW_SUCCESSOR_GATES_INVALID"]);
 });
 
+test("free-form resolved dispositions cannot clear a late-review sentinel", () => {
+  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const forged = structuredClone(truth);
+  for (const finding of forged.lateReviewSentinels[0].findings) finding.disposition = "RESOLVED";
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
+  assert.equal(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_RESOLUTION_EVIDENCE_INVALID"), true);
+
+  const sentinel = forged.lateReviewSentinels[0];
+  for (const finding of sentinel.findings) finding.threadResolutionState = "RESOLVED";
+  const successorHead = "e".repeat(40);
+  const successorTree = "f".repeat(40);
+  sentinel.resolutionEvidence = {
+    schemaVersion: 1,
+    successorPr: 203,
+    successorBranch: sentinel.successorCorrectionOwner,
+    successorHead,
+    successorTree,
+    successorMergeSha: "1".repeat(40),
+    correctedSourceIds: sentinel.findings.map(({ sourceId }) => sourceId),
+    resolvedThreadIds: sentinel.findings.map(({ threadId }) => threadId),
+    allThreadsResolved: true,
+    githubThreadResolutionReadbackAt: "2026-08-10T03:00:00Z",
+    exactHeadReviewedCommit: successorHead,
+    exactHeadReviewedTree: successorTree,
+    exactHeadReviewReceiptHash: "2".repeat(64),
+    correctionEvidenceHash: "3".repeat(64),
+    dispositionEvidenceHash: "4".repeat(64),
+    completedAt: "2026-08-10T03:05:00Z"
+  };
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 0);
+  assert.deepEqual(validateLateReviewSentinelState(forged), []);
+  sentinel.resolutionEvidence.exactHeadReviewedCommit = "5".repeat(40);
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
+});
+
 test("workflow executes only the protected default-branch evaluator", () => {
   const workflow = fs.readFileSync(".github/workflows/codex-review-exact-head.yml", "utf8");
   assert.match(workflow, /pull_request_target:/u);
@@ -378,6 +646,10 @@ test("workflow executes only the protected default-branch evaluator", () => {
   assert.match(workflow, /persist-credentials: false/u);
   assert.doesNotMatch(workflow, /github\.event\.pull_request\.head/u);
   assert.match(workflow, /issues: write/u);
+  assert.match(workflow, /cancel-in-progress: false/u);
+  assert.match(workflow, /pull_request_review:\s*\n\s*types: \[submitted, edited, dismissed\]/u);
+  assert.match(workflow, /pull_request_review_comment:\s*\n\s*types: \[created, edited, deleted\]/u);
+  assert.match(workflow, /issue_comment:\s*\n\s*types: \[created, edited, deleted\]/u);
 });
 
 test("every build and release entrypoint requires durable GitHub late-sentinel readback", () => {

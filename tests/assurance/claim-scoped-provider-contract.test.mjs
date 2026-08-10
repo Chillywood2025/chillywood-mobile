@@ -10,7 +10,18 @@ import {
 } from "../../scripts/assurance/lib.mjs";
 
 const read = (path) => JSON.parse(fs.readFileSync(path, "utf8"));
-const freshness = read("config/assurance/current-truth-contract-v1.json").freshness;
+const canonicalFreshness = read("config/assurance/current-truth-contract-v1.json").freshness;
+const syntheticFactId = "provider.synthetic.current";
+const freshness = {
+  ...canonicalFreshness,
+  factRegistry: [{
+    factId: syntheticFactId,
+    freshnessClass: "PROVIDER_CRITICAL",
+    authorityAllowed: "PROVIDER_READBACK_ONLY",
+    platform: "NONE",
+    provider: "SYNTHETIC_PROVIDER"
+  }]
+};
 const policy = read("config/assurance/external-evidence-receipt-v1.json");
 const claim = {
   id: "synthetic-provider-current",
@@ -19,7 +30,7 @@ const claim = {
   expiresAt: "2026-08-09T18:00:00Z",
   evidenceSourceId: "synthetic-provider-source",
   evidenceMode: "local-and-linked-read-only",
-  factsCovered: ["synthetic provider fact"],
+  factsCovered: [syntheticFactId],
   freshnessClass: "PROVIDER_CRITICAL",
   authorityAllowed: "PROVIDER_READBACK_ONLY",
   platform: "NONE",
@@ -64,6 +75,7 @@ function evaluate(receiptValue, verifyIssuerReceipt = () => true) {
     evidenceSources: [source],
     freshness,
     now: new Date("2026-08-09T12:00:00Z"),
+    allowSyntheticFactRegistry: true,
     evidenceSourceVerifier: () => true,
     externalEvidenceVerifier: {
       policy,
@@ -97,10 +109,37 @@ test("only a hash-bound synthetic receipt crossing the trusted issuer boundary c
     evidenceSources: [source],
     freshness,
     now: new Date("2026-08-09T12:00:00Z"),
+    allowSyntheticFactRegistry: true,
     evidenceSourceVerifier: () => true,
     externalEvidenceVerifier: () => true
   });
   assert.equal(legacyBooleanVerifier.ok, false, "a self-attested boolean callback is not an authoritative receipt verifier");
+});
+
+test("fact identity and global policy failures suppress all current authority", () => {
+  for (const [label, claims, alteredFreshness, finding] of [
+    ["unknown semantic relabel", [{ ...claim, factsCovered: ["provider.synthetic.renamed"] }], freshness, "ASSURANCE_FRESHNESS_FACT_UNKNOWN"],
+    ["class relabel", [{ ...claim, freshnessClass: "SIGNED_ARTIFACT", evidenceMode: "signed-artifact-inspection", authorityAllowed: "SIGNED_ARTIFACT_ONLY", platform: "IOS" }], freshness, "ASSURANCE_FRESHNESS_FACT_BINDING_MISMATCH"],
+    ["global policy corruption", [claim], { ...freshness, providerCriticalHours: 24 }, "ASSURANCE_FRESHNESS_POLICY_MISMATCH"]
+  ]) {
+    const result = evaluateFreshnessClaims({
+      claims,
+      evidenceSources: [source],
+      freshness: alteredFreshness,
+      now: new Date("2026-08-09T12:00:00Z"),
+      allowSyntheticFactRegistry: true,
+      evidenceSourceVerifier: () => true,
+      externalEvidenceVerifier: {
+        policy,
+        receiptFor: () => receipt(),
+        verifyIssuerReceipt: () => true
+      }
+    });
+    assert.equal(result.ok, false, label);
+    assert.equal(result.currentClaims.length, 0, label);
+    assert.equal(result.liveProviderReadback, false, label);
+    assert(result.findings.some(({ id }) => id === finding), label);
+  }
 });
 
 test("historical Installed QA and RevenueCat facts remain recorded while source-only work passes and provider work is denied", () => {
@@ -108,7 +147,7 @@ test("historical Installed QA and RevenueCat facts remain recorded while source-
   const evaluation = evaluateFreshnessClaims({
     claims: truth.freshnessClaims,
     evidenceSources: truth.evidenceSources,
-    freshness,
+    freshness: canonicalFreshness,
     now: new Date(truth.timestamp),
     evidenceSourceVerifier: () => true
   });
@@ -125,8 +164,22 @@ test("historical Installed QA and RevenueCat facts remain recorded while source-
     platform: "NONE",
     evidenceSourceId: "b3-immutable-source-binding-20260802-0600",
     authorityAllowed: "PROVIDER_READBACK_ONLY",
-    requiredFacts: ["live pre-correction ACL explicitly includes anon but source correction revokes it"]
+    requiredFacts: ["provider.supabase.b3.live-acl"]
   }]).eligible, false, "provider-dependent contract fails on stale evidence");
+
+  const relabeledRegistry = structuredClone(canonicalFreshness);
+  relabeledRegistry.factRegistry.find(({ factId }) => factId === "provider.supabase.b3.live-acl").provider = "REVENUECAT";
+  const relabeled = evaluateFreshnessClaims({
+    claims: truth.freshnessClaims,
+    evidenceSources: truth.evidenceSources,
+    freshness: relabeledRegistry,
+    now: new Date(truth.timestamp),
+    evidenceSourceVerifier: () => true
+  });
+  assert.equal(relabeled.ok, false, "canonical fact metadata cannot be relabeled through mutable policy");
+  assert.equal(relabeled.currentClaims.length, 0);
+  assert.equal(relabeled.liveProviderReadback, false);
+  assert(relabeled.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_FACT_REGISTRY_POLICY_MISMATCH"));
 });
 
 test("all-platform, iOS and Cognitive lanes share the same historical-provider/source-current semantics", () => {

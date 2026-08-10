@@ -8,6 +8,7 @@ const severityOrder = new Map([["P0", 0], ["P1", 1], ["P2", 2], ["P3", 3]]);
 export const lateReviewIssueLabel = "codex-review-late-sentinel";
 export const lateReviewIssueTitlePrefix = "[Codex Review Late Sentinel]";
 export const reviewOnlyLabel = "assurance-review-only";
+export const sourcePushLeaseCheckName = "Chi'llywood / Codex Review Source Push Lease";
 
 function validInstant(value) {
   return typeof value === "string" && Number.isFinite(new Date(value).valueOf());
@@ -29,6 +30,13 @@ function severityFromBody(body) {
 
 function issueCommentReviewedCommit(body) {
   const matches = [...String(body ?? "").matchAll(/<!--\s*codex-review-reviewed-commit:([0-9a-f]{40})\s*-->/gu)]
+    .map((match) => match[1]);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function reviewCleanDispositionCommit(review) {
+  if (review?.state === "APPROVED" && validGitSha(review.commit)) return review.commit;
+  const matches = [...String(review?.body ?? "").matchAll(/<!--\s*codex-review-disposition:blocking-findings-resolved\s+reviewed-commit:([0-9a-f]{40})\s*-->/gu)]
     .map((match) => match[1]);
   return matches.length === 1 ? matches[0] : null;
 }
@@ -59,12 +67,62 @@ function normalizedFinding({ sourceType, provider, id, nodeId, body, createdAt, 
   };
 }
 
+export function normalizeLateReviewEvent({ eventName, event, contract, observedAt = new Date().toISOString() }) {
+  const providers = new Set(contract?.reviewProviders ?? []);
+  let sourceType;
+  let value;
+  if (eventName === "pull_request_review") {
+    sourceType = "REVIEW_BODY";
+    value = event?.review;
+  } else if (eventName === "pull_request_review_comment") {
+    sourceType = "INLINE_THREAD";
+    value = event?.comment;
+  } else if (eventName === "issue_comment") {
+    sourceType = "ISSUE_COMMENT";
+    value = event?.comment;
+  } else return null;
+  const provider = value?.user?.login ?? null;
+  if (!providers.has(provider)) return null;
+  const previousBody = event?.changes?.body?.from;
+  const body = severityFromBody(previousBody) ? previousBody : value?.body;
+  const severity = severityFromBody(body);
+  if (!severity || !(contract.blockingSeverities ?? []).includes(severity)) return null;
+  const reviewedCommit = sourceType === "REVIEW_BODY"
+    ? value?.commit_id
+    : (sourceType === "INLINE_THREAD" ? (value?.pull_request_review?.commit_id ?? value?.commit_id) : issueCommentReviewedCommit(body));
+  const nativeTime = sourceType === "REVIEW_BODY"
+    ? value?.submitted_at
+    : (value?.updated_at ?? value?.created_at);
+  const mutableAction = ["edited", "deleted", "dismissed"].includes(event?.action);
+  const updatedAt = (mutableAction ? [nativeTime, observedAt] : [nativeTime])
+    .filter(validInstant)
+    .sort()
+    .at(-1) ?? null;
+  return normalizedFinding({
+    sourceType,
+    provider,
+    id: value?.id,
+    nodeId: value?.node_id,
+    body,
+    createdAt: value?.created_at ?? value?.submitted_at ?? updatedAt,
+    updatedAt,
+    submittedAt: sourceType === "REVIEW_BODY" ? value?.submitted_at : value?.pull_request_review?.submitted_at,
+    edited: mutableAction,
+    reviewedCommit,
+    threadId: null,
+    threadResolutionState: sourceType === "INLINE_THREAD" ? "UNRESOLVED" : "NOT_APPLICABLE",
+    disposition: "UNRESOLVED",
+    paths: value?.path ? [value.path] : []
+  });
+}
+
 function normalizeProviderFindings({ contract, current, reviews = [], threads = [], issueComments = [] }) {
   const providers = new Set(contract.reviewProviders ?? []);
   const acceptableStates = new Set(contract.acceptableReviewStates ?? []);
   const providerReviews = reviews.filter(({ author }) => providers.has(author));
   const laterExactProviderReview = (after) => validInstant(after) && providerReviews.some((candidate) => candidate.commit === current.headSha
     && acceptableStates.has(candidate.state)
+    && reviewCleanDispositionCommit(candidate) === current.headSha
     && validInstant(candidate.submittedAt)
     && new Date(candidate.submittedAt) > new Date(after));
   const findings = [];
@@ -104,9 +162,10 @@ function normalizeProviderFindings({ contract, current, reviews = [], threads = 
         nodeId: comment.commentNodeId,
         body: comment.body,
         createdAt: comment.createdAt,
-        updatedAt: comment.updatedAt,
+        updatedAt: timestamp,
+        submittedAt: comment.submittedAt,
         edited: validInstant(comment.updatedAt) && validInstant(comment.createdAt) && comment.updatedAt !== comment.createdAt,
-        reviewedCommit: comment.commit,
+        reviewedCommit: comment.reviewCommit ?? comment.commit,
         threadId: thread.threadId,
         threadResolutionState: thread.isResolved === true ? "RESOLVED" : "UNRESOLVED",
         disposition: thread.isResolved === true && providerRereviewed
@@ -120,9 +179,11 @@ function normalizeProviderFindings({ contract, current, reviews = [], threads = 
   for (const comment of issueComments) {
     if (!providers.has(comment.author)) continue;
     const reviewedCommit = issueCommentReviewedCommit(comment.body);
-    if (!reviewedCommit) unboundProviderCommentIds.push(comment.commentNodeId ?? comment.commentId);
     const severity = severityFromBody(comment.body);
-    if (!severity && reviewedCommit) continue;
+    if (!severity) continue;
+    if (!reviewedCommit && (contract.blockingSeverities ?? []).includes(severity)) {
+      unboundProviderCommentIds.push(comment.commentNodeId ?? comment.commentId);
+    }
     const timestamp = findingTimestamp(comment);
     findings.push(normalizedFinding({
       sourceType: "ISSUE_COMMENT",
@@ -190,6 +251,9 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
         bodyHash: sha256(String(comment.body ?? "")),
         createdAt: comment.createdAt,
         updatedAt: comment.updatedAt ?? comment.createdAt,
+        reviewId: comment.reviewId ?? null,
+        reviewSubmittedAt: comment.submittedAt ?? null,
+        reviewCommit: comment.reviewCommit ?? null,
         commit: comment.commit,
         path: comment.path ?? null
       }));
@@ -208,7 +272,7 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
     .flatMap(({ comments }) => comments)
     .filter(({ author }) => providerNames.has(author))
     .sort((left, right) => left.commentId - right.commentId);
-  const exactProviderComments = providerComments.filter(({ commit }) => commit === current.headSha);
+  const exactProviderComments = providerComments.filter(({ commit, reviewCommit }) => (reviewCommit ?? commit) === current.headSha);
   const startedCandidates = [review.startedAt, ...exactProviderComments.map(({ createdAt }) => createdAt), review.submittedAt]
     .filter(validInstant)
     .sort();
@@ -227,6 +291,7 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
     reviewStartedAt: startedCandidates[0] ?? review.submittedAt,
     reviewCompletedAt: review.submittedAt,
     latestSourcePushAt: current.latestSourcePushAt,
+    sourcePushLeaseHashes: current.sourcePushLeaseHashes ?? [],
     reviewSubmissions,
     reviewComments: providerComments,
     reviewThreads: normalizedThreads,
@@ -241,7 +306,7 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
 export function evaluateExactHeadReceipt({ contract, current, receipt, readbackIncomplete = false }) {
   const codes = [];
   if (readbackIncomplete) codes.push(paginationIncompleteCode);
-  if (current.sourceReadbackIncomplete === true) codes.push("CODEX_REVIEW_INCOMPLETE");
+  if (current.sourceReadbackIncomplete === true) codes.push(current.sourceReadbackCode ?? "CODEX_REVIEW_INCOMPLETE");
   if (current.reviewOnly === true) codes.push("CODEX_REVIEW_RECEIPT_INVALID");
   if (current.lateReviewBlocked === true) codes.push("CODEX_REVIEW_LATE_SENTINEL_BLOCKED");
   if (!receipt) {
@@ -266,6 +331,8 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
     || !validInstant(receipt.reviewStartedAt)
     || !validInstant(receipt.reviewCompletedAt)
     || !validInstant(receipt.latestSourcePushAt)
+    || !Array.isArray(receipt.sourcePushLeaseHashes)
+    || !receipt.sourcePushLeaseHashes.every((hash) => /^[0-9a-f]{64}$/u.test(hash))
     || !Array.isArray(receipt.reviewComments)
     || !Array.isArray(receipt.reviewSubmissions)
     || !Array.isArray(receipt.reviewThreads)
@@ -279,6 +346,7 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
     codes.push("CODEX_REVIEW_STALE_HEAD");
   }
   if (receipt.latestSourcePushAt !== current.latestSourcePushAt
+    || JSON.stringify(receipt.sourcePushLeaseHashes) !== JSON.stringify(current.sourcePushLeaseHashes ?? [])
     || new Date(receipt.reviewCompletedAt).valueOf() <= new Date(current.latestSourcePushAt).valueOf()) {
     codes.push("CODEX_REVIEW_INCOMPLETE");
   }
@@ -292,18 +360,21 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
   return { ok: codes.length === 0, codes: [...new Set(codes)].sort(), receipt };
 }
 
-export function detectLateReview({ contract, current, review = null, reviews = null, threads = [], issueComments = [] }) {
+export function detectLateReview({ contract, current, review = null, reviews = null, threads = [], issueComments = [], eventFindings = [] }) {
   if (!validInstant(current.mergedAt)) return null;
   const allReviews = Array.isArray(reviews) ? reviews : (review ? [review] : []);
   const normalized = normalizeProviderFindings({ contract, current, reviews: allReviews, threads, issueComments });
   const blocking = new Set(contract.blockingSeverities ?? []);
-  const findings = normalized.findings
+  const uniqueFindings = new Map([...normalized.findings, ...(eventFindings ?? [])]
+    .map((finding) => [`${finding.findingId}:${finding.bodyHash}`, finding]));
+  const findings = [...uniqueFindings.values()]
     .filter((finding) => validInstant(finding.updatedAt)
       && new Date(finding.updatedAt) > new Date(current.mergedAt)
       && finding.disposition !== "RESOLVED_BY_LATER_PROVIDER_REREVIEW"
       && blocking.has(finding.severity))
     .map((finding) => ({
       commentId: finding.sourceType === "REVIEW_BODY" ? null : finding.sourceId,
+      sourceId: finding.sourceId,
       commentNodeId: finding.sourceType === "REVIEW_BODY" ? null : finding.sourceNodeId,
       threadId: finding.threadId,
       sourceType: finding.sourceType,
@@ -327,7 +398,7 @@ export function detectLateReview({ contract, current, review = null, reviews = n
     mergedAt: current.mergedAt,
     mergeSha: current.mergeSha,
     reviewedSha: findings[0].reviewedSha,
-    reviewId: review?.reviewId ?? null,
+    reviewId: findings.find(({ sourceType }) => sourceType === "REVIEW_BODY")?.sourceId ?? review?.reviewId ?? null,
     reviewCompletedAt: review?.submittedAt ?? findings.map(({ timestamp }) => timestamp).sort().at(-1),
     findings,
     successorCorrectionOwner: current.successorCorrectionOwner ?? "UNASSIGNED_BLOCKED",
@@ -374,17 +445,24 @@ async function graphRequest(query, variables, token) {
   return graph.data;
 }
 
-export async function paginateGraphConnection({ query, variables, select, token, maxPages, request = graphRequest }) {
+export async function paginateGraphConnection({ query, variables, select, token, maxPages, request = graphRequest, initialAfter = null }) {
   const nodes = [];
-  let after = null;
+  let after = initialAfter;
   for (let page = 1; page <= maxPages; page += 1) {
     const data = await request(query, { ...variables, after }, token);
     const connection = select(data);
-    if (!connection || !Array.isArray(connection.nodes)) throw paginationError();
+    const pageInfo = connection?.pageInfo;
+    if (!connection
+      || !Array.isArray(connection.nodes)
+      || !pageInfo
+      || typeof pageInfo !== "object"
+      || Array.isArray(pageInfo)
+      || typeof pageInfo.hasNextPage !== "boolean"
+      || (pageInfo.endCursor !== null && pageInfo.endCursor !== undefined && typeof pageInfo.endCursor !== "string")) throw paginationError();
     nodes.push(...connection.nodes);
-    if (connection.pageInfo?.hasNextPage !== true) return nodes;
-    if (typeof connection.pageInfo?.endCursor !== "string" || !connection.pageInfo.endCursor || page === maxPages) throw paginationError();
-    after = connection.pageInfo.endCursor;
+    if (pageInfo.hasNextPage !== true) return nodes;
+    if (typeof pageInfo.endCursor !== "string" || !pageInfo.endCursor || page === maxPages) throw paginationError();
+    after = pageInfo.endCursor;
   }
   throw paginationError();
 }
@@ -393,8 +471,123 @@ function hasNextRestPage(link) {
   return /<[^>]+>;\s*rel="next"/u.test(link ?? "");
 }
 
+function sourcePushLeaseDigest(payload) {
+  return sha256(stableValue(payload));
+}
+
+export async function recordSourcePushLease({ repository, prNumber, headSha, pushedAt, token, request = githubRequestPage }) {
+  if (!/^[^/]+\/[^/]+$/u.test(repository ?? "")
+    || !Number.isInteger(prNumber)
+    || prNumber < 1
+    || !validGitSha(headSha)
+    || !validInstant(pushedAt)) throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
+  const payload = { schemaVersion: 1, repository, prNumber, headSha, pushedAt };
+  payload.digest = sourcePushLeaseDigest(payload);
+  const result = await request(`https://api.github.com/repos/${repository}/check-runs`, token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: sourcePushLeaseCheckName,
+      head_sha: headSha,
+      status: "completed",
+      conclusion: "neutral",
+      external_id: `codex-review-source-push:v1:pr=${prNumber}:head=${headSha}:digest=${payload.digest}`,
+      output: {
+        title: `Source push lease for PR #${prNumber}`,
+        summary: JSON.stringify(payload)
+      }
+    })
+  });
+  return { payload, checkRun: result.body };
+}
+
+function parseSourcePushLease(check, { repository, prNumber, headSha }) {
+  if (check?.name !== sourcePushLeaseCheckName) return null;
+  let payload;
+  try { payload = JSON.parse(check.output?.summary); } catch { return false; }
+  const unsigned = structuredClone(payload ?? {});
+  delete unsigned.digest;
+  const external = String(check.external_id ?? "").match(/^codex-review-source-push:v1:pr=(\d+):head=([0-9a-f]{40}):digest=([0-9a-f]{64})$/u);
+  if (!external
+    || check.status !== "completed"
+    || check.conclusion !== "neutral"
+    || check.head_sha !== headSha
+    || check.app?.slug !== "github-actions"
+    || payload?.schemaVersion !== 1
+    || payload.repository !== repository
+    || payload.prNumber !== prNumber
+    || payload.headSha !== headSha
+    || !validInstant(payload.pushedAt)
+    || payload.digest !== sourcePushLeaseDigest(unsigned)
+    || external[1] !== String(prNumber)
+    || external[2] !== headSha
+    || external[3] !== payload.digest) return false;
+  return payload;
+}
+
+export async function readSourcePushLeases(repository, prNumber, headSha, token, options = {}) {
+  const request = options.request ?? githubRequestPage;
+  const maxPages = options.maxPages ?? 20;
+  const runs = [];
+  let totalCount = null;
+  for (let page = 1; page <= maxPages; page += 1) {
+    const result = await request(`https://api.github.com/repos/${repository}/commits/${headSha}/check-runs?check_name=${encodeURIComponent(sourcePushLeaseCheckName)}&filter=all&per_page=100&page=${page}`, token, { method: "GET" });
+    if (!result?.body
+      || !Number.isInteger(result.body.total_count)
+      || !Array.isArray(result.body.check_runs)
+      || (totalCount !== null && totalCount !== result.body.total_count)) throw paginationError();
+    totalCount = result.body.total_count;
+    runs.push(...result.body.check_runs);
+    if (!hasNextRestPage(result.link)) {
+      if (runs.length !== totalCount) throw paginationError();
+      const parsed = runs.map((check) => parseSourcePushLease(check, { repository, prNumber, headSha }));
+      if (parsed.some((entry) => entry === false)) throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
+      return parsed.filter(Boolean).sort((left, right) => left.pushedAt.localeCompare(right.pushedAt));
+    }
+    if (page === maxPages) throw paginationError();
+  }
+  throw paginationError();
+}
+
 function lateReviewIssueMarker(sentinel) {
   return `<!-- codex-review-late-sentinel:v1 pr=${sentinel.prNumber} merge=${sentinel.mergeSha} -->`;
+}
+
+function lateReviewIssueDocument(sentinel) {
+  const marker = lateReviewIssueMarker(sentinel);
+  return {
+    title: `${lateReviewIssueTitlePrefix} PR #${sentinel.prNumber} at ${String(sentinel.mergeSha).slice(0, 12)}`,
+    body: `${marker}\n\nThis issue is a durable fail-closed sentinel. Do not auto-close it.\n\n\`\`\`json\n${JSON.stringify(sentinel, null, 2)}\n\`\`\`\n`
+  };
+}
+
+function durableSentinelResolved(sentinel) {
+  const findings = Array.isArray(sentinel?.findings) ? sentinel.findings : [];
+  const evidence = sentinel?.resolutionEvidence;
+  const sourceIds = findings.map(({ sourceId }) => sourceId).sort();
+  const resolvedSourceIds = Array.isArray(evidence?.correctedSourceIds) ? [...evidence.correctedSourceIds].sort() : [];
+  const threadIds = findings.map(({ threadId }) => threadId).filter(Boolean).sort();
+  const resolvedThreadIds = Array.isArray(evidence?.resolvedThreadIds) ? [...evidence.resolvedThreadIds].sort() : [];
+  return findings.length > 0
+    && findings.every(({ disposition, threadResolutionState }) => disposition === "RESOLVED"
+      && (threadResolutionState === "RESOLVED" || threadResolutionState === "NOT_APPLICABLE"))
+    && evidence?.schemaVersion === 1
+    && Number.isInteger(evidence.successorPr)
+    && evidence.successorPr > 0
+    && evidence.successorBranch === sentinel.successorCorrectionOwner
+    && validGitSha(evidence.successorHead)
+    && validGitSha(evidence.successorTree)
+    && validGitSha(evidence.successorMergeSha)
+    && evidence.exactHeadReviewedCommit === evidence.successorHead
+    && evidence.exactHeadReviewedTree === evidence.successorTree
+    && /^[0-9a-f]{64}$/u.test(evidence.exactHeadReviewReceiptHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(evidence.correctionEvidenceHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(evidence.dispositionEvidenceHash ?? "")
+    && evidence.allThreadsResolved === true
+    && validInstant(evidence.githubThreadResolutionReadbackAt)
+    && validInstant(evidence.completedAt)
+    && JSON.stringify(sourceIds) === JSON.stringify(resolvedSourceIds)
+    && JSON.stringify(threadIds) === JSON.stringify(resolvedThreadIds);
 }
 
 export function parseLateReviewIssue(issue) {
@@ -407,7 +600,7 @@ export function parseLateReviewIssue(issue) {
       || sentinel?.prNumber !== Number(marker[1])
       || sentinel?.mergeSha !== marker[2]
       || !Array.isArray(sentinel?.findings)
-      || !sentinel.findings.some(({ disposition }) => disposition !== "RESOLVED")) return null;
+      || (!sentinel.findings.some(({ disposition }) => disposition !== "RESOLVED") && !durableSentinelResolved(sentinel))) return null;
     return sentinel;
   } catch {
     return null;
@@ -437,9 +630,34 @@ export async function readOpenLateReviewIssues(repository, token, options = {}) 
 
 export async function recordLateReviewIssue({ repository, token, sentinel, request = githubRequestPage, maxPages = 20 }) {
   const marker = lateReviewIssueMarker(sentinel);
+  let recordedSentinel = sentinel;
   const existing = (await readOpenLateReviewIssues(repository, token, { request, maxPages }))
     .find(({ body }) => body.includes(marker));
-  if (existing) return { created: false, issue: existing };
+  let document = lateReviewIssueDocument(sentinel);
+  if (existing) {
+    const claimsResolution = (sentinel.findings ?? []).length > 0
+      && sentinel.findings.every(({ disposition }) => disposition === "RESOLVED");
+    if (claimsResolution) {
+      if (!durableSentinelResolved(sentinel)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+    } else {
+      const existingSentinel = parseLateReviewIssue(existing);
+      if (!existingSentinel) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+      const combined = new Map([...(existingSentinel.findings ?? []), ...(sentinel.findings ?? [])]
+        .map((finding) => [`${finding.sourceType}:${finding.sourceId}:${finding.bodyHash}`, finding]));
+      if (combined.size === (existingSentinel.findings ?? []).length) {
+        return { created: false, updated: false, issue: existing };
+      }
+      recordedSentinel = { ...existingSentinel, ...sentinel, findings: [...combined.values()] };
+      delete recordedSentinel.resolutionEvidence;
+      document = lateReviewIssueDocument(recordedSentinel);
+    }
+    const updated = await request(`https://api.github.com/repos/${repository}/issues/${existing.number}`, token, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(document)
+    });
+    return { created: false, updated: true, issue: updated.body };
+  }
   try {
     await request(`https://api.github.com/repos/${repository}/labels`, token, {
       method: "POST",
@@ -453,13 +671,11 @@ export async function recordLateReviewIssue({ repository, token, sentinel, reque
   } catch (error) {
     if (error.status !== 422) throw error;
   }
-  const title = `${lateReviewIssueTitlePrefix} PR #${sentinel.prNumber} at ${String(sentinel.mergeSha).slice(0, 12)}`;
-  const body = `${marker}\n\nThis issue is a durable fail-closed sentinel. Do not auto-close it.\n\n\`\`\`json\n${JSON.stringify(sentinel, null, 2)}\n\`\`\`\n`;
   try {
     const created = await request(`https://api.github.com/repos/${repository}/issues`, token, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body, labels: [lateReviewIssueLabel] })
+      body: JSON.stringify({ ...document, labels: [lateReviewIssueLabel] })
     });
     return { created: true, issue: created.body };
   } catch (error) {
@@ -470,7 +686,7 @@ export async function recordLateReviewIssue({ repository, token, sentinel, reque
   }
 }
 
-async function readPullRequest(repository, prNumber, token, contract) {
+async function readPullRequest(repository, prNumber, token, contract, sourcePushFloorAt = null) {
   const [owner, name] = repository.split("/");
   const maxPages = contract.boundedReadback?.maxPages ?? 20;
   const metadataQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){number merged mergedAt mergeCommit{oid} headRefName headRefOid commits(last:1){nodes{commit{oid committedDate tree{oid}}}}}}}`;
@@ -480,7 +696,7 @@ async function readPullRequest(repository, prNumber, token, contract) {
   const baseVariables = { owner, name, number: prNumber, first: 100 };
   const labelsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){labels(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{name}}}}}`;
   const reviewsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviews(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}state body createdAt updatedAt submittedAt commit{oid}}}}}}`;
-  const threadQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{id isResolved comments(first:$first){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt path commit{oid}}}}}}}}`;
+  const threadQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{id isResolved comments(first:$first){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt path commit{oid}pullRequestReview{databaseId submittedAt commit{oid}}}}}}}}}`;
   const issueCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt}}}}}`;
   const [labelNodes, reviewNodes, threadNodes, issueCommentNodes] = await Promise.all([
     paginateGraphConnection({ query: labelsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.labels, token, maxPages }),
@@ -488,40 +704,45 @@ async function readPullRequest(repository, prNumber, token, contract) {
     paginateGraphConnection({ query: threadQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.reviewThreads, token, maxPages }),
     paginateGraphConnection({ query: issueCommentsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.comments, token, maxPages })
   ]);
-  const threadCommentsQuery = `query($id:ID!,$first:Int!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt path commit{oid}}}}}}`;
+  const threadCommentsQuery = `query($id:ID!,$first:Int!,$after:String){node(id:$id){... on PullRequestReviewThread{comments(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}body createdAt updatedAt path commit{oid}pullRequestReview{databaseId submittedAt commit{oid}}}}}}`;
   for (const thread of threadNodes) {
-    if (thread.comments?.pageInfo?.hasNextPage !== true) continue;
+    const pageInfo = thread.comments?.pageInfo;
+    if (!thread.comments
+      || !Array.isArray(thread.comments.nodes)
+      || !pageInfo
+      || typeof pageInfo.hasNextPage !== "boolean"
+      || (pageInfo.endCursor !== null && pageInfo.endCursor !== undefined && typeof pageInfo.endCursor !== "string")) throw paginationError();
+    if (pageInfo.hasNextPage !== true) continue;
+    if (typeof pageInfo.endCursor !== "string" || !pageInfo.endCursor) throw paginationError();
     const remaining = await paginateGraphConnection({
       query: threadCommentsQuery,
       variables: { id: thread.id, first: 100 },
       select: (data) => data?.node?.comments,
       token,
-      maxPages
+      maxPages: maxPages - 1,
+      initialAfter: pageInfo.endCursor
     });
     const firstPageIds = new Set((thread.comments.nodes ?? []).map(({ id }) => id));
     thread.comments.nodes.push(...remaining.filter(({ id }) => !firstPageIds.has(id)));
   }
   const commit = pr.commits?.nodes?.[0]?.commit;
-  let workflowRuns = { total_count: 0, workflow_runs: [] };
-  try {
-    workflowRuns = await githubRequest(`https://api.github.com/repos/${repository}/actions/workflows/codex-review-exact-head.yml/runs?head_sha=${pr.headRefOid}&per_page=100`, token);
-  } catch (error) {
-    if (!String(error.message).startsWith("GITHUB_HTTP_404:")) throw error;
-  }
-  const sourceGateStarts = (workflowRuns.workflow_runs ?? [])
-    .filter(({ event }) => event === "pull_request_target")
-    .map(({ created_at: createdAt }) => createdAt)
-    .filter(validInstant);
+  let sourcePushLeases = [];
   let sourceReadbackIncomplete = false;
-  if (process.env.GITHUB_EVENT_NAME === "pull_request_target" && /^\d+$/u.test(process.env.GITHUB_RUN_ID ?? "")) {
-    try {
-      const currentRun = await githubRequest(`https://api.github.com/repos/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`, token);
-      if (validInstant(currentRun.created_at)) sourceGateStarts.push(currentRun.created_at);
-    } catch {
+  let sourceReadbackCode = null;
+  try {
+    sourcePushLeases = await readSourcePushLeases(repository, prNumber, pr.headRefOid, token, { maxPages });
+  } catch (error) {
+    if (String(error.message).startsWith("GITHUB_HTTP_404:")) sourcePushLeases = [];
+    else if ([paginationIncompleteCode, "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID"].includes(error.message)) {
       sourceReadbackIncomplete = true;
+      sourceReadbackCode = error.message;
     }
+    else throw error;
   }
-  const latestSourcePushAt = [commit?.committedDate, ...sourceGateStarts].filter(validInstant).sort().at(-1);
+  const latestSourcePushAt = [commit?.committedDate, sourcePushFloorAt, ...sourcePushLeases.map(({ pushedAt }) => pushedAt)]
+    .filter(validInstant)
+    .sort()
+    .at(-1);
   const threads = threadNodes.map((thread) => ({
     threadId: thread.id,
     isResolved: thread.isResolved,
@@ -532,6 +753,9 @@ async function readPullRequest(repository, prNumber, token, contract) {
       body: comment.body,
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
+      submittedAt: comment.pullRequestReview?.submittedAt ?? null,
+      reviewId: comment.pullRequestReview?.databaseId ?? null,
+      reviewCommit: comment.pullRequestReview?.commit?.oid ?? null,
       path: comment.path,
       commit: comment.commit?.oid ?? null
     }))
@@ -564,16 +788,18 @@ async function readPullRequest(repository, prNumber, token, contract) {
       headBranch: pr.headRefName,
       headTree: commit?.tree?.oid ?? null,
       latestSourcePushAt,
+      sourcePushLeaseHashes: sourcePushLeases.map(({ digest }) => digest).sort(),
       mergedAt: pr.mergedAt,
       mergeSha: pr.mergeCommit?.oid ?? null,
       providerReviewsExist: false,
       labels: labelNodes.map(({ name: label }) => label).filter(Boolean).sort(),
-      sourceReadbackIncomplete
+      sourceReadbackIncomplete,
+      sourceReadbackCode
     },
     reviews,
     threads,
     issueComments,
-    readbackIncomplete: (workflowRuns.total_count ?? 0) > 100
+    readbackIncomplete: false
   };
 }
 
@@ -608,15 +834,28 @@ async function main() {
   let issueComments;
   let readbackIncomplete = false;
   let token = null;
+  let event = {};
+  let eventName = options.eventName ?? process.env.GITHUB_EVENT_NAME ?? "";
   if (options.fixture) {
     ({ current, reviews = [], threads = [], issueComments = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
   } else {
     const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
     token = process.env.GITHUB_TOKEN;
-    const event = options.event ? JSON.parse(readText(options.event)) : {};
+    event = options.event ? JSON.parse(readText(options.event)) : {};
     const prNumber = Number(options.prNumber ?? event.pull_request?.number ?? (event.issue?.pull_request ? event.issue.number : null));
     if (!repository || !Number.isInteger(prNumber) || prNumber < 1 || !token) throw new Error("CODEX_REVIEW_INPUT_MISSING");
-    ({ current, reviews, threads, issueComments, readbackIncomplete } = await readPullRequest(repository, prNumber, token, contract));
+    let sourcePushFloorAt = null;
+    if (eventName === "pull_request_target" && event.action === "synchronize") {
+      const eventHead = event.pull_request?.head?.sha;
+      if (!validGitSha(eventHead) || !/^\d+$/u.test(process.env.GITHUB_RUN_ID ?? "")) {
+        throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
+      }
+      const currentRun = await githubRequest(`https://api.github.com/repos/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`, token);
+      if (!validInstant(currentRun?.created_at)) throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
+      sourcePushFloorAt = currentRun.created_at;
+      await recordSourcePushLease({ repository, prNumber, headSha: eventHead, pushedAt: sourcePushFloorAt, token });
+    }
+    ({ current, reviews, threads, issueComments, readbackIncomplete } = await readPullRequest(repository, prNumber, token, contract, sourcePushFloorAt));
     const truth = readJson("config/assurance/current-truth-v1.json");
     current.reviewOnly = current.labels.includes(reviewOnlyLabel)
       || (truth.openReviewOnlyPrs ?? []).some(({ number, disposition }) => number === prNumber && String(disposition).includes("never-merge"));
@@ -634,7 +873,7 @@ async function main() {
     }
     current.openDurableLateReviewSentinels = durableLateSentinels;
     current.lateReviewBlocked = [...(truth.lateReviewSentinels ?? []), ...durableLateSentinels].some((sentinel) => {
-      const unresolved = (sentinel.findings ?? []).some(({ disposition }) => disposition !== "RESOLVED");
+      const unresolved = !durableSentinelResolved(sentinel);
       const allowedOwners = [sentinel.successorCorrectionOwner, sentinel.assuranceControlOwner, ...(sentinel.authorizedBootstrapOwners ?? [])];
       return unresolved && !allowedOwners.includes(current.headBranch);
     });
@@ -649,7 +888,16 @@ async function main() {
   const latestProviderReview = providerReviews.filter(({ submittedAt }) => validInstant(submittedAt)).sort((left, right) => left.submittedAt.localeCompare(right.submittedAt)).at(-1) ?? null;
   const receipt = selectedReview ? buildExactHeadReceipt({ contract, current, review: selectedReview, reviews, threads, issueComments }) : null;
   const evaluation = evaluateExactHeadReceipt({ contract, current, receipt, readbackIncomplete });
-  const lateReviewSentinel = detectLateReview({ contract, current, review: latestProviderReview, reviews, threads, issueComments });
+  const eventFinding = normalizeLateReviewEvent({ eventName, event, contract });
+  const lateReviewSentinel = detectLateReview({
+    contract,
+    current,
+    review: latestProviderReview,
+    reviews,
+    threads,
+    issueComments,
+    eventFindings: eventFinding ? [eventFinding] : []
+  });
   let durableLateReviewIssue = null;
   if (lateReviewSentinel) {
     evaluation.ok = false;
@@ -688,7 +936,9 @@ async function main() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => emit("assurance:codex-review-exact-head", false, {
     classification: "EXACT_HEAD_REVIEW_BLOCKED",
-    codes: [error.message === paginationIncompleteCode ? paginationIncompleteCode : "CODEX_REVIEW_RECEIPT_INVALID"],
+    codes: [[paginationIncompleteCode, "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID"].includes(error.message)
+      ? error.message
+      : "CODEX_REVIEW_RECEIPT_INVALID"],
     error: error.message
   }));
 }

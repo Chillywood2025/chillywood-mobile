@@ -97,7 +97,15 @@ test("legacy status text cannot substitute a historical frozen D2A checkpoint", 
   assert.deepEqual(result.findings, ["ACTIVE_TASK_NONE"]);
 });
 
-const freshnessContract = read("config/assurance/current-truth-contract-v1.json").freshness;
+const canonicalFreshnessContract = read("config/assurance/current-truth-contract-v1.json").freshness;
+const freshnessContract = {
+  ...canonicalFreshnessContract,
+  factRegistry: [
+    { factId: "repository.fixture.exact-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+    { factId: "provider.supabase.fixture.historical", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE" },
+    { factId: "artifact.google-play.fixture.signed", freshnessClass: "SIGNED_ARTIFACT", authorityAllowed: "SIGNED_ARTIFACT_ONLY", platform: "ANDROID", provider: "GOOGLE_PLAY" }
+  ]
+};
 const externalEvidencePolicy = read("config/assurance/external-evidence-receipt-v1.json");
 const freshnessNow = new Date("2026-08-09T18:05:09Z");
 const repositorySource = {
@@ -107,10 +115,11 @@ const repositorySource = {
   expiresAt: "2026-08-10T18:05:08Z",
   evidenceSourceId: "repository-source-evidence",
   evidenceMode: "local-offline-and-github-read-only",
-  factsCovered: ["exact source identity"],
+  factsCovered: ["repository.fixture.exact-source"],
   freshnessClass: "REPOSITORY_SOURCE",
   authorityAllowed: "REPOSITORY_ONLY",
-  platform: "NONE"
+  platform: "NONE",
+  provider: "NONE"
 };
 const staleProvider = {
   id: "provider-critical-fixture",
@@ -119,14 +128,14 @@ const staleProvider = {
   expiresAt: "2026-08-02T14:00:44Z",
   evidenceSourceId: "provider-readback-evidence",
   evidenceMode: "local-and-linked-read-only",
-  factsCovered: ["historical provider fact"],
+  factsCovered: ["provider.supabase.fixture.historical"],
   freshnessClass: "PROVIDER_CRITICAL",
   authorityAllowed: "PROVIDER_READBACK_ONLY",
   platform: "NONE",
   provider: "SUPABASE"
 };
 const freshnessSources = [
-  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt, covers: repositorySource.factsCovered, freshnessClass: repositorySource.freshnessClass, authorityAllowed: repositorySource.authorityAllowed, platform: repositorySource.platform },
+  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt, covers: repositorySource.factsCovered, freshnessClass: repositorySource.freshnessClass, authorityAllowed: repositorySource.authorityAllowed, platform: repositorySource.platform, provider: repositorySource.provider },
   { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt, covers: staleProvider.factsCovered, freshnessClass: staleProvider.freshnessClass, authorityAllowed: staleProvider.authorityAllowed, platform: staleProvider.platform, provider: staleProvider.provider, payloadHash: "1".repeat(64) }
 ];
 const sourceRequirement = {
@@ -168,6 +177,7 @@ const syntheticExternalEvidenceVerifier = {
 };
 const evaluateClaims = (input) => evaluateFreshnessClaims({
   ...input,
+  allowSyntheticFactRegistry: true,
   evidenceSourceVerifier: () => true,
   externalEvidenceVerifier: syntheticExternalEvidenceVerifier
 });
@@ -231,6 +241,7 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     evidenceSources: [freshnessSources[1]],
     freshness: freshnessContract,
     now: freshnessNow,
+    allowSyntheticFactRegistry: true,
     evidenceSourceVerifier: () => false
   });
   assert.equal(forgedProviderTimestamp.ok, false, "provider timestamp requires immutable committed provenance");
@@ -280,6 +291,7 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     evidenceSourceId: "android-signed-evidence",
     provider: "GOOGLE_PLAY"
   };
+  androidSigned.factsCovered = ["artifact.google-play.fixture.signed"];
   const androidSignedSource = { id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt, covers: androidSigned.factsCovered, freshnessClass: androidSigned.freshnessClass, authorityAllowed: androidSigned.authorityAllowed, platform: androidSigned.platform, provider: androidSigned.provider, payloadHash: "2".repeat(64) };
   const androidEvaluation = evaluateClaims({
     claims: [androidSigned],
@@ -319,6 +331,7 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     evidenceSources: [freshnessSources[1]],
     freshness: freshnessContract,
     now: new Date(staleProvider.expiresAt),
+    allowSyntheticFactRegistry: true,
     evidenceSourceVerifier: () => true
   });
   assert.equal(selfAttestedProvider.ok, false, "committed prose alone cannot mint external authority");
