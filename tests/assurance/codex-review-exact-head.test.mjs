@@ -1220,6 +1220,14 @@ test("known unassigned discovery sentinels derive owners only from the immutable
   ]);
   assert.deepEqual(lateReviewAllowedOwners({
     ...discovery,
+    assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1"
+  }), []);
+  assert.deepEqual(lateReviewAllowedOwners({
+    ...discovery,
+    authorizedBootstrapOwners: ["codex/assurance-active-task-and-claim-freshness-a1"]
+  }), []);
+  assert.deepEqual(lateReviewAllowedOwners({
+    ...discovery,
     successorCorrectionOwner: "codex/unrelated-next",
     assuranceControlOwner: "codex/unrelated-next",
     authorizedBootstrapOwners: ["codex/unrelated-next"]
