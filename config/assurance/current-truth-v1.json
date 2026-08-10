@@ -443,32 +443,47 @@
   "activeTaskBinding": {
     "schemaVersion": 1,
     "featureId": "assurance-efficiency-e0",
-    "implementationPr": 201,
+    "implementationPr": 205,
     "implementationBranch": "codex/assurance-active-task-and-claim-freshness-a1",
-    "implementationBindingId": "assurance-active-task-claim-freshness-a1-pr201-v1",
-    "immutableSourceHead": "f32d7b5298290035b1af38346339becd6227fd62",
-    "immutableSourceTree": "9b5e2d049419ad16d1607510150412353d6a094c",
-    "currentImplementationHead": "f32d7b5298290035b1af38346339becd6227fd62",
-    "currentImplementationTree": "9b5e2d049419ad16d1607510150412353d6a094c",
-    "phase": "COMPLETE",
-    "executionState": "ASSURANCE_CONTROL_A1_MERGED_S0_NEXT_D2A_FROZEN",
+    "implementationBindingId": "assurance-late-review-owner-registry-bootstrap-pr205-v1",
+    "immutableSourceHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+    "immutableSourceTree": "e90c18e159b8f671c8851df0398ce1996ede4b33",
+    "currentImplementationHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+    "currentImplementationTree": "e90c18e159b8f671c8851df0398ce1996ede4b33",
+    "phase": "FORMAL_REVIEW",
+    "executionState": "ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-merged-successor-head-isolation-source-freeze-20260810-0237", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.source"], "subjectHead": "f32d7b5298290035b1af38346339becd6227fd62", "subjectTree": "9b5e2d049419ad16d1607510150412353d6a094c"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.source"], "subjectHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7", "subjectTree": "e90c18e159b8f671c8851df0398ce1996ede4b33"}],
     "proofTiersUnderEvaluation": ["T1_SOURCE"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
-      "prNumber": 201,
-      "commentId": 5235281604,
+      "prNumber": 205,
+      "commentId": 5235449838,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T02:38:20Z",
-      "updatedAt": "2026-08-10T02:38:20Z",
-      "bodySha256": "5c65aae2b962921f1bbd20d58234a434a3423a44a50b82da9a87ec123be7d6f6",
-      "subjectHash": "62f978aa8ca6e27a0c635a08de11fb53787e55c3b3a59daa1263a94eaba1d83a"
+      "createdAt": "2026-08-10T03:11:06Z",
+      "updatedAt": "2026-08-10T03:11:06Z",
+      "bodySha256": "2c61fb11985cbc652850c794f5bf2a2ae532b0f20962f3ad55d75b683f6a2525",
+      "subjectHash": "7e10875ae111bcf7584ac59004f4a6dce54e63ccdc7c29a9d240eff5d605c849"
     }
   },
   "freshnessClaims": [
+    {
+      "id": "repository-source-a1-late-review-owner-registry-bootstrap",
+      "status": "CURRENT",
+      "observedAt": "2026-08-10T02:48:20Z",
+      "expiresAt": "2026-08-11T02:48:20Z",
+      "evidenceSourceId": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
+      "evidenceMode": "local-offline-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.source"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectTree": "e90c18e159b8f671c8851df0398ce1996ede4b33"
+    },
     {
       "id": "repository-source-a1-assurance-control-final",
       "status": "CURRENT",
@@ -548,7 +563,15 @@
       "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
     }
   ],
-  "openImplementationPrs": [],
+  "openImplementationPrs": [
+    {
+      "number": 205,
+      "branch": "codex/assurance-active-task-and-claim-freshness-a1",
+      "head": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "state": "open-draft-current",
+      "disposition": "Owner-authorized bounded bootstrap correction binds recovered PR 195 late-review ownership before the exact-head check is restored"
+    }
+  ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -633,8 +656,9 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201"],
-    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_A1_COMPLETE_S0_NEXT_D2A_FROZEN",
+    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP_S0_NEXT_D2A_FROZEN",
     "nextActions": [
+      "Complete the bounded PR #205 late-review owner-registry bootstrap correction, restore and read back the exact-head required check immediately, then synchronize post-A1 truth.",
       "Implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
       "Only after S0 completes may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -650,12 +674,20 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T02:48:20Z",
-  "freshnessDeadline": "2026-08-11T02:48:20Z",
+  "timestamp": "2026-08-10T03:07:50Z",
+  "freshnessDeadline": "2026-08-11T03:07:50Z",
   "evidenceSources": [
     {
       "id": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
       "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-10T02:48:20Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectTree": "e90c18e159b8f671c8851df0398ce1996ede4b33",
       "covers": [
         "repository.assurance-control.a1.source",
         "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
