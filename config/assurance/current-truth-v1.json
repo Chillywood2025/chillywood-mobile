@@ -446,26 +446,26 @@
     "implementationPr": 205,
     "implementationBranch": "codex/assurance-active-task-and-claim-freshness-a1",
     "implementationBindingId": "assurance-late-review-owner-registry-bootstrap-pr205-v1",
-    "immutableSourceHead": "4284d0165b9845eaa9fd96d22896c1f202bf4e20",
-    "immutableSourceTree": "5027ad06183edc46958dd23fa8be68752fcccbc2",
-    "currentImplementationHead": "4284d0165b9845eaa9fd96d22896c1f202bf4e20",
-    "currentImplementationTree": "5027ad06183edc46958dd23fa8be68752fcccbc2",
+    "immutableSourceHead": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+    "immutableSourceTree": "96515ec2be0dc0ca2bfe971c69c3122d88a6b658",
+    "currentImplementationHead": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+    "currentImplementationTree": "96515ec2be0dc0ca2bfe971c69c3122d88a6b658",
     "phase": "FORMAL_REVIEW",
     "executionState": "ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-tombstone-correction-carrier-separation-source-freeze-20260810-0354", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.late-review-tombstone-admission"], "subjectHead": "4284d0165b9845eaa9fd96d22896c1f202bf4e20", "subjectTree": "5027ad06183edc46958dd23fa8be68752fcccbc2"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-tombstone-correction-carrier-separation-source-freeze-20260810-0354", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.late-review-tombstone-admission"], "subjectHead": "99dfa85cc8442d6deb64e624769aff1ceab3a16c", "subjectTree": "96515ec2be0dc0ca2bfe971c69c3122d88a6b658"}],
     "proofTiersUnderEvaluation": ["T1_SOURCE"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 205,
-      "commentId": 5235671308,
+      "commentId": 5235680755,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T03:53:12Z",
-      "updatedAt": "2026-08-10T03:53:12Z",
-      "bodySha256": "2dfe914aab282bc7194c07f6a6edd5f914b318268c48af814c2887c5907a5dca",
-      "subjectHash": "ab958ff14311cd623e2e34537f1a569e6fc8e516bfce26655fac36e5933b8c49"
+      "createdAt": "2026-08-10T03:55:08Z",
+      "updatedAt": "2026-08-10T03:55:08Z",
+      "bodySha256": "e370e411cf110c6eb891891e21e9282ee8d5620ef651ea6fed626bae5491b1b7",
+      "subjectHash": "18294e9828584de75e28c57b275789f71a674dfb5deb14cb58de6900c696e41d"
     }
   },
   "freshnessClaims": [
@@ -481,8 +481,8 @@
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "4284d0165b9845eaa9fd96d22896c1f202bf4e20",
-      "subjectTree": "5027ad06183edc46958dd23fa8be68752fcccbc2"
+      "subjectHead": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+      "subjectTree": "96515ec2be0dc0ca2bfe971c69c3122d88a6b658"
     },
     {
       "id": "repository-source-a1-complete-late-sentinel-inventory",
@@ -612,7 +612,7 @@
     {
       "number": 205,
       "branch": "codex/assurance-active-task-and-claim-freshness-a1",
-      "head": "4284d0165b9845eaa9fd96d22896c1f202bf4e20",
+      "head": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
       "state": "open",
       "disposition": "Owner-authorized bounded bootstrap correction separates exact successor correction ownership from protected-main tombstone admission before the exact-head check is restored"
     }
@@ -703,7 +703,7 @@
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201"],
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP_S0_NEXT_D2A_FROZEN",
     "nextActions": [
-      "Complete the bounded PR #205 late-review owner-registry bootstrap with its FORMAL_REVIEW tier boundary, exact hash-bound complete PR 194/195 sentinel inventory, and protected-main-only resolution tombstone admission; restore and read back the exact-head required check immediately, then synchronize post-A1 truth.",
+      "Complete the bounded PR #205 late-review owner-registry bootstrap with its FORMAL_REVIEW tier boundary, exact hash-bound complete PR 194/195 sentinel inventory, canonical correction-owner enforcement, and distinct exact-gated protected-main tombstone admission carrier; restore and read back the exact-head required check immediately, then synchronize post-A1 truth.",
       "Implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
       "Only after S0 completes may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -775,7 +775,15 @@
       "covers": [
         "repository.assurance-control.a1.late-review-tombstone-admission",
         "Late-review resolution tombstones retain original sentinels and require byte-exact protected-main first-parent admission after the exact-review ruleset anchor"
-      ]
+      ],
+      "observedAt": "2026-08-10T03:54:07Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+      "subjectHead": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+      "subjectTree": "96515ec2be0dc0ca2bfe971c69c3122d88a6b658"
     },
     {
       "id": "a1-late-review-tombstone-admission-source-freeze-20260810-0342",
