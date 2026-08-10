@@ -704,9 +704,36 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T03:25:40Z",
-  "freshnessDeadline": "2026-08-11T03:25:40Z",
+  "timestamp": "2026-08-10T03:42:14Z",
+  "freshnessDeadline": "2026-08-11T03:42:14Z",
   "evidenceSources": [
+    {
+      "id": "a1-late-review-tombstone-admission-source-freeze-20260810-0342",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:42:14Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "09d12f2cd3b4d1d07067bdb5b068ebd90cabb8cab28890eeb29c054e9e8286f2",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels and require byte-exact protected-main first-parent admission after the exact-review ruleset anchor"
+      ]
+    },
     {
       "id": "a1-complete-late-sentinel-inventory-source-freeze-20260810-0325",
       "mode": "local-and-github-read-only",

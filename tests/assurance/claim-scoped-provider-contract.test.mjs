@@ -270,6 +270,11 @@ test("repository control readback facts are exact and hash-bound", () => {
   const removedSentinel = structuredClone(inventory);
   removedSentinel.readbackFacts.sentinels = removedSentinel.readbackFacts.sentinels.filter(({ prNumber }) => prNumber !== 195);
   assert.notEqual(repositoryReadbackEvidenceHash(removedSentinel), inventory.readbackSha256);
+  const tombstoneAdmission = truth.evidenceSources.find(({ id }) => id === "a1-late-review-tombstone-admission-source-freeze-20260810-0342");
+  assert.equal(repositoryReadbackEvidenceHash(tombstoneAdmission), tombstoneAdmission.readbackSha256);
+  const widenedAdmission = structuredClone(tombstoneAdmission);
+  widenedAdmission.readbackFacts.admissionPolicy.branchLocalAdmissionAllowed = true;
+  assert.notEqual(repositoryReadbackEvidenceHash(widenedAdmission), tombstoneAdmission.readbackSha256);
   assert.equal(repositoryReadbackEvidenceHash({ ...source, readbackFacts: [] }), null);
 });
 
