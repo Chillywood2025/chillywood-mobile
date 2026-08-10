@@ -109,9 +109,12 @@ const observationHash = (observation) => {
   return sha256(stableJson(payload));
 };
 
-export function validateOwnerFinalCarrierGithubReadback(bindingReceipt, observation) {
+export function validateOwnerFinalCarrierGithubReadback(bindingReceipt, observation, now = new Date()) {
   const errors = [];
   const body = String(observation?.body ?? "");
+  const updatedAt = Date.parse(observation?.updatedAt ?? "");
+  const observedAt = Date.parse(observation?.observedAt ?? "");
+  const validationNow = now instanceof Date ? now.valueOf() : Date.parse(now ?? "");
   const requiredBodyLines = [
     bindingReceipt?.closureClassification,
     `Exact target: ${bindingReceipt?.admittedCarrierHead}`,
@@ -136,6 +139,9 @@ export function validateOwnerFinalCarrierGithubReadback(bindingReceipt, observat
     || observation?.bodySha256 !== bindingReceipt?.bodySha256
     || observation?.bodySha256 !== sha256(body)
     || observation?.evidenceMode !== "github-read-only"
+    || ![updatedAt, observedAt, validationNow].every(Number.isFinite)
+    || observedAt < updatedAt
+    || observedAt > validationNow
     || observation?.observationHash !== observationHash(observation)
     || !requiredBodyLines.every(exactLineOnce)) errors.push("github ruleset readback: owner final-carrier GitHub observation mismatch");
   return errors;
@@ -241,7 +247,7 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
     || !same(mergeIdentity?.carrierDeltaPaths, finalCarrierBindingReceipt?.carrierDeltaPaths)) add("owner final-carrier binding receipt mismatch");
   if (contract?.ownerFinalCarrierGithubReadback !== ownerFinalCarrierGithubReadbackPath
     || exception?.ownerFinalCarrierGithubObservationHash !== finalCarrierGithubReadback?.observationHash) add("owner final-carrier GitHub observation binding mismatch");
-  errors.push(...validateOwnerFinalCarrierGithubReadback(finalCarrierBindingReceipt, finalCarrierGithubReadback));
+  errors.push(...validateOwnerFinalCarrierGithubReadback(finalCarrierBindingReceipt, finalCarrierGithubReadback, now));
   if (exception?.pullRequest !== authorizationReceipt?.prNumber || exception?.mergeSha !== window?.mainAfterRestoration) add("bootstrap subject mismatch");
   if (exception?.temporarilyRemovedStatusCheck !== exactHeadCheck
     || exception?.phase1ChecksPreserved !== phase1Checks.length

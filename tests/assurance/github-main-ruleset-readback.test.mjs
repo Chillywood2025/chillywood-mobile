@@ -99,6 +99,20 @@ test("owner final-carrier authority requires the exact raw GitHub observation", 
   }
 });
 
+test("owner final-carrier observation chronology is fail closed", () => {
+  for (const observedAt of [undefined, "2026-08-10T04:16:25Z", "2036-08-10T06:30:00Z"]) {
+    const observation = structuredClone(finalCarrierGithubReadback);
+    if (observedAt === undefined) delete observation.observedAt;
+    else observation.observedAt = observedAt;
+    const payload = structuredClone(observation);
+    delete payload.observationHash;
+    observation.observationHash = sha256(stableJson(payload));
+    const candidate = structuredClone(contract);
+    candidate.authorizedBootstrapException.ownerFinalCarrierGithubObservationHash = observation.observationHash;
+    assert.ok(validate(candidate, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, observation).some((error) => error.includes("GitHub observation")));
+  }
+});
+
 test("repository ruleset readback expires after its claim-scoped 24-hour window", () => {
   assert.ok(validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2036-08-10T06:30:00Z").some((error) => error.includes("ruleset readback stale")));
   const candidate = structuredClone(contract);
