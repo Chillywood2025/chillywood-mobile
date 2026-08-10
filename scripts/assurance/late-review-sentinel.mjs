@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewSentinelResolved, mergeLateReviewSentinelRecords, readJson } from "./lib.mjs";
+import { args, emit, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewSentinelResolved, mergeLateReviewSentinelRecords, readJson } from "./lib.mjs";
 import { parseLateReviewIssue, readMergedLateReviewLedgerSentinels, readOpenLateReviewIssues, verifyLateReviewResolutionGithub } from "./codex-review-exact-head.mjs";
 
 export { lateReviewSentinelResolved } from "./lib.mjs";
@@ -10,7 +10,7 @@ export function unresolvedLateReviewSentinels(record, options = {}) {
 }
 
 export function validateLateReviewSentinelState(record, options = {}) {
-  const findings = [];
+  const findings = lateReviewRegistryCoverageFindings(record?.lateReviewSentinels);
   for (const sentinel of record?.lateReviewSentinels ?? []) {
     const dispositions = (sentinel.findings ?? []).map(({ disposition }) => disposition);
     const claimsResolution = dispositions.some((disposition) => disposition === "RESOLVED");

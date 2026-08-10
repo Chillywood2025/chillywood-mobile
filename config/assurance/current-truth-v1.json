@@ -689,9 +689,54 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T03:16:55Z",
-  "freshnessDeadline": "2026-08-11T03:16:55Z",
+  "timestamp": "2026-08-10T03:25:40Z",
+  "freshnessDeadline": "2026-08-11T03:25:40Z",
   "evidenceSources": [
+    {
+      "id": "a1-complete-late-sentinel-inventory-source-freeze-20260810-0325",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:25:40Z",
+        "ownerRegistryEntries": [
+          {
+            "prNumber": 194,
+            "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+            "successorOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+            "successorOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "sentinels": [
+          {
+            "prNumber": 194,
+            "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+            "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+            "reviewId": 4892095448,
+            "findingCount": 5,
+            "durableIssue": 203,
+            "durableIssueBodySha256": "5120854b3e5f710e239b5910c61281ad961371654cf83194cae7f827f7368f5b"
+          },
+          {
+            "prNumber": 195,
+            "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+            "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+            "reviewId": 4892031892,
+            "findingCount": 3,
+            "durableIssue": null
+          }
+        ]
+      },
+      "readbackSha256": "6b970e4800625b4a79db0fae8212222093c2c5412e8e6264605ee8f5a4f12ecb",
+      "covers": [
+        "repository.assurance-control.a1.complete-late-sentinel-inventory",
+        "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records"
+      ]
+    },
     {
       "id": "a1-post-merge-control-readback-source-freeze-20260810-0316",
       "mode": "github-read-only",

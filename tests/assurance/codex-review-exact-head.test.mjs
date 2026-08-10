@@ -1200,6 +1200,19 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
   assert.deepEqual(validateLateReviewSentinelState(promoted).map(({ id }) => id).sort(), ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", "LATE_REVIEW_SUCCESSOR_GATES_INVALID"]);
 });
 
+test("every immutable late-review owner entry requires one canonical sentinel or verified tombstone", () => {
+  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  assert.deepEqual(validateLateReviewSentinelState(truth), []);
+  for (const prNumber of [194, 195]) {
+    const removed = structuredClone(truth);
+    removed.lateReviewSentinels = removed.lateReviewSentinels.filter(({ prNumber: candidate }) => candidate !== prNumber);
+    assert(validateLateReviewSentinelState(removed).some((finding) => finding.id === "LATE_REVIEW_REQUIRED_SENTINEL_MISSING" && finding.prNumber === prNumber));
+  }
+  const duplicated = structuredClone(truth);
+  duplicated.lateReviewSentinels.push(structuredClone(duplicated.lateReviewSentinels.find(({ prNumber }) => prNumber === 195)));
+  assert(validateLateReviewSentinelState(duplicated).some((finding) => finding.id === "LATE_REVIEW_REQUIRED_SENTINEL_DUPLICATE" && finding.prNumber === 195));
+});
+
 test("a late-review sentinel cannot authorize its own branch exceptions", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   const forged = structuredClone(truth);
