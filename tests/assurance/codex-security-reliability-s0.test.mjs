@@ -546,7 +546,7 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
   assert.equal(scopeWaiver.secondHighRiskDomain, false);
   assert.equal(scopeWaiver.newTimeboxHours, 8);
   assert.deepEqual(scopeWaiver.supportingDomains, ["CI-test-infrastructure", "documentation-metadata"]);
-  assert.deepEqual(scopeWaiver.fileBudget, { default: 15, waivedMaximum: 24 });
+  assert.deepEqual(scopeWaiver.fileBudget, { default: 15, waivedMaximum: 25 });
   assert.deepEqual(scopeWaiver.lineBudget, { default: 1200, waivedMaximum: 2200 });
 
   for (const record of incidents.incidents) {
