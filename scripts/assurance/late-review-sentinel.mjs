@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, lateReviewAllowedOwners, lateReviewSentinelResolved, readJson } from "./lib.mjs";
+import { args, emit, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewSentinelResolved, mergeLateReviewSentinelRecords, readJson } from "./lib.mjs";
 import { parseLateReviewIssue, readMergedLateReviewLedgerSentinels, readOpenLateReviewIssues, verifyLateReviewResolutionGithub } from "./codex-review-exact-head.mjs";
 
 export { lateReviewSentinelResolved } from "./lib.mjs";
@@ -56,13 +56,13 @@ export async function readDurableLateReviewSentinels(repository, token, options 
 }
 
 export function mergeUnresolvedLateReviewSentinels({ globalLedgerSentinels = [], canonicalSentinels = [], durable = [] }) {
-  const verifiedResolvedKeys = new Set(durable
-    .filter(({ resolutionVerified }) => resolutionVerified === true)
-    .map(({ sentinel }) => `${sentinel.prNumber}:${sentinel.mergeSha}`));
   const durableSentinels = durable.filter(({ resolutionVerified }) => resolutionVerified !== true).map(({ sentinel }) => sentinel);
-  return [...new Map([...globalLedgerSentinels, ...canonicalSentinels, ...durableSentinels]
-    .filter((sentinel) => !verifiedResolvedKeys.has(`${sentinel.prNumber}:${sentinel.mergeSha}`))
-    .map((sentinel) => [`${sentinel.prNumber}:${sentinel.mergeSha}`, sentinel])).values()];
+  const authoritative = mergeLateReviewSentinelRecords([...globalLedgerSentinels, ...canonicalSentinels, ...durableSentinels]);
+  return authoritative.filter((sentinel) => !durable.some((entry) => entry.resolutionVerified === true
+    && entry.sentinel?.repository === sentinel.repository
+    && entry.sentinel?.prNumber === sentinel.prNumber
+    && entry.sentinel?.mergeSha === sentinel.mergeSha
+    && lateReviewFindingSetEqual(entry.sentinel.findings, sentinel.findings)));
 }
 
 async function main() {

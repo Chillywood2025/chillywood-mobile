@@ -613,6 +613,14 @@
   "freshnessDeadline": "2026-08-10T18:05:08Z",
   "evidenceSources": [
     {
+      "id": "a1-assurance-control-source-freeze-final-20260809-1805",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
       "id": "a1-assurance-control-source-freeze-20260809-1805",
       "mode": "local-offline-and-github-read-only",
       "observedAt": "2026-08-09T18:05:08Z",

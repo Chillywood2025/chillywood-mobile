@@ -26,7 +26,9 @@ const binding = {
     platform: "NONE",
     evidenceSourceId: "d2a-microphone-correction-merge-closeout-20260809-1805",
     authorityAllowed: "REPOSITORY_ONLY",
-    requiredFacts: ["repository.active-implementation.immutable-synchronized-source"]
+    requiredFacts: ["repository.active-implementation.immutable-synchronized-source"],
+    subjectHead: "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+    subjectTree: "4ce01fa17e4184f2523b82a10401e3b3f59dd641"
   }],
   proofTiersUnderEvaluation: ["T1_SOURCE"]
 };

@@ -81,7 +81,11 @@ function validateStructuredBinding(value) {
       && typeof requirement.authorityAllowed === "string"
       && Array.isArray(requirement.requiredFacts)
       && requirement.requiredFacts.length > 0
-      && requirement.requiredFacts.every((fact) => typeof fact === "string" && fact.length > 0));
+      && requirement.requiredFacts.every((fact) => typeof fact === "string" && fact.length > 0)
+      && (requirement.freshnessClass !== "REPOSITORY_SOURCE"
+        || (sha40(requirement.subjectHead) && sha40(requirement.subjectTree)
+          && requirement.subjectHead === value.immutableSourceHead
+          && requirement.subjectTree === value.immutableSourceTree)));
   const declaredFreshnessClasses = requiredFreshnessClaimsValid
     ? new Set(value.requiredFreshnessClaims.map(({ freshnessClass }) => freshnessClass))
     : new Set();

@@ -3,9 +3,11 @@ import {
   args,
   emit,
   lateReviewAllowedOwners,
+  lateReviewFindingSetEqual,
   lateReviewResolutionStructureValid,
   lateReviewResolutionSubjectHash,
   lateReviewSentinelResolved,
+  mergeLateReviewSentinelRecords,
   readJson,
   readText,
   sha256,
@@ -1366,7 +1368,7 @@ async function main() {
     current.successorCorrectionOwner = matchingLateSentinel?.successorCorrectionOwner ?? null;
     let durableLateSentinels = [];
     let globalLateLedgerSentinels = [];
-    const verifiedDurableResolutions = new Map();
+    const verifiedDurableResolutions = [];
     try {
       const durableIssues = await readOpenLateReviewIssues(repository, token, { maxPages: contract.lateReviewIssue?.maxReadPages ?? 20 });
       durableLateSentinels = durableIssues.map(parseLateReviewIssue);
@@ -1375,7 +1377,7 @@ async function main() {
       for (const sentinel of durableLateSentinels) {
         if (!sentinel.findings?.every(({ disposition }) => disposition === "RESOLVED")) continue;
         const verified = await verifyLateReviewResolutionGithub({ repository, token, sentinel, maxPages: contract.lateReviewIssue?.maxReadPages ?? 20 });
-        verifiedDurableResolutions.set(`${sentinel.prNumber}:${sentinel.mergeSha}`, verified);
+        verifiedDurableResolutions.push({ sentinel, verified });
       }
       globalLateLedgerSentinels = await readMergedLateReviewLedgerSentinels(repository, token, {
         contract,
@@ -1387,13 +1389,16 @@ async function main() {
     }
     current.openDurableLateReviewSentinels = durableLateSentinels;
     current.globalLateLedgerSentinels = globalLateLedgerSentinels;
-    const allLateSentinels = new Map([...globalLateLedgerSentinels, ...(truth.lateReviewSentinels ?? []), ...durableLateSentinels]
-      .map((sentinel) => [`${sentinel.prNumber}:${sentinel.mergeSha}`, sentinel]));
-    current.lateReviewBlocked = [...allLateSentinels.values()].some((sentinel) => {
-      const verified = verifiedDurableResolutions.get(`${sentinel.prNumber}:${sentinel.mergeSha}`);
-      const unresolved = !lateReviewSentinelResolved(sentinel, { resolutionVerifier: () => verified });
+    const unresolvedDurable = durableLateSentinels.filter((sentinel) => !sentinel.findings?.every(({ disposition }) => disposition === "RESOLVED"));
+    const allLateSentinels = mergeLateReviewSentinelRecords([...globalLateLedgerSentinels, ...(truth.lateReviewSentinels ?? []), ...unresolvedDurable]);
+    current.lateReviewBlocked = allLateSentinels.some((sentinel) => {
+      const resolved = verifiedDurableResolutions.some(({ sentinel: resolution, verified }) => resolution.repository === sentinel.repository
+        && resolution.prNumber === sentinel.prNumber
+        && resolution.mergeSha === sentinel.mergeSha
+        && lateReviewFindingSetEqual(resolution.findings, sentinel.findings)
+        && lateReviewSentinelResolved(resolution, { resolutionVerifier: () => verified }));
       const allowedOwners = lateReviewAllowedOwners(sentinel);
-      return unresolved && !allowedOwners.includes(current.headBranch);
+      return !resolved && !allowedOwners.includes(current.headBranch);
     });
   }
   const providers = new Set(contract.reviewProviders);

@@ -266,6 +266,49 @@ export function lateReviewSentinelResolved(sentinel, options = {}) {
     && verified.repositoryVerificationHash === sentinel.resolutionEvidence.repositoryVerificationHash;
 }
 
+export function lateReviewFindingIdentity(finding) {
+  return stableJson({
+    sourceType: finding?.sourceType ?? null,
+    sourceId: finding?.sourceId ?? null,
+    bodyHash: finding?.bodyHash ?? null,
+    threadId: finding?.threadId ?? null,
+    severity: finding?.severity ?? null
+  });
+}
+
+export function lateReviewFindingSetEqual(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  const leftIds = left.map(lateReviewFindingIdentity);
+  const rightIds = right.map(lateReviewFindingIdentity);
+  return new Set(leftIds).size === leftIds.length
+    && new Set(rightIds).size === rightIds.length
+    && leftIds.length === rightIds.length
+    && leftIds.every((identity) => rightIds.includes(identity));
+}
+
+export function mergeLateReviewSentinelRecords(sentinels) {
+  const merged = new Map();
+  for (const sentinel of Array.isArray(sentinels) ? sentinels : []) {
+    const key = `${sentinel?.repository ?? ""}:${sentinel?.prNumber}:${sentinel?.mergeSha}`;
+    const prior = merged.get(key);
+    if (!prior) {
+      merged.set(key, { ...sentinel, findings: [...(sentinel?.findings ?? [])] });
+      continue;
+    }
+    const findings = [...(prior.findings ?? [])];
+    const identities = new Set(findings.map(lateReviewFindingIdentity));
+    for (const finding of sentinel?.findings ?? []) {
+      const identity = lateReviewFindingIdentity(finding);
+      if (!identities.has(identity)) {
+        findings.push(finding);
+        identities.add(identity);
+      }
+    }
+    merged.set(key, { ...prior, ...sentinel, findings });
+  }
+  return [...merged.values()];
+}
+
 function factRegistryEntryMatchesClaim(entry, claim) {
   return entry?.freshnessClass === claim?.freshnessClass
     && entry?.authorityAllowed === claim?.authorityAllowed
@@ -277,6 +320,14 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
     git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
+    if (claim?.freshnessClass === "REPOSITORY_SOURCE") {
+      if (!/^[0-9a-f]{40}$/u.test(claim?.subjectHead ?? "")
+        || !/^[0-9a-f]{40}$/u.test(claim?.subjectTree ?? "")
+        || source.sourceCommit !== claim.subjectHead
+        || source.subjectHead !== claim.subjectHead
+        || source.subjectTree !== claim.subjectTree
+        || git(["rev-parse", `${claim.subjectHead}^{tree}`]) !== claim.subjectTree) return false;
+    }
     const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
     const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
     const committedSource = committedSources[0];
@@ -506,6 +557,10 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
       findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_TIME_MALFORMED", claimId));
       continue;
     }
+    if (claim.freshnessClass === "REPOSITORY_SOURCE"
+      && (!/^[0-9a-f]{40}$/u.test(claim.subjectHead ?? "") || !/^[0-9a-f]{40}$/u.test(claim.subjectTree ?? ""))) {
+      findings.push(claimFinding("ASSURANCE_FRESHNESS_REPOSITORY_SUBJECT_MISSING", claimId));
+    }
     if (observedAt > evaluationTime) findings.push(claimFinding("ASSURANCE_FRESHNESS_CLAIM_OBSERVED_IN_FUTURE", claimId));
     const maximumHours = Number(rule.maximumHours);
     const maximumExpiry = Number.isFinite(maximumHours)
@@ -555,6 +610,7 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
         || source.authorityAllowed !== claim.authorityAllowed
         || source.platform !== claim.platform
         || source.provider !== claim.provider
+        || (claim.freshnessClass === "REPOSITORY_SOURCE" && (source.subjectHead !== claim.subjectHead || source.subjectTree !== claim.subjectTree))
         || !sourceFactsBound) {
         findings.push(claimFinding("ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_BINDING_MISMATCH", claimId));
       }
@@ -640,7 +696,9 @@ export function evaluateTaskFreshness(claimEvaluation, requirements) {
       && requirement.authorityAllowed === claimClassPolicy[requirement.freshnessClass].authorityAllowed
       && Array.isArray(requiredFacts)
       && requiredFacts.length > 0
-      && requiredFacts.every((fact) => typeof fact === "string" && fact.length > 0);
+      && requiredFacts.every((fact) => typeof fact === "string" && fact.length > 0)
+      && (requirement.freshnessClass !== "REPOSITORY_SOURCE"
+        || (/^[0-9a-f]{40}$/u.test(requirement.subjectHead ?? "") && /^[0-9a-f]{40}$/u.test(requirement.subjectTree ?? "")));
     if (!scoped) {
       blockers.push({ id: "ASSURANCE_REQUIRED_FRESHNESS_SCOPE_MALFORMED", status: "BLOCKED_INTERNAL" });
       continue;
@@ -649,6 +707,8 @@ export function evaluateTaskFreshness(claimEvaluation, requirements) {
       && claim.platform === requirement.platform
       && claim.evidenceSourceId === requirement.evidenceSourceId
       && claim.authorityAllowed === requirement.authorityAllowed
+      && (requirement.freshnessClass !== "REPOSITORY_SOURCE"
+        || (claim.subjectHead === requirement.subjectHead && claim.subjectTree === requirement.subjectTree))
       && requiredFacts.every((fact) => claim.factsCovered.includes(fact)));
     if (!matched) blockers.push({
       id: "ASSURANCE_REQUIRED_FRESHNESS_CLASS_BLOCKED",

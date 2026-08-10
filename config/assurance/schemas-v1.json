@@ -170,8 +170,11 @@
         "platform": {"enum": ["ANDROID", "IOS", "NONE"]},
         "evidenceSourceId": {"$ref": "#/$defs/lowerId"},
         "authorityAllowed": {"enum": ["REPOSITORY_ONLY", "PROVIDER_READBACK_ONLY", "SIGNED_ARTIFACT_ONLY", "INSTALLED_DEVICE_ONLY", "PHYSICAL_DEVICE_ONLY", "PUBLIC_CANARY_ONLY"]},
-        "requiredFacts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
-      }
+        "requiredFacts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "subjectHead": {"$ref": "#/$defs/gitSha"},
+        "subjectTree": {"$ref": "#/$defs/gitSha"}
+      },
+      "allOf": [{"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_SOURCE"}}}, "then": {"required": ["subjectHead", "subjectTree"]}}]
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
@@ -218,7 +221,10 @@
               "authorityAllowed": {"enum": ["REPOSITORY_ONLY", "PROVIDER_READBACK_ONLY", "SIGNED_ARTIFACT_ONLY", "INSTALLED_DEVICE_ONLY", "PHYSICAL_DEVICE_ONLY", "PUBLIC_CANARY_ONLY"]},
               "platform": {"enum": ["ANDROID", "IOS", "NONE"]},
               "provider": {"type": "string", "minLength": 1}
-            }
+              ,"subjectHead": {"$ref": "#/$defs/gitSha"}
+              ,"subjectTree": {"$ref": "#/$defs/gitSha"}
+            },
+            "allOf": [{"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_SOURCE"}}}, "then": {"required": ["subjectHead", "subjectTree"]}}]
           }
         },
         "openImplementationPrs": {

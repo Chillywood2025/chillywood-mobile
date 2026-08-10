@@ -119,7 +119,9 @@ const repositorySource = {
   freshnessClass: "REPOSITORY_SOURCE",
   authorityAllowed: "REPOSITORY_ONLY",
   platform: "NONE",
-  provider: "NONE"
+  provider: "NONE",
+  subjectHead: "a".repeat(40),
+  subjectTree: "b".repeat(40)
 };
 const staleProvider = {
   id: "provider-critical-fixture",
@@ -135,7 +137,7 @@ const staleProvider = {
   provider: "SUPABASE"
 };
 const freshnessSources = [
-  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt, covers: repositorySource.factsCovered, freshnessClass: repositorySource.freshnessClass, authorityAllowed: repositorySource.authorityAllowed, platform: repositorySource.platform, provider: repositorySource.provider },
+  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt, covers: repositorySource.factsCovered, freshnessClass: repositorySource.freshnessClass, authorityAllowed: repositorySource.authorityAllowed, platform: repositorySource.platform, provider: repositorySource.provider, subjectHead: repositorySource.subjectHead, subjectTree: repositorySource.subjectTree },
   { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt, covers: staleProvider.factsCovered, freshnessClass: staleProvider.freshnessClass, authorityAllowed: staleProvider.authorityAllowed, platform: staleProvider.platform, provider: staleProvider.provider, payloadHash: "1".repeat(64) }
 ];
 const sourceRequirement = {
@@ -143,7 +145,9 @@ const sourceRequirement = {
   platform: "NONE",
   evidenceSourceId: repositorySource.evidenceSourceId,
   authorityAllowed: "REPOSITORY_ONLY",
-  requiredFacts: [repositorySource.factsCovered[0]]
+  requiredFacts: [repositorySource.factsCovered[0]],
+  subjectHead: repositorySource.subjectHead,
+  subjectTree: repositorySource.subjectTree
 };
 const providerRequirement = {
   freshnessClass: "PROVIDER_CRITICAL",

@@ -1030,7 +1030,8 @@ test("durable sentinel payloads are marker-bound and malformed payloads fail clo
 });
 
 test("only an independently verified durable resolution clears the same canonical and global sentinel", () => {
-  const sentinel = { prNumber: 194, mergeSha: "4".repeat(40), findings: [{ disposition: "RESOLVED" }] };
+  const finding = { sourceType: "INLINE_THREAD", sourceId: 1, bodyHash: "a".repeat(64), threadId: "thread-1", severity: "P1", disposition: "RESOLVED" };
+  const sentinel = { repository: "owner/repository", prNumber: 194, mergeSha: "4".repeat(40), findings: [finding] };
   assert.equal(mergeUnresolvedLateReviewSentinels({
     globalLedgerSentinels: [sentinel],
     canonicalSentinels: [sentinel],
@@ -1041,6 +1042,12 @@ test("only an independently verified durable resolution clears the same canonica
     canonicalSentinels: [sentinel],
     durable: [{ sentinel, resolutionVerified: false }]
   }).length, 1);
+  const authoritative = { ...sentinel, findings: [finding, { ...finding, sourceId: 2, threadId: "thread-2" }] };
+  assert.equal(mergeUnresolvedLateReviewSentinels({
+    globalLedgerSentinels: [authoritative],
+    canonicalSentinels: [authoritative],
+    durable: [{ sentinel, resolutionVerified: true }]
+  }).length, 1, "a verified subset cannot clear the authoritative finding union");
 });
 
 test("canonical PR 194 sentinel blocks release and preserves every unresolved thread identity", () => {
