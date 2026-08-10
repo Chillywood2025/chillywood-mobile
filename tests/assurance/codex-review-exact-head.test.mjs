@@ -111,7 +111,7 @@ test("provider no-suggestion issue comment binds its unique commit prefix to the
   for (const severity of ["_P0_", "_P1_", "_P2_", "_P3_", "P\u200b1", "Ｐ１", "P\u00001", "P\t1"]) {
     assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\n${severity} finding` }, currentHead: headA, resolvedCommit: headA, contract }), null);
   }
-  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP1=0` }, currentHead: headA, resolvedCommit: headA, contract })?.commit, headA);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP1=0` }, currentHead: headA, resolvedCommit: headA, contract }), null);
   const collidingOldCommit = `${headA.slice(0, 10)}${"f".repeat(30)}`;
   assert.equal(providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: collidingOldCommit, contract }), null);
 });
@@ -128,6 +128,7 @@ test("the exact provider clean assertion tolerates only non-authoritative displa
     mode: "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION",
     maxLength: 80
   });
+  assert.equal(contract.providerCleanIssueCommentReview.bodyLayout, "ASSERTION_MARKER_OPTIONAL_CANONICAL_ABOUT_DETAILS_V1");
   for (const preamble of observedPreambles) {
     const review = providerCleanIssueCommentReview({
       comment: {
@@ -164,6 +165,33 @@ test("the exact provider clean assertion tolerates only non-authoritative displa
       contract
     });
     assert.equal(lookalike, null);
+  }
+});
+
+test("provider clean dispositions reject Markdown, HTML and entity-split severities", () => {
+  const cleanBody = `Codex Review: Didn't find any major issues. Hooray!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``;
+  for (const severity of [
+    "P**1** finding",
+    "**P**1 finding",
+    "P*1* finding",
+    "P[1](https://example.invalid) finding",
+    "P&#49; finding",
+    "P<!--hidden-->1 finding",
+    "P<b>1</b> finding",
+    "P\u034f1 finding",
+    "P\ufe0f1 finding",
+    "P\u180b1 finding",
+    "P1=0finding",
+    "P1:0critical"
+  ]) {
+    const comment = {
+      author: "chatgpt-codex-connector",
+      commentId: 9003,
+      body: `${cleanBody}\n${severity}`,
+      createdAt: "2026-08-09T12:30:00Z",
+      updatedAt: "2026-08-09T12:30:00Z"
+    };
+    assert.equal(providerCleanIssueCommentReview({ comment, currentHead: headA, resolvedCommit: headA, contract }), null);
   }
 });
 

@@ -111,6 +111,7 @@
       "mode": "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION",
       "maxLength": 80
     },
+    "bodyLayout": "ASSERTION_MARKER_OPTIONAL_CANONICAL_ABOUT_DETAILS_V1",
     "reviewedCommitPrefixLength": 10,
     "providerAuthoredOnly": true,
     "editedCommentAllowed": false,

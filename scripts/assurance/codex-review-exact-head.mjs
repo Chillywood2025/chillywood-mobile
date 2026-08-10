@@ -49,13 +49,50 @@ function highestSeverity(values) {
 function severityFromBody(body) {
   const normalized = String(body ?? "")
     .normalize("NFKC")
-    .replace(/\p{Cf}/gu, "")
+    .replace(/&#x([0-9a-f]{1,6});/giu, (_match, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#([0-9]{1,7});/gu, (_match, decimal) => {
+      const codePoint = Number.parseInt(decimal, 10);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
+    })
+    .replace(/&[A-Za-z][A-Za-z0-9]+;/gu, "")
+    .replace(/<!--[^]*?-->/gu, "")
+    .replace(/<[^>]*>/gu, "")
+    .replace(/\[([^\]\r\n]{0,200})\]\([^\)\r\n]{0,1000}\)/gu, "$1")
+    .replace(/[\\*_~`]/gu, "")
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
     .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/gu, "");
-  return highestSeverity([...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])(?!\s*[:=]\s*0(?:$|[^0-9]))/gu)].map((match) => `P${match[1]}`));
+  return highestSeverity([...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])(?!\s*[:=]\s*0(?:$|[^A-Za-z0-9]))/gu)].map((match) => `P${match[1]}`));
 }
 
-function cleanReviewBodyHasDisallowedCharacters(body) {
-  return /[\p{Cf}\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u.test(String(body ?? ""));
+const canonicalProviderAboutDetails = `<details> <summary>ℹ️ About Codex in GitHub</summary>
+<br/>
+
+[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you
+- Open a pull request for review
+- Mark a draft as ready
+- Comment "@codex review".
+
+If Codex has suggestions, it will comment; otherwise it will react with 👍.
+
+
+
+
+Codex can also answer questions or update the PR. Try commenting "@codex address that feedback".
+
+</details>`;
+
+function cleanReviewBodyLayoutValid(body, preamble, marker, contract) {
+  if (contract?.providerCleanIssueCommentReview?.bodyLayout !== "ASSERTION_MARKER_OPTIONAL_CANONICAL_ABOUT_DETAILS_V1") return false;
+  const prefix = `${preamble}\n\n**Reviewed commit:** \`${marker}\``;
+  if (!body.startsWith(prefix)) return false;
+  const trailing = body.slice(prefix.length);
+  if (trailing === "") return true;
+  const normalizedTrailingLines = trailing
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  const canonicalLines = canonicalProviderAboutDetails.split("\n").filter(Boolean);
+  return JSON.stringify(normalizedTrailingLines) === JSON.stringify(canonicalLines);
 }
 
 function issueCommentReviewedCommit(body) {
@@ -84,15 +121,15 @@ export function providerCleanIssueCommentPrefix({ comment, contract }) {
     && displaySuffix.length <= displaySuffixPolicy.maxLength
     && /^ [A-Za-z][A-Za-z' ]*!$/u.test(displaySuffix));
   const prefixLength = contract?.providerCleanIssueCommentReview?.reviewedCommitPrefixLength;
+  const recognizableMarkers = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/gu)].map((match) => match[1]);
   if (authoritativeAssertion !== "Codex Review: Didn't find any major issues."
     || !displaySuffixValid
-    || !body.startsWith(`${preamble}\n`)
     || !Number.isInteger(prefixLength)
     || prefixLength < 7
     || prefixLength > 40
-    || cleanReviewBodyHasDisallowedCharacters(body)
+    || recognizableMarkers.length !== 1
+    || !cleanReviewBodyLayoutValid(body, preamble, recognizableMarkers[0], contract)
     || severityFromBody(body)) return null;
-  const recognizableMarkers = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/gu)].map((match) => match[1]);
   return recognizableMarkers.length === 1 && recognizableMarkers[0].length === prefixLength ? recognizableMarkers[0] : null;
 }
 
