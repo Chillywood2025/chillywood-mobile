@@ -49,6 +49,12 @@ const bootstrapActiveTaskRegistry = [{
   implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1",
   implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
   executionState: "ASSURANCE_CONTROL_A1"
+}, {
+  featureId: "assurance-efficiency-e0",
+  implementationPr: 205,
+  implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1",
+  implementationBindingId: "assurance-late-review-owner-registry-bootstrap-pr205-v1",
+  executionState: "ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP"
 }];
 const ownerBootstrapRepository = "Chillywood2025/chillywood-mobile";
 const ownerBootstrapAuthor = "Chillywood2025";

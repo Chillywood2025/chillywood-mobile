@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
-  "latestMergedImplementationPr": {"number": 194, "state": "merged", "head": "ada396a437e40a98acea75bf016c36fc3ea86739", "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446", "title": "Make LiveKit microphone toggles converge durable state"},
+  "mainSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+  "latestMergedImplementationPr": {"number": 201, "state": "merged", "head": "b6648d689287cd312fb548b966a44db24936e152", "mergeSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48", "title": "Make active-task resolution and evidence freshness claim-scoped"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -382,6 +382,26 @@
     },
     "state": "E0_COMPLETE_D2A_READY_NOT_RESUMED"
   },
+  "defectiveCurrentTruthPr195Binding": {
+    "implementationPr": 195,
+    "branch": "codex/d2a-livekit-mic-correction-current-truth-binding",
+    "reviewedSourceHead": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+    "reviewedSourceTree": "cea8c0a60b552f49e9a2fc8a6fb706956fbe1302",
+    "mergedHead": "fc7502bb51c2efde42a5fe4e77d84a2e1d16681b",
+    "mergedTree": "cea8c0a60b552f49e9a2fc8a6fb706956fbe1302",
+    "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+    "correctionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+    "mayProceed": {
+      "formalReviews": false,
+      "phase1Ci": true,
+      "merge": false,
+      "postMergeProductSuccessorRequired": true,
+      "d2aResume": false,
+      "buildOrOta": false,
+      "providerOrProductionMutation": false
+    },
+    "state": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"
+  },
   "d2aMicrophoneCorrectionBinding": {
     "implementationPr": 194,
     "branch": "codex/d2a-livekit-mic-membership-convergence-correction",
@@ -423,32 +443,92 @@
   "activeTaskBinding": {
     "schemaVersion": 1,
     "featureId": "assurance-efficiency-e0",
-    "implementationPr": 201,
+    "implementationPr": 205,
     "implementationBranch": "codex/assurance-active-task-and-claim-freshness-a1",
-    "implementationBindingId": "assurance-active-task-claim-freshness-a1-pr201-v1",
-    "immutableSourceHead": "f32d7b5298290035b1af38346339becd6227fd62",
-    "immutableSourceTree": "9b5e2d049419ad16d1607510150412353d6a094c",
-    "currentImplementationHead": "f32d7b5298290035b1af38346339becd6227fd62",
-    "currentImplementationTree": "9b5e2d049419ad16d1607510150412353d6a094c",
+    "implementationBindingId": "assurance-late-review-owner-registry-bootstrap-pr205-v1",
+    "immutableSourceHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+    "immutableSourceTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d",
+    "currentImplementationHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+    "currentImplementationTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d",
     "phase": "FORMAL_REVIEW",
-    "executionState": "ASSURANCE_CONTROL_A1",
+    "executionState": "ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-merged-successor-head-isolation-source-freeze-20260810-0237", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.source"], "subjectHead": "f32d7b5298290035b1af38346339becd6227fd62", "subjectTree": "9b5e2d049419ad16d1607510150412353d6a094c"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-exact-carrier-full-history-source-freeze-20260810-0407", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.late-review-tombstone-admission"], "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955", "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"}],
     "proofTiersUnderEvaluation": ["T1_SOURCE"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
-      "prNumber": 201,
-      "commentId": 5235281604,
+      "prNumber": 205,
+      "commentId": 5235753938,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T02:38:20Z",
-      "updatedAt": "2026-08-10T02:38:20Z",
-      "bodySha256": "5c65aae2b962921f1bbd20d58234a434a3423a44a50b82da9a87ec123be7d6f6",
-      "subjectHash": "62f978aa8ca6e27a0c635a08de11fb53787e55c3b3a59daa1263a94eaba1d83a"
+      "createdAt": "2026-08-10T04:08:34Z",
+      "updatedAt": "2026-08-10T04:08:34Z",
+      "bodySha256": "f7733b9190d9b8eac12c8cee3ca587e7b240908e0aba7e5b639c7bfc65be247c",
+      "subjectHash": "d2d96e2316692e33972c2a3f7e0340a9bf1ede0e8c8c4a38164ba4b33cfb02fe"
     }
   },
   "freshnessClaims": [
+    {
+      "id": "repository-source-a1-exact-carrier-full-history",
+      "status": "CURRENT",
+      "observedAt": "2026-08-10T04:07:31Z",
+      "expiresAt": "2026-08-11T04:07:31Z",
+      "evidenceSourceId": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
+      "evidenceMode": "local-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.late-review-tombstone-admission"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"
+    },
+    {
+      "id": "repository-source-a1-complete-late-sentinel-inventory",
+      "status": "CURRENT",
+      "observedAt": "2026-08-10T03:25:40Z",
+      "expiresAt": "2026-08-11T03:25:40Z",
+      "evidenceSourceId": "a1-complete-late-sentinel-inventory-source-freeze-20260810-0325",
+      "evidenceMode": "local-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.complete-late-sentinel-inventory"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "3bb4eb5e51824e7dbfd98a2fbf9c86079c23706e",
+      "subjectTree": "ca8e99bdd968d704aecd38a0c7e2f0f65b501259"
+    },
+    {
+      "id": "repository-source-a1-post-merge-control-readback",
+      "status": "CURRENT",
+      "observedAt": "2026-08-10T03:16:55Z",
+      "expiresAt": "2026-08-11T03:16:55Z",
+      "evidenceSourceId": "a1-post-merge-control-readback-source-freeze-20260810-0316",
+      "evidenceMode": "github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.post-merge-control-readback"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "09ee997c55fa38dce7682be1a7e2a11492dc89d6",
+      "subjectTree": "89b828b94e2af3b809613c2c2607db4d5b61abf1"
+    },
+    {
+      "id": "repository-source-a1-late-review-owner-registry-bootstrap",
+      "status": "CURRENT",
+      "observedAt": "2026-08-10T02:48:20Z",
+      "expiresAt": "2026-08-11T02:48:20Z",
+      "evidenceSourceId": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
+      "evidenceMode": "local-offline-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.source"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectTree": "e90c18e159b8f671c8851df0398ce1996ede4b33"
+    },
     {
       "id": "repository-source-a1-assurance-control-final",
       "status": "CURRENT",
@@ -482,6 +562,29 @@
     {
       "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
       "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 195,
+      "mergedAt": "2026-08-09T17:50:31Z",
+      "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+      "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+      "reviewId": 4892031892,
+      "reviewCompletedAt": "2026-08-09T17:53:16Z",
+      "bindingPath": "defectiveCurrentTruthPr195Binding",
+      "findings": [
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694410, "provider": "chatgpt-codex-connector", "bodyHash": "2fca573517d529bc456418b47438c64289824f0c6e87a4cd463c7f03f30a7805", "commentId": 3744694410, "commentNodeId": "PRRC_kwDORRwZUc7fM4CK", "threadId": "PRRT_kwDORRwZUc6Xp4BK", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694414, "provider": "chatgpt-codex-connector", "bodyHash": "51584c18df44cb4e4592642047223d2dc2c039bfe9e16b4d9472ba8fd28e3792", "commentId": 3744694414, "commentNodeId": "PRRC_kwDORRwZUc7fM4CO", "threadId": "PRRT_kwDORRwZUc6Xp4BO", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694418, "provider": "chatgpt-codex-connector", "bodyHash": "694d7aa57c7484db5b16fb8243c6f01531c8dd1b167a7c5ad99fe8103f8e618d", "commentId": 3744694418, "commentNodeId": "PRRC_kwDORRwZUc7fM4CS", "threadId": "PRRT_kwDORRwZUc6Xp4BQ", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"}
+      ],
+      "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "authorizedBootstrapOwners": [
+        "codex/assurance-active-task-and-claim-freshness-a1",
+        "codex/assurance-codex-security-scan-reliability-s0"
+      ],
+      "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
+    },
+    {
+      "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+      "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 194,
       "mergedAt": "2026-08-09T18:04:06Z",
       "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
@@ -506,7 +609,13 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 201, "branch": "codex/assurance-active-task-and-claim-freshness-a1", "head": "f32d7b5298290035b1af38346339becd6227fd62", "state": "open-draft-current", "disposition": "A1 immutable source frozen and owner-authorized by exact GitHub comment; only the canonical three-file current-truth binding commit follows"}
+    {
+      "number": 205,
+      "branch": "codex/assurance-active-task-and-claim-freshness-a1",
+      "head": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "state": "open",
+      "disposition": "Owner-authorized bounded bootstrap correction separates exact successor correction ownership from protected-main tombstone admission before the exact-head check is restored"
+    }
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -591,12 +700,12 @@
     {"number": 138, "branch": "codex/assurance-reconcile-revenuecat-transfer-review-concurrency-atomicity", "head": "ca69c38368be9bb1d65b717b94c039ebc8829e5a", "reviewedImplementationHead": "81892f3dae544713d8e35512da895cd99c610966", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194"],
-    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_A1_ACTIVE_D2A_FROZEN",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201"],
+    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP_S0_NEXT_D2A_FROZEN",
     "nextActions": [
-      "Review the frozen assurance-control A1 source at exact head f32d7b5298290035b1af38346339becd6227fd62 and tree 9b5e2d049419ad16d1607510150412353d6a094c, require P0=0/P1=0 independent repository closure and one 13/13 Phase 1 CI run, then merge A1 and synchronize post-A1 current truth.",
-    "Then implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
-    "Only after A1 and S0 complete may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
+      "Complete the bounded PR #205 late-review owner-registry bootstrap with its FORMAL_REVIEW tier boundary, exact hash-bound complete PR 194/195 sentinel inventory, canonical correction-owner enforcement, and a distinct admission carrier bound to exact GitHub PR/head/tree/receipt/conversation readback plus a normal two-parent protected-main merge with full-history guard checkouts; restore and read back the exact-head required check immediately, then synchronize post-A1 truth.",
+      "Implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
+      "Only after S0 completes may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
@@ -610,9 +719,372 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T02:38:20Z",
-  "freshnessDeadline": "2026-08-11T02:38:20Z",
+  "timestamp": "2026-08-10T04:07:31Z",
+  "freshnessDeadline": "2026-08-11T04:07:31Z",
   "evidenceSources": [
+    {
+      "id": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T04:07:31Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "carrierExactMergeParentsRequired": true,
+          "carrierGithubReadbackRequired": true,
+          "carrierExactHeadReceiptRequired": true,
+          "carrierLatestSourcePushInvalidationRequired": true,
+          "carrierEvidenceMode": "github-read-only",
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "carrierRequirements": {
+          "normalTwoParentMerge": true,
+          "reviewedHeadIsExactSecondParent": true,
+          "protectedMainFirstParentIsExactBaseParent": true,
+          "currentPullRequestHeadAndTreeReadbackRequired": true,
+          "noSourceCommitAfterReview": true,
+          "exactReceiptAndCheckReadbackRequired": true,
+          "conversationResolutionReadbackRequired": true,
+          "committedHashBoundGithubEvidenceRequired": true
+        },
+        "fullHistoryCallers": [
+          ".github/workflows/ios-preview-build.yml",
+          ".github/workflows/ios-production-testflight.yml",
+          ".github/workflows/manual-public-v1-release.yml",
+          ".github/workflows/phase3a-manual-preview.yml"
+        ],
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "3f5d136a2a08dbcbb8e720772e18aa6bdb99b12a8435f83038869123e6fe75ad",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T04:07:31Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"
+    },
+    {
+      "id": "a1-exact-tombstone-carrier-readback-source-freeze-20260810-0402",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T04:02:24Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "carrierExactMergeParentsRequired": true,
+          "carrierGithubReadbackRequired": true,
+          "carrierExactHeadReceiptRequired": true,
+          "carrierLatestSourcePushInvalidationRequired": true,
+          "carrierEvidenceMode": "github-read-only",
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "carrierRequirements": {
+          "normalTwoParentMerge": true,
+          "reviewedHeadIsExactSecondParent": true,
+          "protectedMainFirstParentIsExactBaseParent": true,
+          "currentPullRequestHeadAndTreeReadbackRequired": true,
+          "noSourceCommitAfterReview": true,
+          "exactReceiptAndCheckReadbackRequired": true,
+          "conversationResolutionReadbackRequired": true,
+          "committedHashBoundGithubEvidenceRequired": true
+        },
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "32e6afff59b99fd3853cbddd6816b613df665c745144689a52154e0d24b2b865",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T04:02:24Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "35465b473ddbbafca95e191b91ce869daecf1af6",
+      "subjectHead": "35465b473ddbbafca95e191b91ce869daecf1af6",
+      "subjectTree": "8204eadd3a2845cdf0cd0ab6534f2aaeac69310b"
+    },
+    {
+      "id": "a1-tombstone-correction-carrier-separation-source-freeze-20260810-0354",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:54:07Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "authorizedAdmissionCarriers": [
+          {
+            "prNumber": 194,
+            "branches": [
+              "codex/assurance-active-task-and-claim-freshness-a1",
+              "codex/assurance-codex-security-scan-reliability-s0",
+              "codex/d2a-livekit-mic-post-merge-review-correction"
+            ]
+          },
+          {
+            "prNumber": 195,
+            "branches": [
+              "codex/assurance-active-task-and-claim-freshness-a1",
+              "codex/assurance-codex-security-scan-reliability-s0"
+            ]
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": [],
+        "separationRule": "CORRECTION_OWNER_EXACT_ADMISSION_CARRIER_DISTINCT"
+      },
+      "readbackSha256": "cbaa1f6b1bfc172899fc9b882b61873f5055d4d9bac275f709e4689319e20c1e",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels and require byte-exact protected-main first-parent admission after the exact-review ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T03:54:07Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+      "subjectHead": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+      "subjectTree": "96515ec2be0dc0ca2bfe971c69c3122d88a6b658"
+    },
+    {
+      "id": "a1-late-review-tombstone-admission-source-freeze-20260810-0342",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:42:14Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "09d12f2cd3b4d1d07067bdb5b068ebd90cabb8cab28890eeb29c054e9e8286f2",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels and require byte-exact protected-main first-parent admission after the exact-review ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T03:42:14Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "57b6c125016b4d9054da78def825c993152393f8",
+      "subjectHead": "57b6c125016b4d9054da78def825c993152393f8",
+      "subjectTree": "56395d625481a14045d7bc39e06c3c2fb19402c7"
+    },
+    {
+      "id": "a1-complete-late-sentinel-inventory-source-freeze-20260810-0325",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:25:40Z",
+        "ownerRegistryEntries": [
+          {
+            "prNumber": 194,
+            "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+            "successorOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+            "successorOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "sentinels": [
+          {
+            "prNumber": 194,
+            "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+            "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+            "reviewId": 4892095448,
+            "findingCount": 5,
+            "durableIssue": 203,
+            "durableIssueBodySha256": "5120854b3e5f710e239b5910c61281ad961371654cf83194cae7f827f7368f5b"
+          },
+          {
+            "prNumber": 195,
+            "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+            "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+            "reviewId": 4892031892,
+            "findingCount": 3,
+            "durableIssue": null
+          }
+        ]
+      },
+      "readbackSha256": "6b970e4800625b4a79db0fae8212222093c2c5412e8e6264605ee8f5a4f12ecb",
+      "covers": [
+        "repository.assurance-control.a1.complete-late-sentinel-inventory",
+        "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records"
+      ],
+      "observedAt": "2026-08-10T03:25:40Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "3bb4eb5e51824e7dbfd98a2fbf9c86079c23706e",
+      "subjectHead": "3bb4eb5e51824e7dbfd98a2fbf9c86079c23706e",
+      "subjectTree": "ca8e99bdd968d704aecd38a0c7e2f0f65b501259"
+    },
+    {
+      "id": "a1-post-merge-control-readback-source-freeze-20260810-0316",
+      "mode": "github-read-only",
+      "observedAt": "2026-08-10T03:16:55Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "09ee997c55fa38dce7682be1a7e2a11492dc89d6",
+      "subjectHead": "09ee997c55fa38dce7682be1a7e2a11492dc89d6",
+      "subjectTree": "89b828b94e2af3b809613c2c2607db4d5b61abf1",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:16:55Z",
+        "a1Implementation": {
+          "prNumber": 201,
+          "head": "b6648d689287cd312fb548b966a44db24936e152",
+          "mergeSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "mergedAt": "2026-08-10T02:45:58Z"
+        },
+        "phase1": {
+          "runId": 31350394428,
+          "head": "b6648d689287cd312fb548b966a44db24936e152",
+          "conclusion": "success",
+          "jobsPassed": 13,
+          "jobsTotal": 13
+        },
+        "ruleset": {
+          "id": 18940814,
+          "enforcement": "active",
+          "exactHeadContextRequired": true,
+          "phase1ContextCount": 13,
+          "strictStatusChecks": true,
+          "conversationResolutionRequired": true,
+          "dismissStaleReviewsOnPush": true,
+          "bypassActors": []
+        },
+        "lateSentinel": {
+          "issueNumber": 203,
+          "state": "open",
+          "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+          "affectedPr": 194,
+          "findingCount": 5,
+          "bodySha256": "5120854b3e5f710e239b5910c61281ad961371654cf83194cae7f827f7368f5b"
+        }
+      },
+      "readbackSha256": "a8ddbc4fdf2fcabbd32415d271fa1e19000d075ccfbc565b36934bb015623369",
+      "covers": [
+        "repository.assurance-control.a1.post-merge-control-readback",
+        "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub"
+      ]
+    },
+    {
+      "id": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-10T02:48:20Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectTree": "e90c18e159b8f671c8851df0398ce1996ede4b33",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
+      "id": "a1-pr195-late-review-registry-source-freeze-20260810-0306",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "PR 195 late-review discovery is bound to the immutable owner registry and its exact defective implementation"
+      ]
+    },
+    {
+      "id": "a1-post-merge-ruleset-readback-20260810-0248",
+      "mode": "github-read-only",
+      "covers": [
+        "A1 PR 201 merged as 08d8c04285c8dc0fbe0f0168b6750fc746d1af48 after exact Phase 1 run 31350394428 passed 13 of 13 jobs",
+        "GitHub ruleset 18940814 requires the exact-head review status check, resolved conversations, stale-review dismissal, strict status checks, and has no bypass actors",
+        "Durable late-review sentinel issue 203 preserves all five unresolved PR 194 findings"
+      ]
+    },
     {
       "id": "a1-merged-successor-head-isolation-source-freeze-20260810-0237",
       "mode": "local-offline-and-github-read-only",
