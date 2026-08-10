@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 1,
+  "reportId": "assurance-control-correction-a1-v1",
+  "classification": "ASSURANCE_INFRASTRUCTURE_ONLY",
+  "startingState": {
+    "operatorSuppliedMain": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+    "actualMainAtA1Start": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9",
+    "sequenceDiscrepancy": "PR_194_AND_POST_PR_194_TRUTH_PR_200_WERE_ALREADY_MERGED_BEFORE_A1_BEGAN",
+    "a1Disposition": "FORWARD_ASSURANCE_CORRECTION_WITH_PRODUCT_SOURCE_UNCHANGED"
+  },
+  "preFixReproduction": {
+    "frozenActiveState": "ACTIVE_TASK_AMBIGUOUS",
+    "matchingExplicitFeature": "ACTIVE_TASK_AMBIGUOUS",
+    "historicalD2aSourceHead": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
+    "historicalD2aSourceTree": "f9e102649b51da84324e97b576823e910340df9f",
+    "providerFreshnessDefect": "LOCAL_GITHUB_RENDER_REFRESH_EXTENDED_GLOBAL_ACCEPTANCE_WITH_LIVE_PROVIDER_READBACK_TRUE",
+    "topLevelProviderReviewBypass": "P1_REVIEW_BODY_WITH_ZERO_INLINE_THREADS_PASSED_EXACT_HEAD_AND_EVADED_LATE_SENTINEL",
+    "issueCommentSurface": "TRIGGERED_WITHOUT_CONTENT_READBACK",
+    "pagination": "FIRST_PAGE_ONLY"
+  },
+  "structuredBinding": {
+    "authority": "activeTaskBinding",
+    "displayTextAuthority": false,
+    "featureId": "chilly-chat-call-lifecycle",
+    "implementationPr": 194,
+    "implementationBranch": "codex/d2a-livekit-mic-membership-convergence-correction",
+    "immutableSource": {
+      "head": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+      "tree": "4ce01fa17e4184f2523b82a10401e3b3f59dd641"
+    },
+    "currentSynchronizedSource": {
+      "head": "ada396a437e40a98acea75bf016c36fc3ea86739",
+      "tree": "662dc601bf54b8abdc78cc915d757a6c55c2b39d"
+    },
+    "executionState": "D2A_FROZEN"
+  },
+  "resolution": {
+    "matchingFeatureOverride": "ACCEPTED_ONLY_AFTER_CANONICAL_MATCH",
+    "conflictingFeatureOverride": "FEATURE_OVERRIDE_CONFLICT",
+    "historicalCheckpointFallback": "DENIED",
+    "genericChecks": [
+      "IMPLEMENTATION_PR",
+      "IMPLEMENTATION_BRANCH",
+      "IMMUTABLE_HEAD_TREE",
+      "CURRENT_SYNCHRONIZED_HEAD_TREE",
+      "REMOTE_BRANCH_HEAD",
+      "IMMUTABLE_ANCESTRY",
+      "PROVIDER_PR_HEAD_WHEN_AVAILABLE"
+    ],
+    "completedBindingDisposition": "ACTIVE_TASK_NONE",
+    "legacyOwnership": "EXACT_OPEN_STATE_PR_BRANCH_HEAD_TREE_AND_REMOTE",
+    "callerSelectedDiffBase": "DENIED"
+    ,"branchLocalTaskSubstitution": "DENIED_UNLESS_PROTECTED_MAIN_BINDING_OR_EXACT_OWNER_BOOTSTRAP_REGISTRY"
+    ,"a1BootstrapAuthority": {
+      "featureId": "assurance-efficiency-e0",
+      "implementationPr": 201,
+      "implementationBranch": "codex/assurance-active-task-and-claim-freshness-a1",
+      "implementationBindingId": "assurance-active-task-claim-freshness-a1-pr201-v1",
+      "executionState": "ASSURANCE_CONTROL_A1"
+    }
+  },
+  "freshness": {
+    "classes": [
+      "REPOSITORY_SOURCE",
+      "PROVIDER_CRITICAL",
+      "SIGNED_ARTIFACT",
+      "INSTALLED_DEVICE",
+      "PHYSICAL_DEVICE",
+      "PUBLIC_CANARY"
+    ],
+    "globalDocumentTimestampAuthorizesClaims": false,
+    "providerCriticalHours": 8,
+    "lastRealProviderReadback": {
+      "evidenceSourceId": "b3-immutable-source-binding-20260802-0600",
+      "sourceCommit": "4a3ccafe3416c71338627c4f0fe05209c2243460",
+      "observedAt": "2026-08-02T06:00:44Z",
+      "expiresAt": "2026-08-02T14:00:44Z",
+      "classification": "STALE_BLOCKED"
+    },
+    "liveProviderReadback": false,
+    "sourceOnlyEligibility": true,
+    "providerDependentEligibility": false,
+    "localOrGithubMayRefreshProviderCritical": false,
+    "factRegistryContractBound": true,
+    "providerFactRelabelingAllowed": false,
+    "sharedAutonomousAllPlatformIosAndCognitiveEvaluator": true,
+    "repositoryClaimFactsMustBeSourceCovered": true,
+    "crossPlatformClaimLabelAllowed": false,
+    "providerTtlPinnedInExecutablePolicy": true,
+    "committedProseMayAuthorizeExternalTier": false,
+    "externalTierCurrentState": "REQUIRES_HASH_BOUND_RECEIPT_AND_TRUSTED_INJECTED_ISSUER_VERIFIER",
+    "externalEvidenceContract": "config/assurance/external-evidence-receipt-v1.json",
+    "productionExternalVerifier": "UNAVAILABLE_FAIL_CLOSED",
+    "externalReceiptPolicyPinnedInExecutableCode": true,
+    "syntheticFixtureModeMayAuthorizeProduction": false,
+    "syntheticReceiptNegativeCases": ["missing", "altered-payload", "wrong-class", "wrong-platform", "forged-issuer", "wrong-command", "self-attested", "altered-receipt-hash", "issuer-proof-rejected", "wrong-schema-version", "empty-or-nonstring-receipt-id", "unexpected-receipt-field", "caller-substituted-policy"],
+    "staleOperationalValuesRenderedAsHistorical": true
+  },
+  "exactHeadCodexReview": {
+    "contractId": "codex-review-exact-head-v1",
+    "checkName": "Chi'llywood / Codex Review Exact Head",
+    "trustedEvaluatorSource": "protected-default-branch-only",
+    "boundedReadback": true,
+    "polling": false,
+    "sourcePushInvalidatesReceipt": true,
+    "sourcePushLeaseCheck": "Chi'llywood / Codex Review Source Push Lease",
+    "sourcePushLeaseBinding": "repository-pr-head-pushedAt-sha256",
+    "sourceAdmissionEvents": ["opened", "synchronize", "reopened", "ready_for_review", "edited-base"],
+    "protectedDiffBaseBound": true,
+    "strictBaseUpToDateRequired": true,
+    "repositoryWriteAuthority": {
+      "ownerType": "User",
+      "rootAuthority": "Chillywood2025",
+      "trustedWriteActors": ["Chillywood2025"],
+      "readback": "EXACT_ONE_ADMIN_OWNER_ZERO_OTHER_COLLABORATORS",
+      "newWriterFailsClosed": "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
+      "forkWorkflowWriteTokensAllowed": false,
+      "rootCanAlterRepositoryRules": true,
+      "threatBoundary": "The gate prevents accidental and non-root late-review merges; the sole repository owner is the root authority and is not represented as cryptographically isolated from repository administration."
+    },
+    "synchronizeEventCancellationAllowed": false,
+    "requiresExactHeadAndTree": true,
+    "requiresReviewAfterLatestSourcePush": true,
+    "requiresAllConversationsResolved": true,
+    "blocksP0P1P2": true,
+    "providerSurfaces": ["REVIEW_BODY", "INLINE_THREAD", "ISSUE_COMMENT"],
+    "allProviderSurfacesPaginated": true,
+    "paginationFailure": "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE",
+    "issueCommentHeadBindingFailure": "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND",
+    "bodyHashesReceiptBound": true,
+    "resolvedFindingRequiresLaterExactHeadProviderRereview": true,
+    "ambiguousCommentedRereviewMayResolveFinding": false,
+    "cleanRereviewRequiresApprovalOrExactDispositionMarker": true,
+    "mutableLateFindingEventsBecomeDurableAppendOnlyEvidence": true,
+    "providerFindingLedger": "Chi'llywood / Codex Review Finding Ledger",
+    "providerFindingLedgerMayBeClearedByEditOrDelete": false,
+    "mergedPrLedgerReadbackIgnoresMutableIssueLabels": true,
+    "durableSentinelResolutionRequiresTypedSuccessorAndExactHeadEvidence": true,
+    "durableSentinelResolutionRequiresAuthoritativeGithubReadback": true,
+    "durableSentinelResolutionRecomputesSuccessorDiffAndDispositionHashes": true,
+    "verifiedResolvedSentinelRemainsReleaseBlocker": false,
+    "sentinelOwnerExceptionsAreExecutablePolicyBound": true,
+    "reviewOnlyLabel": "assurance-review-only",
+    "reviewOnlyLabelIsAuthority": false,
+    "reviewOnlyBranchPrefix": "codex/assurance-review-only/",
+    "baseSynchronizationReviewReceipt": "SHA256_BOUND_INDEPENDENT_REPOSITORY_REVIEW_REF",
+    "rulesetPatch": "config/assurance/github-main-ruleset-codex-review-v1.json",
+    "rulesetApplicationState": "PENDING_POST_A1_MERGE_READBACK"
+  },
+  "a1HostedSecurity": {
+    "scanId": "ff6e7399-23c1-47e9-abf1-13a9e3df4d4b",
+    "state": "HISTORICAL_UNSEALED_FINALIZER_FAILURE",
+    "exactFailure": "scan.target.snapshotDigest: expected a non-empty string",
+    "retried": false,
+    "hostSnapshotDigestFabricated": false,
+    "codexSecuritySealed": false,
+    "replacementClosure": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+    "replacementClosureState": "PENDING_FINAL_EXACT_HEAD_REPOSITORY_REVIEW"
+  },
+  "lateReviewSentinel": {
+    "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+    "prNumber": 194,
+    "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+    "mergedAt": "2026-08-09T18:04:06Z",
+    "reviewId": 4892095448,
+    "reviewedCommit": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+    "reviewCompletedAt": "2026-08-09T18:11:34Z",
+    "postTruthMerge": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9",
+    "postTruthMergedAt": "2026-08-09T18:12:44Z",
+    "liveReadbackCodes": ["CODEX_REVIEW_LATE_POST_MERGE", "CODEX_REVIEW_LATE_SENTINEL_BLOCKED", "CODEX_REVIEW_STALE_HEAD"],
+    "unresolvedThreads": [
+      {"commentId": 3744746865, "threadId": "PRRT_kwDORRwZUc6XqB8L", "severity": "P1"},
+      {"commentId": 3744746868, "threadId": "PRRT_kwDORRwZUc6XqB8O", "severity": "P2"},
+      {"commentId": 3744746869, "threadId": "PRRT_kwDORRwZUc6XqB8P", "severity": "P1"},
+      {"commentId": 3744746872, "threadId": "PRRT_kwDORRwZUc6XqB8S", "severity": "P2"},
+      {"commentId": 3744746873, "threadId": "PRRT_kwDORRwZUc6XqB8T", "severity": "P2"}
+    ],
+    "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction",
+    "durableRepositoryIssue": {
+      "label": "codex-review-late-sentinel",
+      "autoClose": false,
+      "state": "PENDING_A1_MAIN_INSTALLATION"
+    },
+    "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
+  },
+  "regression": {
+    "requiredMatrix": "PENDING_FINAL_EXACT_HEAD_REPOSITORY_REVIEW",
+    "activeTaskExactHeadProviderFocused": "52/52_PASS",
+    "efficiencyAndClaimFreshness": "20/20_PASS",
+    "combinedFocused": "72/72_PASS",
+    "deterministicPacketRuns": "3/3_PASS",
+    "headBindingAndSynchronization": "PASS_27_FAIL_CLOSED_BASE_SYNC_REJECTIONS",
+    "contracts": "20/20_PASS",
+    "featureRegistry": "21_FEATURES_PASS",
+    "escapedDefects": "25_CLASSES_PASS",
+    "completeAssuranceSuite": "133/134_PASS_ONE_PREEXISTING_OUT_OF_SCOPE_RELEASE_PARITY_ASSERTION_66_EXPECTED_67_ACTUAL_PRESENT_ON_BASE_60A6",
+    "phase1CiProvenanceAttempt": "31348101161_FAIL_CLOSED_10_OF_13_SHALLOW_CHECKOUT_COULD_NOT_READ_COMMITTED_EVIDENCE_OBJECTS_SOURCE_CORRECTION_REQUIRED",
+    "lint": "PASS_ZERO_ERRORS_88_PREEXISTING_WARNINGS",
+    "localTypecheck": "BLOCKED_ENVIRONMENT_SHARED_INSTALL_MISSING_ALERT_AUTOMATION_WORKSPACE_PACKAGES"
+  },
+  "nonInterference": {
+    "providerContacted": false,
+    "productSourceChanged": false,
+    "nativeSourceChanged": false,
+    "databaseOrProviderMutation": false,
+    "buildOrOtaCreated": false,
+    "b1B2B3Deployed": false,
+    "userDerivedMemoryEnabled": false,
+    "level2Enabled": false,
+    "d2aResumed": false,
+    "denoLockTrackedOrStaged": false
+  }
+}

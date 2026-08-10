@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "patchId": "main-pr-review-protection-codex-review-exact-head-v1",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "rulesetId": 18940814,
+  "rulesetName": "main-pr-review-protection",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
+  "requiredStatusCheckToAdd": "Chi'llywood / Codex Review Exact Head",
+  "preserveExistingRequiredStatusChecks": true,
+  "strictRequiredStatusChecksPolicy": true,
+  "requiredCheckPublisherBoundary": {
+    "expectedGitHubApp": "github-actions",
+    "repositoryOwnerType": "User",
+    "rootAuthority": "Chillywood2025",
+    "trustedRepositoryWriteActors": ["Chillywood2025"],
+    "unexpectedWriteActorResult": "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
+    "forkWorkflowWriteTokensAllowed": false
+  },
+  "pullRequestRequirements": {
+    "requiredReviewThreadResolution": true,
+    "dismissStaleReviewsOnPush": true,
+    "bypassActors": []
+  },
+  "applicationState": "PENDING_POST_A1_MERGE_READBACK"
+}

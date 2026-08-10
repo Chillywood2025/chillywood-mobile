@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "contractId": "codex-review-exact-head-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/codexReviewExactHeadContract",
+  "checkName": "Chi'llywood / Codex Review Exact Head",
+  "reviewProviders": [
+    "chatgpt-codex-connector",
+    "chatgpt-codex-connector[bot]"
+  ],
+  "acceptableReviewStates": ["COMMENTED", "APPROVED"],
+  "blockingSeverities": ["P0", "P1", "P2"],
+  "reviewOnlyLabel": "assurance-review-only",
+  "trustedRepositoryWriteActors": ["Chillywood2025"],
+  "requiredEvents": [
+    "pull_request_target.opened",
+    "pull_request_target.synchronize",
+    "pull_request_target.reopened",
+    "pull_request_target.ready_for_review",
+    "pull_request_target.edited",
+    "pull_request_target.labeled",
+    "pull_request_target.unlabeled",
+    "pull_request_review.submitted",
+    "pull_request_review.edited",
+    "pull_request_review.dismissed",
+    "pull_request_review_comment.created",
+    "pull_request_review_comment.edited",
+    "pull_request_review_comment.deleted",
+    "issue_comment.created",
+    "issue_comment.edited",
+    "issue_comment.deleted",
+    "workflow_dispatch"
+  ],
+  "receiptRequiredFields": [
+    "schemaVersion",
+    "contractId",
+    "repository",
+    "prNumber",
+    "prHeadSha",
+    "prHeadTree",
+    "prBaseBranch",
+    "prBaseSha",
+    "reviewProvider",
+    "reviewId",
+    "reviewState",
+    "reviewedCommit",
+    "reviewStartedAt",
+    "reviewCompletedAt",
+    "latestSourcePushAt",
+    "sourcePushLeaseHashes",
+    "reviewSubmissions",
+    "reviewComments",
+    "reviewThreads",
+    "providerIssueComments",
+    "reviewFindings",
+    "providerCommentHeadUnbound",
+    "sharedHeadOpenPrNumbers",
+    "repositoryWriteActors",
+    "receiptHash"
+  ],
+  "receiptHash": {
+    "algorithm": "sha256",
+    "canonicalization": "stable-json-without-receiptHash"
+  },
+  "boundedReadback": {
+    "reviews": 100,
+    "threads": 100,
+    "commentsPerThread": 100,
+    "issueComments": 100,
+    "maxPages": 20,
+    "checkRuns": 100,
+    "polling": false
+  },
+  "passRequirements": [
+    "reviewed-commit-equals-current-pr-head",
+    "current-pr-tree-equals-recorded-tree",
+    "protected-base-branch-and-head-equal-recorded-diff-base",
+    "review-completed-after-latest-source-push",
+    "no-source-commit-after-review",
+    "every-synchronize-event-recorded-by-exact-source-push-lease",
+    "all-review-conversations-resolved",
+    "all-provider-review-surfaces-read-and-head-bound",
+    "exactly-one-open-pr-owns-current-head",
+    "repository-write-authority-equals-owner-root-authority",
+    "resolved-thread-findings-require-later-exact-head-provider-rereview",
+    "no-unresolved-blocking-finding",
+    "exact-receipt-hash-valid"
+  ],
+  "resultCodes": [
+    "CODEX_REVIEW_MISSING",
+    "CODEX_REVIEW_STALE_HEAD",
+    "CODEX_REVIEW_STALE_BASE",
+    "CODEX_REVIEW_INCOMPLETE",
+    "CODEX_REVIEW_BLOCKING_THREAD_OPEN",
+    "CODEX_REVIEW_UNRESOLVED_FINDING",
+    "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND",
+    "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE",
+    "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID",
+    "CODEX_REVIEW_FINDING_LEDGER_INVALID",
+    "CODEX_REVIEW_SHARED_HEAD_AMBIGUOUS",
+    "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
+    "CODEX_REVIEW_RECEIPT_INVALID",
+    "CODEX_REVIEW_LATE_POST_MERGE",
+    "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"
+  ],
+  "issueCommentReviewedCommitMarker": "<!-- codex-review-reviewed-commit:<40-lowercase-hex-sha> -->",
+  "protectedBaseBranch": "main",
+  "sourcePushLease": {
+    "checkName": "Chi'llywood / Codex Review Source Push Lease",
+    "trustedAppSlug": "github-actions",
+    "events": ["opened", "synchronize", "reopened", "ready_for_review", "edited-base"],
+    "receiptBinding": "repository-pr-head-pushedAt-sha256",
+    "eventRunCancellationAllowed": false,
+    "reuseAfterRepeatedHeadPush": false
+  },
+  "providerFindingLedger": {
+    "checkName": "Chi'llywood / Codex Review Finding Ledger",
+    "trustedAppSlug": "github-actions",
+    "appendOnly": true,
+    "minimumTrackedMergedPr": 194
+  },
+  "reviewOnlyClassification": {
+    "branchPrefix": "codex/assurance-review-only/",
+    "checkName": "Chi'llywood / Review Only Never Merge",
+    "trustedAppSlug": "github-actions",
+    "appendOnly": true,
+    "labelAuthority": false,
+    "registryAnchorSha": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9",
+    "registryScope": "repository-pr-number-across-all-future-heads"
+  },
+  "findingResolution": {
+    "approvedReviewIsExplicitCleanDisposition": true,
+    "cleanDispositionMarker": "<!-- codex-review-disposition:blocking-findings-resolved reviewed-commit:<40-lowercase-hex-sha> -->",
+    "ambiguousCommentedRereviewMayResolveFindings": false
+  },
+  "lateReviewIssue": {
+    "label": "codex-review-late-sentinel",
+    "titlePrefix": "[Codex Review Late Sentinel]",
+    "autoClose": false,
+    "maxReadPages": 20
+  },
+  "lateReviewClassification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+  "lateReviewBlocks": [
+    "post-merge-completion-claim",
+    "next-implementation",
+    "release",
+    "proof-tier-promotion"
+  ]
+}
