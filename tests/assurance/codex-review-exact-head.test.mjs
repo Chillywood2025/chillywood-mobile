@@ -57,7 +57,7 @@ const exactReview = {
   reviewId: 9001,
   author: "chatgpt-codex-connector",
   state: "COMMENTED",
-  body: "P0: 0 P1: 0 P2: 0 P3: 0",
+  body: "No review findings.",
   startedAt: "2026-08-09T11:30:00Z",
   submittedAt: "2026-08-09T12:00:00Z",
   commit: headA
@@ -192,6 +192,26 @@ test("provider clean dispositions reject Markdown, HTML and entity-split severit
       updatedAt: "2026-08-09T12:30:00Z"
     };
     assert.equal(providerCleanIssueCommentReview({ comment, currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
+});
+
+test("provider severity normalization never exempts zero-prefixed findings", () => {
+  for (const [index, severity] of [
+    "P1: 0-day exploit",
+    "P1: 0 day",
+    "P1: 0/1",
+    "P1: 0.1",
+    "P&#49 finding",
+    "P&#x31 finding",
+    "P&#000000049; finding",
+    "P&#x0000031; finding",
+    "P&#xFFFFFF;1 finding"
+  ].entries()) {
+    const finding = issueComment({ id: 9200 + index });
+    finding.body = `${severity}\n<!-- codex-review-reviewed-commit:${headA} -->`;
+    const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [finding] });
+    assert.equal(receipt.reviewFindings[0]?.severity, "P1", severity);
+    assert.ok(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt }).codes.includes("CODEX_REVIEW_UNRESOLVED_FINDING"), severity);
   }
 });
 

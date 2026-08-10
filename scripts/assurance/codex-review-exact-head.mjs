@@ -49,8 +49,11 @@ function highestSeverity(values) {
 function severityFromBody(body) {
   const normalized = String(body ?? "")
     .normalize("NFKC")
-    .replace(/&#x([0-9a-f]{1,6});/giu, (_match, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
-    .replace(/&#([0-9]{1,7});/gu, (_match, decimal) => {
+    .replace(/&#x([0-9a-f]+);?/giu, (_match, hex) => {
+      const codePoint = Number.parseInt(hex, 16);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
+    })
+    .replace(/&#([0-9]+);?/gu, (_match, decimal) => {
       const codePoint = Number.parseInt(decimal, 10);
       return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
     })
@@ -61,7 +64,7 @@ function severityFromBody(body) {
     .replace(/[\\*_~`]/gu, "")
     .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
     .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/gu, "");
-  return highestSeverity([...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])(?!\s*[:=]\s*0(?:$|[^A-Za-z0-9]))/gu)].map((match) => `P${match[1]}`));
+  return highestSeverity([...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])/gu)].map((match) => `P${match[1]}`));
 }
 
 const canonicalProviderAboutDetails = `<details> <summary>ℹ️ About Codex in GitHub</summary>
@@ -87,6 +90,7 @@ function cleanReviewBodyLayoutValid(body, preamble, marker, contract) {
   if (!body.startsWith(prefix)) return false;
   const trailing = body.slice(prefix.length);
   if (trailing === "") return true;
+  if (!trailing.startsWith("\n\n")) return false;
   const normalizedTrailingLines = trailing
     .split("\n")
     .map((line) => line.trimEnd())
