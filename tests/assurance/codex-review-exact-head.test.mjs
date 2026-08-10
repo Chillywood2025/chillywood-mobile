@@ -469,6 +469,12 @@ test("provider issue comments require an exact reviewed-commit marker and block 
   const informational = { ...unbound, commentId: 4, commentNodeId: "IC_4", body: "Review queued; no disposition yet." };
   const informationalReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [informational] });
   assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: informationalReceipt }).ok, true);
+  for (const [index, body] of ["fish &chips", "https://example.invalid/?foo=1&bar=2", "source a&bar", "one-letter &b parameter"].entries()) {
+    const ordinaryAmpersand = { ...unbound, commentId: 4100 + index, commentNodeId: `IC_${4100 + index}`, body };
+    const ordinaryReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [ordinaryAmpersand] });
+    assert.equal(ordinaryReceipt.reviewFindings.length, 0, body);
+    assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: ordinaryReceipt }).ok, true, body);
+  }
   const p3 = { ...unbound, commentId: 5, commentNodeId: "IC_5", body: "P3 informational note" };
   const p3Receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [p3] });
   assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: p3Receipt }).ok, true);

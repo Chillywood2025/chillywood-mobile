@@ -46,9 +46,12 @@ function highestSeverity(values) {
     .sort((left, right) => severityOrder.get(left) - severityOrder.get(right))[0] ?? null;
 }
 
+const legacySemicolonlessHtmlNamedReferences = new Set(`AElig AMP Aacute Acirc Agrave Aring Atilde Auml COPY Ccedil ETH Eacute Ecirc Egrave Euml GT Iacute Icirc Igrave Iuml LT Ntilde Oacute Ocirc Ograve Oslash Otilde Ouml QUOT REG THORN Uacute Ucirc Ugrave Uuml Yacute aacute acirc acute aelig agrave amp aring atilde auml brvbar ccedil cedil cent copy curren deg divide eacute ecirc egrave eth euml frac12 frac14 frac34 gt iacute icirc iexcl igrave iquest iuml laquo lt macr micro middot nbsp not ntilde oacute ocirc ograve ordf ordm oslash otilde ouml para plusmn pound quot raquo reg sect shy sup1 sup2 sup3 szlig thorn times uacute ucirc ugrave uml uuml yacute yen yuml`.split(" "));
+
 function severityFromBody(body) {
   const source = String(body ?? "");
-  const namedEntityUnverified = /&[A-Za-z][A-Za-z0-9]+;?/u.test(source);
+  const namedReferences = [...source.matchAll(/&([A-Za-z][A-Za-z0-9]*)(;?)/gu)];
+  const namedEntityUnverified = namedReferences.some(([, name, semicolon]) => semicolon === ";" || legacySemicolonlessHtmlNamedReferences.has(name));
   const normalized = source
     .normalize("NFKC")
     .replace(/&#x([0-9a-f]+);?/giu, (_match, hex) => {
@@ -59,7 +62,7 @@ function severityFromBody(body) {
       const codePoint = Number.parseInt(decimal, 10);
       return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
     })
-    .replace(/&[A-Za-z][A-Za-z0-9]+;?/gu, " ")
+    .replace(/&([A-Za-z][A-Za-z0-9]*)(;?)/gu, (match, name, semicolon) => semicolon === ";" || legacySemicolonlessHtmlNamedReferences.has(name) ? " " : match)
     .normalize("NFKC")
     .replace(/<!--[^]*?-->/gu, "")
     .replace(/<[^>]*>/gu, "")
