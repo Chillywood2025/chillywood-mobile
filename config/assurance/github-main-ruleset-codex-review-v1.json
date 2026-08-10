@@ -178,7 +178,7 @@
     "ownerAuthorizationReceiptHash": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744",
     "ownerFinalCarrierBindingReceiptHash": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c",
     "ownerFinalCarrierGithubObservationHash": "12823e4f14e5ecf64b5ebdc279d4cc9bd4b626f28b96f93738ac86edb9074178",
-    "bootstrapPhase1GithubObservationHash": "3941923be5e8ff9bd450333925a1390b35702693ae313788985501239b3481b2",
+    "bootstrapPhase1GithubObservationHash": "4ca238e909162a9d8c3b46d17c963db8fe2b6608cc6620f8504b4810922f0300",
     "protectionWindow": {
       "preRemovalVersionId": 46039477,
       "preRemovalUpdatedAt": "2026-08-09T21:46:21.570-05:00",

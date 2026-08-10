@@ -203,10 +203,12 @@ export function validateBootstrapPhase1GithubReadback(observation, now = new Dat
     || observation?.workflowPath !== ".github/workflows/phase1-ci.yml"
     || observation?.workflowEvent !== "pull_request"
     || observation?.workflowHeadBranch !== "codex/assurance-active-task-and-claim-freshness-a1"
+    || observation?.workflowHeadSha !== observation?.carrierHead
     || observation?.workflowStatus !== "completed"
     || observation?.workflowConclusion !== "success"
     || observation?.runAttempt !== 1
     || observation?.checkSuiteId !== 85044313814
+    || observation?.checkSuiteHeadSha !== observation?.carrierHead
     || observation?.checkSuiteAppId !== githubActionsIntegrationId
     || observation?.checkSuiteAppSlug !== "github-actions"
     || observation?.checkSuiteStatus !== "completed"

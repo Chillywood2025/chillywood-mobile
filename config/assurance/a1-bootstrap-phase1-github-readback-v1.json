@@ -12,10 +12,12 @@
   "workflowPath": ".github/workflows/phase1-ci.yml",
   "workflowEvent": "pull_request",
   "workflowHeadBranch": "codex/assurance-active-task-and-claim-freshness-a1",
+  "workflowHeadSha": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
   "workflowStatus": "completed",
   "workflowConclusion": "success",
   "runAttempt": 1,
   "checkSuiteId": 85044313814,
+  "checkSuiteHeadSha": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
   "checkSuiteAppId": 15368,
   "checkSuiteAppSlug": "github-actions",
   "checkSuiteStatus": "completed",
@@ -41,5 +43,5 @@
     {"id": 93351858572, "name": "Phase 1 / TypeScript", "externalId": "a6568e09-af81-52b9-a524-ca8c86a4a918", "checkSuiteId": 85044313814, "appId": 15368, "appSlug": "github-actions", "startedAt": "2026-08-10T04:09:14Z", "completedAt": "2026-08-10T04:10:01Z", "status": "completed", "conclusion": "success"},
     {"id": 93351858558, "name": "Phase 1 / iOS Configuration", "externalId": "2ec1c1c8-7cbb-5f62-852f-4aceab65f0ae", "checkSuiteId": 85044313814, "appId": 15368, "appSlug": "github-actions", "startedAt": "2026-08-10T04:09:14Z", "completedAt": "2026-08-10T04:09:57Z", "status": "completed", "conclusion": "success"}
   ],
-  "observationHash": "3941923be5e8ff9bd450333925a1390b35702693ae313788985501239b3481b2"
+  "observationHash": "4ca238e909162a9d8c3b46d17c963db8fe2b6608cc6620f8504b4810922f0300"
 }

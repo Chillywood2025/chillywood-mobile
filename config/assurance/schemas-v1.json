@@ -537,7 +537,7 @@
     },
     "a1BootstrapPhase1GithubReadback": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["repository", "carrierHead", "observedAt", "evidenceMode", "historicalRulesetPublisherBinding", "workflowRunId", "workflowId", "workflowPath", "workflowEvent", "workflowHeadBranch", "workflowStatus", "workflowConclusion", "runAttempt", "checkSuiteId", "checkSuiteAppId", "checkSuiteAppSlug", "checkSuiteStatus", "checkSuiteConclusion", "checkRunQueryPageSize", "totalCheckRunsOnHead", "returnedCheckRuns", "checkRunReadbackComplete", "totalPhase1NamedCheckRuns", "unexpectedPhase1NamedCheckRuns", "checkRuns", "observationHash"],
+      "required": ["repository", "carrierHead", "observedAt", "evidenceMode", "historicalRulesetPublisherBinding", "workflowRunId", "workflowId", "workflowPath", "workflowEvent", "workflowHeadBranch", "workflowHeadSha", "workflowStatus", "workflowConclusion", "runAttempt", "checkSuiteId", "checkSuiteHeadSha", "checkSuiteAppId", "checkSuiteAppSlug", "checkSuiteStatus", "checkSuiteConclusion", "checkRunQueryPageSize", "totalCheckRunsOnHead", "returnedCheckRuns", "checkRunReadbackComplete", "totalPhase1NamedCheckRuns", "unexpectedPhase1NamedCheckRuns", "checkRuns", "observationHash"],
       "properties": {
         "contractId": {"const": "a1-bootstrap-phase1-github-readback-v1"},
         "repository": {"const": "Chillywood2025/chillywood-mobile"},
@@ -550,10 +550,12 @@
         "workflowPath": {"const": ".github/workflows/phase1-ci.yml"},
         "workflowEvent": {"const": "pull_request"},
         "workflowHeadBranch": {"const": "codex/assurance-active-task-and-claim-freshness-a1"},
+        "workflowHeadSha": {"const": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6"},
         "workflowStatus": {"const": "completed"},
         "workflowConclusion": {"const": "success"},
         "runAttempt": {"const": 1},
         "checkSuiteId": {"const": 85044313814},
+        "checkSuiteHeadSha": {"const": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6"},
         "checkSuiteAppId": {"const": 15368},
         "checkSuiteAppSlug": {"const": "github-actions"},
         "checkSuiteStatus": {"const": "completed"},
@@ -565,7 +567,7 @@
         "totalPhase1NamedCheckRuns": {"const": 13},
         "unexpectedPhase1NamedCheckRuns": {"const": 0},
         "checkRuns": {"type": "array", "minItems": 13, "maxItems": 13},
-        "observationHash": {"const": "3941923be5e8ff9bd450333925a1390b35702693ae313788985501239b3481b2"}
+        "observationHash": {"const": "4ca238e909162a9d8c3b46d17c963db8fe2b6608cc6620f8504b4810922f0300"}
       }
     },
     "githubMainRulesetReadbackContract": {
@@ -637,7 +639,7 @@
             "ownerAuthorizationReceiptHash": {"const": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744"},
             "ownerFinalCarrierBindingReceiptHash": {"const": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c"},
             "ownerFinalCarrierGithubObservationHash": {"const": "12823e4f14e5ecf64b5ebdc279d4cc9bd4b626f28b96f93738ac86edb9074178"},
-            "bootstrapPhase1GithubObservationHash": {"const": "3941923be5e8ff9bd450333925a1390b35702693ae313788985501239b3481b2"},
+            "bootstrapPhase1GithubObservationHash": {"const": "4ca238e909162a9d8c3b46d17c963db8fe2b6608cc6620f8504b4810922f0300"},
             "protectionWindow": {
               "type": "object",
               "required": ["preRemovalVersionId", "preRemovalUpdatedAt", "preRemovalStatusCheckSetSha256", "removalVersionId", "removedAt", "removalStatusCheckSetSha256", "restorationVersionId", "restoredAt", "restoredStatusCheckSetSha256", "policySnapshots", "policySnapshotHashes", "mainBeforeRemoval", "mainAfterRestoration", "admittedMergeShas", "additionalMergesAdmitted"],

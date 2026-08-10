@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
+import { readBootstrapMergeIdentity, validateBootstrapPhase1GithubReadback, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
 import { readJson, sha256, stableJson } from "../../scripts/assurance/lib.mjs";
 
 const contract = readJson("config/assurance/github-main-ruleset-codex-review-v1.json");
@@ -187,6 +187,8 @@ test("the historical context-only ruleset state is separated from exact GitHub A
   assert.equal(contract.authorizedBootstrapException.protectionWindow.policySnapshots.removal.requiredStatusChecks.publisherBindingState, "CONTEXT_ONLY_NO_INTEGRATION_ID_IN_PROVIDER_HISTORY");
   for (const mutate of [
     (readback) => { readback.checkRuns[0].appId = 1; },
+    (readback) => { readback.workflowHeadSha = "0".repeat(40); },
+    (readback) => { readback.checkSuiteHeadSha = "0".repeat(40); },
     (readback) => { readback.checkRuns[0].appSlug = "attacker"; },
     (readback) => { readback.checkRuns[0].name = "Unrelated / Green Check"; },
     (readback) => { readback.checkRuns[0].checkSuiteId = 1; },
@@ -202,6 +204,16 @@ test("the historical context-only ruleset state is separated from exact GitHub A
     mutate(readback);
     const errors = validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2026-08-10T07:36:00Z", "CURRENT_CLAIM", readback);
     assert.ok(errors.some((error) => error.includes("bootstrap Phase 1 GitHub observation")));
+  }
+});
+
+test("workflow and check-suite readback bind the exact carrier even after observation rehashing", () => {
+  for (const field of ["workflowHeadSha", "checkSuiteHeadSha"]) {
+    const readback = structuredClone(bootstrapPhase1GithubReadback);
+    readback[field] = "0".repeat(40);
+    delete readback.observationHash;
+    readback.observationHash = sha256(stableJson(readback));
+    assert.ok(validateBootstrapPhase1GithubReadback(readback, "2026-08-10T07:36:00Z").some((error) => error.includes("bootstrap Phase 1 GitHub observation")));
   }
 });
 
