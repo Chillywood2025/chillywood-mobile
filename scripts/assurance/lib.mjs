@@ -1403,6 +1403,7 @@ export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, 
     const parents = gitCommand(["show", "-s", "--format=%P", mergeSha]).split(/\s+/u).filter(Boolean);
     const mergeSubject = gitCommand(["show", "-s", "--format=%s", mergeSha]);
     const mergeTree = gitCommand(["rev-parse", `${mergeSha}^{tree}`]);
+    const protectedMainFirstParent = gitCommand(["rev-list", "--first-parent", remoteMain]).split(/\r?\n/u).filter(Boolean);
     gitCommand(["merge-base", "--is-ancestor", activeTaskBinding.currentImplementationHead, mergeSha]);
     gitCommand(["merge-base", "--is-ancestor", mergeSha, remoteMain]);
     const findings = [];
@@ -1412,6 +1413,9 @@ export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, 
     const expectedSubject = `Merge pull request #${activeTaskBinding.implementationPr} from Chillywood2025/${activeTaskBinding.implementationBranch}`;
     if (mergeSubject !== expectedSubject) {
       findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PR_BRANCH_MISMATCH", { expected: expectedSubject, recorded: mergeSubject }));
+    }
+    if (!protectedMainFirstParent.includes(mergeSha)) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_NOT_ON_PROTECTED_MAIN_FIRST_PARENT"));
     }
     if (mergeTree !== activeTaskBinding.currentImplementationTree) {
       findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH", { expected: activeTaskBinding.currentImplementationTree, recorded: mergeTree }));
