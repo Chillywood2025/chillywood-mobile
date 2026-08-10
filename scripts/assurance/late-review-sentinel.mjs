@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { emit, readJson } from "./lib.mjs";
+import { args, emit, readJson } from "./lib.mjs";
+import { parseLateReviewIssue, readOpenLateReviewIssues } from "./codex-review-exact-head.mjs";
 
 const requiredBlocks = ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"];
 
@@ -30,19 +31,47 @@ export function validateLateReviewSentinelState(record) {
   return findings;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+export async function readDurableLateReviewSentinels(repository, token, options = {}) {
+  const issues = await readOpenLateReviewIssues(repository, token, options);
+  const parsed = issues.map((issue) => ({ issue, sentinel: parseLateReviewIssue(issue) }));
+  if (parsed.some(({ sentinel }) => !sentinel)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  return parsed;
+}
+
+async function main() {
+  const options = args();
   const record = readJson("config/assurance/current-truth-v1.json");
   const sentinels = unresolvedLateReviewSentinels(record);
   const findings = validateLateReviewSentinelState(record);
-  emit("assurance:late-review-sentinel", sentinels.length === 0 && findings.length === 0, {
-    classification: sentinels.length ? "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW" : "NO_UNRESOLVED_LATE_REVIEW",
+  const requireGithub = options.requireGithub === true || options.requireGithub === "true";
+  let durable = [];
+  if (requireGithub) {
+    const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
+    const token = process.env.GITHUB_TOKEN;
+    if (!repository || !token) throw new Error("CODEX_REVIEW_INPUT_MISSING");
+    durable = await readDurableLateReviewSentinels(repository, token, { maxPages: 20 });
+  }
+  const durableSentinels = durable.map(({ sentinel }) => sentinel);
+  const allSentinels = [...sentinels, ...durableSentinels];
+  emit("assurance:late-review-sentinel", allSentinels.length === 0 && findings.length === 0, {
+    classification: allSentinels.length ? "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW" : "NO_UNRESOLVED_LATE_REVIEW",
     findings,
-    blocks: sentinels.flatMap(({ blocks }) => blocks ?? []),
-    pullRequests: sentinels.map(({ prNumber, reviewedSha, successorCorrectionOwner, findings }) => ({
+    githubReadbackRequired: requireGithub,
+    durableIssueNumbers: durable.map(({ issue }) => issue.number),
+    blocks: allSentinels.flatMap(({ blocks }) => blocks ?? []),
+    pullRequests: allSentinels.map(({ prNumber, reviewedSha, successorCorrectionOwner, findings: sentinelFindings }) => ({
       prNumber,
       reviewedSha,
       successorCorrectionOwner,
-      unresolvedFindings: findings.filter(({ disposition }) => disposition !== "RESOLVED").length
+      unresolvedFindings: sentinelFindings.filter(({ disposition }) => disposition !== "RESOLVED").length
     }))
-  }, [`late review sentinel: ${sentinels.length ? "FAIL" : "PASS"} — ${sentinels.length} unresolved merged review${sentinels.length === 1 ? "" : "s"}`]);
+  }, [`late review sentinel: ${allSentinels.length ? "FAIL" : "PASS"} — ${allSentinels.length} unresolved merged review${allSentinels.length === 1 ? "" : "s"}`]);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => emit("assurance:late-review-sentinel", false, {
+    classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+    findings: [{ id: error.message }],
+    blocks: requiredBlocks
+  }, [`late review sentinel: FAIL — ${error.message}`]));
 }

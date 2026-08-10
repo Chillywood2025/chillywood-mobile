@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "contractId": "external-evidence-receipt-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/externalEvidenceReceiptContract",
+  "approvedEvidenceClasses": [
+    "PROVIDER_CRITICAL",
+    "SIGNED_ARTIFACT",
+    "INSTALLED_DEVICE",
+    "PHYSICAL_DEVICE",
+    "PUBLIC_CANARY"
+  ],
+  "approvedReceiptIssuers": ["SYNTHETIC_ASSURANCE_FIXTURE_ISSUER"],
+  "approvedReceiptSchemas": ["synthetic-assurance-external-evidence-v1"],
+  "approvedCollectionCommands": {
+    "PROVIDER_CRITICAL": ["synthetic:provider-readback"],
+    "SIGNED_ARTIFACT": ["synthetic:signed-artifact-inspection"],
+    "INSTALLED_DEVICE": ["synthetic:installed-device-readback"],
+    "PHYSICAL_DEVICE": ["synthetic:physical-device-observation"],
+    "PUBLIC_CANARY": ["synthetic:public-canary-readback"]
+  },
+  "selfAttestedEvidenceAllowed": false,
+  "currentProductionVerifier": "UNAVAILABLE_FAIL_CLOSED",
+  "trustedVerifierBoundary": "injected-receipt-issuer-verifier",
+  "hashAlgorithm": "sha256",
+  "classAndPlatformCrossoverAllowed": false
+}

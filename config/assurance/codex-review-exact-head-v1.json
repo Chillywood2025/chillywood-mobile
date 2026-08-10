@@ -9,11 +9,12 @@
   ],
   "acceptableReviewStates": ["COMMENTED", "APPROVED"],
   "blockingSeverities": ["P0", "P1", "P2"],
+  "reviewOnlyLabel": "assurance-review-only",
   "requiredEvents": [
-    "pull_request.opened",
-    "pull_request.synchronize",
-    "pull_request.reopened",
-    "pull_request.ready_for_review",
+    "pull_request_target.opened",
+    "pull_request_target.synchronize",
+    "pull_request_target.reopened",
+    "pull_request_target.ready_for_review",
     "pull_request_review.submitted",
     "pull_request_review_comment.created",
     "pull_request_review_comment.edited",
@@ -37,8 +38,12 @@
     "reviewStartedAt",
     "reviewCompletedAt",
     "latestSourcePushAt",
+    "reviewSubmissions",
     "reviewComments",
     "reviewThreads",
+    "providerIssueComments",
+    "reviewFindings",
+    "providerCommentHeadUnbound",
     "receiptHash"
   ],
   "receiptHash": {
@@ -49,6 +54,8 @@
     "reviews": 100,
     "threads": 100,
     "commentsPerThread": 100,
+    "issueComments": 100,
+    "maxPages": 20,
     "checkRuns": 100,
     "polling": false
   },
@@ -58,6 +65,8 @@
     "review-completed-after-latest-source-push",
     "no-source-commit-after-review",
     "all-review-conversations-resolved",
+    "all-provider-review-surfaces-read-and-head-bound",
+    "resolved-thread-findings-require-later-exact-head-provider-rereview",
     "no-unresolved-blocking-finding",
     "exact-receipt-hash-valid"
   ],
@@ -67,10 +76,19 @@
     "CODEX_REVIEW_INCOMPLETE",
     "CODEX_REVIEW_BLOCKING_THREAD_OPEN",
     "CODEX_REVIEW_UNRESOLVED_FINDING",
+    "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND",
+    "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE",
     "CODEX_REVIEW_RECEIPT_INVALID",
     "CODEX_REVIEW_LATE_POST_MERGE",
     "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"
   ],
+  "issueCommentReviewedCommitMarker": "<!-- codex-review-reviewed-commit:<40-lowercase-hex-sha> -->",
+  "lateReviewIssue": {
+    "label": "codex-review-late-sentinel",
+    "titlePrefix": "[Codex Review Late Sentinel]",
+    "autoClose": false,
+    "maxReadPages": 20
+  },
   "lateReviewClassification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
   "lateReviewBlocks": [
     "post-merge-completion-claim",

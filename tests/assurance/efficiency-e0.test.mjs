@@ -8,7 +8,12 @@ import { runReceipt } from "../../scripts/assurance/receipt.mjs";
 import { archive, reviewHistory } from "../../scripts/assurance/review-history.mjs";
 import { benchmark } from "../../scripts/assurance/benchmark.mjs";
 import { exactKey, sha256 } from "../../scripts/assurance/efficiency-lib.mjs";
-import { evaluateFreshnessClaims, evaluateTaskFreshness } from "../../scripts/assurance/lib.mjs";
+import {
+  evaluateFreshnessClaims,
+  evaluateTaskFreshness,
+  externalEvidenceBindingHash,
+  externalEvidenceReceiptHash
+} from "../../scripts/assurance/lib.mjs";
 
 const root = process.cwd();
 const read = (file) => JSON.parse(fs.readFileSync(`${root}/${file}`, "utf8"));
@@ -93,6 +98,7 @@ test("legacy status text cannot substitute a historical frozen D2A checkpoint", 
 });
 
 const freshnessContract = read("config/assurance/current-truth-contract-v1.json").freshness;
+const externalEvidencePolicy = read("config/assurance/external-evidence-receipt-v1.json");
 const freshnessNow = new Date("2026-08-09T18:05:09Z");
 const repositorySource = {
   id: "repository-source-fixture",
@@ -116,11 +122,12 @@ const staleProvider = {
   factsCovered: ["historical provider fact"],
   freshnessClass: "PROVIDER_CRITICAL",
   authorityAllowed: "PROVIDER_READBACK_ONLY",
-  platform: "NONE"
+  platform: "NONE",
+  provider: "SUPABASE"
 };
 const freshnessSources = [
   { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt, covers: repositorySource.factsCovered, freshnessClass: repositorySource.freshnessClass, authorityAllowed: repositorySource.authorityAllowed, platform: repositorySource.platform },
-  { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt, covers: staleProvider.factsCovered, freshnessClass: staleProvider.freshnessClass, authorityAllowed: staleProvider.authorityAllowed, platform: staleProvider.platform }
+  { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt, covers: staleProvider.factsCovered, freshnessClass: staleProvider.freshnessClass, authorityAllowed: staleProvider.authorityAllowed, platform: staleProvider.platform, provider: staleProvider.provider, payloadHash: "1".repeat(64) }
 ];
 const sourceRequirement = {
   freshnessClass: "REPOSITORY_SOURCE",
@@ -136,7 +143,34 @@ const providerRequirement = {
   authorityAllowed: "PROVIDER_READBACK_ONLY",
   requiredFacts: [staleProvider.factsCovered[0]]
 };
-const evaluateClaims = (input) => evaluateFreshnessClaims({ ...input, evidenceSourceVerifier: () => true, externalEvidenceVerifier: () => true });
+const syntheticExternalEvidenceVerifier = {
+  policy: externalEvidencePolicy,
+  receiptFor: ({ claim, source }) => {
+    const receipt = {
+      schemaVersion: 1,
+      receiptId: `synthetic:${claim.id}`,
+      evidenceClass: claim.freshnessClass,
+      provider: claim.provider ?? source.provider,
+      platform: claim.platform,
+      observedAt: claim.observedAt,
+      expiresAt: claim.expiresAt,
+      receiptIssuer: "SYNTHETIC_ASSURANCE_FIXTURE_ISSUER",
+      receiptSchema: "synthetic-assurance-external-evidence-v1",
+      payloadHash: source.payloadHash,
+      evidenceHash: externalEvidenceBindingHash({ claim, source }),
+      collectionCommand: externalEvidencePolicy.approvedCollectionCommands[claim.freshnessClass]?.[0],
+      selfAttested: false
+    };
+    receipt.receiptHash = externalEvidenceReceiptHash(receipt);
+    return receipt;
+  },
+  verifyIssuerReceipt: ({ receipt }) => receipt.receiptIssuer === "SYNTHETIC_ASSURANCE_FIXTURE_ISSUER"
+};
+const evaluateClaims = (input) => evaluateFreshnessClaims({
+  ...input,
+  evidenceSourceVerifier: () => true,
+  externalEvidenceVerifier: syntheticExternalEvidenceVerifier
+});
 
 test("claim-scoped freshness denies crossover and keeps stale provider state scoped", () => {
   const baseline = evaluateClaims({
@@ -243,11 +277,13 @@ test("claim-scoped freshness denies crossover and keeps stale provider state sco
     evidenceMode: "signed-artifact-inspection",
     authorityAllowed: "SIGNED_ARTIFACT_ONLY",
     platform: "ANDROID",
-    evidenceSourceId: "android-signed-evidence"
+    evidenceSourceId: "android-signed-evidence",
+    provider: "GOOGLE_PLAY"
   };
+  const androidSignedSource = { id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt, covers: androidSigned.factsCovered, freshnessClass: androidSigned.freshnessClass, authorityAllowed: androidSigned.authorityAllowed, platform: androidSigned.platform, provider: androidSigned.provider, payloadHash: "2".repeat(64) };
   const androidEvaluation = evaluateClaims({
     claims: [androidSigned],
-    evidenceSources: [{ id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt, covers: androidSigned.factsCovered, freshnessClass: androidSigned.freshnessClass, authorityAllowed: androidSigned.authorityAllowed, platform: androidSigned.platform }],
+    evidenceSources: [androidSignedSource],
     freshness: freshnessContract,
     now: freshnessNow
   });

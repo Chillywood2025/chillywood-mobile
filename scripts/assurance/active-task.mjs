@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -106,7 +107,12 @@ function resolveFeature(truth, facts, registry) {
     const binding = truth.activeTaskBinding;
     const findings = validateStructuredBinding(binding);
     if (findings.length) return { ok: false, findings };
-    if (binding.phase === "COMPLETE") return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
+    if (binding.phase === "COMPLETE") {
+      const open = truth?.openImplementationPrs;
+      if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
+      if (open.length) return { ok: false, findings: ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"] };
+      return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
+    }
     const displayCandidates = displayFeatureCandidates(truth, registry);
     if (displayCandidates.length > 1 || (displayCandidates.length === 1 && displayCandidates[0] !== binding.featureId)) {
       return { ok: false, findings: ["ACTIVE_TASK_STRUCTURED_DISPLAY_CONFLICT"] };
@@ -313,7 +319,8 @@ export function activeTask(facts = {}) {
 
   const lateReviewBlocksCurrentBranch = (truth?.lateReviewSentinels ?? []).some((sentinel) => {
     const unresolved = (sentinel?.findings ?? []).some(({ disposition }) => disposition !== "RESOLVED");
-    return unresolved && ![sentinel?.successorCorrectionOwner, sentinel?.assuranceControlOwner].includes(identity.branch);
+    const allowedOwners = [sentinel?.successorCorrectionOwner, sentinel?.assuranceControlOwner, ...(sentinel?.authorizedBootstrapOwners ?? [])];
+    return unresolved && !allowedOwners.includes(identity.branch);
   });
   if (lateReviewBlocksCurrentBranch) return { ok: false, findings: ["LATE_REVIEW_SUCCESSOR_BLOCKED"] };
 

@@ -10,6 +10,7 @@ const contracts = [
   ["config/assurance/pr-scope-policy-v1.json", "prScopePolicy"],
   ["config/assurance/review-contract-v1.json", "reviewContract"],
   ["config/assurance/codex-review-exact-head-v1.json", "codexReviewExactHeadContract"],
+  ["config/assurance/external-evidence-receipt-v1.json", "externalEvidenceReceiptContract"],
   ["config/assurance/test-impact-map-v1.json", "testImpactMap"],
   ["config/assurance/current-truth-contract-v1.json", "currentTruthContract"],
   ["config/assurance/current-truth-v1.json", "currentTruthRecord"],

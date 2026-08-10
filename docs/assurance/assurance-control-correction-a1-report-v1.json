@@ -13,7 +13,10 @@
     "matchingExplicitFeature": "ACTIVE_TASK_AMBIGUOUS",
     "historicalD2aSourceHead": "8c47a3a9bff9f9630ba14837652ec31c14be0629",
     "historicalD2aSourceTree": "f9e102649b51da84324e97b576823e910340df9f",
-    "providerFreshnessDefect": "LOCAL_GITHUB_RENDER_REFRESH_EXTENDED_GLOBAL_ACCEPTANCE_WITH_LIVE_PROVIDER_READBACK_TRUE"
+    "providerFreshnessDefect": "LOCAL_GITHUB_RENDER_REFRESH_EXTENDED_GLOBAL_ACCEPTANCE_WITH_LIVE_PROVIDER_READBACK_TRUE",
+    "topLevelProviderReviewBypass": "P1_REVIEW_BODY_WITH_ZERO_INLINE_THREADS_PASSED_EXACT_HEAD_AND_EVADED_LATE_SENTINEL",
+    "issueCommentSurface": "TRIGGERED_WITHOUT_CONTENT_READBACK",
+    "pagination": "FIRST_PAGE_ONLY"
   },
   "structuredBinding": {
     "authority": "activeTaskBinding",
@@ -74,7 +77,10 @@
     "crossPlatformClaimLabelAllowed": false,
     "providerTtlPinnedInExecutablePolicy": true,
     "committedProseMayAuthorizeExternalTier": false,
-    "externalTierCurrentState": "REQUIRES_TRUSTED_IN_PROCESS_EXTERNAL_RECEIPT_VERIFIER",
+    "externalTierCurrentState": "REQUIRES_HASH_BOUND_RECEIPT_AND_TRUSTED_INJECTED_ISSUER_VERIFIER",
+    "externalEvidenceContract": "config/assurance/external-evidence-receipt-v1.json",
+    "productionExternalVerifier": "UNAVAILABLE_FAIL_CLOSED",
+    "syntheticReceiptNegativeCases": ["missing", "altered-payload", "wrong-class", "wrong-platform", "forged-issuer", "wrong-command", "self-attested", "altered-receipt-hash", "issuer-proof-rejected"],
     "staleOperationalValuesRenderedAsHistorical": true
   },
   "exactHeadCodexReview": {
@@ -88,8 +94,25 @@
     "requiresReviewAfterLatestSourcePush": true,
     "requiresAllConversationsResolved": true,
     "blocksP0P1P2": true,
+    "providerSurfaces": ["REVIEW_BODY", "INLINE_THREAD", "ISSUE_COMMENT"],
+    "allProviderSurfacesPaginated": true,
+    "paginationFailure": "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE",
+    "issueCommentHeadBindingFailure": "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND",
+    "bodyHashesReceiptBound": true,
+    "resolvedFindingRequiresLaterExactHeadProviderRereview": true,
+    "reviewOnlyLabel": "assurance-review-only",
     "rulesetPatch": "config/assurance/github-main-ruleset-codex-review-v1.json",
     "rulesetApplicationState": "PENDING_POST_A1_MERGE_READBACK"
+  },
+  "a1HostedSecurity": {
+    "scanId": "ff6e7399-23c1-47e9-abf1-13a9e3df4d4b",
+    "state": "HISTORICAL_UNSEALED_FINALIZER_FAILURE",
+    "exactFailure": "scan.target.snapshotDigest: expected a non-empty string",
+    "retried": false,
+    "hostSnapshotDigestFabricated": false,
+    "codexSecuritySealed": false,
+    "replacementClosure": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+    "replacementClosureState": "PENDING_FINAL_EXACT_HEAD_REPOSITORY_REVIEW"
   },
   "lateReviewSentinel": {
     "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
@@ -110,13 +133,20 @@
       {"commentId": 3744746873, "threadId": "PRRT_kwDORRwZUc6XqB8T", "severity": "P2"}
     ],
     "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction",
+    "durableRepositoryIssue": {
+      "label": "codex-review-late-sentinel",
+      "autoClose": false,
+      "state": "PENDING_A1_MAIN_INSTALLATION"
+    },
     "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
   },
   "regression": {
-    "requiredMatrix": "34/34_PASS",
+    "requiredMatrix": "47/47_PASS",
+    "activeTaskExactHeadProviderFocused": "34/34_PASS",
+    "efficiencyAndClaimFreshness": "13/13_PASS",
     "deterministicPacketRuns": "3/3_PASS",
     "headBindingAndSynchronization": "PASS",
-    "contracts": "19/19_PASS",
+    "contracts": "20/20_PASS",
     "featureRegistry": "21_FEATURES_PASS",
     "escapedDefects": "25_CLASSES_PASS"
   },

@@ -10,6 +10,7 @@ const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md");
 const currentState = read("CURRENT_STATE.md");
 const nextTask = read("NEXT_TASK.md");
+const currentTruth = JSON.parse(read("config/assurance/current-truth-v1.json"));
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
 const approvalFunction = read("supabase/functions/autonomous-approval-request/index.ts");
 const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
@@ -35,6 +36,11 @@ const includes = (source, needle, label) => {
 const notIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
 };
+const providerCriticalCurrent = currentTruth.freshnessClaims.some(({ freshnessClass, status }) => freshnessClass === "PROVIDER_CRITICAL" && status === "CURRENT");
+const repositorySourceCurrent = currentTruth.freshnessClaims.some(({ freshnessClass, status }) => freshnessClass === "REPOSITORY_SOURCE" && status === "CURRENT");
+if (currentTruth.liveProviderReadback !== providerCriticalCurrent) fail("live provider readback must derive only from a current provider-critical claim");
+if (!repositorySourceCurrent) fail("source-only autonomous contract requires a current repository-source claim");
+if (providerCriticalCurrent) fail("source-only autonomous contract must not promote stale provider evidence to current proof");
 
 const requiredActiveSystems = [
   "media_automation",
@@ -378,12 +384,14 @@ for (const system of manualScopedSystems) {
     includes(block, "ownerApprovalRequired: false", `${system.id} bounded bootstrap no per-action approval`);
     includes(block, "gs://chillywood-installed-qa-testlab-results", `${system.id} exact bucket`);
     includes(block, "enable or link Google Cloud billing", `${system.id} billing enablement forbidden`);
-    const installedQaProofDocs = registryDoc + operatingModel + currentState + nextTask;
-    includes(installedQaProofDocs, "ff81956d-94e3-49e9-8c80-fae2c12b0dd8", `${system.id} timer proof row`);
-    includes(installedQaProofDocs, "1dc00369-b5ca-4289-92bc-daf5bae00222", `${system.id} timeout proof row`);
-    includes(installedQaProofDocs, "282fb154-101c-402b-9539-d3fb8080de51", `${system.id} duplicate-safe pending proof row`);
-    includes(installedQaProofDocs, "POLL_HTTP_FAILED", `${system.id} tracked pending matrix state`);
-    includes(installedQaProofDocs, "daily timer is enabled", `${system.id} active timer proof`);
+    const installedQa = currentTruth.operationalClosures.installedProductQa;
+    for (const proofRow of ["ff81956d-94e3-49e9-8c80-fae2c12b0dd8", "1dc00369-b5ca-4289-92bc-daf5bae00222", "282fb154-101c-402b-9539-d3fb8080de51"]) {
+      if (!installedQa.proofRowIds.includes(proofRow)) fail(`${system.id} historical proof row missing: ${proofRow}`);
+    }
+    if (installedQa.currentMatrixState !== "POLL_HTTP_FAILED") fail(`${system.id} historical pending matrix state missing`);
+    if (installedQa.dailyTimerEnabled !== true) fail(`${system.id} historical timer value missing`);
+    includes(currentState, "Installed Product QA closure is retained as historical evidence only", `${system.id} historical classification`);
+    includes(currentState, "It is not fresh installed or physical proof", `${system.id} current-proof denial`);
   }
   for (const forbidden of system.forbidden) includes(block, forbidden, `${system.id} forbidden scope`);
   includes(packageJson, `"${system.proof}"`, `${system.id} package proof`);
@@ -565,12 +573,13 @@ includes(approvalFunction, "emergency_pause_system", "approval emergency control
 for (const systemId of approvalRequesterSystems) includes(approvalFunction, `"${systemId}"`, "approval requester system");
 notIncludes(approvalFunction, "rachi_can_approve", "approval function");
 
-notIncludes(currentState + nextTask, "dashboard valid TEST proof remains pending", "RevenueCat closure state");
-includes(currentState + nextTask, "RevenueCat provider readback is closed", "RevenueCat reconciled state");
-includes(currentState + nextTask, "dashboard TEST returned HTTP `200` / `test_received`", "RevenueCat dashboard TEST closure");
-includes(currentState + nextTask, "premiumGranted=false", "RevenueCat no Premium grant");
-includes(currentState + nextTask, "liveMoneyAction=false", "RevenueCat no live money action");
-includes(currentState + nextTask, "moneyMoved=false", "RevenueCat no money moved");
+const revenueCat = currentTruth.operationalClosures.revenueCat;
+if (revenueCat.providerReadbackClosed !== true) fail("historical RevenueCat provider-readback value missing");
+if (revenueCat.dashboardTest.httpStatus !== 200 || revenueCat.dashboardTest.result !== "test_received") fail("historical RevenueCat dashboard TEST value missing");
+if (revenueCat.premiumGranted !== false || revenueCat.liveMoneyAction !== false || revenueCat.moneyMoved !== false) fail("historical RevenueCat safety values changed");
+includes(currentState, "RevenueCat closure values are historical only, not current provider proof", "RevenueCat historical classification");
+includes(currentState, "dashboard TEST recorded HTTP `200` / `test_received`", "RevenueCat historical dashboard record");
+notIncludes(currentState + nextTask, "RevenueCat provider readback is closed", "falsely current RevenueCat wording");
 
 if (existsSync("app/admin-command-center.tsx")) fail("duplicate admin route exists");
 if (/production_ota_publish[\s\S]{0,400}approvalLevel:\s*[0123]/.test(registry)) fail("production OTA publish downgraded below Level 4");
@@ -594,5 +603,8 @@ console.log(JSON.stringify({
   foundationOnlySystems,
   scopedWriteSystemsAdded: [...newlyScopedSystems.map((system) => system.id), ...manualScopedSystems.map((system) => system.id)],
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
+  providerEvidenceClassification: "HISTORICAL_PROVIDER_FACT",
+  currentProviderProof: false,
+  sourceOnlyEligible: true,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));

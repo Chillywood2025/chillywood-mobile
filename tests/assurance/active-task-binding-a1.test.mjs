@@ -185,7 +185,7 @@ test("a completed binding is not an active task and no override can revive it", 
     identity: completeIdentity
   });
   assert.equal(competing.ok, false);
-  assert.deepEqual(competing.findings, ["ACTIVE_TASK_NONE"]);
+  assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
   assert.deepEqual(activeTask({ ...facts, currentTruth: canonicalTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
 });
 

@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 jobs:
   manual-preview-build:
@@ -19,7 +20,9 @@ jobs:
           persist-credentials: false
 
       - name: Deny build while late Codex Review findings are unresolved
-        run: node scripts/assurance/late-review-sentinel.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/assurance/late-review-sentinel.mjs --require-github
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

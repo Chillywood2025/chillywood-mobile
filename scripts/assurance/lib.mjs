@@ -159,6 +159,82 @@ function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
 }
 
+const externalReceiptHashPattern = /^[0-9a-f]{64}$/u;
+const externalReceiptRequiredFields = [
+  "schemaVersion",
+  "receiptId",
+  "evidenceClass",
+  "provider",
+  "platform",
+  "observedAt",
+  "expiresAt",
+  "receiptIssuer",
+  "receiptSchema",
+  "receiptHash",
+  "payloadHash",
+  "evidenceHash",
+  "collectionCommand",
+  "selfAttested"
+];
+
+export function externalEvidenceReceiptHash(receipt) {
+  const payload = structuredClone(receipt ?? {});
+  delete payload.receiptHash;
+  return sha256(stableValue(payload));
+}
+
+export function externalEvidenceBindingHash({ claim, source }) {
+  return sha256(stableValue({
+    evidenceSourceId: claim?.evidenceSourceId ?? null,
+    evidenceClass: claim?.freshnessClass ?? null,
+    provider: claim?.provider ?? source?.provider ?? null,
+    platform: claim?.platform ?? null,
+    observedAt: claim?.observedAt ?? null,
+    expiresAt: claim?.expiresAt ?? null,
+    factsCovered: claim?.factsCovered ?? null
+  }));
+}
+
+export function verifyExternalEvidenceReceipt({ claim, source, receipt, policy, verifyIssuerReceipt }) {
+  const findings = [];
+  const add = (id) => findings.push({ id, status: "BLOCKED_INTERNAL" });
+  const missing = receipt && typeof receipt === "object" && !Array.isArray(receipt)
+    ? externalReceiptRequiredFields.filter((field) => !Object.hasOwn(receipt, field))
+    : externalReceiptRequiredFields;
+  if (missing.length) return { ok: false, findings: [{ id: "ASSURANCE_EXTERNAL_EVIDENCE_RECEIPT_MISSING", status: "BLOCKED_INTERNAL", fields: missing }] };
+  const approvedClasses = policy?.approvedEvidenceClasses;
+  const approvedIssuers = policy?.approvedReceiptIssuers;
+  const approvedSchemas = policy?.approvedReceiptSchemas;
+  const approvedCommands = policy?.approvedCollectionCommands?.[claim?.freshnessClass];
+  if (policy?.contractId !== "external-evidence-receipt-v1"
+    || policy?.selfAttestedEvidenceAllowed !== false
+    || !Array.isArray(approvedClasses)
+    || !Array.isArray(approvedIssuers)
+    || !Array.isArray(approvedSchemas)
+    || !Array.isArray(approvedCommands)) add("ASSURANCE_EXTERNAL_EVIDENCE_POLICY_INVALID");
+  if (!approvedClasses?.includes(receipt.evidenceClass) || receipt.evidenceClass !== claim?.freshnessClass) add("ASSURANCE_EXTERNAL_EVIDENCE_CLASS_MISMATCH");
+  if (receipt.platform !== claim?.platform || receipt.platform !== source?.platform) add("ASSURANCE_EXTERNAL_EVIDENCE_PLATFORM_MISMATCH");
+  const expectedProvider = claim?.provider ?? source?.provider;
+  if (typeof expectedProvider !== "string" || !expectedProvider || receipt.provider !== expectedProvider || source?.provider !== expectedProvider) add("ASSURANCE_EXTERNAL_EVIDENCE_PROVIDER_MISMATCH");
+  if (receipt.observedAt !== claim?.observedAt || receipt.observedAt !== source?.observedAt || receipt.expiresAt !== claim?.expiresAt) add("ASSURANCE_EXTERNAL_EVIDENCE_TIME_MISMATCH");
+  if (!approvedIssuers?.includes(receipt.receiptIssuer)) add("ASSURANCE_EXTERNAL_EVIDENCE_ISSUER_UNAPPROVED");
+  if (!approvedSchemas?.includes(receipt.receiptSchema)) add("ASSURANCE_EXTERNAL_EVIDENCE_SCHEMA_UNAPPROVED");
+  if (!approvedCommands?.includes(receipt.collectionCommand)) add("ASSURANCE_EXTERNAL_EVIDENCE_COMMAND_UNAPPROVED");
+  if (receipt.selfAttested !== false) add("ASSURANCE_EXTERNAL_EVIDENCE_SELF_ATTESTED_DENIED");
+  if (!externalReceiptHashPattern.test(receipt.payloadHash) || receipt.payloadHash !== source?.payloadHash) add("ASSURANCE_EXTERNAL_EVIDENCE_PAYLOAD_HASH_MISMATCH");
+  if (!externalReceiptHashPattern.test(receipt.evidenceHash) || receipt.evidenceHash !== externalEvidenceBindingHash({ claim, source })) add("ASSURANCE_EXTERNAL_EVIDENCE_BINDING_HASH_MISMATCH");
+  if (!externalReceiptHashPattern.test(receipt.receiptHash) || receipt.receiptHash !== externalEvidenceReceiptHash(receipt)) add("ASSURANCE_EXTERNAL_EVIDENCE_RECEIPT_HASH_MISMATCH");
+  let issuerVerified = false;
+  try {
+    issuerVerified = typeof verifyIssuerReceipt === "function"
+      && verifyIssuerReceipt({ claim, source, receipt, canonicalReceiptHash: externalEvidenceReceiptHash(receipt) }) === true;
+  } catch {
+    issuerVerified = false;
+  }
+  if (!issuerVerified) add("ASSURANCE_EXTERNAL_EVIDENCE_ISSUER_VERIFICATION_FAILED");
+  return { ok: findings.length === 0, findings };
+}
+
 export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null, externalEvidenceVerifier = null }) {
   const findings = [];
   const evaluated = [];
@@ -268,14 +344,24 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
       }
       const derivedStatus = evaluationTime <= expiresAt ? "CURRENT" : "STALE_BLOCKED";
       if (derivedStatus === "CURRENT" && claimClassPolicy[claim.freshnessClass]?.requiresExternalReceipt === true) {
-        let externallyVerified = false;
+        let externalResult = { ok: false, findings: [{ id: "ASSURANCE_EXTERNAL_EVIDENCE_RECEIPT_MISSING", status: "BLOCKED_INTERNAL" }] };
         try {
-          externallyVerified = typeof externalEvidenceVerifier === "function"
-            && externalEvidenceVerifier({ claim, source }) === true;
+          const receipt = typeof externalEvidenceVerifier?.receiptFor === "function"
+            ? externalEvidenceVerifier.receiptFor({ claim, source })
+            : null;
+          externalResult = verifyExternalEvidenceReceipt({
+            claim,
+            source,
+            receipt,
+            policy: externalEvidenceVerifier?.policy,
+            verifyIssuerReceipt: externalEvidenceVerifier?.verifyIssuerReceipt
+          });
         } catch {
-          externallyVerified = false;
+          externalResult = { ok: false, findings: [{ id: "ASSURANCE_EXTERNAL_EVIDENCE_RECEIPT_MALFORMED", status: "BLOCKED_INTERNAL" }] };
         }
-        if (!externallyVerified) findings.push(claimFinding("ASSURANCE_FRESHNESS_EXTERNAL_RECEIPT_UNVERIFIED", claimId));
+        if (!externalResult.ok) findings.push(claimFinding("ASSURANCE_FRESHNESS_EXTERNAL_RECEIPT_UNVERIFIED", claimId, {
+          receiptFindings: externalResult.findings.map(({ id }) => id)
+        }));
       }
     }
     const derivedStatus = evaluationTime <= expiresAt ? "CURRENT" : "STALE_BLOCKED";

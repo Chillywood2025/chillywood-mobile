@@ -474,14 +474,18 @@
       "reviewCompletedAt": "2026-08-09T18:11:34Z",
       "bindingPath": "d2aMicrophoneCorrectionBinding",
       "findings": [
-        {"commentId": 3744746865, "commentNodeId": "PRRC_kwDORRwZUc7fNE1x", "threadId": "PRRT_kwDORRwZUc6XqB8L", "severity": "P1", "timestamp": "2026-08-09T18:11:34Z", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
-        {"commentId": 3744746868, "commentNodeId": "PRRC_kwDORRwZUc7fNE10", "threadId": "PRRT_kwDORRwZUc6XqB8O", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
-        {"commentId": 3744746869, "commentNodeId": "PRRC_kwDORRwZUc7fNE11", "threadId": "PRRT_kwDORRwZUc6XqB8P", "severity": "P1", "timestamp": "2026-08-09T18:11:34Z", "affectedPaths": ["docs/assurance/pr-d2a-livekit-mic-membership-convergence-correction-v1.json"], "disposition": "UNRESOLVED"},
-        {"commentId": 3744746872, "commentNodeId": "PRRC_kwDORRwZUc7fNE14", "threadId": "PRRT_kwDORRwZUc6XqB8S", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
-        {"commentId": 3744746873, "commentNodeId": "PRRC_kwDORRwZUc7fNE15", "threadId": "PRRT_kwDORRwZUc6XqB8T", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"}
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746865, "provider": "chatgpt-codex-connector", "bodyHash": "d524691372b79106d0760f25e445118785e785abbfcc488545cb39c88fd2af37", "commentId": 3744746865, "commentNodeId": "PRRC_kwDORRwZUc7fNE1x", "threadId": "PRRT_kwDORRwZUc6XqB8L", "severity": "P1", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746868, "provider": "chatgpt-codex-connector", "bodyHash": "d54ed8690d12138ad37b6c47a3d2f986a0f331c69be6312cc7239e22842049f7", "commentId": 3744746868, "commentNodeId": "PRRC_kwDORRwZUc7fNE10", "threadId": "PRRT_kwDORRwZUc6XqB8O", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746869, "provider": "chatgpt-codex-connector", "bodyHash": "e174e6a0d2a9e245cb6ac82976cc72d45981926e04e06bee376376475595ad46", "commentId": 3744746869, "commentNodeId": "PRRC_kwDORRwZUc7fNE11", "threadId": "PRRT_kwDORRwZUc6XqB8P", "severity": "P1", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["docs/assurance/pr-d2a-livekit-mic-membership-convergence-correction-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746872, "provider": "chatgpt-codex-connector", "bodyHash": "2e6fe51cb3e76b8a65ef438565caa0a082906176c0110a4617341c7c49a7464a", "commentId": 3744746872, "commentNodeId": "PRRC_kwDORRwZUc7fNE14", "threadId": "PRRT_kwDORRwZUc6XqB8S", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746873, "provider": "chatgpt-codex-connector", "bodyHash": "485b525f741508c8a6872800889cddcb10e053bcb870a72f0e78ec662509b978", "commentId": 3744746873, "commentNodeId": "PRRC_kwDORRwZUc7fNE15", "threadId": "PRRT_kwDORRwZUc6XqB8T", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"}
       ],
       "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction",
       "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "authorizedBootstrapOwners": [
+        "codex/assurance-active-task-and-claim-freshness-a1",
+        "codex/assurance-codex-security-scan-reliability-s0"
+      ],
       "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
     }
   ],
@@ -573,8 +577,8 @@
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_A1_ACTIVE_D2A_FROZEN",
     "nextActions": [
       "Complete assurance-control A1 with exact-head Codex Review receipt gating, unresolved-conversation blocking, late-review detection, bounded ruleset enforcement, four exact-diff review lanes, one exact Phase 1 CI run, and post-A1 current-truth synchronization.",
-      "Then correct all five unresolved PR #194 review findings on codex/d2a-livekit-mic-post-merge-review-correction, require mounted-hook proof, an exact-head Codex Review receipt, resolved conversations, compact review lanes, exact Phase 1 CI, merge, and post-correction truth.",
-      "Only after the post-merge product review findings are corrected may Codex Security Scan Reliability S0 begin; D2A remains frozen until S0 merges.",
+    "Then implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
+    "Only after A1 and S0 complete may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",

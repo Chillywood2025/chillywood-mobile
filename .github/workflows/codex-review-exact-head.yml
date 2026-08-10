@@ -1,7 +1,9 @@
 name: Chi'llywood / Codex Review Exact Head
 
 on:
-  pull_request:
+  # pull_request_target keeps both the workflow definition and evaluator on the
+  # protected base branch. No pull-request source is checked out or executed.
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted, edited, dismissed]
@@ -21,7 +23,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  issues: read
+  issues: write
   checks: write
   actions: read
 
