@@ -31,6 +31,8 @@ const contracts = [
   ["config/assurance/review-history-v1.json", "reviewHistory"],
   ["docs/assurance/e0-benchmark-v1.json", "efficiencyBenchmark"],
   ["config/assurance/dogfood-pr-a-v1.json", "dogfood"]
+  , ["config/assurance/codex-security-reliability-s0-v1.json", "codexSecurityReliabilityContract"]
+  , ["config/assurance/codex-security-scan-incidents-v1.json", "codexSecurityIncidentLedger"]
 ];
 
 function validate(value, schema, at, errors) {

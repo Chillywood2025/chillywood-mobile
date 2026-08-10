@@ -1,1 +1,122 @@
-{"schemaVersion":1,"contractId":"codex-security-reliability-s0-v1","schemaRef":"config/assurance/schemas-v1.json#/$defs/baseContract","states":["TARGET_FROZEN","HOST_PREFLIGHT_CLEAR","DISCOVERY_RUNNING","SOURCE_REVIEW_COMPLETE","FINALIZATION_RUNNING","SEALED","HOST_PREFLIGHT_BLOCKED","SOURCE_REVIEW_INCOMPLETE","SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING","TERMINAL_FAILED","CANCELED"],"invariants":["host digest distinct from repository digest","discovery only after preflight","lease exact","one completion","fallback never sealed"]}
+{
+  "schemaVersion": 1,
+  "contractId": "codex-security-reliability-s0-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/codexSecurityReliabilityContract",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "targetContract": {
+    "kind": "codex-security-target-v1",
+    "requiredIdentity": [
+      "repository.slug",
+      "repository.originUrlSha256",
+      "base.ref",
+      "base.head",
+      "base.tree",
+      "target.ref",
+      "target.head",
+      "target.tree",
+      "changedPaths",
+      "changedPathWorklistSha256",
+      "contractHashes",
+      "repositorySourceSnapshotDigest"
+    ],
+    "changedPathStatuses": ["A", "D", "M", "T"],
+    "snapshotDigest": "sha256-stable-json-repository-owned-git-object-identities"
+  },
+  "hostPreflight": {
+    "requiredBeforeDiscovery": [
+      "scanId",
+      "scanState=RUNNING",
+      "repository",
+      "base.head",
+      "base.tree",
+      "target.head",
+      "target.tree",
+      "target.snapshotDigest"
+    ],
+    "snapshotDigestField": "scan.target.snapshotDigest",
+    "unavailableCode": "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
+    "missingCode": "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",
+    "workersStartedOnFailure": false,
+    "polling": false
+  },
+  "states": [
+    "TARGET_FROZEN",
+    "HOST_PREFLIGHT_CLEAR",
+    "DISCOVERY_RUNNING",
+    "SOURCE_REVIEW_COMPLETE",
+    "FINALIZATION_RUNNING",
+    "SEALED",
+    "HOST_PREFLIGHT_BLOCKED",
+    "SOURCE_REVIEW_INCOMPLETE",
+    "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+    "TERMINAL_FAILED",
+    "CANCELED"
+  ],
+  "terminalStates": [
+    "SEALED",
+    "HOST_PREFLIGHT_BLOCKED",
+    "SOURCE_REVIEW_INCOMPLETE",
+    "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+    "TERMINAL_FAILED",
+    "CANCELED"
+  ],
+  "sourceLease": {
+    "requiredFields": [
+      "repository",
+      "base",
+      "target",
+      "changedPathWorklistSha256",
+      "contractHashes",
+      "repositorySourceSnapshotDigest",
+      "sourceLeaseHash"
+    ],
+    "changedSourceDisposition": "INVALIDATE_IMMEDIATELY"
+  },
+  "completion": {
+    "maximumAttempts": 1,
+    "failedAttemptIsTerminal": true,
+    "terminalRetryAllowed": false
+  },
+  "evidenceReuse": {
+    "unchangedExactSource": "EXACT_UNCHANGED_SOURCE_REUSE",
+    "changedSource": "MISS_SOURCE_OR_CONTRACT_CHANGED",
+    "allowedEvidenceClass": "REPOSITORY_SOURCE_SECURITY",
+    "deniedClasses": ["PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY", "time-limited"]
+  },
+  "repositoryClosure": {
+    "classification": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+    "sealed": false,
+    "required": [
+      "exact head and tree",
+      "complete changed-path coverage",
+      "independent exact-head review hash",
+      "P0=0",
+      "P1=0",
+      "test result hashes",
+      "all prior finding dispositions closed",
+      "no deferred work",
+      "exact reason hosted sealing was not used"
+    ],
+    "hostedSelfApprovalReason": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"
+  },
+  "incidentSanitization": {
+    "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
+    "rawErrorRetained": false,
+    "tokenValues": null,
+    "wallValues": null,
+    "knownScanIds": [
+      "508c30b1-cf43-4902-96f1-92563d490149",
+      "a64456db-438c-4857-8f01-c40fcc965936"
+    ]
+  },
+  "invariants": [
+    "host digest and repository digest use separate fields and authorities",
+    "discovery only starts after exact preflight",
+    "a source push invalidates the exact lease and prior evidence",
+    "one completion attempt maximum",
+    "terminal scans cannot retry",
+    "unchanged repository-source evidence alone may be reused",
+    "repository fallback is never Codex Security sealed",
+    "S0 is approved only by independent exact-head repository review"
+  ]
+}

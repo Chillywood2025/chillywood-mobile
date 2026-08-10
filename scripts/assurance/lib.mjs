@@ -174,7 +174,10 @@ const canonicalFactRegistry = [
   { factId: "repository.assurance-control.a1.post-merge-control-readback", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub" },
   { factId: "repository.assurance-control.a1.complete-late-sentinel-inventory", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records" },
   { factId: "repository.assurance-control.a1.late-review-tombstone-admission", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor" },
+  { factId: "repository.assurance-control.s0.requirements", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 machine-readable contract pins exact target identity, digest preflight, lifecycle, evidence reuse, repository closure, and incident-sanitization requirements" },
   { factId: "repository.assurance-control.s0.source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording" },
+  { factId: "repository.assurance-control.s0.model", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 executable model and adversarial fixtures prove preflight stops before discovery, one completion attempt, terminal no-retry, exact reuse, invalidation, closure integrity, and sanitized recurring incidents" },
+  { factId: "repository.assurance-control.s0.integration", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 integration evidence binds the exact target descriptor, repository closure, governed commands, independent exact-head review, and Phase 1 CI to one frozen source" },
   { factId: "repository.active-implementation.immutable-synchronized-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d" },
   { factId: "repository.active-implementation.merge-identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree" },
   { factId: "repository.review-only-pr.disposition", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained" },
@@ -1457,6 +1460,16 @@ export const proofTierCompletionFeatureApplicability = {
     T5_SIGNED_ARTIFACT: "not-applicable-no-artifact-change",
     T6_INSTALLED_PHYSICAL: "not-applicable-no-installed-change",
     T7_PUBLIC_CANARY: "not-applicable-no-release"
+  },
+  "codex-security-scan-reliability-s0": {
+    T0_REQUIREMENT: "required",
+    T1_SOURCE: "required",
+    T2_MODEL: "required",
+    T3_INTEGRATION: "required",
+    T4_NATIVE_PROVIDER: "metadata-boundary-only-no-new-native-or-provider-proof",
+    T5_SIGNED_ARTIFACT: "not-applicable",
+    T6_INSTALLED_PHYSICAL: "not-applicable",
+    T7_PUBLIC_CANARY: "not-applicable"
   }
 };
 const proofTierCompletionPolicies = {
@@ -1500,6 +1513,42 @@ export const proofTierCompletionFactAuthorities = [
   {
     featureId: "assurance-efficiency-e0",
     factId: "repository.assurance-control.a1.integration",
+    proofTiers: ["T3_INTEGRATION"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.requirements",
+    proofTiers: ["T0_REQUIREMENT"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.source",
+    proofTiers: ["T1_SOURCE"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.model",
+    proofTiers: ["T2_MODEL"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.integration",
     proofTiers: ["T3_INTEGRATION"],
     freshnessClass: "REPOSITORY_SOURCE",
     authorityAllowed: "REPOSITORY_ONLY",

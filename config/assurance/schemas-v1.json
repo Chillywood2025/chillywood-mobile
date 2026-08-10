@@ -41,13 +41,18 @@
           "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
         }},
         "completionFeatureApplicability": {"const": {
-          "assurance-efficiency-e0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required-shadow-workflow", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable-no-artifact-change", "T6_INSTALLED_PHYSICAL": "not-applicable-no-installed-change", "T7_PUBLIC_CANARY": "not-applicable-no-release"}
+          "assurance-efficiency-e0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required-shadow-workflow", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable-no-artifact-change", "T6_INSTALLED_PHYSICAL": "not-applicable-no-installed-change", "T7_PUBLIC_CANARY": "not-applicable-no-release"},
+          "codex-security-scan-reliability-s0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable", "T6_INSTALLED_PHYSICAL": "not-applicable", "T7_PUBLIC_CANARY": "not-applicable"}
         }},
         "completionFactAuthorities": {"const": [
           {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.requirements", "proofTiers": ["T0_REQUIREMENT"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
           {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.source", "proofTiers": ["T1_SOURCE"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
           {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.model", "proofTiers": ["T2_MODEL"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
-          {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"}
+          {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+          {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.requirements", "proofTiers": ["T0_REQUIREMENT"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+          {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.source", "proofTiers": ["T1_SOURCE"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+          {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.model", "proofTiers": ["T2_MODEL"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+          {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"}
         ]},
         "phaseBlockers": {"type": "object"}
       }
@@ -139,7 +144,10 @@
               {"factId": "repository.assurance-control.a1.post-merge-control-readback", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "requiresReadbackHash": true, "historicalEvidence": "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub"},
               {"factId": "repository.assurance-control.a1.complete-late-sentinel-inventory", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "requiresReadbackHash": true, "historicalEvidence": "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records"},
               {"factId": "repository.assurance-control.a1.late-review-tombstone-admission", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "requiresReadbackHash": true, "historicalEvidence": "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"},
+              {"factId": "repository.assurance-control.s0.requirements", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "S0 machine-readable contract pins exact target identity, digest preflight, lifecycle, evidence reuse, repository closure, and incident-sanitization requirements"},
               {"factId": "repository.assurance-control.s0.source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording"},
+              {"factId": "repository.assurance-control.s0.model", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "S0 executable model and adversarial fixtures prove preflight stops before discovery, one completion attempt, terminal no-retry, exact reuse, invalidation, closure integrity, and sanitized recurring incidents"},
+              {"factId": "repository.assurance-control.s0.integration", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "S0 integration evidence binds the exact target descriptor, repository closure, governed commands, independent exact-head review, and Phase 1 CI to one frozen source"},
               {"factId": "repository.active-implementation.immutable-synchronized-source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d"},
               {"factId": "repository.active-implementation.merge-identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree"},
               {"factId": "repository.review-only-pr.disposition", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained"},
@@ -484,6 +492,102 @@
             "active": {"type": "string"},
             "nextActions": {"type": "array", "minItems": 1},
             "prohibitions": {"type": "array", "minItems": 1}
+          }
+        }
+      }
+    },
+    "codexSecurityReliabilityContract": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["repository", "targetContract", "hostPreflight", "states", "terminalStates", "sourceLease", "completion", "evidenceReuse", "repositoryClosure", "incidentSanitization", "invariants"],
+      "properties": {
+        "contractId": {"const": "codex-security-reliability-s0-v1"},
+        "repository": {"const": "Chillywood2025/chillywood-mobile"},
+        "targetContract": {
+          "type": "object",
+          "required": ["kind", "requiredIdentity", "changedPathStatuses", "snapshotDigest"],
+          "properties": {
+            "kind": {"const": "codex-security-target-v1"},
+            "changedPathStatuses": {"const": ["A", "D", "M", "T"]},
+            "snapshotDigest": {"const": "sha256-stable-json-repository-owned-git-object-identities"}
+          }
+        },
+        "hostPreflight": {
+          "type": "object",
+          "required": ["requiredBeforeDiscovery", "snapshotDigestField", "unavailableCode", "missingCode", "workersStartedOnFailure", "polling"],
+          "properties": {
+            "snapshotDigestField": {"const": "scan.target.snapshotDigest"},
+            "unavailableCode": {"const": "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE"},
+            "missingCode": {"const": "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"},
+            "workersStartedOnFailure": {"const": false},
+            "polling": {"const": false}
+          }
+        },
+        "states": {"type": "array", "minItems": 11, "uniqueItems": true},
+        "terminalStates": {"const": ["SEALED", "HOST_PREFLIGHT_BLOCKED", "SOURCE_REVIEW_INCOMPLETE", "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "TERMINAL_FAILED", "CANCELED"]},
+        "sourceLease": {
+          "type": "object",
+          "required": ["requiredFields", "changedSourceDisposition"],
+          "properties": {"changedSourceDisposition": {"const": "INVALIDATE_IMMEDIATELY"}}
+        },
+        "completion": {"const": {"maximumAttempts": 1, "failedAttemptIsTerminal": true, "terminalRetryAllowed": false}},
+        "evidenceReuse": {
+          "type": "object",
+          "required": ["unchangedExactSource", "changedSource", "allowedEvidenceClass", "deniedClasses"],
+          "properties": {
+            "unchangedExactSource": {"const": "EXACT_UNCHANGED_SOURCE_REUSE"},
+            "changedSource": {"const": "MISS_SOURCE_OR_CONTRACT_CHANGED"},
+            "allowedEvidenceClass": {"const": "REPOSITORY_SOURCE_SECURITY"}
+          }
+        },
+        "repositoryClosure": {
+          "type": "object",
+          "required": ["classification", "sealed", "required", "hostedSelfApprovalReason"],
+          "properties": {
+            "classification": {"const": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"},
+            "sealed": {"const": false},
+            "hostedSelfApprovalReason": {"const": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"}
+          }
+        },
+        "incidentSanitization": {
+          "type": "object",
+          "required": ["errorCode", "rawErrorRetained", "tokenValues", "wallValues", "knownScanIds"],
+          "properties": {
+            "errorCode": {"const": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER"},
+            "rawErrorRetained": {"const": false},
+            "tokenValues": {"const": null},
+            "wallValues": {"const": null},
+            "knownScanIds": {"const": ["508c30b1-cf43-4902-96f1-92563d490149", "a64456db-438c-4857-8f01-c40fcc965936"]}
+          }
+        },
+        "invariants": {"type": "array", "minItems": 8, "uniqueItems": true}
+      }
+    },
+    "codexSecurityIncidentLedger": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["rawPayloadsRetained", "incidents"],
+      "properties": {
+        "contractId": {"const": "codex-security-scan-incidents-v1"},
+        "rawPayloadsRetained": {"const": false},
+        "incidents": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["schemaVersion", "scanId", "errorCode", "errorFingerprint", "sourceReviewCompletionState", "finalizationState", "mitigation", "tokenValues", "wallValues", "incidentHash"],
+            "properties": {
+              "schemaVersion": {"const": 1},
+              "scanId": {"enum": ["508c30b1-cf43-4902-96f1-92563d490149", "a64456db-438c-4857-8f01-c40fcc965936"]},
+              "errorCode": {"const": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER"},
+              "errorFingerprint": {"const": "6a0048b0b7658aef8d3680d6a5d017d0c6d0a4001a6b8cd0822772a5661e4475"},
+              "sourceReviewCompletionState": {"const": "SOURCE_REVIEW_COMPLETE"},
+              "finalizationState": {"const": "HOST_PREFLIGHT_BLOCKED"},
+              "mitigation": {"const": "strict repository closure"},
+              "tokenValues": {"const": null},
+              "wallValues": {"const": null},
+              "incidentHash": {"pattern": "^[0-9a-f]{64}$"}
+            }
           }
         }
       }

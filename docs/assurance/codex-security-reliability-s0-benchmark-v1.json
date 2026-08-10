@@ -1,1 +1,21 @@
-{"schemaVersion":1,"contractId":"codex-security-reliability-s0-benchmark-v1","schemaRef":"config/assurance/schemas-v1.json#/$defs/baseContract","failedIncidents":["508c30b1-cf43-4902-96f1-92563d490149","a64456db-438c-4857-8f01-c40fcc965936"],"successfulSealedScan":"6e12734b-d01c-4d92-943e-9c6a8179f76d","failedWorkflow":"PREFLIGHT_STOP_OR_REPOSITORY_CLOSURE_BEFORE_DISCOVERY","expensiveScanWorkAvoided":2,"tokenValues":null,"wallValues":null,"unavailable":"host did not expose supported token or wall metrics"}
+{
+  "schemaVersion": 1,
+  "contractId": "codex-security-reliability-s0-benchmark-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/baseContract",
+  "mode": "SYNTHETIC_REPOSITORY_MODEL_ONLY",
+  "hostedScanStarted": false,
+  "hostedSecuritySelfApproval": false,
+  "failedIncidents": [
+    "508c30b1-cf43-4902-96f1-92563d490149",
+    "a64456db-438c-4857-8f01-c40fcc965936"
+  ],
+  "preflightResults": [
+    "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
+    "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"
+  ],
+  "expensiveScanWorkAvoided": 2,
+  "repositoryClosureClassification": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+  "tokenValues": null,
+  "wallValues": null,
+  "unavailable": "host did not expose supported token or wall metrics"
+}

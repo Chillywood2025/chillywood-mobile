@@ -1,1 +1,32 @@
-{"schemaVersion":1,"contractId":"codex-security-scan-incidents-v1","schemaRef":"config/assurance/schemas-v1.json#/$defs/baseContract","incidents":[{"scanId":"508c30b1-cf43-4902-96f1-92563d490149","error":"scan.target.snapshotDigest: expected a non-empty string","sourceReviewCompletionState":"SOURCE_REVIEW_COMPLETE","finalizationState":"HOST_PREFLIGHT_BLOCKED","tokenValues":null,"wallValues":null,"mitigation":"preflight stop or repository closure"},{"scanId":"a64456db-438c-4857-8f01-c40fcc965936","error":"scan.target.snapshotDigest: expected a non-empty string","sourceReviewCompletionState":"SOURCE_REVIEW_COMPLETE","finalizationState":"HOST_PREFLIGHT_BLOCKED","tokenValues":null,"wallValues":null,"mitigation":"preflight stop or repository closure"}]}
+{
+  "schemaVersion": 1,
+  "contractId": "codex-security-scan-incidents-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/codexSecurityIncidentLedger",
+  "rawPayloadsRetained": false,
+  "incidents": [
+    {
+      "schemaVersion": 1,
+      "scanId": "508c30b1-cf43-4902-96f1-92563d490149",
+      "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
+      "errorFingerprint": "6a0048b0b7658aef8d3680d6a5d017d0c6d0a4001a6b8cd0822772a5661e4475",
+      "sourceReviewCompletionState": "SOURCE_REVIEW_COMPLETE",
+      "finalizationState": "HOST_PREFLIGHT_BLOCKED",
+      "mitigation": "strict repository closure",
+      "tokenValues": null,
+      "wallValues": null,
+      "incidentHash": "606e2be8d5cd542344a3b9f89ffe5f4a1a860aae386ec6eca674a2029a607355"
+    },
+    {
+      "schemaVersion": 1,
+      "scanId": "a64456db-438c-4857-8f01-c40fcc965936",
+      "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
+      "errorFingerprint": "6a0048b0b7658aef8d3680d6a5d017d0c6d0a4001a6b8cd0822772a5661e4475",
+      "sourceReviewCompletionState": "SOURCE_REVIEW_COMPLETE",
+      "finalizationState": "HOST_PREFLIGHT_BLOCKED",
+      "mitigation": "strict repository closure",
+      "tokenValues": null,
+      "wallValues": null,
+      "incidentHash": "2f4bba84b5a1af08ad1d87c81895d1e90593ea8ae406ae77ff9d871e51c120e8"
+    }
+  ]
+}

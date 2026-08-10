@@ -39,6 +39,9 @@ jobs:
         run: |
           node --test tests/assurance/github-main-ruleset-readback.test.mjs
           node --test tests/assurance/codex-review-exact-head.test.mjs
+          node scripts/assurance/codex-security-target.mjs --base=origin/main --target=HEAD
+          node scripts/assurance/codex-security-reliability.mjs --benchmark=all
+          node --test tests/assurance/codex-security-reliability-s0.test.mjs
 
       - name: Validate all-platform autonomous contracts
         run: |

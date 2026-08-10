@@ -18,13 +18,18 @@
     "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
   },
   "completionFeatureApplicability": {
-    "assurance-efficiency-e0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required-shadow-workflow", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable-no-artifact-change", "T6_INSTALLED_PHYSICAL": "not-applicable-no-installed-change", "T7_PUBLIC_CANARY": "not-applicable-no-release"}
+    "assurance-efficiency-e0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required-shadow-workflow", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable-no-artifact-change", "T6_INSTALLED_PHYSICAL": "not-applicable-no-installed-change", "T7_PUBLIC_CANARY": "not-applicable-no-release"},
+    "codex-security-scan-reliability-s0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable", "T6_INSTALLED_PHYSICAL": "not-applicable", "T7_PUBLIC_CANARY": "not-applicable"}
   },
   "completionFactAuthorities": [
     {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.requirements", "proofTiers": ["T0_REQUIREMENT"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
     {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.source", "proofTiers": ["T1_SOURCE"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
     {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.model", "proofTiers": ["T2_MODEL"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
-    {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"}
+    {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+    {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.requirements", "proofTiers": ["T0_REQUIREMENT"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+    {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.source", "proofTiers": ["T1_SOURCE"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+    {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.model", "proofTiers": ["T2_MODEL"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
+    {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"}
   ],
   "phaseBlockers": {
     "implementation": ["T0_REQUIREMENT"],

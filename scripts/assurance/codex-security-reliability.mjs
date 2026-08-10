@@ -1,15 +1,463 @@
 #!/usr/bin/env node
-import { emit, stableJson } from "./lib.mjs";
+import { emit, git, sha256, stableJson } from "./lib.mjs";
+import { repositorySnapshotDigest } from "./codex-security-target.mjs";
 
-export const states=["TARGET_FROZEN","HOST_PREFLIGHT_CLEAR","DISCOVERY_RUNNING","SOURCE_REVIEW_COMPLETE","FINALIZATION_RUNNING","SEALED","HOST_PREFLIGHT_BLOCKED","SOURCE_REVIEW_INCOMPLETE","SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING","TERMINAL_FAILED","CANCELED"];
-const terminal=new Set(states.slice(5)); const legal={TARGET_FROZEN:["HOST_PREFLIGHT_CLEAR","HOST_PREFLIGHT_BLOCKED","CANCELED"],HOST_PREFLIGHT_CLEAR:["DISCOVERY_RUNNING","CANCELED"],DISCOVERY_RUNNING:["SOURCE_REVIEW_COMPLETE","SOURCE_REVIEW_INCOMPLETE","TERMINAL_FAILED","CANCELED"],SOURCE_REVIEW_COMPLETE:["FINALIZATION_RUNNING","SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING","CANCELED"],FINALIZATION_RUNNING:["SEALED","SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING","TERMINAL_FAILED"]};
-const sha=(v)=>typeof v==="string"&&/^[0-9a-f]{64}$/u.test(v); const commit=(v)=>typeof v==="string"&&/^[0-9a-f]{40}$/u.test(v); const ledgers=(v)=>["discovery","validation","attackPath","policy"].every((k)=>v?.[k]===true);
-export function transition(l,next){if(!states.includes(l?.state)||terminal.has(l.state)||!legal[l.state]?.includes(next))return{ok:false,finding:"CODEX_SECURITY_ILLEGAL_TRANSITION"};return{ok:true,lifecycle:{...l,state:next}};}
-export function lease(d){return{base:d?.base,target:d?.target,repositorySnapshotDigest:d?.repositorySnapshotDigest,worklistSha256:d?.worklistSha256,policySha256:d?.policySha256,threatSha256:d?.threatSha256};}
-export const leaseCurrent=(v,d)=>stableJson(v)===stableJson(lease(d));
-export function preflight({descriptor:d,scanId,scanState,host={}}){if(!scanId||scanState!=="running"||!d)return{ok:false,status:"CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID"};for(const side of ["base","target"])for(const k of ["head","tree"])if(host?.[side]?.[k]!==d[side]?.[k]||!commit(d[side]?.[k]))return{ok:false,status:"CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH"};if(host.snapshotDigestExposed!==true)return{ok:false,status:"HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",fallback:"REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",workersStarted:false};if(!sha(host.snapshotDigest))return{ok:false,status:"BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",workersStarted:false};if(host.snapshotDigest===d.repositorySnapshotDigest)return{ok:false,status:"HOST_SNAPSHOT_DIGEST_NOT_DISTINCT",workersStarted:false};return{ok:true,state:"HOST_PREFLIGHT_CLEAR",scanId,hostSnapshotDigest:host.snapshotDigest,repositoryDigest:d.repositorySnapshotDigest};}
-export function finalize({lifecycle,descriptor:d,activeLease,host={},sourceReviewComplete,coverageComplete,deferred=0,completionAttempts=0,ledger}){const ok=lifecycle?.state==="FINALIZATION_RUNNING"&&host.scanState==="running"&&sha(host.snapshotDigest)&&host.snapshotDigest!==d?.repositorySnapshotDigest&&leaseCurrent(activeLease,d)&&sourceReviewComplete&&coverageComplete&&ledgers(ledger)&&deferred===0&&completionAttempts===0;return ok?{ok:true,state:"SEALED",completionAttempts:1}:{ok:false,finding:"CODEX_SECURITY_FINALIZATION_GUARD"};}
-export function repositoryClosure(v){const d=v.descriptor, exact=leaseCurrent(v.activeLease,d), privileged=v.level===3||v.level===4||v.public||v.money||v.rights||v.auth||v.providerControl;const ok=v.requestedStatus!="SEALED"&&["metadata","finalization"].includes(v.toolingFailureKind)&&v.scanId&&v.hostError&&d&&exact&&v.sourceReviewComplete&&v.coverageComplete&&ledgers(v.ledger)&&(v.deferred??0)===0&&(v.p0??0)===0&&(v.p1??0)===0&&v.priorFindingsClosed&&v.immutableSource&&v.independentReviewHash&&v.ownerBoundary&&(!privileged||v.ownerApproval===true);return{ok,status:ok?"REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED":"SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",sealed:false,identity:ok?{target:d.target,repositorySnapshotDigest:d.repositorySnapshotDigest}:null};}
-export function reusable(entry,d){if(!entry||!["CODEX_SECURITY_SEALED","REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"].includes(entry.classification)||["provider","signed","installed","physical","public-canary","time-limited"].some((x)=>entry.evidenceClass?.includes(x)))return{ok:false,status:"MISS_DENIED_EVIDENCE_CLASS"};return leaseCurrent(entry.key,d)?{ok:true,status:"EXACT_REUSE"}:{ok:false,status:"MISS_SOURCE_OR_CONTRACT_CHANGED"};}
-export function sanitizeIncident(v){const ok=["508c30b1-cf43-4902-96f1-92563d490149","a64456db-438c-4857-8f01-c40fcc965936"].includes(v.scanId)&&v.error==="scan.target.snapshotDigest: expected a non-empty string"&&!["path","token","private"].some((x)=>JSON.stringify(v).toLowerCase().includes(x));return ok?{ok:true,record:{scanId:v.scanId,error:v.error,sourceReviewCompletionState:v.sourceReviewCompletionState,finalizationState:v.finalizationState,tokenValues:null,wallValues:null,mitigation:v.mitigation}}:{ok:false,finding:"CODEX_SECURITY_INCIDENT_UNSANITIZED"};}
-if(import.meta.url===`file://${process.argv[1]}`)emit("assurance:codex-security-reliability",true,{benchmark:{failedIncidents:["508c30b1-cf43-4902-96f1-92563d490149","a64456db-438c-4857-8f01-c40fcc965936"],successfulSealedScan:"6e12734b-d01c-4d92-943e-9c6a8179f76d",expensiveScanWorkAvoided:2,tokenValues:null,wallValues:null}});
+export const states = [
+  "TARGET_FROZEN",
+  "HOST_PREFLIGHT_CLEAR",
+  "DISCOVERY_RUNNING",
+  "SOURCE_REVIEW_COMPLETE",
+  "FINALIZATION_RUNNING",
+  "SEALED",
+  "HOST_PREFLIGHT_BLOCKED",
+  "SOURCE_REVIEW_INCOMPLETE",
+  "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+  "TERMINAL_FAILED",
+  "CANCELED",
+];
+
+export const resultCodes = [
+  "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",
+  "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
+  "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID",
+  "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH",
+  "CODEX_SECURITY_SOURCE_LEASE_CHANGED",
+  "CODEX_SECURITY_ILLEGAL_TRANSITION",
+  "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED",
+  "CODEX_SECURITY_FINALIZATION_GUARD",
+];
+
+const terminalStates = new Set([
+  "SEALED",
+  "HOST_PREFLIGHT_BLOCKED",
+  "SOURCE_REVIEW_INCOMPLETE",
+  "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+  "TERMINAL_FAILED",
+  "CANCELED",
+]);
+const gitSha = (value) => typeof value === "string" && /^[0-9a-f]{40}$/u.test(value);
+const digest = (value) => typeof value === "string" && /^[0-9a-f]{64}$/u.test(value);
+const scanIdentifier = (value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value);
+const safePath = (value) => typeof value === "string"
+  && value.length > 0
+  && !value.startsWith("/")
+  && !/[\u0000-\u001f\u007f]/u.test(value)
+  && !value.split("/").some((part) => !part || part === "." || part === "..");
+const safeRef = (value) => typeof value === "string"
+  && /^(?!-)[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/u.test(value)
+  && !value.includes("..")
+  && !value.includes("@{")
+  && !value.endsWith("/")
+  && !value.endsWith(".");
+const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
+  && stableJson(Object.keys(value).sort()) === stableJson([...keys].sort());
+const exactArray = (left, right) => stableJson(left) === stableJson(right);
+const completeLedgers = (value) => exactKeys(value, ["discovery", "validation", "attackPath", "policy"])
+  && ["discovery", "validation", "attackPath", "policy"].every((key) => value[key] === true);
+
+export function descriptorValid(descriptor) {
+  if (!exactKeys(descriptor, ["schemaVersion", "kind", "repository", "base", "target", "changedPaths", "changedPathWorklistSha256", "contractHashes", "repositorySourceSnapshotDigest"])
+    || descriptor.schemaVersion !== 1
+    || descriptor.kind !== "codex-security-target-v1"
+    || !exactKeys(descriptor.repository, ["slug", "originUrlSha256"])
+    || descriptor.repository.slug !== "Chillywood2025/chillywood-mobile"
+    || descriptor.repository.originUrlSha256 !== sha256(`https://github.com/${descriptor.repository.slug}.git`)
+    || !exactKeys(descriptor.base, ["ref", "head", "tree"])
+    || !exactKeys(descriptor.target, ["ref", "head", "tree"])
+    || !safeRef(descriptor.base.ref)
+    || !safeRef(descriptor.target.ref)
+    || ![descriptor.base.head, descriptor.base.tree, descriptor.target.head, descriptor.target.tree].every(gitSha)
+    || descriptor.base.head === descriptor.target.head
+    || !Array.isArray(descriptor.changedPaths)
+    || descriptor.changedPaths.length === 0
+    || !exactKeys(descriptor.contractHashes, ["policySha256", "threatSha256", "featureRegistrySha256"])
+    || !Object.values(descriptor.contractHashes).every(digest)) return false;
+  const paths = descriptor.changedPaths.map((entry) => entry?.path);
+  if (new Set(paths).size !== paths.length || stableJson(paths) !== stableJson([...paths].sort())) return false;
+  if (!descriptor.changedPaths.every((entry) => exactKeys(entry, ["status", "path", "beforeBlob", "afterBlob"])
+    && /^[AMDT]$/u.test(entry.status)
+    && safePath(entry.path)
+    && (entry.beforeBlob === null || gitSha(entry.beforeBlob))
+    && (entry.afterBlob === null || gitSha(entry.afterBlob))
+    && (entry.status === "A" ? entry.beforeBlob === null && gitSha(entry.afterBlob) : true)
+    && (entry.status === "D" ? gitSha(entry.beforeBlob) && entry.afterBlob === null : true)
+    && (["M", "T"].includes(entry.status) ? gitSha(entry.beforeBlob) && gitSha(entry.afterBlob) : true))) return false;
+  return digest(descriptor.changedPathWorklistSha256)
+    && descriptor.changedPathWorklistSha256 === sha256(descriptor.changedPaths)
+    && digest(descriptor.repositorySourceSnapshotDigest)
+    && descriptor.repositorySourceSnapshotDigest === repositorySnapshotDigest(descriptor);
+}
+
+function leasePayload(descriptor) {
+  return {
+    repository: descriptor.repository,
+    base: descriptor.base,
+    target: descriptor.target,
+    changedPathWorklistSha256: descriptor.changedPathWorklistSha256,
+    contractHashes: descriptor.contractHashes,
+    repositorySourceSnapshotDigest: descriptor.repositorySourceSnapshotDigest,
+  };
+}
+
+export function lease(descriptor) {
+  if (!descriptorValid(descriptor)) return null;
+  const payload = leasePayload(descriptor);
+  return { ...payload, sourceLeaseHash: sha256(payload) };
+}
+
+export function leaseCurrent(activeLease, descriptor) {
+  const expected = lease(descriptor);
+  return expected !== null && stableJson(activeLease) === stableJson(expected);
+}
+
+export function repositoryIdentityCurrent(descriptor, runGit = git) {
+  if (!descriptorValid(descriptor)) return false;
+  try {
+    return runGit(["rev-parse", "--verify", `${descriptor.base.ref}^{commit}`]) === descriptor.base.head
+      && runGit(["rev-parse", "--verify", `${descriptor.base.ref}^{tree}`]) === descriptor.base.tree
+      && runGit(["rev-parse", "--verify", `${descriptor.target.ref}^{commit}`]) === descriptor.target.head
+      && runGit(["rev-parse", "--verify", `${descriptor.target.ref}^{tree}`]) === descriptor.target.tree;
+  } catch {
+    return false;
+  }
+}
+
+export function createLifecycle({ descriptor, scanId, scanState = "RUNNING" }) {
+  if (!descriptorValid(descriptor) || !scanIdentifier(scanId) || scanState !== "RUNNING") {
+    return { ok: false, status: "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID", workersStarted: false };
+  }
+  return {
+    ok: true,
+    lifecycle: {
+      schemaVersion: 1,
+      scanId,
+      scanState,
+      state: "TARGET_FROZEN",
+      terminal: false,
+      workersStarted: false,
+      completionAttempts: 0,
+      sourceLease: lease(descriptor),
+      hostBinding: null,
+      terminalReason: null,
+    },
+  };
+}
+
+function terminalize(lifecycle, state, reason) {
+  return {
+    ...lifecycle,
+    state,
+    terminal: true,
+    workersStarted: lifecycle.workersStarted === true,
+    terminalReason: reason,
+  };
+}
+
+function blockedPreflight(lifecycle, status, fallback = null) {
+  return {
+    ok: false,
+    status,
+    fallback,
+    discoveryAuthorized: false,
+    workersStarted: false,
+    lifecycle: terminalize(lifecycle, "HOST_PREFLIGHT_BLOCKED", status),
+  };
+}
+
+function hostIdentityMatches(host, lifecycle, descriptor) {
+  return host?.scanId === lifecycle.scanId
+    && host?.scanState === "RUNNING"
+    && host?.repository === descriptor.repository.slug
+    && host?.base?.head === descriptor.base.head
+    && host?.base?.tree === descriptor.base.tree
+    && host?.target?.head === descriptor.target.head
+    && host?.target?.tree === descriptor.target.tree;
+}
+
+export function preflight({ lifecycle, descriptor, host = {}, runGit = git }) {
+  if (lifecycle?.state !== "TARGET_FROZEN" || lifecycle?.terminal === true || !leaseCurrent(lifecycle?.sourceLease, descriptor)) {
+    return blockedPreflight(lifecycle ?? {}, "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID");
+  }
+  if (!repositoryIdentityCurrent(descriptor, runGit)) {
+    return blockedPreflight(lifecycle, "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
+  }
+  if (!hostIdentityMatches(host, lifecycle, descriptor)) {
+    return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH");
+  }
+  if (host.snapshotDigestExposed !== true) {
+    return blockedPreflight(lifecycle, "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
+  }
+  const hostSnapshotDigest = host?.target?.snapshotDigest;
+  if (!digest(hostSnapshotDigest)) {
+    return blockedPreflight(lifecycle, "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
+  }
+  if (hostSnapshotDigest === descriptor.repositorySourceSnapshotDigest) {
+    return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH");
+  }
+  return {
+    ok: true,
+    status: "HOST_PREFLIGHT_CLEAR",
+    discoveryAuthorized: true,
+    workersStarted: false,
+    lifecycle: {
+      ...lifecycle,
+      state: "HOST_PREFLIGHT_CLEAR",
+      hostBinding: {
+        repository: host.repository,
+        scanId: host.scanId,
+        scanState: host.scanState,
+        base: host.base,
+        target: {
+          head: host.target.head,
+          tree: host.target.tree,
+          snapshotDigest: hostSnapshotDigest,
+        },
+      },
+    },
+  };
+}
+
+export function beginDiscovery({ lifecycle, descriptor, runGit = git }) {
+  if (lifecycle?.terminal === true || lifecycle?.state !== "HOST_PREFLIGHT_CLEAR") {
+    return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", workersStarted: false, lifecycle };
+  }
+  if (!leaseCurrent(lifecycle.sourceLease, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
+    return { ok: false, status: "CODEX_SECURITY_SOURCE_LEASE_CHANGED", workersStarted: false, lifecycle: terminalize(lifecycle, "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED") };
+  }
+  return { ok: true, status: "DISCOVERY_RUNNING", workersStarted: true, lifecycle: { ...lifecycle, state: "DISCOVERY_RUNNING", workersStarted: true } };
+}
+
+export function completeSourceReview({ lifecycle, descriptor, complete, runGit = git }) {
+  if (lifecycle?.terminal === true || lifecycle?.state !== "DISCOVERY_RUNNING") {
+    return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
+  }
+  if (!leaseCurrent(lifecycle?.sourceLease, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
+    return { ok: false, status: "CODEX_SECURITY_SOURCE_LEASE_CHANGED", lifecycle: terminalize(lifecycle, "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED") };
+  }
+  if (complete !== true) {
+    return { ok: false, status: "SOURCE_REVIEW_INCOMPLETE", lifecycle: terminalize(lifecycle, "SOURCE_REVIEW_INCOMPLETE", "SOURCE_REVIEW_INCOMPLETE") };
+  }
+  return { ok: true, status: "SOURCE_REVIEW_COMPLETE", lifecycle: { ...lifecycle, state: "SOURCE_REVIEW_COMPLETE" } };
+}
+
+export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplete, coverageComplete, deferredFindings = [], ledger, runGit = git }) {
+  if (lifecycle?.completionAttempts > 0 || lifecycle?.terminal === true) {
+    return { ok: false, status: "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED", lifecycle };
+  }
+  if (lifecycle?.state !== "SOURCE_REVIEW_COMPLETE") {
+    return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
+  }
+  const attempted = { ...lifecycle, state: "FINALIZATION_RUNNING", completionAttempts: 1 };
+  const snapshotDigest = host?.target?.snapshotDigest;
+  if (host?.snapshotDigestExposed !== true || !digest(snapshotDigest)) {
+    return {
+      ok: false,
+      status: host?.snapshotDigestExposed === true ? "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT" : "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
+      lifecycle: terminalize(attempted, "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION"),
+    };
+  }
+  const guard = leaseCurrent(lifecycle.sourceLease, descriptor)
+    && repositoryIdentityCurrent(descriptor, runGit)
+    && hostIdentityMatches(host, lifecycle, descriptor)
+    && stableJson(host) === stableJson({ ...lifecycle.hostBinding, snapshotDigestExposed: true })
+    && snapshotDigest !== descriptor.repositorySourceSnapshotDigest
+    && sourceReviewComplete === true
+    && coverageComplete === true
+    && Array.isArray(deferredFindings) && deferredFindings.length === 0
+    && completeLedgers(ledger);
+  if (!guard) return { ok: false, status: "CODEX_SECURITY_FINALIZATION_GUARD", lifecycle: terminalize(attempted, "TERMINAL_FAILED", "CODEX_SECURITY_FINALIZATION_GUARD") };
+  return { ok: true, status: "SEALED", lifecycle: terminalize(attempted, "SEALED", "SEALED") };
+}
+
+export function transition(lifecycle, next) {
+  if (!states.includes(lifecycle?.state) || lifecycle?.terminal === true || terminalStates.has(lifecycle?.state)) {
+    return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
+  }
+  if (next !== "CANCELED") return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
+  return { ok: true, status: "CANCELED", lifecycle: terminalize(lifecycle, "CANCELED", "CANCELED") };
+}
+
+function reviewHash(review) {
+  const { exactReviewHash, ...payload } = review;
+  return sha256(payload);
+}
+
+function reviewValid(review, descriptor) {
+  const expectedPaths = descriptor.changedPaths.map(({ path }) => path);
+  return exactKeys(review, ["classification", "target", "coveredPaths", "changedPathWorklistSha256", "p0", "p1", "deferredFindings", "findingDispositions", "exactReviewHash"])
+    && review.classification === "INDEPENDENT_EXACT_HEAD_REPOSITORY_SECURITY_REVIEW"
+    && stableJson(review.target) === stableJson(descriptor.target)
+    && exactArray(review.coveredPaths, expectedPaths)
+    && review.changedPathWorklistSha256 === descriptor.changedPathWorklistSha256
+    && review.p0 === 0
+    && review.p1 === 0
+    && Array.isArray(review.deferredFindings) && review.deferredFindings.length === 0
+    && Array.isArray(review.findingDispositions)
+    && review.findingDispositions.every((item) => exactKeys(item, ["findingId", "disposition", "evidenceHash"])
+      && typeof item.findingId === "string" && item.findingId.length > 0
+      && item.disposition === "CLOSED"
+      && digest(item.evidenceHash))
+    && digest(review.exactReviewHash)
+    && review.exactReviewHash === reviewHash(review);
+}
+
+function testsValid(tests, descriptor) {
+  if (!Array.isArray(tests) || tests.length === 0) return false;
+  const ids = tests.map(({ id }) => id);
+  return new Set(ids).size === ids.length && tests.every((item) => exactKeys(item, ["id", "target", "commandSha256", "resultSha256", "passed"])
+    && typeof item.id === "string" && item.id.length > 0
+    && stableJson(item.target) === stableJson(descriptor.target)
+    && digest(item.commandSha256)
+    && digest(item.resultSha256)
+    && item.passed === true);
+}
+
+export function repositoryClosure(value, { runGit = git } = {}) {
+  const descriptor = value?.descriptor;
+  const policySelfReview = value?.reason === "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"
+    && value?.hostScanStarted === false
+    && value?.lifecycle === null;
+  const toolingFallback = ["HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"].includes(value?.reason)
+    && value?.lifecycle?.state === "HOST_PREFLIGHT_BLOCKED"
+    && value?.lifecycle?.terminal === true
+    && value?.lifecycle?.terminalReason === value.reason
+    && value?.hostScanStarted === false;
+  const ok = descriptorValid(descriptor)
+    && repositoryIdentityCurrent(descriptor, runGit)
+    && value?.classification === "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"
+    && value?.requestedStatus === "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"
+    && value?.hostedSealingUsed === false
+    && leaseCurrent(value?.activeLease, descriptor)
+    && (policySelfReview || toolingFallback)
+    && reviewValid(value?.review, descriptor)
+    && testsValid(value?.tests, descriptor)
+    && value?.priorFindingsClosed === true
+    && value?.noDeferredWork === true;
+  if (!ok) return { ok: false, status: "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", sealed: false, closure: null };
+  const closure = {
+    schemaVersion: 1,
+    classification: "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+    sealed: false,
+    reason: value.reason,
+    repository: descriptor.repository.slug,
+    target: descriptor.target,
+    changedPathWorklistSha256: descriptor.changedPathWorklistSha256,
+    repositorySourceSnapshotDigest: descriptor.repositorySourceSnapshotDigest,
+    exactReviewHash: value.review.exactReviewHash,
+    testResultHashes: value.tests.map(({ id, resultSha256 }) => ({ id, resultSha256 })),
+    p0: 0,
+    p1: 0,
+    deferredWork: 0,
+  };
+  closure.closureHash = sha256(closure);
+  return { ok: true, status: closure.classification, sealed: false, closure };
+}
+
+export function reusable(entry, descriptor) {
+  const sourceExact = leaseCurrent(entry?.sourceLease, descriptor);
+  const evidenceClassAllowed = entry?.evidenceClass === "REPOSITORY_SOURCE_SECURITY";
+  const classificationAllowed = ["CODEX_SECURITY_SEALED", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"].includes(entry?.classification);
+  const expectedTerminalState = entry?.classification === "CODEX_SECURITY_SEALED" ? "SEALED" : "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING";
+  const proofComplete = typeof entry?.id === "string" && entry.id.length > 0
+    && entry?.terminal === true && entry?.terminalState === expectedTerminalState && entry?.p0 === 0 && entry?.p1 === 0
+    && Array.isArray(entry?.deferredFindings) && entry.deferredFindings.length === 0 && digest(entry?.evidenceHash);
+  if (!classificationAllowed || !evidenceClassAllowed || !proofComplete) return { ok: false, status: "MISS_DENIED_EVIDENCE_CLASS" };
+  return sourceExact ? { ok: true, status: "EXACT_UNCHANGED_SOURCE_REUSE" } : { ok: false, status: "MISS_SOURCE_OR_CONTRACT_CHANGED" };
+}
+
+export function invalidateChangedSourceEvidence(entries, descriptor) {
+  if (!Array.isArray(entries)) return { ok: false, status: "EVIDENCE_LEDGER_INVALID", reusable: [], invalidated: [] };
+  const reusableEntries = [];
+  const invalidated = [];
+  for (const entry of entries) {
+    const result = reusable(entry, descriptor);
+    if (result.ok) reusableEntries.push(entry.id);
+    else invalidated.push({ id: entry.id, status: result.status });
+  }
+  return { ok: true, status: invalidated.length ? "CHANGED_SOURCE_EVIDENCE_INVALIDATED" : "UNCHANGED_SOURCE_EVIDENCE_REUSABLE", reusable: reusableEntries, invalidated };
+}
+
+const recurringFailures = new Map([
+  ["508c30b1-cf43-4902-96f1-92563d490149", "scan.target.snapshotDigest: expected a non-empty string"],
+  ["a64456db-438c-4857-8f01-c40fcc965936", "scan.target.snapshotDigest: expected a non-empty string"],
+]);
+
+export function sanitizeIncident(value) {
+  const allowedKeys = ["scanId", "error", "sourceReviewCompletionState", "finalizationState", "mitigation"];
+  if (!exactKeys(value, allowedKeys)
+    || recurringFailures.get(value.scanId) !== value.error
+    || value.sourceReviewCompletionState !== "SOURCE_REVIEW_COMPLETE"
+    || value.finalizationState !== "HOST_PREFLIGHT_BLOCKED"
+    || value.mitigation !== "strict repository closure") return { ok: false, status: "CODEX_SECURITY_INCIDENT_UNSANITIZED" };
+  const record = {
+    schemaVersion: 1,
+    scanId: value.scanId,
+    errorCode: "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
+    errorFingerprint: sha256(value.error),
+    sourceReviewCompletionState: value.sourceReviewCompletionState,
+    finalizationState: value.finalizationState,
+    mitigation: value.mitigation,
+    tokenValues: null,
+    wallValues: null,
+  };
+  record.incidentHash = sha256(record);
+  return { ok: true, record };
+}
+
+export function benchmark() {
+  const descriptor = {
+    schemaVersion: 1,
+    kind: "codex-security-target-v1",
+    repository: { slug: "Chillywood2025/chillywood-mobile", originUrlSha256: sha256("https://github.com/Chillywood2025/chillywood-mobile.git") },
+    base: { ref: "origin/main", head: "2".repeat(40), tree: "3".repeat(40) },
+    target: { ref: "HEAD", head: "4".repeat(40), tree: "5".repeat(40) },
+    changedPaths: [{ status: "M", path: "scripts/assurance/example.mjs", beforeBlob: "6".repeat(40), afterBlob: "7".repeat(40) }],
+    changedPathWorklistSha256: "",
+    contractHashes: { policySha256: "8".repeat(64), threatSha256: "9".repeat(64), featureRegistrySha256: "a".repeat(64) },
+    repositorySourceSnapshotDigest: "",
+  };
+  descriptor.changedPathWorklistSha256 = sha256(descriptor.changedPaths);
+  descriptor.repositorySourceSnapshotDigest = repositorySnapshotDigest(descriptor);
+  const runGit = (args) => {
+    const revision = args[2];
+    if (revision === `${descriptor.base.ref}^{commit}`) return descriptor.base.head;
+    if (revision === `${descriptor.base.ref}^{tree}`) return descriptor.base.tree;
+    if (revision === `${descriptor.target.ref}^{commit}`) return descriptor.target.head;
+    if (revision === `${descriptor.target.ref}^{tree}`) return descriptor.target.tree;
+    throw new Error("unexpected benchmark git read");
+  };
+  const created = createLifecycle({ descriptor, scanId: "s0-benchmark" });
+  const noExposure = preflight({
+    lifecycle: created.lifecycle,
+    descriptor,
+    host: { scanId: "s0-benchmark", scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree }, snapshotDigestExposed: false },
+    runGit,
+  });
+  const missingDigest = preflight({
+    lifecycle: created.lifecycle,
+    descriptor,
+    host: { scanId: "s0-benchmark", scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree, snapshotDigest: "" }, snapshotDigestExposed: true },
+    runGit,
+  });
+  const incidentResults = [...recurringFailures].map(([scanId, error]) => sanitizeIncident({ scanId, error, sourceReviewCompletionState: "SOURCE_REVIEW_COMPLETE", finalizationState: "HOST_PREFLIGHT_BLOCKED", mitigation: "strict repository closure" }));
+  const ok = noExposure.status === "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE"
+    && noExposure.workersStarted === false
+    && missingDigest.status === "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"
+    && missingDigest.workersStarted === false
+    && incidentResults.every(({ ok: incidentOk }) => incidentOk);
+  return {
+    ok,
+    failedIncidents: [...recurringFailures.keys()],
+    expensiveScanWorkAvoided: 2,
+    preflightResults: [noExposure.status, missingDigest.status],
+    incidentHashes: incidentResults.map(({ record }) => record?.incidentHash),
+    tokenValues: null,
+    wallValues: null,
+  };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const validArgs = process.argv.length === 3 && process.argv[2] === "--benchmark=all";
+  const result = validArgs ? benchmark() : { ok: false, status: "CODEX_SECURITY_BENCHMARK_OPTIONS_INVALID" };
+  emit("assurance:codex-security-reliability", result.ok, { benchmark: result });
+}

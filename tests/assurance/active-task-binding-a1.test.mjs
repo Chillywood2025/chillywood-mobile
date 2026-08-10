@@ -77,6 +77,7 @@ const truth = {
   ...canonicalTruth,
   lateReviewSentinels: [],
   activeTaskBinding: binding,
+  assuranceProgram: { ...canonicalTruth.assuranceProgram, active: binding.featureId },
   openImplementationPrs: [{
     number: binding.implementationPr,
     branch: binding.implementationBranch,
@@ -200,6 +201,7 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
     implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
     executionState: "ASSURANCE_CONTROL_A1"
   };
+  a1.assuranceProgram.active = a1.activeTaskBinding.featureId;
   const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(a1.activeTaskBinding);
   a1.openImplementationPrs = [{
     number: 201,
@@ -253,6 +255,7 @@ test("the exact Owner-authorized S0 bootstrap identity is narrow and cannot wide
     implementationBindingId: "assurance-codex-security-scan-reliability-s0-pr206-v1",
     executionState: "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP"
   };
+  s0.assuranceProgram.active = s0.activeTaskBinding.featureId;
   const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(s0.activeTaskBinding);
   s0.openImplementationPrs = [{
     number: 206,
