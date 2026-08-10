@@ -233,7 +233,8 @@ if (mode) {
   const structuredBindingFindings = validateStructuredBinding(
     record.activeTaskBinding,
     readJson("config/assurance/gate-catalog-v1.json"),
-    readJson("config/assurance/feature-registry-v1.json")
+    readJson("config/assurance/feature-registry-v1.json"),
+    record.openImplementationPrs
   ).map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;

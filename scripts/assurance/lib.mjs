@@ -1394,6 +1394,18 @@ export const proofTierApplicabilityPolicies = {
   REQUIRE_CLEAR: ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
   REQUIRE_NOT_APPLICABLE: ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
 };
+export const proofTierCompletionFeatureApplicability = {
+  "assurance-efficiency-e0": {
+    T0_REQUIREMENT: "required",
+    T1_SOURCE: "required",
+    T2_MODEL: "required",
+    T3_INTEGRATION: "required-shadow-workflow",
+    T4_NATIVE_PROVIDER: "metadata-boundary-only-no-new-native-or-provider-proof",
+    T5_SIGNED_ARTIFACT: "not-applicable-no-artifact-change",
+    T6_INSTALLED_PHYSICAL: "not-applicable-no-installed-change",
+    T7_PUBLIC_CANARY: "not-applicable-no-release"
+  }
+};
 const proofTierCompletionPolicies = {
   T0_REQUIREMENT: { passStatus: "REQUIREMENTS_CLEAR", missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["REPOSITORY_SOURCE"] },
   T1_SOURCE: { passStatus: "SOURCE_CLEAR", missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["REPOSITORY_SOURCE"] },
@@ -1472,6 +1484,7 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
     || catalogStatuses.size === 0
     || !gatePolicyExact
     || stableJson(gateCatalog?.applicabilityPolicies) !== stableJson(proofTierApplicabilityPolicies)
+    || stableJson(gateCatalog?.completionFeatureApplicability) !== stableJson(proofTierCompletionFeatureApplicability)
     || stableJson(gateCatalog?.completionFactAuthorities) !== stableJson(proofTierCompletionFactAuthorities)) {
     return [{ id: "ASSURANCE_GATE_CATALOG_MALFORMED", status: "BLOCKED_INTERNAL" }];
   }
@@ -1481,12 +1494,15 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
   if (binding?.phase === "COMPLETE" && !feature) {
     return [{ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_MISSING", status: "BLOCKED_INTERNAL", featureId: binding?.featureId ?? null }];
   }
+  const findings = [];
+  const authoritativeApplicability = proofTierCompletionFeatureApplicability[binding?.featureId];
   if (binding?.phase === "COMPLETE"
-    && binding.proofTierApplicabilityHash !== sha256(stableJson(feature.proofTierApplicability))) {
-    return [{ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_HASH_MISMATCH", status: "BLOCKED_INTERNAL", featureId: binding.featureId }];
+    && (!authoritativeApplicability
+      || stableJson(feature.proofTierApplicability) !== stableJson(authoritativeApplicability)
+      || binding.proofTierApplicabilityHash !== sha256(stableJson(authoritativeApplicability)))) {
+    findings.push({ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_HASH_MISMATCH", status: "BLOCKED_INTERNAL", featureId: binding.featureId });
   }
   const keys = Object.keys(value);
-  const findings = [];
   const clearTiers = [];
   for (const tier of tierIds) {
     if (!Object.hasOwn(value, tier)) {
@@ -1514,7 +1530,7 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
     } else if (binding?.phase === "COMPLETE" && !completePass && proofStatus !== "NOT_APPLICABLE") {
       findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_BLOCKED", status: "BLOCKED_INTERNAL", tier, value: proofStatus });
     } else if (binding?.phase === "COMPLETE") {
-      const applicability = feature?.proofTierApplicability?.[tier];
+      const applicability = (authoritativeApplicability ?? feature?.proofTierApplicability)?.[tier];
       const modes = Object.entries(proofTierApplicabilityPolicies)
         .filter(([, values]) => values.includes(applicability))
         .map(([mode]) => mode);

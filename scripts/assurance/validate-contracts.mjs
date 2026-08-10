@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { args, emit, featureRequired, proofTierApplicabilityPolicies, proofTierCompletionFactAuthorities, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
+import { args, emit, featureRequired, proofTierApplicabilityPolicies, proofTierCompletionFactAuthorities, proofTierCompletionFeatureApplicability, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
+import { validateStructuredBinding } from "./active-task.mjs";
 import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
 
 const options = args();
@@ -86,6 +87,7 @@ const ownerFinalCarrierGithubReadback = readJson("config/assurance/a1-owner-fina
 const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-phase1-github-readback-v1.json");
 const bootstrapMergeIdentity = readBootstrapMergeIdentity(githubRulesetReadback.authorizedBootstrapException.mergeSha);
 errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, bootstrapPhase1GithubReadback, mergeIdentity: bootstrapMergeIdentity, freshnessMode: "STRUCTURAL" }));
+errors.push(...validateStructuredBinding(currentTruth.activeTaskBinding, gates, registryContract, currentTruth.openImplementationPrs));
 errors.push(...validateProofTierStatuses(currentTruth.activeTaskBinding, gates, registryContract).map(({ id, tier, value }) => [id, tier, value].filter((entry) => entry !== undefined).join(":")));
 const applicabilityValues = Object.values(proofTierApplicabilityPolicies).flat();
 if (new Set(applicabilityValues).size !== applicabilityValues.length) errors.push("proof tier applicability policy values must be unique");
@@ -101,6 +103,12 @@ for (const authority of proofTierCompletionFactAuthorities) {
   }
   if (!registry.some(({ featureId }) => featureId === authority.featureId)) errors.push(`completion fact authority unknown feature ${authority.featureId}`);
   if (authority.proofTiers.some((tier) => !tierIds.includes(tier))) errors.push(`completion fact authority unknown tier for ${authority.factId}`);
+}
+for (const [featureId, applicability] of Object.entries(proofTierCompletionFeatureApplicability)) {
+  const matches = registry.filter((feature) => feature.featureId === featureId);
+  if (matches.length !== 1 || JSON.stringify(matches[0].proofTierApplicability) !== JSON.stringify(applicability)) {
+    errors.push(`completion feature applicability mismatch ${featureId}`);
+  }
 }
 if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
 if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");

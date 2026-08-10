@@ -17,6 +17,9 @@
     "REQUIRE_CLEAR": ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
     "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
   },
+  "completionFeatureApplicability": {
+    "assurance-efficiency-e0": {"T0_REQUIREMENT": "required", "T1_SOURCE": "required", "T2_MODEL": "required", "T3_INTEGRATION": "required-shadow-workflow", "T4_NATIVE_PROVIDER": "metadata-boundary-only-no-new-native-or-provider-proof", "T5_SIGNED_ARTIFACT": "not-applicable-no-artifact-change", "T6_INSTALLED_PHYSICAL": "not-applicable-no-installed-change", "T7_PUBLIC_CANARY": "not-applicable-no-release"}
+  },
   "completionFactAuthorities": [
     {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.requirements", "proofTiers": ["T0_REQUIREMENT"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},
     {"featureId": "assurance-efficiency-e0", "factId": "repository.assurance-control.a1.source", "proofTiers": ["T1_SOURCE"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"},

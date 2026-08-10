@@ -594,17 +594,24 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
 
   const mismatchedRepositorySubject = structuredClone(complete);
   mismatchedRepositorySubject.immutableSourceHead = "d".repeat(40);
-  assert.deepEqual(validateStructuredBinding(mismatchedRepositorySubject, gateCatalog, registry), ["ACTIVE_TASK_BINDING_MALFORMED"]);
+  assert.deepEqual(validateStructuredBinding(mismatchedRepositorySubject, gateCatalog, registry, []), ["ACTIVE_TASK_BINDING_MALFORMED"]);
+  assert.deepEqual(validateStructuredBinding(complete, gateCatalog, registry, [{ number: 208 }]), ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
   assert.equal(fs.readFileSync("scripts/assurance/current-truth.mjs", "utf8").includes("validateStructuredBinding("), true, "canonical truth reuses exact structured binding validation");
 
   const applicabilitySubstitution = structuredClone(complete);
   const substitutedRegistry = structuredClone(registry);
   substitutedRegistry.features.find(({ featureId }) => featureId === complete.featureId).proofTierApplicability.T0_REQUIREMENT = "not-applicable";
+  applicabilitySubstitution.proofTierApplicabilityHash = digest(stableJson(substitutedRegistry.features.find(({ featureId }) => featureId === complete.featureId).proofTierApplicability));
+  applicabilitySubstitution.proofTierStatuses.T0_REQUIREMENT = "NOT_APPLICABLE";
+  applicabilitySubstitution.proofTiersUnderEvaluation = applicabilitySubstitution.proofTiersUnderEvaluation.filter((tier) => tier !== "T0_REQUIREMENT");
+  applicabilitySubstitution.requiredFreshnessClaims[0].requiredFacts = applicabilitySubstitution.requiredFreshnessClaims[0].requiredFacts
+    .filter((factId) => factId !== "repository.assurance-control.a1.requirements");
   assert.equal(validateProofTierStatuses(applicabilitySubstitution, gateCatalog, substitutedRegistry).some(({ id }) => id === "ASSURANCE_PROOF_TIER_APPLICABILITY_HASH_MISMATCH"), true);
 
   for (const mutateCatalog of [
     (catalog) => { catalog.gates.find(({ id }) => id === "T4_NATIVE_PROVIDER").completionFreshnessClasses = ["REPOSITORY_SOURCE"]; },
     (catalog) => { catalog.applicabilityPolicies.REQUIRE_CLEAR = catalog.applicabilityPolicies.REQUIRE_CLEAR.filter((value) => value !== "provider-required"); },
+    (catalog) => { catalog.completionFeatureApplicability["assurance-efficiency-e0"].T0_REQUIREMENT = "not-applicable"; },
     (catalog) => { catalog.completionFactAuthorities[0].platform = "IOS"; },
     (catalog) => { catalog.completionFactAuthorities[0].factId = "provider.supabase.b3.live-acl"; },
     (catalog) => { catalog.completionFactAuthorities[0].authorityAllowed = "PROVIDER_READBACK_ONLY"; },

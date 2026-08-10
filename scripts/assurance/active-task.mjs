@@ -145,7 +145,7 @@ function structuredBindingAuthority(truth, facts) {
   return verifyOwnerBootstrapAuthorization(binding, observation) ? "OWNER_BOOTSTRAP_GITHUB_COMMENT" : null;
 }
 
-export function validateStructuredBinding(value, gateCatalog, registry) {
+export function validateStructuredBinding(value, gateCatalog, registry, openImplementationPrs) {
   const findings = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
   if (requiredStructuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
@@ -224,20 +224,21 @@ export function validateStructuredBinding(value, gateCatalog, registry) {
     || !proofFreshnessAligned
     || !bootstrapAuthorizationValid) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
   if (validateProofTierStatuses(value, gateCatalog, registry).length) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  if (value.phase === "COMPLETE") {
+    if (!Array.isArray(openImplementationPrs)) findings.push("IMPLEMENTATION_INVENTORY_MALFORMED");
+    else if (openImplementationPrs.length) findings.push("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION");
+  }
   return [...new Set(findings)].sort();
 }
 
 function resolveFeature(truth, facts, registry) {
   if (Object.hasOwn(truth ?? {}, "activeTaskBinding")) {
     const binding = truth.activeTaskBinding;
-    const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry);
+    const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs);
     if (findings.length) return { ok: false, findings };
     const authority = structuredBindingAuthority(truth, facts);
     if (!authority) return { ok: false, findings: ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"] };
     if (binding.phase === "COMPLETE") {
-      const open = truth?.openImplementationPrs;
-      if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
-      if (open.length) return { ok: false, findings: ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"] };
       return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
     }
     const displayCandidates = displayFeatureCandidates(truth, registry);
