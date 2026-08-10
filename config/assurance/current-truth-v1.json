@@ -382,6 +382,26 @@
     },
     "state": "E0_COMPLETE_D2A_READY_NOT_RESUMED"
   },
+  "defectiveCurrentTruthPr195Binding": {
+    "implementationPr": 195,
+    "branch": "codex/d2a-livekit-mic-correction-current-truth-binding",
+    "reviewedSourceHead": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+    "reviewedSourceTree": "cea8c0a60b552f49e9a2fc8a6fb706956fbe1302",
+    "mergedHead": "fc7502bb51c2efde42a5fe4e77d84a2e1d16681b",
+    "mergedTree": "cea8c0a60b552f49e9a2fc8a6fb706956fbe1302",
+    "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+    "correctionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+    "mayProceed": {
+      "formalReviews": false,
+      "phase1Ci": true,
+      "merge": false,
+      "postMergeProductSuccessorRequired": true,
+      "d2aResume": false,
+      "buildOrOta": false,
+      "providerOrProductionMutation": false
+    },
+    "state": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"
+  },
   "d2aMicrophoneCorrectionBinding": {
     "implementationPr": 194,
     "branch": "codex/d2a-livekit-mic-membership-convergence-correction",
@@ -479,6 +499,29 @@
     }
   ],
   "lateReviewSentinels": [
+    {
+      "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+      "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 195,
+      "mergedAt": "2026-08-09T17:50:31Z",
+      "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+      "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+      "reviewId": 4892031892,
+      "reviewCompletedAt": "2026-08-09T17:53:16Z",
+      "bindingPath": "defectiveCurrentTruthPr195Binding",
+      "findings": [
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694410, "provider": "chatgpt-codex-connector", "bodyHash": "2fca573517d529bc456418b47438c64289824f0c6e87a4cd463c7f03f30a7805", "commentId": 3744694410, "commentNodeId": "PRRC_kwDORRwZUc7fM4CK", "threadId": "PRRT_kwDORRwZUc6Xp4BK", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694414, "provider": "chatgpt-codex-connector", "bodyHash": "51584c18df44cb4e4592642047223d2dc2c039bfe9e16b4d9472ba8fd28e3792", "commentId": 3744694414, "commentNodeId": "PRRC_kwDORRwZUc7fM4CO", "threadId": "PRRT_kwDORRwZUc6Xp4BO", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694418, "provider": "chatgpt-codex-connector", "bodyHash": "694d7aa57c7484db5b16fb8243c6f01531c8dd1b167a7c5ad99fe8103f8e618d", "commentId": 3744694418, "commentNodeId": "PRRC_kwDORRwZUc7fM4CS", "threadId": "PRRT_kwDORRwZUc6Xp4BQ", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"}
+      ],
+      "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "authorizedBootstrapOwners": [
+        "codex/assurance-active-task-and-claim-freshness-a1",
+        "codex/assurance-codex-security-scan-reliability-s0"
+      ],
+      "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
+    },
     {
       "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
       "repository": "Chillywood2025/chillywood-mobile",

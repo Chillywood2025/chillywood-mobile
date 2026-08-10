@@ -105,6 +105,16 @@ const canonicalLateReviewOwnerRegistry = [{
     "codex/assurance-active-task-and-claim-freshness-a1",
     "codex/assurance-codex-security-scan-reliability-s0"
   ]
+}, {
+  repository: "Chillywood2025/chillywood-mobile",
+  prNumber: 195,
+  mergeSha: "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+  successorCorrectionOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+  assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+  authorizedBootstrapOwners: [
+    "codex/assurance-active-task-and-claim-freshness-a1",
+    "codex/assurance-codex-security-scan-reliability-s0"
+  ]
 }];
 const claimClassPolicy = {
   REPOSITORY_SOURCE: {
@@ -189,9 +199,12 @@ export function lateReviewAllowedOwners(sentinel) {
     && entry.mergeSha === sentinel?.mergeSha);
   if (matches.length !== 1) return [];
   const [entry] = matches;
-  if (sentinel.successorCorrectionOwner !== entry.successorCorrectionOwner
+  const registryBoundDiscovery = sentinel.successorCorrectionOwner === "UNASSIGNED_BLOCKED"
+    && sentinel.assuranceControlOwner === undefined
+    && sentinel.authorizedBootstrapOwners === undefined;
+  if (!registryBoundDiscovery && (sentinel.successorCorrectionOwner !== entry.successorCorrectionOwner
     || sentinel.assuranceControlOwner !== entry.assuranceControlOwner
-    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners)) return [];
+    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners))) return [];
   return [...new Set([entry.successorCorrectionOwner, entry.assuranceControlOwner, ...entry.authorizedBootstrapOwners])].sort();
 }
 

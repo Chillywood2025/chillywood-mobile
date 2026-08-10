@@ -26,7 +26,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { lateReviewResolutionSubjectHash } from "../../scripts/assurance/lib.mjs";
+import { lateReviewAllowedOwners, lateReviewResolutionSubjectHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1184,9 +1184,10 @@ test("only an independently verified durable resolution clears the same canonica
 test("canonical PR 194 sentinel blocks release and preserves every unresolved thread identity", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   const sentinels = unresolvedLateReviewSentinels(truth);
-  assert.equal(sentinels.length, 1);
+  assert.equal(sentinels.length, 2);
   assert.deepEqual(validateLateReviewSentinelState(truth), []);
-  assert.deepEqual(sentinels[0].findings.map(({ commentId, threadId, severity }) => ({ commentId, threadId, severity })), [
+  const pr194 = sentinels.find(({ prNumber }) => prNumber === 194);
+  assert.deepEqual(pr194.findings.map(({ commentId, threadId, severity }) => ({ commentId, threadId, severity })), [
     { commentId: 3744746865, threadId: "PRRT_kwDORRwZUc6XqB8L", severity: "P1" },
     { commentId: 3744746868, threadId: "PRRT_kwDORRwZUc6XqB8O", severity: "P2" },
     { commentId: 3744746869, threadId: "PRRT_kwDORRwZUc6XqB8P", severity: "P1" },
@@ -1202,19 +1203,39 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
 test("a late-review sentinel cannot authorize its own branch exceptions", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   const forged = structuredClone(truth);
-  forged.lateReviewSentinels[0].authorizedBootstrapOwners.push("codex/unrelated-next");
-  assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
+  forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194).authorizedBootstrapOwners.push("codex/unrelated-next");
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 2);
   assert(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"));
+});
+
+test("known unassigned discovery sentinels derive owners only from the immutable registry", () => {
+  const discovery = {
+    repository: "Chillywood2025/chillywood-mobile",
+    prNumber: 195,
+    mergeSha: "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+    successorCorrectionOwner: "UNASSIGNED_BLOCKED"
+  };
+  assert.deepEqual(lateReviewAllowedOwners(discovery), [
+    "codex/assurance-active-task-and-claim-freshness-a1",
+    "codex/assurance-codex-security-scan-reliability-s0"
+  ]);
+  assert.deepEqual(lateReviewAllowedOwners({
+    ...discovery,
+    successorCorrectionOwner: "codex/unrelated-next",
+    assuranceControlOwner: "codex/unrelated-next",
+    authorizedBootstrapOwners: ["codex/unrelated-next"]
+  }), []);
+  assert.deepEqual(lateReviewAllowedOwners({ ...discovery, prNumber: 999 }), []);
 });
 
 test("free-form resolved dispositions cannot clear a late-review sentinel", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   const forged = structuredClone(truth);
-  for (const finding of forged.lateReviewSentinels[0].findings) finding.disposition = "RESOLVED";
-  assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
+  const sentinel = forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194);
+  for (const finding of sentinel.findings) finding.disposition = "RESOLVED";
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 2);
   assert.equal(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_RESOLUTION_EVIDENCE_INVALID"), true);
 
-  const sentinel = forged.lateReviewSentinels[0];
   for (const finding of sentinel.findings) finding.threadResolutionState = "RESOLVED";
   const successorHead = "e".repeat(40);
   const successorTree = "f".repeat(40);
@@ -1242,7 +1263,7 @@ test("free-form resolved dispositions cannot clear a late-review sentinel", () =
     completedAt: "2026-08-10T03:05:00Z"
   };
   sentinel.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(sentinel);
-  assert.equal(unresolvedLateReviewSentinels(forged).length, 1, "a structurally perfect self-attestation remains blocked");
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 2, "a structurally perfect self-attestation remains blocked");
   const verifiedOptions = {
     resolutionVerifier: ({ subjectHash }) => ({
       ok: true,
@@ -1250,10 +1271,10 @@ test("free-form resolved dispositions cannot clear a late-review sentinel", () =
       repositoryVerificationHash: sentinel.resolutionEvidence.repositoryVerificationHash
     })
   };
-  assert.equal(unresolvedLateReviewSentinels(forged, verifiedOptions).length, 0);
+  assert.equal(unresolvedLateReviewSentinels(forged, verifiedOptions).length, 1);
   assert.deepEqual(validateLateReviewSentinelState(forged, verifiedOptions), []);
   sentinel.resolutionEvidence.exactHeadReviewedCommit = "7".repeat(40);
-  assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 2);
 });
 
 test("workflow executes only the protected default-branch evaluator", () => {
