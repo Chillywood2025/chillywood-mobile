@@ -598,9 +598,17 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T02:20:27Z",
-  "freshnessDeadline": "2026-08-11T02:20:27Z",
+  "timestamp": "2026-08-10T02:22:33Z",
+  "freshnessDeadline": "2026-08-11T02:22:33Z",
   "evidenceSources": [
+    {
+      "id": "a1-owner-authorized-source-freeze-final-20260810-0222",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
     {
       "id": "a1-owner-authorized-source-freeze-20260810-0220",
       "mode": "local-offline-and-github-read-only",
