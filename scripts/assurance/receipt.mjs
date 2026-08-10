@@ -69,6 +69,17 @@ const canonicalRules = new Map([
   { id: "d2a-plan", contractCommand: "assurance:plan", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } }
 ].map((rule) => [rule.id, rule]));
 
+export function governedReceiptRule(id) {
+  const rule = canonicalRules.get(id);
+  return rule ? structuredClone(rule) : null;
+}
+
+export function governedReceiptIdentityHash(receipt) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+  const { identityHash: _identityHash, artifactLocation: _artifactLocation, ...base } = receipt;
+  return sha256({ ...base, startedAtMs: null, endedAtMs: null, durationMs: null });
+}
+
 function safeRule(rule) {
   const canonical = canonicalRules.get(rule?.id);
   return canonical !== undefined && stableJson(rule) === stableJson(canonical);

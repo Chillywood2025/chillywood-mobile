@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
 import { emit, git, sha256, stableJson } from "./lib.mjs";
-import { repositorySnapshotDigest } from "./codex-security-target.mjs";
+import { privateArtifactDirectory } from "./efficiency-lib.mjs";
+import { governedReceiptIdentityHash, governedReceiptRule } from "./receipt.mjs";
+import { repositorySnapshotDigest, targetDescriptor } from "./codex-security-target.mjs";
 
 export const states = [
   "TARGET_FROZEN",
@@ -113,10 +117,13 @@ export function leaseCurrent(activeLease, descriptor) {
 export function repositoryIdentityCurrent(descriptor, runGit = git) {
   if (!descriptorValid(descriptor)) return false;
   try {
-    return runGit(["rev-parse", "--verify", `${descriptor.base.ref}^{commit}`]) === descriptor.base.head
-      && runGit(["rev-parse", "--verify", `${descriptor.base.ref}^{tree}`]) === descriptor.base.tree
-      && runGit(["rev-parse", "--verify", `${descriptor.target.ref}^{commit}`]) === descriptor.target.head
-      && runGit(["rev-parse", "--verify", `${descriptor.target.ref}^{tree}`]) === descriptor.target.tree;
+    const observed = targetDescriptor({
+      base: descriptor.base.ref,
+      target: descriptor.target.ref,
+      expectedRepository: descriptor.repository.slug,
+      runGit,
+    });
+    return observed.ok === true && stableJson(observed.descriptor) === stableJson(descriptor);
   } catch {
     return false;
   }
@@ -301,18 +308,73 @@ function reviewValid(review, descriptor) {
     && review.exactReviewHash === reviewHash(review);
 }
 
-function testsValid(tests, descriptor) {
-  if (!Array.isArray(tests) || tests.length === 0) return false;
-  const ids = tests.map(({ id }) => id);
-  return new Set(ids).size === ids.length && tests.every((item) => exactKeys(item, ["id", "target", "commandSha256", "resultSha256", "passed"])
-    && typeof item.id === "string" && item.id.length > 0
-    && stableJson(item.target) === stableJson(descriptor.target)
-    && digest(item.commandSha256)
-    && digest(item.resultSha256)
-    && item.passed === true);
+export const repositoryClosureTestIds = [
+  "contracts",
+  "current-truth",
+  "diff-check",
+  "lint",
+  "node-version",
+  "s0-active-task",
+  "s0-benchmark",
+  "s0-focused-test",
+  "s0-plan",
+  "s0-scope",
+  "s0-target",
+  "typecheck",
+];
+
+function readPrivateReceipt(artifactLocation) {
+  return JSON.parse(fs.readFileSync(path.join(artifactLocation, "receipt.json"), "utf8"));
 }
 
-export function repositoryClosure(value, { runGit = git } = {}) {
+function testsValid(tests, descriptor, {
+  readReceipt = readPrivateReceipt,
+  receiptArtifactDirectory = (identityHash) => privateArtifactDirectory("receipts", identityHash),
+} = {}) {
+  if (!Array.isArray(tests) || tests.length !== repositoryClosureTestIds.length) return false;
+  const ids = tests.map(({ id }) => id);
+  if (new Set(ids).size !== ids.length || stableJson([...ids].sort()) !== stableJson(repositoryClosureTestIds)) return false;
+  return tests.every((item) => {
+    if (!exactKeys(item, ["id", "target", "commandSha256", "resultSha256", "passed", "receiptIdentityHash", "artifactLocation"])
+      || stableJson(item.target) !== stableJson(descriptor.target)
+      || !digest(item.commandSha256)
+      || !digest(item.resultSha256)
+      || !digest(item.receiptIdentityHash)
+      || item.passed !== true) return false;
+    const rule = governedReceiptRule(item.id);
+    if (!rule || item.commandSha256 !== sha256([rule.file, ...rule.args])) return false;
+    let canonicalArtifactLocation;
+    let receipt;
+    try {
+      canonicalArtifactLocation = receiptArtifactDirectory(item.receiptIdentityHash);
+      if (item.artifactLocation !== canonicalArtifactLocation) return false;
+      receipt = readReceipt(canonicalArtifactLocation);
+    } catch {
+      return false;
+    }
+    return receipt?.identityHash === item.receiptIdentityHash
+      && governedReceiptIdentityHash(receipt) === receipt.identityHash
+      && receipt.commandId === item.id
+      && stableJson(receipt.exactCommand) === stableJson([rule.file, ...rule.args])
+      && receipt.configurationHash === sha256(rule)
+      && receipt.sourceHead === descriptor.target.head
+      && receipt.sourceTree === descriptor.target.tree
+      && receipt.outputHashes?.combinedSha256 === item.resultSha256
+      && receipt.exitStatus === 0
+      && receipt.signal === null
+      && receipt.failureCategory === null
+      && Number.isFinite(receipt.startedAtMs)
+      && Number.isFinite(receipt.endedAtMs)
+      && receipt.endedAtMs >= receipt.startedAtMs
+      && receipt.durationMs === receipt.endedAtMs - receipt.startedAtMs
+      && Number.isInteger(receipt.resultTotals) && receipt.resultTotals > 0
+      && Number.isInteger(receipt.assertionTotals) && receipt.assertionTotals > 0
+      && receipt.result !== null
+      && receipt.cleanupState === "SYNCHRONOUS_CHILD_EXITED";
+  });
+}
+
+export function repositoryClosure(value, { runGit = git, readReceipt, receiptArtifactDirectory } = {}) {
   const descriptor = value?.descriptor;
   const policySelfReview = value?.reason === "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"
     && value?.hostScanStarted === false
@@ -330,7 +392,7 @@ export function repositoryClosure(value, { runGit = git } = {}) {
     && leaseCurrent(value?.activeLease, descriptor)
     && (policySelfReview || toolingFallback)
     && reviewValid(value?.review, descriptor)
-    && testsValid(value?.tests, descriptor)
+    && testsValid(value?.tests, descriptor, { readReceipt, receiptArtifactDirectory })
     && value?.priorFindingsClosed === true
     && value?.noDeferredWork === true;
   if (!ok) return { ok: false, status: "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", sealed: false, closure: null };
@@ -405,6 +467,11 @@ export function sanitizeIncident(value) {
 }
 
 export function benchmark() {
+  const contractTexts = {
+    "config/assurance/codex-security-reliability-s0-v1.json": "benchmark-policy-v1",
+    "config/assurance/escaped-defect-catalog-v1.json": "benchmark-threat-v1",
+    "config/assurance/feature-registry-v1.json": "benchmark-feature-registry-v1",
+  };
   const descriptor = {
     schemaVersion: 1,
     kind: "codex-security-target-v1",
@@ -413,17 +480,33 @@ export function benchmark() {
     target: { ref: "HEAD", head: "4".repeat(40), tree: "5".repeat(40) },
     changedPaths: [{ status: "M", path: "scripts/assurance/example.mjs", beforeBlob: "6".repeat(40), afterBlob: "7".repeat(40) }],
     changedPathWorklistSha256: "",
-    contractHashes: { policySha256: "8".repeat(64), threatSha256: "9".repeat(64), featureRegistrySha256: "a".repeat(64) },
+    contractHashes: {
+      policySha256: sha256(contractTexts["config/assurance/codex-security-reliability-s0-v1.json"]),
+      threatSha256: sha256(contractTexts["config/assurance/escaped-defect-catalog-v1.json"]),
+      featureRegistrySha256: sha256(contractTexts["config/assurance/feature-registry-v1.json"]),
+    },
     repositorySourceSnapshotDigest: "",
   };
   descriptor.changedPathWorklistSha256 = sha256(descriptor.changedPaths);
   descriptor.repositorySourceSnapshotDigest = repositorySnapshotDigest(descriptor);
   const runGit = (args) => {
-    const revision = args[2];
-    if (revision === `${descriptor.base.ref}^{commit}`) return descriptor.base.head;
-    if (revision === `${descriptor.base.ref}^{tree}`) return descriptor.base.tree;
-    if (revision === `${descriptor.target.ref}^{commit}`) return descriptor.target.head;
-    if (revision === `${descriptor.target.ref}^{tree}`) return descriptor.target.tree;
+    if (stableJson(args) === stableJson(["remote", "get-url", "origin"])) return "https://github.com/Chillywood2025/chillywood-mobile.git";
+    if (args[0] === "rev-parse" && args[1] === "--verify") {
+      const revision = args[2];
+      if (revision === `${descriptor.base.ref}^{commit}`) return descriptor.base.head;
+      if (revision === `${descriptor.base.head}^{tree}`) return descriptor.base.tree;
+      if (revision === `${descriptor.target.ref}^{commit}`) return descriptor.target.head;
+      if (revision === `${descriptor.target.head}^{tree}`) return descriptor.target.tree;
+      if (revision === `${descriptor.base.head}:${descriptor.changedPaths[0].path}`) return descriptor.changedPaths[0].beforeBlob;
+      if (revision === `${descriptor.target.head}:${descriptor.changedPaths[0].path}`) return descriptor.changedPaths[0].afterBlob;
+    }
+    if (stableJson(args) === stableJson(["diff", "--no-ext-diff", "--name-status", "--no-renames", "-z", `${descriptor.base.head}..${descriptor.target.head}`])) {
+      return `M\0${descriptor.changedPaths[0].path}\0`;
+    }
+    if (args[0] === "show") {
+      const [commit, file] = args[1].split(":");
+      if (commit === descriptor.target.head && Object.hasOwn(contractTexts, file)) return contractTexts[file];
+    }
     throw new Error("unexpected benchmark git read");
   };
   const created = createLifecycle({ descriptor, scanId: "s0-benchmark" });

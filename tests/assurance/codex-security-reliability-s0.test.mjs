@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { sha256, stableJson, validateProofTierStatuses } from "../../scripts/assurance/lib.mjs";
+import { governedReceiptIdentityHash, governedReceiptRule } from "../../scripts/assurance/receipt.mjs";
 import { repositorySnapshotDigest, targetDescriptor } from "../../scripts/assurance/codex-security-target.mjs";
 import {
   beginDiscovery,
@@ -15,11 +16,18 @@ import {
   leaseCurrent,
   preflight,
   repositoryClosure,
+  repositoryClosureTestIds,
   reusable,
   sanitizeIncident,
   states,
   transition,
 } from "../../scripts/assurance/codex-security-reliability.mjs";
+
+const contractTexts = {
+  "config/assurance/codex-security-reliability-s0-v1.json": "policy-v1",
+  "config/assurance/escaped-defect-catalog-v1.json": "threat-v1",
+  "config/assurance/feature-registry-v1.json": "feature-registry-v1",
+};
 
 function descriptor() {
   const value = {
@@ -35,9 +43,9 @@ function descriptor() {
     ],
     changedPathWorklistSha256: "",
     contractHashes: {
-      policySha256: "a".repeat(64),
-      threatSha256: "b".repeat(64),
-      featureRegistrySha256: "c".repeat(64),
+      policySha256: sha256(contractTexts["config/assurance/codex-security-reliability-s0-v1.json"]),
+      threatSha256: sha256(contractTexts["config/assurance/escaped-defect-catalog-v1.json"]),
+      featureRegistrySha256: sha256(contractTexts["config/assurance/feature-registry-v1.json"]),
     },
     repositorySourceSnapshotDigest: "",
   };
@@ -70,11 +78,28 @@ function hostFor(value, overrides = {}) {
 
 function gitFor(value, replacement = value) {
   return (args) => {
-    const revision = args[2];
-    if (revision === `${value.base.ref}^{commit}`) return replacement.base.head;
-    if (revision === `${value.base.ref}^{tree}`) return replacement.base.tree;
-    if (revision === `${value.target.ref}^{commit}`) return replacement.target.head;
-    if (revision === `${value.target.ref}^{tree}`) return replacement.target.tree;
+    if (stableJson(args) === stableJson(["remote", "get-url", "origin"])) {
+      return "https://github.com/Chillywood2025/chillywood-mobile.git";
+    }
+    if (args[0] === "rev-parse" && args[1] === "--verify") {
+      const revision = args[2];
+      if (revision === `${value.base.ref}^{commit}`) return replacement.base.head;
+      if (revision === `${value.base.ref}^{tree}` || revision === `${replacement.base.head}^{tree}`) return replacement.base.tree;
+      if (revision === `${value.target.ref}^{commit}`) return replacement.target.head;
+      if (revision === `${value.target.ref}^{tree}` || revision === `${replacement.target.head}^{tree}`) return replacement.target.tree;
+      for (const row of replacement.changedPaths) {
+        if (revision === `${replacement.base.head}:${row.path}` && row.beforeBlob) return row.beforeBlob;
+        if (revision === `${replacement.target.head}:${row.path}` && row.afterBlob) return row.afterBlob;
+      }
+    }
+    if (stableJson(args.slice(0, 5)) === stableJson(["diff", "--no-ext-diff", "--name-status", "--no-renames", "-z"])
+      && args[5] === `${replacement.base.head}..${replacement.target.head}`) {
+      return `${replacement.changedPaths.map(({ status, path }) => `${status}\0${path}\0`).join("")}`;
+    }
+    if (args[0] === "show") {
+      const [commit, file] = args[1].split(":");
+      if (commit === replacement.target.head && Object.hasOwn(contractTexts, file)) return contractTexts[file];
+    }
     throw new Error(`unexpected git read: ${args.join(" ")}`);
   };
 }
@@ -102,18 +127,54 @@ function sourceReviewFor(value) {
   return review;
 }
 
-function testsFor(value) {
-  return [{
-    id: "s0-focused",
-    target: value.target,
-    commandSha256: sha256("node --test tests/assurance/codex-security-reliability-s0.test.mjs"),
-    resultSha256: sha256("pass:codex-security-reliability-s0"),
-    passed: true,
-  }];
+function governedReceiptFor(id, value) {
+  const rule = governedReceiptRule(id);
+  assert.ok(rule, id);
+  const receipt = {
+    commandId: id,
+    exactCommand: [rule.file, ...rule.args],
+    sourceHead: value.target.head,
+    sourceTree: value.target.tree,
+    toolchainIdentity: { runnerNode: "v22.15.0", executable: rule.file },
+    platform: "test-x64",
+    configurationHash: sha256(rule),
+    startedAtMs: 1,
+    endedAtMs: 2,
+    durationMs: 1,
+    exitStatus: 0,
+    signal: null,
+    resultTotals: 1,
+    assertionTotals: 1,
+    result: { ok: true },
+    failureCategory: null,
+    outputHashes: {
+      stdoutSha256: sha256(`stdout:${id}`),
+      stderrSha256: sha256(""),
+      combinedSha256: sha256(`result:${id}`),
+    },
+    cleanupState: "SYNCHRONOUS_CHILD_EXITED",
+  };
+  receipt.identityHash = governedReceiptIdentityHash(receipt);
+  return receipt;
 }
 
-function closureInput(value = descriptor()) {
-  return {
+function closureFixture(value = descriptor()) {
+  const receipts = new Map();
+  const tests = repositoryClosureTestIds.map((id) => {
+    const receipt = governedReceiptFor(id, value);
+    const artifactLocation = `memory:${receipt.identityHash}`;
+    receipts.set(artifactLocation, receipt);
+    return {
+      id,
+      target: value.target,
+      commandSha256: sha256(receipt.exactCommand),
+      resultSha256: receipt.outputHashes.combinedSha256,
+      passed: true,
+      receiptIdentityHash: receipt.identityHash,
+      artifactLocation,
+    };
+  });
+  const input = {
     descriptor: value,
     activeLease: lease(value),
     lifecycle: null,
@@ -123,10 +184,16 @@ function closureInput(value = descriptor()) {
     hostedSealingUsed: false,
     hostScanStarted: false,
     review: sourceReviewFor(value),
-    tests: testsFor(value),
+    tests,
     priorFindingsClosed: true,
     noDeferredWork: true,
   };
+  const dependencies = {
+    runGit: gitFor(value),
+    receiptArtifactDirectory: (identityHash) => `memory:${identityHash}`,
+    readReceipt: (location) => structuredClone(receipts.get(location)),
+  };
+  return { input, dependencies, receipts };
 }
 
 function reachSourceReviewComplete(value = descriptor()) {
@@ -337,8 +404,8 @@ test("unchanged source evidence is reusable and any source or contract drift inv
 
 test("repository closure is exact, independently reviewed, fully covered, and never Codex sealed", () => {
   const value = descriptor();
-  const input = closureInput(value);
-  const result = repositoryClosure(input, { runGit: gitFor(value) });
+  const { input, dependencies } = closureFixture(value);
+  const result = repositoryClosure(input, dependencies);
   assert.equal(result.ok, true);
   assert.equal(result.sealed, false);
   assert.equal(result.status, "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
@@ -370,25 +437,73 @@ test("repository closure rejects sealed labels, coverage, review, test, lease, a
     (value) => { value.noDeferredWork = false; },
   ];
   for (const attack of attacks) {
-    const candidate = closureInput();
-    attack(candidate);
-    assert.equal(repositoryClosure(candidate, { runGit: gitFor(candidate.descriptor) }).ok, false);
+    const { input, dependencies } = closureFixture();
+    attack(input);
+    assert.equal(repositoryClosure(input, dependencies).ok, false);
   }
+});
+
+test("repository closure independently reconstructs the descriptor and governed receipt evidence", () => {
+  const { input, dependencies, receipts } = closureFixture();
+  const fabricated = structuredClone(input);
+  fabricated.descriptor.changedPaths = [{
+    status: "M",
+    path: "AGENTS.md",
+    beforeBlob: "1".repeat(40),
+    afterBlob: "2".repeat(40),
+  }];
+  fabricated.descriptor.changedPathWorklistSha256 = sha256(fabricated.descriptor.changedPaths);
+  fabricated.descriptor.contractHashes.policySha256 = "3".repeat(64);
+  fabricated.descriptor.repositorySourceSnapshotDigest = repositorySnapshotDigest(fabricated.descriptor);
+  fabricated.activeLease = lease(fabricated.descriptor);
+  fabricated.review = sourceReviewFor(fabricated.descriptor);
+  fabricated.tests = fabricated.tests.map((item) => ({ ...item, target: fabricated.descriptor.target }));
+  assert.equal(repositoryClosure(fabricated, dependencies).ok, false, "caller-rehashed descriptor denied by Git reconstruction");
+
+  const attacks = [
+    (fixture) => { fixture.input.tests.pop(); },
+    (fixture) => { fixture.input.tests.push(structuredClone(fixture.input.tests[0])); },
+    (fixture) => { fixture.input.tests[1].id = fixture.input.tests[0].id; },
+    (fixture) => { fixture.input.tests[0].id = "attacker-claims-pass"; },
+    (fixture) => { fixture.input.tests[0].commandSha256 = "4".repeat(64); },
+    (fixture) => { fixture.input.tests[0].resultSha256 = "5".repeat(64); },
+    (fixture) => { fixture.input.tests[0].receiptIdentityHash = "6".repeat(64); },
+    (fixture) => { fixture.input.tests[0].artifactLocation = "memory:attacker"; },
+    (fixture) => {
+      const location = fixture.input.tests[0].artifactLocation;
+      fixture.receipts.get(location).resultTotals = 0;
+    },
+    (fixture) => {
+      const location = fixture.input.tests[0].artifactLocation;
+      fixture.receipts.get(location).exactCommand = ["node", "attacker.mjs"];
+    },
+  ];
+  for (const attack of attacks) {
+    const fixture = closureFixture();
+    attack(fixture);
+    assert.equal(repositoryClosure(fixture.input, fixture.dependencies).ok, false);
+  }
+
+  const missingReceipt = closureFixture();
+  missingReceipt.receipts.delete(missingReceipt.input.tests[0].artifactLocation);
+  assert.equal(repositoryClosure(missingReceipt.input, missingReceipt.dependencies).ok, false);
+
+  assert.equal(receipts.size, repositoryClosureTestIds.length);
 });
 
 test("tooling-preflight closure requires a matching terminal preflight reason", () => {
   const value = descriptor();
   const blocked = preflight({ lifecycle: lifecycleFor(value), descriptor: value, host: hostFor(value, { snapshotDigestExposed: false }), runGit: gitFor(value) });
-  const input = closureInput(value);
+  const { input, dependencies } = closureFixture(value);
   input.reason = "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE";
   input.lifecycle = blocked.lifecycle;
-  const accepted = repositoryClosure(input, { runGit: gitFor(value) });
+  const accepted = repositoryClosure(input, dependencies);
   assert.equal(accepted.ok, true);
   const forged = structuredClone(input);
   forged.reason = "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT";
-  assert.equal(repositoryClosure(forged, { runGit: gitFor(value) }).ok, false);
+  assert.equal(repositoryClosure(forged, dependencies).ok, false);
   forged.lifecycle.terminal = false;
-  assert.equal(repositoryClosure(forged, { runGit: gitFor(value) }).ok, false);
+  assert.equal(repositoryClosure(forged, dependencies).ok, false);
 });
 
 test("known recurring incidents are sanitized and unrecognized or sensitive payloads fail", () => {
