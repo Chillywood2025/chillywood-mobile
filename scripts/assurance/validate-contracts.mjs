@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, featureRequired, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
+import { args, emit, featureRequired, proofTierApplicabilityPolicies, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
 import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
 
 const options = args();
@@ -86,6 +86,8 @@ const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-ph
 const bootstrapMergeIdentity = readBootstrapMergeIdentity(githubRulesetReadback.authorizedBootstrapException.mergeSha);
 errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, bootstrapPhase1GithubReadback, mergeIdentity: bootstrapMergeIdentity, freshnessMode: "STRUCTURAL" }));
 errors.push(...validateProofTierStatuses(currentTruth.activeTaskBinding, gates, registryContract).map(({ id, tier, value }) => [id, tier, value].filter((entry) => entry !== undefined).join(":")));
+const applicabilityValues = Object.values(proofTierApplicabilityPolicies).flat();
+if (new Set(applicabilityValues).size !== applicabilityValues.length) errors.push("proof tier applicability policy values must be unique");
 if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
 if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");
 const defectFields = ["id", "tags", "affectedDomains", "preImplementationQuestions", "requiredProofTier", "detectionRule", "testTemplate", "runtimeSignature", "rollback", "prevention", "blocks"];
@@ -93,6 +95,7 @@ defects.forEach((defect, index) => errors.push(...requiredKeys(defect, defectFie
 registry.forEach((feature, index) => {
   errors.push(...requiredKeys(feature, featureRequired, `features[${index}]`));
   errors.push(...tierIds.flatMap((tier) => Object.hasOwn(feature.proofTierApplicability ?? {}, tier) ? [] : [`features[${index}] missing ${tier}`]));
+  errors.push(...tierIds.flatMap((tier) => applicabilityValues.includes(feature.proofTierApplicability?.[tier]) ? [] : [`features[${index}] unknown applicability for ${tier}`]));
 });
 for (const [label, values] of [["defect", defects.map(({ id }) => id)], ["feature", registry.map(({ featureId }) => featureId)]]) {
   if (new Set(values).size !== values.length) errors.push(`${label} IDs must be unique`);

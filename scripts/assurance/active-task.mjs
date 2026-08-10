@@ -37,9 +37,10 @@ const structuredBindingFields = [
   "requiredFreshnessClaims",
   "proofTiersUnderEvaluation",
   "proofTierStatuses",
+  "proofTierApplicabilityHash",
   "ownerBootstrapAuthorization"
 ];
-const requiredStructuredBindingFields = structuredBindingFields.filter((field) => !["ownerBootstrapAuthorization", "proofTierStatuses"].includes(field));
+const requiredStructuredBindingFields = structuredBindingFields.filter((field) => !["ownerBootstrapAuthorization", "proofTierStatuses", "proofTierApplicabilityHash"].includes(field));
 const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
 const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const activeImplementationStates = new Set(["open", "open-draft-current"]);

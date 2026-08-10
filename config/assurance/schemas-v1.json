@@ -16,8 +16,32 @@
     },
     "gateCatalog": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["statuses", "gates", "phaseBlockers"],
-      "properties": {"statuses": {"type": "array", "items": {"$ref": "#/$defs/status"}, "uniqueItems": true}, "gates": {"type": "array", "minItems": 8}, "phaseBlockers": {"type": "object"}}
+      "required": ["statuses", "gates", "applicabilityPolicies", "phaseBlockers"],
+      "properties": {
+        "statuses": {"type": "array", "items": {"$ref": "#/$defs/status"}, "uniqueItems": true},
+        "gates": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": ["id", "passStatus", "requiredBefore", "missingStatus", "completionFreshnessClasses"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]},
+              "requiredBefore": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+              "missingStatus": {"enum": ["BLOCKED_INTERNAL", "BLOCKED_EXTERNAL"]},
+              "completionFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}}
+            }
+          }
+        },
+        "applicabilityPolicies": {"const": {
+          "REQUIRE_CLEAR": ["layout-matrix", "provider-required", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow"],
+          "REQUIRE_NOT_APPLICABLE": ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"],
+          "CONDITIONAL": ["admin-display-only", "control-ui-only", "provider-when-used", "release-only", "setup-display-only", "store-flow-only", "when-delivered"]
+        }},
+        "phaseBlockers": {"type": "object"}
+      }
     },
     "proofStrength": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
@@ -219,7 +243,8 @@
                 "T6_INSTALLED_PHYSICAL": {"oneOf": [{"const": ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"]}, {"enum": ["BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]}]},
                 "T7_PUBLIC_CANARY": {"enum": ["RELEASE_CLEAR", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]}
               }
-            }
+            },
+            "proofTierApplicabilityHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
             ,"ownerBootstrapAuthorization": {
               "type": "object",
               "required": ["schemaVersion", "repository", "prNumber", "commentId", "author", "authorAssociation", "createdAt", "updatedAt", "bodySha256", "subjectHash"],
@@ -237,7 +262,7 @@
               }
             }
           },
-          "allOf": [{"if": {"properties": {"phase": {"const": "COMPLETE"}}, "required": ["phase"]}, "then": {"required": ["proofTierStatuses"]}}]
+          "allOf": [{"if": {"properties": {"phase": {"const": "COMPLETE"}}, "required": ["phase"]}, "then": {"required": ["proofTierStatuses", "proofTierApplicabilityHash"]}, "else": {"not": {"anyOf": [{"required": ["proofTierStatuses"]}, {"required": ["proofTierApplicabilityHash"]}]}}}]
         },
         "freshnessClaims": {
           "type": "array",
