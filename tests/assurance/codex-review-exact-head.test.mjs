@@ -210,7 +210,12 @@ test("provider severity normalization never exempts zero-prefixed findings", () 
     "&#xFF30;&#xFF11; finding",
     "P&#xFF11; finding",
     "&#xFF30;1 finding",
-    "&#x24C5;&#x2460; finding"
+    "&#x24C5;&#x2460; finding",
+    "&Popf;1 finding",
+    "&Pfr;1 finding",
+    "P&sup1; finding",
+    "P&sup1 finding",
+    "P&amp;1 finding"
   ].entries()) {
     const finding = issueComment({ id: 9200 + index });
     finding.body = `${severity}\n<!-- codex-review-reviewed-commit:${headA} -->`;

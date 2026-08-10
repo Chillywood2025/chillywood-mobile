@@ -47,7 +47,9 @@ function highestSeverity(values) {
 }
 
 function severityFromBody(body) {
-  const normalized = String(body ?? "")
+  const source = String(body ?? "");
+  const namedEntityUnverified = /&[A-Za-z][A-Za-z0-9]+;?/u.test(source);
+  const normalized = source
     .normalize("NFKC")
     .replace(/&#x([0-9a-f]+);?/giu, (_match, hex) => {
       const codePoint = Number.parseInt(hex, 16);
@@ -57,7 +59,7 @@ function severityFromBody(body) {
       const codePoint = Number.parseInt(decimal, 10);
       return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
     })
-    .replace(/&[A-Za-z][A-Za-z0-9]+;/gu, "")
+    .replace(/&[A-Za-z][A-Za-z0-9]+;?/gu, " ")
     .normalize("NFKC")
     .replace(/<!--[^]*?-->/gu, "")
     .replace(/<[^>]*>/gu, "")
@@ -65,7 +67,9 @@ function severityFromBody(body) {
     .replace(/[\\*_~`]/gu, "")
     .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
     .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/gu, "");
-  return highestSeverity([...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])/gu)].map((match) => `P${match[1]}`));
+  const severities = [...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])/gu)].map((match) => `P${match[1]}`);
+  if (namedEntityUnverified) severities.push("P1");
+  return highestSeverity(severities);
 }
 
 const canonicalProviderAboutDetails = `<details> <summary>ℹ️ About Codex in GitHub</summary>
