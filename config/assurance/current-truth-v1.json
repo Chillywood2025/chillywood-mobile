@@ -654,6 +654,14 @@
   "freshnessDeadline": "2026-08-11T02:48:20Z",
   "evidenceSources": [
     {
+      "id": "a1-pr195-late-review-registry-source-freeze-20260810-0306",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "PR 195 late-review discovery is bound to the immutable owner registry and its exact defective implementation"
+      ]
+    },
+    {
       "id": "a1-post-merge-ruleset-readback-20260810-0248",
       "mode": "github-read-only",
       "covers": [
