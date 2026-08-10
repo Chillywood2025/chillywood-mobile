@@ -723,6 +723,61 @@
   "freshnessDeadline": "2026-08-11T03:42:14Z",
   "evidenceSources": [
     {
+      "id": "a1-tombstone-correction-carrier-separation-source-freeze-20260810-0351",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:51:21Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "authorizedAdmissionCarriers": [
+          {
+            "prNumber": 194,
+            "branches": [
+              "codex/assurance-active-task-and-claim-freshness-a1",
+              "codex/assurance-codex-security-scan-reliability-s0",
+              "codex/d2a-livekit-mic-post-merge-review-correction"
+            ]
+          },
+          {
+            "prNumber": 195,
+            "branches": [
+              "codex/assurance-active-task-and-claim-freshness-a1",
+              "codex/assurance-codex-security-scan-reliability-s0"
+            ]
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": [],
+        "separationRule": "CORRECTION_OWNER_EXACT_ADMISSION_CARRIER_DISTINCT"
+      },
+      "readbackSha256": "84514054802d373db392581f3e78e3bd97f356512e3cf2cb11fdd48e695d953f",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels and require byte-exact protected-main first-parent admission after the exact-review ruleset anchor"
+      ]
+    },
+    {
       "id": "a1-late-review-tombstone-admission-source-freeze-20260810-0342",
       "mode": "local-and-github-read-only",
       "readbackFacts": {

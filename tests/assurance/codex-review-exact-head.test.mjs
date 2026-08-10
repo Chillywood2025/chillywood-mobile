@@ -1217,13 +1217,12 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   const original = truth.lateReviewSentinels.find(({ prNumber }) => prNumber === 195);
   const resolved = structuredClone(original);
-  resolved.successorCorrectionOwner = "codex/assurance-codex-security-scan-reliability-s0";
   resolved.findings = resolved.findings.map((finding) => ({ ...finding, disposition: "RESOLVED", threadResolutionState: "RESOLVED" }));
   const successorHead = "8".repeat(40);
   const successorTree = "9".repeat(40);
   resolved.resolutionEvidence = {
     schemaVersion: 1,
-    successorPr: 206,
+    successorPr: 205,
     successorBranch: resolved.successorCorrectionOwner,
     successorHead,
     successorTree,
@@ -1245,7 +1244,18 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
     completedAt: "2026-08-10T04:30:00Z"
   };
   resolved.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(resolved);
-  const tombstone = createLateReviewResolutionTombstone(resolved);
+  const admissionCarrier = {
+    prNumber: 206,
+    branch: "codex/assurance-codex-security-scan-reliability-s0",
+    head: "1".repeat(40),
+    tree: "2".repeat(40),
+    mergeSha: "3".repeat(40),
+    mergedAt: "2026-08-10T04:40:00Z",
+    exactHeadReviewReceiptHash: "4".repeat(64),
+    exactHeadCheckRunId: 9207,
+    exactHeadReviewCompletedAt: "2026-08-10T04:35:00Z"
+  };
+  const tombstone = createLateReviewResolutionTombstone(resolved, admissionCarrier);
   const candidate = structuredClone(truth);
   candidate.lateReviewResolutionTombstones = [tombstone];
 
@@ -1272,6 +1282,31 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
   const duplicate = structuredClone(candidate);
   duplicate.lateReviewResolutionTombstones.push(structuredClone(tombstone));
   assert(validateLateReviewSentinelState(duplicate, { protectedMainRecord: duplicate, tombstoneAdmissionVerifier: () => true }).some(({ id }) => id === "LATE_REVIEW_TOMBSTONE_DUPLICATE"));
+
+  const productOriginal = truth.lateReviewSentinels.find(({ prNumber }) => prNumber === 194);
+  const productSubstitution = structuredClone(productOriginal);
+  productSubstitution.findings = productSubstitution.findings.map((finding) => ({ ...finding, disposition: "RESOLVED", threadResolutionState: "RESOLVED" }));
+  productSubstitution.resolutionEvidence = {
+    ...structuredClone(resolved.resolutionEvidence),
+    successorPr: 206,
+    successorBranch: admissionCarrier.branch,
+    correctedSourceIds: productSubstitution.findings.map(({ sourceId }) => sourceId),
+    resolvedThreadIds: productSubstitution.findings.map(({ threadId }) => threadId),
+    verificationSubjectHash: "0".repeat(64)
+  };
+  productSubstitution.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(productSubstitution);
+  const productSubstitutionTombstone = createLateReviewResolutionTombstone(productSubstitution, admissionCarrier);
+  const substituted = structuredClone(truth);
+  substituted.lateReviewResolutionTombstones = [productSubstitutionTombstone];
+  const substitutionFindings = validateLateReviewSentinelState(substituted, {
+    protectedMainRecord: substituted,
+    tombstoneAdmissionVerifier: () => true
+  });
+  assert(substitutionFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_TOMBSTONE_INVALID" && prNumber === 194));
+  assert.deepEqual(unresolvedLateReviewSentinels(substituted, {
+    protectedMainRecord: substituted,
+    tombstoneAdmissionVerifier: () => true
+  }).map(({ prNumber }) => prNumber).sort(), [194, 195], "an assurance bootstrap carrier cannot substitute for the product correction owner");
 });
 
 test("a late-review sentinel cannot authorize its own branch exceptions", () => {

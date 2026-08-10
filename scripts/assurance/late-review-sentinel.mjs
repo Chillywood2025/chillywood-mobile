@@ -29,6 +29,10 @@ function tombstoneFirstProtectedMainAdmission(tombstone, options = {}) {
     });
     if (!firstAppearance || firstAppearance === policy.protectedMainAnchorSha) return false;
     git(["merge-base", "--is-ancestor", policy.protectedMainAnchorSha, firstAppearance]);
+    git(["merge-base", "--is-ancestor", policy.protectedMainAnchorSha, tombstone.admissionCarrier.mergeSha]);
+    if (git(["rev-parse", `${tombstone.admissionCarrier.head}^{tree}`]) !== tombstone.admissionCarrier.tree) return false;
+    git(["merge-base", "--is-ancestor", tombstone.admissionCarrier.head, tombstone.admissionCarrier.mergeSha]);
+    git(["merge-base", "--is-ancestor", tombstone.admissionCarrier.mergeSha, firstAppearance]);
     return true;
   } catch { return false; }
 }

@@ -336,7 +336,7 @@
           "uniqueItems": true,
           "items": {
             "type": "object",
-            "required": ["schemaVersion", "repository", "prNumber", "mergeSha", "findingSetHash", "resolutionEvidence", "verificationSubjectHash", "admissionPolicyId", "tombstoneHash"],
+            "required": ["schemaVersion", "repository", "prNumber", "mergeSha", "findingSetHash", "resolutionEvidence", "verificationSubjectHash", "admissionCarrier", "admissionPolicyId", "tombstoneHash"],
             "properties": {
               "schemaVersion": {"const": 1},
               "repository": {"type": "string", "minLength": 1},
@@ -345,6 +345,21 @@
               "findingSetHash": {"pattern": "^[0-9a-f]{64}$"},
               "resolutionEvidence": {"$ref": "#/$defs/currentTruthRecord/properties/lateReviewSentinels/items/properties/resolutionEvidence"},
               "verificationSubjectHash": {"pattern": "^[0-9a-f]{64}$"},
+              "admissionCarrier": {
+                "type": "object",
+                "required": ["prNumber", "branch", "head", "tree", "mergeSha", "mergedAt", "exactHeadReviewReceiptHash", "exactHeadCheckRunId", "exactHeadReviewCompletedAt"],
+                "properties": {
+                  "prNumber": {"type": "integer", "minimum": 1},
+                  "branch": {"$ref": "#/$defs/gitBranch"},
+                  "head": {"$ref": "#/$defs/gitSha"},
+                  "tree": {"$ref": "#/$defs/gitSha"},
+                  "mergeSha": {"$ref": "#/$defs/gitSha"},
+                  "mergedAt": {"type": "string", "format": "date-time"},
+                  "exactHeadReviewReceiptHash": {"pattern": "^[0-9a-f]{64}$"},
+                  "exactHeadCheckRunId": {"type": "integer", "minimum": 1},
+                  "exactHeadReviewCompletedAt": {"type": "string", "format": "date-time"}
+                }
+              },
               "admissionPolicyId": {"const": "EXACT_HEAD_PROTECTED_MAIN_V1"},
               "tombstoneHash": {"pattern": "^[0-9a-f]{64}$"}
             }

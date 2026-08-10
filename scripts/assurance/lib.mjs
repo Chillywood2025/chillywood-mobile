@@ -338,10 +338,27 @@ export function lateReviewResolutionTombstoneValid(sentinel, tombstone) {
     || tombstone.verificationSubjectHash !== tombstone.resolutionEvidence?.verificationSubjectHash
     || tombstone.tombstoneHash !== lateReviewResolutionTombstoneHash(tombstone)) return false;
   const allowedOwners = lateReviewAllowedOwners(sentinel);
-  if (!allowedOwners.includes(tombstone.resolutionEvidence?.successorBranch)) return false;
+  const carrier = tombstone.admissionCarrier;
+  const carrierReviewedAt = new Date(carrier?.exactHeadReviewCompletedAt).valueOf();
+  const carrierMergedAt = new Date(carrier?.mergedAt).valueOf();
+  const correctionCompletedAt = new Date(tombstone.resolutionEvidence?.completedAt).valueOf();
+  if (tombstone.resolutionEvidence?.successorBranch !== sentinel.successorCorrectionOwner
+    || !allowedOwners.includes(carrier?.branch)
+    || !Number.isInteger(carrier?.prNumber)
+    || carrier.prNumber < 1
+    || !gitShaPattern.test(carrier?.head ?? "")
+    || !gitShaPattern.test(carrier?.tree ?? "")
+    || !gitShaPattern.test(carrier?.mergeSha ?? "")
+    || !/^[0-9a-f]{64}$/u.test(carrier?.exactHeadReviewReceiptHash ?? "")
+    || !Number.isInteger(carrier?.exactHeadCheckRunId)
+    || carrier.exactHeadCheckRunId < 1
+    || !Number.isFinite(carrierReviewedAt)
+    || !Number.isFinite(carrierMergedAt)
+    || !Number.isFinite(correctionCompletedAt)
+    || correctionCompletedAt > carrierReviewedAt
+    || carrierReviewedAt > carrierMergedAt) return false;
   const virtual = {
     ...sentinel,
-    successorCorrectionOwner: tombstone.resolutionEvidence.successorBranch,
     findings: (sentinel.findings ?? []).map((finding) => ({
       ...finding,
       disposition: "RESOLVED",
@@ -353,7 +370,7 @@ export function lateReviewResolutionTombstoneValid(sentinel, tombstone) {
     && lateReviewResolutionSubjectHash(virtual) === tombstone.verificationSubjectHash;
 }
 
-export function createLateReviewResolutionTombstone(resolvedSentinel) {
+export function createLateReviewResolutionTombstone(resolvedSentinel, admissionCarrier) {
   const tombstone = {
     schemaVersion: 1,
     repository: resolvedSentinel?.repository,
@@ -362,6 +379,7 @@ export function createLateReviewResolutionTombstone(resolvedSentinel) {
     findingSetHash: lateReviewFindingSetHash(resolvedSentinel?.findings),
     resolutionEvidence: structuredClone(resolvedSentinel?.resolutionEvidence),
     verificationSubjectHash: resolvedSentinel?.resolutionEvidence?.verificationSubjectHash,
+    admissionCarrier: structuredClone(admissionCarrier),
     admissionPolicyId: "EXACT_HEAD_PROTECTED_MAIN_V1"
   };
   tombstone.tombstoneHash = lateReviewResolutionTombstoneHash(tombstone);
