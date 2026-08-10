@@ -432,10 +432,13 @@ test("receipt subprocesses disable GitHub telemetry without forwarding ambient c
     }
   });
   assert.equal(result.ok, true);
+  const expectedGithubConfigDirectory = process.env.GH_CONFIG_DIR
+    ?? (process.env.HOME ? `${process.env.HOME}/.config/gh` : undefined);
   assert.deepEqual(observedEnvironment, {
     PATH: process.env.PATH,
     CI: "1",
     NO_COLOR: "1",
+    ...(expectedGithubConfigDirectory ? { GH_CONFIG_DIR: expectedGithubConfigDirectory } : {}),
     GH_TELEMETRY: "0",
     DO_NOT_TRACK: "1",
     GH_PROMPT_DISABLED: "1",
@@ -445,6 +448,7 @@ test("receipt subprocesses disable GitHub telemetry without forwarding ambient c
   for (const secretName of ["GH_TOKEN", "GITHUB_TOKEN", "HOME", "XDG_CONFIG_HOME"]) {
     assert.equal(Object.hasOwn(observedEnvironment, secretName), false, secretName);
   }
+  assert.equal(observedEnvironment.GH_CONFIG_DIR, expectedGithubConfigDirectory, "read-only GitHub CLI authentication lookup remains available without forwarding credentials");
 });
 
 test("runner rejects unknown commands, shell injection, missing results, secrets and artifact failures", () => {

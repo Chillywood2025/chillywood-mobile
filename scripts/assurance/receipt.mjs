@@ -97,6 +97,8 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
 
   const clock = dependencies.clock ?? (() => Date.now());
   const spawn = dependencies.spawn ?? ((file, argv, options) => spawnSync(file, argv, options));
+  const githubConfigDirectory = process.env.GH_CONFIG_DIR
+    ?? (process.env.HOME ? `${process.env.HOME}/.config/gh` : undefined);
   const startedAtMs = clock();
   const execution = spawn(rule.file, rule.args, {
     cwd: ROOT,
@@ -108,6 +110,7 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
       PATH: process.env.PATH,
       CI: "1",
       NO_COLOR: "1",
+      ...(githubConfigDirectory ? { GH_CONFIG_DIR: githubConfigDirectory } : {}),
       GH_TELEMETRY: "0",
       DO_NOT_TRACK: "1",
       GH_PROMPT_DISABLED: "1",
