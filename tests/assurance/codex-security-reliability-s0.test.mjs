@@ -542,12 +542,30 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
   assert.equal(contract.completion.terminalRetryAllowed, false);
   assert.equal(contract.repositoryClosure.classification, "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
   assert.equal(contract.repositoryClosure.sealed, false);
+  assert.deepEqual(contract.reviewGovernance, {
+    providerCodexReview: "OPTIONAL_ADVISORY",
+    ownerTriggeredOnly: true,
+    automaticRequestAllowed: false,
+    automaticRetryAllowed: false,
+    providerReceiptRequired: false,
+    providerFailureBlocks: [],
+    requiredPhase1Checks: 13,
+    repositoryOwnedIndependentExactHeadReviewRequired: true,
+    p0P1StopLineRequired: true,
+    lateProviderFindingDisposition: "ADVISORY_UNTIL_INDEPENDENT_REPOSITORY_VALIDATION",
+    protectedMainFindingSetRegistryRequiredForBlocking: true,
+    requiredStatusCheckExcluded: "Chi'llywood / Codex Review Exact Head",
+    rulesetStrict: true,
+    conversationResolutionRequired: true,
+    staleReviewDismissalRequired: true,
+    bypassActors: [],
+  });
   assert.equal(scopeWaiver.reviewer, "s0-four-compact-independent-exact-head-review-lanes");
   assert.equal(scopeWaiver.secondHighRiskDomain, false);
   assert.equal(scopeWaiver.newTimeboxHours, 8);
   assert.deepEqual(scopeWaiver.supportingDomains, ["CI-test-infrastructure", "documentation-metadata"]);
-  assert.deepEqual(scopeWaiver.fileBudget, { default: 15, waivedMaximum: 25 });
-  assert.deepEqual(scopeWaiver.lineBudget, { default: 1200, waivedMaximum: 2200 });
+  assert.deepEqual(scopeWaiver.fileBudget, { default: 15, waivedMaximum: 35 });
+  assert.deepEqual(scopeWaiver.lineBudget, { default: 1200, waivedMaximum: 2600 });
 
   for (const record of incidents.incidents) {
     const sanitized = sanitizeIncident({
@@ -573,6 +591,9 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
     "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",
     "workersStarted=false",
     "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+    "OPTIONAL_ADVISORY",
+    "Never request, retry, or poll",
+    "exactly the 13 Phase 1 checks",
   ]) {
     assert.equal(skill.includes(requiredText), true, requiredText);
   }

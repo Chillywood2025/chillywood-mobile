@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
+import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -438,6 +438,9 @@ function resolveImplementation(truth, identity, facts, resolution) {
 
 export function activeTask(facts = {}) {
   const truth = facts.currentTruth ?? readJson("config/assurance/current-truth-v1.json");
+  if (!optionalCodexReviewPolicyValid(truth?.reviewPolicy)) {
+    return { ok: false, findings: ["CODEX_REVIEW_OPTIONAL_ADVISORY_POLICY_INVALID"] };
+  }
   const checked = facts.truthCheck ?? (() => {
     const run = spawnSync(process.execPath, ["scripts/assurance/current-truth.mjs"], {
       cwd: ROOT, encoding: "utf8", shell: false

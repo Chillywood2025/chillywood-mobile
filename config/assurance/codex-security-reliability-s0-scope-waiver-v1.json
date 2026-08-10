@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "contractId": "codex-security-reliability-s0-scope-waiver-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
-  "objective": "Implement one repository-only Codex Security lifecycle control that freezes exact source identity, blocks discovery without a usable host snapshot digest, prevents terminal retry, and provides an honestly labeled repository security closure.",
-  "exactReason": "The S0 control is one CI-test-infrastructure objective whose executable target descriptor, lifecycle state machine, contracts, workflow hook, assurance skill, regression suites, and generated current-truth binding must change atomically. Complete fail-closed coverage requires up to 25 assurance-only files and 2200 net authored lines without a product, native, database, provider, package, build, release, or D2A domain.",
+  "objective": "Implement one repository-only Codex Security lifecycle and review-governance control that freezes exact source identity, blocks discovery without a usable host snapshot digest, prevents terminal retry, keeps provider Codex Review optional advisory, and provides an honestly labeled repository security closure.",
+  "exactReason": "The S0 control is one CI-test-infrastructure objective whose executable target descriptor, lifecycle state machine, review-governance contract, protected-main ruleset readback, advisory workflow, assurance skill, regression suites, and generated current-truth binding must change atomically. Complete fail-closed coverage requires up to 35 assurance-only files and 2600 net authored lines without a product, native, database, provider, package, build, release, or D2A domain.",
   "reviewer": "s0-four-compact-independent-exact-head-review-lanes",
   "supportingDomains": [
     "CI-test-infrastructure",
@@ -13,11 +13,11 @@
   "newTimeboxHours": 8,
   "fileBudget": {
     "default": 15,
-    "waivedMaximum": 25
+    "waivedMaximum": 35
   },
   "lineBudget": {
     "default": 1200,
-    "waivedMaximum": 2200
+    "waivedMaximum": 2600
   },
   "reviewStatus": "FOUR_COMPACT_LEVEL_C_EXACT_HEAD_LANES_AND_REPOSITORY_SECURITY_CLOSURE_REQUIRED_BEFORE_MERGE",
   "prohibitedScope": [

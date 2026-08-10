@@ -4,7 +4,21 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
-  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "requiredFields": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "reviewPolicy": {
+    "classification": "OPTIONAL_ADVISORY",
+    "requiredStatusCheck": false,
+    "blocksProgress": false,
+    "blocksMerge": false,
+    "ownerTriggeredOnly": true,
+    "automaticReviewRequests": false,
+    "quotaRetryAllowed": false,
+    "providerReceiptRequired": false,
+    "independentRepositoryValidationRequiredBeforeBlocking": true,
+    "repositoryOwnedExactHeadReviewRequired": true,
+    "requiredPhase1Checks": 13,
+    "historicalIncidentsRetained": true
+  },
   "synchronizationMerge": {
     "required": true,
     "parentCount": 2,
@@ -81,6 +95,7 @@
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 194,
       "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+      "findingSetHash": "9474ccab70621250acc32aaa8bb765f0aba7423b44fa5fd073d2318f12701c99",
       "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction",
       "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
       "authorizedBootstrapOwners": [
@@ -92,6 +107,7 @@
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 195,
       "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+      "findingSetHash": "6aa0de5907c7b504712a502b3072fcd06dd026801425aa5ff6912a67ffcb6b10",
       "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
       "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
       "authorizedBootstrapOwners": [

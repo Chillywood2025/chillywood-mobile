@@ -16,7 +16,8 @@ export const phase1Checks = [
   "Phase 1 / TypeScript",
   "Phase 1 / iOS Configuration"
 ];
-export const requiredChecks = [exactHeadCheck, ...phase1Checks];
+export const requiredChecks = [...phase1Checks];
+export const historicalRequiredChecks = [exactHeadCheck, ...phase1Checks];
 export const githubActionsIntegrationId = 15368;
 export const requiredCheckBindings = requiredChecks.map((context) => ({ context, integration_id: githubActionsIntegrationId }));
 export const mainBranchCondition = { ref_name: { exclude: [], include: ["refs/heads/main"] } };
@@ -100,9 +101,9 @@ const bootstrapPolicySnapshot = (checks) => ({
   }
 });
 export const bootstrapWindowPolicies = {
-  preRemoval: bootstrapPolicySnapshot(requiredChecks),
+  preRemoval: bootstrapPolicySnapshot(historicalRequiredChecks),
   removal: bootstrapPolicySnapshot(phase1Checks),
-  restoration: bootstrapPolicySnapshot(requiredChecks)
+  restoration: bootstrapPolicySnapshot(historicalRequiredChecks)
 };
 export const bootstrapPhase1CheckRuns = [
   { id: 93351858559, name: "Phase 1 / Android Regression Guards", externalId: "7787b136-cccd-5b17-bfc3-e74575911ad7", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:20Z", completedAt: "2026-08-10T04:09:56Z", status: "completed", conclusion: "success" },
@@ -168,8 +169,8 @@ export const canonicalOwnerFinalCarrierBindingReceipt = {
 };
 export const protectedMainReadback = {
   ref: "refs/heads/main",
-  observedHead: "a9bd887606f74996a9f5920e6fad922e7f20598b",
-  observedAt: "2026-08-10T07:24:55Z",
+  observedHead: "085960ba2d26ad14c44d758cbaf1924ec80a1e5d",
+  observedAt: "2026-08-10T12:47:52Z",
   evidenceMode: "github-read-only",
   bootstrapMergeReachable: true
 };
@@ -307,7 +308,9 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   const freshness = readback?.repositorySourceFreshness;
   const add = (id) => errors.push(`github ruleset readback: ${id}`);
 
-  if (contract?.applicationState !== "APPLIED_AND_READ_BACK_POST_A1_MERGE") add("application state mismatch");
+  if (contract?.applicationState !== "OPTIONAL_ADVISORY_APPLIED_AND_READ_BACK_S0"
+    || contract?.advisoryStatusCheckExcluded !== exactHeadCheck
+    || contract?.requiredStatusCheckToAdd !== undefined) add("application state mismatch");
   if (!same(contract?.conditions, mainBranchCondition)) add("protected main condition mismatch");
   if (!same(contract?.requiredCheckPublisherBoundary, requiredCheckPublisherBoundary)) add("required-check publisher boundary mismatch");
   if (!same(contract?.pullRequestRequirements, pullRequestRequirements)) add("pull-request protection requirements mismatch");
@@ -320,9 +323,9 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (!same(readback?.rulesetSource, repositoryRulesetSource)
     || !same(readback?.effectiveMainRules, effectiveMainRules)
     || readback?.effectiveMainRulesSha256 !== sha256(stableJson(effectiveMainRules))) add("effective repository ruleset mismatch");
-  if (readback?.rulesetVersionId !== 46047691
-    || readback?.rulesetUpdatedAt !== "2026-08-10T00:32:55.241-05:00"
-    || readback?.changeClassification !== "ENFORCED_CANONICAL_PULL_REQUEST_POLICY_AND_PRESERVED_EXACT_CHECK_BINDINGS") add("current ruleset identity mismatch");
+  if (readback?.rulesetVersionId !== 46082187
+    || readback?.rulesetUpdatedAt !== "2026-08-10T07:47:40.950-05:00"
+    || readback?.changeClassification !== "CODEX_REVIEW_OPTIONAL_ADVISORY_PHASE1_13_REQUIRED") add("current ruleset identity mismatch");
   const freshnessObservedAt = Date.parse(freshness?.observedAt ?? "");
   const freshnessExpiresAt = Date.parse(freshness?.expiresAt ?? "");
   const validationNow = now instanceof Date ? now.valueOf() : Date.parse(now ?? "");
@@ -337,7 +340,7 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (freshnessMode === "CURRENT_CLAIM"
     && (!Number.isFinite(validationNow) || validationNow < freshnessObservedAt || validationNow > freshnessExpiresAt)) add("repository ruleset readback stale");
   if (!same(readback?.protectedMainReadback, protectedMainReadback)
-    || protectedMainReadback.observedHead !== exception?.mergeSha) add("protected main readback mismatch");
+    || protectedMainReadback.bootstrapMergeReachable !== true) add("protected main readback mismatch");
   if (readback?.enforcement !== "active"
     || readback?.strictRequiredStatusChecksPolicy !== true
     || readback?.doNotEnforceOnCreate !== false
@@ -407,9 +410,9 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (window?.preRemovalVersionId !== 46039477
     || window?.removalVersionId !== 46044242
     || window?.restorationVersionId !== 46044257) add("ruleset version identity mismatch");
-  if (window?.preRemovalStatusCheckSetSha256 !== setHash(requiredChecks)
+  if (window?.preRemovalStatusCheckSetSha256 !== setHash(historicalRequiredChecks)
     || window?.removalStatusCheckSetSha256 !== setHash(phase1Checks)
-    || window?.restoredStatusCheckSetSha256 !== setHash(requiredChecks)) add("protection-window digest mismatch");
+    || window?.restoredStatusCheckSetSha256 !== setHash(historicalRequiredChecks)) add("protection-window digest mismatch");
   if (!same(window?.policySnapshots?.preRemoval, bootstrapWindowPolicies.preRemoval)
     || !same(window?.policySnapshots?.removal, bootstrapWindowPolicies.removal)
     || !same(window?.policySnapshots?.restoration, bootstrapWindowPolicies.restoration)

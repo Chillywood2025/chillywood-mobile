@@ -16,9 +16,10 @@
     },
     "gateCatalog": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["statuses", "gates", "applicabilityPolicies", "completionFeatureApplicability", "completionFactAuthorities", "phaseBlockers"],
+      "required": ["statuses", "advisoryInputs", "gates", "applicabilityPolicies", "completionFeatureApplicability", "completionFactAuthorities", "phaseBlockers"],
       "properties": {
         "statuses": {"type": "array", "items": {"$ref": "#/$defs/status"}, "uniqueItems": true},
+        "advisoryInputs": {"const": {"codexReview": "OPTIONAL_ADVISORY", "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true}},
         "gates": {
           "type": "array",
           "minItems": 8,
@@ -82,8 +83,9 @@
     },
     "currentTruthContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["recordPath", "generatedDocuments", "requiredFields", "synchronizationMerge", "implementationHeadBinding", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "freshness", "staleFindingIds"],
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "reviewPolicy", "synchronizationMerge", "implementationHeadBinding", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "freshness", "staleFindingIds"],
       "properties": {
+        "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
         "synchronizationMerge": {
           "type": "object",
           "required": ["required", "parentCount", "recordedMainMustBeFirstParent", "requiredChangedPaths", "allowedChangedPaths", "bootstrapMerge"],
@@ -126,7 +128,7 @@
             "baseSynchronization": {"const": {"classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH", "exactHeadMatchingRemainsDefault": true, "sourceMustBeAncestor": true, "commitDistance": 1, "commitDistanceTraversal": "first-parent", "ordinaryMergeParentCount": 2, "firstParent": "recorded-source-head", "secondParent": "exact-origin-main", "canonicalMergeTreeRequired": true, "sourceDeltaMustBeByteEquivalent": true, "changedPathSetMustBeEquivalent": true, "providerRemoteRefMustMatch": true, "reviewEvidenceRefNamespace": "refs/remotes/origin/", "reviewEvidenceRoots": ["docs/reviews", "config/assurance/reviews"], "minimumReviewEvidence": 1, "reviewFreshnessHours": 24, "reviewEvidenceMustBeReviewOnly": true, "reviewProvider": "INDEPENDENT_REPOSITORY_REVIEW", "reviewReceiptHashAlgorithm": "sha256", "reviewReceiptRequiredFields": ["reviewId", "reviewProvider", "reviewerId", "reviewedCommit", "reviewedTree", "reviewRef", "reviewTimestamp", "reviewReceiptHash"], "criticalFindingMaximum": {"P0": 0, "P1": 0}, "repeatedMergeChainAllowed": false, "manualResolutionAllowed": false, "networkAccess": "forbidden", "failureStatus": "BLOCKED_INTERNAL"}}
           }
         },
-        "lateReviewOwnerRegistry": {"const": [{"repository": "Chillywood2025/chillywood-mobile", "prNumber": 194, "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446", "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}, {"repository": "Chillywood2025/chillywood-mobile", "prNumber": 195, "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7", "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}]},
+        "lateReviewOwnerRegistry": {"const": [{"repository": "Chillywood2025/chillywood-mobile", "prNumber": 194, "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446", "findingSetHash": "9474ccab70621250acc32aaa8bb765f0aba7423b44fa5fd073d2318f12701c99", "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}, {"repository": "Chillywood2025/chillywood-mobile", "prNumber": 195, "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7", "findingSetHash": "6aa0de5907c7b504712a502b3072fcd06dd026801425aa5ff6912a67ffcb6b10", "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}]},
         "lateReviewTombstoneAdmission": {"const": {"policyId": "EXACT_HEAD_PROTECTED_MAIN_V1", "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48", "originalSentinelRetentionRequired": true, "firstParentAdmissionRequired": true, "carrierExactMergeParentsRequired": true, "carrierGithubReadbackRequired": true, "carrierExactHeadReceiptRequired": true, "carrierLatestSourcePushInvalidationRequired": true, "carrierEvidenceMode": "github-read-only", "branchLocalAdmissionAllowed": false, "networkRequiredAfterAdmission": false}},
         "freshness": {
           "type": "object",
@@ -227,8 +229,9 @@
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "lateReviewSentinels", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "required": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "lateReviewSentinels", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
       "properties": {
+        "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
         "mainSha": {"$ref": "#/$defs/gitSha"},
         "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
         "liveProviderReadback": {"type": "boolean"},
@@ -498,7 +501,7 @@
     },
     "codexSecurityReliabilityContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["repository", "targetContract", "hostPreflight", "states", "terminalStates", "sourceLease", "completion", "evidenceReuse", "repositoryClosure", "incidentSanitization", "invariants"],
+      "required": ["repository", "targetContract", "hostPreflight", "states", "terminalStates", "sourceLease", "completion", "evidenceReuse", "repositoryClosure", "reviewGovernance", "incidentSanitization", "invariants"],
       "properties": {
         "contractId": {"const": "codex-security-reliability-s0-v1"},
         "repository": {"const": "Chillywood2025/chillywood-mobile"},
@@ -548,6 +551,7 @@
             "hostedSelfApprovalReason": {"const": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"}
           }
         },
+        "reviewGovernance": {"const": {"providerCodexReview": "OPTIONAL_ADVISORY", "ownerTriggeredOnly": true, "automaticRequestAllowed": false, "automaticRetryAllowed": false, "providerReceiptRequired": false, "providerFailureBlocks": [], "requiredPhase1Checks": 13, "repositoryOwnedIndependentExactHeadReviewRequired": true, "p0P1StopLineRequired": true, "lateProviderFindingDisposition": "ADVISORY_UNTIL_INDEPENDENT_REPOSITORY_VALIDATION", "protectedMainFindingSetRegistryRequiredForBlocking": true, "requiredStatusCheckExcluded": "Chi'llywood / Codex Review Exact Head", "rulesetStrict": true, "conversationResolutionRequired": true, "staleReviewDismissalRequired": true, "bypassActors": []}},
         "incidentSanitization": {
           "type": "object",
           "required": ["errorCode", "rawErrorRetained", "tokenValues", "wallValues", "knownScanIds"],
@@ -559,7 +563,7 @@
             "knownScanIds": {"const": ["508c30b1-cf43-4902-96f1-92563d490149", "a64456db-438c-4857-8f01-c40fcc965936"]}
           }
         },
-        "invariants": {"type": "array", "minItems": 8, "uniqueItems": true}
+        "invariants": {"type": "array", "minItems": 11, "uniqueItems": true}
       }
     },
     "codexSecurityIncidentLedger": {
@@ -594,10 +598,11 @@
     },
     "codexReviewExactHeadContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["checkName", "reviewProviders", "acceptableReviewStates", "blockingSeverities", "reviewOnlyLabel", "trustedRepositoryWriteActors", "requiredEvents", "receiptRequiredFields", "receiptHash", "boundedReadback", "passRequirements", "resultCodes", "providerCleanIssueCommentReview", "protectedBaseBranch", "sourcePushLease", "providerFindingLedger", "reviewOnlyClassification", "lateReviewClassification", "lateReviewBlocks"],
+      "required": ["checkName", "reviewPolicy", "reviewProviders", "acceptableReviewStates", "blockingSeverities", "reviewOnlyLabel", "trustedRepositoryWriteActors", "requiredEvents", "receiptRequiredFields", "receiptHash", "boundedReadback", "passRequirements", "resultCodes", "providerCleanIssueCommentReview", "protectedBaseBranch", "sourcePushLease", "providerFindingLedger", "reviewOnlyClassification", "lateReviewTriage", "lateReviewClassification", "lateReviewBlocks"],
       "properties": {
         "contractId": {"const": "codex-review-exact-head-v1"},
         "checkName": {"const": "Chi'llywood / Codex Review Exact Head"},
+        "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
         "reviewProviders": {"type": "array", "minItems": 1, "uniqueItems": true, "contains": {"const": "chatgpt-codex-connector"}},
         "acceptableReviewStates": {"const": ["COMMENTED", "APPROVED"]},
         "blockingSeverities": {"const": ["P0", "P1", "P2"]},
@@ -621,6 +626,7 @@
         "sourcePushLease": {"const": {"checkName": "Chi'llywood / Codex Review Source Push Lease", "trustedAppSlug": "github-actions", "events": ["opened", "synchronize", "reopened", "ready_for_review", "edited-base"], "receiptBinding": "repository-pr-head-pushedAt-sha256", "eventRunCancellationAllowed": false, "reuseAfterRepeatedHeadPush": false}},
         "providerFindingLedger": {"const": {"checkName": "Chi'llywood / Codex Review Finding Ledger", "trustedAppSlug": "github-actions", "appendOnly": true, "minimumTrackedMergedPr": 194}},
         "reviewOnlyClassification": {"const": {"branchPrefix": "codex/assurance-review-only/", "checkName": "Chi'llywood / Review Only Never Merge", "trustedAppSlug": "github-actions", "appendOnly": true, "labelAuthority": false, "registryAnchorSha": "60a6a5b3fe5ba1854d0fc6a90ffec1f3c5f4c1a9", "registryScope": "repository-pr-number-across-all-future-heads"}},
+        "lateReviewTriage": {"const": {"unvalidatedDisposition": "OPTIONAL_ADVISORY_PENDING_TRIAGE", "blockingDisposition": "INTERNALLY_VALIDATED_BLOCKING", "validationAuthority": "PROTECTED_MAIN_FINDING_SET_REGISTRY", "automaticGlobalBlock": false}},
         "lateReviewClassification": {"const": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"},
         "lateReviewBlocks": {"const": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]}
       }
@@ -730,10 +736,10 @@
     },
     "githubMainRulesetReadbackContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["patchId", "repository", "rulesetId", "rulesetName", "target", "enforcement", "conditions", "ownerBootstrapAuthorizationReceipt", "ownerFinalCarrierBindingReceipt", "ownerFinalCarrierGithubReadback", "bootstrapPhase1GithubReadback", "requiredStatusCheckToAdd", "preserveExistingRequiredStatusChecks", "strictRequiredStatusChecksPolicy", "requiredCheckPublisherBoundary", "pullRequestRequirements", "applicationState", "applicationReadback", "authorizedBootstrapException"],
+      "required": ["patchId", "repository", "rulesetId", "rulesetName", "target", "enforcement", "conditions", "ownerBootstrapAuthorizationReceipt", "ownerFinalCarrierBindingReceipt", "ownerFinalCarrierGithubReadback", "bootstrapPhase1GithubReadback", "advisoryStatusCheckExcluded", "preserveExistingRequiredStatusChecks", "strictRequiredStatusChecksPolicy", "requiredCheckPublisherBoundary", "pullRequestRequirements", "applicationState", "applicationReadback", "authorizedBootstrapException"],
       "properties": {
         "contractId": {"const": "github-main-ruleset-codex-review-v1"},
-        "patchId": {"const": "main-pr-review-protection-codex-review-exact-head-v1"},
+        "patchId": {"const": "main-pr-review-protection-codex-review-optional-advisory-v1"},
         "repository": {"const": "Chillywood2025/chillywood-mobile"},
         "rulesetId": {"const": 18940814},
         "rulesetName": {"const": "main-pr-review-protection"},
@@ -744,33 +750,33 @@
         "ownerFinalCarrierBindingReceipt": {"const": "config/assurance/a1-owner-final-carrier-binding-v1.json"},
         "ownerFinalCarrierGithubReadback": {"const": "config/assurance/a1-owner-final-carrier-github-readback-v1.json"},
         "bootstrapPhase1GithubReadback": {"const": "config/assurance/a1-bootstrap-phase1-github-readback-v1.json"},
-        "requiredStatusCheckToAdd": {"const": "Chi'llywood / Codex Review Exact Head"},
+        "advisoryStatusCheckExcluded": {"const": "Chi'llywood / Codex Review Exact Head"},
         "preserveExistingRequiredStatusChecks": {"const": true},
         "strictRequiredStatusChecksPolicy": {"const": true},
         "requiredCheckPublisherBoundary": {"const": {"expectedGitHubApp": "github-actions", "expectedGitHubAppIntegrationId": 15368, "repositoryOwnerType": "User", "rootAuthority": "Chillywood2025", "trustedRepositoryWriteActors": ["Chillywood2025"], "unexpectedWriteActorResult": "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR", "forkWorkflowWriteTokensAllowed": false}},
         "pullRequestRequirements": {"const": {"allowedMergeMethods": ["merge", "squash", "rebase"], "requiredApprovingReviewCount": 1, "requiredReviewThreadResolution": true, "dismissStaleReviewsOnPush": true, "requireCodeOwnerReview": false, "requireLastPushApproval": true, "requiredReviewers": [], "preventDeletion": true, "preventNonFastForward": true, "bypassActors": []}},
-        "applicationState": {"const": "APPLIED_AND_READ_BACK_POST_A1_MERGE"},
+        "applicationState": {"const": "OPTIONAL_ADVISORY_APPLIED_AND_READ_BACK_S0"},
         "applicationReadback": {
           "type": "object",
           "required": ["rulesetVersionId", "rulesetUpdatedAt", "changeClassification", "enforcement", "requiredStatusCheckCount", "requiredStatusCheckPresent", "requiredStatusChecks", "requiredStatusCheckBindings", "requiredStatusCheckSetSha256", "requiredStatusCheckBindingSetSha256", "rulesetSource", "effectiveMainRules", "effectiveMainRulesSha256", "protectedMainReadback", "strictRequiredStatusChecksPolicy", "doNotEnforceOnCreate", "repositorySourceFreshness", "ruleTypes", "allowedMergeMethods", "requiredApprovingReviewCount", "requiredReviewThreadResolution", "dismissStaleReviewsOnPush", "requireCodeOwnerReview", "requireLastPushApproval", "requiredReviewers", "preventDeletion", "preventNonFastForward", "bypassActors"],
           "properties": {
-            "rulesetVersionId": {"const": 46047691},
-            "rulesetUpdatedAt": {"const": "2026-08-10T00:32:55.241-05:00"},
-            "changeClassification": {"const": "ENFORCED_CANONICAL_PULL_REQUEST_POLICY_AND_PRESERVED_EXACT_CHECK_BINDINGS"},
+            "rulesetVersionId": {"const": 46082187},
+            "rulesetUpdatedAt": {"const": "2026-08-10T07:47:40.950-05:00"},
+            "changeClassification": {"const": "CODEX_REVIEW_OPTIONAL_ADVISORY_PHASE1_13_REQUIRED"},
             "enforcement": {"const": "active"},
-            "requiredStatusCheckCount": {"const": 14},
-            "requiredStatusCheckPresent": {"const": true},
-            "requiredStatusChecks": {"const": ["Chi'llywood / Codex Review Exact Head", "Phase 1 / Android Regression Guards", "Phase 1 / Autonomous Systems All-Platform Contract", "Phase 1 / Autonomous Systems iOS Contract", "Phase 1 / Cognitive Execution Safety", "Phase 1 / Cognitive Intelligence Contract", "Phase 1 / Expo Doctor", "Phase 1 / Repository Lint", "Phase 1 / Research and Memory Integrity", "Phase 1 / Route Contracts", "Phase 1 / Runtime Validation", "Phase 1 / Supabase Database Integration", "Phase 1 / TypeScript", "Phase 1 / iOS Configuration"]},
-            "requiredStatusCheckBindings": {"const": [{"context": "Chi'llywood / Codex Review Exact Head", "integration_id": 15368}, {"context": "Phase 1 / Android Regression Guards", "integration_id": 15368}, {"context": "Phase 1 / Autonomous Systems All-Platform Contract", "integration_id": 15368}, {"context": "Phase 1 / Autonomous Systems iOS Contract", "integration_id": 15368}, {"context": "Phase 1 / Cognitive Execution Safety", "integration_id": 15368}, {"context": "Phase 1 / Cognitive Intelligence Contract", "integration_id": 15368}, {"context": "Phase 1 / Expo Doctor", "integration_id": 15368}, {"context": "Phase 1 / Repository Lint", "integration_id": 15368}, {"context": "Phase 1 / Research and Memory Integrity", "integration_id": 15368}, {"context": "Phase 1 / Route Contracts", "integration_id": 15368}, {"context": "Phase 1 / Runtime Validation", "integration_id": 15368}, {"context": "Phase 1 / Supabase Database Integration", "integration_id": 15368}, {"context": "Phase 1 / TypeScript", "integration_id": 15368}, {"context": "Phase 1 / iOS Configuration", "integration_id": 15368}]},
-            "requiredStatusCheckSetSha256": {"const": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d"},
-            "requiredStatusCheckBindingSetSha256": {"const": "4ec5a6c6845c6e42f17125b327187a82e81c7d40306996f0d12a32037937d578"},
+            "requiredStatusCheckCount": {"const": 13},
+            "requiredStatusCheckPresent": {"const": false},
+            "requiredStatusChecks": {"const": ["Phase 1 / Android Regression Guards", "Phase 1 / Autonomous Systems All-Platform Contract", "Phase 1 / Autonomous Systems iOS Contract", "Phase 1 / Cognitive Execution Safety", "Phase 1 / Cognitive Intelligence Contract", "Phase 1 / Expo Doctor", "Phase 1 / Repository Lint", "Phase 1 / Research and Memory Integrity", "Phase 1 / Route Contracts", "Phase 1 / Runtime Validation", "Phase 1 / Supabase Database Integration", "Phase 1 / TypeScript", "Phase 1 / iOS Configuration"]},
+            "requiredStatusCheckBindings": {"const": [{"context": "Phase 1 / Android Regression Guards", "integration_id": 15368}, {"context": "Phase 1 / Autonomous Systems All-Platform Contract", "integration_id": 15368}, {"context": "Phase 1 / Autonomous Systems iOS Contract", "integration_id": 15368}, {"context": "Phase 1 / Cognitive Execution Safety", "integration_id": 15368}, {"context": "Phase 1 / Cognitive Intelligence Contract", "integration_id": 15368}, {"context": "Phase 1 / Expo Doctor", "integration_id": 15368}, {"context": "Phase 1 / Repository Lint", "integration_id": 15368}, {"context": "Phase 1 / Research and Memory Integrity", "integration_id": 15368}, {"context": "Phase 1 / Route Contracts", "integration_id": 15368}, {"context": "Phase 1 / Runtime Validation", "integration_id": 15368}, {"context": "Phase 1 / Supabase Database Integration", "integration_id": 15368}, {"context": "Phase 1 / TypeScript", "integration_id": 15368}, {"context": "Phase 1 / iOS Configuration", "integration_id": 15368}]},
+            "requiredStatusCheckSetSha256": {"const": "0132e85ed8b4d563e37520ea07caf214bb4fba3a653f6193d6244355b08304be"},
+            "requiredStatusCheckBindingSetSha256": {"const": "1be202ff0cc738dc062d4a6d513d6a19d36771c6ac6ee3dc1aa50a287820da7a"},
             "rulesetSource": {"const": {"sourceType": "Repository", "source": "Chillywood2025/chillywood-mobile"}},
             "effectiveMainRules": {"type": "array", "minItems": 4, "maxItems": 4},
-            "effectiveMainRulesSha256": {"const": "1907992f25545b92264cf70b466027346ea6e5360abe9c113206d2418726e9e7"},
-            "protectedMainReadback": {"const": {"ref": "refs/heads/main", "observedHead": "a9bd887606f74996a9f5920e6fad922e7f20598b", "observedAt": "2026-08-10T07:24:55Z", "evidenceMode": "github-read-only", "bootstrapMergeReachable": true}},
+            "effectiveMainRulesSha256": {"const": "011f617f826fdc14a57048b78278cf02ce5fc7a9989b4652a038bbea9cbf6655"},
+            "protectedMainReadback": {"const": {"ref": "refs/heads/main", "observedHead": "085960ba2d26ad14c44d758cbaf1924ec80a1e5d", "observedAt": "2026-08-10T12:47:52Z", "evidenceMode": "github-read-only", "bootstrapMergeReachable": true}},
             "strictRequiredStatusChecksPolicy": {"const": true},
             "doNotEnforceOnCreate": {"const": false},
-            "repositorySourceFreshness": {"const": {"status": "CURRENT", "observedAt": "2026-08-10T07:24:55Z", "expiresAt": "2026-08-11T07:24:55Z", "evidenceMode": "github-read-only", "factsCovered": ["repository.github.main-ruleset", "repository.github.main-ruleset-effective-rules", "repository.github.main-head"], "freshnessClass": "REPOSITORY_SOURCE"}},
+            "repositorySourceFreshness": {"const": {"status": "CURRENT", "observedAt": "2026-08-10T12:47:52Z", "expiresAt": "2026-08-11T12:47:52Z", "evidenceMode": "github-read-only", "factsCovered": ["repository.github.main-ruleset", "repository.github.main-ruleset-effective-rules", "repository.github.main-head"], "freshnessClass": "REPOSITORY_SOURCE"}},
             "ruleTypes": {"const": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"]},
             "allowedMergeMethods": {"const": ["merge", "squash", "rebase"]},
             "requiredApprovingReviewCount": {"const": 1},

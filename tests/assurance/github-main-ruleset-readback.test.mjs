@@ -11,10 +11,23 @@ const finalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-car
 const finalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-carrier-github-readback-v1.json");
 const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-phase1-github-readback-v1.json");
 const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
-const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T07:36:00Z", freshnessMode = "CURRENT_CLAIM", phase1Readback = bootstrapPhase1GithubReadback) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, bootstrapPhase1GithubReadback: phase1Readback, mergeIdentity: identity, now, freshnessMode });
+const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T12:50:00Z", freshnessMode = "CURRENT_CLAIM", phase1Readback = bootstrapPhase1GithubReadback) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, bootstrapPhase1GithubReadback: phase1Readback, mergeIdentity: identity, now, freshnessMode });
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
+  assert.equal(contract.applicationReadback.requiredStatusCheckPresent, false);
+  assert.equal(contract.applicationReadback.requiredStatusChecks.includes("Chi'llywood / Codex Review Exact Head"), false);
+  assert.equal(contract.applicationReadback.requiredStatusChecks.length, 13);
+});
+
+test("Codex Review cannot re-enter required checks and all 13 Phase 1 bindings remain exact", () => {
+  const restoredCodexGate = structuredClone(contract);
+  restoredCodexGate.applicationReadback.requiredStatusChecks[0] = "Chi'llywood / Codex Review Exact Head";
+  assert.ok(validate(restoredCodexGate).some((error) => error.includes("status-check identities")));
+  const droppedPhase1 = structuredClone(contract);
+  droppedPhase1.applicationReadback.requiredStatusChecks.pop();
+  droppedPhase1.applicationReadback.requiredStatusCheckBindings.pop();
+  assert.ok(validate(droppedPhase1).some((error) => error.includes("status-check")));
 });
 
 test("same-count status-check substitution fails", () => {

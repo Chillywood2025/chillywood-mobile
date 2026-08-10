@@ -31,8 +31,12 @@ denial, independent semantic review, adjacent-defect discovery, and required CI.
 - `freeze`: record exact implementation head, tree, diff hash, path hash, input
   hash, and deterministic receipts. Source changes invalidate the freeze.
 - `review`: use the packet's current policy level and compact independent lanes.
-  Bind each lane to the frozen head/tree. Code Review is additional unless a
-  later contract says otherwise, and runs at most once per frozen source head.
+  Bind each lane to the frozen head/tree. Repository-owned independent review
+  and the P0/P1 stop line remain mandatory. Provider Codex Review is
+  `OPTIONAL_ADVISORY`, Owner-triggered only, and never a progress, CI, merge,
+  current-truth, build, or release prerequisite. Never request, retry, or poll
+  it automatically. Treat late provider commentary as advisory triage unless
+  an exact protected-main finding-set registration independently validates it.
 - `current-truth`: regenerate only through the canonical current-truth command.
   Never hand-edit its generated documents or treat the packet as canonical.
 - `closeout`: require applicable focused proof, review, exact final CI, retained
@@ -76,3 +80,9 @@ fallback must be labeled only
 `REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED`, bind complete changed-file
 coverage, P0=0/P1=0, closed finding dispositions, exact test-result hashes, no
 deferred work, and the exact reason hosted sealing was not used.
+
+The protected-main ruleset must require exactly the 13 Phase 1 checks with
+strict head freshness, stale-review dismissal, conversation resolution, and no
+bypass. `Chi'llywood / Codex Review Exact Head` must remain excluded from the
+required set. A missing, pending, failed, stale, unavailable, or quota-blocked
+provider review receipt is advisory only and cannot prevent repository closure.

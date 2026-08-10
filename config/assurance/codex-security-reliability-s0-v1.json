@@ -99,6 +99,24 @@
     ],
     "hostedSelfApprovalReason": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"
   },
+  "reviewGovernance": {
+    "providerCodexReview": "OPTIONAL_ADVISORY",
+    "ownerTriggeredOnly": true,
+    "automaticRequestAllowed": false,
+    "automaticRetryAllowed": false,
+    "providerReceiptRequired": false,
+    "providerFailureBlocks": [],
+    "requiredPhase1Checks": 13,
+    "repositoryOwnedIndependentExactHeadReviewRequired": true,
+    "p0P1StopLineRequired": true,
+    "lateProviderFindingDisposition": "ADVISORY_UNTIL_INDEPENDENT_REPOSITORY_VALIDATION",
+    "protectedMainFindingSetRegistryRequiredForBlocking": true,
+    "requiredStatusCheckExcluded": "Chi'llywood / Codex Review Exact Head",
+    "rulesetStrict": true,
+    "conversationResolutionRequired": true,
+    "staleReviewDismissalRequired": true,
+    "bypassActors": []
+  },
   "incidentSanitization": {
     "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
     "rawErrorRetained": false,
@@ -117,6 +135,9 @@
     "terminal scans cannot retry",
     "unchanged repository-source evidence alone may be reused",
     "repository fallback is never Codex Security sealed",
-    "S0 is approved only by independent exact-head repository review"
+    "S0 is approved only by independent exact-head repository review",
+    "provider Codex Review remains optional advisory and is never requested or retried automatically",
+    "only independently validated protected-main finding sets can turn provider commentary into a blocker",
+    "the protected-main required set contains exactly the 13 strict Phase 1 checks and excludes the provider Codex Review context"
   ]
 }

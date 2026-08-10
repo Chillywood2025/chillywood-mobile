@@ -95,10 +95,28 @@ const claimRequiredFields = [
 const claimStatuses = new Set(["CURRENT", "STALE_BLOCKED"]);
 const claimPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 export const HISTORICAL_PROVIDER_FACT = "HISTORICAL_PROVIDER_FACT";
+export const optionalCodexReviewPolicy = {
+  classification: "OPTIONAL_ADVISORY",
+  requiredStatusCheck: false,
+  blocksProgress: false,
+  blocksMerge: false,
+  ownerTriggeredOnly: true,
+  automaticReviewRequests: false,
+  quotaRetryAllowed: false,
+  providerReceiptRequired: false,
+  independentRepositoryValidationRequiredBeforeBlocking: true,
+  repositoryOwnedExactHeadReviewRequired: true,
+  requiredPhase1Checks: 13,
+  historicalIncidentsRetained: true
+};
+export function optionalCodexReviewPolicyValid(policy) {
+  return stableJson(policy) === stableJson(optionalCodexReviewPolicy);
+}
 const canonicalLateReviewOwnerRegistry = [{
   repository: "Chillywood2025/chillywood-mobile",
   prNumber: 194,
   mergeSha: "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+  findingSetHash: "9474ccab70621250acc32aaa8bb765f0aba7423b44fa5fd073d2318f12701c99",
   successorCorrectionOwner: "codex/d2a-livekit-mic-post-merge-review-correction",
   assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   authorizedBootstrapOwners: [
@@ -109,6 +127,7 @@ const canonicalLateReviewOwnerRegistry = [{
   repository: "Chillywood2025/chillywood-mobile",
   prNumber: 195,
   mergeSha: "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+  findingSetHash: "6aa0de5907c7b504712a502b3072fcd06dd026801425aa5ff6912a67ffcb6b10",
   successorCorrectionOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   authorizedBootstrapOwners: [
@@ -218,6 +237,13 @@ function canonicalLateReviewOwnerEntry(sentinel) {
   return entry;
 }
 
+export function lateReviewSentinelValidationState(sentinel) {
+  const entry = canonicalLateReviewOwnerEntry(sentinel);
+  return entry && lateReviewFindingSetHash(sentinel?.findings) === entry.findingSetHash
+    ? "INTERNALLY_VALIDATED_BLOCKING"
+    : "OPTIONAL_ADVISORY_PENDING_TRIAGE";
+}
+
 export function lateReviewSuccessorCorrectionOwner(sentinel) {
   return canonicalLateReviewOwnerEntry(sentinel)?.successorCorrectionOwner ?? null;
 }
@@ -236,6 +262,9 @@ export function lateReviewRegistryCoverageFindings(sentinels) {
       && sentinel?.mergeSha === entry.mergeSha);
     if (matches.length === 0) return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_MISSING", prNumber: entry.prNumber }];
     if (matches.length > 1) return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_DUPLICATE", prNumber: entry.prNumber }];
+    if (lateReviewFindingSetHash(matches[0]?.findings) !== entry.findingSetHash) {
+      return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_FINDING_SET_MISMATCH", prNumber: entry.prNumber }];
+    }
     return [];
   });
 }
@@ -1726,7 +1755,7 @@ export function renderCurrentState(record) {
   const lateReviews = (record.lateReviewSentinels ?? [])
     .map(({ prNumber, reviewedSha, findings, successorCorrectionOwner }) => `PR #${prNumber} reviewed \`${reviewedSha}\` after merge with ${(findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length} unresolved findings; successor \`${successorCorrectionOwner}\``)
     .join("; ") || "none";
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.${proofTierStatusLine}\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Late exact-head Codex Review sentinels: ${lateReviews}. These block post-merge completion claims, unrelated successor work, release, and proof-tier promotion.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.${proofTierStatusLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {

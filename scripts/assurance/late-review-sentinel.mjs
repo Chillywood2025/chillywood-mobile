@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, lateReviewSuccessorCorrectionOwner, mergeLateReviewSentinelRecords, readJson, repositoryReadbackEvidenceHash, stableJson } from "./lib.mjs";
+import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, lateReviewSentinelValidationState, lateReviewSuccessorCorrectionOwner, mergeLateReviewSentinelRecords, readJson, repositoryReadbackEvidenceHash, stableJson } from "./lib.mjs";
 import { parseLateReviewIssue, readMergedLateReviewLedgerSentinels, readOpenLateReviewIssues, verifyLateReviewResolutionGithub } from "./codex-review-exact-head.mjs";
 
 export { lateReviewSentinelResolved } from "./lib.mjs";
@@ -153,7 +153,8 @@ function protectedTombstoneResolves(record, sentinel, options = {}) {
 }
 
 export function unresolvedLateReviewSentinels(record, options = {}) {
-  return (record?.lateReviewSentinels ?? []).filter((sentinel) => !lateReviewSentinelResolved(sentinel, options)
+  return (record?.lateReviewSentinels ?? []).filter((sentinel) => lateReviewSentinelValidationState(sentinel) === "INTERNALLY_VALIDATED_BLOCKING"
+    && !lateReviewSentinelResolved(sentinel, options)
     && !protectedTombstoneResolves(record, sentinel, options));
 }
 
@@ -172,6 +173,7 @@ export function validateLateReviewSentinelState(record, options = {}) {
     }
   }
   for (const sentinel of record?.lateReviewSentinels ?? []) {
+    if (lateReviewSentinelValidationState(sentinel) !== "INTERNALLY_VALIDATED_BLOCKING") continue;
     const dispositions = (sentinel.findings ?? []).map(({ disposition }) => disposition);
     const claimsResolution = dispositions.some((disposition) => disposition === "RESOLVED");
     const resolved = lateReviewSentinelResolved(sentinel, options) || protectedTombstoneResolves(record, sentinel, options);
@@ -223,7 +225,9 @@ export async function readDurableLateReviewSentinels(repository, token, options 
 
 export function mergeUnresolvedLateReviewSentinels({ globalLedgerSentinels = [], canonicalSentinels = [], durable = [] }) {
   const durableSentinels = durable.filter(({ resolutionVerified }) => resolutionVerified !== true).map(({ sentinel }) => sentinel);
-  const authoritative = mergeLateReviewSentinelRecords([...globalLedgerSentinels, ...canonicalSentinels, ...durableSentinels]);
+  const blockingCandidates = [...canonicalSentinels, ...globalLedgerSentinels, ...durableSentinels]
+    .filter((sentinel) => lateReviewSentinelValidationState(sentinel) === "INTERNALLY_VALIDATED_BLOCKING");
+  const authoritative = mergeLateReviewSentinelRecords(blockingCandidates);
   return authoritative.filter((sentinel) => !durable.some((entry) => entry.resolutionVerified === true
     && entry.sentinel?.repository === sentinel.repository
     && entry.sentinel?.prNumber === sentinel.prNumber
@@ -250,8 +254,14 @@ async function main() {
     globalLedgerSentinels = await readMergedLateReviewLedgerSentinels(repository, token, { maxPages: 20 });
   }
   const allSentinels = mergeUnresolvedLateReviewSentinels({ globalLedgerSentinels, canonicalSentinels: sentinels, durable });
+  const advisoryCandidates = mergeLateReviewSentinelRecords([
+    ...globalLedgerSentinels,
+    ...durable.filter(({ resolutionVerified }) => resolutionVerified !== true).map(({ sentinel }) => sentinel)
+  ]).filter((sentinel) => lateReviewSentinelValidationState(sentinel) === "OPTIONAL_ADVISORY_PENDING_TRIAGE");
   emit("assurance:late-review-sentinel", allSentinels.length === 0 && findings.length === 0, {
-    classification: allSentinels.length ? "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW" : "NO_UNRESOLVED_LATE_REVIEW",
+    classification: allSentinels.length ? "INTERNALLY_VALIDATED_LATE_REVIEW_BLOCKED" : "NO_INTERNALLY_VALIDATED_LATE_REVIEW_BLOCKER",
+    codexReviewPolicy: "OPTIONAL_ADVISORY",
+    advisoryTriageCount: advisoryCandidates.length,
     findings,
     githubReadbackRequired: requireGithub,
     durableIssueNumbers: durable.map(({ issue }) => issue.number),
@@ -267,7 +277,7 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => emit("assurance:late-review-sentinel", false, {
-    classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+    classification: "LATE_REVIEW_READBACK_FAILED_CLOSED",
     findings: [{ id: error.message }],
     blocks: requiredBlocks
   }, [`late review sentinel: FAIL — ${error.message}`]));
