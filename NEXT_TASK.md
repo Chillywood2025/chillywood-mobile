@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Complete the bounded PR #205 late-review owner-registry bootstrap with its FORMAL_REVIEW tier boundary and exact hash-bound A1 ruleset, CI, and sentinel readback; restore and read back the exact-head required check immediately, then synchronize post-A1 truth.
+1. Complete the bounded PR #205 late-review owner-registry bootstrap with its FORMAL_REVIEW tier boundary and exact hash-bound complete PR 194/195 sentinel inventory, A1 ruleset, CI, and sentinel readback; restore and read back the exact-head required check immediately, then synchronize post-A1 truth.
 2. Implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.
 3. Only after S0 completes may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.
 4. After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.
