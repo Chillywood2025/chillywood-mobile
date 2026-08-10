@@ -461,7 +461,7 @@ try {
   const payload = runSnapshotCli("unexpected-open-implementation-inventory.json", `${JSON.stringify({
     openImplementationPrs: [{ number: 999, branch: "codex/unexpected-provider-implementation", head: "9".repeat(40), state: "open-draft" }]
   })}\n`);
-  assert.equal(payload.headBindings.context, "unlisted-control-branch");
+  assert.equal(payload.headBindings.context, "listed-implementation-branch");
   assert.equal(payload.providerImplementationSnapshot.ok, false);
   assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_EXTRA"));
 

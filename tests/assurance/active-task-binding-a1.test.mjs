@@ -8,7 +8,28 @@ const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
 const registry = read("config/assurance/feature-registry-v1.json");
 const allowlist = read("config/assurance/command-allowlist-v1.json");
-const binding = { ...canonicalTruth.activeTaskBinding, phase: "FORMAL_REVIEW" };
+const binding = {
+  schemaVersion: 1,
+  featureId: "chilly-chat-call-lifecycle",
+  implementationPr: 194,
+  implementationBranch: "codex/d2a-livekit-mic-membership-convergence-correction",
+  implementationBindingId: "d2a-microphone-correction-pr194-v1",
+  immutableSourceHead: "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+  immutableSourceTree: "4ce01fa17e4184f2523b82a10401e3b3f59dd641",
+  currentImplementationHead: "ada396a437e40a98acea75bf016c36fc3ea86739",
+  currentImplementationTree: "662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+  phase: "FORMAL_REVIEW",
+  executionState: "D2A_FROZEN",
+  requiredFreshnessClasses: ["REPOSITORY_SOURCE"],
+  requiredFreshnessClaims: [{
+    freshnessClass: "REPOSITORY_SOURCE",
+    platform: "NONE",
+    evidenceSourceId: "d2a-microphone-correction-merge-closeout-20260809-1805",
+    authorityAllowed: "REPOSITORY_ONLY",
+    requiredFacts: ["repository.active-implementation.immutable-synchronized-source"]
+  }],
+  proofTiersUnderEvaluation: ["T1_SOURCE"]
+};
 const truth = {
   ...canonicalTruth,
   lateReviewSentinels: [],
@@ -314,15 +335,20 @@ test("freshness claim scopes must match declared classes and proof tiers", () =>
 });
 
 test("a completed binding is not an active task and no override can revive it", () => {
+  const completeTruth = {
+    ...truth,
+    activeTaskBinding: { ...binding, phase: "COMPLETE" },
+    openImplementationPrs: []
+  };
   const completeIdentity = {
     ...identity,
-    branch: "codex/assurance-active-task-and-claim-freshness-a1"
+    branch: binding.implementationBranch
   };
   const competing = activeTask({
     ...facts,
-    protectedMainTruth: canonicalTruth,
+    protectedMainTruth: completeTruth,
     currentTruth: {
-      ...canonicalTruth,
+      ...completeTruth,
       openImplementationPrs: [{
         number: 201,
         branch: completeIdentity.branch,
@@ -334,7 +360,7 @@ test("a completed binding is not an active task and no override can revive it", 
   });
   assert.equal(competing.ok, false);
   assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
-  assert.deepEqual(activeTask({ ...facts, currentTruth: canonicalTruth, protectedMainTruth: canonicalTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+  assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
 });
 
 test("active-task CLI rejects caller-selected diff bases", () => {

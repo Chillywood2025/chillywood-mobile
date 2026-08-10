@@ -249,7 +249,7 @@ test("repository-source authority requires exact committed fact provenance", () 
     factRegistry: canonicalFreshness.factRegistry
   }), false);
   const forgedCoverage = { ...repositorySource, covers: [...repositorySource.covers] };
-  forgedCoverage.covers = forgedCoverage.covers.filter((fact) => fact !== "repository.phase1-ci.identity");
+  forgedCoverage.covers = forgedCoverage.covers.filter((fact) => fact !== repositoryClaim.factsCovered[0]);
   assert.equal(verifyCommittedClaimEvidence({
     claim: repositoryClaim,
     source: forgedCoverage,
@@ -268,5 +268,21 @@ test("all-platform, iOS and Cognitive lanes share the same historical-provider/s
     assert.equal(output.providerEvidenceClassification, "HISTORICAL_PROVIDER_FACT");
     assert.equal(output.currentProviderProof, false);
     assert.equal(output.sourceOnlyEligible, true);
+  }
+});
+
+test("claim-scoped Phase 1 lanes fetch committed evidence ancestry", () => {
+  const workflow = fs.readFileSync(".github/workflows/phase1-ci.yml", "utf8");
+  for (const jobId of [
+    "autonomous-systems-all-platform-contract",
+    "autonomous-systems-ios-contract",
+    "cognitive-intelligence-contract"
+  ]) {
+    const start = workflow.indexOf(`  ${jobId}:\n`);
+    assert.notEqual(start, -1, `${jobId} exists`);
+    const remaining = workflow.slice(start + 2);
+    const nextJob = remaining.search(/\n  [a-z0-9-]+:\n/u);
+    const job = nextJob === -1 ? remaining : remaining.slice(0, nextJob);
+    assert.match(job, /uses: actions\/checkout@[^\n]+\n\s+with:\n\s+fetch-depth: 0\n\s+persist-credentials: false/u, `${jobId} must retain committed provenance objects`);
   }
 });

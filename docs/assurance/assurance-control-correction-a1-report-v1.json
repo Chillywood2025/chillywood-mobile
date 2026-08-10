@@ -186,14 +186,15 @@
   "regression": {
     "requiredMatrix": "PENDING_FINAL_EXACT_HEAD_REPOSITORY_REVIEW",
     "activeTaskExactHeadProviderFocused": "52/52_PASS",
-    "efficiencyAndClaimFreshness": "19/19_PASS",
-    "combinedFocused": "71/71_PASS",
+    "efficiencyAndClaimFreshness": "20/20_PASS",
+    "combinedFocused": "72/72_PASS",
     "deterministicPacketRuns": "3/3_PASS",
     "headBindingAndSynchronization": "PASS_27_FAIL_CLOSED_BASE_SYNC_REJECTIONS",
     "contracts": "20/20_PASS",
     "featureRegistry": "21_FEATURES_PASS",
     "escapedDefects": "25_CLASSES_PASS",
-    "completeAssuranceSuite": "132/133_PASS_ONE_PREEXISTING_OUT_OF_SCOPE_RELEASE_PARITY_ASSERTION_66_EXPECTED_67_ACTUAL_PRESENT_ON_BASE_60A6",
+    "completeAssuranceSuite": "133/134_PASS_ONE_PREEXISTING_OUT_OF_SCOPE_RELEASE_PARITY_ASSERTION_66_EXPECTED_67_ACTUAL_PRESENT_ON_BASE_60A6",
+    "phase1CiProvenanceAttempt": "31348101161_FAIL_CLOSED_10_OF_13_SHALLOW_CHECKOUT_COULD_NOT_READ_COMMITTED_EVIDENCE_OBJECTS_SOURCE_CORRECTION_REQUIRED",
     "lint": "PASS_ZERO_ERRORS_88_PREEXISTING_WARNINGS",
     "localTypecheck": "BLOCKED_ENVIRONMENT_SHARED_INSTALL_MISSING_ALERT_AUTOMATION_WORKSPACE_PACKAGES"
   },
