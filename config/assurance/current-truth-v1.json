@@ -446,43 +446,43 @@
     "implementationPr": 205,
     "implementationBranch": "codex/assurance-active-task-and-claim-freshness-a1",
     "implementationBindingId": "assurance-late-review-owner-registry-bootstrap-pr205-v1",
-    "immutableSourceHead": "35465b473ddbbafca95e191b91ce869daecf1af6",
-    "immutableSourceTree": "8204eadd3a2845cdf0cd0ab6534f2aaeac69310b",
-    "currentImplementationHead": "35465b473ddbbafca95e191b91ce869daecf1af6",
-    "currentImplementationTree": "8204eadd3a2845cdf0cd0ab6534f2aaeac69310b",
+    "immutableSourceHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+    "immutableSourceTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d",
+    "currentImplementationHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+    "currentImplementationTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d",
     "phase": "FORMAL_REVIEW",
     "executionState": "ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-exact-tombstone-carrier-readback-source-freeze-20260810-0402", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.late-review-tombstone-admission"], "subjectHead": "35465b473ddbbafca95e191b91ce869daecf1af6", "subjectTree": "8204eadd3a2845cdf0cd0ab6534f2aaeac69310b"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-exact-carrier-full-history-source-freeze-20260810-0407", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.late-review-tombstone-admission"], "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955", "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"}],
     "proofTiersUnderEvaluation": ["T1_SOURCE"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 205,
-      "commentId": 5235724611,
+      "commentId": 5235753938,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T04:03:43Z",
-      "updatedAt": "2026-08-10T04:03:43Z",
-      "bodySha256": "878e00467aef12daf6dcd70a46e76f88ad2bdd7eb6db2abfb166fedaa0198fb7",
-      "subjectHash": "7d10d51fc5ad81a7391c366f073c443db5a3f3482376f206587d3b8c22bcea5f"
+      "createdAt": "2026-08-10T04:08:34Z",
+      "updatedAt": "2026-08-10T04:08:34Z",
+      "bodySha256": "f7733b9190d9b8eac12c8cee3ca587e7b240908e0aba7e5b639c7bfc65be247c",
+      "subjectHash": "d2d96e2316692e33972c2a3f7e0340a9bf1ede0e8c8c4a38164ba4b33cfb02fe"
     }
   },
   "freshnessClaims": [
     {
-      "id": "repository-source-a1-exact-tombstone-carrier-readback",
+      "id": "repository-source-a1-exact-carrier-full-history",
       "status": "CURRENT",
-      "observedAt": "2026-08-10T04:02:24Z",
-      "expiresAt": "2026-08-11T04:02:24Z",
-      "evidenceSourceId": "a1-exact-tombstone-carrier-readback-source-freeze-20260810-0402",
+      "observedAt": "2026-08-10T04:07:31Z",
+      "expiresAt": "2026-08-11T04:07:31Z",
+      "evidenceSourceId": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
       "evidenceMode": "local-and-github-read-only",
       "factsCovered": ["repository.assurance-control.a1.late-review-tombstone-admission"],
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "35465b473ddbbafca95e191b91ce869daecf1af6",
-      "subjectTree": "8204eadd3a2845cdf0cd0ab6534f2aaeac69310b"
+      "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"
     },
     {
       "id": "repository-source-a1-complete-late-sentinel-inventory",
@@ -612,7 +612,7 @@
     {
       "number": 205,
       "branch": "codex/assurance-active-task-and-claim-freshness-a1",
-      "head": "35465b473ddbbafca95e191b91ce869daecf1af6",
+      "head": "100170bb0fead748eb01ee767d6f4f2151281955",
       "state": "open",
       "disposition": "Owner-authorized bounded bootstrap correction separates exact successor correction ownership from protected-main tombstone admission before the exact-head check is restored"
     }
@@ -703,7 +703,7 @@
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201"],
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP_S0_NEXT_D2A_FROZEN",
     "nextActions": [
-      "Complete the bounded PR #205 late-review owner-registry bootstrap with its FORMAL_REVIEW tier boundary, exact hash-bound complete PR 194/195 sentinel inventory, canonical correction-owner enforcement, and a distinct admission carrier bound to exact GitHub PR/head/tree/receipt/conversation readback plus a normal two-parent protected-main merge; restore and read back the exact-head required check immediately, then synchronize post-A1 truth.",
+      "Complete the bounded PR #205 late-review owner-registry bootstrap with its FORMAL_REVIEW tier boundary, exact hash-bound complete PR 194/195 sentinel inventory, canonical correction-owner enforcement, and a distinct admission carrier bound to exact GitHub PR/head/tree/receipt/conversation readback plus a normal two-parent protected-main merge with full-history guard checkouts; restore and read back the exact-head required check immediately, then synchronize post-A1 truth.",
       "Implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
       "Only after S0 completes may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -778,7 +778,15 @@
       "covers": [
         "repository.assurance-control.a1.late-review-tombstone-admission",
         "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"
-      ]
+      ],
+      "observedAt": "2026-08-10T04:07:31Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"
     },
     {
       "id": "a1-exact-tombstone-carrier-readback-source-freeze-20260810-0402",
