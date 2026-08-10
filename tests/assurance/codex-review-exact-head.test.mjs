@@ -12,6 +12,7 @@ import {
   normalizeLateReviewEvent,
   paginateGraphConnection,
   parseLateReviewIssue,
+  providerCleanIssueCommentReview,
   readOpenLateReviewIssues,
   readMergedLateReviewLedgerSentinels,
   readProviderFindingLedger,
@@ -85,6 +86,25 @@ test("exact-head no-suggestion review produces a valid current receipt", () => {
   assert.equal(receipt.reviewedCommit, headA);
   assert.equal(receipt.prHeadTree, treeA);
   assert.equal(receipt.reviewSubmissions[0].bodyHash.length, 64);
+});
+
+test("provider no-suggestion issue comment binds its unique commit prefix to the exact current head", () => {
+  const cleanComment = {
+    commentId: 9100,
+    commentNodeId: "ISSUE_COMMENT_9100",
+    author: "chatgpt-codex-connector",
+    body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+    createdAt: "2026-08-09T12:00:00Z",
+    updatedAt: "2026-08-09T12:00:00Z"
+  };
+  const review = providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, contract });
+  assert.equal(review.commit, headA);
+  const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review, reviews: [review], threads: [], issueComments: [cleanComment] });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt }).ok, true);
+  assert.equal(receipt.reviewSubmissions[0].sourceType, "PROVIDER_CLEAN_ISSUE_COMMENT");
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: cleanComment.body.replace(headA.slice(0, 10), headB.slice(0, 10)) }, currentHead: headA, contract }), null);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, updatedAt: "2026-08-09T12:01:00Z" }, currentHead: headA, contract }), null);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP2 finding` }, currentHead: headA, contract }), null);
 });
 
 test("repository write authority is exact and a newly admitted writer fails closed", () => {
@@ -1028,7 +1048,8 @@ test("GitHub resolution readback recomputes the successor diff, full exact-head 
     assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
     authorizedBootstrapOwners: [
       "codex/assurance-active-task-and-claim-freshness-a1",
-      "codex/assurance-codex-security-scan-reliability-s0"
+      "codex/assurance-codex-security-scan-reliability-s0",
+      "codex/assurance-current-truth-post-a1"
     ],
     findings: [{
       sourceType: "INLINE_THREAD",
@@ -1447,7 +1468,8 @@ test("known unassigned discovery sentinels derive owners only from the immutable
   };
   assert.deepEqual(lateReviewAllowedOwners(discovery), [
     "codex/assurance-active-task-and-claim-freshness-a1",
-    "codex/assurance-codex-security-scan-reliability-s0"
+    "codex/assurance-codex-security-scan-reliability-s0",
+    "codex/assurance-current-truth-post-a1"
   ]);
   assert.deepEqual(lateReviewAllowedOwners({
     ...discovery,

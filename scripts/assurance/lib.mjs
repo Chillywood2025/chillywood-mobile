@@ -103,7 +103,8 @@ const canonicalLateReviewOwnerRegistry = [{
   assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   authorizedBootstrapOwners: [
     "codex/assurance-active-task-and-claim-freshness-a1",
-    "codex/assurance-codex-security-scan-reliability-s0"
+    "codex/assurance-codex-security-scan-reliability-s0",
+    "codex/assurance-current-truth-post-a1"
   ]
 }, {
   repository: "Chillywood2025/chillywood-mobile",
@@ -113,7 +114,8 @@ const canonicalLateReviewOwnerRegistry = [{
   assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   authorizedBootstrapOwners: [
     "codex/assurance-active-task-and-claim-freshness-a1",
-    "codex/assurance-codex-security-scan-reliability-s0"
+    "codex/assurance-codex-security-scan-reliability-s0",
+    "codex/assurance-current-truth-post-a1"
   ]
 }];
 const claimClassPolicy = {

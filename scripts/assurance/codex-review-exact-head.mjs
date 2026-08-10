@@ -56,6 +56,32 @@ function issueCommentReviewedCommit(body) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+export function providerCleanIssueCommentReview({ comment, currentHead, contract }) {
+  if (!(contract?.reviewProviders ?? []).includes(comment?.author)
+    || !validGitSha(currentHead)
+    || !Number.isInteger(comment?.commentId)
+    || comment.commentId < 1
+    || !validInstant(comment?.createdAt)
+    || comment.createdAt !== comment.updatedAt) return null;
+  const body = String(comment.body ?? "");
+  if (!body.startsWith("Codex Review: Didn't find any major issues. Keep them coming!\n") || severityFromBody(body)) return null;
+  const prefixes = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/gu)].map((match) => match[1]);
+  if (prefixes.length !== 1 || !currentHead.startsWith(prefixes[0])) return null;
+  return {
+    reviewId: comment.commentId,
+    reviewNodeId: comment.commentNodeId ?? null,
+    author: comment.author,
+    state: "COMMENTED",
+    body,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
+    startedAt: comment.createdAt,
+    submittedAt: comment.updatedAt,
+    commit: currentHead,
+    sourceType: "PROVIDER_CLEAN_ISSUE_COMMENT"
+  };
+}
+
 function reviewCleanDispositionCommit(review) {
   if (review?.state === "APPROVED" && validGitSha(review.commit)) return review.commit;
   const matches = [...String(review?.body ?? "").matchAll(/<!--\s*codex-review-disposition:blocking-findings-resolved\s+reviewed-commit:([0-9a-f]{40})\s*-->/gu)]
@@ -323,6 +349,7 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
     .map((entry) => ({
       reviewId: entry.reviewId,
       reviewNodeId: entry.reviewNodeId ?? null,
+      sourceType: entry.sourceType ?? "REVIEW_SUBMISSION",
       author: entry.author,
       state: entry.state,
       bodyHash: sha256(String(entry.body ?? "")),
@@ -1459,7 +1486,11 @@ async function main() {
     });
   }
   const providers = new Set(contract.reviewProviders);
-  const providerReviews = reviews.filter(({ author }) => providers.has(author));
+  const cleanIssueCommentReviews = issueComments
+    .map((comment) => providerCleanIssueCommentReview({ comment, currentHead: current.headSha, contract }))
+    .filter(Boolean);
+  const reviewCandidates = [...reviews, ...cleanIssueCommentReviews];
+  const providerReviews = reviewCandidates.filter(({ author }) => providers.has(author));
   current.providerReviewsExist = providerReviews.length > 0;
   const exactReviews = providerReviews
     .filter(({ commit, submittedAt }) => commit === current.headSha && validInstant(submittedAt))
@@ -1477,13 +1508,13 @@ async function main() {
       current.sourceReadbackCode = error.message === paginationIncompleteCode ? paginationIncompleteCode : "CODEX_REVIEW_FINDING_LEDGER_INVALID";
     }
   }
-  const receipt = selectedReview ? buildExactHeadReceipt({ contract, current, review: selectedReview, reviews, threads, issueComments, persistentFindings: persistentProviderFindings }) : null;
+  const receipt = selectedReview ? buildExactHeadReceipt({ contract, current, review: selectedReview, reviews: reviewCandidates, threads, issueComments, persistentFindings: persistentProviderFindings }) : null;
   const evaluation = evaluateExactHeadReceipt({ contract, current, receipt, readbackIncomplete });
   const lateReviewSentinel = detectLateReview({
     contract,
     current,
     review: latestProviderReview,
-    reviews,
+    reviews: reviewCandidates,
     threads,
     issueComments,
     eventFindings: eventFinding ? [eventFinding] : [],
