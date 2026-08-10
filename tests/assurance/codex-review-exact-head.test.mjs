@@ -1170,8 +1170,7 @@ test("GitHub resolution readback recomputes the successor diff, full exact-head 
     assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
     authorizedBootstrapOwners: [
       "codex/assurance-active-task-and-claim-freshness-a1",
-      "codex/assurance-codex-security-scan-reliability-s0",
-      "codex/assurance-current-truth-post-a1"
+      "codex/assurance-codex-security-scan-reliability-s0"
     ],
     findings: [{
       sourceType: "INLINE_THREAD",
@@ -1590,9 +1589,9 @@ test("known unassigned discovery sentinels derive owners only from the immutable
   };
   assert.deepEqual(lateReviewAllowedOwners(discovery), [
     "codex/assurance-active-task-and-claim-freshness-a1",
-    "codex/assurance-codex-security-scan-reliability-s0",
-    "codex/assurance-current-truth-post-a1"
+    "codex/assurance-codex-security-scan-reliability-s0"
   ]);
+  assert.equal(lateReviewAllowedOwners(discovery).includes("codex/assurance-current-truth-post-a1"), false, "a reusable post-truth branch is not a sentinel-wide authority");
   assert.deepEqual(lateReviewAllowedOwners({
     ...discovery,
     successorCorrectionOwner: "codex/unrelated-next",

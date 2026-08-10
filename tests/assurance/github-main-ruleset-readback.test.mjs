@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
-import { readJson } from "../../scripts/assurance/lib.mjs";
+import { readJson, sha256, stableJson } from "../../scripts/assurance/lib.mjs";
 
 const contract = readJson("config/assurance/github-main-ruleset-codex-review-v1.json");
 const authorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-authorization-v1.json");
 const finalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-carrier-binding-v1.json");
+const finalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-carrier-github-readback-v1.json");
 const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
-const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, mergeIdentity: identity });
+const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T06:30:00Z") => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, mergeIdentity: identity, now });
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -79,6 +80,30 @@ test("owner final-carrier binding must equal the admitted head and tree", () => 
     mutate(identity);
     assert.ok(validate(contract, identity).some((error) => error.includes("final-carrier binding")));
   }
+});
+
+test("owner final-carrier authority requires the exact raw GitHub observation", () => {
+  for (const mutate of [
+    (observation) => { observation.commentId = 1; },
+    (observation) => { observation.author = "attacker"; },
+    (observation) => { observation.body = observation.body.replace(finalCarrierBindingReceipt.admittedCarrierHead, "0".repeat(40)); },
+    (observation) => { observation.body = observation.body.replace("13/13 PASS", "12/13 PASS"); }
+  ]) {
+    const observation = structuredClone(finalCarrierGithubReadback);
+    mutate(observation);
+    observation.bodySha256 = sha256(observation.body);
+    const payload = structuredClone(observation);
+    delete payload.observationHash;
+    observation.observationHash = sha256(stableJson(payload));
+    assert.ok(validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, observation).some((error) => error.includes("GitHub observation")));
+  }
+});
+
+test("repository ruleset readback expires after its claim-scoped 24-hour window", () => {
+  assert.ok(validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2036-08-10T06:30:00Z").some((error) => error.includes("ruleset readback stale")));
+  const candidate = structuredClone(contract);
+  candidate.applicationReadback.repositorySourceFreshness.expiresAt = "2036-08-11T05:33:01Z";
+  assert.ok(validate(candidate, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2026-08-10T06:30:00Z").some((error) => error.includes("ruleset readback stale")));
 });
 
 test("owner authorization must predate protection removal", () => {

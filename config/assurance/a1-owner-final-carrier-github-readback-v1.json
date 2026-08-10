@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "contractId": "a1-owner-final-carrier-github-readback-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/a1OwnerFinalCarrierGithubReadback",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "prNumber": 205,
+  "commentId": 5235796564,
+  "nodeId": "IC_kwDORRwZUc8AAAABOBPqVA",
+  "htmlUrl": "https://github.com/Chillywood2025/chillywood-mobile/pull/205#issuecomment-5235796564",
+  "issueUrl": "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/205",
+  "author": "Chillywood2025",
+  "authorAssociation": "OWNER",
+  "createdAt": "2026-08-10T04:16:26Z",
+  "updatedAt": "2026-08-10T04:16:26Z",
+  "body": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED\n\nExact target: 9ed2ba65eff7658f13329bc3ea118d533c96c2b6\nExact tree: 2d22874811e87af621a7b9d1ca69891b005c780d\nImmutable source: 100170bb0fead748eb01ee767d6f4f2151281955\nImmutable tree: 77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d\nBase: 08d8c04285c8dc0fbe0f0168b6750fc746d1af48\nPacket SHA-256: b6a7020335baee6f833bec31d28e2d345b7365c0ab7bbe297766bb2925a0f61a\nCommitted-evidence SHA-256: 3f5d136a2a08dbcbb8e720772e18aa6bdb99b12a8435f83038869123e6fe75ad\nHead-binding matrix SHA-256: 9000de7413ae042fd0aa943a0031e82f1551d6fafd1643375a01cd313ddc2e18\n\nChanged-file coverage (14/14): four build/release workflow checkout guards; CURRENT_STATE.md; NEXT_TASK.md; current-truth contract, record, and schemas; active-task, late-review-sentinel, and assurance library; claim-scoped-provider and exact-head-review regression suites. No product, native, package, lockfile, provider, migration, or generated platform path changed.\n\nIndependent exact-head review lanes:\n- structured task/exact implementation binding: P0=0, P1=0, P2=0, P3=0\n- claim freshness/provider/external receipts: P0=0, P1=0, P2=0, P3=0\n- exact-head gate/late-review/fail-closed security: P0=0, P1=0, P2=0, P3=0\nAggregate: P0=0, P1=0. No deferred assurance-control work.\n\nVerification:\n- Phase 1 CI run 31354601386: 13/13 PASS at the exact target\n- focused exact-head aggregate: 81/81 PASS\n- exact review/sentinel suite: 43/43 PASS\n- current-truth head-binding matrix: PASS, including 27 fail-closed cases\n- validate-contracts: 20 contracts, 21 features, 25 escaped defects PASS\n- canonical current truth and autonomous guard/proof: PASS\n- provider critical remains STALE_BLOCKED; liveProviderReadback=false; source-only eligible; provider-dependent denied\n\nThis is a repository-owned exact-head security closure. It is not a Codex Security sealed report and A1 is not Codex-sealed. The prior hosted finalizer failed because scan.target.snapshotDigest was empty; that scan is historical after source changes, and the Owner prohibited retry. No hosted scan was started or retried for this closure, and no host snapshot digest was fabricated.",
+  "bodySha256": "1c034d5b7f50644fef11a383c62ceb2dfee0ccbd6a5f3a12a09fa14a86367a14",
+  "observedAt": "2026-08-10T06:28:45Z",
+  "evidenceMode": "github-read-only",
+  "observationHash": "12823e4f14e5ecf64b5ebdc279d4cc9bd4b626f28b96f93738ac86edb9074178"
+}

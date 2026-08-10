@@ -43,6 +43,8 @@ export const pullRequestRequirements = {
 };
 export const ownerAuthorizationReceiptPath = "config/assurance/a1-owner-bootstrap-authorization-v1.json";
 export const ownerFinalCarrierBindingReceiptPath = "config/assurance/a1-owner-final-carrier-binding-v1.json";
+export const ownerFinalCarrierGithubReadbackPath = "config/assurance/a1-owner-final-carrier-github-readback-v1.json";
+export const repositorySourceReadbackHours = 24;
 export const canonicalOwnerAuthorizationReceipt = {
   schemaVersion: 1,
   contractId: "a1-owner-bootstrap-authorization-v1",
@@ -101,6 +103,43 @@ const receiptHash = (receipt) => {
   delete payload.receiptHash;
   return sha256(stableJson(payload));
 };
+const observationHash = (observation) => {
+  const payload = structuredClone(observation ?? {});
+  delete payload.observationHash;
+  return sha256(stableJson(payload));
+};
+
+export function validateOwnerFinalCarrierGithubReadback(bindingReceipt, observation) {
+  const errors = [];
+  const body = String(observation?.body ?? "");
+  const requiredBodyLines = [
+    bindingReceipt?.closureClassification,
+    `Exact target: ${bindingReceipt?.admittedCarrierHead}`,
+    `Exact tree: ${bindingReceipt?.admittedCarrierTree}`,
+    `Immutable source: ${bindingReceipt?.authorizedSourceHead}`,
+    `Immutable tree: ${bindingReceipt?.authorizedSourceTree}`,
+    `Packet SHA-256: ${bindingReceipt?.packetSha256}`,
+    `- Phase 1 CI run ${bindingReceipt?.phase1RunId}: ${bindingReceipt?.phase1Jobs} PASS at the exact target`
+  ];
+  const exactLineOnce = (line) => typeof line === "string" && body.split("\n").filter((candidate) => candidate === line).length === 1;
+  if (observation?.contractId !== "a1-owner-final-carrier-github-readback-v1"
+    || observation?.repository !== bindingReceipt?.repository
+    || observation?.prNumber !== bindingReceipt?.prNumber
+    || observation?.commentId !== bindingReceipt?.closureCommentId
+    || observation?.nodeId !== "IC_kwDORRwZUc8AAAABOBPqVA"
+    || observation?.htmlUrl !== "https://github.com/Chillywood2025/chillywood-mobile/pull/205#issuecomment-5235796564"
+    || observation?.issueUrl !== "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/205"
+    || observation?.author !== bindingReceipt?.author
+    || observation?.authorAssociation !== bindingReceipt?.authorAssociation
+    || observation?.createdAt !== bindingReceipt?.createdAt
+    || observation?.updatedAt !== bindingReceipt?.updatedAt
+    || observation?.bodySha256 !== bindingReceipt?.bodySha256
+    || observation?.bodySha256 !== sha256(body)
+    || observation?.evidenceMode !== "github-read-only"
+    || observation?.observationHash !== observationHash(observation)
+    || !requiredBodyLines.every(exactLineOnce)) errors.push("github ruleset readback: owner final-carrier GitHub observation mismatch");
+  return errors;
+}
 
 export function readBootstrapMergeIdentity(mergeSha, gitRead = git) {
   try {
@@ -134,11 +173,12 @@ export function readBootstrapMergeIdentity(mergeSha, gitRead = git) {
   }
 }
 
-export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, finalCarrierBindingReceipt, mergeIdentity }) {
+export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, mergeIdentity, now = new Date() }) {
   const errors = [];
   const readback = contract?.applicationReadback;
   const exception = contract?.authorizedBootstrapException;
   const window = exception?.protectionWindow;
+  const freshness = readback?.repositorySourceFreshness;
   const add = (id) => errors.push(`github ruleset readback: ${id}`);
 
   if (contract?.applicationState !== "APPLIED_AND_READ_BACK_POST_A1_MERGE") add("application state mismatch");
@@ -154,6 +194,18 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (readback?.rulesetVersionId !== 46047691
     || readback?.rulesetUpdatedAt !== "2026-08-10T00:32:55.241-05:00"
     || readback?.changeClassification !== "ENFORCED_CANONICAL_PULL_REQUEST_POLICY_AND_PRESERVED_EXACT_CHECK_BINDINGS") add("current ruleset identity mismatch");
+  const freshnessObservedAt = Date.parse(freshness?.observedAt ?? "");
+  const freshnessExpiresAt = Date.parse(freshness?.expiresAt ?? "");
+  const validationNow = now instanceof Date ? now.valueOf() : Date.parse(now ?? "");
+  if (freshness?.status !== "CURRENT"
+    || freshness?.freshnessClass !== "REPOSITORY_SOURCE"
+    || freshness?.evidenceMode !== "github-read-only"
+    || !same(freshness?.factsCovered, ["repository.github.main-ruleset", "repository.github.main-head"])
+    || freshness?.observedAt !== readback?.protectedMainReadback?.observedAt
+    || ![freshnessObservedAt, freshnessExpiresAt, validationNow].every(Number.isFinite)
+    || freshnessExpiresAt - freshnessObservedAt !== repositorySourceReadbackHours * 60 * 60 * 1000
+    || validationNow < freshnessObservedAt
+    || validationNow > freshnessExpiresAt) add("repository ruleset readback stale");
   if (!same(readback?.protectedMainReadback, protectedMainReadback)
     || protectedMainReadback.observedHead !== exception?.mergeSha) add("protected main readback mismatch");
   if (readback?.enforcement !== "active"
@@ -187,6 +239,9 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
     || mergeIdentity?.authorizedSourceTree !== finalCarrierBindingReceipt?.authorizedSourceTree
     || mergeIdentity?.authorizedSourceIsAncestorOfCarrier !== true
     || !same(mergeIdentity?.carrierDeltaPaths, finalCarrierBindingReceipt?.carrierDeltaPaths)) add("owner final-carrier binding receipt mismatch");
+  if (contract?.ownerFinalCarrierGithubReadback !== ownerFinalCarrierGithubReadbackPath
+    || exception?.ownerFinalCarrierGithubObservationHash !== finalCarrierGithubReadback?.observationHash) add("owner final-carrier GitHub observation binding mismatch");
+  errors.push(...validateOwnerFinalCarrierGithubReadback(finalCarrierBindingReceipt, finalCarrierGithubReadback));
   if (exception?.pullRequest !== authorizationReceipt?.prNumber || exception?.mergeSha !== window?.mainAfterRestoration) add("bootstrap subject mismatch");
   if (exception?.temporarilyRemovedStatusCheck !== exactHeadCheck
     || exception?.phase1ChecksPreserved !== phase1Checks.length

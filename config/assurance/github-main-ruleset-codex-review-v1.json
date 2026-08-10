@@ -11,6 +11,7 @@
   "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
   "ownerBootstrapAuthorizationReceipt": "config/assurance/a1-owner-bootstrap-authorization-v1.json",
   "ownerFinalCarrierBindingReceipt": "config/assurance/a1-owner-final-carrier-binding-v1.json",
+  "ownerFinalCarrierGithubReadback": "config/assurance/a1-owner-final-carrier-github-readback-v1.json",
   "requiredStatusCheckToAdd": "Chi'llywood / Codex Review Exact Head",
   "preserveExistingRequiredStatusChecks": true,
   "strictRequiredStatusChecksPolicy": true,
@@ -86,6 +87,14 @@
     },
     "strictRequiredStatusChecksPolicy": true,
     "doNotEnforceOnCreate": false,
+    "repositorySourceFreshness": {
+      "status": "CURRENT",
+      "observedAt": "2026-08-10T05:33:01Z",
+      "expiresAt": "2026-08-11T05:33:01Z",
+      "evidenceMode": "github-read-only",
+      "factsCovered": ["repository.github.main-ruleset", "repository.github.main-head"],
+      "freshnessClass": "REPOSITORY_SOURCE"
+    },
     "ruleTypes": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"],
     "allowedMergeMethods": ["merge", "squash", "rebase"],
     "requiredApprovingReviewCount": 1,
@@ -107,6 +116,7 @@
     "temporarilyRemovedStatusCheck": "Chi'llywood / Codex Review Exact Head",
     "ownerAuthorizationReceiptHash": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744",
     "ownerFinalCarrierBindingReceiptHash": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c",
+    "ownerFinalCarrierGithubObservationHash": "12823e4f14e5ecf64b5ebdc279d4cc9bd4b626f28b96f93738ac86edb9074178",
     "protectionWindow": {
       "preRemovalVersionId": 46039477,
       "preRemovalUpdatedAt": "2026-08-09T21:46:21.570-05:00",
