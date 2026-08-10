@@ -446,26 +446,26 @@
     "implementationPr": 206,
     "implementationBranch": "codex/assurance-codex-security-scan-reliability-s0",
     "implementationBindingId": "assurance-codex-security-scan-reliability-s0-pr206-v1",
-    "immutableSourceHead": "6297e381e5f3882e3598731e066a6880cf167041",
-    "immutableSourceTree": "9712cfc4381f7b744007d5d77ccb669dcd802d25",
-    "currentImplementationHead": "6297e381e5f3882e3598731e066a6880cf167041",
-    "currentImplementationTree": "9712cfc4381f7b744007d5d77ccb669dcd802d25",
+    "immutableSourceHead": "14e6f798943a3f8140bd9c4439efe04a0420f9c3",
+    "immutableSourceTree": "d00cb3a8c8674e27ddb62a28b02f5e670e57e103",
+    "currentImplementationHead": "14e6f798943a3f8140bd9c4439efe04a0420f9c3",
+    "currentImplementationTree": "d00cb3a8c8674e27ddb62a28b02f5e670e57e103",
     "phase": "FORMAL_REVIEW",
     "executionState": "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "s0-final-phase1-scope-freeze-20260810-1230", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"], "subjectHead": "6297e381e5f3882e3598731e066a6880cf167041", "subjectTree": "9712cfc4381f7b744007d5d77ccb669dcd802d25"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "s0-final-phase1-scope-freeze-20260810-1230", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"], "subjectHead": "14e6f798943a3f8140bd9c4439efe04a0420f9c3", "subjectTree": "d00cb3a8c8674e27ddb62a28b02f5e670e57e103"}],
     "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 206,
-      "commentId": 5240249837,
+      "commentId": 5240266771,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T12:30:26Z",
-      "updatedAt": "2026-08-10T12:30:26Z",
-      "bodySha256": "449e0c92915839da50f27cd9b1bccb6893e8acd6640c20ee26c4f03b533ede2a",
-      "subjectHash": "1c64ea4810a53c08506f8cc8c5db899f7fc8889343e364d494f40ac02d42b790"
+      "createdAt": "2026-08-10T12:31:21Z",
+      "updatedAt": "2026-08-10T12:31:21Z",
+      "bodySha256": "2d3c26b405f8975edc9d1fa7b9c9d4ebd72cc8f8c4457adaafa7bd6e5117c618",
+      "subjectHash": "f7be39e4d6381732b11b6b8c028d57835257d5dc7d102fde6e0eb6834d4774db"
     }
   },
   "freshnessClaims": [
@@ -481,8 +481,8 @@
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "6297e381e5f3882e3598731e066a6880cf167041",
-      "subjectTree": "9712cfc4381f7b744007d5d77ccb669dcd802d25"
+      "subjectHead": "14e6f798943a3f8140bd9c4439efe04a0420f9c3",
+      "subjectTree": "d00cb3a8c8674e27ddb62a28b02f5e670e57e103"
     },
     {
       "id": "repository-source-a1-exact-carrier-full-history",
@@ -624,7 +624,7 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "6297e381e5f3882e3598731e066a6880cf167041", "state": "open-draft-current", "disposition": "S0 final Phase 1 and scope-corrected source frozen and Owner-authorized; only its repository evidence anchor and exact three-file binding may follow before independent review"}
+    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "14e6f798943a3f8140bd9c4439efe04a0420f9c3", "state": "open-draft-current", "disposition": "S0 final Phase 1 and scope-corrected repository evidence anchor frozen and Owner-authorized; only this exact three-file binding follows before independent review"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -749,9 +749,9 @@
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "sourceCommit": "6297e381e5f3882e3598731e066a6880cf167041",
-      "subjectHead": "6297e381e5f3882e3598731e066a6880cf167041",
-      "subjectTree": "9712cfc4381f7b744007d5d77ccb669dcd802d25"
+      "sourceCommit": "14e6f798943a3f8140bd9c4439efe04a0420f9c3",
+      "subjectHead": "14e6f798943a3f8140bd9c4439efe04a0420f9c3",
+      "subjectTree": "d00cb3a8c8674e27ddb62a28b02f5e670e57e103"
     },
     {
       "id": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
