@@ -110,6 +110,7 @@
     "providerAuthoredOnly": true,
     "editedCommentAllowed": false,
     "blockingSeverityAllowed": false,
+    "repositoryObjectResolutionRequired": true,
     "exactCurrentHeadExpansionRequired": true
   },
   "protectedBaseBranch": "main",

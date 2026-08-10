@@ -56,9 +56,8 @@ function issueCommentReviewedCommit(body) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-export function providerCleanIssueCommentReview({ comment, currentHead, contract }) {
+export function providerCleanIssueCommentPrefix({ comment, contract }) {
   if (!(contract?.reviewProviders ?? []).includes(comment?.author)
-    || !validGitSha(currentHead)
     || !Number.isInteger(comment?.commentId)
     || comment.commentId < 1
     || !validInstant(comment?.createdAt)
@@ -66,7 +65,17 @@ export function providerCleanIssueCommentReview({ comment, currentHead, contract
   const body = String(comment.body ?? "");
   if (!body.startsWith("Codex Review: Didn't find any major issues. Keep them coming!\n") || severityFromBody(body)) return null;
   const prefixes = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/gu)].map((match) => match[1]);
-  if (prefixes.length !== 1 || !currentHead.startsWith(prefixes[0])) return null;
+  return prefixes.length === 1 ? prefixes[0] : null;
+}
+
+export function providerCleanIssueCommentReview({ comment, currentHead, resolvedCommit, contract }) {
+  const prefix = providerCleanIssueCommentPrefix({ comment, contract });
+  if (!prefix
+    || !validGitSha(currentHead)
+    || !validGitSha(resolvedCommit)
+    || resolvedCommit !== currentHead
+    || !resolvedCommit.startsWith(prefix)) return null;
+  const body = String(comment.body ?? "");
   return {
     reviewId: comment.commentId,
     reviewNodeId: comment.commentNodeId ?? null,
@@ -77,9 +86,26 @@ export function providerCleanIssueCommentReview({ comment, currentHead, contract
     updatedAt: comment.updatedAt,
     startedAt: comment.createdAt,
     submittedAt: comment.updatedAt,
-    commit: currentHead,
+    commit: resolvedCommit,
     sourceType: "PROVIDER_CLEAN_ISSUE_COMMENT"
   };
+}
+
+async function readCleanProviderIssueCommentReviews({ repository, token, issueComments, currentHead, contract, current }) {
+  const reviews = [];
+  for (const comment of issueComments) {
+    const prefix = providerCleanIssueCommentPrefix({ comment, contract });
+    if (!prefix) continue;
+    try {
+      const resolved = await githubRequest(`https://api.github.com/repos/${repository}/commits/${prefix}`, token);
+      const review = providerCleanIssueCommentReview({ comment, currentHead, resolvedCommit: resolved?.sha, contract });
+      if (review) reviews.push(review);
+    } catch {
+      current.sourceReadbackIncomplete = true;
+      current.sourceReadbackCode = "CODEX_REVIEW_INCOMPLETE";
+    }
+  }
+  return reviews;
 }
 
 function reviewCleanDispositionCommit(review) {
@@ -1486,9 +1512,14 @@ async function main() {
     });
   }
   const providers = new Set(contract.reviewProviders);
-  const cleanIssueCommentReviews = issueComments
-    .map((comment) => providerCleanIssueCommentReview({ comment, currentHead: current.headSha, contract }))
-    .filter(Boolean);
+  const cleanIssueCommentReviews = await readCleanProviderIssueCommentReviews({
+    repository: current.repository,
+    token,
+    issueComments,
+    currentHead: current.headSha,
+    contract,
+    current
+  });
   const reviewCandidates = [...reviews, ...cleanIssueCommentReviews];
   const providerReviews = reviewCandidates.filter(({ author }) => providers.has(author));
   current.providerReviewsExist = providerReviews.length > 0;

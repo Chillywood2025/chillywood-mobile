@@ -97,14 +97,16 @@ test("provider no-suggestion issue comment binds its unique commit prefix to the
     createdAt: "2026-08-09T12:00:00Z",
     updatedAt: "2026-08-09T12:00:00Z"
   };
-  const review = providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, contract });
+  const review = providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: headA, contract });
   assert.equal(review.commit, headA);
   const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review, reviews: [review], threads: [], issueComments: [cleanComment] });
   assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt }).ok, true);
   assert.equal(receipt.reviewSubmissions[0].sourceType, "PROVIDER_CLEAN_ISSUE_COMMENT");
-  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: cleanComment.body.replace(headA.slice(0, 10), headB.slice(0, 10)) }, currentHead: headA, contract }), null);
-  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, updatedAt: "2026-08-09T12:01:00Z" }, currentHead: headA, contract }), null);
-  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP2 finding` }, currentHead: headA, contract }), null);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: cleanComment.body.replace(headA.slice(0, 10), headB.slice(0, 10)) }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, updatedAt: "2026-08-09T12:01:00Z" }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP2 finding` }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  const collidingOldCommit = `${headA.slice(0, 10)}${"f".repeat(30)}`;
+  assert.equal(providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: collidingOldCommit, contract }), null);
 });
 
 test("repository write authority is exact and a newly admitted writer fails closed", () => {
