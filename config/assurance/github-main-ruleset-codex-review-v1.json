@@ -15,6 +15,7 @@
   "strictRequiredStatusChecksPolicy": true,
   "requiredCheckPublisherBoundary": {
     "expectedGitHubApp": "github-actions",
+    "expectedGitHubAppIntegrationId": 15368,
     "repositoryOwnerType": "User",
     "rootAuthority": "Chillywood2025",
     "trustedRepositoryWriteActors": ["Chillywood2025"],
@@ -28,8 +29,9 @@
   },
   "applicationState": "APPLIED_AND_READ_BACK_POST_A1_MERGE",
   "applicationReadback": {
-    "rulesetVersionId": 46044257,
-    "rulesetUpdatedAt": "2026-08-09T23:17:33.976-05:00",
+    "rulesetVersionId": 46046307,
+    "rulesetUpdatedAt": "2026-08-10T00:05:04.604-05:00",
+    "changeClassification": "BOUND_REQUIRED_CHECKS_TO_GITHUB_ACTIONS_APP_15368",
     "enforcement": "active",
     "requiredStatusCheckCount": 14,
     "requiredStatusCheckPresent": true,
@@ -49,7 +51,31 @@
       "Phase 1 / TypeScript",
       "Phase 1 / iOS Configuration"
     ],
+    "requiredStatusCheckBindings": [
+      {"context": "Chi'llywood / Codex Review Exact Head", "integration_id": 15368},
+      {"context": "Phase 1 / Android Regression Guards", "integration_id": 15368},
+      {"context": "Phase 1 / Autonomous Systems All-Platform Contract", "integration_id": 15368},
+      {"context": "Phase 1 / Autonomous Systems iOS Contract", "integration_id": 15368},
+      {"context": "Phase 1 / Cognitive Execution Safety", "integration_id": 15368},
+      {"context": "Phase 1 / Cognitive Intelligence Contract", "integration_id": 15368},
+      {"context": "Phase 1 / Expo Doctor", "integration_id": 15368},
+      {"context": "Phase 1 / Repository Lint", "integration_id": 15368},
+      {"context": "Phase 1 / Research and Memory Integrity", "integration_id": 15368},
+      {"context": "Phase 1 / Route Contracts", "integration_id": 15368},
+      {"context": "Phase 1 / Runtime Validation", "integration_id": 15368},
+      {"context": "Phase 1 / Supabase Database Integration", "integration_id": 15368},
+      {"context": "Phase 1 / TypeScript", "integration_id": 15368},
+      {"context": "Phase 1 / iOS Configuration", "integration_id": 15368}
+    ],
     "requiredStatusCheckSetSha256": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d",
+    "requiredStatusCheckBindingSetSha256": "4ec5a6c6845c6e42f17125b327187a82e81c7d40306996f0d12a32037937d578",
+    "protectedMainReadback": {
+      "ref": "refs/heads/main",
+      "observedHead": "a9bd887606f74996a9f5920e6fad922e7f20598b",
+      "observedAt": "2026-08-10T05:05:40Z",
+      "evidenceMode": "github-read-only",
+      "bootstrapMergeReachable": true
+    },
     "strictRequiredStatusChecksPolicy": true,
     "requiredReviewThreadResolution": true,
     "dismissStaleReviewsOnPush": true,
@@ -62,7 +88,7 @@
     "mergeSha": "a9bd887606f74996a9f5920e6fad922e7f20598b",
     "mergedAt": "2026-08-10T04:17:26Z",
     "temporarilyRemovedStatusCheck": "Chi'llywood / Codex Review Exact Head",
-    "ownerAuthorizationReceiptHash": "3b0c105692e90981cd929045cdbb93db1c380fa8d8c26e7af856aea574737a0b",
+    "ownerAuthorizationReceiptHash": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744",
     "protectionWindow": {
       "preRemovalVersionId": 46039477,
       "preRemovalUpdatedAt": "2026-08-09T21:46:21.570-05:00",

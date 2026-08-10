@@ -12,7 +12,7 @@
     {"match": [".github/", "package.json", "package-lock.json"], "gates": ["assurance-contracts", "assurance-pr-scope", "supply-chain", "assurance-final-summary"]}
   ],
   "riskCommands": {
-    "A": ["node scripts/assurance/validate-contracts.mjs", "node scripts/assurance/current-truth.mjs", "git diff --check"],
+    "A": ["node scripts/assurance/validate-contracts.mjs", "node scripts/assurance/current-truth.mjs", "node --test tests/assurance/github-main-ruleset-readback.test.mjs", "git diff --check"],
     "B": ["npm run lint", "npm run typecheck", "node scripts/assurance/impact.mjs", "full Phase 1 CI at frozen head"],
     "C": ["all Level B commands", "applicable model/property/concurrency/native/provider/artifact gates", "four exact-head review lanes", "full Phase 1 CI at frozen head"],
     "D": ["separate owner-authorized task", "external confirmation when applicable"]
