@@ -9,6 +9,7 @@
   "target": "branch",
   "enforcement": "active",
   "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
+  "ownerBootstrapAuthorizationReceipt": "config/assurance/a1-owner-bootstrap-authorization-v1.json",
   "requiredStatusCheckToAdd": "Chi'llywood / Codex Review Exact Head",
   "preserveExistingRequiredStatusChecks": true,
   "strictRequiredStatusChecksPolicy": true,
@@ -56,17 +57,12 @@
   },
   "authorizedBootstrapException": {
     "pullRequest": 205,
+    "carrierHead": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
+    "carrierTree": "2d22874811e87af621a7b9d1ca69891b005c780d",
     "mergeSha": "a9bd887606f74996a9f5920e6fad922e7f20598b",
     "mergedAt": "2026-08-10T04:17:26Z",
     "temporarilyRemovedStatusCheck": "Chi'llywood / Codex Review Exact Head",
-    "ownerAuthorization": {
-      "prNumber": 205,
-      "commentId": 5235753938,
-      "author": "Chillywood2025",
-      "authorAssociation": "OWNER",
-      "bodySha256": "f7733b9190d9b8eac12c8cee3ca587e7b240908e0aba7e5b639c7bfc65be247c",
-      "subjectHash": "d2d96e2316692e33972c2a3f7e0340a9bf1ede0e8c8c4a38164ba4b33cfb02fe"
-    },
+    "ownerAuthorizationReceiptHash": "3b0c105692e90981cd929045cdbb93db1c380fa8d8c26e7af856aea574737a0b",
     "protectionWindow": {
       "preRemovalVersionId": 46039477,
       "preRemovalUpdatedAt": "2026-08-09T21:46:21.570-05:00",

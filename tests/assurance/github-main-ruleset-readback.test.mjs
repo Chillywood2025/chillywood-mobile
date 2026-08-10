@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
-import { git, readJson } from "../../scripts/assurance/lib.mjs";
+import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
+import { readJson } from "../../scripts/assurance/lib.mjs";
 
 const contract = readJson("config/assurance/github-main-ruleset-codex-review-v1.json");
-const currentTruth = readJson("config/assurance/current-truth-v1.json");
-const mergeParents = git(["show", "-s", "--format=%P", contract.authorizedBootstrapException.mergeSha]).split(/\s+/u).filter(Boolean);
-const validate = (candidate, parents = mergeParents) => validateGithubMainRulesetReadback({ contract: candidate, currentTruth, mergeParents: parents });
+const authorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-authorization-v1.json");
+const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
+const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, mergeIdentity: identity });
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -18,10 +18,16 @@ test("same-count status-check substitution fails", () => {
   assert.ok(validate(candidate).some((error) => error.includes("status-check identities")));
 });
 
-test("owner authorization substitution fails", () => {
+test("ruleset condition substitution away from main fails", () => {
   const candidate = structuredClone(contract);
-  candidate.authorizedBootstrapException.ownerAuthorization.bodySha256 = "0".repeat(64);
-  assert.ok(validate(candidate).some((error) => error.includes("owner authorization")));
+  candidate.conditions.ref_name.include = ["refs/heads/not-main"];
+  assert.ok(validate(candidate).some((error) => error.includes("protected main condition")));
+});
+
+test("owner authorization substitution fails", () => {
+  const receipt = structuredClone(authorizationReceipt);
+  receipt.bodySha256 = "0".repeat(64);
+  assert.ok(validate(contract, mergeIdentity, receipt).some((error) => error.includes("owner authorization receipt")));
 });
 
 test("unbounded removal chronology fails", () => {
@@ -38,5 +44,25 @@ test("additional admitted merge fails", () => {
 });
 
 test("fake one-parent bootstrap merge fails", () => {
-  assert.ok(validate(contract, [mergeParents[0]]).some((error) => error.includes("main-history interval")));
+  const identity = structuredClone(mergeIdentity);
+  identity.parents = [mergeIdentity.parents[0]];
+  identity.parentTrees = [mergeIdentity.parentTrees[0]];
+  assert.ok(validate(contract, identity).some((error) => error.includes("main-history interval")));
+});
+
+test("wrong exact carrier second parent or tree fails", () => {
+  const wrongParent = structuredClone(mergeIdentity);
+  wrongParent.parents[1] = "0".repeat(40);
+  assert.ok(validate(contract, wrongParent).some((error) => error.includes("main-history interval")));
+  const wrongTree = structuredClone(mergeIdentity);
+  wrongTree.parentTrees[1] = "0".repeat(40);
+  assert.ok(validate(contract, wrongTree).some((error) => error.includes("main-history interval")));
+});
+
+test("missing bootstrap history becomes a deterministic validation error", () => {
+  const identity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha, () => {
+    throw new Error("missing object");
+  });
+  assert.deepEqual(identity.errors, ["github ruleset readback: bootstrap merge history unavailable"]);
+  assert.ok(validate(contract, identity).some((error) => error.includes("bootstrap merge history unavailable")));
 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { args, emit, featureRequired, git, readJson, requiredKeys, tierIds } from "./lib.mjs";
-import { validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
+import { args, emit, featureRequired, readJson, requiredKeys, tierIds } from "./lib.mjs";
+import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
 
 const options = args();
 const schemas = readJson("config/assurance/schemas-v1.json");
@@ -11,6 +11,7 @@ const contracts = [
   ["config/assurance/pr-scope-policy-v1.json", "prScopePolicy"],
   ["config/assurance/review-contract-v1.json", "reviewContract"],
   ["config/assurance/codex-review-exact-head-v1.json", "codexReviewExactHeadContract"],
+  ["config/assurance/a1-owner-bootstrap-authorization-v1.json", "a1OwnerBootstrapAuthorizationReceipt"],
   ["config/assurance/github-main-ruleset-codex-review-v1.json", "githubMainRulesetReadbackContract"],
   ["config/assurance/external-evidence-receipt-v1.json", "externalEvidenceReceiptContract"],
   ["config/assurance/test-impact-map-v1.json", "testImpactMap"],
@@ -73,9 +74,9 @@ const proof = readJson("config/assurance/proof-strength-v1.json");
 const defects = readJson("config/assurance/escaped-defect-catalog-v1.json").defects;
 const registry = readJson("config/assurance/feature-registry-v1.json").features;
 const githubRulesetReadback = readJson("config/assurance/github-main-ruleset-codex-review-v1.json");
-const currentTruth = readJson("config/assurance/current-truth-v1.json");
-const bootstrapMergeParents = git(["show", "-s", "--format=%P", githubRulesetReadback.authorizedBootstrapException.mergeSha]).split(/\s+/u).filter(Boolean);
-errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, currentTruth, mergeParents: bootstrapMergeParents }));
+const ownerAuthorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-authorization-v1.json");
+const bootstrapMergeIdentity = readBootstrapMergeIdentity(githubRulesetReadback.authorizedBootstrapException.mergeSha);
+errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, mergeIdentity: bootstrapMergeIdentity }));
 if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
 if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");
 const defectFields = ["id", "tags", "affectedDomains", "preImplementationQuestions", "requiredProofTier", "detectionRule", "testTemplate", "runtimeSignature", "rollback", "prevention", "blocks"];
