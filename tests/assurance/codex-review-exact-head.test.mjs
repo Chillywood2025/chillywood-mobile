@@ -1488,11 +1488,22 @@ test("an unresolved late-review sentinel blocks only its exact correction owner'
   assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
   assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), false);
 
+  const bootstrapComplete = structuredClone(complete);
+  bootstrapComplete.activeTaskBinding.implementationBranch = "codex/assurance-codex-security-scan-reliability-s0";
+  assert.equal(validateLateReviewSentinelState(bootstrapComplete).some(({ id }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"), false);
+
   const productComplete = structuredClone(complete);
   productComplete.activeTaskBinding.implementationBranch = "codex/d2a-livekit-mic-post-merge-review-correction";
   const productFindings = validateLateReviewSentinelState(productComplete);
   assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), true);
-  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), false);
+  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+
+  const unrelatedComplete = structuredClone(complete);
+  unrelatedComplete.activeTaskBinding.implementationBranch = "codex/unrelated-next";
+  const unrelatedFindings = validateLateReviewSentinelState(unrelatedComplete);
+  for (const prNumber of [194, 195]) {
+    assert.equal(unrelatedFindings.some(({ id, prNumber: blockedPr }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && blockedPr === prNumber), true, `PR ${prNumber}`);
+  }
 });
 
 test("every immutable late-review owner entry permanently retains one canonical sentinel", () => {

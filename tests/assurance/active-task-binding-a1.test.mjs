@@ -475,6 +475,22 @@ test("a completed binding is not an active task and no override can revive it", 
     currentTruth: unrelatedSentinelTruth,
     protectedMainTruth: unrelatedSentinelTruth,
     featureId: completedBinding.featureId
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
+  const assuranceBootstrapBinding = {
+    ...completedBinding,
+    implementationBranch: "codex/assurance-codex-security-scan-reliability-s0"
+  };
+  const assuranceBootstrapTruth = {
+    ...completeTruth,
+    activeTaskBinding: assuranceBootstrapBinding,
+    latestMergedImplementationPr: latestMergedFor(assuranceBootstrapBinding),
+    lateReviewSentinels: canonicalTruth.lateReviewSentinels
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: assuranceBootstrapTruth,
+    protectedMainTruth: assuranceBootstrapTruth,
+    featureId: assuranceBootstrapBinding.featureId
   }).findings, ["ACTIVE_TASK_NONE"]);
   const sentinelBlockedTruth = {
     ...completeTruth,
