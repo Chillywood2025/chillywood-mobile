@@ -23,5 +23,28 @@
     "dismissStaleReviewsOnPush": true,
     "bypassActors": []
   },
-  "applicationState": "PENDING_POST_A1_MERGE_READBACK"
+  "applicationState": "APPLIED_AND_READ_BACK_POST_A1_MERGE",
+  "applicationReadback": {
+    "rulesetUpdatedAt": "2026-08-09T23:17:33.905-05:00",
+    "enforcement": "active",
+    "requiredStatusCheckCount": 14,
+    "requiredStatusCheckPresent": true,
+    "strictRequiredStatusChecksPolicy": true,
+    "requiredReviewThreadResolution": true,
+    "dismissStaleReviewsOnPush": true,
+    "bypassActors": []
+  },
+  "authorizedBootstrapException": {
+    "pullRequest": 205,
+    "mergeSha": "a9bd887606f74996a9f5920e6fad922e7f20598b",
+    "mergedAt": "2026-08-10T04:17:26Z",
+    "temporarilyRemovedStatusCheck": "Chi'llywood / Codex Review Exact Head",
+    "phase1ChecksPreserved": 13,
+    "strictPolicyPreserved": true,
+    "conversationResolutionPreserved": true,
+    "staleReviewDismissalPreserved": true,
+    "bypassActorsPreservedEmpty": true,
+    "restoredImmediatelyAfterMerge": true,
+    "restoredRulesetUpdatedAt": "2026-08-09T23:17:33.905-05:00"
+  }
 }
