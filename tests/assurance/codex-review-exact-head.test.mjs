@@ -30,7 +30,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1504,6 +1504,14 @@ test("an unresolved late-review sentinel blocks only its exact correction owner'
   for (const prNumber of [194, 195]) {
     assert.equal(unrelatedFindings.some(({ id, prNumber: blockedPr }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && blockedPr === prNumber), true, `PR ${prNumber}`);
   }
+
+  const discoveryComplete = structuredClone(complete);
+  const discoverySentinel = discoveryComplete.lateReviewSentinels.find(({ prNumber }) => prNumber === 195);
+  discoverySentinel.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoverySentinel.assuranceControlOwner;
+  delete discoverySentinel.authorizedBootstrapOwners;
+  assert.equal(lateReviewSuccessorCorrectionOwner(discoverySentinel), "codex/assurance-active-task-and-claim-freshness-a1");
+  assert.equal(validateLateReviewSentinelState(discoveryComplete).some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
 });
 
 test("every immutable late-review owner entry permanently retains one canonical sentinel", () => {

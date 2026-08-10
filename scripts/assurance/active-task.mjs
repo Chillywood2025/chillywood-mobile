@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
+import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -244,7 +244,7 @@ function resolveFeature(truth, facts, registry) {
     if (findings.length) return { ok: false, findings };
     if (binding.phase === "COMPLETE" && unresolvedLateReviewSentinels(truth).some((sentinel) => {
       const allowedOwners = lateReviewAllowedOwners(sentinel);
-      return sentinel.successorCorrectionOwner === binding.implementationBranch
+      return lateReviewSuccessorCorrectionOwner(sentinel) === binding.implementationBranch
         || !allowedOwners.includes(binding.implementationBranch);
     })) {
       return { ok: false, findings: ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"] };

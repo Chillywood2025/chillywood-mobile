@@ -199,18 +199,28 @@ function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
 }
 
-export function lateReviewAllowedOwners(sentinel) {
+function canonicalLateReviewOwnerEntry(sentinel) {
   const matches = canonicalLateReviewOwnerRegistry.filter((entry) => entry.repository === sentinel?.repository
     && entry.prNumber === sentinel?.prNumber
     && entry.mergeSha === sentinel?.mergeSha);
-  if (matches.length !== 1) return [];
+  if (matches.length !== 1) return null;
   const [entry] = matches;
   const registryBoundDiscovery = sentinel.successorCorrectionOwner === "UNASSIGNED_BLOCKED"
     && sentinel.assuranceControlOwner === undefined
     && sentinel.authorizedBootstrapOwners === undefined;
   if (!registryBoundDiscovery && (sentinel.successorCorrectionOwner !== entry.successorCorrectionOwner
     || sentinel.assuranceControlOwner !== entry.assuranceControlOwner
-    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners))) return [];
+    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners))) return null;
+  return entry;
+}
+
+export function lateReviewSuccessorCorrectionOwner(sentinel) {
+  return canonicalLateReviewOwnerEntry(sentinel)?.successorCorrectionOwner ?? null;
+}
+
+export function lateReviewAllowedOwners(sentinel) {
+  const entry = canonicalLateReviewOwnerEntry(sentinel);
+  if (!entry) return [];
   return [...new Set([entry.successorCorrectionOwner, entry.assuranceControlOwner, ...entry.authorizedBootstrapOwners])].sort();
 }
 

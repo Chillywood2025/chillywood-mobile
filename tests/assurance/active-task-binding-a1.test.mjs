@@ -505,6 +505,26 @@ test("a completed binding is not an active task and no override can revive it", 
     protectedMainTruth: sentinelBlockedTruth,
     featureId: completedBinding.featureId
   }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
+  const discoverySentinel = structuredClone(canonicalTruth.lateReviewSentinels.find(({ prNumber }) => prNumber === 195));
+  discoverySentinel.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoverySentinel.assuranceControlOwner;
+  delete discoverySentinel.authorizedBootstrapOwners;
+  const assuranceCorrectionBinding = {
+    ...completedBinding,
+    implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1"
+  };
+  const discoveryBlockedTruth = {
+    ...completeTruth,
+    activeTaskBinding: assuranceCorrectionBinding,
+    latestMergedImplementationPr: latestMergedFor(assuranceCorrectionBinding),
+    lateReviewSentinels: [discoverySentinel]
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: discoveryBlockedTruth,
+    protectedMainTruth: discoveryBlockedTruth,
+    featureId: assuranceCorrectionBinding.featureId
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
 });
 
 test("a COMPLETE binding records every tier with exact gate-catalog vocabulary", () => {

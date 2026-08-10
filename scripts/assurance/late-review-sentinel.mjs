@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, mergeLateReviewSentinelRecords, readJson, repositoryReadbackEvidenceHash, stableJson } from "./lib.mjs";
+import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, lateReviewSuccessorCorrectionOwner, mergeLateReviewSentinelRecords, readJson, repositoryReadbackEvidenceHash, stableJson } from "./lib.mjs";
 import { parseLateReviewIssue, readMergedLateReviewLedgerSentinels, readOpenLateReviewIssues, verifyLateReviewResolutionGithub } from "./codex-review-exact-head.mjs";
 
 export { lateReviewSentinelResolved } from "./lib.mjs";
@@ -180,7 +180,7 @@ export function validateLateReviewSentinelState(record, options = {}) {
     if (resolved) continue;
     const activeImplementationBranch = record?.activeTaskBinding?.implementationBranch;
     if (record?.activeTaskBinding?.phase === "COMPLETE"
-      && (sentinel.successorCorrectionOwner === activeImplementationBranch
+      && (lateReviewSuccessorCorrectionOwner(sentinel) === activeImplementationBranch
         || !lateReviewAllowedOwners(sentinel).includes(activeImplementationBranch))) {
       findings.push({ id: "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", prNumber: sentinel.prNumber });
     }
