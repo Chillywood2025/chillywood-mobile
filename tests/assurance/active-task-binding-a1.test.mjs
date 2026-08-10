@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { activeTask } from "../../scripts/assurance/active-task.mjs";
+import {
+  activeTask,
+  ownerBootstrapAuthorizationCommentBody,
+  ownerBootstrapBindingSubject
+} from "../../scripts/assurance/active-task.mjs";
+import { stableJson } from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -73,6 +79,35 @@ const facts = {
   directlyAffectedSymbols: ["scripts/assurance/active-task.mjs#activeTask"]
 };
 const withTruth = (change) => ({ ...facts, currentTruth: change(truth) });
+const digest = (value) => createHash("sha256").update(value).digest("hex");
+
+function authorizeOwnerBootstrap(value) {
+  const createdAt = "2026-08-10T02:30:00Z";
+  const authorization = {
+    schemaVersion: 1,
+    repository: "Chillywood2025/chillywood-mobile",
+    prNumber: value.implementationPr,
+    commentId: 4001,
+    author: "Chillywood2025",
+    authorAssociation: "OWNER",
+    createdAt,
+    updatedAt: createdAt,
+    bodySha256: "0".repeat(64),
+    subjectHash: digest(stableJson(ownerBootstrapBindingSubject(value)))
+  };
+  value.ownerBootstrapAuthorization = authorization;
+  const body = ownerBootstrapAuthorizationCommentBody(value);
+  authorization.bodySha256 = digest(body);
+  return {
+    commentId: authorization.commentId,
+    author: authorization.author,
+    authorAssociation: authorization.authorAssociation,
+    body,
+    createdAt,
+    updatedAt: createdAt,
+    issueUrl: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${value.implementationPr}`
+  };
+}
 
 test("frozen formal review resolves the structured feature and exact PR 194 source", () => {
   const result = activeTask(facts);
@@ -130,6 +165,7 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
     implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
     executionState: "ASSURANCE_CONTROL_A1"
   };
+  const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(a1.activeTaskBinding);
   a1.openImplementationPrs = [{
     number: 201,
     branch: a1.activeTaskBinding.implementationBranch,
@@ -137,7 +173,7 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
     state: "open"
   }];
   const a1Identity = { ...identity, branch: a1.activeTaskBinding.implementationBranch };
-  assert.equal(activeTask({ ...facts, currentTruth: a1, protectedMainTruth: canonicalTruth, identity: a1Identity }).ok, true);
+  assert.equal(activeTask({ ...facts, currentTruth: a1, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation }).ok, true);
   for (const [field, value] of [
     ["featureId", "chilly-chat-call-lifecycle"],
     ["implementationPr", 999],
@@ -146,8 +182,29 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
   ]) {
     const forged = structuredClone(a1);
     forged.activeTaskBinding[field] = value;
-    assert.deepEqual(activeTask({ ...facts, currentTruth: forged, protectedMainTruth: canonicalTruth, identity: a1Identity }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"], field);
+    const result = activeTask({ ...facts, currentTruth: forged, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation });
+    assert.equal(result.ok, false, field);
+    assert(result.findings.some((finding) => ["ACTIVE_TASK_AUTHORITY_UNVERIFIED", "ACTIVE_TASK_BINDING_MALFORMED"].includes(finding)), field);
   }
+
+  const forgedSource = structuredClone(a1);
+  Object.assign(forgedSource.activeTaskBinding, {
+    immutableSourceHead: "a".repeat(40),
+    immutableSourceTree: "b".repeat(40),
+    currentImplementationHead: "a".repeat(40),
+    currentImplementationTree: "b".repeat(40),
+    phase: "MERGE_ELIGIBLE"
+  });
+  Object.assign(forgedSource.activeTaskBinding.requiredFreshnessClaims[0], {
+    subjectHead: "a".repeat(40),
+    subjectTree: "b".repeat(40)
+  });
+  forgedSource.activeTaskBinding.ownerBootstrapAuthorization.subjectHash = digest(stableJson(ownerBootstrapBindingSubject(forgedSource.activeTaskBinding)));
+  forgedSource.activeTaskBinding.ownerBootstrapAuthorization.bodySha256 = digest(ownerBootstrapAuthorizationCommentBody(forgedSource.activeTaskBinding));
+  assert.deepEqual(activeTask({ ...facts, currentTruth: forgedSource, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"]);
+
+  const editedObservation = { ...ownerBootstrapAuthorizationObservation, body: `${ownerBootstrapAuthorizationObservation.body}\nedited` };
+  assert.deepEqual(activeTask({ ...facts, currentTruth: a1, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation: editedObservation }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"]);
 });
 
 test("conflicting feature override fails closed", () => {

@@ -35,8 +35,10 @@ const structuredBindingFields = [
   "executionState",
   "requiredFreshnessClasses",
   "requiredFreshnessClaims",
-  "proofTiersUnderEvaluation"
+  "proofTiersUnderEvaluation",
+  "ownerBootstrapAuthorization"
 ];
+const requiredStructuredBindingFields = structuredBindingFields.filter((field) => field !== "ownerBootstrapAuthorization");
 const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
 const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const activeImplementationStates = new Set(["open", "open-draft-current"]);
@@ -48,6 +50,73 @@ const bootstrapActiveTaskRegistry = [{
   implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
   executionState: "ASSURANCE_CONTROL_A1"
 }];
+const ownerBootstrapRepository = "Chillywood2025/chillywood-mobile";
+const ownerBootstrapAuthor = "Chillywood2025";
+const ownerBootstrapMarker = "<!-- chillywood-assurance-owner-task-binding-v1 -->";
+
+export function ownerBootstrapBindingSubject(binding) {
+  return Object.fromEntries(structuredBindingFields
+    .filter((field) => field !== "ownerBootstrapAuthorization")
+    .map((field) => [field, structuredClone(binding?.[field])]));
+}
+
+export function ownerBootstrapAuthorizationCommentBody(binding) {
+  const subject = ownerBootstrapBindingSubject(binding);
+  const payload = {
+    schemaVersion: 1,
+    repository: ownerBootstrapRepository,
+    prNumber: binding?.implementationPr,
+    subject,
+    subjectHash: sha256(stableJson(subject))
+  };
+  return `${ownerBootstrapMarker}\n${stableJson(payload)}`;
+}
+
+function readOwnerBootstrapAuthorizationObservation(authorization) {
+  if (!Number.isInteger(authorization?.commentId) || authorization.commentId < 1) return null;
+  const response = spawnSync("gh", [
+    "api",
+    `repos/${ownerBootstrapRepository}/issues/comments/${authorization.commentId}`
+  ], { cwd: ROOT, encoding: "utf8", shell: false });
+  if (response.status !== 0) return null;
+  try {
+    const comment = JSON.parse(response.stdout);
+    return {
+      commentId: comment.id,
+      author: comment.user?.login,
+      authorAssociation: comment.author_association,
+      body: comment.body,
+      createdAt: comment.created_at,
+      updatedAt: comment.updated_at,
+      issueUrl: comment.issue_url
+    };
+  } catch { return null; }
+}
+
+export function verifyOwnerBootstrapAuthorization(binding, observation) {
+  const authorization = binding?.ownerBootstrapAuthorization;
+  const expectedBody = ownerBootstrapAuthorizationCommentBody(binding);
+  const expectedSubjectHash = sha256(stableJson(ownerBootstrapBindingSubject(binding)));
+  return authorization?.schemaVersion === 1
+    && authorization.repository === ownerBootstrapRepository
+    && authorization.prNumber === binding?.implementationPr
+    && Number.isInteger(authorization.commentId)
+    && authorization.commentId > 0
+    && authorization.author === ownerBootstrapAuthor
+    && authorization.authorAssociation === "OWNER"
+    && typeof authorization.createdAt === "string"
+    && authorization.createdAt === authorization.updatedAt
+    && authorization.bodySha256 === sha256(expectedBody)
+    && authorization.subjectHash === expectedSubjectHash
+    && observation?.commentId === authorization.commentId
+    && observation.author === authorization.author
+    && observation.authorAssociation === authorization.authorAssociation
+    && observation.createdAt === authorization.createdAt
+    && observation.updatedAt === authorization.updatedAt
+    && observation.issueUrl === `https://api.github.com/repos/${ownerBootstrapRepository}/issues/${binding.implementationPr}`
+    && observation.body === expectedBody
+    && sha256(observation.body) === authorization.bodySha256;
+}
 
 function sameBinding(left, right) {
   return structuredBindingFields.every((field) => JSON.stringify(left?.[field]) === JSON.stringify(right?.[field]));
@@ -62,13 +131,16 @@ function structuredBindingAuthority(truth, facts) {
   const binding = truth?.activeTaskBinding;
   const bootstrapMatches = bootstrapActiveTaskRegistry.filter((entry) => Object.entries(entry)
     .every(([field, expected]) => binding?.[field] === expected));
-  return bootstrapMatches.length === 1 ? "OWNER_BOOTSTRAP_REGISTRY" : null;
+  if (bootstrapMatches.length !== 1) return null;
+  const observation = facts.ownerBootstrapAuthorizationObservation
+    ?? readOwnerBootstrapAuthorizationObservation(binding?.ownerBootstrapAuthorization);
+  return verifyOwnerBootstrapAuthorization(binding, observation) ? "OWNER_BOOTSTRAP_GITHUB_COMMENT" : null;
 }
 
 function validateStructuredBinding(value) {
   const findings = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
-  if (structuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  if (requiredStructuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
   const requiredFreshnessClaimsValid = Array.isArray(value.requiredFreshnessClaims)
     && value.requiredFreshnessClaims.length > 0
     && value.requiredFreshnessClaims.every((requirement) => requirement
@@ -101,6 +173,21 @@ function validateStructuredBinding(value) {
       ? classes.every((freshnessClass) => declaredFreshnessClasses.has(freshnessClass))
       : classes.every((freshnessClass) => !declaredFreshnessClasses.has(freshnessClass));
   });
+  const bootstrapAuthorizationValid = value.ownerBootstrapAuthorization === undefined
+    || (value.ownerBootstrapAuthorization
+      && typeof value.ownerBootstrapAuthorization === "object"
+      && !Array.isArray(value.ownerBootstrapAuthorization)
+      && value.ownerBootstrapAuthorization.schemaVersion === 1
+      && value.ownerBootstrapAuthorization.repository === ownerBootstrapRepository
+      && value.ownerBootstrapAuthorization.prNumber === value.implementationPr
+      && Number.isInteger(value.ownerBootstrapAuthorization.commentId)
+      && value.ownerBootstrapAuthorization.commentId > 0
+      && value.ownerBootstrapAuthorization.author === ownerBootstrapAuthor
+      && value.ownerBootstrapAuthorization.authorAssociation === "OWNER"
+      && typeof value.ownerBootstrapAuthorization.createdAt === "string"
+      && value.ownerBootstrapAuthorization.createdAt === value.ownerBootstrapAuthorization.updatedAt
+      && /^[0-9a-f]{64}$/u.test(value.ownerBootstrapAuthorization.bodySha256 ?? "")
+      && /^[0-9a-f]{64}$/u.test(value.ownerBootstrapAuthorization.subjectHash ?? ""));
   if (value.schemaVersion !== 1
     || typeof value.featureId !== "string"
     || !Number.isInteger(value.implementationPr)
@@ -126,7 +213,8 @@ function validateStructuredBinding(value) {
     || value.proofTiersUnderEvaluation.length === 0
     || new Set(value.proofTiersUnderEvaluation).size !== value.proofTiersUnderEvaluation.length
     || value.proofTiersUnderEvaluation.some((entry) => !proofTiers.has(entry))
-    || !proofFreshnessAligned) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+    || !proofFreshnessAligned
+    || !bootstrapAuthorizationValid) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
   return [...new Set(findings)].sort();
 }
 

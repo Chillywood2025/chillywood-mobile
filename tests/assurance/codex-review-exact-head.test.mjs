@@ -20,6 +20,7 @@ import {
   recordLateReviewIssue,
   recordProviderFindingLedger,
   recordReviewOnlyLease,
+  reviewOnlyLeaseEventAuthorized,
   recordSourcePushLease,
   sourcePushLeaseCheckName,
   verifyLateReviewResolutionGithub
@@ -478,6 +479,52 @@ test("review-only classification remains PR-scoped across a branch rename and ev
     truthEntries: [],
     prNumber: 301
   }), true);
+});
+
+test("review-only registry validates every PR independently and rejects fork-prefix poisoning", async () => {
+  const posted = [];
+  for (const [prNumber, classifiedHeadSha] of [[301, headA], [302, headB]]) {
+    await recordReviewOnlyLease({
+      repository: baseCurrent.repository,
+      prNumber,
+      headSha: classifiedHeadSha,
+      headBranch: `codex/assurance-review-only/lane-${prNumber}`,
+      token: "token",
+      request: async (_url, _token, init) => {
+        posted.push({ ...JSON.parse(init.body), app: { slug: "github-actions" } });
+        return { body: { id: prNumber }, link: "" };
+      }
+    });
+  }
+  const leases = await readReviewOnlyLeases(baseCurrent.repository, 301, headA, "token", {
+    request: async () => ({ body: { total_count: 2, check_runs: posted }, link: "" })
+  });
+  assert.equal(leases.length, 1);
+  assert.equal(leases[0].prNumber, 301);
+
+  const trustedEvent = {
+    pull_request: {
+      user: { login: "Chillywood2025" },
+      head: { repo: { full_name: baseCurrent.repository, owner: { login: "Chillywood2025" } } }
+    }
+  };
+  assert.equal(reviewOnlyLeaseEventAuthorized({
+    repository: baseCurrent.repository,
+    event: trustedEvent,
+    current: { repositoryWriteActors: ["Chillywood2025"] },
+    contract
+  }), true);
+  assert.equal(reviewOnlyLeaseEventAuthorized({
+    repository: baseCurrent.repository,
+    event: {
+      pull_request: {
+        user: { login: "fork-author" },
+        head: { repo: { full_name: "fork-author/chillywood-mobile", owner: { login: "fork-author" } } }
+      }
+    },
+    current: { repositoryWriteActors: ["Chillywood2025"] },
+    contract
+  }), false);
 });
 
 test("PR 194 late-review timeline denies merge, post-truth closure, and successor work", () => {

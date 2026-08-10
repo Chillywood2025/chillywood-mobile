@@ -795,17 +795,34 @@ export async function readReviewOnlyLeases(repository, prNumber, _headSha, token
   const registryAnchorSha = (options.contract ?? readJson(contractPath)).reviewOnlyClassification?.registryAnchorSha;
   if (!validGitSha(registryAnchorSha)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
   const checks = await readNamedCheckRuns(repository, registryAnchorSha, reviewOnlyLeaseCheckName, token, options);
-  const parsed = checks.map((check) => parseCheckLedger(check, {
-    repository,
-    prNumber,
-    headSha: registryAnchorSha,
-    checkName: reviewOnlyLeaseCheckName,
-    externalPrefix: `codex-review-only:v1:pr=${prNumber}`
-  }));
+  const parsed = checks.map((check) => {
+    let payload;
+    try { payload = JSON.parse(check?.output?.summary); } catch { return false; }
+    if (!Number.isInteger(payload?.prNumber) || payload.prNumber < 1) return false;
+    return parseCheckLedger(check, {
+      repository,
+      prNumber: payload.prNumber,
+      headSha: registryAnchorSha,
+      checkName: reviewOnlyLeaseCheckName,
+      externalPrefix: `codex-review-only:v1:pr=${payload.prNumber}`
+    });
+  });
   if (parsed.some((entry) => entry === false || !validGitSha(entry?.classifiedHeadSha) || typeof entry?.headBranch !== "string" || !entry.headBranch)) {
     throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
   }
-  return parsed;
+  return parsed.filter((entry) => entry.prNumber === prNumber);
+}
+
+export function reviewOnlyLeaseEventAuthorized({ repository, event, current, contract }) {
+  const trustedActors = contract?.trustedRepositoryWriteActors;
+  const rootAuthority = Array.isArray(trustedActors) && trustedActors.length === 1 ? trustedActors[0] : null;
+  return typeof rootAuthority === "string"
+    && event?.pull_request?.head?.repo?.full_name === repository
+    && event?.pull_request?.head?.repo?.owner?.login === rootAuthority
+    && event?.pull_request?.user?.login === rootAuthority
+    && Array.isArray(current?.repositoryWriteActors)
+    && current.repositoryWriteActors.length === 1
+    && current.repositoryWriteActors[0] === rootAuthority;
 }
 
 export async function readMergedLateReviewLedgerSentinels(repository, token, options = {}) {
@@ -1353,6 +1370,7 @@ async function main() {
     const truth = readJson("config/assurance/current-truth-v1.json");
     const eventCreatesReviewOnlyLease = eventName === "pull_request_target"
       && current.headBranch.startsWith(reviewOnlyBranchPrefix)
+      && reviewOnlyLeaseEventAuthorized({ repository, event, current, contract })
       && (sourceAdmissionEvent || (event.action === "labeled" && event.label?.name === reviewOnlyLabel));
     if (eventCreatesReviewOnlyLease) {
       await recordReviewOnlyLease({ repository, prNumber, headSha: current.headSha, headBranch: current.headBranch, token });
