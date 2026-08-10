@@ -26,7 +26,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { lateReviewResolutionSubjectHash } from "../../scripts/assurance/lib.mjs";
+import { lateReviewAllowedOwners, lateReviewResolutionSubjectHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1205,6 +1205,26 @@ test("a late-review sentinel cannot authorize its own branch exceptions", () => 
   forged.lateReviewSentinels[0].authorizedBootstrapOwners.push("codex/unrelated-next");
   assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
   assert(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"));
+});
+
+test("known unassigned discovery sentinels derive owners only from the immutable registry", () => {
+  const discovery = {
+    repository: "Chillywood2025/chillywood-mobile",
+    prNumber: 195,
+    mergeSha: "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+    successorCorrectionOwner: "UNASSIGNED_BLOCKED"
+  };
+  assert.deepEqual(lateReviewAllowedOwners(discovery), [
+    "codex/assurance-active-task-and-claim-freshness-a1",
+    "codex/assurance-codex-security-scan-reliability-s0"
+  ]);
+  assert.deepEqual(lateReviewAllowedOwners({
+    ...discovery,
+    successorCorrectionOwner: "codex/unrelated-next",
+    assuranceControlOwner: "codex/unrelated-next",
+    authorizedBootstrapOwners: ["codex/unrelated-next"]
+  }), []);
+  assert.deepEqual(lateReviewAllowedOwners({ ...discovery, prNumber: 999 }), []);
 });
 
 test("free-form resolved dispositions cannot clear a late-review sentinel", () => {
