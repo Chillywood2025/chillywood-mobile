@@ -144,7 +144,7 @@ function structuredBindingAuthority(truth, facts) {
   return verifyOwnerBootstrapAuthorization(binding, observation) ? "OWNER_BOOTSTRAP_GITHUB_COMMENT" : null;
 }
 
-function validateStructuredBinding(value, gateCatalog) {
+function validateStructuredBinding(value, gateCatalog, registry) {
   const findings = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
   if (requiredStructuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
@@ -222,14 +222,14 @@ function validateStructuredBinding(value, gateCatalog) {
     || value.proofTiersUnderEvaluation.some((entry) => !proofTiers.has(entry))
     || !proofFreshnessAligned
     || !bootstrapAuthorizationValid) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
-  if (validateProofTierStatuses(value, gateCatalog).length) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  if (validateProofTierStatuses(value, gateCatalog, registry).length) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
   return [...new Set(findings)].sort();
 }
 
 function resolveFeature(truth, facts, registry) {
   if (Object.hasOwn(truth ?? {}, "activeTaskBinding")) {
     const binding = truth.activeTaskBinding;
-    const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"));
+    const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry);
     if (findings.length) return { ok: false, findings };
     const authority = structuredBindingAuthority(truth, facts);
     if (!authority) return { ok: false, findings: ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"] };

@@ -224,7 +224,11 @@ if (mode) {
     claimFreshness,
     record.activeTaskBinding?.requiredFreshnessClaims ?? []
   );
-  const proofTierStatusFindings = validateProofTierStatuses(record.activeTaskBinding, readJson("config/assurance/gate-catalog-v1.json"));
+  const proofTierStatusFindings = validateProofTierStatuses(
+    record.activeTaskBinding,
+    readJson("config/assurance/gate-catalog-v1.json"),
+    readJson("config/assurance/feature-registry-v1.json")
+  );
   const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...proofTierStatusFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });

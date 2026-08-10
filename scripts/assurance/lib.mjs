@@ -1388,7 +1388,7 @@ export function verifyCurrentTruthSynchronization({
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
 export const featureRequired = ["featureId", "currentState", "ownerSystems", "productOwner", "routes", "components", "edgeFunctions", "tablesRpcs", "nativeModulesPlugins", "providers", "platformScope", "environments", "riskLevel", "requirements", "nonGoals", "states", "transitions", "invariants", "knownDefectTags", "threatFailureModes", "proofTierApplicability", "commands", "artifactRequirements", "installedRequirements", "physicalGoldenCases", "rollback", "emergencyStop", "evidenceRetention", "reviewRequirements", "unresolvedBlockers"];
 
-export function validateProofTierStatuses(binding, gateCatalog) {
+export function validateProofTierStatuses(binding, gateCatalog, featureRegistry) {
   const value = binding?.proofTierStatuses;
   if (value === undefined) {
     return binding?.phase === "COMPLETE"
@@ -1403,6 +1403,12 @@ export function validateProofTierStatuses(binding, gateCatalog) {
   if (gates.size !== tierIds.length || catalogStatuses.size === 0) {
     return [{ id: "ASSURANCE_GATE_CATALOG_MALFORMED", status: "BLOCKED_INTERNAL" }];
   }
+  const registeredFeatures = Array.isArray(featureRegistry) ? featureRegistry : featureRegistry?.features;
+  const featureMatches = (registeredFeatures ?? []).filter(({ featureId }) => featureId === binding?.featureId);
+  const feature = featureMatches.length === 1 ? featureMatches[0] : null;
+  if (binding?.phase === "COMPLETE" && !feature) {
+    return [{ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_MISSING", status: "BLOCKED_INTERNAL", featureId: binding?.featureId ?? null }];
+  }
   const keys = Object.keys(value);
   const findings = [];
   for (const tier of tierIds) {
@@ -1412,12 +1418,34 @@ export function validateProofTierStatuses(binding, gateCatalog) {
     }
     const gate = gates.get(tier);
     const passStatuses = Array.isArray(gate?.passStatus) ? gate.passStatus : [gate?.passStatus];
-    const allowedForTier = new Set([...passStatuses, gate?.missingStatus, "NOT_APPLICABLE", "SUPERSEDED"]);
     const proofStatus = value[tier];
-    if (typeof proofStatus !== "string" || !catalogStatuses.has(proofStatus) || !allowedForTier.has(proofStatus)) {
+    const compositePass = passStatuses.length > 1;
+    const completePass = compositePass
+      ? Array.isArray(proofStatus)
+        && proofStatus.length === passStatuses.length
+        && new Set(proofStatus).size === proofStatus.length
+        && passStatuses.every((status) => proofStatus.includes(status))
+      : proofStatus === passStatuses[0];
+    const scalarNonPass = typeof proofStatus === "string"
+      && [gate?.missingStatus, "NOT_APPLICABLE", "SUPERSEDED"].includes(proofStatus);
+    const statusShapeValid = completePass || scalarNonPass;
+    const catalogValuesValid = (Array.isArray(proofStatus) ? proofStatus : [proofStatus])
+      .every((status) => typeof status === "string" && catalogStatuses.has(status));
+    if (!statusShapeValid || !catalogValuesValid) {
       findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_INVALID", status: "BLOCKED_INTERNAL", tier, value: proofStatus ?? null });
-    } else if (binding?.phase === "COMPLETE" && !passStatuses.includes(proofStatus) && proofStatus !== "NOT_APPLICABLE") {
+    } else if (binding?.phase === "COMPLETE" && !completePass && proofStatus !== "NOT_APPLICABLE") {
       findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_BLOCKED", status: "BLOCKED_INTERNAL", tier, value: proofStatus });
+    } else if (binding?.phase === "COMPLETE") {
+      const applicability = feature?.proofTierApplicability?.[tier];
+      const required = applicability === "required" || String(applicability ?? "").startsWith("required-");
+      const notApplicable = applicability === "not-applicable"
+        || String(applicability ?? "").startsWith("not-applicable-")
+        || applicability === "metadata-boundary-only-no-new-native-or-provider-proof";
+      if (required && !completePass) {
+        findings.push({ id: "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR", status: "BLOCKED_INTERNAL", tier, value: proofStatus, applicability });
+      } else if (notApplicable && proofStatus !== "NOT_APPLICABLE") {
+        findings.push({ id: "ASSURANCE_NOT_APPLICABLE_PROOF_TIER_PROMOTED", status: "BLOCKED_INTERNAL", tier, value: proofStatus, applicability });
+      }
     }
   }
   for (const tier of keys) {
@@ -1441,7 +1469,10 @@ export function renderCurrentState(record) {
   const revenueCat = record.operationalClosures.revenueCat;
   const active = record.activeTaskBinding;
   const proofTierStatusLine = active.proofTierStatuses
-    ? `\n- Proof-tier statuses: ${tierIds.map((tier) => `\`${tier}\`=\`${active.proofTierStatuses[tier]}\``).join(", ")}.`
+    ? `\n- Proof-tier statuses: ${tierIds.map((tier) => {
+      const status = active.proofTierStatuses[tier];
+      return `\`${tier}\`=\`${Array.isArray(status) ? status.join("+") : status}\``;
+    }).join(", ")}.`
     : "";
   const currentClaims = record.freshnessClaims
     .filter(({ status }) => status === "CURRENT")

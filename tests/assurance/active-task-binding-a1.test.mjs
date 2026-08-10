@@ -410,9 +410,15 @@ test("freshness claim scopes must match declared classes and proof tiers", () =>
 });
 
 test("a completed binding is not an active task and no override can revive it", () => {
+  const completedBinding = {
+    ...binding,
+    featureId: "assurance-efficiency-e0",
+    phase: "COMPLETE",
+    proofTierStatuses: completedProofTierStatuses
+  };
   const completeTruth = {
     ...truth,
-    activeTaskBinding: { ...binding, phase: "COMPLETE", proofTierStatuses: completedProofTierStatuses },
+    activeTaskBinding: completedBinding,
     openImplementationPrs: []
   };
   const completeIdentity = {
@@ -435,15 +441,15 @@ test("a completed binding is not an active task and no override can revive it", 
   });
   assert.equal(competing.ok, false);
   assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
-  assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+  assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: completedBinding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
 });
 
 test("a COMPLETE binding records every tier with exact gate-catalog vocabulary", () => {
-  const complete = { ...binding, phase: "COMPLETE", proofTierStatuses: completedProofTierStatuses };
-  assert.deepEqual(validateProofTierStatuses(complete, gateCatalog), []);
+  const complete = { ...binding, featureId: "assurance-efficiency-e0", phase: "COMPLETE", proofTierStatuses: completedProofTierStatuses };
+  assert.deepEqual(validateProofTierStatuses(complete, gateCatalog, registry), []);
 
   const missingMap = { ...binding, phase: "COMPLETE" };
-  assert.deepEqual(validateProofTierStatuses(missingMap, gateCatalog), [{
+  assert.deepEqual(validateProofTierStatuses(missingMap, gateCatalog, registry), [{
     id: "ASSURANCE_PROOF_TIER_STATUSES_MISSING",
     status: "BLOCKED_INTERNAL"
   }]);
@@ -458,13 +464,47 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
     ["extra tier", (statuses) => { statuses.T8_UNKNOWN = "NOT_APPLICABLE"; }, "ASSURANCE_PROOF_TIER_STATUS_UNKNOWN"],
     ["free-form status", (statuses) => { statuses.T4_NATIVE_PROVIDER = "METADATA_BOUNDARY_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
     ["cross-tier status", (statuses) => { statuses.T1_SOURCE = "MODEL_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
+    ["partial composite pass", (statuses) => { statuses.T4_NATIVE_PROVIDER = "NATIVE_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
     ["blocked completion", (statuses) => { statuses.T1_SOURCE = "BLOCKED_INTERNAL"; }, "ASSURANCE_COMPLETED_PROOF_TIER_BLOCKED"]
   ]) {
     const candidate = structuredClone(complete);
     mutate(candidate.proofTierStatuses);
-    const findings = validateProofTierStatuses(candidate, gateCatalog);
+    const findings = validateProofTierStatuses(candidate, gateCatalog, registry);
     assert.equal(findings.some(({ id }) => id === expectedId), true, label);
   }
+
+  const allNotApplicable = structuredClone(complete);
+  allNotApplicable.proofTierStatuses = Object.fromEntries(Object.keys(completedProofTierStatuses).map((tier) => [tier, "NOT_APPLICABLE"]));
+  const applicabilityFindings = validateProofTierStatuses(allNotApplicable, gateCatalog, registry);
+  for (const tier of ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]) {
+    assert.equal(applicabilityFindings.some(({ id, tier: findingTier }) => id === "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR" && findingTier === tier), true, tier);
+  }
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: { ...truth, activeTaskBinding: allNotApplicable, openImplementationPrs: [] },
+    protectedMainTruth: { ...truth, activeTaskBinding: allNotApplicable, openImplementationPrs: [] }
+  }).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+
+  const promotedNotApplicableTier = structuredClone(complete);
+  promotedNotApplicableTier.proofTierStatuses.T4_NATIVE_PROVIDER = ["NATIVE_CLEAR", "PROVIDER_CLEAR"];
+  assert.equal(validateProofTierStatuses(promotedNotApplicableTier, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_NOT_APPLICABLE_PROOF_TIER_PROMOTED"), true);
+
+  const compositeRequired = {
+    ...binding,
+    phase: "COMPLETE",
+    proofTierStatuses: {
+      T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
+      T1_SOURCE: "SOURCE_CLEAR",
+      T2_MODEL: "MODEL_CLEAR",
+      T3_INTEGRATION: "INTEGRATION_CLEAR",
+      T4_NATIVE_PROVIDER: ["NATIVE_CLEAR", "PROVIDER_CLEAR"],
+      T5_SIGNED_ARTIFACT: "ARTIFACT_CLEAR",
+      T6_INSTALLED_PHYSICAL: ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"],
+      T7_PUBLIC_CANARY: "NOT_APPLICABLE"
+    }
+  };
+  assert.deepEqual(validateProofTierStatuses(compositeRequired, gateCatalog, registry), []);
+  assert.equal(validateProofTierStatuses(compositeRequired, gateCatalog, { features: [] }).some(({ id }) => id === "ASSURANCE_PROOF_TIER_APPLICABILITY_MISSING"), true);
 });
 
 test("canonical rendering exposes every recorded proof-tier status separately", () => {
