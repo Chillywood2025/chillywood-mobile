@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
-  "latestMergedImplementationPr": {"number": 194, "state": "merged", "head": "ada396a437e40a98acea75bf016c36fc3ea86739", "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446", "title": "Make LiveKit microphone toggles converge durable state"},
+  "mainSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+  "latestMergedImplementationPr": {"number": 201, "state": "merged", "head": "b6648d689287cd312fb548b966a44db24936e152", "mergeSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48", "title": "Make active-task resolution and evidence freshness claim-scoped"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -430,8 +430,8 @@
     "immutableSourceTree": "9b5e2d049419ad16d1607510150412353d6a094c",
     "currentImplementationHead": "f32d7b5298290035b1af38346339becd6227fd62",
     "currentImplementationTree": "9b5e2d049419ad16d1607510150412353d6a094c",
-    "phase": "FORMAL_REVIEW",
-    "executionState": "ASSURANCE_CONTROL_A1",
+    "phase": "COMPLETE",
+    "executionState": "ASSURANCE_CONTROL_A1_MERGED_S0_NEXT_D2A_FROZEN",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
     "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-merged-successor-head-isolation-source-freeze-20260810-0237", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.source"], "subjectHead": "f32d7b5298290035b1af38346339becd6227fd62", "subjectTree": "9b5e2d049419ad16d1607510150412353d6a094c"}],
     "proofTiersUnderEvaluation": ["T1_SOURCE"],
@@ -505,9 +505,7 @@
       "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
     }
   ],
-  "openImplementationPrs": [
-    {"number": 201, "branch": "codex/assurance-active-task-and-claim-freshness-a1", "head": "f32d7b5298290035b1af38346339becd6227fd62", "state": "open-draft-current", "disposition": "A1 immutable source frozen and owner-authorized by exact GitHub comment; only the canonical three-file current-truth binding commit follows"}
-  ],
+  "openImplementationPrs": [],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -591,12 +589,11 @@
     {"number": 138, "branch": "codex/assurance-reconcile-revenuecat-transfer-review-concurrency-atomicity", "head": "ca69c38368be9bb1d65b717b94c039ebc8829e5a", "reviewedImplementationHead": "81892f3dae544713d8e35512da895cd99c610966", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194"],
-    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_A1_ACTIVE_D2A_FROZEN",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201"],
+    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_A1_COMPLETE_S0_NEXT_D2A_FROZEN",
     "nextActions": [
-      "Review the frozen assurance-control A1 source at exact head f32d7b5298290035b1af38346339becd6227fd62 and tree 9b5e2d049419ad16d1607510150412353d6a094c, require P0=0/P1=0 independent repository closure and one 13/13 Phase 1 CI run, then merge A1 and synchronize post-A1 current truth.",
-    "Then implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
-    "Only after A1 and S0 complete may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
+      "Implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
+      "Only after S0 completes may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
@@ -610,9 +607,18 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T02:38:20Z",
-  "freshnessDeadline": "2026-08-11T02:38:20Z",
+  "timestamp": "2026-08-10T02:48:20Z",
+  "freshnessDeadline": "2026-08-11T02:48:20Z",
   "evidenceSources": [
+    {
+      "id": "a1-post-merge-ruleset-readback-20260810-0248",
+      "mode": "github-read-only",
+      "covers": [
+        "A1 PR 201 merged as 08d8c04285c8dc0fbe0f0168b6750fc746d1af48 after exact Phase 1 run 31350394428 passed 13 of 13 jobs",
+        "GitHub ruleset 18940814 requires the exact-head review status check, resolved conversations, stale-review dismissal, strict status checks, and has no bypass actors",
+        "Durable late-review sentinel issue 203 preserves all five unresolved PR 194 findings"
+      ]
+    },
     {
       "id": "a1-merged-successor-head-isolation-source-freeze-20260810-0237",
       "mode": "local-offline-and-github-read-only",
