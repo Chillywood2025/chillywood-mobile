@@ -1388,6 +1388,35 @@ export function verifyCurrentTruthSynchronization({
   };
 }
 
+export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, latestMergedImplementationPr, remoteMain, gitCommand = git }) {
+  if (activeTaskBinding?.phase !== "COMPLETE") return [];
+  const finding = (id, extra = {}) => ({ id, status: "BLOCKED_INTERNAL", ...extra });
+  if (latestMergedImplementationPr?.state !== "merged"
+    || latestMergedImplementationPr.number !== activeTaskBinding.implementationPr
+    || latestMergedImplementationPr.head !== activeTaskBinding.currentImplementationHead
+    || !gitShaPattern.test(latestMergedImplementationPr.mergeSha ?? "")
+    || !gitShaPattern.test(remoteMain ?? "")) {
+    return [finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_IDENTITY_MISMATCH")];
+  }
+  try {
+    const mergeSha = latestMergedImplementationPr.mergeSha;
+    const parents = gitCommand(["show", "-s", "--format=%P", mergeSha]).split(/\s+/u).filter(Boolean);
+    const mergeTree = gitCommand(["rev-parse", `${mergeSha}^{tree}`]);
+    gitCommand(["merge-base", "--is-ancestor", activeTaskBinding.currentImplementationHead, mergeSha]);
+    gitCommand(["merge-base", "--is-ancestor", mergeSha, remoteMain]);
+    const findings = [];
+    if (parents.length !== 2 || parents[1] !== activeTaskBinding.currentImplementationHead) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PARENT_MISMATCH", { parents }));
+    }
+    if (mergeTree !== activeTaskBinding.currentImplementationTree) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH", { expected: activeTaskBinding.currentImplementationTree, recorded: mergeTree }));
+    }
+    return findings;
+  } catch {
+    return [finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_ANCESTRY_INVALID")];
+  }
+}
+
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
 export const featureRequired = ["featureId", "currentState", "ownerSystems", "productOwner", "routes", "components", "edgeFunctions", "tablesRpcs", "nativeModulesPlugins", "providers", "platformScope", "environments", "riskLevel", "requirements", "nonGoals", "states", "transitions", "invariants", "knownDefectTags", "threatFailureModes", "proofTierApplicability", "commands", "artifactRequirements", "installedRequirements", "physicalGoldenCases", "rollback", "emergencyStop", "evidenceRetention", "reviewRequirements", "unresolvedBlockers"];
 export const proofTierApplicabilityPolicies = {

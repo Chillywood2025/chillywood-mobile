@@ -87,7 +87,7 @@ const ownerFinalCarrierGithubReadback = readJson("config/assurance/a1-owner-fina
 const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-phase1-github-readback-v1.json");
 const bootstrapMergeIdentity = readBootstrapMergeIdentity(githubRulesetReadback.authorizedBootstrapException.mergeSha);
 errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, bootstrapPhase1GithubReadback, mergeIdentity: bootstrapMergeIdentity, freshnessMode: "STRUCTURAL" }));
-errors.push(...validateStructuredBinding(currentTruth.activeTaskBinding, gates, registryContract, currentTruth.openImplementationPrs));
+errors.push(...validateStructuredBinding(currentTruth.activeTaskBinding, gates, registryContract, currentTruth.openImplementationPrs, currentTruth.latestMergedImplementationPr));
 errors.push(...validateProofTierStatuses(currentTruth.activeTaskBinding, gates, registryContract).map(({ id, tier, value }) => [id, tier, value].filter((entry) => entry !== undefined).join(":")));
 const applicabilityValues = Object.values(proofTierApplicabilityPolicies).flat();
 if (new Set(applicabilityValues).size !== applicabilityValues.length) errors.push("proof tier applicability policy values must be unique");

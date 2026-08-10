@@ -145,7 +145,7 @@ function structuredBindingAuthority(truth, facts) {
   return verifyOwnerBootstrapAuthorization(binding, observation) ? "OWNER_BOOTSTRAP_GITHUB_COMMENT" : null;
 }
 
-export function validateStructuredBinding(value, gateCatalog, registry, openImplementationPrs) {
+export function validateStructuredBinding(value, gateCatalog, registry, openImplementationPrs, latestMergedImplementationPr) {
   const findings = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
   if (requiredStructuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
@@ -227,6 +227,12 @@ export function validateStructuredBinding(value, gateCatalog, registry, openImpl
   if (value.phase === "COMPLETE") {
     if (!Array.isArray(openImplementationPrs)) findings.push("IMPLEMENTATION_INVENTORY_MALFORMED");
     else if (openImplementationPrs.length) findings.push("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION");
+    if (latestMergedImplementationPr?.state !== "merged"
+      || latestMergedImplementationPr.number !== value.implementationPr
+      || latestMergedImplementationPr.head !== value.currentImplementationHead
+      || !sha40(latestMergedImplementationPr.mergeSha)) {
+      findings.push("COMPLETED_IMPLEMENTATION_MERGE_IDENTITY_MISMATCH");
+    }
   }
   return [...new Set(findings)].sort();
 }
@@ -234,7 +240,7 @@ export function validateStructuredBinding(value, gateCatalog, registry, openImpl
 function resolveFeature(truth, facts, registry) {
   if (Object.hasOwn(truth ?? {}, "activeTaskBinding")) {
     const binding = truth.activeTaskBinding;
-    const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs);
+    const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs, truth.latestMergedImplementationPr);
     if (findings.length) return { ok: false, findings };
     const authority = structuredBindingAuthority(truth, facts);
     if (!authority) return { ok: false, findings: ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"] };

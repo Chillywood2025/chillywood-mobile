@@ -18,6 +18,7 @@ import {
   renderNextTask,
   sha256,
   verifyCurrentTruthHeadBindings,
+  verifyCompletedImplementationMergeIdentity,
   verifyCommittedClaimEvidence,
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization,
@@ -234,9 +235,15 @@ if (mode) {
     record.activeTaskBinding,
     readJson("config/assurance/gate-catalog-v1.json"),
     readJson("config/assurance/feature-registry-v1.json"),
-    record.openImplementationPrs
+    record.openImplementationPrs,
+    record.latestMergedImplementationPr
   ).map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
-  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...validateLateReviewSentinelState(record)];
+  const completedMergeFindings = verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: record.activeTaskBinding,
+    latestMergedImplementationPr: record.latestMergedImplementationPr,
+    remoteMain
+  });
+  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });

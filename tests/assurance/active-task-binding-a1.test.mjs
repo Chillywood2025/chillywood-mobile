@@ -10,7 +10,7 @@ import {
   validateStructuredBinding,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
-import { renderCurrentState, stableJson, validateProofTierStatuses } from "../../scripts/assurance/lib.mjs";
+import { renderCurrentState, stableJson, validateProofTierStatuses, verifyCompletedImplementationMergeIdentity } from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -66,6 +66,13 @@ const e0CompletionClaims = () => binding.requiredFreshnessClaims.map((claim) => 
   provider: "NONE",
   requiredFacts: e0CompletionFacts
 }));
+const latestMergedFor = (candidate) => ({
+  number: candidate.implementationPr,
+  state: "merged",
+  head: candidate.currentImplementationHead,
+  mergeSha: "e".repeat(40),
+  title: "Exact completed implementation"
+});
 const truth = {
   ...canonicalTruth,
   lateReviewSentinels: [],
@@ -435,6 +442,7 @@ test("a completed binding is not an active task and no override can revive it", 
   const completeTruth = {
     ...truth,
     activeTaskBinding: completedBinding,
+    latestMergedImplementationPr: latestMergedFor(completedBinding),
     openImplementationPrs: []
   };
   const completeIdentity = {
@@ -483,6 +491,7 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
   assert.deepEqual(activeTask(withTruth((value) => ({
     ...value,
     activeTaskBinding: missingMap,
+    latestMergedImplementationPr: latestMergedFor(missingMap),
     openImplementationPrs: []
   }))).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
 
@@ -508,8 +517,8 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
   }
   assert.deepEqual(activeTask({
     ...facts,
-    currentTruth: { ...truth, activeTaskBinding: allNotApplicable, openImplementationPrs: [] },
-    protectedMainTruth: { ...truth, activeTaskBinding: allNotApplicable, openImplementationPrs: [] }
+    currentTruth: { ...truth, activeTaskBinding: allNotApplicable, latestMergedImplementationPr: latestMergedFor(allNotApplicable), openImplementationPrs: [] },
+    protectedMainTruth: { ...truth, activeTaskBinding: allNotApplicable, latestMergedImplementationPr: latestMergedFor(allNotApplicable), openImplementationPrs: [] }
   }).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
 
   const promotedNotApplicableTier = structuredClone(complete);
@@ -594,9 +603,35 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
 
   const mismatchedRepositorySubject = structuredClone(complete);
   mismatchedRepositorySubject.immutableSourceHead = "d".repeat(40);
-  assert.deepEqual(validateStructuredBinding(mismatchedRepositorySubject, gateCatalog, registry, []), ["ACTIVE_TASK_BINDING_MALFORMED"]);
-  assert.deepEqual(validateStructuredBinding(complete, gateCatalog, registry, [{ number: 208 }]), ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
+  assert.deepEqual(validateStructuredBinding(mismatchedRepositorySubject, gateCatalog, registry, [], latestMergedFor(mismatchedRepositorySubject)), ["ACTIVE_TASK_BINDING_MALFORMED"]);
+  assert.deepEqual(validateStructuredBinding(complete, gateCatalog, registry, [{ number: 208 }], latestMergedFor(complete)), ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
+  assert.deepEqual(validateStructuredBinding(complete, gateCatalog, registry, [], latestMergedFor({ ...complete, implementationPr: 999 })), ["COMPLETED_IMPLEMENTATION_MERGE_IDENTITY_MISMATCH"]);
   assert.equal(fs.readFileSync("scripts/assurance/current-truth.mjs", "utf8").includes("validateStructuredBinding("), true, "canonical truth reuses exact structured binding validation");
+
+  const validMergeGit = (argv) => {
+    if (argv[0] === "show") return `${"a".repeat(40)} ${complete.currentImplementationHead}`;
+    if (argv[0] === "rev-parse") return complete.currentImplementationTree;
+    if (argv[0] === "merge-base") return "";
+    throw new Error("unexpected git command");
+  };
+  assert.deepEqual(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: validMergeGit
+  }), []);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv[0] === "show" ? `${"a".repeat(40)} ${"b".repeat(40)}` : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PARENT_MISMATCH"), true);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv[0] === "rev-parse" ? "c".repeat(40) : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH"), true);
 
   const applicabilitySubstitution = structuredClone(complete);
   const substitutedRegistry = structuredClone(registry);
