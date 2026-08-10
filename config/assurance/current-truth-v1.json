@@ -426,43 +426,43 @@
     "implementationPr": 201,
     "implementationBranch": "codex/assurance-active-task-and-claim-freshness-a1",
     "implementationBindingId": "assurance-active-task-claim-freshness-a1-pr201-v1",
-    "immutableSourceHead": "a7510536e281cd0d8c32d308b836974cb6819778",
-    "immutableSourceTree": "a65b71a1c6bc2ac87db14acf791f10399e267bf5",
-    "currentImplementationHead": "a7510536e281cd0d8c32d308b836974cb6819778",
-    "currentImplementationTree": "a65b71a1c6bc2ac87db14acf791f10399e267bf5",
+    "immutableSourceHead": "9447b26841cbb48dabc7c1790a9b4df80fb7b332",
+    "immutableSourceTree": "01b58341c3ef73349cad3b4dfda8ccb8b563e570",
+    "currentImplementationHead": "9447b26841cbb48dabc7c1790a9b4df80fb7b332",
+    "currentImplementationTree": "01b58341c3ef73349cad3b4dfda8ccb8b563e570",
     "phase": "FORMAL_REVIEW",
     "executionState": "ASSURANCE_CONTROL_A1",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-owner-authorized-source-freeze-final-20260810-0222", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.source"], "subjectHead": "a7510536e281cd0d8c32d308b836974cb6819778", "subjectTree": "a65b71a1c6bc2ac87db14acf791f10399e267bf5"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "a1-shared-head-isolation-source-freeze-20260810-0233", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.a1.source"], "subjectHead": "9447b26841cbb48dabc7c1790a9b4df80fb7b332", "subjectTree": "01b58341c3ef73349cad3b4dfda8ccb8b563e570"}],
     "proofTiersUnderEvaluation": ["T1_SOURCE"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 201,
-      "commentId": 5235209448,
+      "commentId": 5235261791,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T02:23:21Z",
-      "updatedAt": "2026-08-10T02:23:21Z",
-      "bodySha256": "e5e9abdad6e8196280dfcc75869825f6b713f29c7d35586046b12ba080fec886",
-      "subjectHash": "2000a688e6d26b9952ede3b1b6e6c383fa0dae072b55663d1afa7f5ee5e18a08"
+      "createdAt": "2026-08-10T02:34:20Z",
+      "updatedAt": "2026-08-10T02:34:20Z",
+      "bodySha256": "048e0a7fa6a04433f90ccfc54e5016db7658a22502e1d410f8c8095a495f92c7",
+      "subjectHash": "c1d4b5fe80891a91e162b38bf65a29ef25ac8fa6d0b7b4cc74ecee37c5cc561d"
     }
   },
   "freshnessClaims": [
     {
       "id": "repository-source-a1-assurance-control-final",
       "status": "CURRENT",
-      "observedAt": "2026-08-10T02:22:33Z",
-      "expiresAt": "2026-08-11T02:22:33Z",
-      "evidenceSourceId": "a1-owner-authorized-source-freeze-final-20260810-0222",
+      "observedAt": "2026-08-10T02:33:28Z",
+      "expiresAt": "2026-08-11T02:33:28Z",
+      "evidenceSourceId": "a1-shared-head-isolation-source-freeze-20260810-0233",
       "evidenceMode": "local-offline-and-github-read-only",
       "factsCovered": ["repository.assurance-control.a1.source"],
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "a7510536e281cd0d8c32d308b836974cb6819778",
-      "subjectTree": "a65b71a1c6bc2ac87db14acf791f10399e267bf5"
+      "subjectHead": "9447b26841cbb48dabc7c1790a9b4df80fb7b332",
+      "subjectTree": "01b58341c3ef73349cad3b4dfda8ccb8b563e570"
     },
     {
       "id": "provider-critical-b3-linked-readback",
@@ -506,7 +506,7 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 201, "branch": "codex/assurance-active-task-and-claim-freshness-a1", "head": "a7510536e281cd0d8c32d308b836974cb6819778", "state": "open-draft-current", "disposition": "A1 immutable source frozen and owner-authorized by exact GitHub comment; only the canonical three-file current-truth binding commit follows"}
+    {"number": 201, "branch": "codex/assurance-active-task-and-claim-freshness-a1", "head": "9447b26841cbb48dabc7c1790a9b4df80fb7b332", "state": "open-draft-current", "disposition": "A1 immutable source frozen and owner-authorized by exact GitHub comment; only the canonical three-file current-truth binding commit follows"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -594,7 +594,7 @@
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194"],
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_A1_ACTIVE_D2A_FROZEN",
     "nextActions": [
-      "Review the frozen assurance-control A1 source at exact head a7510536e281cd0d8c32d308b836974cb6819778 and tree a65b71a1c6bc2ac87db14acf791f10399e267bf5, require P0=0/P1=0 independent repository closure and one 13/13 Phase 1 CI run, then merge A1 and synchronize post-A1 current truth.",
+      "Review the frozen assurance-control A1 source at exact head 9447b26841cbb48dabc7c1790a9b4df80fb7b332 and tree 01b58341c3ef73349cad3b4dfda8ccb8b563e570, require P0=0/P1=0 independent repository closure and one 13/13 Phase 1 CI run, then merge A1 and synchronize post-A1 current truth.",
     "Then implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
     "Only after A1 and S0 complete may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -610,12 +610,20 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T02:33:28Z",
-  "freshnessDeadline": "2026-08-11T02:33:28Z",
+  "timestamp": "2026-08-10T02:34:20Z",
+  "freshnessDeadline": "2026-08-11T02:34:20Z",
   "evidenceSources": [
     {
       "id": "a1-shared-head-isolation-source-freeze-20260810-0233",
       "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-10T02:33:28Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "9447b26841cbb48dabc7c1790a9b4df80fb7b332",
+      "subjectHead": "9447b26841cbb48dabc7c1790a9b4df80fb7b332",
+      "subjectTree": "01b58341c3ef73349cad3b4dfda8ccb8b563e570",
       "covers": [
         "repository.assurance-control.a1.source",
         "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
