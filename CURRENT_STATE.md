@@ -19,7 +19,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Current freshness claims: `repository-source-a1-late-review-owner-registry-bootstrap` (REPOSITORY_SOURCE, expires `2026-08-11T02:48:20Z`), `repository-source-a1-assurance-control-final` (REPOSITORY_SOURCE, expires `2026-08-11T02:37:45Z`).
 - Blocked freshness claims: `provider-critical-b3-linked-readback` (PROVIDER_CRITICAL, STALE_BLOCKED, expired `2026-08-02T14:00:44Z`).
 - Late exact-head Codex Review sentinels: PR #195 reviewed `605039a1eec08e153f33380a2998ee1c4cef2a90` after merge with 3 unresolved findings; successor `codex/assurance-active-task-and-claim-freshness-a1`; PR #194 reviewed `c15a58039b67d65eabdcaa03a9422ebc8d6dd95e` after merge with 5 unresolved findings; successor `codex/d2a-livekit-mic-post-merge-review-correction`. These block post-merge completion claims, unrelated successor work, release, and proof-tier promotion.
-- Document rendered at `2026-08-10T03:07:50Z`; document deadline `2026-08-11T03:07:50Z`. This deadline authorizes no claim. Derived live provider readback: false.
+- Document rendered at `2026-08-10T03:16:55Z`; document deadline `2026-08-11T03:16:55Z`. This deadline authorizes no claim. Derived live provider readback: false.
 
 ## Open implementation PRs
 

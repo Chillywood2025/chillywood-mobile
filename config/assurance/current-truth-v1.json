@@ -674,9 +674,54 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T03:07:50Z",
-  "freshnessDeadline": "2026-08-11T03:07:50Z",
+  "timestamp": "2026-08-10T03:16:55Z",
+  "freshnessDeadline": "2026-08-11T03:16:55Z",
   "evidenceSources": [
+    {
+      "id": "a1-post-merge-control-readback-source-freeze-20260810-0316",
+      "mode": "github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:16:55Z",
+        "a1Implementation": {
+          "prNumber": 201,
+          "head": "b6648d689287cd312fb548b966a44db24936e152",
+          "mergeSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "mergedAt": "2026-08-10T02:45:58Z"
+        },
+        "phase1": {
+          "runId": 31350394428,
+          "head": "b6648d689287cd312fb548b966a44db24936e152",
+          "conclusion": "success",
+          "jobsPassed": 13,
+          "jobsTotal": 13
+        },
+        "ruleset": {
+          "id": 18940814,
+          "enforcement": "active",
+          "exactHeadContextRequired": true,
+          "phase1ContextCount": 13,
+          "strictStatusChecks": true,
+          "conversationResolutionRequired": true,
+          "dismissStaleReviewsOnPush": true,
+          "bypassActors": []
+        },
+        "lateSentinel": {
+          "issueNumber": 203,
+          "state": "open",
+          "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+          "affectedPr": 194,
+          "findingCount": 5,
+          "bodySha256": "5120854b3e5f710e239b5910c61281ad961371654cf83194cae7f827f7368f5b"
+        }
+      },
+      "readbackSha256": "a8ddbc4fdf2fcabbd32415d271fa1e19000d075ccfbc565b36934bb015623369",
+      "covers": [
+        "repository.assurance-control.a1.post-merge-control-readback",
+        "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub"
+      ]
+    },
     {
       "id": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
       "mode": "local-offline-and-github-read-only",

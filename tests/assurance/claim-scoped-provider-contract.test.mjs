@@ -7,6 +7,7 @@ import {
   evaluateTaskFreshness,
   externalEvidenceBindingHash,
   externalEvidenceReceiptHash,
+  repositoryReadbackEvidenceHash,
   verifyCommittedClaimEvidence
 } from "../../scripts/assurance/lib.mjs";
 
@@ -255,6 +256,16 @@ test("repository-source authority requires exact committed fact provenance", () 
     source: forgedCoverage,
     factRegistry: canonicalFreshness.factRegistry
   }), false);
+});
+
+test("repository control readback facts are exact and hash-bound", () => {
+  const truth = read("config/assurance/current-truth-v1.json");
+  const source = truth.evidenceSources.find(({ id }) => id === "a1-post-merge-control-readback-source-freeze-20260810-0316");
+  assert.equal(repositoryReadbackEvidenceHash(source), source.readbackSha256);
+  const altered = structuredClone(source);
+  altered.readbackFacts.ruleset.exactHeadContextRequired = false;
+  assert.notEqual(repositoryReadbackEvidenceHash(altered), source.readbackSha256);
+  assert.equal(repositoryReadbackEvidenceHash({ ...source, readbackFacts: [] }), null);
 });
 
 test("all-platform, iOS and Cognitive lanes share the same historical-provider/source-current semantics", () => {

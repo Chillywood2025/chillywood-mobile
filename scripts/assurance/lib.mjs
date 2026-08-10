@@ -168,6 +168,7 @@ const claimClassPolicy = {
 };
 const canonicalFactRegistry = [
   { factId: "repository.assurance-control.a1.source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification" },
+  { factId: "repository.assurance-control.a1.post-merge-control-readback", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub" },
   { factId: "repository.active-implementation.immutable-synchronized-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d" },
   { factId: "repository.active-implementation.merge-identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree" },
   { factId: "repository.review-only-pr.disposition", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained" },
@@ -329,6 +330,25 @@ function factRegistryEntryMatchesClaim(entry, claim) {
     && entry?.provider === claim?.provider;
 }
 
+export function repositoryReadbackEvidenceHash(source) {
+  if (!source?.readbackFacts || typeof source.readbackFacts !== "object" || Array.isArray(source.readbackFacts)) return null;
+  return sha256(stableValue(source.readbackFacts));
+}
+
+function repositoryReadbackEvidenceBound({ claim, source, committedSource, required }) {
+  const present = source?.readbackFacts !== undefined
+    || source?.readbackSha256 !== undefined
+    || committedSource?.readbackFacts !== undefined
+    || committedSource?.readbackSha256 !== undefined;
+  if (!present) return required !== true;
+  const expectedHash = repositoryReadbackEvidenceHash(source);
+  return /^[0-9a-f]{64}$/u.test(expectedHash ?? "")
+    && source.readbackSha256 === expectedHash
+    && committedSource?.readbackSha256 === expectedHash
+    && stableJson(committedSource?.readbackFacts) === stableJson(source.readbackFacts)
+    && source.readbackFacts?.observedAt === claim?.observedAt;
+}
+
 export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
@@ -352,6 +372,8 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
         const historicalEvidence = entries[0].historicalEvidence ?? factId;
         return source.covers.includes(factId) && committedSource.covers.includes(historicalEvidence);
       });
+    const readbackHashRequired = claim.factsCovered.some((factId) => factRegistry.find(({ factId: registered }) => registered === factId)?.requiresReadbackHash === true);
+    const readbackHashBound = repositoryReadbackEvidenceBound({ claim, source, committedSource, required: readbackHashRequired });
     const parents = git(["show", "-s", "--format=%P", source.sourceCommit]).split(/\s+/u).filter(Boolean);
     const introducedHere = parents.every((parent) => {
       try {
@@ -370,6 +392,7 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
       && source.provider === claim.provider
       && (claim.freshnessClass === "REPOSITORY_SOURCE" || committedRecord.liveProviderReadback === true)
       && factsBound
+      && readbackHashBound
       && introducedHere;
   } catch {
     return false;
@@ -520,6 +543,7 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
         || !classPolicy.allowedPlatforms.includes(entry.platform)
         || typeof entry.provider !== "string"
         || !entry.provider
+        || (entry.requiresReadbackHash !== undefined && entry.requiresReadbackHash !== true)
         || (entry.freshnessClass === "REPOSITORY_SOURCE" && entry.provider !== "NONE")
         || (entry.freshnessClass !== "REPOSITORY_SOURCE" && entry.provider === "NONE");
       if (malformed) findings.push(claimFinding("ASSURANCE_FRESHNESS_FACT_REGISTRY_ENTRY_INVALID", null, { factId: factId || null }));
