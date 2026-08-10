@@ -1536,5 +1536,7 @@ test("every build and release entrypoint requires durable GitHub late-sentinel r
     assert.match(workflow, /pull-requests: read/u, path);
     assert.match(workflow, /late-review-sentinel\.mjs --require-github/u, path);
     assert.match(workflow, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/u, path);
+    const guardPrefix = workflow.slice(0, workflow.indexOf("late-review-sentinel.mjs --require-github"));
+    assert.match(guardPrefix, /fetch-depth:\s*0/u, `${path} must fetch protected-main history before the late-review guard`);
   }
 });
