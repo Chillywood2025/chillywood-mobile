@@ -4,7 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
-  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "requiredFields": ["mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
   "synchronizationMerge": {
     "required": true,
     "parentCount": 2,
@@ -66,6 +66,9 @@
       "minimumReviewEvidence": 1,
       "reviewFreshnessHours": 24,
       "reviewEvidenceMustBeReviewOnly": true,
+      "reviewProvider": "INDEPENDENT_REPOSITORY_REVIEW",
+      "reviewReceiptHashAlgorithm": "sha256",
+      "reviewReceiptRequiredFields": ["reviewId", "reviewProvider", "reviewerId", "reviewedCommit", "reviewedTree", "reviewRef", "reviewTimestamp", "reviewReceiptHash"],
       "criticalFindingMaximum": {"P0": 0, "P1": 0},
       "repeatedMergeChainAllowed": false,
       "manualResolutionAllowed": false,
@@ -73,7 +76,74 @@
       "failureStatus": "BLOCKED_INTERNAL"
     }
   },
-  "freshness": {"defaultHours": 24, "providerCriticalHours": 8, "clock": "UTC", "failClosed": true},
+  "lateReviewOwnerRegistry": [
+    {
+      "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 194,
+      "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+      "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction",
+      "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "authorizedBootstrapOwners": [
+        "codex/assurance-active-task-and-claim-freshness-a1",
+        "codex/assurance-codex-security-scan-reliability-s0"
+      ]
+    }
+  ],
+  "freshness": {
+    "defaultHours": 24,
+    "providerCriticalHours": 8,
+    "clock": "UTC",
+    "failClosed": true,
+    "classes": {
+      "REPOSITORY_SOURCE": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["local-source", "git-read-only", "github-read-only", "exact-ci", "local-offline", "local-read-only", "local-and-github-read-only", "local-offline-and-github-read-only"],
+        "authorityAllowed": "REPOSITORY_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "PROVIDER_CRITICAL": {
+        "maximumHours": 8,
+        "allowedEvidenceModes": ["local-and-linked-read-only"],
+        "authorityAllowed": "PROVIDER_READBACK_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "SIGNED_ARTIFACT": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["signed-artifact-inspection"],
+        "authorityAllowed": "SIGNED_ARTIFACT_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "INSTALLED_DEVICE": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["installed-device-readback"],
+        "authorityAllowed": "INSTALLED_DEVICE_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "PHYSICAL_DEVICE": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["physical-device-observation"],
+        "authorityAllowed": "PHYSICAL_DEVICE_ONLY",
+        "requiresCommittedEvidence": true
+      },
+      "PUBLIC_CANARY": {
+        "maximumHours": 24,
+        "allowedEvidenceModes": ["public-canary-readback"],
+        "authorityAllowed": "PUBLIC_CANARY_ONLY",
+        "requiresCommittedEvidence": true
+      }
+    },
+    "factRegistry": [
+      {"factId": "repository.assurance-control.a1.source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"},
+      {"factId": "repository.active-implementation.immutable-synchronized-source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d"},
+      {"factId": "repository.active-implementation.merge-identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree"},
+      {"factId": "repository.review-only-pr.disposition", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained"},
+      {"factId": "repository.phase1-ci.identity", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "Phase 1 CI run 31327771533 passed 13/13 at synchronized head ada396a437e40a98acea75bf016c36fc3ea86739"},
+      {"factId": "repository.d2a.frozen-state", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "D2A blocked evidence ebb0ac5e2dc6ba9005208b7e6b10474292e0972d tree c41a4d688e799483b67f35c956f1c95b273bf072 remains frozen and not resumed"},
+      {"factId": "provider.supabase.b3.deployed-predecessor", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765"},
+      {"factId": "provider.supabase.b3.forward-correction", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38"},
+      {"factId": "provider.supabase.b3.live-acl", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "historicalEvidence": "live pre-correction ACL explicitly includes anon but source correction revokes it"}
+    ]
+  },
   "staleFindingIds": {
     "mainSha": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
     "mergedPrState": "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE",

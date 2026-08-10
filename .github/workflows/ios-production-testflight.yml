@@ -21,7 +21,10 @@ on:
         type: string
 
 permissions:
+  checks: read
   contents: read
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: ios-production-${{ github.ref }}
@@ -30,8 +33,9 @@ concurrency:
 jobs:
   validate:
     if: >-
-      (inputs.action == 'build' && inputs.confirmation == 'BUILD_IOS_PRODUCTION') ||
-      (inputs.action == 'submit-existing-build' && inputs.confirmation == 'SUBMIT_INTERNAL_TESTFLIGHT' && inputs.eas_build_id != '')
+      github.ref == 'refs/heads/main' &&
+      ((inputs.action == 'build' && inputs.confirmation == 'BUILD_IOS_PRODUCTION') ||
+      (inputs.action == 'submit-existing-build' && inputs.confirmation == 'SUBMIT_INTERNAL_TESTFLIGHT' && inputs.eas_build_id != ''))
     name: iOS Production / Validate
     runs-on: ubuntu-latest
     environment: ios-production
@@ -40,6 +44,11 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+
+      - name: Deny release while late Codex Review findings are unresolved
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/assurance/late-review-sentinel.mjs --require-github
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

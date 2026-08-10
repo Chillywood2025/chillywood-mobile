@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  evaluateFreshnessClaims,
+  evaluateTaskFreshness,
+  HISTORICAL_PROVIDER_FACT,
+  verifyCommittedClaimEvidence
+} from "./assurance/lib.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -9,6 +15,8 @@ const registry = read("_lib/autonomousSystemsRegistry.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const currentState = read("CURRENT_STATE.md");
 const nextTask = read("NEXT_TASK.md");
+const currentTruth = JSON.parse(read("config/assurance/current-truth-v1.json"));
+const currentTruthContract = JSON.parse(read("config/assurance/current-truth-contract-v1.json"));
 const packageJson = read("package.json");
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
 const approvalFunction = read("supabase/functions/autonomous-approval-request/index.ts");
@@ -57,6 +65,25 @@ const approvalRequesterSystems = [
   ...activeSystems,
   "owner_command_operator",
 ];
+const claimFreshness = evaluateFreshnessClaims({
+  claims: currentTruth.freshnessClaims,
+  evidenceSources: currentTruth.evidenceSources,
+  freshness: currentTruthContract.freshness,
+  now: new Date(),
+  evidenceSourceVerifier: ({ claim, source }) => verifyCommittedClaimEvidence({
+    claim,
+    source,
+    factRegistry: currentTruthContract.freshness.factRegistry
+  })
+});
+const sourceOnlyFreshness = evaluateTaskFreshness(claimFreshness, currentTruth.activeTaskBinding.requiredFreshnessClaims);
+const providerDependentFreshness = evaluateTaskFreshness(claimFreshness, [{
+  freshnessClass: "PROVIDER_CRITICAL",
+  platform: "NONE",
+  evidenceSourceId: "b3-immutable-source-binding-20260802-0600",
+  authorityAllowed: "PROVIDER_READBACK_ONLY",
+  requiredFacts: ["provider.supabase.b3.live-acl"]
+}]);
 
 const scopedSystems = [
   {
@@ -415,14 +442,24 @@ const checks = [
     ),
   },
   {
-    name: "RevenueCat reconciled current-state text passes",
+    name: "historical provider facts remain recorded without current provider proof",
     passes: () => (
-      (currentState + nextTask).includes("RevenueCat provider readback is closed")
-      && (currentState + nextTask).includes("dashboard TEST returned HTTP `200` / `test_received`")
-      && (currentState + nextTask).includes("premiumGranted=false")
-      && (currentState + nextTask).includes("liveMoneyAction=false")
-      && (currentState + nextTask).includes("moneyMoved=false")
-      && !(currentState + nextTask).includes("dashboard valid TEST proof remains pending")
+      claimFreshness.ok
+      && sourceOnlyFreshness.eligible
+      && !providerDependentFreshness.eligible
+      && claimFreshness.liveProviderReadback === false
+      && currentTruth.liveProviderReadback === claimFreshness.liveProviderReadback
+      && currentTruth.operationalClosures.installedProductQa.dailyTimerEnabled === true
+      && currentTruth.operationalClosures.installedProductQa.currentMatrixState === "POLL_HTTP_FAILED"
+      && currentTruth.operationalClosures.revenueCat.providerReadbackClosed === true
+      && currentTruth.operationalClosures.revenueCat.dashboardTest.httpStatus === 200
+      && currentTruth.operationalClosures.revenueCat.dashboardTest.result === "test_received"
+      && currentTruth.operationalClosures.revenueCat.premiumGranted === false
+      && currentTruth.operationalClosures.revenueCat.liveMoneyAction === false
+      && currentTruth.operationalClosures.revenueCat.moneyMoved === false
+      && currentState.includes("Installed Product QA closure is retained as historical evidence only")
+      && currentState.includes("RevenueCat closure values are historical only, not current provider proof")
+      && !(currentState + nextTask).includes("RevenueCat provider readback is closed")
     ),
   },
   {
@@ -452,6 +489,9 @@ console.log(JSON.stringify({
     "installed_product_qa_operator",
   ],
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
-  revenueCatReadbackReconciled: true,
+  providerEvidenceClassification: HISTORICAL_PROVIDER_FACT,
+  currentProviderProof: claimFreshness.liveProviderReadback,
+  sourceOnlyEligible: sourceOnlyFreshness.eligible,
+  providerDependentEligible: providerDependentFreshness.eligible,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));
