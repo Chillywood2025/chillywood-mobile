@@ -1490,6 +1490,7 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
 test("an unresolved late-review sentinel blocks only its exact correction owner's phase COMPLETE claim", () => {
   const complete = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   complete.activeTaskBinding.phase = "COMPLETE";
+  complete.activeTaskBinding.implementationBranch = "codex/assurance-active-task-and-claim-freshness-a1";
   const findings = validateLateReviewSentinelState(complete);
   assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
   assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), false);
