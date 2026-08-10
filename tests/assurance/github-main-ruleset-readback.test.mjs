@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readBootstrapMergeIdentity, validateBootstrapPhase1GithubReadback, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
 import { readJson, sha256, stableJson } from "../../scripts/assurance/lib.mjs";
+import { runReceipt } from "../../scripts/assurance/receipt.mjs";
 
 const contract = readJson("config/assurance/github-main-ruleset-codex-review-v1.json");
 const authorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-authorization-v1.json");
@@ -254,13 +255,28 @@ test("missing bootstrap history becomes a deterministic validation error", () =>
 });
 
 test("focused readback regressions are mandatory Level A and Phase 1 inputs", () => {
-  const command = "node --test tests/assurance/github-main-ruleset-readback.test.mjs";
+  const commands = [
+    ["github-main-ruleset-readback-test", "node --test tests/assurance/github-main-ruleset-readback.test.mjs"],
+    ["codex-review-exact-head-test", "node --test tests/assurance/codex-review-exact-head.test.mjs"]
+  ];
   const allowlist = readJson("config/assurance/command-allowlist-v1.json");
   const impact = readJson("config/assurance/test-impact-map-v1.json");
   const feature = readJson("config/assurance/feature-registry-v1.json").features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
   const workflow = readFileSync(".github/workflows/phase1-ci.yml", "utf8");
-  assert.ok(allowlist.commands.some(({ contractCommand }) => contractCommand === command));
-  assert.ok(impact.riskCommands.A.includes(command));
-  assert.ok(feature.commands.includes(command));
-  assert.match(workflow, /Validate exact GitHub ruleset readback controls\n\s+run: node --test tests\/assurance\/github-main-ruleset-readback\.test\.mjs/u);
+  for (const [commandId, command] of commands) {
+    const rule = allowlist.commands.find(({ id }) => id === commandId);
+    assert.equal(rule?.contractCommand, command);
+    assert.ok(impact.riskCommands.A.includes(command));
+    assert.ok(feature.commands.includes(command));
+    let clock = 0;
+    const receipt = runReceipt(allowlist, commandId, rule.args, {
+      sourceHead: "a".repeat(40),
+      sourceTree: "b".repeat(40),
+      clock: () => clock++,
+      spawn: () => ({ status: 0, stdout: "TAP version 13\n1..1\n# tests 1\n# pass 1\n# fail 0\n", stderr: "" }),
+      artifactWriter: () => "/tmp/assurance-receipt-test"
+    });
+    assert.equal(receipt.ok, true, `${commandId} must execute through the governed receipt runner`);
+  }
+  assert.match(workflow, /Validate exact GitHub review and ruleset controls\n\s+run: \|\n\s+node --test tests\/assurance\/github-main-ruleset-readback\.test\.mjs\n\s+node --test tests\/assurance\/codex-review-exact-head\.test\.mjs/u);
 });

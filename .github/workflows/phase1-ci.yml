@@ -35,8 +35,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate exact GitHub ruleset readback controls
-        run: node --test tests/assurance/github-main-ruleset-readback.test.mjs
+      - name: Validate exact GitHub review and ruleset controls
+        run: |
+          node --test tests/assurance/github-main-ruleset-readback.test.mjs
+          node --test tests/assurance/codex-review-exact-head.test.mjs
 
       - name: Validate all-platform autonomous contracts
         run: |

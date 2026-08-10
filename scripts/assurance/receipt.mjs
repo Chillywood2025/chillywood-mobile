@@ -56,6 +56,8 @@ function safeRule(rule) {
     ["scripts/assurance/review-history.mjs"],
     ["scripts/assurance/benchmark.mjs", "--baseline=all"],
     ["--test", "tests/assurance/efficiency-e0.test.mjs"],
+    ["--test", "tests/assurance/github-main-ruleset-readback.test.mjs"],
+    ["--test", "tests/assurance/codex-review-exact-head.test.mjs"],
     ["--version"]
   ].map(JSON.stringify)).has(argv);
   if (rule.file === "npm") return new Set(["lint", "typecheck", "test:chilly-chat-call-semantics", "test:chilly-chat-native-call-action-handoff"]).has(rule.args[1]) && argv === JSON.stringify(["run", rule.args[1]]);
