@@ -1099,7 +1099,7 @@ test("GitHub resolution readback recomputes the successor diff, full exact-head 
     }, link: "" };
     if (url.endsWith(`/git/commits/${successorHead}`)) return { body: { tree: { sha: successorTree } }, link: "" };
     if (url.includes(`/pulls/${successorPr}/files`)) return { body: files, link: "" };
-    if (url.includes(`/commits/${successorHead}/pulls`)) return { body: [{ number: successorPr, state: "open", head: { sha: successorHead } }], link: "" };
+    if (url.includes(`/commits/${successorHead}/pulls`)) return { body: [], link: "" };
     if (url.includes(encodeURIComponent(contract.checkName))) return { body: { total_count: 1, check_runs: [exactCheck] }, link: "" };
     if (url.includes(encodeURIComponent(sourcePushLeaseCheckName))) return { body: { total_count: 1, check_runs: [sourceLeaseCheck] }, link: "" };
     throw new Error(`unexpected request ${url}`);
@@ -1133,6 +1133,13 @@ test("GitHub resolution readback recomputes the successor diff, full exact-head 
     ? { body: { total_count: 1, check_runs: [minimalReceipt] }, link: "" }
     : request(url);
   assert.equal((await verifyLateReviewResolutionGithub({ repository, token: "token", sentinel, request: minimalRequest, graphRequestFn })).reason, "EXACT_HEAD_RECEIPT");
+  const aliasRequest = async (url) => url.includes(`/commits/${successorHead}/pulls`)
+    ? { body: [{ number: 999, state: "open", head: { sha: successorHead } }], link: "" }
+    : request(url);
+  assert.match(
+    (await verifyLateReviewResolutionGithub({ repository, token: "token", sentinel, request: aliasRequest, graphRequestFn })).reason,
+    /CODEX_REVIEW_SHARED_HEAD_AMBIGUOUS/u
+  );
 });
 
 test("durable sentinel payloads are marker-bound and malformed payloads fail closed", async () => {

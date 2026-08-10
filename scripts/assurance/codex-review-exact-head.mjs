@@ -1098,7 +1098,8 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
     const sourcePushLeases = await readSourcePushLeases(repository, evidence.successorPr, evidence.successorHead, token, { request, maxPages });
     const sourcePushLeaseHashes = sourcePushLeases.map(({ digest }) => digest).sort();
     const latestSourcePushAt = sourcePushLeases.map(({ pushedAt }) => pushedAt).sort().at(-1);
-    const sharedHeadOpenPrNumbers = await readOpenPullRequestNumbersForHead(repository, evidence.successorHead, token, { request, maxPages });
+    const openAliases = await readOpenPullRequestNumbersForHead(repository, evidence.successorHead, token, { request, maxPages });
+    const sharedHeadOpenPrNumbers = [evidence.successorPr, ...openAliases.filter((number) => number !== evidence.successorPr)].sort((left, right) => left - right);
     const receiptEvaluation = evaluateExactHeadReceipt({
       contract: readJson(contractPath),
       current: {
