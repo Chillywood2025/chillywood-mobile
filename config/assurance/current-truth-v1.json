@@ -719,9 +719,61 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T03:54:07Z",
-  "freshnessDeadline": "2026-08-11T03:54:07Z",
+  "timestamp": "2026-08-10T04:02:24Z",
+  "freshnessDeadline": "2026-08-11T04:02:24Z",
   "evidenceSources": [
+    {
+      "id": "a1-exact-tombstone-carrier-readback-source-freeze-20260810-0402",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T04:02:24Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "carrierExactMergeParentsRequired": true,
+          "carrierGithubReadbackRequired": true,
+          "carrierExactHeadReceiptRequired": true,
+          "carrierLatestSourcePushInvalidationRequired": true,
+          "carrierEvidenceMode": "github-read-only",
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "carrierRequirements": {
+          "normalTwoParentMerge": true,
+          "reviewedHeadIsExactSecondParent": true,
+          "protectedMainFirstParentIsExactBaseParent": true,
+          "currentPullRequestHeadAndTreeReadbackRequired": true,
+          "noSourceCommitAfterReview": true,
+          "exactReceiptAndCheckReadbackRequired": true,
+          "conversationResolutionReadbackRequired": true,
+          "committedHashBoundGithubEvidenceRequired": true
+        },
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "32e6afff59b99fd3853cbddd6816b613df665c745144689a52154e0d24b2b865",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"
+      ]
+    },
     {
       "id": "a1-tombstone-correction-carrier-separation-source-freeze-20260810-0354",
       "mode": "local-and-github-read-only",

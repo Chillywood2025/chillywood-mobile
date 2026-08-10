@@ -25,8 +25,8 @@ import {
   sourcePushLeaseCheckName,
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
-import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash } from "../../scripts/assurance/lib.mjs";
+import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1251,9 +1251,12 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
     tree: "2".repeat(40),
     mergeSha: "3".repeat(40),
     mergedAt: "2026-08-10T04:40:00Z",
+    latestSourcePushAt: "2026-08-10T04:32:00Z",
     exactHeadReviewReceiptHash: "4".repeat(64),
     exactHeadCheckRunId: 9207,
-    exactHeadReviewCompletedAt: "2026-08-10T04:35:00Z"
+    exactHeadReviewCompletedAt: "2026-08-10T04:35:00Z",
+    verificationEvidenceSourceId: "s0-tombstone-admission-carrier-readback-20260810-0441",
+    repositoryVerificationHash: "5".repeat(64)
   };
   const tombstone = createLateReviewResolutionTombstone(resolved, admissionCarrier);
   const candidate = structuredClone(truth);
@@ -1307,6 +1310,124 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
     protectedMainRecord: substituted,
     tombstoneAdmissionVerifier: () => true
   }).map(({ prNumber }) => prNumber).sort(), [194, 195], "an assurance bootstrap carrier cannot substitute for the product correction owner");
+
+  const baseParent = "6".repeat(40);
+  const firstAppearance = "7".repeat(40);
+  const anchor = "0".repeat(40);
+  const exactGraph = [anchor, baseParent, admissionCarrier.mergeSha, firstAppearance];
+  const exactGit = (argv) => {
+    if (argv[0] === "show" && argv.at(-1) === admissionCarrier.mergeSha) return `${baseParent} ${admissionCarrier.head}`;
+    if (argv[0] === "rev-parse") return admissionCarrier.tree;
+    if (argv[0] === "merge-base") return "";
+    throw new Error(`unexpected git call: ${argv.join(" ")}`);
+  };
+  assert.equal(tombstoneAdmissionCarrierGitIdentityValid(tombstone, {
+    gitRunner: exactGit,
+    anchorSha: anchor,
+    firstAppearance,
+    firstParentCommits: exactGraph
+  }), true, "the exact reviewed S0 head is the second parent of one normal protected-main merge");
+  const staleCarrier = structuredClone(tombstone);
+  staleCarrier.admissionCarrier.head = "8".repeat(40);
+  staleCarrier.admissionCarrier.tree = "9".repeat(40);
+  assert.equal(tombstoneAdmissionCarrierGitIdentityValid(staleCarrier, {
+    gitRunner: exactGit,
+    anchorSha: anchor,
+    firstAppearance,
+    firstParentCommits: exactGraph
+  }), false, "an older reviewed ancestor cannot authorize a later merged source head");
+  const singleParentGit = (argv) => {
+    if (argv[0] === "show") return baseParent;
+    return exactGit(argv);
+  };
+  assert.equal(tombstoneAdmissionCarrierGitIdentityValid(tombstone, {
+    gitRunner: singleParentGit,
+    anchorSha: anchor,
+    firstAppearance,
+    firstParentCommits: exactGraph
+  }), false, "a one-parent commit cannot be relabeled as the admission carrier merge");
+
+  const evidenceSourceCommit = "a".repeat(40);
+  const evidenceSourceTree = "b".repeat(40);
+  const evidenceParent = "c".repeat(40);
+  const observedAt = "2026-08-10T04:45:00Z";
+  const readbackFacts = {
+    schemaVersion: 1,
+    repository: tombstone.repository,
+    observedAt,
+    provider: "github-read-only",
+    prNumber: admissionCarrier.prNumber,
+    branch: admissionCarrier.branch,
+    baseBranch: "main",
+    currentPrHead: admissionCarrier.head,
+    currentPrTree: admissionCarrier.tree,
+    reviewedCommit: admissionCarrier.head,
+    latestSourcePushAt: admissionCarrier.latestSourcePushAt,
+    exactHeadReviewCompletedAt: admissionCarrier.exactHeadReviewCompletedAt,
+    exactHeadReviewReceiptHash: admissionCarrier.exactHeadReviewReceiptHash,
+    exactHeadCheckRunId: admissionCarrier.exactHeadCheckRunId,
+    exactHeadCheckName: "Chi'llywood / Codex Review Exact Head",
+    exactHeadCheckConclusion: "success",
+    checkExternalId: admissionCarrier.exactHeadReviewReceiptHash,
+    merged: true,
+    mergeSha: admissionCarrier.mergeSha,
+    mergeParents: [baseParent, admissionCarrier.head],
+    mergedAt: admissionCarrier.mergedAt,
+    allConversationsResolved: true,
+    noSourceCommitAfterReview: true
+  };
+  const carrierSource = {
+    id: admissionCarrier.verificationEvidenceSourceId,
+    mode: "github-read-only",
+    readbackFacts,
+    readbackSha256: null,
+    covers: ["repository.assurance-control.late-review-tombstone-admission-carrier"],
+    observedAt,
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE",
+    sourceCommit: evidenceSourceCommit,
+    subjectHead: evidenceSourceCommit,
+    subjectTree: evidenceSourceTree
+  };
+  carrierSource.readbackSha256 = repositoryReadbackEvidenceHash(carrierSource);
+  tombstone.admissionCarrier.repositoryVerificationHash = carrierSource.readbackSha256;
+  tombstone.tombstoneHash = lateReviewResolutionTombstoneHash(tombstone);
+  const committedCarrierSource = {
+    id: carrierSource.id,
+    mode: carrierSource.mode,
+    readbackFacts: structuredClone(readbackFacts),
+    readbackSha256: carrierSource.readbackSha256,
+    covers: [...carrierSource.covers]
+  };
+  const carrierReadbackGit = (argv) => {
+    if (argv[0] === "show" && argv.at(-1) === admissionCarrier.mergeSha) return `${baseParent} ${admissionCarrier.head}`;
+    if (argv[0] === "rev-parse") return evidenceSourceTree;
+    if (argv[0] === "merge-base") return "";
+    if (argv[0] === "show" && argv.at(-1) === `${evidenceSourceCommit}:config/assurance/current-truth-v1.json`) {
+      return JSON.stringify({ timestamp: observedAt, evidenceSources: [committedCarrierSource] });
+    }
+    if (argv[0] === "show" && argv.at(-1) === evidenceSourceCommit) return evidenceParent;
+    if (argv[0] === "show" && argv.at(-1) === `${evidenceParent}:config/assurance/current-truth-v1.json`) {
+      return JSON.stringify({ evidenceSources: [] });
+    }
+    throw new Error(`unexpected carrier readback git call: ${argv.join(" ")}`);
+  };
+  const carrierRecord = { evidenceSources: [carrierSource] };
+  assert.equal(tombstoneAdmissionCarrierReadbackValid(tombstone, carrierRecord, firstAppearance, { gitRunner: carrierReadbackGit }), true);
+  const prAliasRecord = structuredClone(carrierRecord);
+  prAliasRecord.evidenceSources[0].readbackFacts.prNumber = 999;
+  prAliasRecord.evidenceSources[0].readbackSha256 = repositoryReadbackEvidenceHash(prAliasRecord.evidenceSources[0]);
+  const prAliasTombstone = structuredClone(tombstone);
+  prAliasTombstone.admissionCarrier.repositoryVerificationHash = prAliasRecord.evidenceSources[0].readbackSha256;
+  const prAliasCommittedSource = structuredClone(committedCarrierSource);
+  prAliasCommittedSource.readbackFacts.prNumber = 999;
+  prAliasCommittedSource.readbackSha256 = prAliasRecord.evidenceSources[0].readbackSha256;
+  const prAliasGit = (argv) => argv[0] === "show" && argv.at(-1) === `${evidenceSourceCommit}:config/assurance/current-truth-v1.json`
+    ? JSON.stringify({ timestamp: observedAt, evidenceSources: [prAliasCommittedSource] })
+    : carrierReadbackGit(argv);
+  assert.equal(tombstoneAdmissionCarrierReadbackValid(prAliasTombstone, prAliasRecord, firstAppearance, { gitRunner: prAliasGit }), false, "a rehashed PR or branch alias cannot satisfy the exact carrier readback");
 });
 
 test("a late-review sentinel cannot authorize its own branch exceptions", () => {

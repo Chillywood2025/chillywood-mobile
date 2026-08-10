@@ -1,23 +1,128 @@
 #!/usr/bin/env node
-import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, mergeLateReviewSentinelRecords, readJson, stableJson } from "./lib.mjs";
+import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, mergeLateReviewSentinelRecords, readJson, repositoryReadbackEvidenceHash, stableJson } from "./lib.mjs";
 import { parseLateReviewIssue, readMergedLateReviewLedgerSentinels, readOpenLateReviewIssues, verifyLateReviewResolutionGithub } from "./codex-review-exact-head.mjs";
 
 export { lateReviewSentinelResolved } from "./lib.mjs";
 
 const requiredBlocks = ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"];
 const currentTruthPath = "config/assurance/current-truth-v1.json";
+const carrierEvidenceCover = "repository.assurance-control.late-review-tombstone-admission-carrier";
 
 function protectedMainRecord(options = {}) {
   if (Object.hasOwn(options, "protectedMainRecord")) return options.protectedMainRecord;
   try { return JSON.parse(git(["show", `origin/main:${currentTruthPath}`])); } catch { return null; }
 }
 
-function tombstoneFirstProtectedMainAdmission(tombstone, options = {}) {
+export function tombstoneAdmissionCarrierGitIdentityValid(tombstone, options = {}) {
+  const runGit = options.gitRunner ?? git;
+  const carrier = tombstone?.admissionCarrier;
+  const anchorSha = options.anchorSha;
+  const firstAppearance = options.firstAppearance;
+  try {
+    const parents = runGit(["show", "-s", "--format=%P", carrier.mergeSha]).split(/\s+/u).filter(Boolean);
+    const firstParentCommits = options.firstParentCommits
+      ?? runGit(["rev-list", "--first-parent", "--reverse", "origin/main"]).split(/\r?\n/u).filter(Boolean);
+    const mergeIndex = firstParentCommits.indexOf(carrier.mergeSha);
+    const appearanceIndex = firstParentCommits.indexOf(firstAppearance);
+    if (parents.length !== 2
+      || parents[1] !== carrier.head
+      || mergeIndex < 1
+      || appearanceIndex <= mergeIndex
+      || firstParentCommits[mergeIndex - 1] !== parents[0]
+      || runGit(["rev-parse", `${carrier.head}^{tree}`]) !== carrier.tree) return false;
+    runGit(["merge-base", "--is-ancestor", anchorSha, parents[0]]);
+    return true;
+  } catch { return false; }
+}
+
+export function tombstoneAdmissionCarrierReadbackValid(tombstone, admittedRecord, firstAppearance, options = {}) {
+  const runGit = options.gitRunner ?? git;
+  const carrier = tombstone?.admissionCarrier;
+  const sources = (admittedRecord?.evidenceSources ?? []).filter(({ id }) => id === carrier?.verificationEvidenceSourceId);
+  if (sources.length !== 1) return false;
+  const source = sources[0];
+  const facts = source.readbackFacts;
+  try {
+    const parents = runGit(["show", "-s", "--format=%P", carrier.mergeSha]).split(/\s+/u).filter(Boolean);
+    const expectedFacts = {
+      schemaVersion: 1,
+      repository: tombstone.repository,
+      observedAt: facts?.observedAt,
+      provider: "github-read-only",
+      prNumber: carrier.prNumber,
+      branch: carrier.branch,
+      baseBranch: "main",
+      currentPrHead: carrier.head,
+      currentPrTree: carrier.tree,
+      reviewedCommit: carrier.head,
+      latestSourcePushAt: carrier.latestSourcePushAt,
+      exactHeadReviewCompletedAt: carrier.exactHeadReviewCompletedAt,
+      exactHeadReviewReceiptHash: carrier.exactHeadReviewReceiptHash,
+      exactHeadCheckRunId: carrier.exactHeadCheckRunId,
+      exactHeadCheckName: "Chi'llywood / Codex Review Exact Head",
+      exactHeadCheckConclusion: "success",
+      checkExternalId: carrier.exactHeadReviewReceiptHash,
+      merged: true,
+      mergeSha: carrier.mergeSha,
+      mergeParents: parents,
+      mergedAt: carrier.mergedAt,
+      allConversationsResolved: true,
+      noSourceCommitAfterReview: true
+    };
+    const sourceCommit = source?.sourceCommit;
+    if (!/^[0-9a-f]{40}$/u.test(sourceCommit ?? "")
+      || source.mode !== "github-read-only"
+      || source.readbackSha256 !== carrier.repositoryVerificationHash
+      || source.readbackSha256 !== repositoryReadbackEvidenceHash(source)
+      || stableJson(facts) !== stableJson(expectedFacts)
+      || source.observedAt !== facts.observedAt
+      || source.freshnessClass !== "REPOSITORY_SOURCE"
+      || source.authorityAllowed !== "REPOSITORY_ONLY"
+      || source.platform !== "NONE"
+      || source.provider !== "NONE"
+      || source.subjectHead !== sourceCommit
+      || source.subjectTree !== runGit(["rev-parse", `${sourceCommit}^{tree}`])
+      || !Array.isArray(source.covers)
+      || !source.covers.includes(carrierEvidenceCover)
+      || new Date(carrier.latestSourcePushAt).valueOf() >= new Date(carrier.exactHeadReviewCompletedAt).valueOf()
+      || new Date(carrier.exactHeadReviewCompletedAt).valueOf() > new Date(carrier.mergedAt).valueOf()
+      || new Date(carrier.mergedAt).valueOf() > new Date(facts.observedAt).valueOf()) return false;
+    runGit(["merge-base", "--is-ancestor", sourceCommit, firstAppearance]);
+    const committedRecord = JSON.parse(runGit(["show", `${sourceCommit}:${currentTruthPath}`]));
+    const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
+    const committedSource = committedSources[0];
+    const introducedHere = runGit(["show", "-s", "--format=%P", sourceCommit]).split(/\s+/u).filter(Boolean).every((parent) => {
+      try {
+        const parentRecord = JSON.parse(runGit(["show", `${parent}:${currentTruthPath}`]));
+        return !(parentRecord.evidenceSources ?? []).some(({ id }) => id === source.id);
+      } catch { return true; }
+    });
+    return committedRecord.timestamp === facts.observedAt
+      && committedSources.length === 1
+      && committedSource.mode === source.mode
+      && committedSource.readbackSha256 === source.readbackSha256
+      && stableJson(committedSource.readbackFacts) === stableJson(facts)
+      && stableJson(committedSource.covers) === stableJson(source.covers)
+      && introducedHere;
+  } catch { return false; }
+}
+
+function tombstoneFirstProtectedMainAdmission(tombstone, admittedRecord, options = {}) {
   if (typeof options.tombstoneAdmissionVerifier === "function") {
     try { return options.tombstoneAdmissionVerifier(tombstone) === true; } catch { return false; }
   }
   const policy = options.tombstoneAdmissionPolicy ?? readJson("config/assurance/current-truth-contract-v1.json").lateReviewTombstoneAdmission;
-  if (policy?.policyId !== "EXACT_HEAD_PROTECTED_MAIN_V1" || !/^[0-9a-f]{40}$/u.test(policy?.protectedMainAnchorSha ?? "")) return false;
+  if (policy?.policyId !== "EXACT_HEAD_PROTECTED_MAIN_V1"
+    || !/^[0-9a-f]{40}$/u.test(policy?.protectedMainAnchorSha ?? "")
+    || policy.originalSentinelRetentionRequired !== true
+    || policy.firstParentAdmissionRequired !== true
+    || policy.carrierExactMergeParentsRequired !== true
+    || policy.carrierGithubReadbackRequired !== true
+    || policy.carrierExactHeadReceiptRequired !== true
+    || policy.carrierLatestSourcePushInvalidationRequired !== true
+    || policy.carrierEvidenceMode !== "github-read-only"
+    || policy.branchLocalAdmissionAllowed !== false
+    || policy.networkRequiredAfterAdmission !== false) return false;
   try {
     const commits = git(["log", "--first-parent", "--reverse", "--format=%H", "origin/main", "--", currentTruthPath]).split(/\r?\n/u).filter(Boolean);
     const expected = stableJson(tombstone);
@@ -29,11 +134,10 @@ function tombstoneFirstProtectedMainAdmission(tombstone, options = {}) {
     });
     if (!firstAppearance || firstAppearance === policy.protectedMainAnchorSha) return false;
     git(["merge-base", "--is-ancestor", policy.protectedMainAnchorSha, firstAppearance]);
-    git(["merge-base", "--is-ancestor", policy.protectedMainAnchorSha, tombstone.admissionCarrier.mergeSha]);
-    if (git(["rev-parse", `${tombstone.admissionCarrier.head}^{tree}`]) !== tombstone.admissionCarrier.tree) return false;
-    git(["merge-base", "--is-ancestor", tombstone.admissionCarrier.head, tombstone.admissionCarrier.mergeSha]);
-    git(["merge-base", "--is-ancestor", tombstone.admissionCarrier.mergeSha, firstAppearance]);
-    return true;
+    return tombstoneAdmissionCarrierGitIdentityValid(tombstone, {
+      anchorSha: policy.protectedMainAnchorSha,
+      firstAppearance
+    }) && tombstoneAdmissionCarrierReadbackValid(tombstone, admittedRecord, firstAppearance, options);
   } catch { return false; }
 }
 
@@ -42,9 +146,10 @@ function protectedTombstoneResolves(record, sentinel, options = {}) {
     && tombstone?.prNumber === sentinel?.prNumber
     && tombstone?.mergeSha === sentinel?.mergeSha);
   if (tombstones.length !== 1 || !lateReviewResolutionTombstoneValid(sentinel, tombstones[0])) return false;
-  const admitted = protectedMainRecord(options)?.lateReviewResolutionTombstones ?? [];
+  const admittedRecord = protectedMainRecord(options);
+  const admitted = admittedRecord?.lateReviewResolutionTombstones ?? [];
   if (!admitted.some((candidate) => stableJson(candidate) === stableJson(tombstones[0]))) return false;
-  return tombstoneFirstProtectedMainAdmission(tombstones[0], options);
+  return tombstoneFirstProtectedMainAdmission(tombstones[0], admittedRecord, options);
 }
 
 export function unresolvedLateReviewSentinels(record, options = {}) {
