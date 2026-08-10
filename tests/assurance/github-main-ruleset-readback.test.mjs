@@ -6,8 +6,9 @@ import { readJson } from "../../scripts/assurance/lib.mjs";
 
 const contract = readJson("config/assurance/github-main-ruleset-codex-review-v1.json");
 const authorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-authorization-v1.json");
+const finalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-carrier-binding-v1.json");
 const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
-const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, mergeIdentity: identity });
+const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, mergeIdentity: identity });
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -58,6 +59,28 @@ test("owner authorization substitution fails", () => {
   assert.ok(validate(contract, mergeIdentity, receipt).some((error) => error.includes("owner authorization receipt")));
 });
 
+test("owner final-carrier binding must equal the admitted head and tree", () => {
+  for (const mutate of [
+    (receipt) => { receipt.admittedCarrierHead = "0".repeat(40); },
+    (receipt) => { receipt.admittedCarrierTree = "0".repeat(40); },
+    (receipt) => { receipt.sourceAuthorizationReceiptHash = "0".repeat(64); },
+    (receipt) => { receipt.bodySha256 = "0".repeat(64); }
+  ]) {
+    const receipt = structuredClone(finalCarrierBindingReceipt);
+    mutate(receipt);
+    assert.ok(validate(contract, mergeIdentity, authorizationReceipt, receipt).some((error) => error.includes("final-carrier binding")));
+  }
+  for (const mutate of [
+    (identity) => { identity.authorizedSourceIsAncestorOfCarrier = false; },
+    (identity) => { identity.authorizedSourceTree = "0".repeat(40); },
+    (identity) => identity.carrierDeltaPaths.push("scripts/assurance/unreviewed-source.mjs")
+  ]) {
+    const identity = structuredClone(mergeIdentity);
+    mutate(identity);
+    assert.ok(validate(contract, identity).some((error) => error.includes("final-carrier binding")));
+  }
+});
+
 test("owner authorization must predate protection removal", () => {
   const candidate = structuredClone(contract);
   candidate.authorizedBootstrapException.protectionWindow.removedAt = authorizationReceipt.createdAt;
@@ -75,6 +98,20 @@ test("additional admitted merge fails", () => {
   candidate.authorizedBootstrapException.protectionWindow.additionalMergesAdmitted = 1;
   candidate.authorizedBootstrapException.protectionWindow.admittedMergeShas.push("0".repeat(40));
   assert.ok(validate(candidate).some((error) => error.includes("main-history interval")));
+});
+
+test("protection-window provider version identities are exact", () => {
+  const candidate = structuredClone(contract);
+  candidate.authorizedBootstrapException.protectionWindow.preRemovalVersionId = 1;
+  candidate.authorizedBootstrapException.protectionWindow.removalVersionId = 2;
+  candidate.authorizedBootstrapException.protectionWindow.restorationVersionId = 3;
+  assert.ok(validate(candidate).some((error) => error.includes("ruleset version identity")));
+});
+
+test("status checks remain enforced when a protected branch is created", () => {
+  const candidate = structuredClone(contract);
+  candidate.applicationReadback.doNotEnforceOnCreate = true;
+  assert.ok(validate(candidate).some((error) => error.includes("required protection state")));
 });
 
 test("fake one-parent bootstrap merge fails", () => {

@@ -485,9 +485,37 @@
         "receiptHash": {"const": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744"}
       }
     },
+    "a1OwnerFinalCarrierBindingReceipt": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["repository", "prNumber", "sourceAuthorizationReceiptHash", "closureCommentId", "closureCommentUrl", "author", "authorAssociation", "createdAt", "updatedAt", "bodySha256", "authorizedSourceHead", "authorizedSourceTree", "admittedCarrierHead", "admittedCarrierTree", "carrierDeltaClassification", "carrierDeltaPaths", "packetSha256", "phase1RunId", "phase1Jobs", "closureClassification", "receiptHash"],
+      "properties": {
+        "contractId": {"const": "a1-owner-final-carrier-binding-v1"},
+        "repository": {"const": "Chillywood2025/chillywood-mobile"},
+        "prNumber": {"const": 205},
+        "sourceAuthorizationReceiptHash": {"const": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744"},
+        "closureCommentId": {"const": 5235796564},
+        "closureCommentUrl": {"const": "https://github.com/Chillywood2025/chillywood-mobile/issues/205#issuecomment-5235796564"},
+        "author": {"const": "Chillywood2025"},
+        "authorAssociation": {"const": "OWNER"},
+        "createdAt": {"const": "2026-08-10T04:16:26Z"},
+        "updatedAt": {"const": "2026-08-10T04:16:26Z"},
+        "bodySha256": {"const": "1c034d5b7f50644fef11a383c62ceb2dfee0ccbd6a5f3a12a09fa14a86367a14"},
+        "authorizedSourceHead": {"const": "100170bb0fead748eb01ee767d6f4f2151281955"},
+        "authorizedSourceTree": {"const": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"},
+        "admittedCarrierHead": {"const": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6"},
+        "admittedCarrierTree": {"const": "2d22874811e87af621a7b9d1ca69891b005c780d"},
+        "carrierDeltaClassification": {"const": "CURRENT_TRUTH_BINDING_ONLY"},
+        "carrierDeltaPaths": {"const": ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]},
+        "packetSha256": {"const": "b6a7020335baee6f833bec31d28e2d345b7365c0ab7bbe297766bb2925a0f61a"},
+        "phase1RunId": {"const": 31354601386},
+        "phase1Jobs": {"const": "13/13"},
+        "closureClassification": {"const": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"},
+        "receiptHash": {"const": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c"}
+      }
+    },
     "githubMainRulesetReadbackContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["patchId", "repository", "rulesetId", "rulesetName", "target", "enforcement", "conditions", "ownerBootstrapAuthorizationReceipt", "requiredStatusCheckToAdd", "preserveExistingRequiredStatusChecks", "strictRequiredStatusChecksPolicy", "requiredCheckPublisherBoundary", "pullRequestRequirements", "applicationState", "applicationReadback", "authorizedBootstrapException"],
+      "required": ["patchId", "repository", "rulesetId", "rulesetName", "target", "enforcement", "conditions", "ownerBootstrapAuthorizationReceipt", "ownerFinalCarrierBindingReceipt", "requiredStatusCheckToAdd", "preserveExistingRequiredStatusChecks", "strictRequiredStatusChecksPolicy", "requiredCheckPublisherBoundary", "pullRequestRequirements", "applicationState", "applicationReadback", "authorizedBootstrapException"],
       "properties": {
         "contractId": {"const": "github-main-ruleset-codex-review-v1"},
         "patchId": {"const": "main-pr-review-protection-codex-review-exact-head-v1"},
@@ -498,6 +526,7 @@
         "enforcement": {"const": "active"},
         "conditions": {"const": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}}},
         "ownerBootstrapAuthorizationReceipt": {"const": "config/assurance/a1-owner-bootstrap-authorization-v1.json"},
+        "ownerFinalCarrierBindingReceipt": {"const": "config/assurance/a1-owner-final-carrier-binding-v1.json"},
         "requiredStatusCheckToAdd": {"const": "Chi'llywood / Codex Review Exact Head"},
         "preserveExistingRequiredStatusChecks": {"const": true},
         "strictRequiredStatusChecksPolicy": {"const": true},
@@ -506,7 +535,7 @@
         "applicationState": {"const": "APPLIED_AND_READ_BACK_POST_A1_MERGE"},
         "applicationReadback": {
           "type": "object",
-          "required": ["rulesetVersionId", "rulesetUpdatedAt", "changeClassification", "enforcement", "requiredStatusCheckCount", "requiredStatusCheckPresent", "requiredStatusChecks", "requiredStatusCheckBindings", "requiredStatusCheckSetSha256", "requiredStatusCheckBindingSetSha256", "protectedMainReadback", "strictRequiredStatusChecksPolicy", "ruleTypes", "allowedMergeMethods", "requiredApprovingReviewCount", "requiredReviewThreadResolution", "dismissStaleReviewsOnPush", "requireCodeOwnerReview", "requireLastPushApproval", "requiredReviewers", "preventDeletion", "preventNonFastForward", "bypassActors"],
+          "required": ["rulesetVersionId", "rulesetUpdatedAt", "changeClassification", "enforcement", "requiredStatusCheckCount", "requiredStatusCheckPresent", "requiredStatusChecks", "requiredStatusCheckBindings", "requiredStatusCheckSetSha256", "requiredStatusCheckBindingSetSha256", "protectedMainReadback", "strictRequiredStatusChecksPolicy", "doNotEnforceOnCreate", "ruleTypes", "allowedMergeMethods", "requiredApprovingReviewCount", "requiredReviewThreadResolution", "dismissStaleReviewsOnPush", "requireCodeOwnerReview", "requireLastPushApproval", "requiredReviewers", "preventDeletion", "preventNonFastForward", "bypassActors"],
           "properties": {
             "rulesetVersionId": {"const": 46047691},
             "rulesetUpdatedAt": {"const": "2026-08-10T00:32:55.241-05:00"},
@@ -520,6 +549,7 @@
             "requiredStatusCheckBindingSetSha256": {"const": "4ec5a6c6845c6e42f17125b327187a82e81c7d40306996f0d12a32037937d578"},
             "protectedMainReadback": {"const": {"ref": "refs/heads/main", "observedHead": "a9bd887606f74996a9f5920e6fad922e7f20598b", "observedAt": "2026-08-10T05:33:01Z", "evidenceMode": "github-read-only", "bootstrapMergeReachable": true}},
             "strictRequiredStatusChecksPolicy": {"const": true},
+            "doNotEnforceOnCreate": {"const": false},
             "ruleTypes": {"const": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"]},
             "allowedMergeMethods": {"const": ["merge", "squash", "rebase"]},
             "requiredApprovingReviewCount": {"const": 1},
@@ -535,7 +565,7 @@
         },
         "authorizedBootstrapException": {
           "type": "object",
-          "required": ["pullRequest", "carrierHead", "carrierTree", "mergeSha", "mergedAt", "temporarilyRemovedStatusCheck", "ownerAuthorizationReceiptHash", "protectionWindow", "phase1ChecksPreserved", "strictPolicyPreserved", "conversationResolutionPreserved", "staleReviewDismissalPreserved", "bypassActorsPreservedEmpty", "restoredImmediatelyAfterMerge", "restoredRulesetUpdatedAt"],
+          "required": ["pullRequest", "carrierHead", "carrierTree", "mergeSha", "mergedAt", "temporarilyRemovedStatusCheck", "ownerAuthorizationReceiptHash", "ownerFinalCarrierBindingReceiptHash", "protectionWindow", "phase1ChecksPreserved", "strictPolicyPreserved", "conversationResolutionPreserved", "staleReviewDismissalPreserved", "bypassActorsPreservedEmpty", "restoredImmediatelyAfterMerge", "restoredRulesetUpdatedAt"],
           "properties": {
             "pullRequest": {"const": 205},
             "carrierHead": {"const": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6"},
@@ -544,9 +574,15 @@
             "mergedAt": {"const": "2026-08-10T04:17:26Z"},
             "temporarilyRemovedStatusCheck": {"const": "Chi'llywood / Codex Review Exact Head"},
             "ownerAuthorizationReceiptHash": {"const": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744"},
+            "ownerFinalCarrierBindingReceiptHash": {"const": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c"},
             "protectionWindow": {
               "type": "object",
-              "required": ["preRemovalVersionId", "preRemovalUpdatedAt", "preRemovalStatusCheckSetSha256", "removalVersionId", "removedAt", "removalStatusCheckSetSha256", "restorationVersionId", "restoredAt", "restoredStatusCheckSetSha256", "mainBeforeRemoval", "mainAfterRestoration", "admittedMergeShas", "additionalMergesAdmitted"]
+              "required": ["preRemovalVersionId", "preRemovalUpdatedAt", "preRemovalStatusCheckSetSha256", "removalVersionId", "removedAt", "removalStatusCheckSetSha256", "restorationVersionId", "restoredAt", "restoredStatusCheckSetSha256", "mainBeforeRemoval", "mainAfterRestoration", "admittedMergeShas", "additionalMergesAdmitted"],
+              "properties": {
+                "preRemovalVersionId": {"const": 46039477},
+                "removalVersionId": {"const": 46044242},
+                "restorationVersionId": {"const": 46044257}
+              }
             },
             "phase1ChecksPreserved": {"const": 13},
             "strictPolicyPreserved": {"const": true},

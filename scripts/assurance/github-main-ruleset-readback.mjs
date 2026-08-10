@@ -42,6 +42,7 @@ export const pullRequestRequirements = {
   bypassActors: []
 };
 export const ownerAuthorizationReceiptPath = "config/assurance/a1-owner-bootstrap-authorization-v1.json";
+export const ownerFinalCarrierBindingReceiptPath = "config/assurance/a1-owner-final-carrier-binding-v1.json";
 export const canonicalOwnerAuthorizationReceipt = {
   schemaVersion: 1,
   contractId: "a1-owner-bootstrap-authorization-v1",
@@ -57,6 +58,32 @@ export const canonicalOwnerAuthorizationReceipt = {
   bodySha256: "f7733b9190d9b8eac12c8cee3ca587e7b240908e0aba7e5b639c7bfc65be247c",
   subjectHash: "d2d96e2316692e33972c2a3f7e0340a9bf1ede0e8c8c4a38164ba4b33cfb02fe",
   receiptHash: "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744"
+};
+export const canonicalOwnerFinalCarrierBindingReceipt = {
+  schemaVersion: 1,
+  contractId: "a1-owner-final-carrier-binding-v1",
+  schemaRef: "config/assurance/schemas-v1.json#/$defs/a1OwnerFinalCarrierBindingReceipt",
+  repository: "Chillywood2025/chillywood-mobile",
+  prNumber: 205,
+  sourceAuthorizationReceiptHash: "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744",
+  closureCommentId: 5235796564,
+  closureCommentUrl: "https://github.com/Chillywood2025/chillywood-mobile/issues/205#issuecomment-5235796564",
+  author: "Chillywood2025",
+  authorAssociation: "OWNER",
+  createdAt: "2026-08-10T04:16:26Z",
+  updatedAt: "2026-08-10T04:16:26Z",
+  bodySha256: "1c034d5b7f50644fef11a383c62ceb2dfee0ccbd6a5f3a12a09fa14a86367a14",
+  authorizedSourceHead: "100170bb0fead748eb01ee767d6f4f2151281955",
+  authorizedSourceTree: "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d",
+  admittedCarrierHead: "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
+  admittedCarrierTree: "2d22874811e87af621a7b9d1ca69891b005c780d",
+  carrierDeltaClassification: "CURRENT_TRUTH_BINDING_ONLY",
+  carrierDeltaPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
+  packetSha256: "b6a7020335baee6f833bec31d28e2d345b7365c0ab7bbe297766bb2925a0f61a",
+  phase1RunId: 31354601386,
+  phase1Jobs: "13/13",
+  closureClassification: "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+  receiptHash: "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c"
 };
 export const protectedMainReadback = {
   ref: "refs/heads/main",
@@ -81,12 +108,17 @@ export function readBootstrapMergeIdentity(mergeSha, gitRead = git) {
     const parents = parentsLine.split(/\s+/u).filter(Boolean);
     const parentTrees = parents.map((parent) => gitRead(["show", "-s", "--format=%T", parent]));
     const protectedMainHead = gitRead(["rev-parse", "refs/remotes/origin/main"]);
+    const authorizedSourceTree = gitRead(["rev-parse", `${canonicalOwnerFinalCarrierBindingReceipt.authorizedSourceHead}^{tree}`]);
+    gitRead(["merge-base", "--is-ancestor", canonicalOwnerFinalCarrierBindingReceipt.authorizedSourceHead, canonicalOwnerFinalCarrierBindingReceipt.admittedCarrierHead]);
+    const carrierDeltaPaths = gitRead(["diff", "--name-only", `${canonicalOwnerFinalCarrierBindingReceipt.authorizedSourceHead}..${canonicalOwnerFinalCarrierBindingReceipt.admittedCarrierHead}`])
+      .split(/\n/u)
+      .filter(Boolean);
     let protectedMainContainsMerge = false;
     try {
       gitRead(["merge-base", "--is-ancestor", mergeSha, protectedMainHead]);
       protectedMainContainsMerge = true;
     } catch {}
-    return { errors: [], parents, parentTrees, mergeTree, protectedMainHead, protectedMainContainsMerge };
+    return { errors: [], parents, parentTrees, mergeTree, protectedMainHead, protectedMainContainsMerge, authorizedSourceTree, authorizedSourceIsAncestorOfCarrier: true, carrierDeltaPaths };
   } catch {
     return {
       errors: ["github ruleset readback: bootstrap merge history unavailable"],
@@ -94,12 +126,15 @@ export function readBootstrapMergeIdentity(mergeSha, gitRead = git) {
       parentTrees: [],
       mergeTree: null,
       protectedMainHead: null,
-      protectedMainContainsMerge: false
+      protectedMainContainsMerge: false,
+      authorizedSourceTree: null,
+      authorizedSourceIsAncestorOfCarrier: false,
+      carrierDeltaPaths: []
     };
   }
 }
 
-export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, mergeIdentity }) {
+export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, finalCarrierBindingReceipt, mergeIdentity }) {
   const errors = [];
   const readback = contract?.applicationReadback;
   const exception = contract?.authorizedBootstrapException;
@@ -123,6 +158,7 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
     || protectedMainReadback.observedHead !== exception?.mergeSha) add("protected main readback mismatch");
   if (readback?.enforcement !== "active"
     || readback?.strictRequiredStatusChecksPolicy !== true
+    || readback?.doNotEnforceOnCreate !== false
     || !same(readback?.ruleTypes, ["deletion", "non_fast_forward", "pull_request", "required_status_checks"])
     || !same(readback?.allowedMergeMethods, pullRequestRequirements.allowedMergeMethods)
     || readback?.requiredApprovingReviewCount !== pullRequestRequirements.requiredApprovingReviewCount
@@ -140,6 +176,17 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
     || !same(authorizationReceipt, canonicalOwnerAuthorizationReceipt)
     || authorizationReceipt?.receiptHash !== receiptHash(authorizationReceipt)
     || exception?.ownerAuthorizationReceiptHash !== authorizationReceipt?.receiptHash) add("owner authorization receipt mismatch");
+  if (contract?.ownerFinalCarrierBindingReceipt !== ownerFinalCarrierBindingReceiptPath
+    || !same(finalCarrierBindingReceipt, canonicalOwnerFinalCarrierBindingReceipt)
+    || finalCarrierBindingReceipt?.receiptHash !== receiptHash(finalCarrierBindingReceipt)
+    || finalCarrierBindingReceipt?.sourceAuthorizationReceiptHash !== authorizationReceipt?.receiptHash
+    || exception?.ownerFinalCarrierBindingReceiptHash !== finalCarrierBindingReceipt?.receiptHash
+    || finalCarrierBindingReceipt?.prNumber !== exception?.pullRequest
+    || finalCarrierBindingReceipt?.admittedCarrierHead !== exception?.carrierHead
+    || finalCarrierBindingReceipt?.admittedCarrierTree !== exception?.carrierTree
+    || mergeIdentity?.authorizedSourceTree !== finalCarrierBindingReceipt?.authorizedSourceTree
+    || mergeIdentity?.authorizedSourceIsAncestorOfCarrier !== true
+    || !same(mergeIdentity?.carrierDeltaPaths, finalCarrierBindingReceipt?.carrierDeltaPaths)) add("owner final-carrier binding receipt mismatch");
   if (exception?.pullRequest !== authorizationReceipt?.prNumber || exception?.mergeSha !== window?.mainAfterRestoration) add("bootstrap subject mismatch");
   if (exception?.temporarilyRemovedStatusCheck !== exactHeadCheck
     || exception?.phase1ChecksPreserved !== phase1Checks.length
@@ -156,18 +203,22 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   const restoredAt = Date.parse(window?.restoredAt ?? "");
   const authorizationCreatedAt = Date.parse(authorizationReceipt?.createdAt ?? "");
   const authorizationUpdatedAt = Date.parse(authorizationReceipt?.updatedAt ?? "");
+  const finalCarrierBindingCreatedAt = Date.parse(finalCarrierBindingReceipt?.createdAt ?? "");
+  const finalCarrierBindingUpdatedAt = Date.parse(finalCarrierBindingReceipt?.updatedAt ?? "");
   const currentRulesetAt = Date.parse(readback?.rulesetUpdatedAt ?? "");
   const mainReadbackAt = Date.parse(readback?.protectedMainReadback?.observedAt ?? "");
   if (![preAt, removedAt, mergedAt, restoredAt].every(Number.isFinite)
     || !(preAt < removedAt && removedAt < mergedAt && mergedAt < restoredAt)) add("bootstrap chronology mismatch");
-  if (![authorizationCreatedAt, authorizationUpdatedAt, currentRulesetAt, mainReadbackAt].every(Number.isFinite)
+  if (![authorizationCreatedAt, authorizationUpdatedAt, finalCarrierBindingCreatedAt, finalCarrierBindingUpdatedAt, currentRulesetAt, mainReadbackAt].every(Number.isFinite)
     || authorizationCreatedAt !== authorizationUpdatedAt
-    || !(authorizationCreatedAt < removedAt && restoredAt < currentRulesetAt && currentRulesetAt < mainReadbackAt)) add("authorization and readback chronology mismatch");
-  if (!(Number.isInteger(window?.preRemovalVersionId)
-    && Number.isInteger(window?.removalVersionId)
-    && Number.isInteger(window?.restorationVersionId)
-    && window.preRemovalVersionId < window.removalVersionId
-    && window.removalVersionId < window.restorationVersionId)) add("ruleset version order mismatch");
+    || finalCarrierBindingCreatedAt !== finalCarrierBindingUpdatedAt
+    || !(authorizationCreatedAt < finalCarrierBindingCreatedAt
+      && finalCarrierBindingCreatedAt < removedAt
+      && restoredAt < currentRulesetAt
+      && currentRulesetAt < mainReadbackAt)) add("authorization and readback chronology mismatch");
+  if (window?.preRemovalVersionId !== 46039477
+    || window?.removalVersionId !== 46044242
+    || window?.restorationVersionId !== 46044257) add("ruleset version identity mismatch");
   if (window?.preRemovalStatusCheckSetSha256 !== setHash(requiredChecks)
     || window?.removalStatusCheckSetSha256 !== setHash(phase1Checks)
     || window?.restoredStatusCheckSetSha256 !== setHash(requiredChecks)) add("protection-window digest mismatch");

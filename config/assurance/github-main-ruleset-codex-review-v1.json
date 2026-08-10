@@ -10,6 +10,7 @@
   "enforcement": "active",
   "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
   "ownerBootstrapAuthorizationReceipt": "config/assurance/a1-owner-bootstrap-authorization-v1.json",
+  "ownerFinalCarrierBindingReceipt": "config/assurance/a1-owner-final-carrier-binding-v1.json",
   "requiredStatusCheckToAdd": "Chi'llywood / Codex Review Exact Head",
   "preserveExistingRequiredStatusChecks": true,
   "strictRequiredStatusChecksPolicy": true,
@@ -84,6 +85,7 @@
       "bootstrapMergeReachable": true
     },
     "strictRequiredStatusChecksPolicy": true,
+    "doNotEnforceOnCreate": false,
     "ruleTypes": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"],
     "allowedMergeMethods": ["merge", "squash", "rebase"],
     "requiredApprovingReviewCount": 1,
@@ -104,6 +106,7 @@
     "mergedAt": "2026-08-10T04:17:26Z",
     "temporarilyRemovedStatusCheck": "Chi'llywood / Codex Review Exact Head",
     "ownerAuthorizationReceiptHash": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744",
+    "ownerFinalCarrierBindingReceiptHash": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c",
     "protectionWindow": {
       "preRemovalVersionId": 46039477,
       "preRemovalUpdatedAt": "2026-08-09T21:46:21.570-05:00",

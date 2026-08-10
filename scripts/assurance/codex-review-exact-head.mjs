@@ -1436,6 +1436,11 @@ async function main() {
   let eventName = options.eventName ?? process.env.GITHUB_EVENT_NAME ?? "";
   if (options.fixture) {
     ({ current, reviews = [], threads = [], issueComments = [], persistentProviderFindings = [], cleanIssueCommentCommitResolutions = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
+    if (reviews.some(({ sourceType }) => sourceType === "PROVIDER_CLEAN_ISSUE_COMMENT")) {
+      readbackIncomplete = true;
+      current.sourceReadbackIncomplete = true;
+      current.sourceReadbackCode = "CODEX_REVIEW_INCOMPLETE";
+    }
   } else {
     const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
     token = process.env.GITHUB_TOKEN;

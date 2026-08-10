@@ -209,6 +209,21 @@ test("clean issue-comment fixture replay resolves commits only from explicit off
       headClassification: "STALE_HEAD"
     }], [exactReview]);
     assert.equal(historical.status, 0, historical.stdout || historical.stderr);
+
+    const forgedRawCleanReview = {
+      ...exactReview,
+      reviewId: 9103,
+      body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${"b".repeat(10)}\``,
+      sourceType: "PROVIDER_CLEAN_ISSUE_COMMENT"
+    };
+    const forgedRaw = runFixture("forged-raw-clean-review.json", [{
+      commentId: cleanComment.commentId,
+      prefix: headA.slice(0, 10),
+      resolvedCommit: headA,
+      headClassification: "CURRENT_HEAD"
+    }], [exactReview, forgedRawCleanReview]);
+    assert.notEqual(forgedRaw.status, 0);
+    assert(JSON.parse(forgedRaw.stdout.trim().split(/\r?\n/u).at(-1)).codes.includes("CODEX_REVIEW_INCOMPLETE"));
   } finally {
     fs.rmSync(fixtureDirectory, { recursive: true });
   }
