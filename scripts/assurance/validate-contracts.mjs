@@ -26,6 +26,7 @@ const contracts = [
   ["config/assurance/feature-registry-v1.json", "featureRegistry"],
   ["config/assurance/pr-a-scope-waiver-v1.json", "scopeWaiver"],
   ["config/assurance/efficiency-e0-v1.json", "scopeWaiver"],
+  ["config/assurance/codex-security-reliability-s0-scope-waiver-v1.json", "scopeWaiver"],
   ["config/assurance/command-allowlist-v1.json", "commandAllowlist"],
   ["config/assurance/evidence-index-v1.json", "evidenceIndex"],
   ["config/assurance/review-history-v1.json", "reviewHistory"],

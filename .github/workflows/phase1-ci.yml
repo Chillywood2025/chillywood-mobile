@@ -40,6 +40,7 @@ jobs:
           node --test tests/assurance/github-main-ruleset-readback.test.mjs
           node --test tests/assurance/codex-review-exact-head.test.mjs
           node scripts/assurance/codex-security-target.mjs --base=origin/main --target=HEAD
+          node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json
           node scripts/assurance/codex-security-reliability.mjs --benchmark=all
           node --test tests/assurance/codex-security-reliability-s0.test.mjs
 

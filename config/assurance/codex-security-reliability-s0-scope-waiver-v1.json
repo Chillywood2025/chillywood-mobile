@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "contractId": "codex-security-reliability-s0-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Implement one repository-only Codex Security lifecycle control that freezes exact source identity, blocks discovery without a usable host snapshot digest, prevents terminal retry, and provides an honestly labeled repository security closure.",
+  "exactReason": "The S0 control is one CI-test-infrastructure objective whose executable target descriptor, lifecycle state machine, contracts, workflow hook, assurance skill, regression suite, and generated current-truth binding must change atomically. Complete fail-closed coverage requires up to 24 assurance-only files and 2200 net authored lines without a product, native, database, provider, package, build, release, or D2A domain.",
+  "reviewer": "s0-four-compact-independent-exact-head-review-lanes",
+  "supportingDomains": [
+    "CI-test-infrastructure",
+    "documentation-metadata"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 24
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 2200
+  },
+  "reviewStatus": "FOUR_COMPACT_LEVEL_C_EXACT_HEAD_LANES_AND_REPOSITORY_SECURITY_CLOSURE_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "product or native source or behavior",
+    "database or provider mutation",
+    "package or lockfile changes",
+    "build OTA release signed installed physical or public artifacts",
+    "D2A or the PR 194 product successor",
+    "hosted Codex Security self-approval",
+    "deno.lock"
+  ]
+}

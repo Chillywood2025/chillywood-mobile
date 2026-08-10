@@ -531,6 +531,7 @@ test("S0 completion tiers require four distinct feature-scoped repository facts"
 test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () => {
   const contract = JSON.parse(fs.readFileSync("config/assurance/codex-security-reliability-s0-v1.json", "utf8"));
   const incidents = JSON.parse(fs.readFileSync("config/assurance/codex-security-scan-incidents-v1.json", "utf8"));
+  const scopeWaiver = JSON.parse(fs.readFileSync("config/assurance/codex-security-reliability-s0-scope-waiver-v1.json", "utf8"));
   const workflow = fs.readFileSync(".github/workflows/phase1-ci.yml", "utf8");
   const skill = fs.readFileSync(".agents/skills/chillywood-assurance/SKILL.md", "utf8");
   assert.deepEqual(contract.states, states);
@@ -541,6 +542,12 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
   assert.equal(contract.completion.terminalRetryAllowed, false);
   assert.equal(contract.repositoryClosure.classification, "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
   assert.equal(contract.repositoryClosure.sealed, false);
+  assert.equal(scopeWaiver.reviewer, "s0-four-compact-independent-exact-head-review-lanes");
+  assert.equal(scopeWaiver.secondHighRiskDomain, false);
+  assert.equal(scopeWaiver.newTimeboxHours, 8);
+  assert.deepEqual(scopeWaiver.supportingDomains, ["CI-test-infrastructure", "documentation-metadata"]);
+  assert.deepEqual(scopeWaiver.fileBudget, { default: 15, waivedMaximum: 24 });
+  assert.deepEqual(scopeWaiver.lineBudget, { default: 1200, waivedMaximum: 2200 });
 
   for (const record of incidents.incidents) {
     const sanitized = sanitizeIncident({
@@ -555,6 +562,7 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
   }
   for (const command of [
     "node scripts/assurance/codex-security-target.mjs --base=origin/main --target=HEAD",
+    "node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json",
     "node scripts/assurance/codex-security-reliability.mjs --benchmark=all",
     "node --test tests/assurance/codex-security-reliability-s0.test.mjs",
   ]) {
