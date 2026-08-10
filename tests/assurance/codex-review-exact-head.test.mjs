@@ -1481,6 +1481,15 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
   assert.deepEqual(validateLateReviewSentinelState(promoted).map(({ id }) => id).sort(), ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", "LATE_REVIEW_SUCCESSOR_GATES_INVALID"]);
 });
 
+test("an unresolved late-review sentinel blocks every phase COMPLETE claim", () => {
+  const complete = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  complete.activeTaskBinding.phase = "COMPLETE";
+  const findings = validateLateReviewSentinelState(complete);
+  for (const prNumber of [194, 195]) {
+    assert.equal(findings.some(({ id, prNumber: blockedPr }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && blockedPr === prNumber), true, `PR ${prNumber}`);
+  }
+});
+
 test("every immutable late-review owner entry permanently retains one canonical sentinel", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   assert.deepEqual(validateLateReviewSentinelState(truth), []);

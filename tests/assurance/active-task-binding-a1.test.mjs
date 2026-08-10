@@ -466,6 +466,16 @@ test("a completed binding is not an active task and no override can revive it", 
   assert.equal(competing.ok, false);
   assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
   assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: completedBinding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+  const sentinelBlockedTruth = {
+    ...completeTruth,
+    lateReviewSentinels: canonicalTruth.lateReviewSentinels
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: sentinelBlockedTruth,
+    protectedMainTruth: sentinelBlockedTruth,
+    featureId: completedBinding.featureId
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
 });
 
 test("a COMPLETE binding records every tier with exact gate-catalog vocabulary", () => {
@@ -634,6 +644,12 @@ test("a COMPLETE binding records every tier with exact gate-catalog vocabulary",
     remoteMain: "f".repeat(40),
     gitCommand: (argv) => argv[0] === "rev-parse" ? "c".repeat(40) : validMergeGit(argv)
   }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH"), true);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv[0] === "rev-parse" && argv[1] === `${complete.currentImplementationHead}^{tree}` ? "d".repeat(40) : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_HEAD_TREE_MISMATCH"), true);
   assert.equal(verifyCompletedImplementationMergeIdentity({
     activeTaskBinding: complete,
     latestMergedImplementationPr: latestMergedFor(complete),

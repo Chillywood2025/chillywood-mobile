@@ -242,6 +242,9 @@ function resolveFeature(truth, facts, registry) {
     const binding = truth.activeTaskBinding;
     const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs, truth.latestMergedImplementationPr);
     if (findings.length) return { ok: false, findings };
+    if (binding.phase === "COMPLETE" && unresolvedLateReviewSentinels(truth).length) {
+      return { ok: false, findings: ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"] };
+    }
     const authority = structuredBindingAuthority(truth, facts);
     if (!authority) return { ok: false, findings: ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"] };
     if (binding.phase === "COMPLETE") {
