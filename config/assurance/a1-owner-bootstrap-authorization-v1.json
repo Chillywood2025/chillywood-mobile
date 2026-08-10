@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "contractId": "a1-owner-bootstrap-authorization-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/a1OwnerBootstrapAuthorizationReceipt",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "prNumber": 205,
+  "commentId": 5235753938,
+  "commentUrl": "https://github.com/Chillywood2025/chillywood-mobile/issues/205#issuecomment-5235753938",
+  "author": "Chillywood2025",
+  "authorAssociation": "OWNER",
+  "createdAt": "2026-08-10T04:08:34Z",
+  "updatedAt": "2026-08-10T04:08:34Z",
+  "bodySha256": "f7733b9190d9b8eac12c8cee3ca587e7b240908e0aba7e5b639c7bfc65be247c",
+  "subjectHash": "d2d96e2316692e33972c2a3f7e0340a9bf1ede0e8c8c4a38164ba4b33cfb02fe",
+  "receiptHash": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744"
+}

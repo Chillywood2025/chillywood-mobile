@@ -402,7 +402,8 @@ test("sealed security scan is reused once only for exact source and requests an 
 });
 
 const receiptIdentity = { sourceHead: head, sourceTree: tree };
-const okRule = { commands: [{ id: "ok", file: "node", args: ["--version"], timeoutMs: 1000, resultContract: { type: "node-version-v1" } }] };
+const canonicalRule = (id) => structuredClone(allowlist.commands.find((rule) => rule.id === id));
+const okRule = { commands: [canonicalRule("node-version")] };
 const deterministicDependencies = {
   ...receiptIdentity,
   clock: () => 10,
@@ -411,7 +412,7 @@ const deterministicDependencies = {
 };
 
 test("compact receipt is deterministic 3/3 and exposes no successful raw log", () => {
-  const receipts = [runReceipt(okRule, "ok", ["--version"], deterministicDependencies), runReceipt(okRule, "ok", ["--version"], deterministicDependencies), runReceipt(okRule, "ok", ["--version"], deterministicDependencies)];
+  const receipts = [runReceipt(okRule, "node-version", ["--version"], deterministicDependencies), runReceipt(okRule, "node-version", ["--version"], deterministicDependencies), runReceipt(okRule, "node-version", ["--version"], deterministicDependencies)];
   assert.equal(receipts.every(({ ok }) => ok), true);
   assert.equal(JSON.stringify(receipts[0]), JSON.stringify(receipts[1]));
   assert.equal(JSON.stringify(receipts[1]), JSON.stringify(receipts[2]));
@@ -423,23 +424,51 @@ test("compact receipt is deterministic 3/3 and exposes no successful raw log", (
 
 test("runner rejects unknown commands, shell injection, missing results, secrets and artifact failures", () => {
   assert.equal(runReceipt(okRule, "unknown", [], deterministicDependencies).ok, false, "unknown command");
-  assert.equal(runReceipt(okRule, "ok", ["--version", "; rm -rf /"], deterministicDependencies).ok, false, "arbitrary shell command");
+  assert.equal(runReceipt(okRule, "node-version", ["--version", "; rm -rf /"], deterministicDependencies).ok, false, "arbitrary shell command");
   const interpreterRule = { commands: [{ id: "eval", file: "node", args: ["-e", "process.exit(0)"], timeoutMs: 1000, resultContract: { type: "exit-zero-v1" } }] };
   assert.equal(runReceipt(interpreterRule, "eval", ["-e", "process.exit(0)"], deterministicDependencies).finding, "COMMAND_CONTRACT_INVALID", "interpreter code denied");
-  const jsonArgs = ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"];
-  const jsonRule = { commands: [{ id: "json", file: "node", args: jsonArgs, timeoutMs: 1000, resultContract: { type: "assurance-json-v1", command: "assurance:test" } }] };
-  assert.equal(runReceipt(jsonRule, "json", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "", stderr: "" }) }).finding, "RESULT_MISSING");
-  assert.equal(runReceipt(jsonRule, "json", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: '{"command":"assurance:test","ok":true}\n{"command":"assurance:test","ok":true}\n', stderr: "" }) }).finding, "RESULT_AMBIGUOUS");
-  const secretRule = { commands: [{ id: "secret", file: "node", args: ["--version"], timeoutMs: 1000, resultContract: { type: "exit-zero-v1" } }] };
-  assert.equal(runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "Bearer sk_abcdefghijklmnop", stderr: "" }) }).finding, "SENSITIVE_OUTPUT_DETECTED", "raw successful log injection denied");
-  const failed = runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "Bearer sk_abcdefghijklmnop" }) });
+  const jsonRule = { commands: [canonicalRule("plan")] };
+  const jsonArgs = jsonRule.commands[0].args;
+  assert.equal(runReceipt(jsonRule, "plan", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "", stderr: "" }) }).finding, "RESULT_MISSING");
+  assert.equal(runReceipt(jsonRule, "plan", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: '{"command":"assurance:plan","ok":true}\n{"command":"assurance:plan","ok":true}\n', stderr: "" }) }).finding, "RESULT_AMBIGUOUS");
+  const secretRule = { commands: [canonicalRule("lint")] };
+  const secretArgs = secretRule.commands[0].args;
+  assert.equal(runReceipt(secretRule, "lint", secretArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "Bearer sk_abcdefghijklmnop", stderr: "" }) }).finding, "SENSITIVE_OUTPUT_DETECTED", "raw successful log injection denied");
+  const failed = runReceipt(secretRule, "lint", secretArgs, { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "Bearer sk_abcdefghijklmnop" }) });
   assert.match(failed.failureExcerpt, /REDACTED/u, "failure excerpt redacted");
-  const deviceFailed = runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "deviceSerial=R58M1234ABC UDID=00008101-001234567890001E ordinary diagnostic" }) });
+  const deviceFailed = runReceipt(secretRule, "lint", secretArgs, { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "deviceSerial=R58M1234ABC UDID=00008101-001234567890001E ordinary diagnostic" }) });
   assert.doesNotMatch(deviceFailed.failureExcerpt, /R58M1234ABC|00008101-001234567890001E/u, "device identifiers redacted");
   assert.match(deviceFailed.failureExcerpt, /ordinary diagnostic/u, "benign failure text retained");
-  assert.equal(runReceipt(okRule, "ok", ["--version"], { ...deterministicDependencies, artifactWriter: () => { throw new Error("no"); } }).finding, "ARTIFACT_WRITE_FAILED");
+  assert.equal(runReceipt(okRule, "node-version", ["--version"], { ...deterministicDependencies, artifactWriter: () => { throw new Error("no"); } }).finding, "ARTIFACT_WRITE_FAILED");
   const cli = spawnSync(process.execPath, ["scripts/assurance/receipt.mjs", "--unknown=value"], { cwd: root, encoding: "utf8" });
   assert.equal(cli.status, 1, "unknown CLI flag rejected");
+});
+
+test("receipt command IDs bind the complete canonical rule tuple", () => {
+  const stdoutFor = (resultContract) => {
+    if (resultContract.type === "assurance-json-v1") return `${JSON.stringify({ command: resultContract.command, ok: true })}\n`;
+    if (resultContract.type === "node-test-tap-v1") return "TAP version 13\n1..1\n# tests 1\n# pass 1\n# fail 0\n";
+    if (resultContract.type === "node-version-v1") return "v22.1.0\n";
+    return "";
+  };
+  for (const rule of allowlist.commands) {
+    const result = runReceipt(allowlist, rule.id, rule.args, {
+      ...deterministicDependencies,
+      spawn: () => ({ status: 0, signal: null, stdout: stdoutFor(rule.resultContract), stderr: "" })
+    });
+    assert.equal(result.ok, true, `${rule.id} canonical tuple must remain runnable`);
+  }
+  const invokeMutation = (mutate) => {
+    const candidate = structuredClone(allowlist);
+    const rule = candidate.commands.find(({ id }) => id === "codex-review-exact-head-test");
+    mutate(rule, candidate);
+    return runReceipt(candidate, "codex-review-exact-head-test", rule.args, deterministicDependencies);
+  };
+  assert.equal(invokeMutation((rule, candidate) => { rule.args = candidate.commands.find(({ id }) => id === "github-main-ruleset-readback-test").args; }).finding, "COMMAND_CONTRACT_INVALID", "cross-ID argv substitution denied");
+  assert.equal(invokeMutation((rule) => { rule.contractCommand = "node --test tests/assurance/github-main-ruleset-readback.test.mjs"; }).finding, "COMMAND_CONTRACT_INVALID", "display command substitution denied");
+  assert.equal(invokeMutation((rule) => { rule.resultContract = { type: "exit-zero-v1" }; }).finding, "COMMAND_CONTRACT_INVALID", "result contract downgrade denied");
+  assert.equal(invokeMutation((rule) => { rule.timeoutMs = 900000; }).finding, "COMMAND_CONTRACT_INVALID", "timeout widening denied");
+  assert.equal(invokeMutation((rule) => { rule.maxBuffer = 1024; }).finding, "COMMAND_CONTRACT_INVALID", "unbound max buffer denied");
 });
 
 test("review archive rejects active reviews and preserves four never-merge lanes", () => {

@@ -46,8 +46,65 @@ function highestSeverity(values) {
     .sort((left, right) => severityOrder.get(left) - severityOrder.get(right))[0] ?? null;
 }
 
+const legacySemicolonlessHtmlNamedReferences = new Set(`AElig AMP Aacute Acirc Agrave Aring Atilde Auml COPY Ccedil ETH Eacute Ecirc Egrave Euml GT Iacute Icirc Igrave Iuml LT Ntilde Oacute Ocirc Ograve Oslash Otilde Ouml QUOT REG THORN Uacute Ucirc Ugrave Uuml Yacute aacute acirc acute aelig agrave amp aring atilde auml brvbar ccedil cedil cent copy curren deg divide eacute ecirc egrave eth euml frac12 frac14 frac34 gt iacute icirc iexcl igrave iquest iuml laquo lt macr micro middot nbsp not ntilde oacute ocirc ograve ordf ordm oslash otilde ouml para plusmn pound quot raquo reg sect shy sup1 sup2 sup3 szlig thorn times uacute ucirc ugrave uml uuml yacute yen yuml`.split(" "));
+
 function severityFromBody(body) {
-  return highestSeverity([...String(body ?? "").matchAll(/\bP([0-3])\b(?!\s*[:=]\s*0\b)/gu)].map((match) => `P${match[1]}`));
+  const source = String(body ?? "");
+  const namedReferences = [...source.matchAll(/&([A-Za-z][A-Za-z0-9]*)(;?)/gu)];
+  const namedEntityUnverified = namedReferences.some(([, name, semicolon]) => semicolon === ";" || legacySemicolonlessHtmlNamedReferences.has(name));
+  const normalized = source
+    .normalize("NFKC")
+    .replace(/&#x([0-9a-f]+);?/giu, (_match, hex) => {
+      const codePoint = Number.parseInt(hex, 16);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
+    })
+    .replace(/&#([0-9]+);?/gu, (_match, decimal) => {
+      const codePoint = Number.parseInt(decimal, 10);
+      return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
+    })
+    .replace(/&([A-Za-z][A-Za-z0-9]*)(;?)/gu, (match, name, semicolon) => semicolon === ";" || legacySemicolonlessHtmlNamedReferences.has(name) ? " " : match)
+    .normalize("NFKC")
+    .replace(/<!--[^]*?-->/gu, "")
+    .replace(/<[^>]*>/gu, "")
+    .replace(/\[([^\]\r\n]{0,200})\]\([^\)\r\n]{0,1000}\)/gu, "$1")
+    .replace(/[\\*_~`]/gu, "")
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/gu, "");
+  const severities = [...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])/gu)].map((match) => `P${match[1]}`);
+  if (namedEntityUnverified) severities.push("P1");
+  return highestSeverity(severities);
+}
+
+const canonicalProviderAboutDetails = `<details> <summary>ℹ️ About Codex in GitHub</summary>
+<br/>
+
+[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you
+- Open a pull request for review
+- Mark a draft as ready
+- Comment "@codex review".
+
+If Codex has suggestions, it will comment; otherwise it will react with 👍.
+
+
+
+
+Codex can also answer questions or update the PR. Try commenting "@codex address that feedback".
+
+</details>`;
+
+function cleanReviewBodyLayoutValid(body, preamble, marker, contract) {
+  if (contract?.providerCleanIssueCommentReview?.bodyLayout !== "ASSERTION_MARKER_OPTIONAL_CANONICAL_ABOUT_DETAILS_V1") return false;
+  const prefix = `${preamble}\n\n**Reviewed commit:** \`${marker}\``;
+  if (!body.startsWith(prefix)) return false;
+  const trailing = body.slice(prefix.length);
+  if (trailing === "") return true;
+  if (!trailing.startsWith("\n\n")) return false;
+  const normalizedTrailingLines = trailing
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  const canonicalLines = canonicalProviderAboutDetails.split("\n").filter(Boolean);
+  return JSON.stringify(normalizedTrailingLines) === JSON.stringify(canonicalLines);
 }
 
 function issueCommentReviewedCommit(body) {
@@ -56,8 +113,95 @@ function issueCommentReviewedCommit(body) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-function reviewCleanDispositionCommit(review) {
+export function providerCleanIssueCommentPrefix({ comment, contract }) {
+  if (!(contract?.reviewProviders ?? []).includes(comment?.author)
+    || !Number.isInteger(comment?.commentId)
+    || comment.commentId < 1
+    || !validInstant(comment?.createdAt)
+    || comment.createdAt !== comment.updatedAt) return null;
+  const body = String(comment.body ?? "");
+  const preamble = body.split("\n", 1)[0];
+  const authoritativeAssertion = contract?.providerCleanIssueCommentReview?.authoritativeAssertion;
+  const displaySuffixPolicy = contract?.providerCleanIssueCommentReview?.nonAuthoritativeDisplaySuffix;
+  const displaySuffix = typeof authoritativeAssertion === "string" && preamble.startsWith(authoritativeAssertion)
+    ? preamble.slice(authoritativeAssertion.length)
+    : null;
+  const displaySuffixValid = displaySuffix === "" || (typeof displaySuffix === "string"
+    && displaySuffixPolicy?.mode === "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION"
+    && Number.isInteger(displaySuffixPolicy?.maxLength)
+    && displaySuffixPolicy.maxLength === 80
+    && displaySuffix.length <= displaySuffixPolicy.maxLength
+    && /^ [A-Za-z][A-Za-z' ]*!$/u.test(displaySuffix));
+  const prefixLength = contract?.providerCleanIssueCommentReview?.reviewedCommitPrefixLength;
+  const recognizableMarkers = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/gu)].map((match) => match[1]);
+  if (authoritativeAssertion !== "Codex Review: Didn't find any major issues."
+    || !displaySuffixValid
+    || !Number.isInteger(prefixLength)
+    || prefixLength < 7
+    || prefixLength > 40
+    || recognizableMarkers.length !== 1
+    || !cleanReviewBodyLayoutValid(body, preamble, recognizableMarkers[0], contract)
+    || severityFromBody(body)) return null;
+  return recognizableMarkers.length === 1 && recognizableMarkers[0].length === prefixLength ? recognizableMarkers[0] : null;
+}
+
+export function providerCleanIssueCommentReview({ comment, currentHead, resolvedCommit, contract }) {
+  const prefix = providerCleanIssueCommentPrefix({ comment, contract });
+  if (!prefix
+    || !validGitSha(currentHead)
+    || !validGitSha(resolvedCommit)
+    || resolvedCommit !== currentHead
+    || !resolvedCommit.startsWith(prefix)) return null;
+  const body = String(comment.body ?? "");
+  return {
+    reviewId: comment.commentId,
+    reviewNodeId: comment.commentNodeId ?? null,
+    author: comment.author,
+    state: "COMMENTED",
+    body,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
+    startedAt: comment.createdAt,
+    submittedAt: comment.updatedAt,
+    commit: resolvedCommit,
+    sourceType: "PROVIDER_CLEAN_ISSUE_COMMENT"
+  };
+}
+
+async function readCleanProviderIssueCommentReviews({ repository, token, issueComments, currentHead, contract, current, resolveCommit = null }) {
+  const reviews = [];
+  for (const comment of issueComments) {
+    const prefix = providerCleanIssueCommentPrefix({ comment, contract });
+    if (!prefix) continue;
+    try {
+      const resolvedCommit = resolveCommit
+        ? await resolveCommit({ comment, prefix })
+        : (await githubRequest(`https://api.github.com/repos/${repository}/commits/${prefix}`, token))?.sha;
+      const review = providerCleanIssueCommentReview({ comment, currentHead, resolvedCommit, contract });
+      if (review) reviews.push(review);
+    } catch {
+      current.sourceReadbackIncomplete = true;
+      current.sourceReadbackCode = "CODEX_REVIEW_INCOMPLETE";
+    }
+  }
+  return reviews;
+}
+
+function reviewCleanDispositionCommit(review, contract) {
   if (review?.state === "APPROVED" && validGitSha(review.commit)) return review.commit;
+  if (review?.sourceType === "PROVIDER_CLEAN_ISSUE_COMMENT"
+    && review?.state === "COMMENTED"
+    && validGitSha(review.commit)
+    && providerCleanIssueCommentPrefix({
+      comment: {
+        author: review.author,
+        commentId: review.reviewId,
+        body: review.body,
+        createdAt: review.createdAt ?? review.startedAt,
+        updatedAt: review.updatedAt ?? review.submittedAt
+      },
+      contract
+    })?.length > 0) return review.commit;
   const matches = [...String(review?.body ?? "").matchAll(/<!--\s*codex-review-disposition:blocking-findings-resolved\s+reviewed-commit:([0-9a-f]{40})\s*-->/gu)]
     .map((match) => match[1]);
   return matches.length === 1 ? matches[0] : null;
@@ -165,7 +309,7 @@ function normalizeProviderFindings({ contract, current, reviews = [], threads = 
   const providerReviews = reviews.filter(({ author }) => providers.has(author));
   const laterExactProviderReview = (after) => validInstant(after) && providerReviews.some((candidate) => candidate.commit === current.headSha
     && acceptableStates.has(candidate.state)
-    && reviewCleanDispositionCommit(candidate) === current.headSha
+    && reviewCleanDispositionCommit(candidate, contract) === current.headSha
     && validInstant(candidate.submittedAt)
     && new Date(candidate.submittedAt) > new Date(after)
     && (!validInstant(current.mergedAt) || new Date(candidate.submittedAt) <= new Date(current.mergedAt)));
@@ -323,6 +467,7 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
     .map((entry) => ({
       reviewId: entry.reviewId,
       reviewNodeId: entry.reviewNodeId ?? null,
+      sourceType: entry.sourceType ?? "REVIEW_SUBMISSION",
       author: entry.author,
       state: entry.state,
       bodyHash: sha256(String(entry.body ?? "")),
@@ -1361,12 +1506,18 @@ async function main() {
   let threads;
   let issueComments;
   let persistentProviderFindings = [];
+  let cleanIssueCommentCommitResolutions = [];
   let readbackIncomplete = false;
   let token = null;
   let event = {};
   let eventName = options.eventName ?? process.env.GITHUB_EVENT_NAME ?? "";
   if (options.fixture) {
-    ({ current, reviews = [], threads = [], issueComments = [], persistentProviderFindings = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
+    ({ current, reviews = [], threads = [], issueComments = [], persistentProviderFindings = [], cleanIssueCommentCommitResolutions = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
+    if (reviews.some(({ sourceType }) => sourceType === "PROVIDER_CLEAN_ISSUE_COMMENT")) {
+      readbackIncomplete = true;
+      current.sourceReadbackIncomplete = true;
+      current.sourceReadbackCode = "CODEX_REVIEW_INCOMPLETE";
+    }
   } else {
     const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
     token = process.env.GITHUB_TOKEN;
@@ -1459,7 +1610,31 @@ async function main() {
     });
   }
   const providers = new Set(contract.reviewProviders);
-  const providerReviews = reviews.filter(({ author }) => providers.has(author));
+  const fixtureCommitResolver = options.fixture ? async ({ comment, prefix }) => {
+    const matches = (Array.isArray(cleanIssueCommentCommitResolutions) ? cleanIssueCommentCommitResolutions : [])
+      .filter((entry) => entry?.commentId === comment.commentId);
+    if (matches.length !== 1
+      || matches[0].prefix !== prefix
+      || !validGitSha(matches[0].resolvedCommit)
+      || !matches[0].resolvedCommit.startsWith(prefix)
+      || !["CURRENT_HEAD", "STALE_HEAD"].includes(matches[0].headClassification)
+      || (matches[0].headClassification === "CURRENT_HEAD" && matches[0].resolvedCommit !== current.headSha)
+      || (matches[0].headClassification === "STALE_HEAD" && matches[0].resolvedCommit === current.headSha)) {
+      throw new Error("CODEX_REVIEW_FIXTURE_COMMIT_RESOLUTION_INVALID");
+    }
+    return matches[0].resolvedCommit;
+  } : null;
+  const cleanIssueCommentReviews = await readCleanProviderIssueCommentReviews({
+    repository: current.repository,
+    token,
+    issueComments,
+    currentHead: current.headSha,
+    contract,
+    current,
+    resolveCommit: fixtureCommitResolver
+  });
+  const reviewCandidates = [...reviews, ...cleanIssueCommentReviews];
+  const providerReviews = reviewCandidates.filter(({ author }) => providers.has(author));
   current.providerReviewsExist = providerReviews.length > 0;
   const exactReviews = providerReviews
     .filter(({ commit, submittedAt }) => commit === current.headSha && validInstant(submittedAt))
@@ -1477,13 +1652,13 @@ async function main() {
       current.sourceReadbackCode = error.message === paginationIncompleteCode ? paginationIncompleteCode : "CODEX_REVIEW_FINDING_LEDGER_INVALID";
     }
   }
-  const receipt = selectedReview ? buildExactHeadReceipt({ contract, current, review: selectedReview, reviews, threads, issueComments, persistentFindings: persistentProviderFindings }) : null;
+  const receipt = selectedReview ? buildExactHeadReceipt({ contract, current, review: selectedReview, reviews: reviewCandidates, threads, issueComments, persistentFindings: persistentProviderFindings }) : null;
   const evaluation = evaluateExactHeadReceipt({ contract, current, receipt, readbackIncomplete });
   const lateReviewSentinel = detectLateReview({
     contract,
     current,
     review: latestProviderReview,
-    reviews,
+    reviews: reviewCandidates,
     threads,
     issueComments,
     eventFindings: eventFinding ? [eventFinding] : [],
