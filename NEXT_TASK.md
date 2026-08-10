@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Review the frozen assurance-control A1 source at exact head 9447b26841cbb48dabc7c1790a9b4df80fb7b332 and tree 01b58341c3ef73349cad3b4dfda8ccb8b563e570, require P0=0/P1=0 independent repository closure and one 13/13 Phase 1 CI run, then merge A1 and synchronize post-A1 current truth.
+1. Review the frozen assurance-control A1 source at exact head f32d7b5298290035b1af38346339becd6227fd62 and tree 9b5e2d049419ad16d1607510150412353d6a094c, require P0=0/P1=0 independent repository closure and one 13/13 Phase 1 CI run, then merge A1 and synchronize post-A1 current truth.
 2. Then implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.
 3. Only after A1 and S0 complete may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.
 4. After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.
