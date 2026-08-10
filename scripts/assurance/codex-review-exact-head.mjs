@@ -47,7 +47,15 @@ function highestSeverity(values) {
 }
 
 function severityFromBody(body) {
-  return highestSeverity([...String(body ?? "").matchAll(/\bP([0-3])\b(?!\s*[:=]\s*0\b)/gu)].map((match) => `P${match[1]}`));
+  const normalized = String(body ?? "")
+    .normalize("NFKC")
+    .replace(/\p{Cf}/gu, "")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/gu, "");
+  return highestSeverity([...normalized.matchAll(/(?:^|[^A-Za-z0-9])P([0-3])(?=$|[^A-Za-z0-9])(?!\s*[:=]\s*0(?:$|[^0-9]))/gu)].map((match) => `P${match[1]}`));
+}
+
+function cleanReviewBodyHasDisallowedCharacters(body) {
+  return /[\p{Cf}\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u.test(String(body ?? ""));
 }
 
 function issueCommentReviewedCommit(body) {
@@ -82,6 +90,7 @@ export function providerCleanIssueCommentPrefix({ comment, contract }) {
     || !Number.isInteger(prefixLength)
     || prefixLength < 7
     || prefixLength > 40
+    || cleanReviewBodyHasDisallowedCharacters(body)
     || severityFromBody(body)) return null;
   const recognizableMarkers = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/gu)].map((match) => match[1]);
   return recognizableMarkers.length === 1 && recognizableMarkers[0].length === prefixLength ? recognizableMarkers[0] : null;

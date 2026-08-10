@@ -108,6 +108,10 @@ test("provider no-suggestion issue comment binds its unique commit prefix to the
   assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: cleanComment.body.replace(headA.slice(0, 10), headB.slice(0, 10)) }, currentHead: headA, resolvedCommit: headA, contract }), null);
   assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, updatedAt: "2026-08-09T12:01:00Z" }, currentHead: headA, resolvedCommit: headA, contract }), null);
   assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP2 finding` }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  for (const severity of ["_P0_", "_P1_", "_P2_", "_P3_", "P\u200b1", "Ｐ１", "P\u00001", "P\t1"]) {
+    assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\n${severity} finding` }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP1=0` }, currentHead: headA, resolvedCommit: headA, contract })?.commit, headA);
   const collidingOldCommit = `${headA.slice(0, 10)}${"f".repeat(30)}`;
   assert.equal(providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: collidingOldCommit, contract }), null);
 });
