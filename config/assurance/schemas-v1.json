@@ -204,7 +204,22 @@
             "executionState": {"type": "string", "minLength": 1},
             "requiredFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}},
             "requiredFreshnessClaims": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/requiredFreshnessClaim"}},
-            "proofTiersUnderEvaluation": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]}}
+            "proofTiersUnderEvaluation": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]}},
+            "proofTierStatuses": {
+              "type": "object",
+              "required": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"],
+              "additionalProperties": false,
+              "properties": {
+                "T0_REQUIREMENT": {"enum": ["REQUIREMENTS_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T1_SOURCE": {"enum": ["SOURCE_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T2_MODEL": {"enum": ["MODEL_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T3_INTEGRATION": {"enum": ["INTEGRATION_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T4_NATIVE_PROVIDER": {"enum": ["NATIVE_CLEAR", "PROVIDER_CLEAR", "BLOCKED_INTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T5_SIGNED_ARTIFACT": {"enum": ["ARTIFACT_CLEAR", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T6_INSTALLED_PHYSICAL": {"enum": ["INSTALLED_CLEAR", "PHYSICAL_CLEAR", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]},
+                "T7_PUBLIC_CANARY": {"enum": ["RELEASE_CLEAR", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"]}
+              }
+            }
             ,"ownerBootstrapAuthorization": {
               "type": "object",
               "required": ["schemaVersion", "repository", "prNumber", "commentId", "author", "authorAssociation", "createdAt", "updatedAt", "bodySha256", "subjectHash"],
@@ -221,7 +236,8 @@
                 "subjectHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
               }
             }
-          }
+          },
+          "allOf": [{"if": {"properties": {"phase": {"const": "COMPLETE"}}, "required": ["phase"]}, "then": {"required": ["proofTierStatuses"]}}]
         },
         "freshnessClaims": {
           "type": "array",

@@ -8,12 +8,23 @@ import {
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject
 } from "../../scripts/assurance/active-task.mjs";
-import { stableJson } from "../../scripts/assurance/lib.mjs";
+import { renderCurrentState, stableJson, validateProofTierStatuses } from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
 const registry = read("config/assurance/feature-registry-v1.json");
 const allowlist = read("config/assurance/command-allowlist-v1.json");
+const gateCatalog = read("config/assurance/gate-catalog-v1.json");
+const completedProofTierStatuses = {
+  T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
+  T1_SOURCE: "SOURCE_CLEAR",
+  T2_MODEL: "MODEL_CLEAR",
+  T3_INTEGRATION: "INTEGRATION_CLEAR",
+  T4_NATIVE_PROVIDER: "NOT_APPLICABLE",
+  T5_SIGNED_ARTIFACT: "NOT_APPLICABLE",
+  T6_INSTALLED_PHYSICAL: "NOT_APPLICABLE",
+  T7_PUBLIC_CANARY: "NOT_APPLICABLE"
+};
 const binding = {
   schemaVersion: 1,
   featureId: "chilly-chat-call-lifecycle",
@@ -163,7 +174,8 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
     implementationPr: 201,
     implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1",
     implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
-    executionState: "ASSURANCE_CONTROL_A1"
+    executionState: "ASSURANCE_CONTROL_A1",
+    proofTierStatuses: completedProofTierStatuses
   };
   const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(a1.activeTaskBinding);
   a1.openImplementationPrs = [{
@@ -205,6 +217,10 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
 
   const editedObservation = { ...ownerBootstrapAuthorizationObservation, body: `${ownerBootstrapAuthorizationObservation.body}\nedited` };
   assert.deepEqual(activeTask({ ...facts, currentTruth: a1, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation: editedObservation }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"]);
+
+  const statusSubstitution = structuredClone(a1);
+  statusSubstitution.activeTaskBinding.proofTierStatuses.T1_SOURCE = "BLOCKED_INTERNAL";
+  assert.deepEqual(activeTask({ ...facts, currentTruth: statusSubstitution, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"]);
 });
 
 test("conflicting feature override fails closed", () => {
@@ -396,7 +412,7 @@ test("freshness claim scopes must match declared classes and proof tiers", () =>
 test("a completed binding is not an active task and no override can revive it", () => {
   const completeTruth = {
     ...truth,
-    activeTaskBinding: { ...binding, phase: "COMPLETE" },
+    activeTaskBinding: { ...binding, phase: "COMPLETE", proofTierStatuses: completedProofTierStatuses },
     openImplementationPrs: []
   };
   const completeIdentity = {
@@ -420,6 +436,50 @@ test("a completed binding is not an active task and no override can revive it", 
   assert.equal(competing.ok, false);
   assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
   assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+});
+
+test("a COMPLETE binding records every tier with exact gate-catalog vocabulary", () => {
+  const complete = { ...binding, phase: "COMPLETE", proofTierStatuses: completedProofTierStatuses };
+  assert.deepEqual(validateProofTierStatuses(complete, gateCatalog), []);
+
+  const missingMap = { ...binding, phase: "COMPLETE" };
+  assert.deepEqual(validateProofTierStatuses(missingMap, gateCatalog), [{
+    id: "ASSURANCE_PROOF_TIER_STATUSES_MISSING",
+    status: "BLOCKED_INTERNAL"
+  }]);
+  assert.deepEqual(activeTask(withTruth((value) => ({
+    ...value,
+    activeTaskBinding: missingMap,
+    openImplementationPrs: []
+  }))).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+
+  for (const [label, mutate, expectedId] of [
+    ["missing tier", (statuses) => { delete statuses.T7_PUBLIC_CANARY; }, "ASSURANCE_PROOF_TIER_STATUS_MISSING"],
+    ["extra tier", (statuses) => { statuses.T8_UNKNOWN = "NOT_APPLICABLE"; }, "ASSURANCE_PROOF_TIER_STATUS_UNKNOWN"],
+    ["free-form status", (statuses) => { statuses.T4_NATIVE_PROVIDER = "METADATA_BOUNDARY_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
+    ["cross-tier status", (statuses) => { statuses.T1_SOURCE = "MODEL_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
+    ["blocked completion", (statuses) => { statuses.T1_SOURCE = "BLOCKED_INTERNAL"; }, "ASSURANCE_COMPLETED_PROOF_TIER_BLOCKED"]
+  ]) {
+    const candidate = structuredClone(complete);
+    mutate(candidate.proofTierStatuses);
+    const findings = validateProofTierStatuses(candidate, gateCatalog);
+    assert.equal(findings.some(({ id }) => id === expectedId), true, label);
+  }
+});
+
+test("canonical rendering exposes every recorded proof-tier status separately", () => {
+  const rendered = renderCurrentState({
+    ...canonicalTruth,
+    activeTaskBinding: {
+      ...canonicalTruth.activeTaskBinding,
+      phase: "COMPLETE",
+      proofTierStatuses: completedProofTierStatuses
+    }
+  });
+  for (const [tier, status] of Object.entries(completedProofTierStatuses)) {
+    assert.equal(rendered.includes(`\`${tier}\`=\`${status}\``), true, tier);
+  }
+  assert.equal(rendered.includes("METADATA_BOUNDARY_CLEAR"), false);
 });
 
 test("active-task CLI rejects caller-selected diff bases", () => {

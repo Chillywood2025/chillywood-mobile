@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, featureRequired, readJson, requiredKeys, tierIds } from "./lib.mjs";
+import { args, emit, featureRequired, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
 import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
 
 const options = args();
@@ -73,6 +73,7 @@ for (const [file, definition] of contracts) {
 }
 
 const gates = readJson("config/assurance/gate-catalog-v1.json");
+const currentTruth = readJson("config/assurance/current-truth-v1.json");
 const proof = readJson("config/assurance/proof-strength-v1.json");
 const defects = readJson("config/assurance/escaped-defect-catalog-v1.json").defects;
 const registry = readJson("config/assurance/feature-registry-v1.json").features;
@@ -83,6 +84,7 @@ const ownerFinalCarrierGithubReadback = readJson("config/assurance/a1-owner-fina
 const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-phase1-github-readback-v1.json");
 const bootstrapMergeIdentity = readBootstrapMergeIdentity(githubRulesetReadback.authorizedBootstrapException.mergeSha);
 errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, bootstrapPhase1GithubReadback, mergeIdentity: bootstrapMergeIdentity, freshnessMode: "STRUCTURAL" }));
+errors.push(...validateProofTierStatuses(currentTruth.activeTaskBinding, gates).map(({ id, tier, value }) => [id, tier, value].filter((entry) => entry !== undefined).join(":")));
 if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
 if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");
 const defectFields = ["id", "tags", "affectedDomains", "preImplementationQuestions", "requiredProofTier", "detectionRule", "testTemplate", "runtimeSignature", "rollback", "prevention", "blocks"];

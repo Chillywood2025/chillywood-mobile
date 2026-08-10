@@ -20,7 +20,8 @@ import {
   verifyCurrentTruthHeadBindings,
   verifyCommittedClaimEvidence,
   verifyProviderImplementationSnapshot,
-  verifyCurrentTruthSynchronization
+  verifyCurrentTruthSynchronization,
+  validateProofTierStatuses
 } from "./lib.mjs";
 import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
 
@@ -223,7 +224,8 @@ if (mode) {
     claimFreshness,
     record.activeTaskBinding?.requiredFreshnessClaims ?? []
   );
-  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...validateLateReviewSentinelState(record)];
+  const proofTierStatusFindings = validateProofTierStatuses(record.activeTaskBinding, readJson("config/assurance/gate-catalog-v1.json"));
+  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...proofTierStatusFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
