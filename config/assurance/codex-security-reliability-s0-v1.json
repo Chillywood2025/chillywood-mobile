@@ -72,6 +72,16 @@
     ],
     "changedSourceDisposition": "INVALIDATE_IMMEDIATELY"
   },
+  "lifecycleAuthority": {
+    "storage": "PRIVATE_UID_OWNED_ATOMIC_O_EXCL",
+    "identityKey": ["repository", "scanId", "sourceLeaseHash"],
+    "snapshotBinding": "SHA256_STABLE_JSON_FULL_LIFECYCLE",
+    "initialStateVersion": 0,
+    "completionSourceStateVersion": 3,
+    "completionAttemptConsumedBeforeFinalizationGuards": true,
+    "duplicateScanCode": "CODEX_SECURITY_SCAN_ALREADY_REGISTERED",
+    "staleOrReplayedCompletionCode": "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED"
+  },
   "completion": {
     "maximumAttempts": 1,
     "failedAttemptIsTerminal": true,
@@ -97,7 +107,12 @@
       "no deferred work",
       "exact reason hosted sealing was not used"
     ],
-    "hostedSelfApprovalReason": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"
+    "hostedSelfApprovalReason": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED",
+    "requiredFindingIds": [
+      "PRIOR_FINDING_OMISSION_SELF_ATTESTED",
+      "REPOSITORY_CLOSURE_CALLER_REHASH_BYPASS",
+      "TERMINAL_FINALIZATION_CAN_BE_REPLAYED_FROM_PRE_ATTEMPT_SNAPSHOT"
+    ]
   },
   "reviewGovernance": {
     "providerCodexReview": "OPTIONAL_ADVISORY",
@@ -132,12 +147,14 @@
     "discovery only starts after exact preflight",
     "a source push invalidates the exact lease and prior evidence",
     "one completion attempt maximum",
+    "scan creation and completion attempts are atomically registered outside caller lifecycle snapshots",
     "terminal scans cannot retry",
     "unchanged repository-source evidence alone may be reused",
     "repository fallback is never Codex Security sealed",
     "S0 is approved only by independent exact-head repository review",
     "provider Codex Review remains optional advisory and is never requested or retried automatically",
     "only independently validated protected-main finding sets can turn provider commentary into a blocker",
-    "the protected-main required set contains exactly the 13 strict Phase 1 checks and excludes the provider Codex Review context"
+    "the protected-main required set contains exactly the 13 strict Phase 1 checks and excludes the provider Codex Review context",
+    "repository closure requires every code-pinned prior finding disposition with governed correction evidence"
   ]
 }

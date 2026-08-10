@@ -27,6 +27,7 @@ export const resultCodes = [
   "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH",
   "CODEX_SECURITY_SOURCE_LEASE_CHANGED",
   "CODEX_SECURITY_ILLEGAL_TRANSITION",
+  "CODEX_SECURITY_SCAN_ALREADY_REGISTERED",
   "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED",
   "CODEX_SECURITY_FINALIZATION_GUARD",
 ];
@@ -129,24 +130,161 @@ export function repositoryIdentityCurrent(descriptor, runGit = git) {
   }
 }
 
+function lifecycleIdentity(descriptor, scanId) {
+  const activeLease = lease(descriptor);
+  if (!activeLease || !scanIdentifier(scanId)) return null;
+  return sha256({ repository: descriptor.repository.slug, scanId, sourceLeaseHash: activeLease.sourceLeaseHash });
+}
+
+function atomicPrivateRecord(kind, identityHash, name, value) {
+  try {
+    const directory = privateArtifactDirectory(kind, identityHash);
+    const output = path.join(directory, name);
+    if (path.dirname(output) !== fs.realpathSync(directory)) return false;
+    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
+    const file = fs.openSync(output, flags, 0o600);
+    try {
+      fs.writeFileSync(file, `${stableJson(value)}\n`);
+      fs.fsyncSync(file);
+    } finally {
+      fs.closeSync(file);
+    }
+    fs.chmodSync(output, 0o600);
+    return true;
+  } catch (error) {
+    if (error?.code === "EEXIST") return false;
+    return false;
+  }
+}
+
+function registerLifecycle(record) {
+  return atomicPrivateRecord("codex-security-lifecycles", record.lifecycleIdentityHash, "lifecycle.json", record);
+}
+
+function readLifecycleRecord(identityHash, name) {
+  try {
+    const directory = privateArtifactDirectory("codex-security-lifecycles", identityHash);
+    return JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+const lifecycleSnapshotHash = (lifecycle) => sha256(lifecycle);
+
+function lifecycleAuthorityCurrent(lifecycle) {
+  if (!digest(lifecycle?.lifecycleIdentityHash) || !Number.isInteger(lifecycle?.stateVersion) || lifecycle.stateVersion < 0) return false;
+  if (lifecycle.stateVersion === 0) {
+    const created = readLifecycleRecord(lifecycle.lifecycleIdentityHash, "lifecycle.json");
+    return created?.lifecycleIdentityHash === lifecycle.lifecycleIdentityHash
+      && created?.scanId === lifecycle.scanId
+      && created?.sourceLeaseHash === lifecycle?.sourceLease?.sourceLeaseHash
+      && created?.initialState === lifecycle.state
+      && created?.initialStateVersion === lifecycle.stateVersion
+      && created?.lifecycleSnapshotHash === lifecycleSnapshotHash(lifecycle)
+      && lifecycle.terminal === false;
+  }
+  const transitionRecord = readLifecycleRecord(lifecycle.lifecycleIdentityHash, `transition-${lifecycle.stateVersion}.json`);
+  return transitionRecord?.lifecycleIdentityHash === lifecycle.lifecycleIdentityHash
+    && transitionRecord?.scanId === lifecycle.scanId
+    && transitionRecord?.sourceLeaseHash === lifecycle?.sourceLease?.sourceLeaseHash
+    && transitionRecord?.toState === lifecycle.state
+    && transitionRecord?.toStateVersion === lifecycle.stateVersion
+    && transitionRecord?.terminal === lifecycle.terminal
+    && transitionRecord?.terminalReason === lifecycle.terminalReason
+    && transitionRecord?.toLifecycleSnapshotHash === lifecycleSnapshotHash(lifecycle);
+}
+
+function recordLifecycleTransition(lifecycle, next) {
+  if (!lifecycleAuthorityCurrent(lifecycle)
+    || next?.lifecycleIdentityHash !== lifecycle.lifecycleIdentityHash
+    || next?.scanId !== lifecycle.scanId
+    || next?.sourceLease?.sourceLeaseHash !== lifecycle?.sourceLease?.sourceLeaseHash
+    || next?.stateVersion !== lifecycle.stateVersion + 1) return false;
+  const record = {
+    schemaVersion: 1,
+    lifecycleIdentityHash: lifecycle.lifecycleIdentityHash,
+    repository: lifecycle.sourceLease.repository.slug,
+    scanId: lifecycle.scanId,
+    sourceLeaseHash: lifecycle.sourceLease.sourceLeaseHash,
+    fromState: lifecycle.state,
+    fromStateVersion: lifecycle.stateVersion,
+    toState: next.state,
+    toStateVersion: next.stateVersion,
+    terminal: next.terminal,
+    terminalReason: next.terminalReason,
+    fromLifecycleSnapshotHash: lifecycleSnapshotHash(lifecycle),
+    toLifecycleSnapshotHash: lifecycleSnapshotHash(next),
+  };
+  return atomicPrivateRecord("codex-security-lifecycles", lifecycle.lifecycleIdentityHash, `transition-${next.stateVersion}.json`, record);
+}
+
+function consumeCompletionAttempt(record, lifecycle) {
+  return lifecycleAuthorityCurrent(lifecycle)
+    && atomicPrivateRecord("codex-security-lifecycles", record.lifecycleIdentityHash, "completion-attempt.json", record);
+}
+
+function lifecycleIdentityCurrent(lifecycle, descriptor) {
+  return lifecycle?.lifecycleIdentityHash === lifecycleIdentity(descriptor, lifecycle?.scanId)
+    && leaseCurrent(lifecycle?.sourceLease, descriptor);
+}
+
+function lifecycleAt(lifecycle, descriptor, state, stateVersion) {
+  return lifecycleIdentityCurrent(lifecycle, descriptor)
+    && lifecycle?.state === state
+    && lifecycle?.stateVersion === stateVersion
+    && lifecycle?.terminal !== true;
+}
+
+function lifecycleStateAt(lifecycle, state, stateVersion) {
+  return lifecycle?.state === state
+    && lifecycle?.stateVersion === stateVersion
+    && lifecycle?.terminal !== true;
+}
+
+function nextLifecycle(lifecycle, state, additions = {}) {
+  return { ...lifecycle, ...additions, state, stateVersion: lifecycle.stateVersion + 1 };
+}
+
+function commitLifecycleTransition(lifecycle, next) {
+  return recordLifecycleTransition(lifecycle, next) ? next : null;
+}
+
 export function createLifecycle({ descriptor, scanId, scanState = "RUNNING" }) {
   if (!descriptorValid(descriptor) || !scanIdentifier(scanId) || scanState !== "RUNNING") {
     return { ok: false, status: "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID", workersStarted: false };
   }
+  const lifecycleIdentityHash = lifecycleIdentity(descriptor, scanId);
+  const lifecycle = {
+    schemaVersion: 1,
+    lifecycleIdentityHash,
+    scanId,
+    scanState,
+    state: "TARGET_FROZEN",
+    stateVersion: 0,
+    terminal: false,
+    workersStarted: false,
+    completionAttempts: 0,
+    sourceLease: lease(descriptor),
+    hostBinding: null,
+    terminalReason: null,
+  };
+  const registered = registerLifecycle({
+    schemaVersion: 1,
+    lifecycleIdentityHash,
+    repository: descriptor.repository.slug,
+    scanId,
+    sourceLeaseHash: lifecycle.sourceLease.sourceLeaseHash,
+    initialState: "TARGET_FROZEN",
+    initialStateVersion: 0,
+    lifecycleSnapshotHash: lifecycleSnapshotHash(lifecycle),
+  });
+  if (registered !== true) {
+    return { ok: false, status: "CODEX_SECURITY_SCAN_ALREADY_REGISTERED", workersStarted: false };
+  }
   return {
     ok: true,
-    lifecycle: {
-      schemaVersion: 1,
-      scanId,
-      scanState,
-      state: "TARGET_FROZEN",
-      terminal: false,
-      workersStarted: false,
-      completionAttempts: 0,
-      sourceLease: lease(descriptor),
-      hostBinding: null,
-      terminalReason: null,
-    },
+    lifecycle,
   };
 }
 
@@ -161,13 +299,18 @@ function terminalize(lifecycle, state, reason) {
 }
 
 function blockedPreflight(lifecycle, status, fallback = null) {
+  const next = terminalize(nextLifecycle(lifecycle, "HOST_PREFLIGHT_BLOCKED"), "HOST_PREFLIGHT_BLOCKED", status);
+  const committed = commitLifecycleTransition(lifecycle, next);
+  if (!committed) {
+    return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", discoveryAuthorized: false, workersStarted: false, lifecycle };
+  }
   return {
     ok: false,
     status,
     fallback,
     discoveryAuthorized: false,
     workersStarted: false,
-    lifecycle: terminalize(lifecycle, "HOST_PREFLIGHT_BLOCKED", status),
+    lifecycle: committed,
   };
 }
 
@@ -182,8 +325,8 @@ function hostIdentityMatches(host, lifecycle, descriptor) {
 }
 
 export function preflight({ lifecycle, descriptor, host = {}, runGit = git }) {
-  if (lifecycle?.state !== "TARGET_FROZEN" || lifecycle?.terminal === true || !leaseCurrent(lifecycle?.sourceLease, descriptor)) {
-    return blockedPreflight(lifecycle ?? {}, "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID");
+  if (!lifecycleAt(lifecycle, descriptor, "TARGET_FROZEN", 0)) {
+    return { ok: false, status: "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID", discoveryAuthorized: false, workersStarted: false, lifecycle };
   }
   if (!repositoryIdentityCurrent(descriptor, runGit)) {
     return blockedPreflight(lifecycle, "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
@@ -201,60 +344,92 @@ export function preflight({ lifecycle, descriptor, host = {}, runGit = git }) {
   if (hostSnapshotDigest === descriptor.repositorySourceSnapshotDigest) {
     return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH");
   }
+  const next = nextLifecycle(lifecycle, "HOST_PREFLIGHT_CLEAR", {
+    hostBinding: {
+      repository: host.repository,
+      scanId: host.scanId,
+      scanState: host.scanState,
+      base: host.base,
+      target: {
+        head: host.target.head,
+        tree: host.target.tree,
+        snapshotDigest: hostSnapshotDigest,
+      },
+    },
+  });
+  const committed = commitLifecycleTransition(lifecycle, next);
+  if (!committed) return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", discoveryAuthorized: false, workersStarted: false, lifecycle };
   return {
     ok: true,
     status: "HOST_PREFLIGHT_CLEAR",
     discoveryAuthorized: true,
     workersStarted: false,
-    lifecycle: {
-      ...lifecycle,
-      state: "HOST_PREFLIGHT_CLEAR",
-      hostBinding: {
-        repository: host.repository,
-        scanId: host.scanId,
-        scanState: host.scanState,
-        base: host.base,
-        target: {
-          head: host.target.head,
-          tree: host.target.tree,
-          snapshotDigest: hostSnapshotDigest,
-        },
-      },
-    },
+    lifecycle: committed,
   };
 }
 
 export function beginDiscovery({ lifecycle, descriptor, runGit = git }) {
-  if (lifecycle?.terminal === true || lifecycle?.state !== "HOST_PREFLIGHT_CLEAR") {
+  if (!lifecycleStateAt(lifecycle, "HOST_PREFLIGHT_CLEAR", 1)) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", workersStarted: false, lifecycle };
   }
-  if (!leaseCurrent(lifecycle.sourceLease, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
-    return { ok: false, status: "CODEX_SECURITY_SOURCE_LEASE_CHANGED", workersStarted: false, lifecycle: terminalize(lifecycle, "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED") };
+  if (!lifecycleIdentityCurrent(lifecycle, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
+    const next = terminalize(nextLifecycle(lifecycle, "TERMINAL_FAILED"), "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
+    const committed = commitLifecycleTransition(lifecycle, next);
+    return { ok: false, status: committed ? "CODEX_SECURITY_SOURCE_LEASE_CHANGED" : "CODEX_SECURITY_ILLEGAL_TRANSITION", workersStarted: false, lifecycle: committed ?? lifecycle };
   }
-  return { ok: true, status: "DISCOVERY_RUNNING", workersStarted: true, lifecycle: { ...lifecycle, state: "DISCOVERY_RUNNING", workersStarted: true } };
+  const next = nextLifecycle(lifecycle, "DISCOVERY_RUNNING", { workersStarted: true });
+  const committed = commitLifecycleTransition(lifecycle, next);
+  return committed
+    ? { ok: true, status: "DISCOVERY_RUNNING", workersStarted: true, lifecycle: committed }
+    : { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", workersStarted: false, lifecycle };
 }
 
 export function completeSourceReview({ lifecycle, descriptor, complete, runGit = git }) {
-  if (lifecycle?.terminal === true || lifecycle?.state !== "DISCOVERY_RUNNING") {
+  if (!lifecycleStateAt(lifecycle, "DISCOVERY_RUNNING", 2)) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
   }
-  if (!leaseCurrent(lifecycle?.sourceLease, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
-    return { ok: false, status: "CODEX_SECURITY_SOURCE_LEASE_CHANGED", lifecycle: terminalize(lifecycle, "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED") };
+  if (!lifecycleIdentityCurrent(lifecycle, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
+    const next = terminalize(nextLifecycle(lifecycle, "TERMINAL_FAILED"), "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
+    const committed = commitLifecycleTransition(lifecycle, next);
+    return { ok: false, status: committed ? "CODEX_SECURITY_SOURCE_LEASE_CHANGED" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
   }
   if (complete !== true) {
-    return { ok: false, status: "SOURCE_REVIEW_INCOMPLETE", lifecycle: terminalize(lifecycle, "SOURCE_REVIEW_INCOMPLETE", "SOURCE_REVIEW_INCOMPLETE") };
+    const next = terminalize(nextLifecycle(lifecycle, "SOURCE_REVIEW_INCOMPLETE"), "SOURCE_REVIEW_INCOMPLETE", "SOURCE_REVIEW_INCOMPLETE");
+    const committed = commitLifecycleTransition(lifecycle, next);
+    return { ok: false, status: committed ? "SOURCE_REVIEW_INCOMPLETE" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
   }
-  return { ok: true, status: "SOURCE_REVIEW_COMPLETE", lifecycle: { ...lifecycle, state: "SOURCE_REVIEW_COMPLETE" } };
+  const next = nextLifecycle(lifecycle, "SOURCE_REVIEW_COMPLETE");
+  const committed = commitLifecycleTransition(lifecycle, next);
+  return committed
+    ? { ok: true, status: "SOURCE_REVIEW_COMPLETE", lifecycle: committed }
+    : { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
 }
 
 export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplete, coverageComplete, deferredFindings = [], ledger, runGit = git }) {
   if (lifecycle?.completionAttempts > 0 || lifecycle?.terminal === true) {
     return { ok: false, status: "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED", lifecycle };
   }
-  if (lifecycle?.state !== "SOURCE_REVIEW_COMPLETE") {
+  if (!lifecycleStateAt(lifecycle, "SOURCE_REVIEW_COMPLETE", 3)) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
   }
-  const attempted = { ...lifecycle, state: "FINALIZATION_RUNNING", completionAttempts: 1 };
+  if (!lifecycleIdentityCurrent(lifecycle, descriptor)) {
+    return { ok: false, status: "CODEX_SECURITY_SOURCE_LEASE_CHANGED", lifecycle: terminalize(lifecycle, "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED") };
+  }
+  const attemptRecord = {
+    schemaVersion: 1,
+    lifecycleIdentityHash: lifecycle.lifecycleIdentityHash,
+    repository: descriptor.repository.slug,
+    scanId: lifecycle.scanId,
+    sourceLeaseHash: lifecycle.sourceLease.sourceLeaseHash,
+    consumedState: lifecycle.state,
+    consumedStateVersion: lifecycle.stateVersion,
+    nextStateVersion: lifecycle.stateVersion + 1,
+    consumedLifecycleSnapshotHash: lifecycleSnapshotHash(lifecycle),
+  };
+  if (consumeCompletionAttempt(attemptRecord, lifecycle) !== true) {
+    return { ok: false, status: "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED", lifecycle };
+  }
+  const attempted = nextLifecycle(lifecycle, "FINALIZATION_RUNNING", { completionAttempts: 1 });
   const snapshotDigest = host?.target?.snapshotDigest;
   if (host?.snapshotDigestExposed !== true || !digest(snapshotDigest)) {
     return {
@@ -263,8 +438,7 @@ export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplet
       lifecycle: terminalize(attempted, "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION"),
     };
   }
-  const guard = leaseCurrent(lifecycle.sourceLease, descriptor)
-    && repositoryIdentityCurrent(descriptor, runGit)
+  const guard = repositoryIdentityCurrent(descriptor, runGit)
     && hostIdentityMatches(host, lifecycle, descriptor)
     && stableJson(host) === stableJson({ ...lifecycle.hostBinding, snapshotDigestExposed: true })
     && snapshotDigest !== descriptor.repositorySourceSnapshotDigest
@@ -281,7 +455,29 @@ export function transition(lifecycle, next) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
   }
   if (next !== "CANCELED") return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
-  return { ok: true, status: "CANCELED", lifecycle: terminalize(lifecycle, "CANCELED", "CANCELED") };
+  const canceled = terminalize(nextLifecycle(lifecycle, "CANCELED"), "CANCELED", "CANCELED");
+  const committed = commitLifecycleTransition(lifecycle, canceled);
+  return committed
+    ? { ok: true, status: "CANCELED", lifecycle: committed }
+    : { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
+}
+
+export const repositoryClosureRequiredFindingIds = [
+  "PRIOR_FINDING_OMISSION_SELF_ATTESTED",
+  "REPOSITORY_CLOSURE_CALLER_REHASH_BYPASS",
+  "TERMINAL_FINALIZATION_CAN_BE_REPLAYED_FROM_PRE_ATTEMPT_SNAPSHOT",
+];
+
+export function repositoryClosureFindingEvidenceHash(findingId, descriptor, tests) {
+  if (!repositoryClosureRequiredFindingIds.includes(findingId) || !descriptorValid(descriptor) || !Array.isArray(tests)) return null;
+  const focused = tests.filter(({ id }) => id === "s0-focused-test");
+  if (focused.length !== 1 || !digest(focused[0]?.resultSha256) || stableJson(focused[0]?.target) !== stableJson(descriptor.target)) return null;
+  return sha256({
+    findingId,
+    target: descriptor.target,
+    changedPathWorklistSha256: descriptor.changedPathWorklistSha256,
+    focusedTestResultSha256: focused[0].resultSha256,
+  });
 }
 
 function reviewHash(review) {
@@ -289,8 +485,9 @@ function reviewHash(review) {
   return sha256(payload);
 }
 
-function reviewValid(review, descriptor) {
+function reviewValid(review, descriptor, tests) {
   const expectedPaths = descriptor.changedPaths.map(({ path }) => path);
+  const findingIds = review?.findingDispositions?.map(({ findingId }) => findingId) ?? [];
   return exactKeys(review, ["classification", "target", "coveredPaths", "changedPathWorklistSha256", "p0", "p1", "deferredFindings", "findingDispositions", "exactReviewHash"])
     && review.classification === "INDEPENDENT_EXACT_HEAD_REPOSITORY_SECURITY_REVIEW"
     && stableJson(review.target) === stableJson(descriptor.target)
@@ -300,10 +497,13 @@ function reviewValid(review, descriptor) {
     && review.p1 === 0
     && Array.isArray(review.deferredFindings) && review.deferredFindings.length === 0
     && Array.isArray(review.findingDispositions)
+    && review.findingDispositions.length === repositoryClosureRequiredFindingIds.length
+    && new Set(findingIds).size === findingIds.length
+    && stableJson(findingIds) === stableJson(repositoryClosureRequiredFindingIds)
     && review.findingDispositions.every((item) => exactKeys(item, ["findingId", "disposition", "evidenceHash"])
-      && typeof item.findingId === "string" && item.findingId.length > 0
+      && repositoryClosureRequiredFindingIds.includes(item.findingId)
       && item.disposition === "CLOSED"
-      && digest(item.evidenceHash))
+      && item.evidenceHash === repositoryClosureFindingEvidenceHash(item.findingId, descriptor, tests))
     && digest(review.exactReviewHash)
     && review.exactReviewHash === reviewHash(review);
 }
@@ -391,9 +591,9 @@ export function repositoryClosure(value, { runGit = git, readReceipt, receiptArt
     && value?.hostedSealingUsed === false
     && leaseCurrent(value?.activeLease, descriptor)
     && (policySelfReview || toolingFallback)
-    && reviewValid(value?.review, descriptor)
+    && reviewValid(value?.review, descriptor, value?.tests)
     && testsValid(value?.tests, descriptor, { readReceipt, receiptArtifactDirectory })
-    && value?.priorFindingsClosed === true
+    && !Object.hasOwn(value ?? {}, "priorFindingsClosed")
     && value?.noDeferredWork === true;
   if (!ok) return { ok: false, status: "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", sealed: false, closure: null };
   const closure = {
@@ -406,6 +606,7 @@ export function repositoryClosure(value, { runGit = git, readReceipt, receiptArt
     changedPathWorklistSha256: descriptor.changedPathWorklistSha256,
     repositorySourceSnapshotDigest: descriptor.repositorySourceSnapshotDigest,
     exactReviewHash: value.review.exactReviewHash,
+    findingDispositions: value.review.findingDispositions.map(({ findingId, evidenceHash }) => ({ findingId, evidenceHash })),
     testResultHashes: value.tests.map(({ id, resultSha256 }) => ({ id, resultSha256 })),
     p0: 0,
     p1: 0,
@@ -509,17 +710,19 @@ export function benchmark() {
     }
     throw new Error("unexpected benchmark git read");
   };
-  const created = createLifecycle({ descriptor, scanId: "s0-benchmark" });
+  const benchmarkScanId = `s0-benchmark:${process.pid}:${Date.now()}:${process.hrtime.bigint()}`;
+  const created = createLifecycle({ descriptor, scanId: benchmarkScanId });
   const noExposure = preflight({
     lifecycle: created.lifecycle,
     descriptor,
-    host: { scanId: "s0-benchmark", scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree }, snapshotDigestExposed: false },
+    host: { scanId: benchmarkScanId, scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree }, snapshotDigestExposed: false },
     runGit,
   });
+  const second = createLifecycle({ descriptor, scanId: `${benchmarkScanId}:missing` });
   const missingDigest = preflight({
-    lifecycle: created.lifecycle,
+    lifecycle: second.lifecycle,
     descriptor,
-    host: { scanId: "s0-benchmark", scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree, snapshotDigest: "" }, snapshotDigestExposed: true },
+    host: { scanId: `${benchmarkScanId}:missing`, scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree, snapshotDigest: "" }, snapshotDigestExposed: true },
     runGit,
   });
   const incidentResults = [...recurringFailures].map(([scanId, error]) => sanitizeIncident({ scanId, error, sourceReviewCompletionState: "SOURCE_REVIEW_COMPLETE", finalizationState: "HOST_PREFLIGHT_BLOCKED", mitigation: "strict repository closure" }));

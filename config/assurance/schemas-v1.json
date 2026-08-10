@@ -501,7 +501,7 @@
     },
     "codexSecurityReliabilityContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["repository", "targetContract", "hostPreflight", "states", "terminalStates", "sourceLease", "completion", "evidenceReuse", "repositoryClosure", "reviewGovernance", "incidentSanitization", "invariants"],
+      "required": ["repository", "targetContract", "hostPreflight", "states", "terminalStates", "sourceLease", "lifecycleAuthority", "completion", "evidenceReuse", "repositoryClosure", "reviewGovernance", "incidentSanitization", "invariants"],
       "properties": {
         "contractId": {"const": "codex-security-reliability-s0-v1"},
         "repository": {"const": "Chillywood2025/chillywood-mobile"},
@@ -532,6 +532,7 @@
           "required": ["requiredFields", "changedSourceDisposition"],
           "properties": {"changedSourceDisposition": {"const": "INVALIDATE_IMMEDIATELY"}}
         },
+        "lifecycleAuthority": {"const": {"storage": "PRIVATE_UID_OWNED_ATOMIC_O_EXCL", "identityKey": ["repository", "scanId", "sourceLeaseHash"], "snapshotBinding": "SHA256_STABLE_JSON_FULL_LIFECYCLE", "initialStateVersion": 0, "completionSourceStateVersion": 3, "completionAttemptConsumedBeforeFinalizationGuards": true, "duplicateScanCode": "CODEX_SECURITY_SCAN_ALREADY_REGISTERED", "staleOrReplayedCompletionCode": "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED"}},
         "completion": {"const": {"maximumAttempts": 1, "failedAttemptIsTerminal": true, "terminalRetryAllowed": false}},
         "evidenceReuse": {
           "type": "object",
@@ -544,11 +545,12 @@
         },
         "repositoryClosure": {
           "type": "object",
-          "required": ["classification", "sealed", "required", "hostedSelfApprovalReason"],
+          "required": ["classification", "sealed", "required", "hostedSelfApprovalReason", "requiredFindingIds"],
           "properties": {
             "classification": {"const": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"},
             "sealed": {"const": false},
-            "hostedSelfApprovalReason": {"const": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"}
+            "hostedSelfApprovalReason": {"const": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"},
+            "requiredFindingIds": {"const": ["PRIOR_FINDING_OMISSION_SELF_ATTESTED", "REPOSITORY_CLOSURE_CALLER_REHASH_BYPASS", "TERMINAL_FINALIZATION_CAN_BE_REPLAYED_FROM_PRE_ATTEMPT_SNAPSHOT"]}
           }
         },
         "reviewGovernance": {"const": {"providerCodexReview": "OPTIONAL_ADVISORY", "ownerTriggeredOnly": true, "automaticRequestAllowed": false, "automaticRetryAllowed": false, "providerReceiptRequired": false, "providerFailureBlocks": [], "requiredPhase1Checks": 13, "repositoryOwnedIndependentExactHeadReviewRequired": true, "p0P1StopLineRequired": true, "lateProviderFindingDisposition": "ADVISORY_UNTIL_INDEPENDENT_REPOSITORY_VALIDATION", "protectedMainFindingSetRegistryRequiredForBlocking": true, "requiredStatusCheckExcluded": "Chi'llywood / Codex Review Exact Head", "rulesetStrict": true, "conversationResolutionRequired": true, "staleReviewDismissalRequired": true, "bypassActors": []}},

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
 import { sha256, stableJson, validateProofTierStatuses } from "../../scripts/assurance/lib.mjs";
@@ -16,6 +17,8 @@ import {
   leaseCurrent,
   preflight,
   repositoryClosure,
+  repositoryClosureFindingEvidenceHash,
+  repositoryClosureRequiredFindingIds,
   repositoryClosureTestIds,
   reusable,
   sanitizeIncident,
@@ -105,12 +108,16 @@ function gitFor(value, replacement = value) {
 }
 
 function lifecycleFor(value = descriptor()) {
-  const result = createLifecycle({ descriptor: value, scanId: "scan-s0-1", scanState: "RUNNING" });
+  const result = createLifecycle({ descriptor: value, scanId: `scan-s0-test:${crypto.randomUUID()}`, scanState: "RUNNING" });
   assert.equal(result.ok, true);
   return result.lifecycle;
 }
 
-function sourceReviewFor(value) {
+function finalizeFor(input) {
+  return finalize(input);
+}
+
+function sourceReviewFor(value, tests) {
   const review = {
     classification: "INDEPENDENT_EXACT_HEAD_REPOSITORY_SECURITY_REVIEW",
     target: value.target,
@@ -119,12 +126,21 @@ function sourceReviewFor(value) {
     p0: 0,
     p1: 0,
     deferredFindings: [],
-    findingDispositions: [],
+    findingDispositions: repositoryClosureRequiredFindingIds.map((findingId) => ({
+      findingId,
+      disposition: "CLOSED",
+      evidenceHash: repositoryClosureFindingEvidenceHash(findingId, value, tests),
+    })),
     exactReviewHash: "",
   };
   const { exactReviewHash: _ignored, ...payload } = review;
   review.exactReviewHash = sha256(payload);
   return review;
+}
+
+function rehashReview(review) {
+  const { exactReviewHash: _ignored, ...payload } = review;
+  review.exactReviewHash = sha256(payload);
 }
 
 function governedReceiptFor(id, value) {
@@ -183,9 +199,8 @@ function closureFixture(value = descriptor()) {
     reason: "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED",
     hostedSealingUsed: false,
     hostScanStarted: false,
-    review: sourceReviewFor(value),
+    review: sourceReviewFor(value, tests),
     tests,
-    priorFindingsClosed: true,
     noDeferredWork: true,
   };
   const dependencies = {
@@ -197,8 +212,9 @@ function closureFixture(value = descriptor()) {
 }
 
 function reachSourceReviewComplete(value = descriptor()) {
-  const host = hostFor(value);
-  const clear = preflight({ lifecycle: lifecycleFor(value), descriptor: value, host, runGit: gitFor(value) });
+  const lifecycle = lifecycleFor(value);
+  const host = hostFor(value, { scanId: lifecycle.scanId });
+  const clear = preflight({ lifecycle, descriptor: value, host, runGit: gitFor(value) });
   assert.equal(clear.ok, true);
   const discovery = beginDiscovery({ lifecycle: clear.lifecycle, descriptor: value, runGit: gitFor(value) });
   assert.equal(discovery.ok, true);
@@ -245,16 +261,20 @@ test("descriptor validation fails closed on every exact identity class", () => {
 test("preflight stops before discovery when host snapshot digest is unavailable", () => {
   const value = descriptor();
   const lifecycle = lifecycleFor(value);
-  const unavailable = preflight({ lifecycle, descriptor: value, host: hostFor(value, { snapshotDigestExposed: false }), runGit: gitFor(value) });
+  const unavailable = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId, snapshotDigestExposed: false }), runGit: gitFor(value) });
   assert.equal(unavailable.status, "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE");
   assert.equal(unavailable.workersStarted, false);
   assert.equal(unavailable.lifecycle.state, "HOST_PREFLIGHT_BLOCKED");
   assert.equal(unavailable.lifecycle.terminal, true);
+  const replayedPreflight = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId }), runGit: gitFor(value) });
+  assert.equal(replayedPreflight.status, "CODEX_SECURITY_ILLEGAL_TRANSITION");
+  assert.equal(replayedPreflight.workersStarted, false);
 
   for (const snapshotDigest of [undefined, null, "", "not-a-digest"]) {
-    const host = hostFor(value);
+    const candidateLifecycle = lifecycleFor(value);
+    const host = hostFor(value, { scanId: candidateLifecycle.scanId });
     host.target.snapshotDigest = snapshotDigest;
-    const missing = preflight({ lifecycle, descriptor: value, host, runGit: gitFor(value) });
+    const missing = preflight({ lifecycle: candidateLifecycle, descriptor: value, host, runGit: gitFor(value) });
     assert.equal(missing.status, "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT");
     assert.equal(missing.discoveryAuthorized, false);
     assert.equal(missing.workersStarted, false);
@@ -274,9 +294,10 @@ test("preflight requires exact repository, scan, base, target, state, and separa
     (host) => { host.target.snapshotDigest = value.repositorySourceSnapshotDigest; },
   ];
   for (const attack of attacks) {
-    const host = structuredClone(hostFor(value));
+    const lifecycle = lifecycleFor(value);
+    const host = structuredClone(hostFor(value, { scanId: lifecycle.scanId }));
     attack(host);
-    const result = preflight({ lifecycle: lifecycleFor(value), descriptor: value, host, runGit: gitFor(value) });
+    const result = preflight({ lifecycle, descriptor: value, host, runGit: gitFor(value) });
     assert.equal(result.ok, false);
     assert.equal(result.workersStarted, false);
     assert.equal(result.lifecycle.terminal, true);
@@ -289,19 +310,23 @@ test("discovery begins only after clear exact preflight and a current source lea
   assert.equal(beginDiscovery({ lifecycle, descriptor: value }).status, "CODEX_SECURITY_ILLEGAL_TRANSITION");
   assert.equal(transition(lifecycle, "DISCOVERY_RUNNING").status, "CODEX_SECURITY_ILLEGAL_TRANSITION");
 
-  const clear = preflight({ lifecycle, descriptor: value, host: hostFor(value), runGit: gitFor(value) });
+  const clear = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId }), runGit: gitFor(value) });
   assert.equal(clear.ok, true);
   assert.equal(clear.workersStarted, false);
   const started = beginDiscovery({ lifecycle: clear.lifecycle, descriptor: value, runGit: gitFor(value) });
   assert.equal(started.ok, true);
   assert.equal(started.workersStarted, true);
 
-  const drifted = beginDiscovery({ lifecycle: clear.lifecycle, descriptor: changedDescriptor(value), runGit: gitFor(value) });
+  const driftLifecycle = lifecycleFor(value);
+  const driftClear = preflight({ lifecycle: driftLifecycle, descriptor: value, host: hostFor(value, { scanId: driftLifecycle.scanId }), runGit: gitFor(value) });
+  const drifted = beginDiscovery({ lifecycle: driftClear.lifecycle, descriptor: changedDescriptor(value), runGit: gitFor(value) });
   assert.equal(drifted.status, "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
   assert.equal(drifted.workersStarted, false);
   assert.equal(drifted.lifecycle.terminal, true);
 
-  const pushed = beginDiscovery({ lifecycle: clear.lifecycle, descriptor: value, runGit: gitFor(value, changedDescriptor(value)) });
+  const pushLifecycle = lifecycleFor(value);
+  const pushClear = preflight({ lifecycle: pushLifecycle, descriptor: value, host: hostFor(value, { scanId: pushLifecycle.scanId }), runGit: gitFor(value) });
+  const pushed = beginDiscovery({ lifecycle: pushClear.lifecycle, descriptor: value, runGit: gitFor(value, changedDescriptor(value)) });
   assert.equal(pushed.status, "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
   assert.equal(pushed.workersStarted, false);
   assert.equal(pushed.lifecycle.terminal, true);
@@ -310,7 +335,7 @@ test("discovery begins only after clear exact preflight and a current source lea
 test("one exact completion attempt seals and cannot be retried", () => {
   const value = descriptor();
   const reached = reachSourceReviewComplete(value);
-  const result = finalize({
+  const result = finalizeFor({
     lifecycle: reached.lifecycle,
     descriptor: value,
     host: reached.host,
@@ -324,8 +349,24 @@ test("one exact completion attempt seals and cannot be retried", () => {
   assert.equal(result.lifecycle.state, "SEALED");
   assert.equal(result.lifecycle.completionAttempts, 1);
   assert.equal(result.lifecycle.terminal, true);
-  assert.equal(finalize({ lifecycle: result.lifecycle, descriptor: value, host: reached.host }).status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED");
+  assert.equal(finalizeFor({ lifecycle: result.lifecycle, descriptor: value, host: reached.host }).status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED");
   assert.equal(transition(result.lifecycle, "CANCELED").status, "CODEX_SECURITY_ILLEGAL_TRANSITION");
+});
+
+test("scan registration and state versions reject duplicate or stale lifecycle snapshots", () => {
+  const value = descriptor();
+  const input = { descriptor: value, scanId: `scan-duplicate-s0:${crypto.randomUUID()}`, scanState: "RUNNING" };
+  const first = createLifecycle(input);
+  assert.equal(first.ok, true);
+  assert.equal(first.lifecycle.stateVersion, 0);
+  assert.equal(createLifecycle(input).status, "CODEX_SECURITY_SCAN_ALREADY_REGISTERED");
+
+  const host = hostFor(value, { scanId: input.scanId });
+  const clear = preflight({ lifecycle: first.lifecycle, descriptor: value, host, runGit: gitFor(value) });
+  assert.equal(clear.lifecycle.stateVersion, 1);
+  const stale = structuredClone(clear.lifecycle);
+  stale.stateVersion = 0;
+  assert.equal(beginDiscovery({ lifecycle: stale, descriptor: value, runGit: gitFor(value) }).status, "CODEX_SECURITY_ILLEGAL_TRANSITION");
 });
 
 test("failed finalization is terminal and consumes the sole completion attempt", () => {
@@ -333,7 +374,7 @@ test("failed finalization is terminal and consumes the sole completion attempt",
   const reached = reachSourceReviewComplete(value);
   const lateMissing = structuredClone(reached.host);
   lateMissing.target.snapshotDigest = "";
-  const failure = finalize({
+  const failure = finalizeFor({
     lifecycle: reached.lifecycle,
     descriptor: value,
     host: lateMissing,
@@ -347,10 +388,24 @@ test("failed finalization is terminal and consumes the sole completion attempt",
   assert.equal(failure.lifecycle.state, "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING");
   assert.equal(failure.lifecycle.completionAttempts, 1);
   assert.equal(failure.lifecycle.terminal, true);
-  assert.equal(finalize({ lifecycle: failure.lifecycle, descriptor: value, host: reached.host }).status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED");
+  assert.equal(finalizeFor({ lifecycle: failure.lifecycle, descriptor: value, host: reached.host }).status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED");
+
+  const replay = finalizeFor({
+    lifecycle: reached.lifecycle,
+    descriptor: value,
+    host: reached.host,
+    sourceReviewComplete: true,
+    coverageComplete: true,
+    deferredFindings: [],
+    ledger: { discovery: true, validation: true, attackPath: true, policy: true },
+    runGit: gitFor(value),
+  });
+  assert.equal(replay.status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED");
+  const recreated = createLifecycle({ descriptor: value, scanId: reached.lifecycle.scanId, scanState: "RUNNING" });
+  assert.equal(recreated.status, "CODEX_SECURITY_SCAN_ALREADY_REGISTERED");
 
   const pushed = reachSourceReviewComplete(value);
-  const changedDuringReview = finalize({
+  const changedDuringReview = finalizeFor({
     lifecycle: pushed.lifecycle,
     descriptor: value,
     host: pushed.host,
@@ -365,13 +420,34 @@ test("failed finalization is terminal and consumes the sole completion attempt",
   assert.equal(changedDuringReview.lifecycle.completionAttempts, 1);
 });
 
+test("authoritative lifecycle snapshot binding rejects caller-mutated finalization state", () => {
+  const value = descriptor();
+  const reached = reachSourceReviewComplete(value);
+  const mutated = structuredClone(reached.lifecycle);
+  mutated.hostBinding.target.snapshotDigest = "e".repeat(64);
+  const result = finalizeFor({
+    lifecycle: mutated,
+    descriptor: value,
+    host: { ...reached.host, target: { ...reached.host.target, snapshotDigest: "e".repeat(64) } },
+    sourceReviewComplete: true,
+    coverageComplete: true,
+    deferredFindings: [],
+    ledger: { discovery: true, validation: true, attackPath: true, policy: true },
+    runGit: gitFor(value),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED");
+});
+
 test("incomplete source review and every terminal lifecycle are no-retry", () => {
   const value = descriptor();
-  const clear = preflight({ lifecycle: lifecycleFor(value), descriptor: value, host: hostFor(value), runGit: gitFor(value) });
+  const lifecycle = lifecycleFor(value);
+  const clear = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId }), runGit: gitFor(value) });
   const running = beginDiscovery({ lifecycle: clear.lifecycle, descriptor: value, runGit: gitFor(value) });
   const incomplete = completeSourceReview({ lifecycle: running.lifecycle, descriptor: value, complete: false, runGit: gitFor(value) });
   assert.equal(incomplete.lifecycle.state, "SOURCE_REVIEW_INCOMPLETE");
   assert.equal(beginDiscovery({ lifecycle: incomplete.lifecycle, descriptor: value }).ok, false);
+  assert.equal(completeSourceReview({ lifecycle: running.lifecycle, descriptor: value, complete: true, runGit: gitFor(value) }).status, "CODEX_SECURITY_ILLEGAL_TRANSITION");
   for (const state of states.filter((candidate) => ["SEALED", "HOST_PREFLIGHT_BLOCKED", "SOURCE_REVIEW_INCOMPLETE", "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "TERMINAL_FAILED", "CANCELED"].includes(candidate))) {
     const lifecycle = { ...lifecycleFor(value), state, terminal: true };
     assert.equal(transition(lifecycle, "CANCELED").ok, false, state);
@@ -413,7 +489,30 @@ test("repository closure is exact, independently reviewed, fully covered, and ne
   assert.equal(result.closure.target.tree, value.target.tree);
   assert.equal(result.closure.p0, 0);
   assert.equal(result.closure.p1, 0);
+  assert.deepEqual(result.closure.findingDispositions.map(({ findingId }) => findingId), repositoryClosureRequiredFindingIds);
   assert.match(result.closure.closureHash, /^[0-9a-f]{64}$/u);
+});
+
+test("repository closure requires the exact known finding set and governed correction evidence", () => {
+  const attacks = [
+    (review) => { review.findingDispositions = []; },
+    (review) => { review.findingDispositions.pop(); },
+    (review) => { review.findingDispositions.push(structuredClone(review.findingDispositions[0])); },
+    (review) => { review.findingDispositions.reverse(); },
+    (review) => { review.findingDispositions[0].findingId = "ATTACKER_OMITS_KNOWN_FINDINGS"; },
+    (review) => { review.findingDispositions[0].evidenceHash = "f".repeat(64); },
+  ];
+  for (const attack of attacks) {
+    const { input, dependencies } = closureFixture();
+    attack(input.review);
+    rehashReview(input.review);
+    assert.equal(repositoryClosure(input, dependencies).ok, false);
+  }
+  const { input, dependencies } = closureFixture();
+  input.review.findingDispositions = [];
+  input.priorFindingsClosed = true;
+  rehashReview(input.review);
+  assert.equal(repositoryClosure(input, dependencies).ok, false, "boolean cannot replace required finding dispositions");
 });
 
 test("repository closure rejects sealed labels, coverage, review, test, lease, and deferred substitutions", () => {
@@ -433,7 +532,7 @@ test("repository closure rejects sealed labels, coverage, review, test, lease, a
     (value) => { value.tests[0].target.tree = "0".repeat(40); },
     (value) => { value.tests[0].resultSha256 = "not-a-hash"; },
     (value) => { value.tests[0].passed = false; },
-    (value) => { value.priorFindingsClosed = false; },
+    (value) => { value.priorFindingsClosed = true; },
     (value) => { value.noDeferredWork = false; },
   ];
   for (const attack of attacks) {
@@ -456,7 +555,7 @@ test("repository closure independently reconstructs the descriptor and governed 
   fabricated.descriptor.contractHashes.policySha256 = "3".repeat(64);
   fabricated.descriptor.repositorySourceSnapshotDigest = repositorySnapshotDigest(fabricated.descriptor);
   fabricated.activeLease = lease(fabricated.descriptor);
-  fabricated.review = sourceReviewFor(fabricated.descriptor);
+  fabricated.review = sourceReviewFor(fabricated.descriptor, fabricated.tests);
   fabricated.tests = fabricated.tests.map((item) => ({ ...item, target: fabricated.descriptor.target }));
   assert.equal(repositoryClosure(fabricated, dependencies).ok, false, "caller-rehashed descriptor denied by Git reconstruction");
 
@@ -493,7 +592,8 @@ test("repository closure independently reconstructs the descriptor and governed 
 
 test("tooling-preflight closure requires a matching terminal preflight reason", () => {
   const value = descriptor();
-  const blocked = preflight({ lifecycle: lifecycleFor(value), descriptor: value, host: hostFor(value, { snapshotDigestExposed: false }), runGit: gitFor(value) });
+  const lifecycle = lifecycleFor(value);
+  const blocked = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId, snapshotDigestExposed: false }), runGit: gitFor(value) });
   const { input, dependencies } = closureFixture(value);
   input.reason = "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE";
   input.lifecycle = blocked.lifecycle;
@@ -655,8 +755,19 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
   assert.equal(contract.hostPreflight.workersStartedOnFailure, false);
   assert.equal(contract.completion.maximumAttempts, 1);
   assert.equal(contract.completion.terminalRetryAllowed, false);
+  assert.deepEqual(contract.lifecycleAuthority, {
+    storage: "PRIVATE_UID_OWNED_ATOMIC_O_EXCL",
+    identityKey: ["repository", "scanId", "sourceLeaseHash"],
+    snapshotBinding: "SHA256_STABLE_JSON_FULL_LIFECYCLE",
+    initialStateVersion: 0,
+    completionSourceStateVersion: 3,
+    completionAttemptConsumedBeforeFinalizationGuards: true,
+    duplicateScanCode: "CODEX_SECURITY_SCAN_ALREADY_REGISTERED",
+    staleOrReplayedCompletionCode: "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED",
+  });
   assert.equal(contract.repositoryClosure.classification, "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
   assert.equal(contract.repositoryClosure.sealed, false);
+  assert.deepEqual(contract.repositoryClosure.requiredFindingIds, repositoryClosureRequiredFindingIds);
   assert.deepEqual(contract.reviewGovernance, {
     providerCodexReview: "OPTIONAL_ADVISORY",
     ownerTriggeredOnly: true,
