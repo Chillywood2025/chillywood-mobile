@@ -112,6 +112,41 @@ test("provider no-suggestion issue comment binds its unique commit prefix to the
   assert.equal(providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: collidingOldCommit, contract }), null);
 });
 
+test("every observed provider no-suggestion preamble remains exact and fail closed", () => {
+  for (const preamble of [
+    "Codex Review: Didn't find any major issues. Keep them coming!",
+    "Codex Review: Didn't find any major issues. Can't wait for the next one!"
+  ]) {
+    const review = providerCleanIssueCommentReview({
+      comment: {
+        author: "chatgpt-codex-connector",
+        commentId: 9001,
+        body: `${preamble}\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+        createdAt: "2026-08-09T12:30:00Z",
+        updatedAt: "2026-08-09T12:30:00Z"
+      },
+      currentHead: headA,
+      resolvedCommit: headA,
+      contract
+    });
+    assert.equal(review?.commit, headA);
+  }
+
+  const lookalike = providerCleanIssueCommentReview({
+    comment: {
+      author: "chatgpt-codex-connector",
+      commentId: 9002,
+      body: `Codex Review: Didn't find any major issues. Check this manually!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+      createdAt: "2026-08-09T12:30:00Z",
+      updatedAt: "2026-08-09T12:30:00Z"
+    },
+    currentHead: headA,
+    resolvedCommit: headA,
+    contract
+  });
+  assert.equal(lookalike, null);
+});
+
 test("an exact provider no-suggestion issue comment is a clean rereview disposition", () => {
   const cleanComment = {
     commentId: 9101,
