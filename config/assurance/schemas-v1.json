@@ -535,9 +535,42 @@
         "observationHash": {"const": "12823e4f14e5ecf64b5ebdc279d4cc9bd4b626f28b96f93738ac86edb9074178"}
       }
     },
+    "a1BootstrapPhase1GithubReadback": {
+      "allOf": [{"$ref": "#/$defs/baseContract"}],
+      "required": ["repository", "carrierHead", "observedAt", "evidenceMode", "historicalRulesetPublisherBinding", "workflowRunId", "workflowId", "workflowPath", "workflowEvent", "workflowHeadBranch", "workflowStatus", "workflowConclusion", "runAttempt", "checkSuiteId", "checkSuiteAppId", "checkSuiteAppSlug", "checkSuiteStatus", "checkSuiteConclusion", "checkRunQueryPageSize", "totalCheckRunsOnHead", "returnedCheckRuns", "checkRunReadbackComplete", "totalPhase1NamedCheckRuns", "unexpectedPhase1NamedCheckRuns", "checkRuns", "observationHash"],
+      "properties": {
+        "contractId": {"const": "a1-bootstrap-phase1-github-readback-v1"},
+        "repository": {"const": "Chillywood2025/chillywood-mobile"},
+        "carrierHead": {"const": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6"},
+        "observedAt": {"const": "2026-08-10T07:35:23Z"},
+        "evidenceMode": {"const": "github-read-only"},
+        "historicalRulesetPublisherBinding": {"const": "CONTEXT_ONLY_NO_INTEGRATION_ID_IN_PROVIDER_HISTORY"},
+        "workflowRunId": {"const": 31354601386},
+        "workflowId": {"const": 251388000},
+        "workflowPath": {"const": ".github/workflows/phase1-ci.yml"},
+        "workflowEvent": {"const": "pull_request"},
+        "workflowHeadBranch": {"const": "codex/assurance-active-task-and-claim-freshness-a1"},
+        "workflowStatus": {"const": "completed"},
+        "workflowConclusion": {"const": "success"},
+        "runAttempt": {"const": 1},
+        "checkSuiteId": {"const": 85044313814},
+        "checkSuiteAppId": {"const": 15368},
+        "checkSuiteAppSlug": {"const": "github-actions"},
+        "checkSuiteStatus": {"const": "completed"},
+        "checkSuiteConclusion": {"const": "success"},
+        "checkRunQueryPageSize": {"const": 100},
+        "totalCheckRunsOnHead": {"const": 18},
+        "returnedCheckRuns": {"const": 18},
+        "checkRunReadbackComplete": {"const": true},
+        "totalPhase1NamedCheckRuns": {"const": 13},
+        "unexpectedPhase1NamedCheckRuns": {"const": 0},
+        "checkRuns": {"type": "array", "minItems": 13, "maxItems": 13},
+        "observationHash": {"const": "3941923be5e8ff9bd450333925a1390b35702693ae313788985501239b3481b2"}
+      }
+    },
     "githubMainRulesetReadbackContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["patchId", "repository", "rulesetId", "rulesetName", "target", "enforcement", "conditions", "ownerBootstrapAuthorizationReceipt", "ownerFinalCarrierBindingReceipt", "ownerFinalCarrierGithubReadback", "requiredStatusCheckToAdd", "preserveExistingRequiredStatusChecks", "strictRequiredStatusChecksPolicy", "requiredCheckPublisherBoundary", "pullRequestRequirements", "applicationState", "applicationReadback", "authorizedBootstrapException"],
+      "required": ["patchId", "repository", "rulesetId", "rulesetName", "target", "enforcement", "conditions", "ownerBootstrapAuthorizationReceipt", "ownerFinalCarrierBindingReceipt", "ownerFinalCarrierGithubReadback", "bootstrapPhase1GithubReadback", "requiredStatusCheckToAdd", "preserveExistingRequiredStatusChecks", "strictRequiredStatusChecksPolicy", "requiredCheckPublisherBoundary", "pullRequestRequirements", "applicationState", "applicationReadback", "authorizedBootstrapException"],
       "properties": {
         "contractId": {"const": "github-main-ruleset-codex-review-v1"},
         "patchId": {"const": "main-pr-review-protection-codex-review-exact-head-v1"},
@@ -550,6 +583,7 @@
         "ownerBootstrapAuthorizationReceipt": {"const": "config/assurance/a1-owner-bootstrap-authorization-v1.json"},
         "ownerFinalCarrierBindingReceipt": {"const": "config/assurance/a1-owner-final-carrier-binding-v1.json"},
         "ownerFinalCarrierGithubReadback": {"const": "config/assurance/a1-owner-final-carrier-github-readback-v1.json"},
+        "bootstrapPhase1GithubReadback": {"const": "config/assurance/a1-bootstrap-phase1-github-readback-v1.json"},
         "requiredStatusCheckToAdd": {"const": "Chi'llywood / Codex Review Exact Head"},
         "preserveExistingRequiredStatusChecks": {"const": true},
         "strictRequiredStatusChecksPolicy": {"const": true},
@@ -592,7 +626,7 @@
         },
         "authorizedBootstrapException": {
           "type": "object",
-          "required": ["pullRequest", "carrierHead", "carrierTree", "mergeSha", "mergedAt", "temporarilyRemovedStatusCheck", "ownerAuthorizationReceiptHash", "ownerFinalCarrierBindingReceiptHash", "ownerFinalCarrierGithubObservationHash", "protectionWindow", "phase1ChecksPreserved", "strictPolicyPreserved", "conversationResolutionPreserved", "staleReviewDismissalPreserved", "bypassActorsPreservedEmpty", "restoredImmediatelyAfterMerge", "restoredRulesetUpdatedAt"],
+          "required": ["pullRequest", "carrierHead", "carrierTree", "mergeSha", "mergedAt", "temporarilyRemovedStatusCheck", "ownerAuthorizationReceiptHash", "ownerFinalCarrierBindingReceiptHash", "ownerFinalCarrierGithubObservationHash", "bootstrapPhase1GithubObservationHash", "protectionWindow", "phase1ChecksPreserved", "strictPolicyPreserved", "conversationResolutionPreserved", "staleReviewDismissalPreserved", "bypassActorsPreservedEmpty", "restoredImmediatelyAfterMerge", "restoredRulesetUpdatedAt"],
           "properties": {
             "pullRequest": {"const": 205},
             "carrierHead": {"const": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6"},
@@ -603,6 +637,7 @@
             "ownerAuthorizationReceiptHash": {"const": "13a97809e2f84a86e8958e607e2d132ef2b6e3c6829c83f566fcca9a547e0744"},
             "ownerFinalCarrierBindingReceiptHash": {"const": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c"},
             "ownerFinalCarrierGithubObservationHash": {"const": "12823e4f14e5ecf64b5ebdc279d4cc9bd4b626f28b96f93738ac86edb9074178"},
+            "bootstrapPhase1GithubObservationHash": {"const": "3941923be5e8ff9bd450333925a1390b35702693ae313788985501239b3481b2"},
             "protectionWindow": {
               "type": "object",
               "required": ["preRemovalVersionId", "preRemovalUpdatedAt", "preRemovalStatusCheckSetSha256", "removalVersionId", "removedAt", "removalStatusCheckSetSha256", "restorationVersionId", "restoredAt", "restoredStatusCheckSetSha256", "policySnapshots", "policySnapshotHashes", "mainBeforeRemoval", "mainAfterRestoration", "admittedMergeShas", "additionalMergesAdmitted"],
@@ -619,7 +654,7 @@
                     "restoration": {"type": "object"}
                   }
                 },
-                "policySnapshotHashes": {"const": {"preRemoval": "19413cb895a29af9ffbb2237d0718a1d0d73b84d06a72ac1a7a5bbab9150a80a", "removal": "feb96dc43e989978e0f3cf43610495ad96688dad73ef19db7ac03f23b5315aa8", "restoration": "19413cb895a29af9ffbb2237d0718a1d0d73b84d06a72ac1a7a5bbab9150a80a"}}
+                "policySnapshotHashes": {"const": {"preRemoval": "8c7ce72537975864b54510336a43facefd8762f12b87f8f68ea6bf0d2816cd42", "removal": "bdb2ff6151179fe6ae50fbb716bd2fbe4c6a3edbc20a0791610c2bd5ba687bb3", "restoration": "8c7ce72537975864b54510336a43facefd8762f12b87f8f68ea6bf0d2816cd42"}}
               }
             },
             "phase1ChecksPreserved": {"const": 13},

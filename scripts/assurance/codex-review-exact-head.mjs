@@ -73,9 +73,8 @@ export function providerCleanIssueCommentPrefix({ comment, contract }) {
     || prefixLength < 7
     || prefixLength > 40
     || severityFromBody(body)) return null;
-  const markerPattern = new RegExp(`\\*\\*Reviewed commit:\\*\\*\\s*\`([0-9a-f]{${prefixLength}})\``, "gu");
-  const prefixes = [...body.matchAll(markerPattern)].map((match) => match[1]);
-  return prefixes.length === 1 ? prefixes[0] : null;
+  const recognizableMarkers = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/gu)].map((match) => match[1]);
+  return recognizableMarkers.length === 1 && recognizableMarkers[0].length === prefixLength ? recognizableMarkers[0] : null;
 }
 
 export function providerCleanIssueCommentReview({ comment, currentHead, resolvedCommit, contract }) {

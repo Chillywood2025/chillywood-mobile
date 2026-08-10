@@ -8,8 +8,9 @@ const contract = readJson("config/assurance/github-main-ruleset-codex-review-v1.
 const authorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-authorization-v1.json");
 const finalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-carrier-binding-v1.json");
 const finalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-carrier-github-readback-v1.json");
+const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-phase1-github-readback-v1.json");
 const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
-const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T07:30:00Z", freshnessMode = "CURRENT_CLAIM") => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, mergeIdentity: identity, now, freshnessMode });
+const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T07:36:00Z", freshnessMode = "CURRENT_CLAIM", phase1Readback = bootstrapPhase1GithubReadback) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, bootstrapPhase1GithubReadback: phase1Readback, mergeIdentity: identity, now, freshnessMode });
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -172,11 +173,35 @@ test("every protection-window version binds its complete provider policy", () =>
     (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.preventNonFastForward = false; },
     (candidate) => candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.bypassActors.push({ actorId: 1 }),
     (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.conditions.ref_name.include = ["refs/heads/not-main"]; },
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.requiredStatusChecks.publisherBindingState = "INTEGRATION_BOUND"; },
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.requiredStatusChecks.contexts[0].integration_id = 1; },
     (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshotHashes.removal = "0".repeat(64); }
   ]) {
     const candidate = structuredClone(contract);
     mutate(candidate);
     assert.ok(validate(candidate).some((error) => error.includes("protection-window")));
+  }
+});
+
+test("the historical context-only ruleset state is separated from exact GitHub Actions check-run evidence", () => {
+  assert.equal(contract.authorizedBootstrapException.protectionWindow.policySnapshots.removal.requiredStatusChecks.publisherBindingState, "CONTEXT_ONLY_NO_INTEGRATION_ID_IN_PROVIDER_HISTORY");
+  for (const mutate of [
+    (readback) => { readback.checkRuns[0].appId = 1; },
+    (readback) => { readback.checkRuns[0].appSlug = "attacker"; },
+    (readback) => { readback.checkRuns[0].name = "Unrelated / Green Check"; },
+    (readback) => { readback.checkRuns[0].checkSuiteId = 1; },
+    (readback) => { readback.checkRuns[0].conclusion = "neutral"; },
+    (readback) => { readback.unexpectedPhase1NamedCheckRuns = 1; },
+    (readback) => { readback.totalCheckRunsOnHead = 19; },
+    (readback) => { readback.returnedCheckRuns = 17; },
+    (readback) => { readback.checkRunReadbackComplete = false; },
+    (readback) => { readback.historicalRulesetPublisherBinding = "INTEGRATION_BOUND"; },
+    (readback) => readback.checkRuns.pop()
+  ]) {
+    const readback = structuredClone(bootstrapPhase1GithubReadback);
+    mutate(readback);
+    const errors = validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2026-08-10T07:36:00Z", "CURRENT_CLAIM", readback);
+    assert.ok(errors.some((error) => error.includes("bootstrap Phase 1 GitHub observation")));
   }
 });
 

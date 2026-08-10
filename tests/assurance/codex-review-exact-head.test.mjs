@@ -162,6 +162,11 @@ test("provider clean-review commit markers use only the contracted prefix length
   for (const length of [9, 11, 39, 40]) {
     assert.equal(providerCleanIssueCommentReview({ comment: makeComment(headA.slice(0, length)), currentHead: headA, resolvedCommit: headA, contract }), null);
   }
+  for (const extraMarker of [headB.slice(0, 9), headB.slice(0, 11), headB]) {
+    const ambiguous = makeComment(headA.slice(0, 10));
+    ambiguous.body += `\n**Reviewed commit:** \`${extraMarker}\``;
+    assert.equal(providerCleanIssueCommentReview({ comment: ambiguous, currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
 });
 
 test("an exact provider no-suggestion issue comment is a clean rereview disposition", () => {

@@ -14,6 +14,7 @@ const contracts = [
   ["config/assurance/a1-owner-bootstrap-authorization-v1.json", "a1OwnerBootstrapAuthorizationReceipt"],
   ["config/assurance/a1-owner-final-carrier-binding-v1.json", "a1OwnerFinalCarrierBindingReceipt"],
   ["config/assurance/a1-owner-final-carrier-github-readback-v1.json", "a1OwnerFinalCarrierGithubReadback"],
+  ["config/assurance/a1-bootstrap-phase1-github-readback-v1.json", "a1BootstrapPhase1GithubReadback"],
   ["config/assurance/github-main-ruleset-codex-review-v1.json", "githubMainRulesetReadbackContract"],
   ["config/assurance/external-evidence-receipt-v1.json", "externalEvidenceReceiptContract"],
   ["config/assurance/test-impact-map-v1.json", "testImpactMap"],
@@ -79,8 +80,9 @@ const githubRulesetReadback = readJson("config/assurance/github-main-ruleset-cod
 const ownerAuthorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-authorization-v1.json");
 const ownerFinalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-carrier-binding-v1.json");
 const ownerFinalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-carrier-github-readback-v1.json");
+const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-phase1-github-readback-v1.json");
 const bootstrapMergeIdentity = readBootstrapMergeIdentity(githubRulesetReadback.authorizedBootstrapException.mergeSha);
-errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, mergeIdentity: bootstrapMergeIdentity, freshnessMode: "STRUCTURAL" }));
+errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, bootstrapPhase1GithubReadback, mergeIdentity: bootstrapMergeIdentity, freshnessMode: "STRUCTURAL" }));
 if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
 if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");
 const defectFields = ["id", "tags", "affectedDomains", "preImplementationQuestions", "requiredProofTier", "detectionRule", "testTemplate", "runtimeSignature", "rollback", "prevention", "blocks"];

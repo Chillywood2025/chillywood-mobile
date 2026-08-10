@@ -95,6 +95,7 @@ const bootstrapPolicySnapshot = (checks) => ({
   requiredStatusChecks: {
     doNotEnforceOnCreate: false,
     contexts: checks.map((context) => ({ context })),
+    publisherBindingState: "CONTEXT_ONLY_NO_INTEGRATION_ID_IN_PROVIDER_HISTORY",
     strictRequiredStatusChecksPolicy: true
   }
 });
@@ -103,6 +104,22 @@ export const bootstrapWindowPolicies = {
   removal: bootstrapPolicySnapshot(phase1Checks),
   restoration: bootstrapPolicySnapshot(requiredChecks)
 };
+export const bootstrapPhase1CheckRuns = [
+  { id: 93351858559, name: "Phase 1 / Android Regression Guards", externalId: "7787b136-cccd-5b17-bfc3-e74575911ad7", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:20Z", completedAt: "2026-08-10T04:09:56Z", status: "completed", conclusion: "success" },
+  { id: 93351858389, name: "Phase 1 / Autonomous Systems All-Platform Contract", externalId: "27d9ff2f-46c1-5079-8ce4-9d1fd2076fbe", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:13Z", completedAt: "2026-08-10T04:10:29Z", status: "completed", conclusion: "success" },
+  { id: 93351858448, name: "Phase 1 / Autonomous Systems iOS Contract", externalId: "af314a5a-e2bb-5280-a8fb-ab2ac45d36eb", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:09:46Z", status: "completed", conclusion: "success" },
+  { id: 93351858455, name: "Phase 1 / Cognitive Execution Safety", externalId: "9e27f680-9707-5fc1-a0b9-b70d729634cd", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:10:46Z", status: "completed", conclusion: "success" },
+  { id: 93351858432, name: "Phase 1 / Cognitive Intelligence Contract", externalId: "65644c83-a708-5f35-9fa9-8ffb9e8f6ded", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:09:50Z", status: "completed", conclusion: "success" },
+  { id: 93351858561, name: "Phase 1 / Expo Doctor", externalId: "72a7e901-96e9-5fb2-954b-54468d1eebd7", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:09:48Z", status: "completed", conclusion: "success" },
+  { id: 93351858538, name: "Phase 1 / Repository Lint", externalId: "2f0bf503-f895-543c-87ac-6cdff9ac5ca5", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:09:57Z", status: "completed", conclusion: "success" },
+  { id: 93351858438, name: "Phase 1 / Research and Memory Integrity", externalId: "7a3ba917-2115-5712-8853-822943f8fb47", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:14:05Z", status: "completed", conclusion: "success" },
+  { id: 93351858525, name: "Phase 1 / Route Contracts", externalId: "f713a837-4392-5d08-b873-7f18c84bb21f", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:20Z", completedAt: "2026-08-10T04:09:56Z", status: "completed", conclusion: "success" },
+  { id: 93351858562, name: "Phase 1 / Runtime Validation", externalId: "6b2a8f8a-9452-5570-8848-4e037d7d767f", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:19Z", completedAt: "2026-08-10T04:09:50Z", status: "completed", conclusion: "success" },
+  { id: 93351858456, name: "Phase 1 / Supabase Database Integration", externalId: "37546964-7c41-5f91-a23e-4e4a833811c9", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:14:23Z", status: "completed", conclusion: "success" },
+  { id: 93351858572, name: "Phase 1 / TypeScript", externalId: "a6568e09-af81-52b9-a524-ca8c86a4a918", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:10:01Z", status: "completed", conclusion: "success" },
+  { id: 93351858558, name: "Phase 1 / iOS Configuration", externalId: "2ec1c1c8-7cbb-5f62-852f-4aceab65f0ae", checkSuiteId: 85044313814, appId: 15368, appSlug: "github-actions", startedAt: "2026-08-10T04:09:14Z", completedAt: "2026-08-10T04:09:57Z", status: "completed", conclusion: "success" }
+];
+export const bootstrapPhase1GithubReadbackPath = "config/assurance/a1-bootstrap-phase1-github-readback-v1.json";
 export const ownerAuthorizationReceiptPath = "config/assurance/a1-owner-bootstrap-authorization-v1.json";
 export const ownerFinalCarrierBindingReceiptPath = "config/assurance/a1-owner-final-carrier-binding-v1.json";
 export const ownerFinalCarrierGithubReadbackPath = "config/assurance/a1-owner-final-carrier-github-readback-v1.json";
@@ -170,6 +187,45 @@ const observationHash = (observation) => {
   delete payload.observationHash;
   return sha256(stableJson(payload));
 };
+
+export function validateBootstrapPhase1GithubReadback(observation, now = new Date()) {
+  const errors = [];
+  const observedAt = Date.parse(observation?.observedAt ?? "");
+  const validationNow = now instanceof Date ? now.valueOf() : Date.parse(now ?? "");
+  const names = observation?.checkRuns?.map(({ name }) => name);
+  if (observation?.contractId !== "a1-bootstrap-phase1-github-readback-v1"
+    || observation?.repository !== "Chillywood2025/chillywood-mobile"
+    || observation?.carrierHead !== canonicalOwnerFinalCarrierBindingReceipt.admittedCarrierHead
+    || observation?.historicalRulesetPublisherBinding !== "CONTEXT_ONLY_NO_INTEGRATION_ID_IN_PROVIDER_HISTORY"
+    || observation?.evidenceMode !== "github-read-only"
+    || observation?.workflowRunId !== canonicalOwnerFinalCarrierBindingReceipt.phase1RunId
+    || observation?.workflowId !== 251388000
+    || observation?.workflowPath !== ".github/workflows/phase1-ci.yml"
+    || observation?.workflowEvent !== "pull_request"
+    || observation?.workflowHeadBranch !== "codex/assurance-active-task-and-claim-freshness-a1"
+    || observation?.workflowStatus !== "completed"
+    || observation?.workflowConclusion !== "success"
+    || observation?.runAttempt !== 1
+    || observation?.checkSuiteId !== 85044313814
+    || observation?.checkSuiteAppId !== githubActionsIntegrationId
+    || observation?.checkSuiteAppSlug !== "github-actions"
+    || observation?.checkSuiteStatus !== "completed"
+    || observation?.checkSuiteConclusion !== "success"
+    || observation?.checkRunQueryPageSize !== 100
+    || observation?.totalCheckRunsOnHead !== 18
+    || observation?.returnedCheckRuns !== observation?.totalCheckRunsOnHead
+    || observation?.checkRunReadbackComplete !== true
+    || observation?.totalPhase1NamedCheckRuns !== phase1Checks.length
+    || observation?.unexpectedPhase1NamedCheckRuns !== 0
+    || !same(names, phase1Checks)
+    || !same(observation?.checkRuns, bootstrapPhase1CheckRuns)
+    || !bootstrapPhase1CheckRuns.every(({ appId, appSlug, checkSuiteId, status, conclusion }) => appId === githubActionsIntegrationId && appSlug === "github-actions" && checkSuiteId === 85044313814 && status === "completed" && conclusion === "success")
+    || ![observedAt, validationNow].every(Number.isFinite)
+    || observedAt < Date.parse("2026-08-10T04:14:24Z")
+    || observedAt > validationNow
+    || observation?.observationHash !== observationHash(observation)) errors.push("github ruleset readback: bootstrap Phase 1 GitHub observation mismatch");
+  return errors;
+}
 
 export function validateOwnerFinalCarrierGithubReadback(bindingReceipt, observation, now = new Date()) {
   const errors = [];
@@ -241,7 +297,7 @@ export function readBootstrapMergeIdentity(mergeSha, gitRead = git) {
   }
 }
 
-export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, mergeIdentity, now = new Date(), freshnessMode }) {
+export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, bootstrapPhase1GithubReadback, mergeIdentity, now = new Date(), freshnessMode }) {
   const errors = [];
   const readback = contract?.applicationReadback;
   const exception = contract?.authorizedBootstrapException;
@@ -314,6 +370,9 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (contract?.ownerFinalCarrierGithubReadback !== ownerFinalCarrierGithubReadbackPath
     || exception?.ownerFinalCarrierGithubObservationHash !== finalCarrierGithubReadback?.observationHash) add("owner final-carrier GitHub observation binding mismatch");
   errors.push(...validateOwnerFinalCarrierGithubReadback(finalCarrierBindingReceipt, finalCarrierGithubReadback, now));
+  if (contract?.bootstrapPhase1GithubReadback !== bootstrapPhase1GithubReadbackPath
+    || exception?.bootstrapPhase1GithubObservationHash !== bootstrapPhase1GithubReadback?.observationHash) add("bootstrap Phase 1 GitHub observation binding mismatch");
+  errors.push(...validateBootstrapPhase1GithubReadback(bootstrapPhase1GithubReadback, now));
   if (exception?.pullRequest !== authorizationReceipt?.prNumber || exception?.mergeSha !== window?.mainAfterRestoration) add("bootstrap subject mismatch");
   if (exception?.temporarilyRemovedStatusCheck !== exactHeadCheck
     || exception?.phase1ChecksPreserved !== phase1Checks.length
