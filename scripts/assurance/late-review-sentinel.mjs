@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, mergeLateReviewSentinelRecords, readJson, repositoryReadbackEvidenceHash, stableJson } from "./lib.mjs";
+import { args, emit, git, lateReviewAllowedOwners, lateReviewFindingSetEqual, lateReviewRegistryCoverageFindings, lateReviewResolutionTombstoneValid, lateReviewSentinelResolved, lateReviewSuccessorCorrectionOwner, mergeLateReviewSentinelRecords, readJson, repositoryReadbackEvidenceHash, stableJson } from "./lib.mjs";
 import { parseLateReviewIssue, readMergedLateReviewLedgerSentinels, readOpenLateReviewIssues, verifyLateReviewResolutionGithub } from "./codex-review-exact-head.mjs";
 
 export { lateReviewSentinelResolved } from "./lib.mjs";
@@ -178,6 +178,12 @@ export function validateLateReviewSentinelState(record, options = {}) {
     if (lateReviewAllowedOwners(sentinel).length === 0) findings.push({ id: "LATE_REVIEW_OWNER_POLICY_INVALID", prNumber: sentinel.prNumber });
     if (claimsResolution && !resolved) findings.push({ id: "LATE_REVIEW_RESOLUTION_EVIDENCE_INVALID", prNumber: sentinel.prNumber });
     if (resolved) continue;
+    const activeImplementationBranch = record?.activeTaskBinding?.implementationBranch;
+    if (record?.activeTaskBinding?.phase === "COMPLETE"
+      && (lateReviewSuccessorCorrectionOwner(sentinel) === activeImplementationBranch
+        || !lateReviewAllowedOwners(sentinel).includes(activeImplementationBranch))) {
+      findings.push({ id: "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", prNumber: sentinel.prNumber });
+    }
     const binding = typeof sentinel.bindingPath === "string" ? record?.[sentinel.bindingPath] : null;
     if (JSON.stringify(sentinel.blocks) !== JSON.stringify(requiredBlocks)) findings.push({ id: "LATE_REVIEW_BLOCK_SET_INVALID", prNumber: sentinel.prNumber });
     if (!binding || binding.implementationPr !== sentinel.prNumber) findings.push({ id: "LATE_REVIEW_AFFECTED_BINDING_MISSING", prNumber: sentinel.prNumber });

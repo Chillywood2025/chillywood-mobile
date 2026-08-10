@@ -6,14 +6,37 @@ import test from "node:test";
 import {
   activeTask,
   ownerBootstrapAuthorizationCommentBody,
-  ownerBootstrapBindingSubject
+  ownerBootstrapBindingSubject,
+  validateStructuredBinding,
+  verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
-import { stableJson } from "../../scripts/assurance/lib.mjs";
+import { renderCurrentState, stableJson, validateProofTierStatuses, verifyCompletedImplementationMergeIdentity } from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
 const registry = read("config/assurance/feature-registry-v1.json");
 const allowlist = read("config/assurance/command-allowlist-v1.json");
+const gateCatalog = read("config/assurance/gate-catalog-v1.json");
+const e0Feature = registry.features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
+const callFeature = registry.features.find(({ featureId }) => featureId === "chilly-chat-call-lifecycle");
+const creatorFeature = registry.features.find(({ featureId }) => featureId === "creator-money-ledger");
+const cognitiveFeature = registry.features.find(({ featureId }) => featureId === "autonomous-cognitive-governance");
+const completedProofTierStatuses = {
+  T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
+  T1_SOURCE: "SOURCE_CLEAR",
+  T2_MODEL: "MODEL_CLEAR",
+  T3_INTEGRATION: "INTEGRATION_CLEAR",
+  T4_NATIVE_PROVIDER: "NOT_APPLICABLE",
+  T5_SIGNED_ARTIFACT: "NOT_APPLICABLE",
+  T6_INSTALLED_PHYSICAL: "NOT_APPLICABLE",
+  T7_PUBLIC_CANARY: "NOT_APPLICABLE"
+};
+const e0CompletionFacts = [
+  "repository.assurance-control.a1.requirements",
+  "repository.assurance-control.a1.source",
+  "repository.assurance-control.a1.model",
+  "repository.assurance-control.a1.integration"
+];
 const binding = {
   schemaVersion: 1,
   featureId: "chilly-chat-call-lifecycle",
@@ -38,6 +61,18 @@ const binding = {
   }],
   proofTiersUnderEvaluation: ["T1_SOURCE"]
 };
+const e0CompletionClaims = () => binding.requiredFreshnessClaims.map((claim) => ({
+  ...claim,
+  provider: "NONE",
+  requiredFacts: e0CompletionFacts
+}));
+const latestMergedFor = (candidate) => ({
+  number: candidate.implementationPr,
+  state: "merged",
+  head: candidate.currentImplementationHead,
+  mergeSha: "e".repeat(40),
+  title: "Exact completed implementation"
+});
 const truth = {
   ...canonicalTruth,
   lateReviewSentinels: [],
@@ -205,6 +240,7 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
 
   const editedObservation = { ...ownerBootstrapAuthorizationObservation, body: `${ownerBootstrapAuthorizationObservation.body}\nedited` };
   assert.deepEqual(activeTask({ ...facts, currentTruth: a1, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation: editedObservation }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"]);
+
 });
 
 test("conflicting feature override fails closed", () => {
@@ -394,9 +430,19 @@ test("freshness claim scopes must match declared classes and proof tiers", () =>
 });
 
 test("a completed binding is not an active task and no override can revive it", () => {
+  const completedBinding = {
+    ...binding,
+    featureId: "assurance-efficiency-e0",
+    phase: "COMPLETE",
+    proofTierStatuses: completedProofTierStatuses,
+    proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    requiredFreshnessClaims: e0CompletionClaims()
+  };
   const completeTruth = {
     ...truth,
-    activeTaskBinding: { ...binding, phase: "COMPLETE" },
+    activeTaskBinding: completedBinding,
+    latestMergedImplementationPr: latestMergedFor(completedBinding),
     openImplementationPrs: []
   };
   const completeIdentity = {
@@ -419,7 +465,313 @@ test("a completed binding is not an active task and no override can revive it", 
   });
   assert.equal(competing.ok, false);
   assert.deepEqual(competing.findings, ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
-  assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: binding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+  assert.deepEqual(activeTask({ ...facts, currentTruth: completeTruth, protectedMainTruth: completeTruth, featureId: completedBinding.featureId }).findings, ["ACTIVE_TASK_NONE"]);
+  const unrelatedSentinelTruth = {
+    ...completeTruth,
+    lateReviewSentinels: canonicalTruth.lateReviewSentinels
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: unrelatedSentinelTruth,
+    protectedMainTruth: unrelatedSentinelTruth,
+    featureId: completedBinding.featureId
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
+  const assuranceBootstrapBinding = {
+    ...completedBinding,
+    implementationBranch: "codex/assurance-codex-security-scan-reliability-s0"
+  };
+  const assuranceBootstrapTruth = {
+    ...completeTruth,
+    activeTaskBinding: assuranceBootstrapBinding,
+    latestMergedImplementationPr: latestMergedFor(assuranceBootstrapBinding),
+    lateReviewSentinels: canonicalTruth.lateReviewSentinels
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: assuranceBootstrapTruth,
+    protectedMainTruth: assuranceBootstrapTruth,
+    featureId: assuranceBootstrapBinding.featureId
+  }).findings, ["ACTIVE_TASK_NONE"]);
+  const sentinelBlockedTruth = {
+    ...completeTruth,
+    lateReviewSentinels: [{
+      ...canonicalTruth.lateReviewSentinels[0],
+      successorCorrectionOwner: completedBinding.implementationBranch
+    }]
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: sentinelBlockedTruth,
+    protectedMainTruth: sentinelBlockedTruth,
+    featureId: completedBinding.featureId
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
+  const discoverySentinel = structuredClone(canonicalTruth.lateReviewSentinels.find(({ prNumber }) => prNumber === 195));
+  discoverySentinel.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoverySentinel.assuranceControlOwner;
+  delete discoverySentinel.authorizedBootstrapOwners;
+  const assuranceCorrectionBinding = {
+    ...completedBinding,
+    implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1"
+  };
+  const discoveryBlockedTruth = {
+    ...completeTruth,
+    activeTaskBinding: assuranceCorrectionBinding,
+    latestMergedImplementationPr: latestMergedFor(assuranceCorrectionBinding),
+    lateReviewSentinels: [discoverySentinel]
+  };
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: discoveryBlockedTruth,
+    protectedMainTruth: discoveryBlockedTruth,
+    featureId: assuranceCorrectionBinding.featureId
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
+});
+
+test("a COMPLETE binding records every tier with exact gate-catalog vocabulary", () => {
+  const complete = {
+    ...binding,
+    featureId: "assurance-efficiency-e0",
+    phase: "COMPLETE",
+    proofTierStatuses: completedProofTierStatuses,
+    proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    requiredFreshnessClaims: e0CompletionClaims()
+  };
+  assert.deepEqual(validateProofTierStatuses(complete, gateCatalog, registry), []);
+
+  assert.equal(validateProofTierStatuses({ ...binding, proofTierStatuses: completedProofTierStatuses }, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE"), true);
+  assert.equal(validateProofTierStatuses({ ...binding, proofTierApplicabilityHash: "f".repeat(64) }, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE"), true);
+
+  const missingMap = { ...binding, phase: "COMPLETE" };
+  assert.deepEqual(validateProofTierStatuses(missingMap, gateCatalog, registry), [{
+    id: "ASSURANCE_PROOF_TIER_STATUSES_MISSING",
+    status: "BLOCKED_INTERNAL"
+  }]);
+  assert.deepEqual(activeTask(withTruth((value) => ({
+    ...value,
+    activeTaskBinding: missingMap,
+    latestMergedImplementationPr: latestMergedFor(missingMap),
+    openImplementationPrs: []
+  }))).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+
+  for (const [label, mutate, expectedId] of [
+    ["missing tier", (statuses) => { delete statuses.T7_PUBLIC_CANARY; }, "ASSURANCE_PROOF_TIER_STATUS_MISSING"],
+    ["extra tier", (statuses) => { statuses.T8_UNKNOWN = "NOT_APPLICABLE"; }, "ASSURANCE_PROOF_TIER_STATUS_UNKNOWN"],
+    ["free-form status", (statuses) => { statuses.T4_NATIVE_PROVIDER = "METADATA_BOUNDARY_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
+    ["cross-tier status", (statuses) => { statuses.T1_SOURCE = "MODEL_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
+    ["partial composite pass", (statuses) => { statuses.T4_NATIVE_PROVIDER = "NATIVE_CLEAR"; }, "ASSURANCE_PROOF_TIER_STATUS_INVALID"],
+    ["blocked completion", (statuses) => { statuses.T1_SOURCE = "BLOCKED_INTERNAL"; }, "ASSURANCE_COMPLETED_PROOF_TIER_BLOCKED"]
+  ]) {
+    const candidate = structuredClone(complete);
+    mutate(candidate.proofTierStatuses);
+    const findings = validateProofTierStatuses(candidate, gateCatalog, registry);
+    assert.equal(findings.some(({ id }) => id === expectedId), true, label);
+  }
+
+  const allNotApplicable = structuredClone(complete);
+  allNotApplicable.proofTierStatuses = Object.fromEntries(Object.keys(completedProofTierStatuses).map((tier) => [tier, "NOT_APPLICABLE"]));
+  const applicabilityFindings = validateProofTierStatuses(allNotApplicable, gateCatalog, registry);
+  for (const tier of ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]) {
+    assert.equal(applicabilityFindings.some(({ id, tier: findingTier }) => id === "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR" && findingTier === tier), true, tier);
+  }
+  assert.deepEqual(activeTask({
+    ...facts,
+    currentTruth: { ...truth, activeTaskBinding: allNotApplicable, latestMergedImplementationPr: latestMergedFor(allNotApplicable), openImplementationPrs: [] },
+    protectedMainTruth: { ...truth, activeTaskBinding: allNotApplicable, latestMergedImplementationPr: latestMergedFor(allNotApplicable), openImplementationPrs: [] }
+  }).findings, ["ACTIVE_TASK_BINDING_MALFORMED"]);
+
+  const promotedNotApplicableTier = structuredClone(complete);
+  promotedNotApplicableTier.proofTierStatuses.T4_NATIVE_PROVIDER = ["NATIVE_CLEAR", "PROVIDER_CLEAR"];
+  assert.equal(validateProofTierStatuses(promotedNotApplicableTier, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_NOT_APPLICABLE_PROOF_TIER_PROMOTED"), true);
+
+  const unboundEvaluation = structuredClone(complete);
+  unboundEvaluation.proofTiersUnderEvaluation = ["T1_SOURCE"];
+  assert.equal(validateProofTierStatuses(unboundEvaluation, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_PROOF_TIER_EVALUATION_MISMATCH"), true);
+
+  const compositeRequired = {
+    ...binding,
+    phase: "COMPLETE",
+    proofTierApplicabilityHash: digest(stableJson(callFeature.proofTierApplicability)),
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL"],
+    requiredFreshnessClasses: ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE"],
+    requiredFreshnessClaims: ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE"].map((freshnessClass) => ({ freshnessClass })),
+    proofTierStatuses: {
+      T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
+      T1_SOURCE: "SOURCE_CLEAR",
+      T2_MODEL: "MODEL_CLEAR",
+      T3_INTEGRATION: "INTEGRATION_CLEAR",
+      T4_NATIVE_PROVIDER: ["NATIVE_CLEAR", "PROVIDER_CLEAR"],
+      T5_SIGNED_ARTIFACT: "ARTIFACT_CLEAR",
+      T6_INSTALLED_PHYSICAL: ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"],
+      T7_PUBLIC_CANARY: "NOT_APPLICABLE"
+    }
+  };
+  const compositeFindings = validateProofTierStatuses(compositeRequired, gateCatalog, registry);
+  assert.equal(compositeFindings.some(({ id }) => id === "ASSURANCE_PROOF_TIER_STATUS_INVALID"), false);
+  assert.equal(compositeFindings.some(({ id }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED"), true);
+  assert.equal(validateProofTierStatuses(compositeRequired, gateCatalog, { features: [] }).some(({ id }) => id === "ASSURANCE_PROOF_TIER_APPLICABILITY_MISSING"), true);
+
+  const sourceOnlyHigherTierClaim = structuredClone(compositeRequired);
+  sourceOnlyHigherTierClaim.requiredFreshnessClasses = ["REPOSITORY_SOURCE"];
+  sourceOnlyHigherTierClaim.requiredFreshnessClaims = [{ freshnessClass: "REPOSITORY_SOURCE" }];
+  const sourceOnlyFindings = validateProofTierStatuses(sourceOnlyHigherTierClaim, gateCatalog, registry);
+  for (const freshnessClass of ["PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE"]) {
+    assert.equal(sourceOnlyFindings.some(({ id, freshnessClass: findingClass }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FRESHNESS_MISSING" && findingClass === freshnessClass), true, freshnessClass);
+  }
+
+  const providerRequiredNotApplicable = {
+    ...complete,
+    featureId: creatorFeature.featureId,
+    proofTierApplicabilityHash: digest(stableJson(creatorFeature.proofTierApplicability)),
+    proofTierStatuses: { ...completedProofTierStatuses },
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]
+  };
+  assert.equal(validateProofTierStatuses(providerRequiredNotApplicable, gateCatalog, registry).some(({ id, tier }) => id === "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR" && tier === "T4_NATIVE_PROVIDER"), true);
+
+  const conditionalNotApplicable = {
+    ...providerRequiredNotApplicable,
+    featureId: cognitiveFeature.featureId,
+    proofTierApplicabilityHash: digest(stableJson(cognitiveFeature.proofTierApplicability))
+  };
+  assert.equal(validateProofTierStatuses(conditionalNotApplicable, gateCatalog, registry).some(({ id, tier }) => id === "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR" && tier === "T4_NATIVE_PROVIDER"), true);
+
+  const unrelatedFactCompletion = structuredClone(complete);
+  unrelatedFactCompletion.requiredFreshnessClaims[0].requiredFacts = ["provider.supabase.b3.live-acl"];
+  const unrelatedFactFindings = validateProofTierStatuses(unrelatedFactCompletion, gateCatalog, registry);
+  for (const tier of ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]) {
+    assert.equal(unrelatedFactFindings.some(({ id, tier: findingTier }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED" && findingTier === tier), true, tier);
+  }
+
+  for (const [tier, omittedFact] of [
+    ["T0_REQUIREMENT", "repository.assurance-control.a1.requirements"],
+    ["T1_SOURCE", "repository.assurance-control.a1.source"],
+    ["T2_MODEL", "repository.assurance-control.a1.model"],
+    ["T3_INTEGRATION", "repository.assurance-control.a1.integration"]
+  ]) {
+    const omitted = structuredClone(complete);
+    omitted.requiredFreshnessClaims[0].requiredFacts = e0CompletionFacts.filter((factId) => factId !== omittedFact);
+    assert.equal(validateProofTierStatuses(omitted, gateCatalog, registry).some(({ id, tier: findingTier }) =>
+      id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED" && findingTier === tier), true, `${tier} requires ${omittedFact}`);
+  }
+
+  for (const [field, value] of [["authorityAllowed", "PROVIDER_READBACK_ONLY"], ["provider", "SUPABASE"]]) {
+    const crossover = structuredClone(complete);
+    crossover.requiredFreshnessClaims[0][field] = value;
+    assert.equal(validateProofTierStatuses(crossover, gateCatalog, registry).some(({ id }) => id === "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED"), true, field);
+  }
+
+  const mismatchedRepositorySubject = structuredClone(complete);
+  mismatchedRepositorySubject.immutableSourceHead = "d".repeat(40);
+  assert.deepEqual(validateStructuredBinding(mismatchedRepositorySubject, gateCatalog, registry, [], latestMergedFor(mismatchedRepositorySubject)), ["ACTIVE_TASK_BINDING_MALFORMED"]);
+  assert.deepEqual(validateStructuredBinding(complete, gateCatalog, registry, [{ number: 208 }], latestMergedFor(complete)), ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"]);
+  assert.deepEqual(validateStructuredBinding(complete, gateCatalog, registry, [], latestMergedFor({ ...complete, implementationPr: 999 })), ["COMPLETED_IMPLEMENTATION_MERGE_IDENTITY_MISMATCH"]);
+  assert.equal(fs.readFileSync("scripts/assurance/current-truth.mjs", "utf8").includes("validateStructuredBinding("), true, "canonical truth reuses exact structured binding validation");
+
+  const validMergeGit = (argv) => {
+    if (argv[0] === "show" && argv.includes("--format=%P")) return `${"a".repeat(40)} ${complete.currentImplementationHead}`;
+    if (argv[0] === "show" && argv.includes("--format=%s")) return `Merge pull request #${complete.implementationPr} from Chillywood2025/${complete.implementationBranch}`;
+    if (argv[0] === "rev-parse") return complete.currentImplementationTree;
+    if (argv[0] === "rev-list") return `${"f".repeat(40)}\n${latestMergedFor(complete).mergeSha}\n${"a".repeat(40)}`;
+    if (argv[0] === "merge-base") return "";
+    throw new Error("unexpected git command");
+  };
+  assert.deepEqual(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: validMergeGit
+  }), []);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv[0] === "show" ? `${"a".repeat(40)} ${"b".repeat(40)}` : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PARENT_MISMATCH"), true);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv[0] === "rev-parse" ? "c".repeat(40) : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH"), true);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv[0] === "rev-parse" && argv[1] === `${complete.currentImplementationHead}^{tree}` ? "d".repeat(40) : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_HEAD_TREE_MISMATCH"), true);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv.includes("--format=%s") ? "Merge pull request #999 from Chillywood2025/codex/substitution" : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PR_BRANCH_MISMATCH"), true);
+  assert.equal(verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: complete,
+    latestMergedImplementationPr: latestMergedFor(complete),
+    remoteMain: "f".repeat(40),
+    gitCommand: (argv) => argv[0] === "rev-list" ? `${"f".repeat(40)}\n${"a".repeat(40)}` : validMergeGit(argv)
+  }).some(({ id }) => id === "ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_NOT_ON_PROTECTED_MAIN_FIRST_PARENT"), true);
+
+  const applicabilitySubstitution = structuredClone(complete);
+  const substitutedRegistry = structuredClone(registry);
+  substitutedRegistry.features.find(({ featureId }) => featureId === complete.featureId).proofTierApplicability.T0_REQUIREMENT = "not-applicable";
+  applicabilitySubstitution.proofTierApplicabilityHash = digest(stableJson(substitutedRegistry.features.find(({ featureId }) => featureId === complete.featureId).proofTierApplicability));
+  applicabilitySubstitution.proofTierStatuses.T0_REQUIREMENT = "NOT_APPLICABLE";
+  applicabilitySubstitution.proofTiersUnderEvaluation = applicabilitySubstitution.proofTiersUnderEvaluation.filter((tier) => tier !== "T0_REQUIREMENT");
+  applicabilitySubstitution.requiredFreshnessClaims[0].requiredFacts = applicabilitySubstitution.requiredFreshnessClaims[0].requiredFacts
+    .filter((factId) => factId !== "repository.assurance-control.a1.requirements");
+  assert.equal(validateProofTierStatuses(applicabilitySubstitution, gateCatalog, substitutedRegistry).some(({ id }) => id === "ASSURANCE_PROOF_TIER_APPLICABILITY_HASH_MISMATCH"), true);
+
+  for (const mutateCatalog of [
+    (catalog) => { catalog.gates.find(({ id }) => id === "T4_NATIVE_PROVIDER").completionFreshnessClasses = ["REPOSITORY_SOURCE"]; },
+    (catalog) => { catalog.applicabilityPolicies.REQUIRE_CLEAR = catalog.applicabilityPolicies.REQUIRE_CLEAR.filter((value) => value !== "provider-required"); },
+    (catalog) => { catalog.completionFeatureApplicability["assurance-efficiency-e0"].T0_REQUIREMENT = "not-applicable"; },
+    (catalog) => { catalog.completionFactAuthorities[0].platform = "IOS"; },
+    (catalog) => { catalog.completionFactAuthorities[0].factId = "provider.supabase.b3.live-acl"; },
+    (catalog) => { catalog.completionFactAuthorities[0].authorityAllowed = "PROVIDER_READBACK_ONLY"; },
+    (catalog) => { catalog.completionFactAuthorities[0].provider = "SUPABASE"; }
+  ]) {
+    const substitutedCatalog = structuredClone(gateCatalog);
+    mutateCatalog(substitutedCatalog);
+    assert.equal(validateProofTierStatuses(complete, substitutedCatalog, registry).some(({ id }) => id === "ASSURANCE_GATE_CATALOG_MALFORMED"), true);
+  }
+});
+
+test("Owner task authority binds the complete proof status and applicability subject", () => {
+  const completed = {
+    ...binding,
+    featureId: e0Feature.featureId,
+    phase: "COMPLETE",
+    proofTierStatuses: completedProofTierStatuses,
+    proofTierApplicabilityHash: digest(stableJson(e0Feature.proofTierApplicability)),
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    requiredFreshnessClaims: e0CompletionClaims()
+  };
+  const observation = authorizeOwnerBootstrap(completed);
+  assert.equal(verifyOwnerBootstrapAuthorization(completed, observation), true);
+  for (const mutate of [
+    (candidate) => { candidate.proofTierStatuses.T1_SOURCE = "BLOCKED_INTERNAL"; },
+    (candidate) => { candidate.proofTierApplicabilityHash = "f".repeat(64); }
+  ]) {
+    const substituted = structuredClone(completed);
+    mutate(substituted);
+    assert.equal(verifyOwnerBootstrapAuthorization(substituted, observation), false);
+  }
+});
+
+test("canonical rendering exposes every recorded proof-tier status separately", () => {
+  const rendered = renderCurrentState({
+    ...canonicalTruth,
+    activeTaskBinding: {
+      ...canonicalTruth.activeTaskBinding,
+      phase: "COMPLETE",
+      proofTierStatuses: completedProofTierStatuses
+    }
+  });
+  for (const [tier, status] of Object.entries(completedProofTierStatuses)) {
+    assert.equal(rendered.includes(`\`${tier}\`=\`${status}\``), true, tier);
+  }
+  assert.equal(rendered.includes("METADATA_BOUNDARY_CLEAR"), false);
 });
 
 test("active-task CLI rejects caller-selected diff bases", () => {

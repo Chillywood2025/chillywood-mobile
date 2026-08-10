@@ -79,6 +79,8 @@
     "every-synchronize-event-recorded-by-exact-source-push-lease",
     "all-review-conversations-resolved",
     "all-provider-review-surfaces-read-and-head-bound",
+    "provider-clean-issue-comment-prefix-expands-only-to-current-head",
+    "provider-clean-issue-comment-is-clean-rereview-disposition",
     "exactly-one-open-pr-owns-current-head",
     "repository-write-authority-equals-owner-root-authority",
     "resolved-thread-findings-require-later-exact-head-provider-rereview",
@@ -103,6 +105,21 @@
     "CODEX_REVIEW_LATE_SENTINEL_BLOCKED"
   ],
   "issueCommentReviewedCommitMarker": "<!-- codex-review-reviewed-commit:<40-lowercase-hex-sha> -->",
+  "providerCleanIssueCommentReview": {
+    "authoritativeAssertion": "Codex Review: Didn't find any major issues.",
+    "nonAuthoritativeDisplaySuffix": {
+      "mode": "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION",
+      "maxLength": 80
+    },
+    "bodyLayout": "ASSERTION_MARKER_OPTIONAL_CANONICAL_ABOUT_DETAILS_V1",
+    "reviewedCommitPrefixLength": 10,
+    "providerAuthoredOnly": true,
+    "editedCommentAllowed": false,
+    "blockingSeverityAllowed": false,
+    "repositoryObjectResolutionRequired": true,
+    "fixtureResolutionMode": "explicit-offline-data-with-head-classification",
+    "exactCurrentHeadExpansionRequired": true
+  },
   "protectedBaseBranch": "main",
   "sourcePushLease": {
     "checkName": "Chi'llywood / Codex Review Source Push Lease",

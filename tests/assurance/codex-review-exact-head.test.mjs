@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   buildExactHeadReceipt,
@@ -12,6 +15,7 @@ import {
   normalizeLateReviewEvent,
   paginateGraphConnection,
   parseLateReviewIssue,
+  providerCleanIssueCommentReview,
   readOpenLateReviewIssues,
   readMergedLateReviewLedgerSentinels,
   readProviderFindingLedger,
@@ -26,7 +30,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -53,7 +57,7 @@ const exactReview = {
   reviewId: 9001,
   author: "chatgpt-codex-connector",
   state: "COMMENTED",
-  body: "P0: 0 P1: 0 P2: 0 P3: 0",
+  body: "No review findings.",
   startedAt: "2026-08-09T11:30:00Z",
   submittedAt: "2026-08-09T12:00:00Z",
   commit: headA
@@ -85,6 +89,277 @@ test("exact-head no-suggestion review produces a valid current receipt", () => {
   assert.equal(receipt.reviewedCommit, headA);
   assert.equal(receipt.prHeadTree, treeA);
   assert.equal(receipt.reviewSubmissions[0].bodyHash.length, 64);
+});
+
+test("provider no-suggestion issue comment binds its unique commit prefix to the exact current head", () => {
+  const cleanComment = {
+    commentId: 9100,
+    commentNodeId: "ISSUE_COMMENT_9100",
+    author: "chatgpt-codex-connector",
+    body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+    createdAt: "2026-08-09T12:00:00Z",
+    updatedAt: "2026-08-09T12:00:00Z"
+  };
+  const review = providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: headA, contract });
+  assert.equal(review.commit, headA);
+  const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review, reviews: [review], threads: [], issueComments: [cleanComment] });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt }).ok, true);
+  assert.equal(receipt.reviewSubmissions[0].sourceType, "PROVIDER_CLEAN_ISSUE_COMMENT");
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: cleanComment.body.replace(headA.slice(0, 10), headB.slice(0, 10)) }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, updatedAt: "2026-08-09T12:01:00Z" }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP2 finding` }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  for (const severity of ["_P0_", "_P1_", "_P2_", "_P3_", "P\u200b1", "Ｐ１", "P\u00001", "P\t1"]) {
+    assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\n${severity} finding` }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
+  assert.equal(providerCleanIssueCommentReview({ comment: { ...cleanComment, body: `${cleanComment.body}\nP1=0` }, currentHead: headA, resolvedCommit: headA, contract }), null);
+  const collidingOldCommit = `${headA.slice(0, 10)}${"f".repeat(30)}`;
+  assert.equal(providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: collidingOldCommit, contract }), null);
+});
+
+test("the exact provider clean assertion tolerates only non-authoritative display suffix drift", () => {
+  const observedPreambles = [
+    "Codex Review: Didn't find any major issues. Keep them coming!",
+    "Codex Review: Didn't find any major issues. Can't wait for the next one!",
+    "Codex Review: Didn't find any major issues. Hooray!",
+    "Codex Review: Didn't find any major issues."
+  ];
+  assert.equal(contract.providerCleanIssueCommentReview.authoritativeAssertion, "Codex Review: Didn't find any major issues.");
+  assert.deepEqual(contract.providerCleanIssueCommentReview.nonAuthoritativeDisplaySuffix, {
+    mode: "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION",
+    maxLength: 80
+  });
+  assert.equal(contract.providerCleanIssueCommentReview.bodyLayout, "ASSERTION_MARKER_OPTIONAL_CANONICAL_ABOUT_DETAILS_V1");
+  for (const preamble of observedPreambles) {
+    const review = providerCleanIssueCommentReview({
+      comment: {
+        author: "chatgpt-codex-connector",
+        commentId: 9001,
+        body: `${preamble}\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+        createdAt: "2026-08-09T12:30:00Z",
+        updatedAt: "2026-08-09T12:30:00Z"
+      },
+      currentHead: headA,
+      resolvedCommit: headA,
+      contract
+    });
+    assert.equal(review?.commit, headA);
+  }
+
+  for (const preamble of [
+    "Codex review: Didn't find any major issues. Hooray!",
+    "Codex Review: Didn't find any major issue. Hooray!",
+    "Codex Review: Didn't find any major issues. Hooray.",
+    `Codex Review: Didn't find any major issues. ${"A".repeat(80)}!`,
+    " Codex Review: Didn't find any major issues. Hooray!"
+  ]) {
+    const lookalike = providerCleanIssueCommentReview({
+      comment: {
+        author: "chatgpt-codex-connector",
+        commentId: 9002,
+        body: `${preamble}\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+        createdAt: "2026-08-09T12:30:00Z",
+        updatedAt: "2026-08-09T12:30:00Z"
+      },
+      currentHead: headA,
+      resolvedCommit: headA,
+      contract
+    });
+    assert.equal(lookalike, null);
+  }
+});
+
+test("provider clean dispositions reject Markdown, HTML and entity-split severities", () => {
+  const cleanBody = `Codex Review: Didn't find any major issues. Hooray!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``;
+  for (const severity of [
+    "P**1** finding",
+    "**P**1 finding",
+    "P*1* finding",
+    "P[1](https://example.invalid) finding",
+    "P&#49; finding",
+    "P<!--hidden-->1 finding",
+    "P<b>1</b> finding",
+    "P\u034f1 finding",
+    "P\ufe0f1 finding",
+    "P\u180b1 finding",
+    "P1=0finding",
+    "P1:0critical"
+  ]) {
+    const comment = {
+      author: "chatgpt-codex-connector",
+      commentId: 9003,
+      body: `${cleanBody}\n${severity}`,
+      createdAt: "2026-08-09T12:30:00Z",
+      updatedAt: "2026-08-09T12:30:00Z"
+    };
+    assert.equal(providerCleanIssueCommentReview({ comment, currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
+});
+
+test("provider severity normalization never exempts zero-prefixed findings", () => {
+  for (const [index, severity] of [
+    "P1: 0-day exploit",
+    "P1: 0 day",
+    "P1: 0/1",
+    "P1: 0.1",
+    "P&#49 finding",
+    "P&#x31 finding",
+    "P&#000000049; finding",
+    "P&#x0000031; finding",
+    "P&#xFFFFFF;1 finding",
+    "&#65328;&#65297; finding",
+    "&#xFF30;&#xFF11; finding",
+    "P&#xFF11; finding",
+    "&#xFF30;1 finding",
+    "&#x24C5;&#x2460; finding",
+    "&Popf;1 finding",
+    "&Pfr;1 finding",
+    "P&sup1; finding",
+    "P&sup1 finding",
+    "P&amp;1 finding"
+  ].entries()) {
+    const finding = issueComment({ id: 9200 + index });
+    finding.body = `${severity}\n<!-- codex-review-reviewed-commit:${headA} -->`;
+    const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [finding] });
+    assert.equal(receipt.reviewFindings[0]?.severity, "P1", severity);
+    assert.ok(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt }).codes.includes("CODEX_REVIEW_UNRESOLVED_FINDING"), severity);
+  }
+});
+
+test("provider clean-review commit markers use only the contracted prefix length", () => {
+  assert.equal(contract.providerCleanIssueCommentReview.reviewedCommitPrefixLength, 10);
+  const makeComment = (prefix) => ({
+    author: "chatgpt-codex-connector",
+    commentId: 9003,
+    body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${prefix}\``,
+    createdAt: "2026-08-09T12:30:00Z",
+    updatedAt: "2026-08-09T12:30:00Z"
+  });
+  assert.equal(providerCleanIssueCommentReview({ comment: makeComment(headA.slice(0, 10)), currentHead: headA, resolvedCommit: headA, contract })?.commit, headA);
+  for (const length of [9, 11, 39, 40]) {
+    assert.equal(providerCleanIssueCommentReview({ comment: makeComment(headA.slice(0, length)), currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
+  for (const extraMarker of [headB.slice(0, 9), headB.slice(0, 11), headB]) {
+    const ambiguous = makeComment(headA.slice(0, 10));
+    ambiguous.body += `\n**Reviewed commit:** \`${extraMarker}\``;
+    assert.equal(providerCleanIssueCommentReview({ comment: ambiguous, currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
+});
+
+test("an exact provider no-suggestion issue comment is a clean rereview disposition", () => {
+  const cleanComment = {
+    commentId: 9101,
+    commentNodeId: "ISSUE_COMMENT_9101",
+    author: "chatgpt-codex-connector",
+    body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+    createdAt: "2026-08-09T12:00:00Z",
+    updatedAt: "2026-08-09T12:00:00Z"
+  };
+  const cleanReview = providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: headA, contract });
+  const priorFinding = {
+    ...exactReview,
+    reviewId: 9000,
+    body: "P1 prior-head finding",
+    commit: headB,
+    startedAt: "2026-08-09T11:10:00Z",
+    submittedAt: "2026-08-09T11:20:00Z"
+  };
+  const receipt = buildExactHeadReceipt({
+    contract,
+    current: baseCurrent,
+    review: cleanReview,
+    reviews: [priorFinding, cleanReview],
+    threads: [],
+    issueComments: [cleanComment]
+  });
+  assert.deepEqual(receipt.reviewFindings.map(({ severity, disposition }) => ({ severity, disposition })), [{
+    severity: "P1",
+    disposition: "RESOLVED_BY_LATER_PROVIDER_REREVIEW"
+  }]);
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt }).ok, true);
+
+  const untrustedLookalike = { ...cleanReview, sourceType: "REVIEW_SUBMISSION" };
+  const blockedReceipt = buildExactHeadReceipt({
+    contract,
+    current: baseCurrent,
+    review: untrustedLookalike,
+    reviews: [priorFinding, untrustedLookalike],
+    threads: [],
+    issueComments: [cleanComment]
+  });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: blockedReceipt }).ok, false);
+  assert(blockedReceipt.reviewFindings.some(({ disposition }) => disposition === "UNRESOLVED"));
+});
+
+test("clean issue-comment fixture replay resolves commits only from explicit offline data", () => {
+  const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-codex-review-fixture-"));
+  try {
+    const cleanComment = {
+      commentId: 9102,
+      commentNodeId: "ISSUE_COMMENT_9102",
+      author: "chatgpt-codex-connector",
+      body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+      createdAt: "2026-08-09T12:00:00Z",
+      updatedAt: "2026-08-09T12:00:00Z"
+    };
+    const runFixture = (name, resolutions, reviews = []) => {
+      const fixture = path.join(fixtureDirectory, name);
+      fs.writeFileSync(fixture, `${JSON.stringify({
+        current: baseCurrent,
+        reviews,
+        threads: [],
+        issueComments: [cleanComment],
+        cleanIssueCommentCommitResolutions: resolutions
+      })}\n`, { mode: 0o600 });
+      return spawnSync(process.execPath, ["scripts/assurance/codex-review-exact-head.mjs", `--fixture=${fixture}`], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, GITHUB_TOKEN: "fixture-must-not-use-network" }
+      });
+    };
+    const explicit = runFixture("explicit.json", [{ commentId: cleanComment.commentId, prefix: headA.slice(0, 10), resolvedCommit: headA, headClassification: "CURRENT_HEAD" }]);
+    assert.equal(explicit.status, 0, explicit.stdout || explicit.stderr);
+    assert.equal(JSON.parse(explicit.stdout.trim().split(/\r?\n/u).at(-1)).ok, true);
+
+    const missing = runFixture("missing.json", []);
+    assert.notEqual(missing.status, 0);
+    const missingResult = JSON.parse(missing.stdout.trim().split(/\r?\n/u).at(-1));
+    assert(missingResult.codes.includes("CODEX_REVIEW_INCOMPLETE"));
+
+    const collidingOldCommit = `${headA.slice(0, 10)}${"f".repeat(30)}`;
+    const forgedCurrent = runFixture("forged-current.json", [{
+      commentId: cleanComment.commentId,
+      prefix: headA.slice(0, 10),
+      resolvedCommit: collidingOldCommit,
+      headClassification: "CURRENT_HEAD"
+    }], [exactReview]);
+    assert.notEqual(forgedCurrent.status, 0);
+    assert(JSON.parse(forgedCurrent.stdout.trim().split(/\r?\n/u).at(-1)).codes.includes("CODEX_REVIEW_INCOMPLETE"));
+
+    const historical = runFixture("historical.json", [{
+      commentId: cleanComment.commentId,
+      prefix: headA.slice(0, 10),
+      resolvedCommit: collidingOldCommit,
+      headClassification: "STALE_HEAD"
+    }], [exactReview]);
+    assert.equal(historical.status, 0, historical.stdout || historical.stderr);
+
+    const forgedRawCleanReview = {
+      ...exactReview,
+      reviewId: 9103,
+      body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${"b".repeat(10)}\``,
+      sourceType: "PROVIDER_CLEAN_ISSUE_COMMENT"
+    };
+    const forgedRaw = runFixture("forged-raw-clean-review.json", [{
+      commentId: cleanComment.commentId,
+      prefix: headA.slice(0, 10),
+      resolvedCommit: headA,
+      headClassification: "CURRENT_HEAD"
+    }], [exactReview, forgedRawCleanReview]);
+    assert.notEqual(forgedRaw.status, 0);
+    assert(JSON.parse(forgedRaw.stdout.trim().split(/\r?\n/u).at(-1)).codes.includes("CODEX_REVIEW_INCOMPLETE"));
+  } finally {
+    fs.rmSync(fixtureDirectory, { recursive: true });
+  }
 });
 
 test("repository write authority is exact and a newly admitted writer fails closed", () => {
@@ -194,6 +469,12 @@ test("provider issue comments require an exact reviewed-commit marker and block 
   const informational = { ...unbound, commentId: 4, commentNodeId: "IC_4", body: "Review queued; no disposition yet." };
   const informationalReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [informational] });
   assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: informationalReceipt }).ok, true);
+  for (const [index, body] of ["fish &chips", "https://example.invalid/?foo=1&bar=2", "source a&bar", "one-letter &b parameter"].entries()) {
+    const ordinaryAmpersand = { ...unbound, commentId: 4100 + index, commentNodeId: `IC_${4100 + index}`, body };
+    const ordinaryReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [ordinaryAmpersand] });
+    assert.equal(ordinaryReceipt.reviewFindings.length, 0, body);
+    assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: ordinaryReceipt }).ok, true, body);
+  }
   const p3 = { ...unbound, commentId: 5, commentNodeId: "IC_5", body: "P3 informational note" };
   const p3Receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [p3] });
   assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: p3Receipt }).ok, true);
@@ -891,10 +1172,16 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   const successorHead = "1".repeat(40);
   const successorTree = "2".repeat(40);
   const sentinel = {
+    repository: "Chillywood2025/chillywood-mobile",
     classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
     prNumber: 194,
-    mergeSha: "3".repeat(40),
-    successorCorrectionOwner: "codex/product-successor",
+    mergeSha: "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+    successorCorrectionOwner: "codex/d2a-livekit-mic-post-merge-review-correction",
+    assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+    authorizedBootstrapOwners: [
+      "codex/assurance-active-task-and-claim-freshness-a1",
+      "codex/assurance-codex-security-scan-reliability-s0"
+    ],
     findings: [{
       sourceId: 77,
       threadId: "THREAD_77",
@@ -904,7 +1191,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
     resolutionEvidence: {
       schemaVersion: 1,
       successorPr: 203,
-      successorBranch: "codex/product-successor",
+      successorBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
       successorHead,
       successorTree,
       successorMergeSha: "4".repeat(40),
@@ -934,7 +1221,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   const marker = `<!-- codex-review-late-sentinel:v1 pr=194 merge=${sentinel.mergeSha} -->`;
   const calls = [];
   const result = await recordLateReviewIssue({
-    repository: "owner/repository",
+    repository: "Chillywood2025/chillywood-mobile",
     token: "token",
     sentinel,
     resolutionVerifier,
@@ -954,7 +1241,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   forged.resolutionEvidence.exactHeadReviewedCommit = headA;
   await assert.rejects(
     recordLateReviewIssue({
-      repository: "owner/repository",
+      repository: "Chillywood2025/chillywood-mobile",
       token: "token",
       sentinel: forged,
       resolutionVerifier,
@@ -1200,6 +1487,39 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
   assert.deepEqual(validateLateReviewSentinelState(promoted).map(({ id }) => id).sort(), ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", "LATE_REVIEW_SUCCESSOR_GATES_INVALID"]);
 });
 
+test("an unresolved late-review sentinel blocks only its exact correction owner's phase COMPLETE claim", () => {
+  const complete = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  complete.activeTaskBinding.phase = "COMPLETE";
+  const findings = validateLateReviewSentinelState(complete);
+  assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+  assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), false);
+
+  const bootstrapComplete = structuredClone(complete);
+  bootstrapComplete.activeTaskBinding.implementationBranch = "codex/assurance-codex-security-scan-reliability-s0";
+  assert.equal(validateLateReviewSentinelState(bootstrapComplete).some(({ id }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"), false);
+
+  const productComplete = structuredClone(complete);
+  productComplete.activeTaskBinding.implementationBranch = "codex/d2a-livekit-mic-post-merge-review-correction";
+  const productFindings = validateLateReviewSentinelState(productComplete);
+  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), true);
+  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+
+  const unrelatedComplete = structuredClone(complete);
+  unrelatedComplete.activeTaskBinding.implementationBranch = "codex/unrelated-next";
+  const unrelatedFindings = validateLateReviewSentinelState(unrelatedComplete);
+  for (const prNumber of [194, 195]) {
+    assert.equal(unrelatedFindings.some(({ id, prNumber: blockedPr }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && blockedPr === prNumber), true, `PR ${prNumber}`);
+  }
+
+  const discoveryComplete = structuredClone(complete);
+  const discoverySentinel = discoveryComplete.lateReviewSentinels.find(({ prNumber }) => prNumber === 195);
+  discoverySentinel.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoverySentinel.assuranceControlOwner;
+  delete discoverySentinel.authorizedBootstrapOwners;
+  assert.equal(lateReviewSuccessorCorrectionOwner(discoverySentinel), "codex/assurance-active-task-and-claim-freshness-a1");
+  assert.equal(validateLateReviewSentinelState(discoveryComplete).some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+});
+
 test("every immutable late-review owner entry permanently retains one canonical sentinel", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   assert.deepEqual(validateLateReviewSentinelState(truth), []);
@@ -1261,6 +1581,23 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
   const tombstone = createLateReviewResolutionTombstone(resolved, admissionCarrier);
   const candidate = structuredClone(truth);
   candidate.lateReviewResolutionTombstones = [tombstone];
+
+  const discoveryResolved = structuredClone(resolved);
+  discoveryResolved.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoveryResolved.assuranceControlOwner;
+  delete discoveryResolved.authorizedBootstrapOwners;
+  discoveryResolved.resolutionEvidence.successorBranch = lateReviewSuccessorCorrectionOwner(discoveryResolved);
+  discoveryResolved.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(discoveryResolved);
+  const discoveryTombstone = createLateReviewResolutionTombstone(discoveryResolved, admissionCarrier);
+  assert.equal(lateReviewResolutionStructureValid(discoveryResolved), true);
+  assert.equal(lateReviewResolutionTombstoneValid(discoveryResolved, discoveryTombstone), true);
+
+  const discoveryOwnerSubstitution = structuredClone(discoveryResolved);
+  discoveryOwnerSubstitution.resolutionEvidence.successorBranch = "UNASSIGNED_BLOCKED";
+  discoveryOwnerSubstitution.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(discoveryOwnerSubstitution);
+  const discoveryOwnerSubstitutionTombstone = createLateReviewResolutionTombstone(discoveryOwnerSubstitution, admissionCarrier);
+  assert.equal(lateReviewResolutionStructureValid(discoveryOwnerSubstitution), false);
+  assert.equal(lateReviewResolutionTombstoneValid(discoveryOwnerSubstitution, discoveryOwnerSubstitutionTombstone), false);
 
   assert.deepEqual(validateLateReviewSentinelState(candidate), [], "a valid branch candidate remains pending, not invalid");
   assert.equal(unresolvedLateReviewSentinels(candidate, { protectedMainRecord: truth, tombstoneAdmissionVerifier: () => true }).length, 2, "branch-local tombstone cannot authorize itself");
@@ -1449,6 +1786,7 @@ test("known unassigned discovery sentinels derive owners only from the immutable
     "codex/assurance-active-task-and-claim-freshness-a1",
     "codex/assurance-codex-security-scan-reliability-s0"
   ]);
+  assert.equal(lateReviewAllowedOwners(discovery).includes("codex/assurance-current-truth-post-a1"), false, "a reusable post-truth branch is not a sentinel-wide authority");
   assert.deepEqual(lateReviewAllowedOwners({
     ...discovery,
     successorCorrectionOwner: "codex/unrelated-next",

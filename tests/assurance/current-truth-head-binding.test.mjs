@@ -30,6 +30,10 @@ const pr52Branch = "codex/cognitive-level01-livekit-sentinel-live-activation";
 const pr64Branch = "codex/first-pass-assurance-models";
 const headBindingBranch = git(["branch", "--show-current"]) || "codex/first-pass-assurance-current-truth-head-binding";
 const headBindingHead = git(["rev-parse", "HEAD"]);
+const canonicalCurrentTruth = readJson("config/assurance/current-truth-v1.json");
+const expectedHeadBindingContext = canonicalCurrentTruth.openImplementationPrs.some(({ branch }) => branch === headBindingBranch)
+  ? "listed-implementation-branch"
+  : "unlisted-control-branch";
 assert.equal(isValidGitBranchName(headBindingBranch), true);
 const entries = [
   { number: 52, branch: pr52Branch, head: pr52Head, state: "open-draft", disposition: "reconcile" },
@@ -461,7 +465,7 @@ try {
   const payload = runSnapshotCli("unexpected-open-implementation-inventory.json", `${JSON.stringify({
     openImplementationPrs: [{ number: 999, branch: "codex/unexpected-provider-implementation", head: "9".repeat(40), state: "open-draft" }]
   })}\n`);
-  assert.equal(payload.headBindings.context, "listed-implementation-branch");
+  assert.equal(payload.headBindings.context, expectedHeadBindingContext);
   assert.equal(payload.providerImplementationSnapshot.ok, false);
   assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_EXTRA"));
 
