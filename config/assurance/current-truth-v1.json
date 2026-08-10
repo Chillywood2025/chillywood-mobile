@@ -598,9 +598,17 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-09T18:05:08Z",
-  "freshnessDeadline": "2026-08-10T18:05:08Z",
+  "timestamp": "2026-08-10T02:20:27Z",
+  "freshnessDeadline": "2026-08-11T02:20:27Z",
   "evidenceSources": [
+    {
+      "id": "a1-owner-authorized-source-freeze-20260810-0220",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.owner-authorized-source",
+        "A1 bootstrap source is bound to exact owner-authorized GitHub evidence and review-only leases are isolated by PR and same-repository owner authority"
+      ]
+    },
     {
       "id": "a1-assurance-control-source-freeze-final-20260809-1805",
       "mode": "local-offline-and-github-read-only",
