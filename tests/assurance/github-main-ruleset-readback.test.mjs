@@ -9,7 +9,7 @@ const authorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-autho
 const finalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-carrier-binding-v1.json");
 const finalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-carrier-github-readback-v1.json");
 const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
-const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T06:30:00Z", freshnessMode = "CURRENT_CLAIM") => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, mergeIdentity: identity, now, freshnessMode });
+const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T07:30:00Z", freshnessMode = "CURRENT_CLAIM") => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, mergeIdentity: identity, now, freshnessMode });
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -25,6 +25,21 @@ test("required context integration identity substitution fails", () => {
   const candidate = structuredClone(contract);
   candidate.applicationReadback.requiredStatusCheckBindings[0].integration_id = 1;
   assert.ok(validate(candidate).some((error) => error.includes("integration identities")));
+});
+
+test("ruleset source and every effective main rule remain repository-bound", () => {
+  for (const mutate of [
+    (candidate) => { candidate.applicationReadback.rulesetSource.sourceType = "Organization"; },
+    (candidate) => { candidate.applicationReadback.rulesetSource.source = "Chillywood2025"; },
+    (candidate) => { candidate.applicationReadback.effectiveMainRules[0].rulesetId = 1; },
+    (candidate) => { candidate.applicationReadback.effectiveMainRules[1].rulesetSourceType = "Organization"; },
+    (candidate) => { candidate.applicationReadback.effectiveMainRules[2].rulesetSource = "Chillywood2025"; },
+    (candidate) => { candidate.applicationReadback.effectiveMainRules.pop(); }
+  ]) {
+    const candidate = structuredClone(contract);
+    mutate(candidate);
+    assert.ok(validate(candidate).some((error) => error.includes("effective repository ruleset")));
+  }
 });
 
 test("ruleset condition substitution away from main fails", () => {
@@ -147,6 +162,22 @@ test("protection-window provider version identities are exact", () => {
   candidate.authorizedBootstrapException.protectionWindow.removalVersionId = 2;
   candidate.authorizedBootstrapException.protectionWindow.restorationVersionId = 3;
   assert.ok(validate(candidate).some((error) => error.includes("ruleset version identity")));
+});
+
+test("every protection-window version binds its complete provider policy", () => {
+  for (const mutate of [
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.pullRequest.requiredApprovingReviewCount = 1; },
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.pullRequest.requireLastPushApproval = true; },
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.preventDeletion = false; },
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.preventNonFastForward = false; },
+    (candidate) => candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.bypassActors.push({ actorId: 1 }),
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshots.removal.conditions.ref_name.include = ["refs/heads/not-main"]; },
+    (candidate) => { candidate.authorizedBootstrapException.protectionWindow.policySnapshotHashes.removal = "0".repeat(64); }
+  ]) {
+    const candidate = structuredClone(contract);
+    mutate(candidate);
+    assert.ok(validate(candidate).some((error) => error.includes("protection-window")));
+  }
 });
 
 test("status checks remain enforced when a protected branch is created", () => {

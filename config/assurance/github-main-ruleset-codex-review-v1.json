@@ -78,10 +78,70 @@
     ],
     "requiredStatusCheckSetSha256": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d",
     "requiredStatusCheckBindingSetSha256": "4ec5a6c6845c6e42f17125b327187a82e81c7d40306996f0d12a32037937d578",
+    "rulesetSource": {
+      "sourceType": "Repository",
+      "source": "Chillywood2025/chillywood-mobile"
+    },
+    "effectiveMainRules": [
+      {
+        "type": "pull_request",
+        "rulesetId": 18940814,
+        "rulesetSourceType": "Repository",
+        "rulesetSource": "Chillywood2025/chillywood-mobile",
+        "parameters": {
+          "allowedMergeMethods": ["merge", "squash", "rebase"],
+          "dismissStaleReviewsOnPush": true,
+          "requireCodeOwnerReview": false,
+          "requireLastPushApproval": true,
+          "requiredApprovingReviewCount": 1,
+          "requiredReviewThreadResolution": true,
+          "requiredReviewers": []
+        }
+      },
+      {
+        "type": "non_fast_forward",
+        "rulesetId": 18940814,
+        "rulesetSourceType": "Repository",
+        "rulesetSource": "Chillywood2025/chillywood-mobile"
+      },
+      {
+        "type": "deletion",
+        "rulesetId": 18940814,
+        "rulesetSourceType": "Repository",
+        "rulesetSource": "Chillywood2025/chillywood-mobile"
+      },
+      {
+        "type": "required_status_checks",
+        "rulesetId": 18940814,
+        "rulesetSourceType": "Repository",
+        "rulesetSource": "Chillywood2025/chillywood-mobile",
+        "parameters": {
+          "doNotEnforceOnCreate": false,
+          "requiredStatusChecks": [
+            {"context": "Chi'llywood / Codex Review Exact Head", "integration_id": 15368},
+            {"context": "Phase 1 / Android Regression Guards", "integration_id": 15368},
+            {"context": "Phase 1 / Autonomous Systems All-Platform Contract", "integration_id": 15368},
+            {"context": "Phase 1 / Autonomous Systems iOS Contract", "integration_id": 15368},
+            {"context": "Phase 1 / Cognitive Execution Safety", "integration_id": 15368},
+            {"context": "Phase 1 / Cognitive Intelligence Contract", "integration_id": 15368},
+            {"context": "Phase 1 / Expo Doctor", "integration_id": 15368},
+            {"context": "Phase 1 / Repository Lint", "integration_id": 15368},
+            {"context": "Phase 1 / Research and Memory Integrity", "integration_id": 15368},
+            {"context": "Phase 1 / Route Contracts", "integration_id": 15368},
+            {"context": "Phase 1 / Runtime Validation", "integration_id": 15368},
+            {"context": "Phase 1 / Supabase Database Integration", "integration_id": 15368},
+            {"context": "Phase 1 / TypeScript", "integration_id": 15368},
+            {"context": "Phase 1 / iOS Configuration", "integration_id": 15368}
+          ],
+          "strictRequiredStatusChecksPolicy": true
+        }
+      }
+    ],
+    "effectiveMainRulesSha256": "1907992f25545b92264cf70b466027346ea6e5360abe9c113206d2418726e9e7",
     "protectedMainReadback": {
       "ref": "refs/heads/main",
       "observedHead": "a9bd887606f74996a9f5920e6fad922e7f20598b",
-      "observedAt": "2026-08-10T05:33:01Z",
+      "observedAt": "2026-08-10T07:24:55Z",
       "evidenceMode": "github-read-only",
       "bootstrapMergeReachable": true
     },
@@ -89,10 +149,10 @@
     "doNotEnforceOnCreate": false,
     "repositorySourceFreshness": {
       "status": "CURRENT",
-      "observedAt": "2026-08-10T05:33:01Z",
-      "expiresAt": "2026-08-11T05:33:01Z",
+      "observedAt": "2026-08-10T07:24:55Z",
+      "expiresAt": "2026-08-11T07:24:55Z",
       "evidenceMode": "github-read-only",
-      "factsCovered": ["repository.github.main-ruleset", "repository.github.main-head"],
+      "factsCovered": ["repository.github.main-ruleset", "repository.github.main-ruleset-effective-rules", "repository.github.main-head"],
       "freshnessClass": "REPOSITORY_SOURCE"
     },
     "ruleTypes": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"],
@@ -127,6 +187,138 @@
       "restorationVersionId": 46044257,
       "restoredAt": "2026-08-09T23:17:33.976-05:00",
       "restoredStatusCheckSetSha256": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d",
+      "policySnapshots": {
+        "preRemoval": {
+          "rulesetId": 18940814,
+          "rulesetName": "main-pr-review-protection",
+          "sourceType": "Repository",
+          "source": "Chillywood2025/chillywood-mobile",
+          "target": "branch",
+          "enforcement": "active",
+          "currentUserCanBypass": "never",
+          "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
+          "bypassActors": [],
+          "pullRequest": {
+            "allowedMergeMethods": ["merge", "squash", "rebase"],
+            "requiredApprovingReviewCount": 0,
+            "requiredReviewThreadResolution": true,
+            "dismissStaleReviewsOnPush": true,
+            "requireCodeOwnerReview": false,
+            "requireLastPushApproval": false,
+            "requiredReviewers": []
+          },
+          "preventNonFastForward": true,
+          "preventDeletion": true,
+          "requiredStatusChecks": {
+            "doNotEnforceOnCreate": false,
+            "contexts": [
+              {"context": "Chi'llywood / Codex Review Exact Head"},
+              {"context": "Phase 1 / Android Regression Guards"},
+              {"context": "Phase 1 / Autonomous Systems All-Platform Contract"},
+              {"context": "Phase 1 / Autonomous Systems iOS Contract"},
+              {"context": "Phase 1 / Cognitive Execution Safety"},
+              {"context": "Phase 1 / Cognitive Intelligence Contract"},
+              {"context": "Phase 1 / Expo Doctor"},
+              {"context": "Phase 1 / Repository Lint"},
+              {"context": "Phase 1 / Research and Memory Integrity"},
+              {"context": "Phase 1 / Route Contracts"},
+              {"context": "Phase 1 / Runtime Validation"},
+              {"context": "Phase 1 / Supabase Database Integration"},
+              {"context": "Phase 1 / TypeScript"},
+              {"context": "Phase 1 / iOS Configuration"}
+            ],
+            "strictRequiredStatusChecksPolicy": true
+          }
+        },
+        "removal": {
+          "rulesetId": 18940814,
+          "rulesetName": "main-pr-review-protection",
+          "sourceType": "Repository",
+          "source": "Chillywood2025/chillywood-mobile",
+          "target": "branch",
+          "enforcement": "active",
+          "currentUserCanBypass": "never",
+          "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
+          "bypassActors": [],
+          "pullRequest": {
+            "allowedMergeMethods": ["merge", "squash", "rebase"],
+            "requiredApprovingReviewCount": 0,
+            "requiredReviewThreadResolution": true,
+            "dismissStaleReviewsOnPush": true,
+            "requireCodeOwnerReview": false,
+            "requireLastPushApproval": false,
+            "requiredReviewers": []
+          },
+          "preventNonFastForward": true,
+          "preventDeletion": true,
+          "requiredStatusChecks": {
+            "doNotEnforceOnCreate": false,
+            "contexts": [
+              {"context": "Phase 1 / Android Regression Guards"},
+              {"context": "Phase 1 / Autonomous Systems All-Platform Contract"},
+              {"context": "Phase 1 / Autonomous Systems iOS Contract"},
+              {"context": "Phase 1 / Cognitive Execution Safety"},
+              {"context": "Phase 1 / Cognitive Intelligence Contract"},
+              {"context": "Phase 1 / Expo Doctor"},
+              {"context": "Phase 1 / Repository Lint"},
+              {"context": "Phase 1 / Research and Memory Integrity"},
+              {"context": "Phase 1 / Route Contracts"},
+              {"context": "Phase 1 / Runtime Validation"},
+              {"context": "Phase 1 / Supabase Database Integration"},
+              {"context": "Phase 1 / TypeScript"},
+              {"context": "Phase 1 / iOS Configuration"}
+            ],
+            "strictRequiredStatusChecksPolicy": true
+          }
+        },
+        "restoration": {
+          "rulesetId": 18940814,
+          "rulesetName": "main-pr-review-protection",
+          "sourceType": "Repository",
+          "source": "Chillywood2025/chillywood-mobile",
+          "target": "branch",
+          "enforcement": "active",
+          "currentUserCanBypass": "never",
+          "conditions": {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}},
+          "bypassActors": [],
+          "pullRequest": {
+            "allowedMergeMethods": ["merge", "squash", "rebase"],
+            "requiredApprovingReviewCount": 0,
+            "requiredReviewThreadResolution": true,
+            "dismissStaleReviewsOnPush": true,
+            "requireCodeOwnerReview": false,
+            "requireLastPushApproval": false,
+            "requiredReviewers": []
+          },
+          "preventNonFastForward": true,
+          "preventDeletion": true,
+          "requiredStatusChecks": {
+            "doNotEnforceOnCreate": false,
+            "contexts": [
+              {"context": "Chi'llywood / Codex Review Exact Head"},
+              {"context": "Phase 1 / Android Regression Guards"},
+              {"context": "Phase 1 / Autonomous Systems All-Platform Contract"},
+              {"context": "Phase 1 / Autonomous Systems iOS Contract"},
+              {"context": "Phase 1 / Cognitive Execution Safety"},
+              {"context": "Phase 1 / Cognitive Intelligence Contract"},
+              {"context": "Phase 1 / Expo Doctor"},
+              {"context": "Phase 1 / Repository Lint"},
+              {"context": "Phase 1 / Research and Memory Integrity"},
+              {"context": "Phase 1 / Route Contracts"},
+              {"context": "Phase 1 / Runtime Validation"},
+              {"context": "Phase 1 / Supabase Database Integration"},
+              {"context": "Phase 1 / TypeScript"},
+              {"context": "Phase 1 / iOS Configuration"}
+            ],
+            "strictRequiredStatusChecksPolicy": true
+          }
+        }
+      },
+      "policySnapshotHashes": {
+        "preRemoval": "19413cb895a29af9ffbb2237d0718a1d0d73b84d06a72ac1a7a5bbab9150a80a",
+        "removal": "feb96dc43e989978e0f3cf43610495ad96688dad73ef19db7ac03f23b5315aa8",
+        "restoration": "19413cb895a29af9ffbb2237d0718a1d0d73b84d06a72ac1a7a5bbab9150a80a"
+      },
       "mainBeforeRemoval": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
       "mainAfterRestoration": "a9bd887606f74996a9f5920e6fad922e7f20598b",
       "admittedMergeShas": ["a9bd887606f74996a9f5920e6fad922e7f20598b"],

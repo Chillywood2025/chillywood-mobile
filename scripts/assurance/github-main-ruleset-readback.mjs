@@ -20,6 +20,10 @@ export const requiredChecks = [exactHeadCheck, ...phase1Checks];
 export const githubActionsIntegrationId = 15368;
 export const requiredCheckBindings = requiredChecks.map((context) => ({ context, integration_id: githubActionsIntegrationId }));
 export const mainBranchCondition = { ref_name: { exclude: [], include: ["refs/heads/main"] } };
+export const repositoryRulesetSource = {
+  sourceType: "Repository",
+  source: "Chillywood2025/chillywood-mobile"
+};
 export const requiredCheckPublisherBoundary = {
   expectedGitHubApp: "github-actions",
   expectedGitHubAppIntegrationId: githubActionsIntegrationId,
@@ -40,6 +44,64 @@ export const pullRequestRequirements = {
   preventDeletion: true,
   preventNonFastForward: true,
   bypassActors: []
+};
+export const bootstrapPullRequestRequirements = {
+  allowedMergeMethods: ["merge", "squash", "rebase"],
+  requiredApprovingReviewCount: 0,
+  requiredReviewThreadResolution: true,
+  dismissStaleReviewsOnPush: true,
+  requireCodeOwnerReview: false,
+  requireLastPushApproval: false,
+  requiredReviewers: []
+};
+const effectiveRuleIdentity = (type, parameters) => ({
+  type,
+  rulesetId: 18940814,
+  rulesetSourceType: repositoryRulesetSource.sourceType,
+  rulesetSource: repositoryRulesetSource.source,
+  ...(parameters ? { parameters } : {})
+});
+export const effectiveMainRules = [
+  effectiveRuleIdentity("pull_request", {
+    allowedMergeMethods: pullRequestRequirements.allowedMergeMethods,
+    dismissStaleReviewsOnPush: pullRequestRequirements.dismissStaleReviewsOnPush,
+    requireCodeOwnerReview: pullRequestRequirements.requireCodeOwnerReview,
+    requireLastPushApproval: pullRequestRequirements.requireLastPushApproval,
+    requiredApprovingReviewCount: pullRequestRequirements.requiredApprovingReviewCount,
+    requiredReviewThreadResolution: pullRequestRequirements.requiredReviewThreadResolution,
+    requiredReviewers: pullRequestRequirements.requiredReviewers
+  }),
+  effectiveRuleIdentity("non_fast_forward"),
+  effectiveRuleIdentity("deletion"),
+  effectiveRuleIdentity("required_status_checks", {
+    doNotEnforceOnCreate: false,
+    requiredStatusChecks: requiredCheckBindings,
+    strictRequiredStatusChecksPolicy: true
+  })
+];
+const bootstrapPolicySnapshot = (checks) => ({
+  rulesetId: 18940814,
+  rulesetName: "main-pr-review-protection",
+  sourceType: repositoryRulesetSource.sourceType,
+  source: repositoryRulesetSource.source,
+  target: "branch",
+  enforcement: "active",
+  currentUserCanBypass: "never",
+  conditions: mainBranchCondition,
+  bypassActors: [],
+  pullRequest: bootstrapPullRequestRequirements,
+  preventNonFastForward: true,
+  preventDeletion: true,
+  requiredStatusChecks: {
+    doNotEnforceOnCreate: false,
+    contexts: checks.map((context) => ({ context })),
+    strictRequiredStatusChecksPolicy: true
+  }
+});
+export const bootstrapWindowPolicies = {
+  preRemoval: bootstrapPolicySnapshot(requiredChecks),
+  removal: bootstrapPolicySnapshot(phase1Checks),
+  restoration: bootstrapPolicySnapshot(requiredChecks)
 };
 export const ownerAuthorizationReceiptPath = "config/assurance/a1-owner-bootstrap-authorization-v1.json";
 export const ownerFinalCarrierBindingReceiptPath = "config/assurance/a1-owner-final-carrier-binding-v1.json";
@@ -90,7 +152,7 @@ export const canonicalOwnerFinalCarrierBindingReceipt = {
 export const protectedMainReadback = {
   ref: "refs/heads/main",
   observedHead: "a9bd887606f74996a9f5920e6fad922e7f20598b",
-  observedAt: "2026-08-10T05:33:01Z",
+  observedAt: "2026-08-10T07:24:55Z",
   evidenceMode: "github-read-only",
   bootstrapMergeReachable: true
 };
@@ -197,6 +259,9 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (readback?.requiredStatusCheckPresent !== readback?.requiredStatusChecks?.includes(exactHeadCheck)) add("exact-head presence derivation mismatch");
   if (readback?.requiredStatusCheckSetSha256 !== setHash(requiredChecks)) add("required status-check digest mismatch");
   if (readback?.requiredStatusCheckBindingSetSha256 !== bindingSetHash(requiredCheckBindings)) add("required status-check integration digest mismatch");
+  if (!same(readback?.rulesetSource, repositoryRulesetSource)
+    || !same(readback?.effectiveMainRules, effectiveMainRules)
+    || readback?.effectiveMainRulesSha256 !== sha256(stableJson(effectiveMainRules))) add("effective repository ruleset mismatch");
   if (readback?.rulesetVersionId !== 46047691
     || readback?.rulesetUpdatedAt !== "2026-08-10T00:32:55.241-05:00"
     || readback?.changeClassification !== "ENFORCED_CANONICAL_PULL_REQUEST_POLICY_AND_PRESERVED_EXACT_CHECK_BINDINGS") add("current ruleset identity mismatch");
@@ -207,7 +272,7 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (freshness?.status !== "CURRENT"
     || freshness?.freshnessClass !== "REPOSITORY_SOURCE"
     || freshness?.evidenceMode !== "github-read-only"
-    || !same(freshness?.factsCovered, ["repository.github.main-ruleset", "repository.github.main-head"])
+    || !same(freshness?.factsCovered, ["repository.github.main-ruleset", "repository.github.main-ruleset-effective-rules", "repository.github.main-head"])
     || freshness?.observedAt !== readback?.protectedMainReadback?.observedAt
     || ![freshnessObservedAt, freshnessExpiresAt].every(Number.isFinite)
     || freshnessExpiresAt - freshnessObservedAt !== repositorySourceReadbackHours * 60 * 60 * 1000) add("repository ruleset readback malformed");
@@ -284,6 +349,19 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (window?.preRemovalStatusCheckSetSha256 !== setHash(requiredChecks)
     || window?.removalStatusCheckSetSha256 !== setHash(phase1Checks)
     || window?.restoredStatusCheckSetSha256 !== setHash(requiredChecks)) add("protection-window digest mismatch");
+  if (!same(window?.policySnapshots?.preRemoval, bootstrapWindowPolicies.preRemoval)
+    || !same(window?.policySnapshots?.removal, bootstrapWindowPolicies.removal)
+    || !same(window?.policySnapshots?.restoration, bootstrapWindowPolicies.restoration)
+    || window?.policySnapshotHashes?.preRemoval !== sha256(stableJson(bootstrapWindowPolicies.preRemoval))
+    || window?.policySnapshotHashes?.removal !== sha256(stableJson(bootstrapWindowPolicies.removal))
+    || window?.policySnapshotHashes?.restoration !== sha256(stableJson(bootstrapWindowPolicies.restoration))) add("protection-window complete policy mismatch");
+  const nonStatusPolicy = (policy) => {
+    const copy = structuredClone(policy ?? {});
+    delete copy.requiredStatusChecks;
+    return copy;
+  };
+  if (!same(nonStatusPolicy(window?.policySnapshots?.preRemoval), nonStatusPolicy(window?.policySnapshots?.removal))
+    || !same(nonStatusPolicy(window?.policySnapshots?.removal), nonStatusPolicy(window?.policySnapshots?.restoration))) add("protection-window non-status policy changed");
   errors.push(...(mergeIdentity?.errors ?? ["github ruleset readback: bootstrap merge history unavailable"]));
   const mergeParents = mergeIdentity?.parents;
   const parentTrees = mergeIdentity?.parentTrees;

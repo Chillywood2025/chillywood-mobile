@@ -65,8 +65,16 @@ export function providerCleanIssueCommentPrefix({ comment, contract }) {
   const body = String(comment.body ?? "");
   const preamble = body.split("\n", 1)[0];
   const requiredLeads = contract?.providerCleanIssueCommentReview?.requiredLeads;
-  if (!Array.isArray(requiredLeads) || !requiredLeads.includes(preamble) || !body.startsWith(`${preamble}\n`) || severityFromBody(body)) return null;
-  const prefixes = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/gu)].map((match) => match[1]);
+  const prefixLength = contract?.providerCleanIssueCommentReview?.reviewedCommitPrefixLength;
+  if (!Array.isArray(requiredLeads)
+    || !requiredLeads.includes(preamble)
+    || !body.startsWith(`${preamble}\n`)
+    || !Number.isInteger(prefixLength)
+    || prefixLength < 7
+    || prefixLength > 40
+    || severityFromBody(body)) return null;
+  const markerPattern = new RegExp(`\\*\\*Reviewed commit:\\*\\*\\s*\`([0-9a-f]{${prefixLength}})\``, "gu");
+  const prefixes = [...body.matchAll(markerPattern)].map((match) => match[1]);
   return prefixes.length === 1 ? prefixes[0] : null;
 }
 

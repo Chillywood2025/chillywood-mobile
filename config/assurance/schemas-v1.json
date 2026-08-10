@@ -558,7 +558,7 @@
         "applicationState": {"const": "APPLIED_AND_READ_BACK_POST_A1_MERGE"},
         "applicationReadback": {
           "type": "object",
-          "required": ["rulesetVersionId", "rulesetUpdatedAt", "changeClassification", "enforcement", "requiredStatusCheckCount", "requiredStatusCheckPresent", "requiredStatusChecks", "requiredStatusCheckBindings", "requiredStatusCheckSetSha256", "requiredStatusCheckBindingSetSha256", "protectedMainReadback", "strictRequiredStatusChecksPolicy", "doNotEnforceOnCreate", "repositorySourceFreshness", "ruleTypes", "allowedMergeMethods", "requiredApprovingReviewCount", "requiredReviewThreadResolution", "dismissStaleReviewsOnPush", "requireCodeOwnerReview", "requireLastPushApproval", "requiredReviewers", "preventDeletion", "preventNonFastForward", "bypassActors"],
+          "required": ["rulesetVersionId", "rulesetUpdatedAt", "changeClassification", "enforcement", "requiredStatusCheckCount", "requiredStatusCheckPresent", "requiredStatusChecks", "requiredStatusCheckBindings", "requiredStatusCheckSetSha256", "requiredStatusCheckBindingSetSha256", "rulesetSource", "effectiveMainRules", "effectiveMainRulesSha256", "protectedMainReadback", "strictRequiredStatusChecksPolicy", "doNotEnforceOnCreate", "repositorySourceFreshness", "ruleTypes", "allowedMergeMethods", "requiredApprovingReviewCount", "requiredReviewThreadResolution", "dismissStaleReviewsOnPush", "requireCodeOwnerReview", "requireLastPushApproval", "requiredReviewers", "preventDeletion", "preventNonFastForward", "bypassActors"],
           "properties": {
             "rulesetVersionId": {"const": 46047691},
             "rulesetUpdatedAt": {"const": "2026-08-10T00:32:55.241-05:00"},
@@ -570,10 +570,13 @@
             "requiredStatusCheckBindings": {"const": [{"context": "Chi'llywood / Codex Review Exact Head", "integration_id": 15368}, {"context": "Phase 1 / Android Regression Guards", "integration_id": 15368}, {"context": "Phase 1 / Autonomous Systems All-Platform Contract", "integration_id": 15368}, {"context": "Phase 1 / Autonomous Systems iOS Contract", "integration_id": 15368}, {"context": "Phase 1 / Cognitive Execution Safety", "integration_id": 15368}, {"context": "Phase 1 / Cognitive Intelligence Contract", "integration_id": 15368}, {"context": "Phase 1 / Expo Doctor", "integration_id": 15368}, {"context": "Phase 1 / Repository Lint", "integration_id": 15368}, {"context": "Phase 1 / Research and Memory Integrity", "integration_id": 15368}, {"context": "Phase 1 / Route Contracts", "integration_id": 15368}, {"context": "Phase 1 / Runtime Validation", "integration_id": 15368}, {"context": "Phase 1 / Supabase Database Integration", "integration_id": 15368}, {"context": "Phase 1 / TypeScript", "integration_id": 15368}, {"context": "Phase 1 / iOS Configuration", "integration_id": 15368}]},
             "requiredStatusCheckSetSha256": {"const": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d"},
             "requiredStatusCheckBindingSetSha256": {"const": "4ec5a6c6845c6e42f17125b327187a82e81c7d40306996f0d12a32037937d578"},
-            "protectedMainReadback": {"const": {"ref": "refs/heads/main", "observedHead": "a9bd887606f74996a9f5920e6fad922e7f20598b", "observedAt": "2026-08-10T05:33:01Z", "evidenceMode": "github-read-only", "bootstrapMergeReachable": true}},
+            "rulesetSource": {"const": {"sourceType": "Repository", "source": "Chillywood2025/chillywood-mobile"}},
+            "effectiveMainRules": {"type": "array", "minItems": 4, "maxItems": 4},
+            "effectiveMainRulesSha256": {"const": "1907992f25545b92264cf70b466027346ea6e5360abe9c113206d2418726e9e7"},
+            "protectedMainReadback": {"const": {"ref": "refs/heads/main", "observedHead": "a9bd887606f74996a9f5920e6fad922e7f20598b", "observedAt": "2026-08-10T07:24:55Z", "evidenceMode": "github-read-only", "bootstrapMergeReachable": true}},
             "strictRequiredStatusChecksPolicy": {"const": true},
             "doNotEnforceOnCreate": {"const": false},
-            "repositorySourceFreshness": {"const": {"status": "CURRENT", "observedAt": "2026-08-10T05:33:01Z", "expiresAt": "2026-08-11T05:33:01Z", "evidenceMode": "github-read-only", "factsCovered": ["repository.github.main-ruleset", "repository.github.main-head"], "freshnessClass": "REPOSITORY_SOURCE"}},
+            "repositorySourceFreshness": {"const": {"status": "CURRENT", "observedAt": "2026-08-10T07:24:55Z", "expiresAt": "2026-08-11T07:24:55Z", "evidenceMode": "github-read-only", "factsCovered": ["repository.github.main-ruleset", "repository.github.main-ruleset-effective-rules", "repository.github.main-head"], "freshnessClass": "REPOSITORY_SOURCE"}},
             "ruleTypes": {"const": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"]},
             "allowedMergeMethods": {"const": ["merge", "squash", "rebase"]},
             "requiredApprovingReviewCount": {"const": 1},
@@ -602,11 +605,21 @@
             "ownerFinalCarrierGithubObservationHash": {"const": "12823e4f14e5ecf64b5ebdc279d4cc9bd4b626f28b96f93738ac86edb9074178"},
             "protectionWindow": {
               "type": "object",
-              "required": ["preRemovalVersionId", "preRemovalUpdatedAt", "preRemovalStatusCheckSetSha256", "removalVersionId", "removedAt", "removalStatusCheckSetSha256", "restorationVersionId", "restoredAt", "restoredStatusCheckSetSha256", "mainBeforeRemoval", "mainAfterRestoration", "admittedMergeShas", "additionalMergesAdmitted"],
+              "required": ["preRemovalVersionId", "preRemovalUpdatedAt", "preRemovalStatusCheckSetSha256", "removalVersionId", "removedAt", "removalStatusCheckSetSha256", "restorationVersionId", "restoredAt", "restoredStatusCheckSetSha256", "policySnapshots", "policySnapshotHashes", "mainBeforeRemoval", "mainAfterRestoration", "admittedMergeShas", "additionalMergesAdmitted"],
               "properties": {
                 "preRemovalVersionId": {"const": 46039477},
                 "removalVersionId": {"const": 46044242},
-                "restorationVersionId": {"const": 46044257}
+                "restorationVersionId": {"const": 46044257},
+                "policySnapshots": {
+                  "type": "object",
+                  "required": ["preRemoval", "removal", "restoration"],
+                  "properties": {
+                    "preRemoval": {"type": "object"},
+                    "removal": {"type": "object"},
+                    "restoration": {"type": "object"}
+                  }
+                },
+                "policySnapshotHashes": {"const": {"preRemoval": "19413cb895a29af9ffbb2237d0718a1d0d73b84d06a72ac1a7a5bbab9150a80a", "removal": "feb96dc43e989978e0f3cf43610495ad96688dad73ef19db7ac03f23b5315aa8", "restoration": "19413cb895a29af9ffbb2237d0718a1d0d73b84d06a72ac1a7a5bbab9150a80a"}}
               }
             },
             "phase1ChecksPreserved": {"const": 13},

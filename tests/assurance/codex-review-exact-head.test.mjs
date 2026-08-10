@@ -149,6 +149,21 @@ test("every observed provider no-suggestion preamble remains exact and fail clos
   assert.equal(lookalike, null);
 });
 
+test("provider clean-review commit markers use only the contracted prefix length", () => {
+  assert.equal(contract.providerCleanIssueCommentReview.reviewedCommitPrefixLength, 10);
+  const makeComment = (prefix) => ({
+    author: "chatgpt-codex-connector",
+    commentId: 9003,
+    body: `Codex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** \`${prefix}\``,
+    createdAt: "2026-08-09T12:30:00Z",
+    updatedAt: "2026-08-09T12:30:00Z"
+  });
+  assert.equal(providerCleanIssueCommentReview({ comment: makeComment(headA.slice(0, 10)), currentHead: headA, resolvedCommit: headA, contract })?.commit, headA);
+  for (const length of [9, 11, 39, 40]) {
+    assert.equal(providerCleanIssueCommentReview({ comment: makeComment(headA.slice(0, length)), currentHead: headA, resolvedCommit: headA, contract }), null);
+  }
+});
+
 test("an exact provider no-suggestion issue comment is a clean rereview disposition", () => {
   const cleanComment = {
     commentId: 9101,
