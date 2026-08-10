@@ -167,7 +167,10 @@ const claimClassPolicy = {
   }
 };
 const canonicalFactRegistry = [
+  { factId: "repository.assurance-control.a1.requirements", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 Owner control requirements, prohibited mutations, review-gate, claim-freshness, and bootstrap boundaries are recorded as executable assurance requirements" },
   { factId: "repository.assurance-control.a1.source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification" },
+  { factId: "repository.assurance-control.a1.model", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 executable focused regressions reject task, head, review-surface, pagination, freshness, receipt, and proof-status substitutions" },
+  { factId: "repository.assurance-control.a1.integration", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 integration contracts connect active-task and current-truth validation with the exact-head review gate and Phase 1 workflow" },
   { factId: "repository.assurance-control.a1.post-merge-control-readback", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub" },
   { factId: "repository.assurance-control.a1.complete-late-sentinel-inventory", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records" },
   { factId: "repository.assurance-control.a1.late-review-tombstone-admission", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor" },
@@ -196,18 +199,28 @@ function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
 }
 
-export function lateReviewAllowedOwners(sentinel) {
+function canonicalLateReviewOwnerEntry(sentinel) {
   const matches = canonicalLateReviewOwnerRegistry.filter((entry) => entry.repository === sentinel?.repository
     && entry.prNumber === sentinel?.prNumber
     && entry.mergeSha === sentinel?.mergeSha);
-  if (matches.length !== 1) return [];
+  if (matches.length !== 1) return null;
   const [entry] = matches;
   const registryBoundDiscovery = sentinel.successorCorrectionOwner === "UNASSIGNED_BLOCKED"
     && sentinel.assuranceControlOwner === undefined
     && sentinel.authorizedBootstrapOwners === undefined;
   if (!registryBoundDiscovery && (sentinel.successorCorrectionOwner !== entry.successorCorrectionOwner
     || sentinel.assuranceControlOwner !== entry.assuranceControlOwner
-    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners))) return [];
+    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners))) return null;
+  return entry;
+}
+
+export function lateReviewSuccessorCorrectionOwner(sentinel) {
+  return canonicalLateReviewOwnerEntry(sentinel)?.successorCorrectionOwner ?? null;
+}
+
+export function lateReviewAllowedOwners(sentinel) {
+  const entry = canonicalLateReviewOwnerEntry(sentinel);
+  if (!entry) return [];
   return [...new Set([entry.successorCorrectionOwner, entry.assuranceControlOwner, ...entry.authorizedBootstrapOwners])].sort();
 }
 
@@ -240,7 +253,7 @@ export function lateReviewResolutionStructureValid(sentinel) {
     && evidence?.schemaVersion === 1
     && Number.isInteger(evidence.successorPr)
     && evidence.successorPr > 0
-    && evidence.successorBranch === sentinel.successorCorrectionOwner
+    && evidence.successorBranch === lateReviewSuccessorCorrectionOwner(sentinel)
     && gitShaPattern.test(evidence.successorHead ?? "")
     && gitShaPattern.test(evidence.successorTree ?? "")
     && gitShaPattern.test(evidence.successorMergeSha ?? "")
@@ -343,7 +356,7 @@ export function lateReviewResolutionTombstoneValid(sentinel, tombstone) {
   const carrierReviewedAt = new Date(carrier?.exactHeadReviewCompletedAt).valueOf();
   const carrierMergedAt = new Date(carrier?.mergedAt).valueOf();
   const correctionCompletedAt = new Date(tombstone.resolutionEvidence?.completedAt).valueOf();
-  if (tombstone.resolutionEvidence?.successorBranch !== sentinel.successorCorrectionOwner
+  if (tombstone.resolutionEvidence?.successorBranch !== lateReviewSuccessorCorrectionOwner(sentinel)
     || !allowedOwners.includes(carrier?.branch)
     || !Number.isInteger(carrier?.prNumber)
     || carrier.prNumber < 1
@@ -1385,8 +1398,252 @@ export function verifyCurrentTruthSynchronization({
   };
 }
 
+export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, latestMergedImplementationPr, remoteMain, gitCommand = git }) {
+  if (activeTaskBinding?.phase !== "COMPLETE") return [];
+  const finding = (id, extra = {}) => ({ id, status: "BLOCKED_INTERNAL", ...extra });
+  if (latestMergedImplementationPr?.state !== "merged"
+    || latestMergedImplementationPr.number !== activeTaskBinding.implementationPr
+    || latestMergedImplementationPr.head !== activeTaskBinding.currentImplementationHead
+    || !gitShaPattern.test(latestMergedImplementationPr.mergeSha ?? "")
+    || !gitShaPattern.test(remoteMain ?? "")) {
+    return [finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_IDENTITY_MISMATCH")];
+  }
+  try {
+    const mergeSha = latestMergedImplementationPr.mergeSha;
+    const parents = gitCommand(["show", "-s", "--format=%P", mergeSha]).split(/\s+/u).filter(Boolean);
+    const mergeSubject = gitCommand(["show", "-s", "--format=%s", mergeSha]);
+    const mergeTree = gitCommand(["rev-parse", `${mergeSha}^{tree}`]);
+    const implementationHeadTree = gitCommand(["rev-parse", `${activeTaskBinding.currentImplementationHead}^{tree}`]);
+    const protectedMainFirstParent = gitCommand(["rev-list", "--first-parent", remoteMain]).split(/\r?\n/u).filter(Boolean);
+    gitCommand(["merge-base", "--is-ancestor", activeTaskBinding.currentImplementationHead, mergeSha]);
+    gitCommand(["merge-base", "--is-ancestor", mergeSha, remoteMain]);
+    const findings = [];
+    if (parents.length !== 2 || parents[1] !== activeTaskBinding.currentImplementationHead) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PARENT_MISMATCH", { parents }));
+    }
+    const expectedSubject = `Merge pull request #${activeTaskBinding.implementationPr} from Chillywood2025/${activeTaskBinding.implementationBranch}`;
+    if (mergeSubject !== expectedSubject) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_PR_BRANCH_MISMATCH", { expected: expectedSubject, recorded: mergeSubject }));
+    }
+    if (!protectedMainFirstParent.includes(mergeSha)) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_NOT_ON_PROTECTED_MAIN_FIRST_PARENT"));
+    }
+    if (mergeTree !== activeTaskBinding.currentImplementationTree) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_TREE_MISMATCH", { expected: activeTaskBinding.currentImplementationTree, recorded: mergeTree }));
+    }
+    if (implementationHeadTree !== activeTaskBinding.currentImplementationTree) {
+      findings.push(finding("ASSURANCE_COMPLETED_IMPLEMENTATION_HEAD_TREE_MISMATCH", { expected: activeTaskBinding.currentImplementationTree, recorded: implementationHeadTree }));
+    }
+    return findings;
+  } catch {
+    return [finding("ASSURANCE_COMPLETED_IMPLEMENTATION_MERGE_ANCESTRY_INVALID")];
+  }
+}
+
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
 export const featureRequired = ["featureId", "currentState", "ownerSystems", "productOwner", "routes", "components", "edgeFunctions", "tablesRpcs", "nativeModulesPlugins", "providers", "platformScope", "environments", "riskLevel", "requirements", "nonGoals", "states", "transitions", "invariants", "knownDefectTags", "threatFailureModes", "proofTierApplicability", "commands", "artifactRequirements", "installedRequirements", "physicalGoldenCases", "rollback", "emergencyStop", "evidenceRetention", "reviewRequirements", "unresolvedBlockers"];
+export const proofTierApplicabilityPolicies = {
+  REQUIRE_CLEAR: ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
+  REQUIRE_NOT_APPLICABLE: ["metadata-boundary-only-no-new-native-or-provider-proof", "not-applicable", "not-applicable-no-artifact-change", "not-applicable-no-installed-change", "not-applicable-no-release"]
+};
+export const proofTierCompletionFeatureApplicability = {
+  "assurance-efficiency-e0": {
+    T0_REQUIREMENT: "required",
+    T1_SOURCE: "required",
+    T2_MODEL: "required",
+    T3_INTEGRATION: "required-shadow-workflow",
+    T4_NATIVE_PROVIDER: "metadata-boundary-only-no-new-native-or-provider-proof",
+    T5_SIGNED_ARTIFACT: "not-applicable-no-artifact-change",
+    T6_INSTALLED_PHYSICAL: "not-applicable-no-installed-change",
+    T7_PUBLIC_CANARY: "not-applicable-no-release"
+  }
+};
+const proofTierCompletionPolicies = {
+  T0_REQUIREMENT: { passStatus: "REQUIREMENTS_CLEAR", missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["REPOSITORY_SOURCE"] },
+  T1_SOURCE: { passStatus: "SOURCE_CLEAR", missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["REPOSITORY_SOURCE"] },
+  T2_MODEL: { passStatus: "MODEL_CLEAR", missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["REPOSITORY_SOURCE"] },
+  T3_INTEGRATION: { passStatus: "INTEGRATION_CLEAR", missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["REPOSITORY_SOURCE"] },
+  T4_NATIVE_PROVIDER: { passStatus: ["NATIVE_CLEAR", "PROVIDER_CLEAR"], missingStatus: "BLOCKED_INTERNAL", freshnessClasses: ["PROVIDER_CRITICAL"] },
+  T5_SIGNED_ARTIFACT: { passStatus: "ARTIFACT_CLEAR", missingStatus: "BLOCKED_EXTERNAL", freshnessClasses: ["SIGNED_ARTIFACT"] },
+  T6_INSTALLED_PHYSICAL: { passStatus: ["INSTALLED_CLEAR", "PHYSICAL_CLEAR"], missingStatus: "BLOCKED_EXTERNAL", freshnessClasses: ["INSTALLED_DEVICE", "PHYSICAL_DEVICE"] },
+  T7_PUBLIC_CANARY: { passStatus: "RELEASE_CLEAR", missingStatus: "BLOCKED_EXTERNAL", freshnessClasses: ["PUBLIC_CANARY"] }
+};
+export const proofTierCompletionFactAuthorities = [
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.requirements",
+    proofTiers: ["T0_REQUIREMENT"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.source",
+    proofTiers: ["T1_SOURCE"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.model",
+    proofTiers: ["T2_MODEL"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "assurance-efficiency-e0",
+    factId: "repository.assurance-control.a1.integration",
+    proofTiers: ["T3_INTEGRATION"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  }
+];
+
+export function validateProofTierStatuses(binding, gateCatalog, featureRegistry) {
+  const value = binding?.proofTierStatuses;
+  if (value === undefined) {
+    if (binding?.proofTierApplicabilityHash !== undefined) {
+      return [{ id: "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE", status: "BLOCKED_INTERNAL", phase: binding?.phase ?? null }];
+    }
+    return binding?.phase === "COMPLETE"
+      ? [{ id: "ASSURANCE_PROOF_TIER_STATUSES_MISSING", status: "BLOCKED_INTERNAL" }]
+      : [];
+  }
+  if (binding?.phase !== "COMPLETE") {
+    return [{ id: "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE", status: "BLOCKED_INTERNAL", phase: binding?.phase ?? null }];
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [{ id: "ASSURANCE_PROOF_TIER_STATUSES_MALFORMED", status: "BLOCKED_INTERNAL" }];
+  }
+  const gates = new Map((gateCatalog?.gates ?? []).map((gate) => [gate?.id, gate]));
+  const catalogStatuses = new Set(gateCatalog?.statuses ?? []);
+  const gatePolicyExact = tierIds.every((tier) => {
+    const gate = gates.get(tier);
+    const expected = proofTierCompletionPolicies[tier];
+    return stableJson(gate?.passStatus) === stableJson(expected.passStatus)
+      && gate?.missingStatus === expected.missingStatus
+      && stableJson(gate?.completionFreshnessClasses) === stableJson(expected.freshnessClasses);
+  });
+  if (gates.size !== tierIds.length
+    || catalogStatuses.size === 0
+    || !gatePolicyExact
+    || stableJson(gateCatalog?.applicabilityPolicies) !== stableJson(proofTierApplicabilityPolicies)
+    || stableJson(gateCatalog?.completionFeatureApplicability) !== stableJson(proofTierCompletionFeatureApplicability)
+    || stableJson(gateCatalog?.completionFactAuthorities) !== stableJson(proofTierCompletionFactAuthorities)) {
+    return [{ id: "ASSURANCE_GATE_CATALOG_MALFORMED", status: "BLOCKED_INTERNAL" }];
+  }
+  const registeredFeatures = Array.isArray(featureRegistry) ? featureRegistry : featureRegistry?.features;
+  const featureMatches = (registeredFeatures ?? []).filter(({ featureId }) => featureId === binding?.featureId);
+  const feature = featureMatches.length === 1 ? featureMatches[0] : null;
+  if (binding?.phase === "COMPLETE" && !feature) {
+    return [{ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_MISSING", status: "BLOCKED_INTERNAL", featureId: binding?.featureId ?? null }];
+  }
+  const findings = [];
+  const authoritativeApplicability = proofTierCompletionFeatureApplicability[binding?.featureId];
+  if (binding?.phase === "COMPLETE"
+    && (!authoritativeApplicability
+      || stableJson(feature.proofTierApplicability) !== stableJson(authoritativeApplicability)
+      || binding.proofTierApplicabilityHash !== sha256(stableJson(authoritativeApplicability)))) {
+    findings.push({ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_HASH_MISMATCH", status: "BLOCKED_INTERNAL", featureId: binding.featureId });
+  }
+  const keys = Object.keys(value);
+  const clearTiers = [];
+  for (const tier of tierIds) {
+    if (!Object.hasOwn(value, tier)) {
+      findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_MISSING", status: "BLOCKED_INTERNAL", tier });
+      continue;
+    }
+    const gate = gates.get(tier);
+    const passStatuses = Array.isArray(gate?.passStatus) ? gate.passStatus : [gate?.passStatus];
+    const proofStatus = value[tier];
+    const compositePass = passStatuses.length > 1;
+    const completePass = compositePass
+      ? Array.isArray(proofStatus)
+        && proofStatus.length === passStatuses.length
+        && new Set(proofStatus).size === proofStatus.length
+        && passStatuses.every((status) => proofStatus.includes(status))
+      : proofStatus === passStatuses[0];
+    const scalarNonPass = typeof proofStatus === "string"
+      && [gate?.missingStatus, "NOT_APPLICABLE", "SUPERSEDED"].includes(proofStatus);
+    const statusShapeValid = completePass || scalarNonPass;
+    const catalogValuesValid = (Array.isArray(proofStatus) ? proofStatus : [proofStatus])
+      .every((status) => typeof status === "string" && catalogStatuses.has(status));
+    if (completePass) clearTiers.push(tier);
+    if (!statusShapeValid || !catalogValuesValid) {
+      findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_INVALID", status: "BLOCKED_INTERNAL", tier, value: proofStatus ?? null });
+    } else if (binding?.phase === "COMPLETE" && !completePass && proofStatus !== "NOT_APPLICABLE") {
+      findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_BLOCKED", status: "BLOCKED_INTERNAL", tier, value: proofStatus });
+    } else if (binding?.phase === "COMPLETE") {
+      const applicability = (authoritativeApplicability ?? feature?.proofTierApplicability)?.[tier];
+      const modes = Object.entries(proofTierApplicabilityPolicies)
+        .filter(([, values]) => values.includes(applicability))
+        .map(([mode]) => mode);
+      if (modes.length !== 1) {
+        findings.push({ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_UNKNOWN", status: "BLOCKED_INTERNAL", tier, applicability: applicability ?? null });
+        continue;
+      }
+      const required = modes[0] === "REQUIRE_CLEAR";
+      const notApplicable = modes[0] === "REQUIRE_NOT_APPLICABLE";
+      if (required && !completePass) {
+        findings.push({ id: "ASSURANCE_REQUIRED_PROOF_TIER_NOT_CLEAR", status: "BLOCKED_INTERNAL", tier, value: proofStatus, applicability });
+      } else if (notApplicable && proofStatus !== "NOT_APPLICABLE") {
+        findings.push({ id: "ASSURANCE_NOT_APPLICABLE_PROOF_TIER_PROMOTED", status: "BLOCKED_INTERNAL", tier, value: proofStatus, applicability });
+      }
+    }
+  }
+  for (const tier of keys) {
+    if (!tierIds.includes(tier)) findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_UNKNOWN", status: "BLOCKED_INTERNAL", tier });
+  }
+  if (binding?.phase === "COMPLETE") {
+    const underEvaluation = Array.isArray(binding.proofTiersUnderEvaluation) ? binding.proofTiersUnderEvaluation : [];
+    if (new Set(underEvaluation).size !== underEvaluation.length
+      || stableJson([...underEvaluation].sort()) !== stableJson([...clearTiers].sort())) {
+      findings.push({
+        id: "ASSURANCE_PROOF_TIER_EVALUATION_MISMATCH",
+        status: "BLOCKED_INTERNAL",
+        proofTiersUnderEvaluation: underEvaluation,
+        clearTiers
+      });
+    }
+    const declaredClasses = Array.isArray(binding.requiredFreshnessClasses) ? binding.requiredFreshnessClasses : [];
+    const claimClasses = Array.isArray(binding.requiredFreshnessClaims)
+      ? [...new Set(binding.requiredFreshnessClaims.map(({ freshnessClass }) => freshnessClass))]
+      : [];
+    if (new Set(declaredClasses).size !== declaredClasses.length
+      || stableJson([...declaredClasses].sort()) !== stableJson([...claimClasses].sort())) {
+      findings.push({ id: "ASSURANCE_COMPLETION_FRESHNESS_SCOPE_MISMATCH", status: "BLOCKED_INTERNAL" });
+    }
+    const requiredCompletionClasses = [...new Set(clearTiers.flatMap((tier) => proofTierCompletionPolicies[tier].freshnessClasses))];
+    for (const freshnessClass of requiredCompletionClasses) {
+      if (!declaredClasses.includes(freshnessClass)) {
+        findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_FRESHNESS_MISSING", status: "BLOCKED_INTERNAL", freshnessClass });
+      }
+    }
+    for (const tier of clearTiers) {
+      const authorities = proofTierCompletionFactAuthorities
+        .filter(({ featureId, proofTiers: authorizedTiers }) => featureId === binding.featureId && authorizedTiers.includes(tier));
+      const factAuthorized = authorities.some((authority) => (binding.requiredFreshnessClaims ?? []).some((claim) =>
+        claim?.freshnessClass === authority.freshnessClass
+        && claim?.authorityAllowed === authority.authorityAllowed
+        && claim?.platform === authority.platform
+        && claim?.provider === authority.provider
+        && Array.isArray(claim.requiredFacts)
+        && claim.requiredFacts.includes(authority.factId)));
+      if (!factAuthorized) {
+        findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_FACT_UNAUTHORIZED", status: "BLOCKED_INTERNAL", tier, featureId: binding.featureId });
+      }
+    }
+  }
+  return findings;
+}
 
 export function renderCurrentState(record) {
   const enabled = record.enabledCognitiveSwitches.length ? record.enabledCognitiveSwitches.map((entry) => `\`${entry}\``).join(", ") : "none";
@@ -1402,6 +1659,12 @@ export function renderCurrentState(record) {
   const installedQa = record.operationalClosures.installedProductQa;
   const revenueCat = record.operationalClosures.revenueCat;
   const active = record.activeTaskBinding;
+  const proofTierStatusLine = active.proofTierStatuses
+    ? `\n- Proof-tier statuses: ${tierIds.map((tier) => {
+      const status = active.proofTierStatuses[tier];
+      return `\`${tier}\`=\`${Array.isArray(status) ? status.join("+") : status}\``;
+    }).join(", ")}.`
+    : "";
   const currentClaims = record.freshnessClaims
     .filter(({ status }) => status === "CURRENT")
     .map(({ id, freshnessClass, expiresAt }) => `\`${id}\` (${freshnessClass}, expires \`${expiresAt}\`)`)
@@ -1413,7 +1676,7 @@ export function renderCurrentState(record) {
   const lateReviews = (record.lateReviewSentinels ?? [])
     .map(({ prNumber, reviewedSha, findings, successorCorrectionOwner }) => `PR #${prNumber} reviewed \`${reviewedSha}\` after merge with ${(findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length} unresolved findings; successor \`${successorCorrectionOwner}\``)
     .join("; ") || "none";
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Late exact-head Codex Review sentinels: ${lateReviews}. These block post-merge completion claims, unrelated successor work, release, and proof-tier promotion.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.${proofTierStatusLine}\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Late exact-head Codex Review sentinels: ${lateReviews}. These block post-merge completion claims, unrelated successor work, release, and proof-tier promotion.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {

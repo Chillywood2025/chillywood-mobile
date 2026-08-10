@@ -7,6 +7,7 @@ import {
   lateReviewResolutionStructureValid,
   lateReviewResolutionSubjectHash,
   lateReviewSentinelResolved,
+  lateReviewSuccessorCorrectionOwner,
   mergeLateReviewSentinelRecords,
   readJson,
   readText,
@@ -1165,7 +1166,7 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
   const failed = (reason) => ({ ok: false, reason, subjectHash: lateReviewResolutionSubjectHash(sentinel), repositoryVerificationHash: null });
   if (!lateReviewResolutionStructureValid(sentinel) || lateReviewAllowedOwners(sentinel).length === 0) return failed("STRUCTURE_OR_OWNER_POLICY");
   const evidence = sentinel.resolutionEvidence;
-  if (repository !== sentinel.repository || evidence.successorBranch !== sentinel.successorCorrectionOwner) return failed("REPOSITORY_OR_OWNER");
+  if (repository !== sentinel.repository || evidence.successorBranch !== lateReviewSuccessorCorrectionOwner(sentinel)) return failed("REPOSITORY_OR_OWNER");
   try {
     const successor = (await request(`https://api.github.com/repos/${repository}/pulls/${evidence.successorPr}`, token, { method: "GET" })).body;
     if (successor?.merged !== true

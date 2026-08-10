@@ -30,7 +30,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1172,10 +1172,16 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   const successorHead = "1".repeat(40);
   const successorTree = "2".repeat(40);
   const sentinel = {
+    repository: "Chillywood2025/chillywood-mobile",
     classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
     prNumber: 194,
-    mergeSha: "3".repeat(40),
-    successorCorrectionOwner: "codex/product-successor",
+    mergeSha: "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+    successorCorrectionOwner: "codex/d2a-livekit-mic-post-merge-review-correction",
+    assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+    authorizedBootstrapOwners: [
+      "codex/assurance-active-task-and-claim-freshness-a1",
+      "codex/assurance-codex-security-scan-reliability-s0"
+    ],
     findings: [{
       sourceId: 77,
       threadId: "THREAD_77",
@@ -1185,7 +1191,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
     resolutionEvidence: {
       schemaVersion: 1,
       successorPr: 203,
-      successorBranch: "codex/product-successor",
+      successorBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
       successorHead,
       successorTree,
       successorMergeSha: "4".repeat(40),
@@ -1215,7 +1221,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   const marker = `<!-- codex-review-late-sentinel:v1 pr=194 merge=${sentinel.mergeSha} -->`;
   const calls = [];
   const result = await recordLateReviewIssue({
-    repository: "owner/repository",
+    repository: "Chillywood2025/chillywood-mobile",
     token: "token",
     sentinel,
     resolutionVerifier,
@@ -1235,7 +1241,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   forged.resolutionEvidence.exactHeadReviewedCommit = headA;
   await assert.rejects(
     recordLateReviewIssue({
-      repository: "owner/repository",
+      repository: "Chillywood2025/chillywood-mobile",
       token: "token",
       sentinel: forged,
       resolutionVerifier,
@@ -1481,6 +1487,39 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
   assert.deepEqual(validateLateReviewSentinelState(promoted).map(({ id }) => id).sort(), ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", "LATE_REVIEW_SUCCESSOR_GATES_INVALID"]);
 });
 
+test("an unresolved late-review sentinel blocks only its exact correction owner's phase COMPLETE claim", () => {
+  const complete = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  complete.activeTaskBinding.phase = "COMPLETE";
+  const findings = validateLateReviewSentinelState(complete);
+  assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+  assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), false);
+
+  const bootstrapComplete = structuredClone(complete);
+  bootstrapComplete.activeTaskBinding.implementationBranch = "codex/assurance-codex-security-scan-reliability-s0";
+  assert.equal(validateLateReviewSentinelState(bootstrapComplete).some(({ id }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"), false);
+
+  const productComplete = structuredClone(complete);
+  productComplete.activeTaskBinding.implementationBranch = "codex/d2a-livekit-mic-post-merge-review-correction";
+  const productFindings = validateLateReviewSentinelState(productComplete);
+  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), true);
+  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+
+  const unrelatedComplete = structuredClone(complete);
+  unrelatedComplete.activeTaskBinding.implementationBranch = "codex/unrelated-next";
+  const unrelatedFindings = validateLateReviewSentinelState(unrelatedComplete);
+  for (const prNumber of [194, 195]) {
+    assert.equal(unrelatedFindings.some(({ id, prNumber: blockedPr }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && blockedPr === prNumber), true, `PR ${prNumber}`);
+  }
+
+  const discoveryComplete = structuredClone(complete);
+  const discoverySentinel = discoveryComplete.lateReviewSentinels.find(({ prNumber }) => prNumber === 195);
+  discoverySentinel.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoverySentinel.assuranceControlOwner;
+  delete discoverySentinel.authorizedBootstrapOwners;
+  assert.equal(lateReviewSuccessorCorrectionOwner(discoverySentinel), "codex/assurance-active-task-and-claim-freshness-a1");
+  assert.equal(validateLateReviewSentinelState(discoveryComplete).some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+});
+
 test("every immutable late-review owner entry permanently retains one canonical sentinel", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   assert.deepEqual(validateLateReviewSentinelState(truth), []);
@@ -1542,6 +1581,23 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
   const tombstone = createLateReviewResolutionTombstone(resolved, admissionCarrier);
   const candidate = structuredClone(truth);
   candidate.lateReviewResolutionTombstones = [tombstone];
+
+  const discoveryResolved = structuredClone(resolved);
+  discoveryResolved.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoveryResolved.assuranceControlOwner;
+  delete discoveryResolved.authorizedBootstrapOwners;
+  discoveryResolved.resolutionEvidence.successorBranch = lateReviewSuccessorCorrectionOwner(discoveryResolved);
+  discoveryResolved.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(discoveryResolved);
+  const discoveryTombstone = createLateReviewResolutionTombstone(discoveryResolved, admissionCarrier);
+  assert.equal(lateReviewResolutionStructureValid(discoveryResolved), true);
+  assert.equal(lateReviewResolutionTombstoneValid(discoveryResolved, discoveryTombstone), true);
+
+  const discoveryOwnerSubstitution = structuredClone(discoveryResolved);
+  discoveryOwnerSubstitution.resolutionEvidence.successorBranch = "UNASSIGNED_BLOCKED";
+  discoveryOwnerSubstitution.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(discoveryOwnerSubstitution);
+  const discoveryOwnerSubstitutionTombstone = createLateReviewResolutionTombstone(discoveryOwnerSubstitution, admissionCarrier);
+  assert.equal(lateReviewResolutionStructureValid(discoveryOwnerSubstitution), false);
+  assert.equal(lateReviewResolutionTombstoneValid(discoveryOwnerSubstitution, discoveryOwnerSubstitutionTombstone), false);
 
   assert.deepEqual(validateLateReviewSentinelState(candidate), [], "a valid branch candidate remains pending, not invalid");
   assert.equal(unresolvedLateReviewSentinels(candidate, { protectedMainRecord: truth, tombstoneAdmissionVerifier: () => true }).length, 2, "branch-local tombstone cannot authorize itself");

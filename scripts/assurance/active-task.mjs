@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, readJson, redact, stableJson } from "./lib.mjs";
+import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -36,9 +36,11 @@ const structuredBindingFields = [
   "requiredFreshnessClasses",
   "requiredFreshnessClaims",
   "proofTiersUnderEvaluation",
+  "proofTierStatuses",
+  "proofTierApplicabilityHash",
   "ownerBootstrapAuthorization"
 ];
-const requiredStructuredBindingFields = structuredBindingFields.filter((field) => field !== "ownerBootstrapAuthorization");
+const requiredStructuredBindingFields = structuredBindingFields.filter((field) => !["ownerBootstrapAuthorization", "proofTierStatuses", "proofTierApplicabilityHash"].includes(field));
 const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
 const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const activeImplementationStates = new Set(["open", "open-draft-current"]);
@@ -143,7 +145,7 @@ function structuredBindingAuthority(truth, facts) {
   return verifyOwnerBootstrapAuthorization(binding, observation) ? "OWNER_BOOTSTRAP_GITHUB_COMMENT" : null;
 }
 
-function validateStructuredBinding(value) {
+export function validateStructuredBinding(value, gateCatalog, registry, openImplementationPrs, latestMergedImplementationPr) {
   const findings = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
   if (requiredStructuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
@@ -221,20 +223,35 @@ function validateStructuredBinding(value) {
     || value.proofTiersUnderEvaluation.some((entry) => !proofTiers.has(entry))
     || !proofFreshnessAligned
     || !bootstrapAuthorizationValid) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  if (validateProofTierStatuses(value, gateCatalog, registry).length) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  if (value.phase === "COMPLETE") {
+    if (!Array.isArray(openImplementationPrs)) findings.push("IMPLEMENTATION_INVENTORY_MALFORMED");
+    else if (openImplementationPrs.length) findings.push("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION");
+    if (latestMergedImplementationPr?.state !== "merged"
+      || latestMergedImplementationPr.number !== value.implementationPr
+      || latestMergedImplementationPr.head !== value.currentImplementationHead
+      || !sha40(latestMergedImplementationPr.mergeSha)) {
+      findings.push("COMPLETED_IMPLEMENTATION_MERGE_IDENTITY_MISMATCH");
+    }
+  }
   return [...new Set(findings)].sort();
 }
 
 function resolveFeature(truth, facts, registry) {
   if (Object.hasOwn(truth ?? {}, "activeTaskBinding")) {
     const binding = truth.activeTaskBinding;
-    const findings = validateStructuredBinding(binding);
+    const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs, truth.latestMergedImplementationPr);
     if (findings.length) return { ok: false, findings };
+    if (binding.phase === "COMPLETE" && unresolvedLateReviewSentinels(truth).some((sentinel) => {
+      const allowedOwners = lateReviewAllowedOwners(sentinel);
+      return lateReviewSuccessorCorrectionOwner(sentinel) === binding.implementationBranch
+        || !allowedOwners.includes(binding.implementationBranch);
+    })) {
+      return { ok: false, findings: ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"] };
+    }
     const authority = structuredBindingAuthority(truth, facts);
     if (!authority) return { ok: false, findings: ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"] };
     if (binding.phase === "COMPLETE") {
-      const open = truth?.openImplementationPrs;
-      if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
-      if (open.length) return { ok: false, findings: ["COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION"] };
       return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
     }
     const displayCandidates = displayFeatureCandidates(truth, registry);
@@ -285,7 +302,7 @@ function inheritedBlockers(truth) {
       pr: sentinel.prNumber,
       reviewedSha: sentinel.reviewedSha,
       unresolvedFindings: (sentinel.findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length,
-      successorCorrectionOwner: sentinel.successorCorrectionOwner,
+      successorCorrectionOwner: lateReviewSuccessorCorrectionOwner(sentinel),
       blocks: sentinel.blocks
     });
   }
