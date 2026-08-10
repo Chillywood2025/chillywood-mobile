@@ -243,6 +243,39 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
 
 });
 
+test("the exact Owner-authorized S0 bootstrap identity is narrow and cannot widen feature, PR, branch or execution state", () => {
+  const s0 = structuredClone(truth);
+  s0.activeTaskBinding = {
+    ...s0.activeTaskBinding,
+    featureId: "codex-security-scan-reliability-s0",
+    implementationPr: 206,
+    implementationBranch: "codex/assurance-codex-security-scan-reliability-s0",
+    implementationBindingId: "assurance-codex-security-scan-reliability-s0-pr206-v1",
+    executionState: "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP"
+  };
+  const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(s0.activeTaskBinding);
+  s0.openImplementationPrs = [{
+    number: 206,
+    branch: s0.activeTaskBinding.implementationBranch,
+    head: s0.activeTaskBinding.currentImplementationHead,
+    state: "open-draft-current"
+  }];
+  const s0Identity = { ...identity, branch: s0.activeTaskBinding.implementationBranch };
+  assert.equal(activeTask({ ...facts, currentTruth: s0, protectedMainTruth: canonicalTruth, identity: s0Identity, ownerBootstrapAuthorizationObservation }).ok, true);
+  for (const [field, value] of [
+    ["featureId", "assurance-efficiency-e0"],
+    ["implementationPr", 999],
+    ["implementationBranch", "codex/unrelated"],
+    ["executionState", "UNRELATED"]
+  ]) {
+    const forged = structuredClone(s0);
+    forged.activeTaskBinding[field] = value;
+    const result = activeTask({ ...facts, currentTruth: forged, protectedMainTruth: canonicalTruth, identity: s0Identity, ownerBootstrapAuthorizationObservation });
+    assert.equal(result.ok, false, field);
+    assert(result.findings.some((finding) => ["ACTIVE_TASK_AUTHORITY_UNVERIFIED", "ACTIVE_TASK_BINDING_MALFORMED"].includes(finding)), field);
+  }
+});
+
 test("conflicting feature override fails closed", () => {
   const result = activeTask({ ...facts, featureId: "assurance-efficiency-e0" });
   assert.equal(result.ok, false);

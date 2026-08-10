@@ -703,6 +703,14 @@
   "freshnessDeadline": "2026-08-11T11:13:25Z",
   "evidenceSources": [
     {
+      "id": "s0-source-freeze-20260810-1127",
+      "mode": "local-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.s0.source",
+        "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording"
+      ]
+    },
+    {
       "id": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
       "mode": "local-and-github-read-only",
       "readbackFacts": {
