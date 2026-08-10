@@ -253,7 +253,7 @@ export function lateReviewResolutionStructureValid(sentinel) {
     && evidence?.schemaVersion === 1
     && Number.isInteger(evidence.successorPr)
     && evidence.successorPr > 0
-    && evidence.successorBranch === sentinel.successorCorrectionOwner
+    && evidence.successorBranch === lateReviewSuccessorCorrectionOwner(sentinel)
     && gitShaPattern.test(evidence.successorHead ?? "")
     && gitShaPattern.test(evidence.successorTree ?? "")
     && gitShaPattern.test(evidence.successorMergeSha ?? "")
@@ -356,7 +356,7 @@ export function lateReviewResolutionTombstoneValid(sentinel, tombstone) {
   const carrierReviewedAt = new Date(carrier?.exactHeadReviewCompletedAt).valueOf();
   const carrierMergedAt = new Date(carrier?.mergedAt).valueOf();
   const correctionCompletedAt = new Date(tombstone.resolutionEvidence?.completedAt).valueOf();
-  if (tombstone.resolutionEvidence?.successorBranch !== sentinel.successorCorrectionOwner
+  if (tombstone.resolutionEvidence?.successorBranch !== lateReviewSuccessorCorrectionOwner(sentinel)
     || !allowedOwners.includes(carrier?.branch)
     || !Number.isInteger(carrier?.prNumber)
     || carrier.prNumber < 1

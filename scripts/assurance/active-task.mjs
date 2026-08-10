@@ -302,7 +302,7 @@ function inheritedBlockers(truth) {
       pr: sentinel.prNumber,
       reviewedSha: sentinel.reviewedSha,
       unresolvedFindings: (sentinel.findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length,
-      successorCorrectionOwner: sentinel.successorCorrectionOwner,
+      successorCorrectionOwner: lateReviewSuccessorCorrectionOwner(sentinel),
       blocks: sentinel.blocks
     });
   }

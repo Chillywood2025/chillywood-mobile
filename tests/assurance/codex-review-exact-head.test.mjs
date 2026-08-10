@@ -30,7 +30,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1172,10 +1172,16 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   const successorHead = "1".repeat(40);
   const successorTree = "2".repeat(40);
   const sentinel = {
+    repository: "Chillywood2025/chillywood-mobile",
     classification: "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
     prNumber: 194,
-    mergeSha: "3".repeat(40),
-    successorCorrectionOwner: "codex/product-successor",
+    mergeSha: "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+    successorCorrectionOwner: "codex/d2a-livekit-mic-post-merge-review-correction",
+    assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+    authorizedBootstrapOwners: [
+      "codex/assurance-active-task-and-claim-freshness-a1",
+      "codex/assurance-codex-security-scan-reliability-s0"
+    ],
     findings: [{
       sourceId: 77,
       threadId: "THREAD_77",
@@ -1185,7 +1191,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
     resolutionEvidence: {
       schemaVersion: 1,
       successorPr: 203,
-      successorBranch: "codex/product-successor",
+      successorBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
       successorHead,
       successorTree,
       successorMergeSha: "4".repeat(40),
@@ -1215,7 +1221,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   const marker = `<!-- codex-review-late-sentinel:v1 pr=194 merge=${sentinel.mergeSha} -->`;
   const calls = [];
   const result = await recordLateReviewIssue({
-    repository: "owner/repository",
+    repository: "Chillywood2025/chillywood-mobile",
     token: "token",
     sentinel,
     resolutionVerifier,
@@ -1235,7 +1241,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
   forged.resolutionEvidence.exactHeadReviewedCommit = headA;
   await assert.rejects(
     recordLateReviewIssue({
-      repository: "owner/repository",
+      repository: "Chillywood2025/chillywood-mobile",
       token: "token",
       sentinel: forged,
       resolutionVerifier,
@@ -1575,6 +1581,23 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
   const tombstone = createLateReviewResolutionTombstone(resolved, admissionCarrier);
   const candidate = structuredClone(truth);
   candidate.lateReviewResolutionTombstones = [tombstone];
+
+  const discoveryResolved = structuredClone(resolved);
+  discoveryResolved.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
+  delete discoveryResolved.assuranceControlOwner;
+  delete discoveryResolved.authorizedBootstrapOwners;
+  discoveryResolved.resolutionEvidence.successorBranch = lateReviewSuccessorCorrectionOwner(discoveryResolved);
+  discoveryResolved.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(discoveryResolved);
+  const discoveryTombstone = createLateReviewResolutionTombstone(discoveryResolved, admissionCarrier);
+  assert.equal(lateReviewResolutionStructureValid(discoveryResolved), true);
+  assert.equal(lateReviewResolutionTombstoneValid(discoveryResolved, discoveryTombstone), true);
+
+  const discoveryOwnerSubstitution = structuredClone(discoveryResolved);
+  discoveryOwnerSubstitution.resolutionEvidence.successorBranch = "UNASSIGNED_BLOCKED";
+  discoveryOwnerSubstitution.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(discoveryOwnerSubstitution);
+  const discoveryOwnerSubstitutionTombstone = createLateReviewResolutionTombstone(discoveryOwnerSubstitution, admissionCarrier);
+  assert.equal(lateReviewResolutionStructureValid(discoveryOwnerSubstitution), false);
+  assert.equal(lateReviewResolutionTombstoneValid(discoveryOwnerSubstitution, discoveryOwnerSubstitutionTombstone), false);
 
   assert.deepEqual(validateLateReviewSentinelState(candidate), [], "a valid branch candidate remains pending, not invalid");
   assert.equal(unresolvedLateReviewSentinels(candidate, { protectedMainRecord: truth, tombstoneAdmissionVerifier: () => true }).length, 2, "branch-local tombstone cannot authorize itself");
