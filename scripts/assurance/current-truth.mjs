@@ -3,6 +3,7 @@ import fs from "node:fs";
 import {
   args,
   baseSynchronizationFirstParentDistance,
+  baseSynchronizationReviewReceiptHash,
   emit,
   evaluateFreshnessClaims,
   evaluateTaskFreshness,
@@ -43,6 +44,8 @@ function collectBaseSynchronizationReviewEvidence(reviewEntries) {
     const reviewRef = implementationRemoteRef(review.branch);
     const reviewRefHead = safeGit(["show-ref", "--verify", "--hash", reviewRef]);
     if (!reviewRefHead) continue;
+    const reviewRefTree = safeGit(["rev-parse", `${reviewRefHead}^{tree}`]);
+    if (!reviewRefTree) continue;
     const files = safeGit(["ls-tree", "-r", "--name-only", reviewRef, "--", "docs/reviews", "config/assurance/reviews"], "")
       .split(/\r?\n/gu)
       .filter((file) => file.endsWith(".json"));
@@ -50,7 +53,9 @@ function collectBaseSynchronizationReviewEvidence(reviewEntries) {
       try {
         const manifest = JSON.parse(git(["show", `${reviewRef}:${file}`]));
         if (manifest?.classification !== "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH") continue;
-        evidence.push({ ...manifest, reviewRef, reviewRefHead });
+        const candidate = { ...manifest, reviewRef, reviewRefHead, reviewRefTree };
+        if (candidate.reviewReceiptHash !== baseSynchronizationReviewReceiptHash(candidate)) continue;
+        evidence.push(candidate);
       } catch {
         // A malformed candidate is ignored and the minimum-evidence gate fails closed.
       }

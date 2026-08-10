@@ -1,59 +1,21 @@
 #!/usr/bin/env node
-import { args, emit, readJson } from "./lib.mjs";
-import { parseLateReviewIssue, readOpenLateReviewIssues } from "./codex-review-exact-head.mjs";
+import { args, emit, lateReviewAllowedOwners, lateReviewSentinelResolved, readJson } from "./lib.mjs";
+import { parseLateReviewIssue, readMergedLateReviewLedgerSentinels, readOpenLateReviewIssues, verifyLateReviewResolutionGithub } from "./codex-review-exact-head.mjs";
+
+export { lateReviewSentinelResolved } from "./lib.mjs";
 
 const requiredBlocks = ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"];
-const gitSha = /^[0-9a-f]{40}$/u;
-const sha256 = /^[0-9a-f]{64}$/u;
-
-function sameValues(left, right) {
-  return Array.isArray(left)
-    && Array.isArray(right)
-    && new Set(left).size === left.length
-    && new Set(right).size === right.length
-    && JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
+export function unresolvedLateReviewSentinels(record, options = {}) {
+  return (record?.lateReviewSentinels ?? []).filter((sentinel) => !lateReviewSentinelResolved(sentinel, options));
 }
 
-function validInstant(value) {
-  return typeof value === "string" && Number.isFinite(new Date(value).valueOf());
-}
-
-export function lateReviewSentinelResolved(sentinel) {
-  const findings = Array.isArray(sentinel?.findings) ? sentinel.findings : [];
-  if (!findings.length || findings.some(({ disposition, threadResolutionState }) => disposition !== "RESOLVED"
-    || (threadResolutionState !== "RESOLVED" && threadResolutionState !== "NOT_APPLICABLE"))) return false;
-  const evidence = sentinel.resolutionEvidence;
-  const sourceIds = findings.map(({ sourceId }) => sourceId);
-  const threadIds = findings.map(({ threadId }) => threadId).filter(Boolean);
-  return evidence?.schemaVersion === 1
-    && Number.isInteger(evidence.successorPr)
-    && evidence.successorPr > 0
-    && evidence.successorBranch === sentinel.successorCorrectionOwner
-    && gitSha.test(evidence.successorHead ?? "")
-    && gitSha.test(evidence.successorTree ?? "")
-    && gitSha.test(evidence.successorMergeSha ?? "")
-    && evidence.exactHeadReviewedCommit === evidence.successorHead
-    && evidence.exactHeadReviewedTree === evidence.successorTree
-    && sha256.test(evidence.exactHeadReviewReceiptHash ?? "")
-    && sha256.test(evidence.correctionEvidenceHash ?? "")
-    && sha256.test(evidence.dispositionEvidenceHash ?? "")
-    && evidence.allThreadsResolved === true
-    && validInstant(evidence.githubThreadResolutionReadbackAt)
-    && validInstant(evidence.completedAt)
-    && sameValues(evidence.correctedSourceIds, sourceIds)
-    && sameValues(evidence.resolvedThreadIds, threadIds);
-}
-
-export function unresolvedLateReviewSentinels(record) {
-  return (record?.lateReviewSentinels ?? []).filter((sentinel) => !lateReviewSentinelResolved(sentinel));
-}
-
-export function validateLateReviewSentinelState(record) {
+export function validateLateReviewSentinelState(record, options = {}) {
   const findings = [];
   for (const sentinel of record?.lateReviewSentinels ?? []) {
     const dispositions = (sentinel.findings ?? []).map(({ disposition }) => disposition);
     const claimsResolution = dispositions.some((disposition) => disposition === "RESOLVED");
-    const resolved = lateReviewSentinelResolved(sentinel);
+    const resolved = lateReviewSentinelResolved(sentinel, options);
+    if (lateReviewAllowedOwners(sentinel).length === 0) findings.push({ id: "LATE_REVIEW_OWNER_POLICY_INVALID", prNumber: sentinel.prNumber });
     if (claimsResolution && !resolved) findings.push({ id: "LATE_REVIEW_RESOLUTION_EVIDENCE_INVALID", prNumber: sentinel.prNumber });
     if (resolved) continue;
     const binding = typeof sentinel.bindingPath === "string" ? record?.[sentinel.bindingPath] : null;
@@ -79,6 +41,17 @@ export async function readDurableLateReviewSentinels(repository, token, options 
   const issues = await readOpenLateReviewIssues(repository, token, options);
   const parsed = issues.map((issue) => ({ issue, sentinel: parseLateReviewIssue(issue) }));
   if (parsed.some(({ sentinel }) => !sentinel)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  for (const entry of parsed) {
+    const claimsResolution = entry.sentinel.findings?.every(({ disposition }) => disposition === "RESOLVED");
+    if (!claimsResolution) continue;
+    const verified = typeof options.verifyResolution === "function"
+      ? await options.verifyResolution({ repository, token, ...entry })
+      : null;
+    if (!lateReviewSentinelResolved(entry.sentinel, { resolutionVerifier: () => verified })) {
+      throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+    }
+    entry.resolutionVerified = true;
+  }
   return parsed;
 }
 
@@ -89,14 +62,20 @@ async function main() {
   const findings = validateLateReviewSentinelState(record);
   const requireGithub = options.requireGithub === true || options.requireGithub === "true";
   let durable = [];
+  let globalLedgerSentinels = [];
   if (requireGithub) {
     const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
     const token = process.env.GITHUB_TOKEN;
     if (!repository || !token) throw new Error("CODEX_REVIEW_INPUT_MISSING");
-    durable = await readDurableLateReviewSentinels(repository, token, { maxPages: 20 });
+    durable = await readDurableLateReviewSentinels(repository, token, {
+      maxPages: 20,
+      verifyResolution: ({ sentinel }) => verifyLateReviewResolutionGithub({ repository, token, sentinel, maxPages: 20 })
+    });
+    globalLedgerSentinels = await readMergedLateReviewLedgerSentinels(repository, token, { maxPages: 20 });
   }
   const durableSentinels = durable.map(({ sentinel }) => sentinel);
-  const allSentinels = [...sentinels, ...durableSentinels];
+  const allSentinels = [...new Map([...globalLedgerSentinels, ...sentinels, ...durableSentinels]
+    .map((sentinel) => [`${sentinel.prNumber}:${sentinel.mergeSha}`, sentinel])).values()];
   emit("assurance:late-review-sentinel", allSentinels.length === 0 && findings.length === 0, {
     classification: allSentinels.length ? "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW" : "NO_UNRESOLVED_LATE_REVIEW",
     findings,

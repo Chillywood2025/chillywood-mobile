@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   baseSynchronizationFirstParentDistance,
+  baseSynchronizationReviewReceiptHash,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
@@ -120,10 +121,16 @@ const baseSyncReviewEvidence = {
   reviewOnly: true,
   mergePermitted: false,
   criticalFindingCounts: { P0: 0, P1: 0 },
+  reviewProvider: "INDEPENDENT_REPOSITORY_REVIEW",
+  reviewerId: "independent-lane-1",
+  reviewedCommit: pr64Observed,
+  reviewedTree: synchronizedTree,
   reviewRef: "refs/remotes/origin/codex/pr64-review",
   reviewRefHead: "4".repeat(40),
+  reviewRefTree: "5".repeat(40),
   reviewTimestamp: "2026-08-01T20:00:00Z"
 };
+baseSyncReviewEvidence.reviewReceiptHash = baseSynchronizationReviewReceiptHash(baseSyncReviewEvidence);
 const baseSyncFacts = {
   sourceIsAncestor: true,
   commitDistance: 1,
@@ -182,7 +189,9 @@ const rejectionCases = [
   ["expiredReview", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewTimestamp: "2026-07-30T20:00:00Z" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
   ["futureReview", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewTimestamp: "2026-08-02T20:00:00Z" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
   ["reviewAllowsMerge", { reviewEvidence: [{ ...baseSyncReviewEvidence, mergePermitted: true }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
-  ["reviewCriticalFinding", { reviewEvidence: [{ ...baseSyncReviewEvidence, criticalFindingCounts: { P0: 0, P1: 1 } }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"]
+  ["reviewCriticalFinding", { reviewEvidence: [{ ...baseSyncReviewEvidence, criticalFindingCounts: { P0: 0, P1: 1 } }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["reviewProviderForged", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewProvider: "SELF_ATTESTED" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["reviewReceiptAltered", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewReceiptHash: "6".repeat(64) }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"]
 ];
 for (const [label, facts, findingId] of rejectionCases) {
   const result = verifyBaseSync(facts);
@@ -366,6 +375,8 @@ assert.equal(baseSyncContract.sourceDeltaMustBeByteEquivalent, true);
 assert.equal(baseSyncContract.changedPathSetMustBeEquivalent, true);
 assert.equal(baseSyncContract.providerRemoteRefMustMatch, true);
 assert.equal(baseSyncContract.reviewFreshnessHours, 24);
+assert.equal(baseSyncContract.reviewProvider, "INDEPENDENT_REPOSITORY_REVIEW");
+assert.equal(baseSyncContract.reviewReceiptHashAlgorithm, "sha256");
 assert.equal(baseSyncContract.repeatedMergeChainAllowed, false);
 assert.equal(baseSyncContract.manualResolutionAllowed, false);
 assert.deepEqual(baseSyncContract.criticalFindingMaximum, { P0: 0, P1: 0 });
@@ -446,4 +457,4 @@ try {
   fs.rmSync(tempDirectory, { recursive: true });
 }
 
-process.stdout.write(`current-truth head binding: PASS (exact-head cases unchanged; first-parent base-sync acceptance plus 25 fail-closed rejection cases; provider CLI fail-closed; deterministic 3/3; ${hashes[0]})\n`);
+process.stdout.write(`current-truth head binding: PASS (exact-head cases unchanged; first-parent base-sync acceptance plus ${rejectionCases.length} fail-closed rejection cases; provider CLI fail-closed; deterministic 3/3; ${hashes[0]})\n`);

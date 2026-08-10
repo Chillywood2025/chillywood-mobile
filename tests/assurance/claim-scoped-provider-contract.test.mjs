@@ -76,6 +76,7 @@ function evaluate(receiptValue, verifyIssuerReceipt = () => true) {
     freshness,
     now: new Date("2026-08-09T12:00:00Z"),
     allowSyntheticFactRegistry: true,
+    allowSyntheticExternalEvidence: true,
     evidenceSourceVerifier: () => true,
     externalEvidenceVerifier: {
       policy,
@@ -110,6 +111,7 @@ test("only a hash-bound synthetic receipt crossing the trusted issuer boundary c
     freshness,
     now: new Date("2026-08-09T12:00:00Z"),
     allowSyntheticFactRegistry: true,
+    allowSyntheticExternalEvidence: true,
     evidenceSourceVerifier: () => true,
     externalEvidenceVerifier: () => true
   });
@@ -128,6 +130,7 @@ test("fact identity and global policy failures suppress all current authority", 
       freshness: alteredFreshness,
       now: new Date("2026-08-09T12:00:00Z"),
       allowSyntheticFactRegistry: true,
+      allowSyntheticExternalEvidence: true,
       evidenceSourceVerifier: () => true,
       externalEvidenceVerifier: {
         policy,
@@ -140,6 +143,54 @@ test("fact identity and global policy failures suppress all current authority", 
     assert.equal(result.liveProviderReadback, false, label);
     assert(result.findings.some(({ id }) => id === finding), label);
   }
+});
+
+test("receipt shapes, policy substitution and production use of synthetic fixtures fail closed", () => {
+  for (const [label, value] of [
+    ["wrong receipt version", receipt({ schemaVersion: 999 })],
+    ["empty receipt id", receipt({ receiptId: "" })],
+    ["object receipt id", receipt({ receiptId: { forged: true } })],
+    ["unexpected receipt field", receipt({ attackerControlled: true })]
+  ]) {
+    const result = evaluate(value);
+    assert.equal(result.ok, false, label);
+    assert.equal(result.liveProviderReadback, false, label);
+  }
+  const attackerPolicy = {
+    ...policy,
+    schemaVersion: 9,
+    approvedReceiptIssuers: ["ATTACKER"],
+    approvedReceiptSchemas: ["attacker-v1"],
+    approvedCollectionCommands: { PROVIDER_CRITICAL: ["curl provider"] },
+    currentProductionVerifier: "ATTACKER",
+    trustedVerifierBoundary: "attacker",
+    hashAlgorithm: "md5",
+    classAndPlatformCrossoverAllowed: true
+  };
+  const attackerReceipt = receipt({ receiptIssuer: "ATTACKER", receiptSchema: "attacker-v1", collectionCommand: "curl provider" });
+  const substituted = evaluateFreshnessClaims({
+    claims: [claim],
+    evidenceSources: [source],
+    freshness,
+    now: new Date("2026-08-09T12:00:00Z"),
+    allowSyntheticFactRegistry: true,
+    allowSyntheticExternalEvidence: true,
+    evidenceSourceVerifier: () => true,
+    externalEvidenceVerifier: { policy: attackerPolicy, receiptFor: () => attackerReceipt, verifyIssuerReceipt: () => true }
+  });
+  assert.equal(substituted.ok, false);
+  assert.equal(substituted.liveProviderReadback, false);
+  const production = evaluateFreshnessClaims({
+    claims: [claim],
+    evidenceSources: [source],
+    freshness,
+    now: new Date("2026-08-09T12:00:00Z"),
+    allowSyntheticFactRegistry: true,
+    evidenceSourceVerifier: () => true,
+    externalEvidenceVerifier: { policy, receiptFor: () => receipt(), verifyIssuerReceipt: () => true }
+  });
+  assert.equal(production.ok, false, "synthetic receipts cannot authorize normal production evaluation");
+  assert.equal(production.liveProviderReadback, false);
 });
 
 test("historical Installed QA and RevenueCat facts remain recorded while source-only work passes and provider work is denied", () => {

@@ -1,5 +1,16 @@
 #!/usr/bin/env node
-import { args, emit, readJson, readText, sha256, stableValue } from "./lib.mjs";
+import {
+  args,
+  emit,
+  lateReviewAllowedOwners,
+  lateReviewResolutionStructureValid,
+  lateReviewResolutionSubjectHash,
+  lateReviewSentinelResolved,
+  readJson,
+  readText,
+  sha256,
+  stableValue
+} from "./lib.mjs";
 
 const contractPath = "config/assurance/codex-review-exact-head-v1.json";
 const paginationIncompleteCode = "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE";
@@ -9,6 +20,15 @@ export const lateReviewIssueLabel = "codex-review-late-sentinel";
 export const lateReviewIssueTitlePrefix = "[Codex Review Late Sentinel]";
 export const reviewOnlyLabel = "assurance-review-only";
 export const sourcePushLeaseCheckName = "Chi'llywood / Codex Review Source Push Lease";
+export const providerFindingLedgerCheckName = "Chi'llywood / Codex Review Finding Ledger";
+export const reviewOnlyLeaseCheckName = "Chi'llywood / Review Only Never Merge";
+export const reviewOnlyBranchPrefix = "codex/assurance-review-only/";
+
+export function isReviewOnlyPullRequest({ headBranch, reviewOnlyLeasePresent = false, truthEntries = [], prNumber }) {
+  return String(headBranch ?? "").startsWith(reviewOnlyBranchPrefix)
+    || reviewOnlyLeasePresent === true
+    || truthEntries.some(({ number, disposition }) => number === prNumber && String(disposition).includes("never-merge"));
+}
 
 function validInstant(value) {
   return typeof value === "string" && Number.isFinite(new Date(value).valueOf());
@@ -67,6 +87,27 @@ function normalizedFinding({ sourceType, provider, id, nodeId, body, createdAt, 
   };
 }
 
+function validPersistentProviderFinding(finding, contract) {
+  const sourceTypes = new Set(["REVIEW_BODY", "INLINE_THREAD", "ISSUE_COMMENT"]);
+  return sourceTypes.has(finding?.sourceType)
+    && Number.isInteger(finding.sourceId)
+    && finding.sourceId > 0
+    && typeof finding.findingId === "string"
+    && finding.findingId.length > 0
+    && (contract?.reviewProviders ?? []).includes(finding.provider)
+    && (contract?.blockingSeverities ?? []).includes(finding.severity)
+    && /^[0-9a-f]{64}$/u.test(finding.bodyHash ?? "")
+    && validInstant(finding.createdAt)
+    && validInstant(finding.updatedAt)
+    && (finding.submittedAt === null || validInstant(finding.submittedAt))
+    && (finding.reviewedCommit === null || validGitSha(finding.reviewedCommit))
+    && finding.headBound === validGitSha(finding.reviewedCommit)
+    && ["RESOLVED", "UNRESOLVED", "NOT_APPLICABLE"].includes(finding.threadResolutionState)
+    && finding.disposition === "UNRESOLVED"
+    && Array.isArray(finding.affectedPaths)
+    && finding.affectedPaths.every((path) => typeof path === "string" && path.length > 0);
+}
+
 export function normalizeLateReviewEvent({ eventName, event, contract, observedAt = new Date().toISOString() }) {
   const providers = new Set(contract?.reviewProviders ?? []);
   let sourceType;
@@ -116,7 +157,7 @@ export function normalizeLateReviewEvent({ eventName, event, contract, observedA
   });
 }
 
-function normalizeProviderFindings({ contract, current, reviews = [], threads = [], issueComments = [] }) {
+function normalizeProviderFindings({ contract, current, reviews = [], threads = [], issueComments = [], persistentFindings = [] }) {
   const providers = new Set(contract.reviewProviders ?? []);
   const acceptableStates = new Set(contract.acceptableReviewStates ?? []);
   const providerReviews = reviews.filter(({ author }) => providers.has(author));
@@ -200,8 +241,23 @@ function normalizeProviderFindings({ contract, current, reviews = [], threads = 
     }));
   }
 
+  for (const finding of persistentFindings) {
+    if (!validPersistentProviderFinding(finding, contract)) continue;
+    const timestamp = findingTimestamp(finding);
+    const disposition = laterExactProviderReview(timestamp) ? "RESOLVED_BY_LATER_PROVIDER_REREVIEW" : "UNRESOLVED";
+    if (finding.sourceType === "ISSUE_COMMENT" && finding.headBound !== true && disposition === "UNRESOLVED") {
+      unboundProviderCommentIds.push(finding.sourceNodeId ?? finding.sourceId);
+    }
+    findings.push({
+      ...finding,
+      updatedAt: timestamp,
+      disposition
+    });
+  }
+
+  const uniqueFindings = new Map(findings.map((finding) => [`${finding.findingId}:${finding.bodyHash}`, finding]));
   return {
-    findings: findings.sort((left, right) => left.findingId.localeCompare(right.findingId)),
+    findings: [...uniqueFindings.values()].sort((left, right) => left.findingId.localeCompare(right.findingId)),
     unboundProviderCommentIds: [...new Set(unboundProviderCommentIds)].sort()
   };
 }
@@ -212,7 +268,7 @@ export function exactReceiptHash(receipt) {
   return sha256(stableValue(payload));
 }
 
-export function buildExactHeadReceipt({ contract, current, review, reviews = null, threads, issueComments = [] }) {
+export function buildExactHeadReceipt({ contract, current, review, reviews = null, threads, issueComments = [], persistentFindings = [] }) {
   const allReviews = Array.isArray(reviews) ? reviews : [review];
   const providerNames = new Set(contract.reviewProviders ?? []);
   const reviewSubmissions = allReviews
@@ -276,7 +332,7 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
   const startedCandidates = [review.startedAt, ...exactProviderComments.map(({ createdAt }) => createdAt), review.submittedAt]
     .filter(validInstant)
     .sort();
-  const normalized = normalizeProviderFindings({ contract, current, reviews: allReviews, threads, issueComments });
+  const normalized = normalizeProviderFindings({ contract, current, reviews: allReviews, threads, issueComments, persistentFindings });
   const receipt = {
     schemaVersion: 1,
     contractId: contract.contractId,
@@ -284,6 +340,8 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
     prNumber: current.prNumber,
     prHeadSha: current.headSha,
     prHeadTree: current.headTree,
+    prBaseBranch: current.baseBranch,
+    prBaseSha: current.baseSha,
     reviewProvider: review.author,
     reviewId: review.reviewId,
     reviewState: review.state,
@@ -323,6 +381,8 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
     || !validGitSha(current.headTree)
     || !validGitSha(receipt.prHeadSha)
     || !validGitSha(receipt.prHeadTree)
+    || typeof receipt.prBaseBranch !== "string"
+    || !validGitSha(receipt.prBaseSha)
     || !validGitSha(receipt.reviewedCommit)
     || !(contract.reviewProviders ?? []).includes(receipt.reviewProvider)
     || !Number.isInteger(receipt.reviewId)
@@ -345,7 +405,12 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
   if (receipt.reviewedCommit !== current.headSha || receipt.prHeadSha !== current.headSha || receipt.prHeadTree !== current.headTree) {
     codes.push("CODEX_REVIEW_STALE_HEAD");
   }
-  if (receipt.latestSourcePushAt !== current.latestSourcePushAt
+  if (current.baseBranch !== contract.protectedBaseBranch
+    || receipt.prBaseBranch !== current.baseBranch
+    || receipt.prBaseSha !== current.baseSha) codes.push("CODEX_REVIEW_STALE_BASE");
+  if (!Array.isArray(current.sourcePushLeaseHashes)
+    || current.sourcePushLeaseHashes.length === 0
+    || receipt.latestSourcePushAt !== current.latestSourcePushAt
     || JSON.stringify(receipt.sourcePushLeaseHashes) !== JSON.stringify(current.sourcePushLeaseHashes ?? [])
     || new Date(receipt.reviewCompletedAt).valueOf() <= new Date(current.latestSourcePushAt).valueOf()) {
     codes.push("CODEX_REVIEW_INCOMPLETE");
@@ -360,10 +425,10 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
   return { ok: codes.length === 0, codes: [...new Set(codes)].sort(), receipt };
 }
 
-export function detectLateReview({ contract, current, review = null, reviews = null, threads = [], issueComments = [], eventFindings = [] }) {
+export function detectLateReview({ contract, current, review = null, reviews = null, threads = [], issueComments = [], eventFindings = [], persistentFindings = [] }) {
   if (!validInstant(current.mergedAt)) return null;
   const allReviews = Array.isArray(reviews) ? reviews : (review ? [review] : []);
-  const normalized = normalizeProviderFindings({ contract, current, reviews: allReviews, threads, issueComments });
+  const normalized = normalizeProviderFindings({ contract, current, reviews: allReviews, threads, issueComments, persistentFindings });
   const blocking = new Set(contract.blockingSeverities ?? []);
   const uniqueFindings = new Map([...normalized.findings, ...(eventFindings ?? [])]
     .map((finding) => [`${finding.findingId}:${finding.bodyHash}`, finding]));
@@ -475,13 +540,16 @@ function sourcePushLeaseDigest(payload) {
   return sha256(stableValue(payload));
 }
 
-export async function recordSourcePushLease({ repository, prNumber, headSha, pushedAt, token, request = githubRequestPage }) {
+export async function recordSourcePushLease({ repository, prNumber, headSha, baseBranch, baseSha, pushedAt, token, request = githubRequestPage }) {
   if (!/^[^/]+\/[^/]+$/u.test(repository ?? "")
     || !Number.isInteger(prNumber)
     || prNumber < 1
     || !validGitSha(headSha)
+    || typeof baseBranch !== "string"
+    || !baseBranch
+    || !validGitSha(baseSha)
     || !validInstant(pushedAt)) throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
-  const payload = { schemaVersion: 1, repository, prNumber, headSha, pushedAt };
+  const payload = { schemaVersion: 1, repository, prNumber, headSha, baseBranch, baseSha, pushedAt };
   payload.digest = sourcePushLeaseDigest(payload);
   const result = await request(`https://api.github.com/repos/${repository}/check-runs`, token, {
     method: "POST",
@@ -517,6 +585,9 @@ function parseSourcePushLease(check, { repository, prNumber, headSha }) {
     || payload.repository !== repository
     || payload.prNumber !== prNumber
     || payload.headSha !== headSha
+    || typeof payload.baseBranch !== "string"
+    || !payload.baseBranch
+    || !validGitSha(payload.baseSha)
     || !validInstant(payload.pushedAt)
     || payload.digest !== sourcePushLeaseDigest(unsigned)
     || external[1] !== String(prNumber)
@@ -549,6 +620,196 @@ export async function readSourcePushLeases(repository, prNumber, headSha, token,
   throw paginationError();
 }
 
+async function readNamedCheckRuns(repository, headSha, checkName, token, options = {}) {
+  const request = options.request ?? githubRequestPage;
+  const maxPages = options.maxPages ?? 20;
+  const runs = [];
+  let totalCount = null;
+  for (let page = 1; page <= maxPages; page += 1) {
+    const result = await request(`https://api.github.com/repos/${repository}/commits/${headSha}/check-runs?check_name=${encodeURIComponent(checkName)}&filter=all&per_page=100&page=${page}`, token, { method: "GET" });
+    if (!result?.body
+      || !Number.isInteger(result.body.total_count)
+      || !Array.isArray(result.body.check_runs)
+      || (totalCount !== null && totalCount !== result.body.total_count)) throw paginationError();
+    totalCount = result.body.total_count;
+    runs.push(...result.body.check_runs);
+    if (!hasNextRestPage(result.link)) {
+      if (runs.length !== totalCount) throw paginationError();
+      return runs;
+    }
+    if (page === maxPages) throw paginationError();
+  }
+  throw paginationError();
+}
+
+function checkLedgerDigest(payload) {
+  const unsigned = structuredClone(payload ?? {});
+  delete unsigned.digest;
+  return sha256(stableValue(unsigned));
+}
+
+async function recordCheckLedger({ repository, headSha, checkName, externalPrefix, payload, token, request = githubRequestPage }) {
+  const value = { ...payload, schemaVersion: 1, repository, headSha };
+  value.digest = checkLedgerDigest(value);
+  const result = await request(`https://api.github.com/repos/${repository}/check-runs`, token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: checkName,
+      head_sha: headSha,
+      status: "completed",
+      conclusion: "neutral",
+      external_id: `${externalPrefix}:${value.digest}`,
+      output: { title: checkName, summary: JSON.stringify(value) }
+    })
+  });
+  return { payload: value, checkRun: result.body };
+}
+
+function parseCheckLedger(check, { repository, prNumber, headSha, checkName, externalPrefix }) {
+  let payload;
+  try { payload = JSON.parse(check?.output?.summary); } catch { return false; }
+  if (check?.name !== checkName
+    || check.status !== "completed"
+    || check.conclusion !== "neutral"
+    || check.head_sha !== headSha
+    || check.app?.slug !== "github-actions"
+    || check.external_id !== `${externalPrefix}:${payload?.digest}`
+    || payload?.schemaVersion !== 1
+    || payload.repository !== repository
+    || payload.prNumber !== prNumber
+    || payload.headSha !== headSha
+    || !/^[0-9a-f]{64}$/u.test(payload.digest ?? "")
+    || payload.digest !== checkLedgerDigest(payload)) return false;
+  return payload;
+}
+
+export async function recordProviderFindingLedger({ repository, prNumber, headSha, finding, token, request = githubRequestPage }) {
+  const contract = readJson(contractPath);
+  if (!Number.isInteger(prNumber)
+    || !validGitSha(headSha)
+    || !validPersistentProviderFinding(finding, contract)) throw new Error("CODEX_REVIEW_FINDING_LEDGER_INVALID");
+  return recordCheckLedger({
+    repository,
+    headSha,
+    checkName: providerFindingLedgerCheckName,
+    externalPrefix: `codex-review-finding:v1:pr=${prNumber}:source=${finding.sourceType}:${finding.sourceId}`,
+    payload: { prNumber, finding },
+    token,
+    request
+  });
+}
+
+export async function readProviderFindingLedger(repository, prNumber, headSha, token, options = {}) {
+  const contract = options.contract ?? readJson(contractPath);
+  const checks = await readNamedCheckRuns(repository, headSha, providerFindingLedgerCheckName, token, options);
+  const parsed = checks.map((check) => {
+    let source;
+    try { source = JSON.parse(check.output?.summary)?.finding; } catch { return false; }
+    return parseCheckLedger(check, {
+      repository,
+      prNumber,
+      headSha,
+      checkName: providerFindingLedgerCheckName,
+      externalPrefix: `codex-review-finding:v1:pr=${prNumber}:source=${source?.sourceType}:${source?.sourceId}`
+    });
+  });
+  if (parsed.some((entry) => entry === false || !validPersistentProviderFinding(entry?.finding, contract))) {
+    throw new Error("CODEX_REVIEW_FINDING_LEDGER_INVALID");
+  }
+  return [...new Map(parsed.map(({ finding }) => [`${finding.findingId}:${finding.bodyHash}`, finding])).values()];
+}
+
+export async function recordReviewOnlyLease({ repository, prNumber, headSha, headBranch, token, request = githubRequestPage }) {
+  if (!Number.isInteger(prNumber) || !validGitSha(headSha) || typeof headBranch !== "string" || !headBranch) {
+    throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  }
+  return recordCheckLedger({
+    repository,
+    headSha,
+    checkName: reviewOnlyLeaseCheckName,
+    externalPrefix: `codex-review-only:v1:pr=${prNumber}`,
+    payload: { prNumber, headBranch },
+    token,
+    request
+  });
+}
+
+export async function readReviewOnlyLeases(repository, prNumber, headSha, token, options = {}) {
+  const checks = await readNamedCheckRuns(repository, headSha, reviewOnlyLeaseCheckName, token, options);
+  const parsed = checks.map((check) => parseCheckLedger(check, {
+    repository,
+    prNumber,
+    headSha,
+    checkName: reviewOnlyLeaseCheckName,
+    externalPrefix: `codex-review-only:v1:pr=${prNumber}`
+  }));
+  if (parsed.some((entry) => entry === false)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  return parsed;
+}
+
+export async function readMergedLateReviewLedgerSentinels(repository, token, options = {}) {
+  const contract = options.contract ?? readJson(contractPath);
+  const graphRequestFn = options.graphRequestFn ?? graphRequest;
+  const maxPages = options.maxPages ?? contract.boundedReadback?.maxPages ?? 20;
+  const [owner, name] = repository.split("/");
+  const pullsQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequests(states:MERGED,first:$first,after:$after,orderBy:{field:CREATED_AT,direction:DESC}){pageInfo{hasNextPage endCursor}nodes{number mergedAt mergeCommit{oid} headRefName headRefOid commits(last:1){nodes{commit{oid tree{oid}}}}}}}}`;
+  const pulls = await paginateGraphConnection({
+    query: pullsQuery,
+    variables: { owner, name, first: 100 },
+    select: (data) => data?.repository?.pullRequests,
+    token,
+    maxPages,
+    request: graphRequestFn
+  });
+  const minimumPr = contract.providerFindingLedger?.minimumTrackedMergedPr ?? Number.MAX_SAFE_INTEGER;
+  const sentinels = [];
+  for (const pr of pulls.filter(({ number }) => number >= minimumPr)) {
+    const commit = pr.commits?.nodes?.[0]?.commit;
+    const headSha = pr.headRefOid ?? commit?.oid;
+    if (!validGitSha(headSha)) throw new Error("CODEX_REVIEW_FINDING_LEDGER_INVALID");
+    const persistentFindings = await readProviderFindingLedger(repository, pr.number, headSha, token, { maxPages, request: options.request });
+    if (!persistentFindings.length) continue;
+    const reviewsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviews(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{databaseId id author{login}state body createdAt updatedAt submittedAt commit{oid}}}}}}`;
+    const reviewNodes = await paginateGraphConnection({
+      query: reviewsQuery,
+      variables: { owner, name, number: pr.number, first: 100 },
+      select: (data) => data?.repository?.pullRequest?.reviews,
+      token,
+      maxPages,
+      request: graphRequestFn
+    });
+    const reviews = reviewNodes.map((review) => ({
+      reviewId: review.databaseId,
+      reviewNodeId: review.id,
+      author: review.author?.login ?? null,
+      state: review.state,
+      body: review.body,
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
+      startedAt: review.createdAt,
+      submittedAt: review.submittedAt,
+      commit: review.commit?.oid ?? null
+    }));
+    const sentinel = detectLateReview({
+      contract,
+      current: {
+        repository,
+        prNumber: pr.number,
+        headSha,
+        headTree: commit?.tree?.oid ?? null,
+        mergedAt: pr.mergedAt,
+        mergeSha: pr.mergeCommit?.oid ?? null,
+        successorCorrectionOwner: "UNASSIGNED_BLOCKED"
+      },
+      reviews,
+      persistentFindings
+    });
+    if (sentinel) sentinels.push(sentinel);
+  }
+  return sentinels;
+}
+
 function lateReviewIssueMarker(sentinel) {
   return `<!-- codex-review-late-sentinel:v1 pr=${sentinel.prNumber} merge=${sentinel.mergeSha} -->`;
 }
@@ -561,35 +822,6 @@ function lateReviewIssueDocument(sentinel) {
   };
 }
 
-function durableSentinelResolved(sentinel) {
-  const findings = Array.isArray(sentinel?.findings) ? sentinel.findings : [];
-  const evidence = sentinel?.resolutionEvidence;
-  const sourceIds = findings.map(({ sourceId }) => sourceId).sort();
-  const resolvedSourceIds = Array.isArray(evidence?.correctedSourceIds) ? [...evidence.correctedSourceIds].sort() : [];
-  const threadIds = findings.map(({ threadId }) => threadId).filter(Boolean).sort();
-  const resolvedThreadIds = Array.isArray(evidence?.resolvedThreadIds) ? [...evidence.resolvedThreadIds].sort() : [];
-  return findings.length > 0
-    && findings.every(({ disposition, threadResolutionState }) => disposition === "RESOLVED"
-      && (threadResolutionState === "RESOLVED" || threadResolutionState === "NOT_APPLICABLE"))
-    && evidence?.schemaVersion === 1
-    && Number.isInteger(evidence.successorPr)
-    && evidence.successorPr > 0
-    && evidence.successorBranch === sentinel.successorCorrectionOwner
-    && validGitSha(evidence.successorHead)
-    && validGitSha(evidence.successorTree)
-    && validGitSha(evidence.successorMergeSha)
-    && evidence.exactHeadReviewedCommit === evidence.successorHead
-    && evidence.exactHeadReviewedTree === evidence.successorTree
-    && /^[0-9a-f]{64}$/u.test(evidence.exactHeadReviewReceiptHash ?? "")
-    && /^[0-9a-f]{64}$/u.test(evidence.correctionEvidenceHash ?? "")
-    && /^[0-9a-f]{64}$/u.test(evidence.dispositionEvidenceHash ?? "")
-    && evidence.allThreadsResolved === true
-    && validInstant(evidence.githubThreadResolutionReadbackAt)
-    && validInstant(evidence.completedAt)
-    && JSON.stringify(sourceIds) === JSON.stringify(resolvedSourceIds)
-    && JSON.stringify(threadIds) === JSON.stringify(resolvedThreadIds);
-}
-
 export function parseLateReviewIssue(issue) {
   const marker = String(issue?.body ?? "").match(/<!--\s*codex-review-late-sentinel:v1\s+pr=(\d+)\s+merge=([0-9a-f]{40})\s*-->/u);
   const payload = String(issue?.body ?? "").match(/```json\s*([\s\S]*?)\s*```/u);
@@ -600,7 +832,7 @@ export function parseLateReviewIssue(issue) {
       || sentinel?.prNumber !== Number(marker[1])
       || sentinel?.mergeSha !== marker[2]
       || !Array.isArray(sentinel?.findings)
-      || (!sentinel.findings.some(({ disposition }) => disposition !== "RESOLVED") && !durableSentinelResolved(sentinel))) return null;
+      || (sentinel.findings.every(({ disposition }) => disposition === "RESOLVED") && !lateReviewResolutionStructureValid(sentinel))) return null;
     return sentinel;
   } catch {
     return null;
@@ -628,7 +860,7 @@ export async function readOpenLateReviewIssues(repository, token, options = {}) 
   throw paginationError();
 }
 
-export async function recordLateReviewIssue({ repository, token, sentinel, request = githubRequestPage, maxPages = 20 }) {
+export async function recordLateReviewIssue({ repository, token, sentinel, request = githubRequestPage, maxPages = 20, resolutionVerifier = verifyLateReviewResolutionGithub }) {
   const marker = lateReviewIssueMarker(sentinel);
   let recordedSentinel = sentinel;
   const existing = (await readOpenLateReviewIssues(repository, token, { request, maxPages }))
@@ -638,7 +870,12 @@ export async function recordLateReviewIssue({ repository, token, sentinel, reque
     const claimsResolution = (sentinel.findings ?? []).length > 0
       && sentinel.findings.every(({ disposition }) => disposition === "RESOLVED");
     if (claimsResolution) {
-      if (!durableSentinelResolved(sentinel)) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+      const verified = typeof resolutionVerifier === "function"
+        ? await resolutionVerifier({ repository, token, sentinel, request, maxPages })
+        : null;
+      if (!lateReviewSentinelResolved(sentinel, { resolutionVerifier: () => verified })) {
+        throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+      }
     } else {
       const existingSentinel = parseLateReviewIssue(existing);
       if (!existingSentinel) throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
@@ -686,10 +923,98 @@ export async function recordLateReviewIssue({ repository, token, sentinel, reque
   }
 }
 
+export async function verifyLateReviewResolutionGithub({ repository, token, sentinel, request = githubRequestPage, graphRequestFn = graphRequest, maxPages = 20 }) {
+  const failed = (reason) => ({ ok: false, reason, subjectHash: lateReviewResolutionSubjectHash(sentinel), repositoryVerificationHash: null });
+  if (!lateReviewResolutionStructureValid(sentinel) || lateReviewAllowedOwners(sentinel).length === 0) return failed("STRUCTURE_OR_OWNER_POLICY");
+  const evidence = sentinel.resolutionEvidence;
+  if (repository !== sentinel.repository || evidence.successorBranch !== sentinel.successorCorrectionOwner) return failed("REPOSITORY_OR_OWNER");
+  try {
+    const successor = (await request(`https://api.github.com/repos/${repository}/pulls/${evidence.successorPr}`, token, { method: "GET" })).body;
+    if (successor?.merged !== true
+      || successor?.head?.ref !== evidence.successorBranch
+      || successor?.head?.sha !== evidence.successorHead
+      || successor?.merge_commit_sha !== evidence.successorMergeSha
+      || successor?.merged_at !== evidence.successorMergedAt) return failed("SUCCESSOR_PR_IDENTITY");
+    const commit = (await request(`https://api.github.com/repos/${repository}/git/commits/${evidence.successorHead}`, token, { method: "GET" })).body;
+    if (commit?.tree?.sha !== evidence.successorTree) return failed("SUCCESSOR_TREE");
+
+    const checkRuns = [];
+    let totalCount = null;
+    for (let page = 1; page <= maxPages; page += 1) {
+      const response = await request(`https://api.github.com/repos/${repository}/commits/${evidence.successorHead}/check-runs?check_name=${encodeURIComponent(readJson(contractPath).checkName)}&filter=all&per_page=100&page=${page}`, token, { method: "GET" });
+      if (!response?.body
+        || !Number.isInteger(response.body.total_count)
+        || !Array.isArray(response.body.check_runs)
+        || (totalCount !== null && totalCount !== response.body.total_count)) return failed("CHECK_READBACK");
+      totalCount = response.body.total_count;
+      checkRuns.push(...response.body.check_runs);
+      if (!hasNextRestPage(response.link)) {
+        if (checkRuns.length !== totalCount) return failed("CHECK_PAGINATION");
+        break;
+      }
+      if (page === maxPages) return failed("CHECK_PAGINATION");
+    }
+    const exactChecks = checkRuns.filter((check) => check.name === readJson(contractPath).checkName
+      && check.status === "completed"
+      && check.conclusion === "success"
+      && check.head_sha === evidence.successorHead
+      && check.app?.slug === "github-actions"
+      && check.external_id === evidence.exactHeadReviewReceiptHash
+      && check.id === evidence.exactHeadCheckRunId);
+    if (exactChecks.length !== 1) return failed("EXACT_HEAD_CHECK");
+    let checkPayload;
+    try { checkPayload = JSON.parse(exactChecks[0].output?.text); } catch { return failed("EXACT_HEAD_CHECK_PAYLOAD"); }
+    const receipt = checkPayload?.receipt;
+    if (checkPayload?.codes?.length
+      || receipt?.receiptHash !== evidence.exactHeadReviewReceiptHash
+      || receipt?.receiptHash !== exactReceiptHash(receipt)
+      || receipt?.repository !== repository
+      || receipt?.prNumber !== evidence.successorPr
+      || receipt?.prHeadSha !== evidence.successorHead
+      || receipt?.prHeadTree !== evidence.successorTree
+      || receipt?.reviewedCommit !== evidence.successorHead
+      || receipt?.reviewCompletedAt !== evidence.exactHeadReviewCompletedAt) return failed("EXACT_HEAD_RECEIPT");
+
+    const [owner, name] = repository.split("/");
+    const query = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:$first,after:$after){pageInfo{hasNextPage endCursor}nodes{id isResolved}}}}}`;
+    const threads = await paginateGraphConnection({
+      query,
+      variables: { owner, name, number: sentinel.prNumber, first: 100 },
+      select: (data) => data?.repository?.pullRequest?.reviewThreads,
+      token,
+      maxPages,
+      request: graphRequestFn
+    });
+    const requiredThreads = [...new Set((evidence.resolvedThreadIds ?? []))].sort();
+    const resolvedThreads = threads.filter(({ id, isResolved }) => requiredThreads.includes(id) && isResolved === true).map(({ id }) => id).sort();
+    if (JSON.stringify(requiredThreads) !== JSON.stringify(resolvedThreads)) return failed("ORIGINAL_THREADS");
+    const subjectHash = lateReviewResolutionSubjectHash(sentinel);
+    const repositoryVerificationHash = sha256(stableValue({
+      schemaVersion: 1,
+      subjectHash,
+      repository,
+      originalPr: sentinel.prNumber,
+      originalMergeSha: sentinel.mergeSha,
+      successorPr: evidence.successorPr,
+      successorHead: evidence.successorHead,
+      successorTree: evidence.successorTree,
+      successorMergeSha: evidence.successorMergeSha,
+      successorMergedAt: evidence.successorMergedAt,
+      exactHeadCheckRunId: exactChecks[0].id,
+      exactHeadReceiptHash: receipt.receiptHash,
+      exactHeadReviewCompletedAt: receipt.reviewCompletedAt,
+      resolvedThreadIds: resolvedThreads
+    }));
+    return { ok: true, subjectHash, repositoryVerificationHash };
+  } catch (error) {
+    return failed(`READBACK:${error.message}`);
+  }
+}
+
 async function readPullRequest(repository, prNumber, token, contract, sourcePushFloorAt = null) {
   const [owner, name] = repository.split("/");
   const maxPages = contract.boundedReadback?.maxPages ?? 20;
-  const metadataQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){number merged mergedAt mergeCommit{oid} headRefName headRefOid commits(last:1){nodes{commit{oid committedDate tree{oid}}}}}}}`;
+  const metadataQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){number merged mergedAt mergeCommit{oid} headRefName headRefOid baseRefName baseRefOid commits(last:1){nodes{commit{oid committedDate tree{oid}}}}}}}`;
   const metadata = await graphRequest(metadataQuery, { owner, name, number: prNumber }, token);
   const pr = metadata?.repository?.pullRequest;
   if (!pr) throw new Error("GITHUB_PULL_REQUEST_MISSING");
@@ -727,10 +1052,13 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
   }
   const commit = pr.commits?.nodes?.[0]?.commit;
   let sourcePushLeases = [];
+  let persistentProviderFindings = [];
+  let reviewOnlyLeases = [];
   let sourceReadbackIncomplete = false;
   let sourceReadbackCode = null;
   try {
-    sourcePushLeases = await readSourcePushLeases(repository, prNumber, pr.headRefOid, token, { maxPages });
+    sourcePushLeases = (await readSourcePushLeases(repository, prNumber, pr.headRefOid, token, { maxPages }))
+      .filter((lease) => lease.baseBranch === pr.baseRefName && lease.baseSha === pr.baseRefOid);
   } catch (error) {
     if (String(error.message).startsWith("GITHUB_HTTP_404:")) sourcePushLeases = [];
     else if ([paginationIncompleteCode, "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID"].includes(error.message)) {
@@ -738,6 +1066,15 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
       sourceReadbackCode = error.message;
     }
     else throw error;
+  }
+  try {
+    persistentProviderFindings = await readProviderFindingLedger(repository, prNumber, pr.headRefOid, token, { maxPages });
+    reviewOnlyLeases = await readReviewOnlyLeases(repository, prNumber, pr.headRefOid, token, { maxPages });
+  } catch (error) {
+    if ([paginationIncompleteCode, "CODEX_REVIEW_FINDING_LEDGER_INVALID", "CODEX_REVIEW_RECEIPT_INVALID"].includes(error.message)) {
+      sourceReadbackIncomplete = true;
+      sourceReadbackCode = error.message;
+    } else throw error;
   }
   const latestSourcePushAt = [commit?.committedDate, sourcePushFloorAt, ...sourcePushLeases.map(({ pushedAt }) => pushedAt)]
     .filter(validInstant)
@@ -787,18 +1124,22 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
       headSha: pr.headRefOid,
       headBranch: pr.headRefName,
       headTree: commit?.tree?.oid ?? null,
+      baseBranch: pr.baseRefName,
+      baseSha: pr.baseRefOid,
       latestSourcePushAt,
       sourcePushLeaseHashes: sourcePushLeases.map(({ digest }) => digest).sort(),
       mergedAt: pr.mergedAt,
       mergeSha: pr.mergeCommit?.oid ?? null,
       providerReviewsExist: false,
       labels: labelNodes.map(({ name: label }) => label).filter(Boolean).sort(),
+      reviewOnlyLeasePresent: reviewOnlyLeases.length > 0,
       sourceReadbackIncomplete,
       sourceReadbackCode
     },
     reviews,
     threads,
     issueComments,
+    persistentProviderFindings,
     readbackIncomplete: false
   };
 }
@@ -832,12 +1173,13 @@ async function main() {
   let reviews;
   let threads;
   let issueComments;
+  let persistentProviderFindings = [];
   let readbackIncomplete = false;
   let token = null;
   let event = {};
   let eventName = options.eventName ?? process.env.GITHUB_EVENT_NAME ?? "";
   if (options.fixture) {
-    ({ current, reviews = [], threads = [], issueComments = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
+    ({ current, reviews = [], threads = [], issueComments = [], persistentProviderFindings = [], readbackIncomplete = false } = JSON.parse(readText(options.fixture)));
   } else {
     const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
     token = process.env.GITHUB_TOKEN;
@@ -845,36 +1187,83 @@ async function main() {
     const prNumber = Number(options.prNumber ?? event.pull_request?.number ?? (event.issue?.pull_request ? event.issue.number : null));
     if (!repository || !Number.isInteger(prNumber) || prNumber < 1 || !token) throw new Error("CODEX_REVIEW_INPUT_MISSING");
     let sourcePushFloorAt = null;
-    if (eventName === "pull_request_target" && event.action === "synchronize") {
+    let admissionHead = null;
+    const sourceAdmissionEvent = eventName === "pull_request_target"
+      && (["opened", "synchronize", "reopened", "ready_for_review"].includes(event.action)
+        || (event.action === "edited" && event.changes?.base));
+    if (sourceAdmissionEvent) {
       const eventHead = event.pull_request?.head?.sha;
-      if (!validGitSha(eventHead) || !/^\d+$/u.test(process.env.GITHUB_RUN_ID ?? "")) {
+      const eventBaseBranch = event.pull_request?.base?.ref;
+      const eventBaseSha = event.pull_request?.base?.sha;
+      if (!validGitSha(eventHead)
+        || typeof eventBaseBranch !== "string"
+        || !validGitSha(eventBaseSha)
+        || !/^\d+$/u.test(process.env.GITHUB_RUN_ID ?? "")) {
         throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
       }
       const currentRun = await githubRequest(`https://api.github.com/repos/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`, token);
       if (!validInstant(currentRun?.created_at)) throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
       sourcePushFloorAt = currentRun.created_at;
-      await recordSourcePushLease({ repository, prNumber, headSha: eventHead, pushedAt: sourcePushFloorAt, token });
+      admissionHead = eventHead;
+      await recordSourcePushLease({
+        repository,
+        prNumber,
+        headSha: eventHead,
+        baseBranch: eventBaseBranch,
+        baseSha: eventBaseSha,
+        pushedAt: sourcePushFloorAt,
+        token
+      });
     }
-    ({ current, reviews, threads, issueComments, readbackIncomplete } = await readPullRequest(repository, prNumber, token, contract, sourcePushFloorAt));
+    ({ current, reviews, threads, issueComments, persistentProviderFindings, readbackIncomplete } = await readPullRequest(repository, prNumber, token, contract, sourcePushFloorAt));
+    if (admissionHead && (current.headSha !== admissionHead
+      || current.baseBranch !== event.pull_request?.base?.ref
+      || current.baseSha !== event.pull_request?.base?.sha)) throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
     const truth = readJson("config/assurance/current-truth-v1.json");
-    current.reviewOnly = current.labels.includes(reviewOnlyLabel)
-      || (truth.openReviewOnlyPrs ?? []).some(({ number, disposition }) => number === prNumber && String(disposition).includes("never-merge"));
+    const eventCreatesReviewOnlyLease = eventName === "pull_request_target"
+      && current.headBranch.startsWith(reviewOnlyBranchPrefix)
+      && (sourceAdmissionEvent || (event.action === "labeled" && event.label?.name === reviewOnlyLabel));
+    if (eventCreatesReviewOnlyLease) {
+      await recordReviewOnlyLease({ repository, prNumber, headSha: current.headSha, headBranch: current.headBranch, token });
+      current.reviewOnlyLeasePresent = true;
+    }
+    current.reviewOnly = isReviewOnlyPullRequest({
+      headBranch: current.headBranch,
+      reviewOnlyLeasePresent: current.reviewOnlyLeasePresent,
+      truthEntries: truth.openReviewOnlyPrs ?? [],
+      prNumber
+    });
     const matchingLateSentinel = (truth.lateReviewSentinels ?? []).find(({ prNumber: mergedPr }) => mergedPr === prNumber);
     current.successorCorrectionOwner = matchingLateSentinel?.successorCorrectionOwner ?? null;
     let durableLateSentinels = [];
+    let globalLateLedgerSentinels = [];
+    const verifiedDurableResolutions = new Map();
     try {
       const durableIssues = await readOpenLateReviewIssues(repository, token, { maxPages: contract.lateReviewIssue?.maxReadPages ?? 20 });
       durableLateSentinels = durableIssues.map(parseLateReviewIssue);
       if (durableLateSentinels.some((sentinel) => !sentinel)) readbackIncomplete = true;
       durableLateSentinels = durableLateSentinels.filter(Boolean);
+      for (const sentinel of durableLateSentinels) {
+        if (!sentinel.findings?.every(({ disposition }) => disposition === "RESOLVED")) continue;
+        const verified = await verifyLateReviewResolutionGithub({ repository, token, sentinel, maxPages: contract.lateReviewIssue?.maxReadPages ?? 20 });
+        verifiedDurableResolutions.set(`${sentinel.prNumber}:${sentinel.mergeSha}`, verified);
+      }
+      globalLateLedgerSentinels = await readMergedLateReviewLedgerSentinels(repository, token, {
+        contract,
+        maxPages: contract.lateReviewIssue?.maxReadPages ?? 20
+      });
     } catch (error) {
       if (error.message === paginationIncompleteCode) readbackIncomplete = true;
       else throw error;
     }
     current.openDurableLateReviewSentinels = durableLateSentinels;
-    current.lateReviewBlocked = [...(truth.lateReviewSentinels ?? []), ...durableLateSentinels].some((sentinel) => {
-      const unresolved = !durableSentinelResolved(sentinel);
-      const allowedOwners = [sentinel.successorCorrectionOwner, sentinel.assuranceControlOwner, ...(sentinel.authorizedBootstrapOwners ?? [])];
+    current.globalLateLedgerSentinels = globalLateLedgerSentinels;
+    const allLateSentinels = new Map([...globalLateLedgerSentinels, ...(truth.lateReviewSentinels ?? []), ...durableLateSentinels]
+      .map((sentinel) => [`${sentinel.prNumber}:${sentinel.mergeSha}`, sentinel]));
+    current.lateReviewBlocked = [...allLateSentinels.values()].some((sentinel) => {
+      const verified = verifiedDurableResolutions.get(`${sentinel.prNumber}:${sentinel.mergeSha}`);
+      const unresolved = !lateReviewSentinelResolved(sentinel, { resolutionVerifier: () => verified });
+      const allowedOwners = lateReviewAllowedOwners(sentinel);
       return unresolved && !allowedOwners.includes(current.headBranch);
     });
   }
@@ -886,9 +1275,19 @@ async function main() {
     .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
   const selectedReview = exactReviews.at(-1) ?? null;
   const latestProviderReview = providerReviews.filter(({ submittedAt }) => validInstant(submittedAt)).sort((left, right) => left.submittedAt.localeCompare(right.submittedAt)).at(-1) ?? null;
-  const receipt = selectedReview ? buildExactHeadReceipt({ contract, current, review: selectedReview, reviews, threads, issueComments }) : null;
-  const evaluation = evaluateExactHeadReceipt({ contract, current, receipt, readbackIncomplete });
   const eventFinding = normalizeLateReviewEvent({ eventName, event, contract });
+  if (eventFinding && token) {
+    try {
+      await recordProviderFindingLedger({ repository: current.repository, prNumber: current.prNumber, headSha: current.headSha, finding: eventFinding, token });
+      persistentProviderFindings = [...persistentProviderFindings, eventFinding];
+    } catch (error) {
+      readbackIncomplete = true;
+      current.sourceReadbackIncomplete = true;
+      current.sourceReadbackCode = error.message === paginationIncompleteCode ? paginationIncompleteCode : "CODEX_REVIEW_FINDING_LEDGER_INVALID";
+    }
+  }
+  const receipt = selectedReview ? buildExactHeadReceipt({ contract, current, review: selectedReview, reviews, threads, issueComments, persistentFindings: persistentProviderFindings }) : null;
+  const evaluation = evaluateExactHeadReceipt({ contract, current, receipt, readbackIncomplete });
   const lateReviewSentinel = detectLateReview({
     contract,
     current,
@@ -896,7 +1295,8 @@ async function main() {
     reviews,
     threads,
     issueComments,
-    eventFindings: eventFinding ? [eventFinding] : []
+    eventFindings: eventFinding ? [eventFinding] : [],
+    persistentFindings: persistentProviderFindings
   });
   let durableLateReviewIssue = null;
   if (lateReviewSentinel) {
@@ -936,7 +1336,7 @@ async function main() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => emit("assurance:codex-review-exact-head", false, {
     classification: "EXACT_HEAD_REVIEW_BLOCKED",
-    codes: [[paginationIncompleteCode, "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID"].includes(error.message)
+    codes: [[paginationIncompleteCode, "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID", "CODEX_REVIEW_FINDING_LEDGER_INVALID"].includes(error.message)
       ? error.message
       : "CODEX_REVIEW_RECEIPT_INVALID"],
     error: error.message

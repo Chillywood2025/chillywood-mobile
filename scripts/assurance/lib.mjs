@@ -95,6 +95,17 @@ const claimRequiredFields = [
 const claimStatuses = new Set(["CURRENT", "STALE_BLOCKED"]);
 const claimPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 export const HISTORICAL_PROVIDER_FACT = "HISTORICAL_PROVIDER_FACT";
+const canonicalLateReviewOwnerRegistry = [{
+  repository: "Chillywood2025/chillywood-mobile",
+  prNumber: 194,
+  mergeSha: "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+  successorCorrectionOwner: "codex/d2a-livekit-mic-post-merge-review-correction",
+  assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+  authorizedBootstrapOwners: [
+    "codex/assurance-active-task-and-claim-freshness-a1",
+    "codex/assurance-codex-security-scan-reliability-s0"
+  ]
+}];
 const claimClassPolicy = {
   REPOSITORY_SOURCE: {
     evidenceModes: ["local-source", "git-read-only", "github-read-only", "exact-ci", "local-offline", "local-read-only", "local-and-github-read-only", "local-offline-and-github-read-only"],
@@ -171,6 +182,89 @@ function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
 }
 
+export function lateReviewAllowedOwners(sentinel) {
+  const matches = canonicalLateReviewOwnerRegistry.filter((entry) => entry.repository === sentinel?.repository
+    && entry.prNumber === sentinel?.prNumber
+    && entry.mergeSha === sentinel?.mergeSha);
+  if (matches.length !== 1) return [];
+  const [entry] = matches;
+  if (sentinel.successorCorrectionOwner !== entry.successorCorrectionOwner
+    || sentinel.assuranceControlOwner !== entry.assuranceControlOwner
+    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners)) return [];
+  return [...new Set([entry.successorCorrectionOwner, entry.assuranceControlOwner, ...entry.authorizedBootstrapOwners])].sort();
+}
+
+export function lateReviewResolutionStructureValid(sentinel) {
+  const findings = Array.isArray(sentinel?.findings) ? sentinel.findings : [];
+  const evidence = sentinel?.resolutionEvidence;
+  const sourceIds = findings.map(({ sourceId }) => sourceId).sort((left, right) => left - right);
+  const resolvedSourceIds = Array.isArray(evidence?.correctedSourceIds) ? [...evidence.correctedSourceIds].sort((left, right) => left - right) : [];
+  const threadIds = findings.map(({ threadId }) => threadId).filter(Boolean).sort();
+  const resolvedThreadIds = Array.isArray(evidence?.resolvedThreadIds) ? [...evidence.resolvedThreadIds].sort() : [];
+  const reviewAt = new Date(evidence?.exactHeadReviewCompletedAt).valueOf();
+  const mergedAt = new Date(evidence?.successorMergedAt).valueOf();
+  const readbackAt = new Date(evidence?.githubThreadResolutionReadbackAt).valueOf();
+  const completedAt = new Date(evidence?.completedAt).valueOf();
+  return findings.length > 0
+    && findings.every(({ disposition, threadResolutionState }) => disposition === "RESOLVED"
+      && (threadResolutionState === "RESOLVED" || threadResolutionState === "NOT_APPLICABLE"))
+    && evidence?.schemaVersion === 1
+    && Number.isInteger(evidence.successorPr)
+    && evidence.successorPr > 0
+    && evidence.successorBranch === sentinel.successorCorrectionOwner
+    && gitShaPattern.test(evidence.successorHead ?? "")
+    && gitShaPattern.test(evidence.successorTree ?? "")
+    && gitShaPattern.test(evidence.successorMergeSha ?? "")
+    && evidence.exactHeadReviewedCommit === evidence.successorHead
+    && evidence.exactHeadReviewedTree === evidence.successorTree
+    && /^[0-9a-f]{64}$/u.test(evidence.exactHeadReviewReceiptHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(evidence.correctionEvidenceHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(evidence.dispositionEvidenceHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(evidence.verificationSubjectHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(evidence.repositoryVerificationHash ?? "")
+    && evidence.allThreadsResolved === true
+    && [reviewAt, mergedAt, readbackAt, completedAt].every(Number.isFinite)
+    && reviewAt <= mergedAt
+    && mergedAt <= readbackAt
+    && readbackAt <= completedAt
+    && JSON.stringify(sourceIds) === JSON.stringify(resolvedSourceIds)
+    && JSON.stringify(threadIds) === JSON.stringify(resolvedThreadIds);
+}
+
+export function lateReviewResolutionSubjectHash(sentinel) {
+  const evidence = structuredClone(sentinel?.resolutionEvidence ?? {});
+  delete evidence.verificationSubjectHash;
+  delete evidence.repositoryVerificationHash;
+  return sha256(stableValue({
+    repository: sentinel?.repository ?? null,
+    prNumber: sentinel?.prNumber ?? null,
+    mergeSha: sentinel?.mergeSha ?? null,
+    successorCorrectionOwner: sentinel?.successorCorrectionOwner ?? null,
+    findings: (sentinel?.findings ?? []).map(({ sourceType, sourceId, bodyHash, severity, threadId, disposition, threadResolutionState }) => ({
+      sourceType,
+      sourceId,
+      bodyHash,
+      severity,
+      threadId,
+      disposition,
+      threadResolutionState
+    })).sort((left, right) => String(left.sourceId).localeCompare(String(right.sourceId))),
+    resolutionEvidence: evidence
+  }));
+}
+
+export function lateReviewSentinelResolved(sentinel, options = {}) {
+  if (!lateReviewResolutionStructureValid(sentinel)) return false;
+  const subjectHash = lateReviewResolutionSubjectHash(sentinel);
+  if (sentinel.resolutionEvidence.verificationSubjectHash !== subjectHash
+    || typeof options.resolutionVerifier !== "function") return false;
+  let verified;
+  try { verified = options.resolutionVerifier({ sentinel, subjectHash }); } catch { return false; }
+  return verified?.ok === true
+    && verified.subjectHash === subjectHash
+    && verified.repositoryVerificationHash === sentinel.resolutionEvidence.repositoryVerificationHash;
+}
+
 function factRegistryEntryMatchesClaim(entry, claim) {
   return entry?.freshnessClass === claim?.freshnessClass
     && entry?.authorityAllowed === claim?.authorityAllowed
@@ -234,6 +328,26 @@ const externalReceiptRequiredFields = [
   "collectionCommand",
   "selfAttested"
 ];
+const canonicalExternalEvidencePolicy = {
+  schemaVersion: 1,
+  contractId: "external-evidence-receipt-v1",
+  schemaRef: "config/assurance/schemas-v1.json#/$defs/externalEvidenceReceiptContract",
+  approvedEvidenceClasses: ["PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"],
+  approvedReceiptIssuers: ["SYNTHETIC_ASSURANCE_FIXTURE_ISSUER"],
+  approvedReceiptSchemas: ["synthetic-assurance-external-evidence-v1"],
+  approvedCollectionCommands: {
+    PROVIDER_CRITICAL: ["synthetic:provider-readback"],
+    SIGNED_ARTIFACT: ["synthetic:signed-artifact-inspection"],
+    INSTALLED_DEVICE: ["synthetic:installed-device-readback"],
+    PHYSICAL_DEVICE: ["synthetic:physical-device-observation"],
+    PUBLIC_CANARY: ["synthetic:public-canary-readback"]
+  },
+  selfAttestedEvidenceAllowed: false,
+  currentProductionVerifier: "UNAVAILABLE_FAIL_CLOSED",
+  trustedVerifierBoundary: "injected-receipt-issuer-verifier",
+  hashAlgorithm: "sha256",
+  classAndPlatformCrossoverAllowed: false
+};
 
 export function externalEvidenceReceiptHash(receipt) {
   const payload = structuredClone(receipt ?? {});
@@ -253,23 +367,40 @@ export function externalEvidenceBindingHash({ claim, source }) {
   }));
 }
 
-export function verifyExternalEvidenceReceipt({ claim, source, receipt, policy, verifyIssuerReceipt }) {
+export function verifyExternalEvidenceReceipt({ claim, source, receipt, policy, verifyIssuerReceipt, syntheticFixtureMode = false }) {
   const findings = [];
   const add = (id) => findings.push({ id, status: "BLOCKED_INTERNAL" });
   const missing = receipt && typeof receipt === "object" && !Array.isArray(receipt)
     ? externalReceiptRequiredFields.filter((field) => !Object.hasOwn(receipt, field))
     : externalReceiptRequiredFields;
   if (missing.length) return { ok: false, findings: [{ id: "ASSURANCE_EXTERNAL_EVIDENCE_RECEIPT_MISSING", status: "BLOCKED_INTERNAL", fields: missing }] };
+  if (receipt.schemaVersion !== 1
+    || typeof receipt.receiptId !== "string"
+    || !/^[a-z0-9][a-z0-9._:-]{0,127}$/u.test(receipt.receiptId)
+    || typeof receipt.evidenceClass !== "string"
+    || typeof receipt.provider !== "string"
+    || receipt.provider.length < 1
+    || receipt.provider.length > 128
+    || !claimPlatforms.has(receipt.platform)
+    || !validInstant(receipt.observedAt)
+    || !validInstant(receipt.expiresAt)
+    || typeof receipt.receiptIssuer !== "string"
+    || typeof receipt.receiptSchema !== "string"
+    || typeof receipt.collectionCommand !== "string"
+    || typeof receipt.selfAttested !== "boolean"
+    || !sameStringSet(Object.keys(receipt), externalReceiptRequiredFields)) add("ASSURANCE_EXTERNAL_EVIDENCE_RECEIPT_MALFORMED");
   const approvedClasses = policy?.approvedEvidenceClasses;
   const approvedIssuers = policy?.approvedReceiptIssuers;
   const approvedSchemas = policy?.approvedReceiptSchemas;
   const approvedCommands = policy?.approvedCollectionCommands?.[claim?.freshnessClass];
-  if (policy?.contractId !== "external-evidence-receipt-v1"
-    || policy?.selfAttestedEvidenceAllowed !== false
+  if (JSON.stringify(stableValue(policy)) !== JSON.stringify(stableValue(canonicalExternalEvidencePolicy))
     || !Array.isArray(approvedClasses)
     || !Array.isArray(approvedIssuers)
     || !Array.isArray(approvedSchemas)
     || !Array.isArray(approvedCommands)) add("ASSURANCE_EXTERNAL_EVIDENCE_POLICY_INVALID");
+  if (syntheticFixtureMode !== true || policy?.currentProductionVerifier !== "UNAVAILABLE_FAIL_CLOSED") {
+    add("ASSURANCE_EXTERNAL_EVIDENCE_SYNTHETIC_FIXTURE_BOUNDARY_INVALID");
+  }
   if (!approvedClasses?.includes(receipt.evidenceClass) || receipt.evidenceClass !== claim?.freshnessClass) add("ASSURANCE_EXTERNAL_EVIDENCE_CLASS_MISMATCH");
   if (receipt.platform !== claim?.platform || receipt.platform !== source?.platform) add("ASSURANCE_EXTERNAL_EVIDENCE_PLATFORM_MISMATCH");
   const expectedProvider = claim?.provider ?? source?.provider;
@@ -293,7 +424,7 @@ export function verifyExternalEvidenceReceipt({ claim, source, receipt, policy, 
   return { ok: findings.length === 0, findings };
 }
 
-export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null, externalEvidenceVerifier = null, allowSyntheticFactRegistry = false }) {
+export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, now = new Date(), evidenceSourceVerifier = null, externalEvidenceVerifier = null, allowSyntheticFactRegistry = false, allowSyntheticExternalEvidence = false }) {
   const findings = [];
   const evaluated = [];
   const seenClaimIds = new Set();
@@ -447,7 +578,8 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
             source,
             receipt,
             policy: externalEvidenceVerifier?.policy,
-            verifyIssuerReceipt: externalEvidenceVerifier?.verifyIssuerReceipt
+            verifyIssuerReceipt: externalEvidenceVerifier?.verifyIssuerReceipt,
+            syntheticFixtureMode: allowSyntheticExternalEvidence
           });
         } catch {
           externalResult = { ok: false, findings: [{ id: "ASSURANCE_EXTERNAL_EVIDENCE_RECEIPT_MALFORMED", status: "BLOCKED_INTERNAL" }] };
@@ -683,6 +815,14 @@ function baseSynchronizationFinding(id, details = {}) {
   return { id, status: "BLOCKED_INTERNAL", ...details };
 }
 
+export function baseSynchronizationReviewReceiptHash(manifest) {
+  const receipt = structuredClone(manifest ?? {});
+  delete receipt.reviewReceiptHash;
+  delete receipt.reviewRefHead;
+  delete receipt.reviewRefTree;
+  return sha256(stableValue(receipt));
+}
+
 export function verifyBaseSynchronizedImplementationHead({
   number,
   branch,
@@ -758,8 +898,16 @@ export function verifyBaseSynchronizedImplementationHead({
     && manifest.mergePermitted === false
     && manifest.criticalFindingCounts?.P0 === 0
     && manifest.criticalFindingCounts?.P1 === 0
+    && manifest.reviewProvider === "INDEPENDENT_REPOSITORY_REVIEW"
+    && typeof manifest.reviewerId === "string"
+    && manifest.reviewerId.length > 0
+    && manifest.reviewedCommit === synchronizedHead
+    && manifest.reviewedTree === observedTree
+    && /^[0-9a-f]{64}$/u.test(manifest.reviewReceiptHash ?? "")
+    && manifest.reviewReceiptHash === baseSynchronizationReviewReceiptHash(manifest)
     && typeof manifest.reviewRef === "string"
     && gitShaPattern.test(manifest.reviewRefHead ?? "")
+    && gitShaPattern.test(manifest.reviewRefTree ?? "")
     && Number.isFinite(new Date(manifest.reviewTimestamp).valueOf())
     && evaluationTimeValid
     && new Date(manifest.reviewTimestamp) <= new Date(evaluatedAt.valueOf() + 5 * 60000)
@@ -776,7 +924,15 @@ export function verifyBaseSynchronizedImplementationHead({
     synchronizedHead,
     synchronizedTree: observedTree,
     currentMain,
-    matchingReviewEvidence: sortStable(matchingEvidence.map(({ reviewId, reviewRef, reviewRefHead }) => ({ reviewId, reviewRef, reviewRefHead }))),
+    matchingReviewEvidence: sortStable(matchingEvidence.map(({ reviewId, reviewProvider, reviewerId, reviewReceiptHash, reviewRef, reviewRefHead, reviewRefTree }) => ({
+      reviewId,
+      reviewProvider,
+      reviewerId,
+      reviewReceiptHash,
+      reviewRef,
+      reviewRefHead,
+      reviewRefTree
+    }))),
     findings: sortedFindings
   };
 }

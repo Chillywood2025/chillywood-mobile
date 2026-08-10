@@ -178,6 +178,7 @@ const syntheticExternalEvidenceVerifier = {
 const evaluateClaims = (input) => evaluateFreshnessClaims({
   ...input,
   allowSyntheticFactRegistry: true,
+  allowSyntheticExternalEvidence: true,
   evidenceSourceVerifier: () => true,
   externalEvidenceVerifier: syntheticExternalEvidenceVerifier
 });

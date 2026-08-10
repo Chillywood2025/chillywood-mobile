@@ -6,16 +6,20 @@ import {
   detectLateReview,
   evaluateExactHeadReceipt,
   exactReceiptHash,
+  isReviewOnlyPullRequest,
   normalizeLateReviewEvent,
   paginateGraphConnection,
   parseLateReviewIssue,
   readOpenLateReviewIssues,
+  readProviderFindingLedger,
   readSourcePushLeases,
   recordLateReviewIssue,
+  recordProviderFindingLedger,
   recordSourcePushLease,
   sourcePushLeaseCheckName
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
+import { lateReviewResolutionSubjectHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -27,8 +31,10 @@ const baseCurrent = {
   prNumber: 201,
   headSha: headA,
   headTree: treeA,
+  baseBranch: "main",
+  baseSha: "e".repeat(40),
   latestSourcePushAt: "2026-08-09T11:00:00Z",
-  sourcePushLeaseHashes: [],
+  sourcePushLeaseHashes: ["9".repeat(64)],
   mergedAt: null,
   mergeSha: null,
   providerReviewsExist: true,
@@ -79,6 +85,20 @@ test("old-head review and a new source commit invalidate the receipt immediately
   assert.equal(result.ok, false);
   assert(result.codes.includes("CODEX_REVIEW_STALE_HEAD"));
   assert(result.codes.includes("CODEX_REVIEW_INCOMPLETE"));
+});
+
+test("missing source admission and a changed diff base invalidate review eligibility", () => {
+  const receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, threads: [] });
+  const missingLease = evaluateExactHeadReceipt({ contract, current: { ...baseCurrent, sourcePushLeaseHashes: [] }, receipt });
+  assert.equal(missingLease.ok, false);
+  assert(missingLease.codes.includes("CODEX_REVIEW_INCOMPLETE"));
+  const changedBase = evaluateExactHeadReceipt({
+    contract,
+    current: { ...baseCurrent, baseSha: "f".repeat(40) },
+    receipt
+  });
+  assert.equal(changedBase.ok, false);
+  assert(changedBase.codes.includes("CODEX_REVIEW_STALE_BASE"));
 });
 
 test("dismissed or malformed review receipts fail closed", () => {
@@ -149,6 +169,37 @@ test("provider issue comments require an exact reviewed-commit marker and block 
   const p3 = { ...unbound, commentId: 5, commentNodeId: "IC_5", body: "P3 informational note" };
   const p3Receipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, reviews: [exactReview], threads: [], issueComments: [p3] });
   assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: p3Receipt }).ok, true);
+});
+
+test("an append-only unbound provider issue finding cannot disappear from mutable issue-comment readback", () => {
+  const persistent = normalizeLateReviewEvent({
+    eventName: "issue_comment",
+    event: {
+      action: "created",
+      comment: {
+        id: 6001,
+        node_id: "ISSUE_6001",
+        user: { login: "chatgpt-codex-connector" },
+        body: "P1 provider issue finding without a reviewed-head marker",
+        created_at: "2026-08-09T11:45:00Z",
+        updated_at: "2026-08-09T11:45:00Z"
+      }
+    },
+    contract
+  });
+  const receipt = buildExactHeadReceipt({
+    contract,
+    current: baseCurrent,
+    review: exactReview,
+    reviews: [exactReview],
+    threads: [],
+    issueComments: [],
+    persistentFindings: [persistent]
+  });
+  const result = evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt });
+  assert.equal(result.ok, false);
+  assert(result.codes.includes("CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND"));
+  assert(result.codes.includes("CODEX_REVIEW_UNRESOLVED_FINDING"));
 });
 
 test("resolving a provider finding requires a later exact-head provider rereview", () => {
@@ -236,6 +287,8 @@ test("every synchronize event creates an exact append-only source-push lease", a
     repository: baseCurrent.repository,
     prNumber: baseCurrent.prNumber,
     headSha: headA,
+    baseBranch: baseCurrent.baseBranch,
+    baseSha: baseCurrent.baseSha,
     pushedAt: "2026-08-09T12:20:00Z",
     token: "token",
     request: async (_url, _token, init) => {
@@ -282,6 +335,80 @@ test("every synchronize event creates an exact append-only source-push lease", a
   );
 });
 
+test("provider finding events persist in a hash-bound append-only ledger until explicit exact-head rereview", async () => {
+  const finding = normalizeLateReviewEvent({
+    eventName: "pull_request_review",
+    event: {
+      action: "submitted",
+      review: {
+        id: 7001,
+        node_id: "REVIEW_7001",
+        user: { login: "chatgpt-codex-connector" },
+        state: "commented",
+        body: "P1 original blocking review",
+        commit_id: headA,
+        submitted_at: "2026-08-09T11:30:00Z"
+      }
+    },
+    contract,
+    observedAt: "2026-08-09T11:30:00Z"
+  });
+  let posted;
+  const recorded = await recordProviderFindingLedger({
+    repository: baseCurrent.repository,
+    prNumber: baseCurrent.prNumber,
+    headSha: headA,
+    finding,
+    token: "token",
+    request: async (_url, _token, init) => {
+      posted = JSON.parse(init.body);
+      return { body: { id: 81 }, link: "" };
+    }
+  });
+  const check = { ...posted, app: { slug: "github-actions" } };
+  const ledger = await readProviderFindingLedger(baseCurrent.repository, baseCurrent.prNumber, headA, "token", {
+    request: async () => ({ body: { total_count: 1, check_runs: [check] }, link: "" })
+  });
+  assert.deepEqual(ledger, [recorded.payload.finding]);
+
+  const mutableCleanReview = { ...exactReview, reviewId: finding.sourceId, body: "clean replacement" };
+  const blockedReceipt = buildExactHeadReceipt({
+    contract,
+    current: baseCurrent,
+    review: mutableCleanReview,
+    reviews: [mutableCleanReview],
+    threads: [],
+    persistentFindings: ledger
+  });
+  assert(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: blockedReceipt }).codes.includes("CODEX_REVIEW_UNRESOLVED_FINDING"));
+
+  const rereview = {
+    ...exactReview,
+    reviewId: 7002,
+    state: "APPROVED",
+    body: "Exact-head blocking findings resolved",
+    submittedAt: "2026-08-09T12:30:00Z"
+  };
+  const resolvedReceipt = buildExactHeadReceipt({
+    contract,
+    current: baseCurrent,
+    review: rereview,
+    reviews: [mutableCleanReview, rereview],
+    threads: [],
+    persistentFindings: ledger
+  });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: resolvedReceipt }).ok, true);
+
+  const tampered = structuredClone(check);
+  tampered.output.summary = tampered.output.summary.replace(finding.bodyHash, "0".repeat(64));
+  await assert.rejects(
+    readProviderFindingLedger(baseCurrent.repository, baseCurrent.prNumber, headA, "token", {
+      request: async () => ({ body: { total_count: 1, check_runs: [tampered] }, link: "" })
+    }),
+    { message: "CODEX_REVIEW_FINDING_LEDGER_INVALID" }
+  );
+});
+
 test("resolving an old thread does not substitute for rereview after source changes", () => {
   const oldReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, threads: [thread({ resolved: true })] });
   const advanced = { ...baseCurrent, headSha: headB, headTree: treeB, latestSourcePushAt: "2026-08-09T12:30:00Z" };
@@ -296,6 +423,20 @@ test("review-only PRs never become merge eligible", () => {
   const result = evaluateExactHeadReceipt({ contract, current, receipt });
   assert.equal(result.ok, false);
   assert(result.codes.includes("CODEX_REVIEW_RECEIPT_INVALID"));
+  assert.equal(isReviewOnlyPullRequest({
+    headBranch: "codex/ordinary",
+    labels: [],
+    reviewOnlyLeasePresent: true,
+    truthEntries: [],
+    prNumber: 300
+  }), true, "removing the mutable label cannot clear the append-only lease");
+  assert.equal(isReviewOnlyPullRequest({
+    headBranch: "codex/assurance-review-only/final-a1-lane",
+    labels: [],
+    reviewOnlyLeasePresent: false,
+    truthEntries: [],
+    prNumber: 301
+  }), true, "the canonical review-only branch prefix is independently fail closed");
 });
 
 test("PR 194 late-review timeline denies merge, post-truth closure, and successor work", () => {
@@ -524,6 +665,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
       successorHead,
       successorTree,
       successorMergeSha: "4".repeat(40),
+      successorMergedAt: "2026-08-10T02:45:00Z",
       correctedSourceIds: [77],
       resolvedThreadIds: ["THREAD_77"],
       allThreadsResolved: true,
@@ -531,17 +673,28 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
       exactHeadReviewedCommit: successorHead,
       exactHeadReviewedTree: successorTree,
       exactHeadReviewReceiptHash: "5".repeat(64),
+      exactHeadCheckRunId: 9002,
+      exactHeadReviewCompletedAt: "2026-08-10T02:30:00Z",
       correctionEvidenceHash: "6".repeat(64),
       dispositionEvidenceHash: "7".repeat(64),
+      verificationSubjectHash: "8".repeat(64),
+      repositoryVerificationHash: "9".repeat(64),
       completedAt: "2026-08-10T03:05:00Z"
     }
   };
+  sentinel.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(sentinel);
+  const resolutionVerifier = async ({ sentinel: candidate }) => ({
+    ok: true,
+    subjectHash: lateReviewResolutionSubjectHash(candidate),
+    repositoryVerificationHash: candidate.resolutionEvidence.repositoryVerificationHash
+  });
   const marker = `<!-- codex-review-late-sentinel:v1 pr=194 merge=${sentinel.mergeSha} -->`;
   const calls = [];
   const result = await recordLateReviewIssue({
     repository: "owner/repository",
     token: "token",
     sentinel,
+    resolutionVerifier,
     request: async (url, _token, init) => {
       calls.push({ url, method: init.method, body: init.body ?? null });
       if (init.method === "GET") return { body: [{ number: 77, title: "existing", body: marker, state: "open" }], link: "" };
@@ -561,6 +714,7 @@ test("a durable sentinel accepts only a typed exact-head correction transition",
       repository: "owner/repository",
       token: "token",
       sentinel: forged,
+      resolutionVerifier,
       request: async (_url, _token, init) => ({ body: init.method === "GET" ? [{ number: 77, title: "existing", body: marker, state: "open" }] : {}, link: "" })
     }),
     { message: "CODEX_REVIEW_RECEIPT_INVALID" }
@@ -603,6 +757,14 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
   assert.deepEqual(validateLateReviewSentinelState(promoted).map(({ id }) => id).sort(), ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", "LATE_REVIEW_SUCCESSOR_GATES_INVALID"]);
 });
 
+test("a late-review sentinel cannot authorize its own branch exceptions", () => {
+  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const forged = structuredClone(truth);
+  forged.lateReviewSentinels[0].authorizedBootstrapOwners.push("codex/unrelated-next");
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
+  assert(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"));
+});
+
 test("free-form resolved dispositions cannot clear a late-review sentinel", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   const forged = structuredClone(truth);
@@ -621,6 +783,7 @@ test("free-form resolved dispositions cannot clear a late-review sentinel", () =
     successorHead,
     successorTree,
     successorMergeSha: "1".repeat(40),
+    successorMergedAt: "2026-08-10T02:45:00Z",
     correctedSourceIds: sentinel.findings.map(({ sourceId }) => sourceId),
     resolvedThreadIds: sentinel.findings.map(({ threadId }) => threadId),
     allThreadsResolved: true,
@@ -628,13 +791,26 @@ test("free-form resolved dispositions cannot clear a late-review sentinel", () =
     exactHeadReviewedCommit: successorHead,
     exactHeadReviewedTree: successorTree,
     exactHeadReviewReceiptHash: "2".repeat(64),
+    exactHeadCheckRunId: 9003,
+    exactHeadReviewCompletedAt: "2026-08-10T02:30:00Z",
     correctionEvidenceHash: "3".repeat(64),
     dispositionEvidenceHash: "4".repeat(64),
+    verificationSubjectHash: "5".repeat(64),
+    repositoryVerificationHash: "6".repeat(64),
     completedAt: "2026-08-10T03:05:00Z"
   };
-  assert.equal(unresolvedLateReviewSentinels(forged).length, 0);
-  assert.deepEqual(validateLateReviewSentinelState(forged), []);
-  sentinel.resolutionEvidence.exactHeadReviewedCommit = "5".repeat(40);
+  sentinel.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(sentinel);
+  assert.equal(unresolvedLateReviewSentinels(forged).length, 1, "a structurally perfect self-attestation remains blocked");
+  const verifiedOptions = {
+    resolutionVerifier: ({ subjectHash }) => ({
+      ok: true,
+      subjectHash,
+      repositoryVerificationHash: sentinel.resolutionEvidence.repositoryVerificationHash
+    })
+  };
+  assert.equal(unresolvedLateReviewSentinels(forged, verifiedOptions).length, 0);
+  assert.deepEqual(validateLateReviewSentinelState(forged, verifiedOptions), []);
+  sentinel.resolutionEvidence.exactHeadReviewedCommit = "7".repeat(40);
   assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
 });
 
@@ -647,9 +823,11 @@ test("workflow executes only the protected default-branch evaluator", () => {
   assert.doesNotMatch(workflow, /github\.event\.pull_request\.head/u);
   assert.match(workflow, /issues: write/u);
   assert.match(workflow, /cancel-in-progress: false/u);
+  assert.match(workflow, /pull_request_target:\s*\n\s*types: \[opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled\]/u);
   assert.match(workflow, /pull_request_review:\s*\n\s*types: \[submitted, edited, dismissed\]/u);
   assert.match(workflow, /pull_request_review_comment:\s*\n\s*types: \[created, edited, deleted\]/u);
   assert.match(workflow, /issue_comment:\s*\n\s*types: \[created, edited, deleted\]/u);
+  assert.doesNotMatch(workflow, /pull_request_review_thread:/u, "unsupported webhook-only events cannot make the Actions workflow invalid");
 });
 
 test("every build and release entrypoint requires durable GitHub late-sentinel readback", () => {

@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, isValidGitBranchName, readJson, redact, stableJson } from "./lib.mjs";
+import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, readJson, redact, stableJson } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -156,7 +156,7 @@ function affectedSymbols(files) {
 
 function inheritedBlockers(truth) {
   const blockers = (truth?.blockedProviders ?? []).map(({ provider, scope, status }) => ({ provider, scope, status }));
-  for (const sentinel of truth?.lateReviewSentinels ?? []) {
+  for (const sentinel of unresolvedLateReviewSentinels(truth)) {
     blockers.push({
       id: sentinel.classification,
       pr: sentinel.prNumber,
@@ -333,7 +333,7 @@ export function activeTask(facts = {}) {
   } catch { return { ok: false, findings: ["SOURCE_IDENTITY_UNRESOLVED"] }; }
 
   const lateReviewBlocksCurrentBranch = unresolvedLateReviewSentinels(truth).some((sentinel) => {
-    const allowedOwners = [sentinel?.successorCorrectionOwner, sentinel?.assuranceControlOwner, ...(sentinel?.authorizedBootstrapOwners ?? [])];
+    const allowedOwners = lateReviewAllowedOwners(sentinel);
     return !allowedOwners.includes(identity.branch);
   });
   if (lateReviewBlocksCurrentBranch) return { ok: false, findings: ["LATE_REVIEW_SUCCESSOR_BLOCKED"] };
