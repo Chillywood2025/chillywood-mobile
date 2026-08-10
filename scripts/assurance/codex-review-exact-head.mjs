@@ -58,6 +58,7 @@ function severityFromBody(body) {
       return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
     })
     .replace(/&[A-Za-z][A-Za-z0-9]+;/gu, "")
+    .normalize("NFKC")
     .replace(/<!--[^]*?-->/gu, "")
     .replace(/<[^>]*>/gu, "")
     .replace(/\[([^\]\r\n]{0,200})\]\([^\)\r\n]{0,1000}\)/gu, "$1")
