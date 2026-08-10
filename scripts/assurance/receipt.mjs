@@ -104,7 +104,16 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
     shell: false,
     timeout: rule.timeoutMs,
     maxBuffer: rule.maxBuffer ?? 16 * 1024 * 1024,
-    env: { PATH: process.env.PATH, CI: "1", NO_COLOR: "1" }
+    env: {
+      PATH: process.env.PATH,
+      CI: "1",
+      NO_COLOR: "1",
+      GH_TELEMETRY: "0",
+      DO_NOT_TRACK: "1",
+      GH_PROMPT_DISABLED: "1",
+      GH_NO_UPDATE_NOTIFIER: "1",
+      GH_NO_EXTENSION_UPDATE_NOTIFIER: "1"
+    }
   });
   const endedAtMs = clock();
   if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs) || endedAtMs < startedAtMs) return { ok: false, finding: "CLOCK_INVALID" };

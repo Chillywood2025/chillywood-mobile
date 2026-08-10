@@ -422,6 +422,31 @@ test("compact receipt is deterministic 3/3 and exposes no successful raw log", (
   assert.equal(JSON.stringify(receipts[0]).includes("v22.1.0"), true, "bounded parsed result retained, not full log");
 });
 
+test("receipt subprocesses disable GitHub telemetry without forwarding ambient credentials", () => {
+  let observedEnvironment;
+  const result = runReceipt(okRule, "node-version", ["--version"], {
+    ...deterministicDependencies,
+    spawn: (_file, _args, options) => {
+      observedEnvironment = options.env;
+      return { status: 0, signal: null, stdout: "v22.1.0\n", stderr: "" };
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(observedEnvironment, {
+    PATH: process.env.PATH,
+    CI: "1",
+    NO_COLOR: "1",
+    GH_TELEMETRY: "0",
+    DO_NOT_TRACK: "1",
+    GH_PROMPT_DISABLED: "1",
+    GH_NO_UPDATE_NOTIFIER: "1",
+    GH_NO_EXTENSION_UPDATE_NOTIFIER: "1"
+  });
+  for (const secretName of ["GH_TOKEN", "GITHUB_TOKEN", "HOME", "XDG_CONFIG_HOME"]) {
+    assert.equal(Object.hasOwn(observedEnvironment, secretName), false, secretName);
+  }
+});
+
 test("runner rejects unknown commands, shell injection, missing results, secrets and artifact failures", () => {
   assert.equal(runReceipt(okRule, "unknown", [], deterministicDependencies).ok, false, "unknown command");
   assert.equal(runReceipt(okRule, "node-version", ["--version", "; rm -rf /"], deterministicDependencies).ok, false, "arbitrary shell command");
