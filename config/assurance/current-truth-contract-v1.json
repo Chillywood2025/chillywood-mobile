@@ -100,6 +100,14 @@
       ]
     }
   ],
+  "lateReviewTombstoneAdmission": {
+    "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+    "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+    "originalSentinelRetentionRequired": true,
+    "firstParentAdmissionRequired": true,
+    "branchLocalAdmissionAllowed": false,
+    "networkRequiredAfterAdmission": false
+  },
   "freshness": {
     "defaultHours": 24,
     "providerCriticalHours": 8,

@@ -26,7 +26,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { lateReviewAllowedOwners, lateReviewResolutionSubjectHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1200,7 +1200,7 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
   assert.deepEqual(validateLateReviewSentinelState(promoted).map(({ id }) => id).sort(), ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED", "LATE_REVIEW_SUCCESSOR_GATES_INVALID"]);
 });
 
-test("every immutable late-review owner entry requires one canonical sentinel or verified tombstone", () => {
+test("every immutable late-review owner entry permanently retains one canonical sentinel", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   assert.deepEqual(validateLateReviewSentinelState(truth), []);
   for (const prNumber of [194, 195]) {
@@ -1211,6 +1211,67 @@ test("every immutable late-review owner entry requires one canonical sentinel or
   const duplicated = structuredClone(truth);
   duplicated.lateReviewSentinels.push(structuredClone(duplicated.lateReviewSentinels.find(({ prNumber }) => prNumber === 195)));
   assert(validateLateReviewSentinelState(duplicated).some((finding) => finding.id === "LATE_REVIEW_REQUIRED_SENTINEL_DUPLICATE" && finding.prNumber === 195));
+});
+
+test("only a byte-exact post-anchor protected-main tombstone can retire a retained sentinel offline", () => {
+  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const original = truth.lateReviewSentinels.find(({ prNumber }) => prNumber === 195);
+  const resolved = structuredClone(original);
+  resolved.successorCorrectionOwner = "codex/assurance-codex-security-scan-reliability-s0";
+  resolved.findings = resolved.findings.map((finding) => ({ ...finding, disposition: "RESOLVED", threadResolutionState: "RESOLVED" }));
+  const successorHead = "8".repeat(40);
+  const successorTree = "9".repeat(40);
+  resolved.resolutionEvidence = {
+    schemaVersion: 1,
+    successorPr: 206,
+    successorBranch: resolved.successorCorrectionOwner,
+    successorHead,
+    successorTree,
+    successorMergeSha: "a".repeat(40),
+    successorMergedAt: "2026-08-10T04:20:00Z",
+    correctedSourceIds: resolved.findings.map(({ sourceId }) => sourceId),
+    resolvedThreadIds: resolved.findings.map(({ threadId }) => threadId),
+    allThreadsResolved: true,
+    githubThreadResolutionReadbackAt: "2026-08-10T04:25:00Z",
+    exactHeadReviewedCommit: successorHead,
+    exactHeadReviewedTree: successorTree,
+    exactHeadReviewReceiptHash: "b".repeat(64),
+    exactHeadCheckRunId: 9206,
+    exactHeadReviewCompletedAt: "2026-08-10T04:15:00Z",
+    correctionEvidenceHash: "c".repeat(64),
+    dispositionEvidenceHash: "d".repeat(64),
+    verificationSubjectHash: "e".repeat(64),
+    repositoryVerificationHash: "f".repeat(64),
+    completedAt: "2026-08-10T04:30:00Z"
+  };
+  resolved.resolutionEvidence.verificationSubjectHash = lateReviewResolutionSubjectHash(resolved);
+  const tombstone = createLateReviewResolutionTombstone(resolved);
+  const candidate = structuredClone(truth);
+  candidate.lateReviewResolutionTombstones = [tombstone];
+
+  assert.deepEqual(validateLateReviewSentinelState(candidate), [], "a valid branch candidate remains pending, not invalid");
+  assert.equal(unresolvedLateReviewSentinels(candidate, { protectedMainRecord: truth, tombstoneAdmissionVerifier: () => true }).length, 2, "branch-local tombstone cannot authorize itself");
+  const protectedMainRecord = structuredClone(candidate);
+  const admittedOptions = { protectedMainRecord, tombstoneAdmissionVerifier: () => true };
+  assert.equal(unresolvedLateReviewSentinels(candidate, admittedOptions).length, 1);
+  assert.deepEqual(validateLateReviewSentinelState(candidate, admittedOptions), []);
+  assert.equal(unresolvedLateReviewSentinels(candidate, { protectedMainRecord, tombstoneAdmissionVerifier: () => false }).length, 2, "pre-anchor or unverifiable admission remains blocked");
+
+  const altered = structuredClone(candidate);
+  altered.lateReviewResolutionTombstones[0].resolutionEvidence.correctedSourceIds.pop();
+  altered.lateReviewResolutionTombstones[0].tombstoneHash = lateReviewResolutionTombstoneHash(altered.lateReviewResolutionTombstones[0]);
+  assert(validateLateReviewSentinelState(altered, { protectedMainRecord: altered, tombstoneAdmissionVerifier: () => true }).some(({ id }) => id === "LATE_REVIEW_TOMBSTONE_INVALID"));
+  assert.equal(unresolvedLateReviewSentinels(altered, { protectedMainRecord: altered, tombstoneAdmissionVerifier: () => true }).length, 2);
+
+  const deletedOriginal = structuredClone(candidate);
+  deletedOriginal.lateReviewSentinels = deletedOriginal.lateReviewSentinels.filter(({ prNumber }) => prNumber !== 195);
+  const deletionFindings = validateLateReviewSentinelState(deletedOriginal, { protectedMainRecord: deletedOriginal, tombstoneAdmissionVerifier: () => true });
+  assert(deletionFindings.some(({ id }) => id === "LATE_REVIEW_REQUIRED_SENTINEL_MISSING"));
+  assert(deletionFindings.some(({ id }) => id === "LATE_REVIEW_TOMBSTONE_INVALID"));
+
+  const duplicate = structuredClone(candidate);
+  duplicate.lateReviewResolutionTombstones.push(structuredClone(tombstone));
+  assert(validateLateReviewSentinelState(duplicate, { protectedMainRecord: duplicate, tombstoneAdmissionVerifier: () => true }).some(({ id }) => id === "LATE_REVIEW_TOMBSTONE_DUPLICATE"));
 });
 
 test("a late-review sentinel cannot authorize its own branch exceptions", () => {

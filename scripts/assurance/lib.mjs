@@ -313,6 +313,60 @@ export function lateReviewFindingSetEqual(left, right) {
     && leftIds.every((identity) => rightIds.includes(identity));
 }
 
+export function lateReviewFindingSetHash(findings) {
+  if (!Array.isArray(findings)) return null;
+  const identities = findings.map(lateReviewFindingIdentity).sort();
+  if (new Set(identities).size !== identities.length) return null;
+  return sha256(stableValue(identities));
+}
+
+export function lateReviewResolutionTombstoneHash(tombstone) {
+  if (!tombstone || typeof tombstone !== "object" || Array.isArray(tombstone)) return null;
+  const value = structuredClone(tombstone);
+  delete value.tombstoneHash;
+  return sha256(stableValue(value));
+}
+
+export function lateReviewResolutionTombstoneValid(sentinel, tombstone) {
+  if (!sentinel || !tombstone || tombstone.schemaVersion !== 1
+    || tombstone.repository !== sentinel.repository
+    || tombstone.prNumber !== sentinel.prNumber
+    || tombstone.mergeSha !== sentinel.mergeSha
+    || tombstone.admissionPolicyId !== "EXACT_HEAD_PROTECTED_MAIN_V1"
+    || tombstone.findingSetHash !== lateReviewFindingSetHash(sentinel.findings)
+    || tombstone.verificationSubjectHash !== tombstone.resolutionEvidence?.verificationSubjectHash
+    || tombstone.tombstoneHash !== lateReviewResolutionTombstoneHash(tombstone)) return false;
+  const allowedOwners = lateReviewAllowedOwners(sentinel);
+  if (!allowedOwners.includes(tombstone.resolutionEvidence?.successorBranch)) return false;
+  const virtual = {
+    ...sentinel,
+    successorCorrectionOwner: tombstone.resolutionEvidence.successorBranch,
+    findings: (sentinel.findings ?? []).map((finding) => ({
+      ...finding,
+      disposition: "RESOLVED",
+      threadResolutionState: finding.threadId ? "RESOLVED" : "NOT_APPLICABLE"
+    })),
+    resolutionEvidence: tombstone.resolutionEvidence
+  };
+  return lateReviewResolutionStructureValid(virtual)
+    && lateReviewResolutionSubjectHash(virtual) === tombstone.verificationSubjectHash;
+}
+
+export function createLateReviewResolutionTombstone(resolvedSentinel) {
+  const tombstone = {
+    schemaVersion: 1,
+    repository: resolvedSentinel?.repository,
+    prNumber: resolvedSentinel?.prNumber,
+    mergeSha: resolvedSentinel?.mergeSha,
+    findingSetHash: lateReviewFindingSetHash(resolvedSentinel?.findings),
+    resolutionEvidence: structuredClone(resolvedSentinel?.resolutionEvidence),
+    verificationSubjectHash: resolvedSentinel?.resolutionEvidence?.verificationSubjectHash,
+    admissionPolicyId: "EXACT_HEAD_PROTECTED_MAIN_V1"
+  };
+  tombstone.tombstoneHash = lateReviewResolutionTombstoneHash(tombstone);
+  return tombstone;
+}
+
 export function mergeLateReviewSentinelRecords(sentinels) {
   const merged = new Map();
   for (const sentinel of Array.isArray(sentinels) ? sentinels : []) {

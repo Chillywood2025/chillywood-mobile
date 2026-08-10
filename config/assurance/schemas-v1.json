@@ -44,7 +44,7 @@
     },
     "currentTruthContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["recordPath", "generatedDocuments", "requiredFields", "synchronizationMerge", "implementationHeadBinding", "lateReviewOwnerRegistry", "freshness", "staleFindingIds"],
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "synchronizationMerge", "implementationHeadBinding", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "freshness", "staleFindingIds"],
       "properties": {
         "synchronizationMerge": {
           "type": "object",
@@ -89,6 +89,7 @@
           }
         },
         "lateReviewOwnerRegistry": {"const": [{"repository": "Chillywood2025/chillywood-mobile", "prNumber": 194, "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446", "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}, {"repository": "Chillywood2025/chillywood-mobile", "prNumber": 195, "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7", "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}]},
+        "lateReviewTombstoneAdmission": {"const": {"policyId": "EXACT_HEAD_PROTECTED_MAIN_V1", "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48", "originalSentinelRetentionRequired": true, "firstParentAdmissionRequired": true, "branchLocalAdmissionAllowed": false, "networkRequiredAfterAdmission": false}},
         "freshness": {
           "type": "object",
           "required": ["defaultHours", "providerCriticalHours", "clock", "failClosed", "classes", "factRegistry"],
@@ -326,6 +327,25 @@
                 }
               },
               "blocks": {"type": "array", "minItems": 4, "uniqueItems": true}
+            }
+          }
+        },
+        "lateReviewResolutionTombstones": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["schemaVersion", "repository", "prNumber", "mergeSha", "findingSetHash", "resolutionEvidence", "verificationSubjectHash", "admissionPolicyId", "tombstoneHash"],
+            "properties": {
+              "schemaVersion": {"const": 1},
+              "repository": {"type": "string", "minLength": 1},
+              "prNumber": {"type": "integer", "minimum": 1},
+              "mergeSha": {"$ref": "#/$defs/gitSha"},
+              "findingSetHash": {"pattern": "^[0-9a-f]{64}$"},
+              "resolutionEvidence": {"$ref": "#/$defs/currentTruthRecord/properties/lateReviewSentinels/items/properties/resolutionEvidence"},
+              "verificationSubjectHash": {"pattern": "^[0-9a-f]{64}$"},
+              "admissionPolicyId": {"const": "EXACT_HEAD_PROTECTED_MAIN_V1"},
+              "tombstoneHash": {"pattern": "^[0-9a-f]{64}$"}
             }
           }
         },
