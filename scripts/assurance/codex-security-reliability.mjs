@@ -466,6 +466,7 @@ export const repositoryClosureRequiredFindingIds = [
   "PRIOR_FINDING_OMISSION_SELF_ATTESTED",
   "REPOSITORY_CLOSURE_CALLER_REHASH_BYPASS",
   "TERMINAL_FINALIZATION_CAN_BE_REPLAYED_FROM_PRE_ATTEMPT_SNAPSHOT",
+  "TOOLING_FALLBACK_LIFECYCLE_SELF_ATTESTED",
 ];
 
 export function repositoryClosureFindingEvidenceHash(findingId, descriptor, tests) {
@@ -581,8 +582,11 @@ export function repositoryClosure(value, { runGit = git, readReceipt, receiptArt
     && value?.lifecycle === null;
   const toolingFallback = ["HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"].includes(value?.reason)
     && value?.lifecycle?.state === "HOST_PREFLIGHT_BLOCKED"
+    && value?.lifecycle?.stateVersion === 1
     && value?.lifecycle?.terminal === true
     && value?.lifecycle?.terminalReason === value.reason
+    && lifecycleIdentityCurrent(value.lifecycle, descriptor)
+    && lifecycleAuthorityCurrent(value.lifecycle)
     && value?.hostScanStarted === false;
   const ok = descriptorValid(descriptor)
     && repositoryIdentityCurrent(descriptor, runGit)

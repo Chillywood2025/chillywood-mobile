@@ -604,6 +604,22 @@ test("tooling-preflight closure requires a matching terminal preflight reason", 
   assert.equal(repositoryClosure(forged, dependencies).ok, false);
   forged.lifecycle.terminal = false;
   assert.equal(repositoryClosure(forged, dependencies).ok, false);
+
+  const selfAttested = structuredClone(input);
+  selfAttested.lifecycle.lifecycleIdentityHash = "f".repeat(64);
+  assert.equal(repositoryClosure(selfAttested, dependencies).ok, false);
+
+  const anotherSource = changedDescriptor(value);
+  const anotherLifecycle = lifecycleFor(anotherSource);
+  const anotherBlocked = preflight({
+    lifecycle: anotherLifecycle,
+    descriptor: anotherSource,
+    host: hostFor(anotherSource, { scanId: anotherLifecycle.scanId, snapshotDigestExposed: false }),
+    runGit: gitFor(anotherSource),
+  });
+  const crossSource = structuredClone(input);
+  crossSource.lifecycle = anotherBlocked.lifecycle;
+  assert.equal(repositoryClosure(crossSource, dependencies).ok, false);
 });
 
 test("known recurring incidents are sanitized and unrecognized or sensitive payloads fail", () => {
