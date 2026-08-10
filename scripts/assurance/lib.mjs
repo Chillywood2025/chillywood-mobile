@@ -105,6 +105,16 @@ const canonicalLateReviewOwnerRegistry = [{
     "codex/assurance-active-task-and-claim-freshness-a1",
     "codex/assurance-codex-security-scan-reliability-s0"
   ]
+}, {
+  repository: "Chillywood2025/chillywood-mobile",
+  prNumber: 195,
+  mergeSha: "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+  successorCorrectionOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+  assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
+  authorizedBootstrapOwners: [
+    "codex/assurance-active-task-and-claim-freshness-a1",
+    "codex/assurance-codex-security-scan-reliability-s0"
+  ]
 }];
 const claimClassPolicy = {
   REPOSITORY_SOURCE: {
@@ -158,6 +168,9 @@ const claimClassPolicy = {
 };
 const canonicalFactRegistry = [
   { factId: "repository.assurance-control.a1.source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification" },
+  { factId: "repository.assurance-control.a1.post-merge-control-readback", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub" },
+  { factId: "repository.assurance-control.a1.complete-late-sentinel-inventory", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records" },
+  { factId: "repository.assurance-control.a1.late-review-tombstone-admission", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor" },
   { factId: "repository.active-implementation.immutable-synchronized-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d" },
   { factId: "repository.active-implementation.merge-identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree" },
   { factId: "repository.review-only-pr.disposition", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained" },
@@ -189,10 +202,25 @@ export function lateReviewAllowedOwners(sentinel) {
     && entry.mergeSha === sentinel?.mergeSha);
   if (matches.length !== 1) return [];
   const [entry] = matches;
-  if (sentinel.successorCorrectionOwner !== entry.successorCorrectionOwner
+  const registryBoundDiscovery = sentinel.successorCorrectionOwner === "UNASSIGNED_BLOCKED"
+    && sentinel.assuranceControlOwner === undefined
+    && sentinel.authorizedBootstrapOwners === undefined;
+  if (!registryBoundDiscovery && (sentinel.successorCorrectionOwner !== entry.successorCorrectionOwner
     || sentinel.assuranceControlOwner !== entry.assuranceControlOwner
-    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners)) return [];
+    || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners))) return [];
   return [...new Set([entry.successorCorrectionOwner, entry.assuranceControlOwner, ...entry.authorizedBootstrapOwners])].sort();
+}
+
+export function lateReviewRegistryCoverageFindings(sentinels) {
+  const records = Array.isArray(sentinels) ? sentinels : [];
+  return canonicalLateReviewOwnerRegistry.flatMap((entry) => {
+    const matches = records.filter((sentinel) => sentinel?.repository === entry.repository
+      && sentinel?.prNumber === entry.prNumber
+      && sentinel?.mergeSha === entry.mergeSha);
+    if (matches.length === 0) return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_MISSING", prNumber: entry.prNumber }];
+    if (matches.length > 1) return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_DUPLICATE", prNumber: entry.prNumber }];
+    return [];
+  });
 }
 
 export function lateReviewResolutionStructureValid(sentinel) {
@@ -286,6 +314,83 @@ export function lateReviewFindingSetEqual(left, right) {
     && leftIds.every((identity) => rightIds.includes(identity));
 }
 
+export function lateReviewFindingSetHash(findings) {
+  if (!Array.isArray(findings)) return null;
+  const identities = findings.map(lateReviewFindingIdentity).sort();
+  if (new Set(identities).size !== identities.length) return null;
+  return sha256(stableValue(identities));
+}
+
+export function lateReviewResolutionTombstoneHash(tombstone) {
+  if (!tombstone || typeof tombstone !== "object" || Array.isArray(tombstone)) return null;
+  const value = structuredClone(tombstone);
+  delete value.tombstoneHash;
+  return sha256(stableValue(value));
+}
+
+export function lateReviewResolutionTombstoneValid(sentinel, tombstone) {
+  if (!sentinel || !tombstone || tombstone.schemaVersion !== 1
+    || tombstone.repository !== sentinel.repository
+    || tombstone.prNumber !== sentinel.prNumber
+    || tombstone.mergeSha !== sentinel.mergeSha
+    || tombstone.admissionPolicyId !== "EXACT_HEAD_PROTECTED_MAIN_V1"
+    || tombstone.findingSetHash !== lateReviewFindingSetHash(sentinel.findings)
+    || tombstone.verificationSubjectHash !== tombstone.resolutionEvidence?.verificationSubjectHash
+    || tombstone.tombstoneHash !== lateReviewResolutionTombstoneHash(tombstone)) return false;
+  const allowedOwners = lateReviewAllowedOwners(sentinel);
+  const carrier = tombstone.admissionCarrier;
+  const carrierLatestPushAt = new Date(carrier?.latestSourcePushAt).valueOf();
+  const carrierReviewedAt = new Date(carrier?.exactHeadReviewCompletedAt).valueOf();
+  const carrierMergedAt = new Date(carrier?.mergedAt).valueOf();
+  const correctionCompletedAt = new Date(tombstone.resolutionEvidence?.completedAt).valueOf();
+  if (tombstone.resolutionEvidence?.successorBranch !== sentinel.successorCorrectionOwner
+    || !allowedOwners.includes(carrier?.branch)
+    || !Number.isInteger(carrier?.prNumber)
+    || carrier.prNumber < 1
+    || !gitShaPattern.test(carrier?.head ?? "")
+    || !gitShaPattern.test(carrier?.tree ?? "")
+    || !gitShaPattern.test(carrier?.mergeSha ?? "")
+    || !/^[0-9a-f]{64}$/u.test(carrier?.exactHeadReviewReceiptHash ?? "")
+    || !/^[0-9a-f]{64}$/u.test(carrier?.repositoryVerificationHash ?? "")
+    || !/^[a-z0-9][a-z0-9._-]*$/u.test(carrier?.verificationEvidenceSourceId ?? "")
+    || !Number.isInteger(carrier?.exactHeadCheckRunId)
+    || carrier.exactHeadCheckRunId < 1
+    || !Number.isFinite(carrierLatestPushAt)
+    || !Number.isFinite(carrierReviewedAt)
+    || !Number.isFinite(carrierMergedAt)
+    || !Number.isFinite(correctionCompletedAt)
+    || carrierLatestPushAt >= carrierReviewedAt
+    || correctionCompletedAt > carrierReviewedAt
+    || carrierReviewedAt > carrierMergedAt) return false;
+  const virtual = {
+    ...sentinel,
+    findings: (sentinel.findings ?? []).map((finding) => ({
+      ...finding,
+      disposition: "RESOLVED",
+      threadResolutionState: finding.threadId ? "RESOLVED" : "NOT_APPLICABLE"
+    })),
+    resolutionEvidence: tombstone.resolutionEvidence
+  };
+  return lateReviewResolutionStructureValid(virtual)
+    && lateReviewResolutionSubjectHash(virtual) === tombstone.verificationSubjectHash;
+}
+
+export function createLateReviewResolutionTombstone(resolvedSentinel, admissionCarrier) {
+  const tombstone = {
+    schemaVersion: 1,
+    repository: resolvedSentinel?.repository,
+    prNumber: resolvedSentinel?.prNumber,
+    mergeSha: resolvedSentinel?.mergeSha,
+    findingSetHash: lateReviewFindingSetHash(resolvedSentinel?.findings),
+    resolutionEvidence: structuredClone(resolvedSentinel?.resolutionEvidence),
+    verificationSubjectHash: resolvedSentinel?.resolutionEvidence?.verificationSubjectHash,
+    admissionCarrier: structuredClone(admissionCarrier),
+    admissionPolicyId: "EXACT_HEAD_PROTECTED_MAIN_V1"
+  };
+  tombstone.tombstoneHash = lateReviewResolutionTombstoneHash(tombstone);
+  return tombstone;
+}
+
 export function mergeLateReviewSentinelRecords(sentinels) {
   const merged = new Map();
   for (const sentinel of Array.isArray(sentinels) ? sentinels : []) {
@@ -316,6 +421,25 @@ function factRegistryEntryMatchesClaim(entry, claim) {
     && entry?.provider === claim?.provider;
 }
 
+export function repositoryReadbackEvidenceHash(source) {
+  if (!source?.readbackFacts || typeof source.readbackFacts !== "object" || Array.isArray(source.readbackFacts)) return null;
+  return sha256(stableValue(source.readbackFacts));
+}
+
+function repositoryReadbackEvidenceBound({ claim, source, committedSource, required }) {
+  const present = source?.readbackFacts !== undefined
+    || source?.readbackSha256 !== undefined
+    || committedSource?.readbackFacts !== undefined
+    || committedSource?.readbackSha256 !== undefined;
+  if (!present) return required !== true;
+  const expectedHash = repositoryReadbackEvidenceHash(source);
+  return /^[0-9a-f]{64}$/u.test(expectedHash ?? "")
+    && source.readbackSha256 === expectedHash
+    && committedSource?.readbackSha256 === expectedHash
+    && stableJson(committedSource?.readbackFacts) === stableJson(source.readbackFacts)
+    && source.readbackFacts?.observedAt === claim?.observedAt;
+}
+
 export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
@@ -339,6 +463,8 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
         const historicalEvidence = entries[0].historicalEvidence ?? factId;
         return source.covers.includes(factId) && committedSource.covers.includes(historicalEvidence);
       });
+    const readbackHashRequired = claim.factsCovered.some((factId) => factRegistry.find(({ factId: registered }) => registered === factId)?.requiresReadbackHash === true);
+    const readbackHashBound = repositoryReadbackEvidenceBound({ claim, source, committedSource, required: readbackHashRequired });
     const parents = git(["show", "-s", "--format=%P", source.sourceCommit]).split(/\s+/u).filter(Boolean);
     const introducedHere = parents.every((parent) => {
       try {
@@ -357,6 +483,7 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
       && source.provider === claim.provider
       && (claim.freshnessClass === "REPOSITORY_SOURCE" || committedRecord.liveProviderReadback === true)
       && factsBound
+      && readbackHashBound
       && introducedHere;
   } catch {
     return false;
@@ -507,6 +634,7 @@ export function evaluateFreshnessClaims({ claims, evidenceSources, freshness, no
         || !classPolicy.allowedPlatforms.includes(entry.platform)
         || typeof entry.provider !== "string"
         || !entry.provider
+        || (entry.requiresReadbackHash !== undefined && entry.requiresReadbackHash !== true)
         || (entry.freshnessClass === "REPOSITORY_SOURCE" && entry.provider !== "NONE")
         || (entry.freshnessClass !== "REPOSITORY_SOURCE" && entry.provider === "NONE");
       if (malformed) findings.push(claimFinding("ASSURANCE_FRESHNESS_FACT_REGISTRY_ENTRY_INVALID", null, { factId: factId || null }));
