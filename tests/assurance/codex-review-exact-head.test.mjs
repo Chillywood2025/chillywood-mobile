@@ -838,7 +838,9 @@ test("every build and release entrypoint requires durable GitHub late-sentinel r
     ".github/workflows/phase3a-manual-preview.yml"
   ]) {
     const workflow = fs.readFileSync(path, "utf8");
+    assert.match(workflow, /checks: read/u, path);
     assert.match(workflow, /issues: read/u, path);
+    assert.match(workflow, /pull-requests: read/u, path);
     assert.match(workflow, /late-review-sentinel\.mjs --require-github/u, path);
     assert.match(workflow, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/u, path);
   }

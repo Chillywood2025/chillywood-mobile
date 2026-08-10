@@ -21,8 +21,10 @@ on:
         type: string
 
 permissions:
+  checks: read
   contents: read
   issues: read
+  pull-requests: read
 
 concurrency:
   group: ios-production-${{ github.ref }}
