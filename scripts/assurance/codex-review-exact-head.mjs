@@ -18,10 +18,6 @@ const contractPath = "config/assurance/codex-review-exact-head-v1.json";
 const paginationIncompleteCode = "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE";
 const providerCommentHeadUnboundCode = "CODEX_REVIEW_PROVIDER_COMMENT_HEAD_UNBOUND";
 const severityOrder = new Map([["P0", 0], ["P1", 1], ["P2", 2], ["P3", 3]]);
-const providerCleanIssueCommentPreambles = new Set([
-  "Codex Review: Didn't find any major issues. Keep them coming!",
-  "Codex Review: Didn't find any major issues. Can't wait for the next one!"
-]);
 export const lateReviewIssueLabel = "codex-review-late-sentinel";
 export const lateReviewIssueTitlePrefix = "[Codex Review Late Sentinel]";
 export const reviewOnlyLabel = "assurance-review-only";
@@ -68,7 +64,8 @@ export function providerCleanIssueCommentPrefix({ comment, contract }) {
     || comment.createdAt !== comment.updatedAt) return null;
   const body = String(comment.body ?? "");
   const preamble = body.split("\n", 1)[0];
-  if (!providerCleanIssueCommentPreambles.has(preamble) || !body.startsWith(`${preamble}\n`) || severityFromBody(body)) return null;
+  const requiredLeads = contract?.providerCleanIssueCommentReview?.requiredLeads;
+  if (!Array.isArray(requiredLeads) || !requiredLeads.includes(preamble) || !body.startsWith(`${preamble}\n`) || severityFromBody(body)) return null;
   const prefixes = [...body.matchAll(/\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/gu)].map((match) => match[1]);
   return prefixes.length === 1 ? prefixes[0] : null;
 }

@@ -80,7 +80,7 @@ const ownerAuthorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-
 const ownerFinalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-carrier-binding-v1.json");
 const ownerFinalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-carrier-github-readback-v1.json");
 const bootstrapMergeIdentity = readBootstrapMergeIdentity(githubRulesetReadback.authorizedBootstrapException.mergeSha);
-errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, mergeIdentity: bootstrapMergeIdentity }));
+errors.push(...validateGithubMainRulesetReadback({ contract: githubRulesetReadback, authorizationReceipt: ownerAuthorizationReceipt, finalCarrierBindingReceipt: ownerFinalCarrierBindingReceipt, finalCarrierGithubReadback: ownerFinalCarrierGithubReadback, mergeIdentity: bootstrapMergeIdentity, freshnessMode: "STRUCTURAL" }));
 if (JSON.stringify(gates.gates.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("gate tier order mismatch");
 if (JSON.stringify(proof.tiers.map(({ id }) => id)) !== JSON.stringify(tierIds)) errors.push("proof tier order mismatch");
 const defectFields = ["id", "tags", "affectedDomains", "preImplementationQuestions", "requiredProofTier", "detectionRule", "testTemplate", "runtimeSignature", "rollback", "prevention", "blocks"];

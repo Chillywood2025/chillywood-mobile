@@ -179,7 +179,7 @@ export function readBootstrapMergeIdentity(mergeSha, gitRead = git) {
   }
 }
 
-export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, mergeIdentity, now = new Date() }) {
+export function validateGithubMainRulesetReadback({ contract, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, mergeIdentity, now = new Date(), freshnessMode }) {
   const errors = [];
   const readback = contract?.applicationReadback;
   const exception = contract?.authorizedBootstrapException;
@@ -203,15 +203,16 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   const freshnessObservedAt = Date.parse(freshness?.observedAt ?? "");
   const freshnessExpiresAt = Date.parse(freshness?.expiresAt ?? "");
   const validationNow = now instanceof Date ? now.valueOf() : Date.parse(now ?? "");
+  if (!["STRUCTURAL", "CURRENT_CLAIM"].includes(freshnessMode)) add("freshness validation mode missing");
   if (freshness?.status !== "CURRENT"
     || freshness?.freshnessClass !== "REPOSITORY_SOURCE"
     || freshness?.evidenceMode !== "github-read-only"
     || !same(freshness?.factsCovered, ["repository.github.main-ruleset", "repository.github.main-head"])
     || freshness?.observedAt !== readback?.protectedMainReadback?.observedAt
-    || ![freshnessObservedAt, freshnessExpiresAt, validationNow].every(Number.isFinite)
-    || freshnessExpiresAt - freshnessObservedAt !== repositorySourceReadbackHours * 60 * 60 * 1000
-    || validationNow < freshnessObservedAt
-    || validationNow > freshnessExpiresAt) add("repository ruleset readback stale");
+    || ![freshnessObservedAt, freshnessExpiresAt].every(Number.isFinite)
+    || freshnessExpiresAt - freshnessObservedAt !== repositorySourceReadbackHours * 60 * 60 * 1000) add("repository ruleset readback malformed");
+  if (freshnessMode === "CURRENT_CLAIM"
+    && (!Number.isFinite(validationNow) || validationNow < freshnessObservedAt || validationNow > freshnessExpiresAt)) add("repository ruleset readback stale");
   if (!same(readback?.protectedMainReadback, protectedMainReadback)
     || protectedMainReadback.observedHead !== exception?.mergeSha) add("protected main readback mismatch");
   if (readback?.enforcement !== "active"

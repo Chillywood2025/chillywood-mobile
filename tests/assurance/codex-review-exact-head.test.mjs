@@ -113,10 +113,12 @@ test("provider no-suggestion issue comment binds its unique commit prefix to the
 });
 
 test("every observed provider no-suggestion preamble remains exact and fail closed", () => {
-  for (const preamble of [
+  const requiredLeads = [
     "Codex Review: Didn't find any major issues. Keep them coming!",
     "Codex Review: Didn't find any major issues. Can't wait for the next one!"
-  ]) {
+  ];
+  assert.deepEqual(contract.providerCleanIssueCommentReview.requiredLeads, requiredLeads);
+  for (const preamble of requiredLeads) {
     const review = providerCleanIssueCommentReview({
       comment: {
         author: "chatgpt-codex-connector",

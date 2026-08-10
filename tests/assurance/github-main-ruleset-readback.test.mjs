@@ -9,7 +9,7 @@ const authorizationReceipt = readJson("config/assurance/a1-owner-bootstrap-autho
 const finalCarrierBindingReceipt = readJson("config/assurance/a1-owner-final-carrier-binding-v1.json");
 const finalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-carrier-github-readback-v1.json");
 const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
-const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T06:30:00Z") => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, mergeIdentity: identity, now });
+const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-10T06:30:00Z", freshnessMode = "CURRENT_CLAIM") => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, mergeIdentity: identity, now, freshnessMode });
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -115,9 +115,11 @@ test("owner final-carrier observation chronology is fail closed", () => {
 
 test("repository ruleset readback expires after its claim-scoped 24-hour window", () => {
   assert.ok(validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2036-08-10T06:30:00Z").some((error) => error.includes("ruleset readback stale")));
+  assert.deepEqual(validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2036-08-10T06:30:00Z", "STRUCTURAL"), []);
   const candidate = structuredClone(contract);
   candidate.applicationReadback.repositorySourceFreshness.expiresAt = "2036-08-11T05:33:01Z";
-  assert.ok(validate(candidate, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2026-08-10T06:30:00Z").some((error) => error.includes("ruleset readback stale")));
+  assert.ok(validate(candidate, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2026-08-10T06:30:00Z").some((error) => error.includes("ruleset readback malformed")));
+  assert.ok(validate(contract, mergeIdentity, authorizationReceipt, finalCarrierBindingReceipt, finalCarrierGithubReadback, "2026-08-10T06:30:00Z", null).some((error) => error.includes("freshness validation mode")));
 });
 
 test("owner authorization must predate protection removal", () => {
