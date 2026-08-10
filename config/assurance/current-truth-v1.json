@@ -446,43 +446,43 @@
     "implementationPr": 206,
     "implementationBranch": "codex/assurance-codex-security-scan-reliability-s0",
     "implementationBindingId": "assurance-codex-security-scan-reliability-s0-pr206-v1",
-    "immutableSourceHead": "27dfcc49a8b82a53c918c91a6512f162f3a7e13c",
-    "immutableSourceTree": "1ed803025200215e03952f7f9c1a80631654a563",
-    "currentImplementationHead": "27dfcc49a8b82a53c918c91a6512f162f3a7e13c",
-    "currentImplementationTree": "1ed803025200215e03952f7f9c1a80631654a563",
-    "phase": "IMPLEMENTATION",
+    "immutableSourceHead": "06f7e2ba6944afc34880b56c1fbc1130cea1a241",
+    "immutableSourceTree": "4e1affb5d555a12bc242963c7b40c97098b9a624",
+    "currentImplementationHead": "06f7e2ba6944afc34880b56c1fbc1130cea1a241",
+    "currentImplementationTree": "4e1affb5d555a12bc242963c7b40c97098b9a624",
+    "phase": "FORMAL_REVIEW",
     "executionState": "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "s0-source-freeze-20260810-1127", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.s0.source"], "subjectHead": "27dfcc49a8b82a53c918c91a6512f162f3a7e13c", "subjectTree": "1ed803025200215e03952f7f9c1a80631654a563"}],
-    "proofTiersUnderEvaluation": ["T1_SOURCE"],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "s0-final-source-freeze-20260810-1151", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"], "subjectHead": "06f7e2ba6944afc34880b56c1fbc1130cea1a241", "subjectTree": "4e1affb5d555a12bc242963c7b40c97098b9a624"}],
+    "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 206,
-      "commentId": 5239548504,
+      "commentId": 5239734883,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-10T11:31:44Z",
-      "updatedAt": "2026-08-10T11:31:44Z",
-      "bodySha256": "3ab42734b904a6c94aed4cd7def03804880b2059dc5313c6b82d7c13b1b59929",
-      "subjectHash": "55c1e3de8c690d17d91f2e831ece92b107a29bb2e01b02ada944edddca63ba87"
+      "createdAt": "2026-08-10T11:51:42Z",
+      "updatedAt": "2026-08-10T11:51:42Z",
+      "bodySha256": "99e05bdffce3c6c7f77393fedcafd114c5441cc0d5c794127d54177a8252fa80",
+      "subjectHash": "190aae7a4e12ebd49f1bc1ab7691db520d98f8182939c4df8f5e76b8e0a71084"
     }
   },
   "freshnessClaims": [
     {
-      "id": "repository-source-s0-bootstrap-source-freeze",
+      "id": "repository-source-s0-final-source-freeze",
       "status": "CURRENT",
-      "observedAt": "2026-08-10T11:13:25Z",
-      "expiresAt": "2026-08-11T11:13:25Z",
-      "evidenceSourceId": "s0-source-freeze-20260810-1127",
+      "observedAt": "2026-08-10T11:51:42Z",
+      "expiresAt": "2026-08-11T11:51:42Z",
+      "evidenceSourceId": "s0-final-source-freeze-20260810-1151",
       "evidenceMode": "local-and-github-read-only",
-      "factsCovered": ["repository.assurance-control.s0.source"],
+      "factsCovered": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"],
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "27dfcc49a8b82a53c918c91a6512f162f3a7e13c",
-      "subjectTree": "1ed803025200215e03952f7f9c1a80631654a563"
+      "subjectHead": "06f7e2ba6944afc34880b56c1fbc1130cea1a241",
+      "subjectTree": "4e1affb5d555a12bc242963c7b40c97098b9a624"
     },
     {
       "id": "repository-source-a1-exact-carrier-full-history",
@@ -624,7 +624,7 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "27dfcc49a8b82a53c918c91a6512f162f3a7e13c", "state": "open-draft-current", "disposition": "S0 immutable source frozen and Owner-authorized by exact GitHub comment; only this exact three-file current-truth binding commit follows"}
+    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "06f7e2ba6944afc34880b56c1fbc1130cea1a241", "state": "open-draft-current", "disposition": "S0 final immutable source frozen and Owner-authorized for independent exact-head review; this exact evidence-anchor commit follows"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -713,7 +713,7 @@
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP_codex-security-scan-reliability-s0_D2A_FROZEN",
     "nextActions": [
       "Use only the code-pinned PR #206 S0 Owner-bootstrap registry tuple, exact repository source fact, hash-bound source claim, canonical Owner comment, and fresh active-task packet to authorize Codex Security Scan Reliability S0; no other PR, branch, head, fact, feature, product, provider, build, release, or D2A work is authorized.",
-      "Implement Codex Security Scan Reliability S0 on codex/assurance-codex-security-scan-reliability-s0, require repository snapshot-digest preflight before expensive hosted work, independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, merge, and post-S0 truth.",
+      "Review the frozen Codex Security Scan Reliability S0 source on codex/assurance-codex-security-scan-reliability-s0 with independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, normal merge, and post-S0 truth; do not start a hosted Codex Security scan.",
       "Only after S0 completes may the five unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under the required exact-head Codex Review gate; D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
@@ -728,24 +728,30 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-10T11:13:25Z",
-  "freshnessDeadline": "2026-08-11T11:13:25Z",
+  "timestamp": "2026-08-10T11:51:42Z",
+  "freshnessDeadline": "2026-08-11T11:51:42Z",
   "evidenceSources": [
     {
-      "id": "s0-source-freeze-20260810-1127",
+      "id": "s0-final-source-freeze-20260810-1151",
       "mode": "local-and-github-read-only",
       "covers": [
+        "repository.assurance-control.s0.requirements",
         "repository.assurance-control.s0.source",
-        "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording"
+        "repository.assurance-control.s0.model",
+        "repository.assurance-control.s0.integration",
+        "S0 machine-readable contract pins exact target identity, digest preflight, lifecycle, evidence reuse, repository closure, and incident-sanitization requirements",
+        "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording",
+        "S0 executable model and adversarial fixtures prove preflight stops before discovery, one completion attempt, terminal no-retry, exact reuse, invalidation, closure integrity, and sanitized recurring incidents",
+        "S0 integration evidence binds the exact target descriptor, repository closure, governed commands, independent exact-head review, and Phase 1 CI to one frozen source"
       ],
-      "observedAt": "2026-08-10T11:13:25Z",
+      "observedAt": "2026-08-10T11:51:42Z",
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "sourceCommit": "27dfcc49a8b82a53c918c91a6512f162f3a7e13c",
-      "subjectHead": "27dfcc49a8b82a53c918c91a6512f162f3a7e13c",
-      "subjectTree": "1ed803025200215e03952f7f9c1a80631654a563"
+      "sourceCommit": "06f7e2ba6944afc34880b56c1fbc1130cea1a241",
+      "subjectHead": "06f7e2ba6944afc34880b56c1fbc1130cea1a241",
+      "subjectTree": "4e1affb5d555a12bc242963c7b40c97098b9a624"
     },
     {
       "id": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
