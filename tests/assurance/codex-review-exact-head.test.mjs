@@ -112,13 +112,19 @@ test("provider no-suggestion issue comment binds its unique commit prefix to the
   assert.equal(providerCleanIssueCommentReview({ comment: cleanComment, currentHead: headA, resolvedCommit: collidingOldCommit, contract }), null);
 });
 
-test("every observed provider no-suggestion preamble remains exact and fail closed", () => {
-  const requiredLeads = [
+test("the exact provider clean assertion tolerates only non-authoritative display suffix drift", () => {
+  const observedPreambles = [
     "Codex Review: Didn't find any major issues. Keep them coming!",
-    "Codex Review: Didn't find any major issues. Can't wait for the next one!"
+    "Codex Review: Didn't find any major issues. Can't wait for the next one!",
+    "Codex Review: Didn't find any major issues. Hooray!",
+    "Codex Review: Didn't find any major issues."
   ];
-  assert.deepEqual(contract.providerCleanIssueCommentReview.requiredLeads, requiredLeads);
-  for (const preamble of requiredLeads) {
+  assert.equal(contract.providerCleanIssueCommentReview.authoritativeAssertion, "Codex Review: Didn't find any major issues.");
+  assert.deepEqual(contract.providerCleanIssueCommentReview.nonAuthoritativeDisplaySuffix, {
+    mode: "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION",
+    maxLength: 80
+  });
+  for (const preamble of observedPreambles) {
     const review = providerCleanIssueCommentReview({
       comment: {
         author: "chatgpt-codex-connector",
@@ -134,19 +140,27 @@ test("every observed provider no-suggestion preamble remains exact and fail clos
     assert.equal(review?.commit, headA);
   }
 
-  const lookalike = providerCleanIssueCommentReview({
-    comment: {
-      author: "chatgpt-codex-connector",
-      commentId: 9002,
-      body: `Codex Review: Didn't find any major issues. Check this manually!\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
-      createdAt: "2026-08-09T12:30:00Z",
-      updatedAt: "2026-08-09T12:30:00Z"
-    },
-    currentHead: headA,
-    resolvedCommit: headA,
-    contract
-  });
-  assert.equal(lookalike, null);
+  for (const preamble of [
+    "Codex review: Didn't find any major issues. Hooray!",
+    "Codex Review: Didn't find any major issue. Hooray!",
+    "Codex Review: Didn't find any major issues. Hooray.",
+    `Codex Review: Didn't find any major issues. ${"A".repeat(80)}!`,
+    " Codex Review: Didn't find any major issues. Hooray!"
+  ]) {
+    const lookalike = providerCleanIssueCommentReview({
+      comment: {
+        author: "chatgpt-codex-connector",
+        commentId: 9002,
+        body: `${preamble}\n\n**Reviewed commit:** \`${headA.slice(0, 10)}\``,
+        createdAt: "2026-08-09T12:30:00Z",
+        updatedAt: "2026-08-09T12:30:00Z"
+      },
+      currentHead: headA,
+      resolvedCommit: headA,
+      contract
+    });
+    assert.equal(lookalike, null);
+  }
 });
 
 test("provider clean-review commit markers use only the contracted prefix length", () => {

@@ -64,10 +64,20 @@ export function providerCleanIssueCommentPrefix({ comment, contract }) {
     || comment.createdAt !== comment.updatedAt) return null;
   const body = String(comment.body ?? "");
   const preamble = body.split("\n", 1)[0];
-  const requiredLeads = contract?.providerCleanIssueCommentReview?.requiredLeads;
+  const authoritativeAssertion = contract?.providerCleanIssueCommentReview?.authoritativeAssertion;
+  const displaySuffixPolicy = contract?.providerCleanIssueCommentReview?.nonAuthoritativeDisplaySuffix;
+  const displaySuffix = typeof authoritativeAssertion === "string" && preamble.startsWith(authoritativeAssertion)
+    ? preamble.slice(authoritativeAssertion.length)
+    : null;
+  const displaySuffixValid = displaySuffix === "" || (typeof displaySuffix === "string"
+    && displaySuffixPolicy?.mode === "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION"
+    && Number.isInteger(displaySuffixPolicy?.maxLength)
+    && displaySuffixPolicy.maxLength === 80
+    && displaySuffix.length <= displaySuffixPolicy.maxLength
+    && /^ [A-Za-z][A-Za-z' ]*!$/u.test(displaySuffix));
   const prefixLength = contract?.providerCleanIssueCommentReview?.reviewedCommitPrefixLength;
-  if (!Array.isArray(requiredLeads)
-    || !requiredLeads.includes(preamble)
+  if (authoritativeAssertion !== "Codex Review: Didn't find any major issues."
+    || !displaySuffixValid
     || !body.startsWith(`${preamble}\n`)
     || !Number.isInteger(prefixLength)
     || prefixLength < 7

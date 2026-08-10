@@ -106,10 +106,11 @@
   ],
   "issueCommentReviewedCommitMarker": "<!-- codex-review-reviewed-commit:<40-lowercase-hex-sha> -->",
   "providerCleanIssueCommentReview": {
-    "requiredLeads": [
-      "Codex Review: Didn't find any major issues. Keep them coming!",
-      "Codex Review: Didn't find any major issues. Can't wait for the next one!"
-    ],
+    "authoritativeAssertion": "Codex Review: Didn't find any major issues.",
+    "nonAuthoritativeDisplaySuffix": {
+      "mode": "OPTIONAL_SINGLE_LINE_ASCII_EXCLAMATION",
+      "maxLength": 80
+    },
     "reviewedCommitPrefixLength": 10,
     "providerAuthoredOnly": true,
     "editedCommentAllowed": false,
