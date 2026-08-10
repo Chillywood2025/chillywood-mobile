@@ -46,6 +46,7 @@ const baseCurrent = {
   mergeSha: null,
   providerReviewsExist: true,
   reviewOnly: false,
+  sharedHeadOpenPrNumbers: [201],
   repositoryWriteActors: ["Chillywood2025"]
 };
 const exactReview = {
@@ -115,6 +116,17 @@ test("missing source admission and a changed diff base invalidate review eligibi
   });
   assert.equal(changedBase.ok, false);
   assert(changedBase.codes.includes("CODEX_REVIEW_STALE_BASE"));
+});
+
+test("exact-head PASS requires one open PR to own the head", () => {
+  const singletonReceipt = buildExactHeadReceipt({ contract, current: baseCurrent, review: exactReview, threads: [] });
+  assert.equal(evaluateExactHeadReceipt({ contract, current: baseCurrent, receipt: singletonReceipt }).ok, true);
+
+  const ambiguous = { ...baseCurrent, sharedHeadOpenPrNumbers: [201, 999] };
+  const ambiguousReceipt = buildExactHeadReceipt({ contract, current: ambiguous, review: exactReview, threads: [] });
+  const result = evaluateExactHeadReceipt({ contract, current: ambiguous, receipt: ambiguousReceipt });
+  assert.equal(result.ok, false);
+  assert(result.codes.includes("CODEX_REVIEW_SHARED_HEAD_AMBIGUOUS"));
 });
 
 test("dismissed or malformed review receipts fail closed", () => {
@@ -351,6 +363,30 @@ test("every synchronize event creates an exact append-only source-push lease", a
   );
 });
 
+test("source-push leases isolate two PRs sharing the same head", async () => {
+  const checks = [];
+  for (const prNumber of [201, 999]) {
+    await recordSourcePushLease({
+      repository: baseCurrent.repository,
+      prNumber,
+      headSha: headA,
+      baseBranch: baseCurrent.baseBranch,
+      baseSha: baseCurrent.baseSha,
+      pushedAt: `2026-08-09T12:${prNumber === 201 ? "20" : "21"}:00Z`,
+      token: "token",
+      request: async (_url, _token, init) => {
+        checks.push({ ...JSON.parse(init.body), app: { slug: "github-actions" } });
+        return { body: { id: prNumber }, link: "" };
+      }
+    });
+  }
+  const leases = await readSourcePushLeases(baseCurrent.repository, 201, headA, "token", {
+    request: async () => ({ body: { total_count: checks.length, check_runs: checks }, link: "" })
+  });
+  assert.equal(leases.length, 1);
+  assert.equal(leases[0].prNumber, 201);
+});
+
 test("provider finding events persist in a hash-bound append-only ledger until explicit exact-head rereview", async () => {
   const finding = normalizeLateReviewEvent({
     eventName: "pull_request_review",
@@ -423,6 +459,45 @@ test("provider finding events persist in a hash-bound append-only ledger until e
     }),
     { message: "CODEX_REVIEW_FINDING_LEDGER_INVALID" }
   );
+});
+
+test("provider finding ledgers isolate two PRs sharing the same head", async () => {
+  const checks = [];
+  for (const prNumber of [201, 999]) {
+    const finding = normalizeLateReviewEvent({
+      eventName: "pull_request_review",
+      event: {
+        action: "submitted",
+        review: {
+          id: 8000 + prNumber,
+          node_id: `REVIEW_${prNumber}`,
+          user: { login: "chatgpt-codex-connector" },
+          state: "commented",
+          body: `P1 finding for PR ${prNumber}`,
+          commit_id: headA,
+          submitted_at: "2026-08-09T11:30:00Z"
+        }
+      },
+      contract,
+      observedAt: "2026-08-09T11:30:00Z"
+    });
+    await recordProviderFindingLedger({
+      repository: baseCurrent.repository,
+      prNumber,
+      headSha: headA,
+      finding,
+      token: "token",
+      request: async (_url, _token, init) => {
+        checks.push({ ...JSON.parse(init.body), app: { slug: "github-actions" } });
+        return { body: { id: prNumber }, link: "" };
+      }
+    });
+  }
+  const findings = await readProviderFindingLedger(baseCurrent.repository, 201, headA, "token", {
+    request: async () => ({ body: { total_count: checks.length, check_runs: checks }, link: "" })
+  });
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].sourceId, 8201);
 });
 
 test("resolving an old thread does not substitute for rereview after source changes", () => {
@@ -925,6 +1000,7 @@ test("GitHub resolution readback recomputes the successor diff, full exact-head 
     providerReviewsExist: true,
     reviewOnly: false,
     lateReviewBlocked: false,
+    sharedHeadOpenPrNumbers: [successorPr],
     repositoryWriteActors: ["Chillywood2025"]
   };
   const successorReview = {
@@ -1023,6 +1099,7 @@ test("GitHub resolution readback recomputes the successor diff, full exact-head 
     }, link: "" };
     if (url.endsWith(`/git/commits/${successorHead}`)) return { body: { tree: { sha: successorTree } }, link: "" };
     if (url.includes(`/pulls/${successorPr}/files`)) return { body: files, link: "" };
+    if (url.includes(`/commits/${successorHead}/pulls`)) return { body: [{ number: successorPr, state: "open", head: { sha: successorHead } }], link: "" };
     if (url.includes(encodeURIComponent(contract.checkName))) return { body: { total_count: 1, check_runs: [exactCheck] }, link: "" };
     if (url.includes(encodeURIComponent(sourcePushLeaseCheckName))) return { body: { total_count: 1, check_runs: [sourceLeaseCheck] }, link: "" };
     throw new Error(`unexpected request ${url}`);

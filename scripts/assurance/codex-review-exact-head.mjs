@@ -403,6 +403,7 @@ export function buildExactHeadReceipt({ contract, current, review, reviews = nul
     providerIssueComments,
     reviewFindings: normalized.findings,
     providerCommentHeadUnbound: normalized.unboundProviderCommentIds,
+    sharedHeadOpenPrNumbers: [...(current.sharedHeadOpenPrNumbers ?? [])].sort((left, right) => left - right),
     repositoryWriteActors: [...(current.repositoryWriteActors ?? [])].sort()
   };
   receipt.receiptHash = exactReceiptHash(receipt);
@@ -447,6 +448,8 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
     || !Array.isArray(receipt.providerIssueComments)
     || !Array.isArray(receipt.reviewFindings)
     || !Array.isArray(receipt.providerCommentHeadUnbound)
+    || !Array.isArray(receipt.sharedHeadOpenPrNumbers)
+    || !receipt.sharedHeadOpenPrNumbers.every((number) => Number.isInteger(number) && number > 0)
     || !Array.isArray(receipt.repositoryWriteActors)
     || receipt.receiptHash !== exactReceiptHash(receipt)) {
     codes.push("CODEX_REVIEW_RECEIPT_INVALID");
@@ -465,6 +468,11 @@ export function evaluateExactHeadReceipt({ contract, current, receipt, readbackI
     codes.push("CODEX_REVIEW_INCOMPLETE");
   }
   if ((receipt.providerCommentHeadUnbound ?? []).length) codes.push(providerCommentHeadUnboundCode);
+  const expectedSharedHeadPrs = [current.prNumber];
+  if (JSON.stringify(receipt.sharedHeadOpenPrNumbers ?? []) !== JSON.stringify(expectedSharedHeadPrs)
+    || JSON.stringify([...(current.sharedHeadOpenPrNumbers ?? [])].sort((left, right) => left - right)) !== JSON.stringify(expectedSharedHeadPrs)) {
+    codes.push("CODEX_REVIEW_SHARED_HEAD_AMBIGUOUS");
+  }
   const trustedWriteActors = [...(contract.trustedRepositoryWriteActors ?? [])].sort();
   if (JSON.stringify(receipt.repositoryWriteActors ?? []) !== JSON.stringify(trustedWriteActors)
     || JSON.stringify([...(current.repositoryWriteActors ?? [])].sort()) !== JSON.stringify(trustedWriteActors)) {
@@ -590,6 +598,22 @@ function hasNextRestPage(link) {
   return /<[^>]+>;\s*rel="next"/u.test(link ?? "");
 }
 
+async function readOpenPullRequestNumbersForHead(repository, headSha, token, { request = githubRequestPage, maxPages = 20 } = {}) {
+  const numbers = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const response = await request(`https://api.github.com/repos/${repository}/commits/${headSha}/pulls?per_page=100&page=${page}`, token, { method: "GET" });
+    if (!Array.isArray(response?.body)) throw paginationError();
+    numbers.push(...response.body
+      .filter((candidate) => candidate?.state === "open" && candidate?.head?.sha === headSha)
+      .map(({ number }) => number));
+    if (!hasNextRestPage(response.link)) {
+      return [...new Set(numbers)].filter((number) => Number.isInteger(number) && number > 0).sort((left, right) => left - right);
+    }
+    if (page === maxPages) throw paginationError();
+  }
+  throw paginationError();
+}
+
 function sourcePushLeaseDigest(payload) {
   return sha256(stableValue(payload));
 }
@@ -665,9 +689,14 @@ export async function readSourcePushLeases(repository, prNumber, headSha, token,
     runs.push(...result.body.check_runs);
     if (!hasNextRestPage(result.link)) {
       if (runs.length !== totalCount) throw paginationError();
-      const parsed = runs.map((check) => parseSourcePushLease(check, { repository, prNumber, headSha }));
+      const parsed = runs.map((check) => {
+        let payload;
+        try { payload = JSON.parse(check?.output?.summary); } catch { return false; }
+        if (!Number.isInteger(payload?.prNumber) || payload.prNumber < 1) return false;
+        return parseSourcePushLease(check, { repository, prNumber: payload.prNumber, headSha });
+      });
       if (parsed.some((entry) => entry === false)) throw new Error("CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID");
-      return parsed.filter(Boolean).sort((left, right) => left.pushedAt.localeCompare(right.pushedAt));
+      return parsed.filter((entry) => entry?.prNumber === prNumber).sort((left, right) => left.pushedAt.localeCompare(right.pushedAt));
     }
     if (page === maxPages) throw paginationError();
   }
@@ -758,20 +787,24 @@ export async function readProviderFindingLedger(repository, prNumber, headSha, t
   const contract = options.contract ?? readJson(contractPath);
   const checks = await readNamedCheckRuns(repository, headSha, providerFindingLedgerCheckName, token, options);
   const parsed = checks.map((check) => {
-    let source;
-    try { source = JSON.parse(check.output?.summary)?.finding; } catch { return false; }
+    let payload;
+    try { payload = JSON.parse(check.output?.summary); } catch { return false; }
+    const source = payload?.finding;
+    if (!Number.isInteger(payload?.prNumber) || payload.prNumber < 1) return false;
     return parseCheckLedger(check, {
       repository,
-      prNumber,
+      prNumber: payload.prNumber,
       headSha,
       checkName: providerFindingLedgerCheckName,
-      externalPrefix: `codex-review-finding:v1:pr=${prNumber}:source=${source?.sourceType}:${source?.sourceId}`
+      externalPrefix: `codex-review-finding:v1:pr=${payload.prNumber}:source=${source?.sourceType}:${source?.sourceId}`
     });
   });
   if (parsed.some((entry) => entry === false || !validPersistentProviderFinding(entry?.finding, contract))) {
     throw new Error("CODEX_REVIEW_FINDING_LEDGER_INVALID");
   }
-  return [...new Map(parsed.map(({ finding }) => [`${finding.findingId}:${finding.bodyHash}`, finding])).values()];
+  return [...new Map(parsed
+    .filter((entry) => entry.prNumber === prNumber)
+    .map(({ finding }) => [`${finding.findingId}:${finding.bodyHash}`, finding])).values()];
 }
 
 export async function recordReviewOnlyLease({ repository, prNumber, headSha, headBranch, token, request = githubRequestPage }) {
@@ -1065,6 +1098,7 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
     const sourcePushLeases = await readSourcePushLeases(repository, evidence.successorPr, evidence.successorHead, token, { request, maxPages });
     const sourcePushLeaseHashes = sourcePushLeases.map(({ digest }) => digest).sort();
     const latestSourcePushAt = sourcePushLeases.map(({ pushedAt }) => pushedAt).sort().at(-1);
+    const sharedHeadOpenPrNumbers = await readOpenPullRequestNumbersForHead(repository, evidence.successorHead, token, { request, maxPages });
     const receiptEvaluation = evaluateExactHeadReceipt({
       contract: readJson(contractPath),
       current: {
@@ -1081,6 +1115,7 @@ export async function verifyLateReviewResolutionGithub({ repository, token, sent
         providerReviewsExist: true,
         reviewOnly: false,
         lateReviewBlocked: false,
+        sharedHeadOpenPrNumbers,
         repositoryWriteActors: readJson(contractPath).trustedRepositoryWriteActors
       },
       receipt
@@ -1228,10 +1263,12 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
     }
     throw paginationError();
   })();
-  const [labelNodes, surfaces, repositoryWriteActors] = await Promise.all([
+  const sharedHeadPullsPromise = readOpenPullRequestNumbersForHead(repository, pr.headRefOid, token, { maxPages });
+  const [labelNodes, surfaces, repositoryWriteActors, sharedHeadOpenPrNumbers] = await Promise.all([
     paginateGraphConnection({ query: labelsQuery, variables: baseVariables, select: (data) => data?.repository?.pullRequest?.labels, token, maxPages }),
     readProviderReviewSurfaces(repository, prNumber, token, { maxPages }),
-    writeActorsPromise
+    writeActorsPromise,
+    sharedHeadPullsPromise
   ]);
   const commit = pr.commits?.nodes?.[0]?.commit;
   let sourcePushLeases = [];
@@ -1282,7 +1319,8 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
       reviewOnlyLeasePresent: reviewOnlyLeases.length > 0,
       sourceReadbackIncomplete,
       sourceReadbackCode,
-      repositoryWriteActors
+      repositoryWriteActors,
+      sharedHeadOpenPrNumbers
     },
     reviews,
     threads,

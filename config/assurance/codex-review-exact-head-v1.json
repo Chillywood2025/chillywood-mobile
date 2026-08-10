@@ -53,6 +53,7 @@
     "providerIssueComments",
     "reviewFindings",
     "providerCommentHeadUnbound",
+    "sharedHeadOpenPrNumbers",
     "repositoryWriteActors",
     "receiptHash"
   ],
@@ -78,6 +79,7 @@
     "every-synchronize-event-recorded-by-exact-source-push-lease",
     "all-review-conversations-resolved",
     "all-provider-review-surfaces-read-and-head-bound",
+    "exactly-one-open-pr-owns-current-head",
     "repository-write-authority-equals-owner-root-authority",
     "resolved-thread-findings-require-later-exact-head-provider-rereview",
     "no-unresolved-blocking-finding",
@@ -94,6 +96,7 @@
     "CODEX_REVIEW_READBACK_PAGINATION_INCOMPLETE",
     "CODEX_REVIEW_SOURCE_PUSH_LEASE_INVALID",
     "CODEX_REVIEW_FINDING_LEDGER_INVALID",
+    "CODEX_REVIEW_SHARED_HEAD_AMBIGUOUS",
     "CODEX_REVIEW_UNTRUSTED_WRITE_ACTOR",
     "CODEX_REVIEW_RECEIPT_INVALID",
     "CODEX_REVIEW_LATE_POST_MERGE",
