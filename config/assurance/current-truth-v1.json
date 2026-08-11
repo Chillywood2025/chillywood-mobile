@@ -16,7 +16,7 @@
     "requiredPhase1Checks": 13,
     "historicalIncidentsRetained": true
   },
-  "mainSha": "11ccca1308a98b232cd14a32ebcd2b5ab39c2139",
+  "mainSha": "085960ba2d26ad14c44d758cbaf1924ec80a1e5d",
   "latestMergedImplementationPr": {"number": 208, "state": "merged", "head": "29c1ad243040a09a6e91eba771814c8ee6349586", "mergeSha": "11ccca1308a98b232cd14a32ebcd2b5ab39c2139", "title": "Bind A1 proof tiers and completion authority"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -460,47 +460,47 @@
     "implementationPr": 206,
     "implementationBranch": "codex/assurance-codex-security-scan-reliability-s0",
     "implementationBindingId": "assurance-codex-security-scan-reliability-s0-pr206-v1",
-    "immutableSourceHead": "f4424b0169ed3f97df8646f951c4f4979045545f",
-    "immutableSourceTree": "126593669a05992797a1f766b01aa692c033893b",
-    "currentImplementationHead": "27ead7b470b1a690bcab3e64fb4346e2feeb9c6d",
-    "currentImplementationTree": "a4d65fa4671ca9e54b3e008031d92f2be3d32053",
+    "immutableSourceHead": "320259d93d5cd2baf222e8e1451f8615b164cd0d",
+    "immutableSourceTree": "888d25517135f54a7f68b032bb9cbfd6cf2c7df3",
+    "currentImplementationHead": "320259d93d5cd2baf222e8e1451f8615b164cd0d",
+    "currentImplementationTree": "888d25517135f54a7f68b032bb9cbfd6cf2c7df3",
     "phase": "FORMAL_REVIEW",
     "executionState": "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "s0-exact-closure-reuse-final-source-freeze-20260811-0219", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"], "subjectHead": "f4424b0169ed3f97df8646f951c4f4979045545f", "subjectTree": "126593669a05992797a1f766b01aa692c033893b"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "evidenceSourceId": "s0-solo-owner-final-closeout-source-freeze-20260811-0428", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"], "subjectHead": "320259d93d5cd2baf222e8e1451f8615b164cd0d", "subjectTree": "888d25517135f54a7f68b032bb9cbfd6cf2c7df3"}],
     "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 206,
-      "commentId": 5248286767,
+      "commentId": 5248986642,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-11T02:21:23Z",
-      "updatedAt": "2026-08-11T02:21:23Z",
-      "bodySha256": "4b7bda5d2fed0edb4be553f2a8927af79ba70d031cba98090aaa9613a64f5e46",
-      "subjectHash": "2f0bf3efb0357ccf7ac639b46ecb2a8b2bfe3cdecd8690e6a0022528d16cd699"
+      "createdAt": "2026-08-11T04:28:22Z",
+      "updatedAt": "2026-08-11T04:28:22Z",
+      "bodySha256": "19106ee4992719d3a8bc5065c8dfbc29a6c1d53e2e27a3eff19b8584718b6546",
+      "subjectHash": "4ac2e0470737553ebd269fc6fcb5af2e244a0fe97d46f2cf893866aff380c114"
     }
   },
   "freshnessClaims": [
     {
       "id": "repository-source-s0-exact-closure-reuse-final",
       "status": "CURRENT",
-      "observedAt": "2026-08-11T02:19:03Z",
-      "expiresAt": "2026-08-12T02:19:03Z",
-      "evidenceSourceId": "s0-exact-closure-reuse-final-source-freeze-20260811-0219",
+      "observedAt": "2026-08-11T04:28:00Z",
+      "expiresAt": "2026-08-12T04:28:00Z",
+      "evidenceSourceId": "s0-solo-owner-final-closeout-source-freeze-20260811-0428",
       "evidenceMode": "local-and-github-read-only",
       "factsCovered": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"],
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "f4424b0169ed3f97df8646f951c4f4979045545f",
-      "subjectTree": "126593669a05992797a1f766b01aa692c033893b"
+      "subjectHead": "320259d93d5cd2baf222e8e1451f8615b164cd0d",
+      "subjectTree": "888d25517135f54a7f68b032bb9cbfd6cf2c7df3"
     },
     {
       "id": "repository-source-a1-exact-carrier-full-history",
-      "status": "CURRENT",
+      "status": "STALE_BLOCKED",
       "observedAt": "2026-08-10T04:07:31Z",
       "expiresAt": "2026-08-11T04:07:31Z",
       "evidenceSourceId": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
@@ -515,7 +515,7 @@
     },
     {
       "id": "repository-source-a1-complete-late-sentinel-inventory",
-      "status": "CURRENT",
+      "status": "STALE_BLOCKED",
       "observedAt": "2026-08-10T03:25:40Z",
       "expiresAt": "2026-08-11T03:25:40Z",
       "evidenceSourceId": "a1-complete-late-sentinel-inventory-source-freeze-20260810-0325",
@@ -530,7 +530,7 @@
     },
     {
       "id": "repository-source-a1-post-merge-control-readback",
-      "status": "CURRENT",
+      "status": "STALE_BLOCKED",
       "observedAt": "2026-08-10T03:16:55Z",
       "expiresAt": "2026-08-11T03:16:55Z",
       "evidenceSourceId": "a1-post-merge-control-readback-source-freeze-20260810-0316",
@@ -545,7 +545,7 @@
     },
     {
       "id": "repository-source-a1-late-review-owner-registry-bootstrap",
-      "status": "CURRENT",
+      "status": "STALE_BLOCKED",
       "observedAt": "2026-08-10T02:48:20Z",
       "expiresAt": "2026-08-11T02:48:20Z",
       "evidenceSourceId": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
@@ -560,7 +560,7 @@
     },
     {
       "id": "repository-source-a1-assurance-control-final",
-      "status": "CURRENT",
+      "status": "STALE_BLOCKED",
       "observedAt": "2026-08-10T02:37:45Z",
       "expiresAt": "2026-08-11T02:37:45Z",
       "evidenceSourceId": "a1-merged-successor-head-isolation-source-freeze-20260810-0237",
@@ -638,7 +638,7 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "27ead7b470b1a690bcab3e64fb4346e2feeb9c6d", "state": "open-draft-current", "disposition": "S0 exact closure-reuse current carrier and exact-subject Owner comment 5248286767 frozen; only this exact generated three-file binding follows before independent review"}
+    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "320259d93d5cd2baf222e8e1451f8615b164cd0d", "state": "open", "disposition": "S0 solo-owner correction source frozen with seven repository-owned finding dispositions, exact ruleset readback, one final three-file binding carrier, repository-owned review, and final Phase 1 required before merge"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -726,7 +726,7 @@
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208"],
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP_codex-security-scan-reliability-s0_D2A_FROZEN",
     "nextActions": [
-      "Use only the code-pinned PR #206 S0 Owner-bootstrap registry tuple, immutable exact closure-reuse final evidence anchor f4424b0169ed3f97df8646f951c4f4979045545f tree 126593669a05992797a1f766b01aa692c033893b, current carrier 27ead7b470b1a690bcab3e64fb4346e2feeb9c6d tree a4d65fa4671ca9e54b3e008031d92f2be3d32053, hash-bound source claim, canonical Owner comment 5248286767, and a fresh active-task packet to authorize Codex Security Scan Reliability S0; no other PR, branch, head, fact, feature, product, provider, build, release, or D2A work is authorized.",
+      "Use only the code-pinned PR #206 S0 Owner-bootstrap registry tuple, immutable solo-owner final source 320259d93d5cd2baf222e8e1451f8615b164cd0d tree 888d25517135f54a7f68b032bb9cbfd6cf2c7df3, hash-bound source claim, canonical Owner directive, and the one generated three-file binding carrier to authorize Codex Security Scan Reliability S0; no other PR, branch, head, fact, feature, product, provider, build, release, or D2A work is authorized.",
       "Review the frozen Codex Security Scan Reliability S0 source on codex/assurance-codex-security-scan-reliability-s0 with independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, normal merge, and post-S0 truth; do not start a hosted Codex Security scan.",
       "Only after S0 completes may the five internally validated unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under repository-owned independent exact-head review; provider Codex Review remains optional advisory and D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -742,11 +742,11 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T02:19:03Z",
-  "freshnessDeadline": "2026-08-12T02:19:03Z",
+  "timestamp": "2026-08-11T04:28:00Z",
+  "freshnessDeadline": "2026-08-12T04:28:00Z",
   "evidenceSources": [
     {
-      "id": "s0-exact-closure-reuse-final-source-freeze-20260811-0219",
+      "id": "s0-solo-owner-final-closeout-source-freeze-20260811-0428",
       "mode": "local-and-github-read-only",
       "covers": [
         "repository.assurance-control.s0.requirements",
@@ -762,16 +762,20 @@
         "S0 lifecycle authority atomically registers full-snapshot-hash-bound scan transitions and consumes finalization before guards so stale or terminal snapshots cannot replay",
         "S0 repository closure code-pins the exact known finding set and binds each closed disposition to the governed focused-test receipt",
         "S0 tooling-fallback closure accepts only an authoritative exact-source terminal preflight transition and rejects caller-created or cross-source lifecycle objects",
-        "S0 unchanged-source reuse classifies source drift before old-closure validation and accepts only an exact source lease plus a complete hash-valid five-finding repository closure with governed test hashes"
+        "S0 unchanged-source reuse classifies source drift before old-closure validation and accepts only an exact source lease plus a complete hash-valid five-finding repository closure with governed test hashes",
+        "S0 source-drift finalization persists a terminal lifecycle transition before return and invalidates every prior lifecycle snapshot",
+        "S0 governed child commands receive no ambient GitHub credentials or credential-bearing configuration paths",
+        "S0 protected-main ruleset 18940814 version 46160124 preserves strict 13-check enforcement and no bypass while requiring zero approvals, no last-push approval, and no provider-thread resolution",
+        "S0 automatic review findings have one bounded repository-owned disposition pass; provider Codex Review remains optional advisory"
       ],
-      "observedAt": "2026-08-11T02:19:03Z",
+      "observedAt": "2026-08-11T04:28:00Z",
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "sourceCommit": "f4424b0169ed3f97df8646f951c4f4979045545f",
-      "subjectHead": "f4424b0169ed3f97df8646f951c4f4979045545f",
-      "subjectTree": "126593669a05992797a1f766b01aa692c033893b"
+      "sourceCommit": "320259d93d5cd2baf222e8e1451f8615b164cd0d",
+      "subjectHead": "320259d93d5cd2baf222e8e1451f8615b164cd0d",
+      "subjectTree": "888d25517135f54a7f68b032bb9cbfd6cf2c7df3"
     },
     {
       "id": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
