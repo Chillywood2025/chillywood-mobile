@@ -1505,7 +1505,7 @@ test("an unresolved late-review sentinel blocks only its exact correction owner'
   productComplete.activeTaskBinding.implementationBranch = "codex/d2a-livekit-mic-post-merge-review-correction";
   const productFindings = validateLateReviewSentinelState(productComplete);
   assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), true);
-  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
+  assert.equal(productFindings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), false);
 
   const unrelatedComplete = structuredClone(complete);
   unrelatedComplete.activeTaskBinding.implementationBranch = "codex/unrelated-next";
@@ -1794,7 +1794,8 @@ test("known unassigned discovery sentinels derive owners only from the immutable
   };
   assert.deepEqual(lateReviewAllowedOwners(discovery), [
     "codex/assurance-active-task-and-claim-freshness-a1",
-    "codex/assurance-codex-security-scan-reliability-s0"
+    "codex/assurance-codex-security-scan-reliability-s0",
+    "codex/d2a-livekit-mic-post-merge-review-correction"
   ]);
   assert.equal(lateReviewAllowedOwners(discovery).includes("codex/assurance-current-truth-post-a1"), false, "a reusable post-truth branch is not a sentinel-wide authority");
   assert.deepEqual(lateReviewAllowedOwners({
