@@ -30,7 +30,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSentinelValidationState, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1447,9 +1447,10 @@ test("durable sentinel payloads are marker-bound and malformed payloads fail clo
   );
 });
 
-test("only an independently verified durable resolution clears the same canonical and global sentinel", () => {
-  const finding = { sourceType: "INLINE_THREAD", sourceId: 1, bodyHash: "a".repeat(64), threadId: "thread-1", severity: "P1", disposition: "RESOLVED" };
-  const sentinel = { repository: "owner/repository", prNumber: 194, mergeSha: "4".repeat(40), findings: [finding] };
+test("only protected-main registered finding sets block; unvalidated Codex findings remain advisory", () => {
+  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const sentinel = structuredClone(truth.lateReviewSentinels.find(({ prNumber }) => prNumber === 194));
+  assert.equal(lateReviewSentinelValidationState(sentinel), "INTERNALLY_VALIDATED_BLOCKING");
   assert.equal(mergeUnresolvedLateReviewSentinels({
     globalLedgerSentinels: [sentinel],
     canonicalSentinels: [sentinel],
@@ -1460,12 +1461,13 @@ test("only an independently verified durable resolution clears the same canonica
     canonicalSentinels: [sentinel],
     durable: [{ sentinel, resolutionVerified: false }]
   }).length, 1);
-  const authoritative = { ...sentinel, findings: [finding, { ...finding, sourceId: 2, threadId: "thread-2" }] };
+  const advisory = { ...sentinel, findings: [...sentinel.findings, { ...sentinel.findings[0], sourceId: 2, threadId: "thread-2" }] };
+  assert.equal(lateReviewSentinelValidationState(advisory), "OPTIONAL_ADVISORY_PENDING_TRIAGE");
   assert.equal(mergeUnresolvedLateReviewSentinels({
-    globalLedgerSentinels: [authoritative],
-    canonicalSentinels: [authoritative],
+    globalLedgerSentinels: [advisory],
+    canonicalSentinels: [],
     durable: [{ sentinel, resolutionVerified: true }]
-  }).length, 1, "a verified subset cannot clear the authoritative finding union");
+  }).length, 0, "a provider-only finding-set expansion cannot promote itself into a global blocker");
 });
 
 test("canonical PR 194 sentinel blocks release and preserves every unresolved thread identity", () => {
@@ -1490,6 +1492,7 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
 test("an unresolved late-review sentinel blocks only its exact correction owner's phase COMPLETE claim", () => {
   const complete = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
   complete.activeTaskBinding.phase = "COMPLETE";
+  complete.activeTaskBinding.implementationBranch = "codex/assurance-active-task-and-claim-freshness-a1";
   const findings = validateLateReviewSentinelState(complete);
   assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 195), true);
   assert.equal(findings.some(({ id, prNumber }) => id === "LATE_REVIEW_COMPLETION_CLAIM_BLOCKED" && prNumber === 194), false);
@@ -1769,10 +1772,17 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
 
 test("a late-review sentinel cannot authorize its own branch exceptions", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
-  const forged = structuredClone(truth);
-  forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194).authorizedBootstrapOwners.push("codex/unrelated-next");
-  assert.equal(unresolvedLateReviewSentinels(forged).length, 2);
-  assert(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"));
+  for (const mutate of [
+    (sentinel) => sentinel.authorizedBootstrapOwners.push("codex/unrelated-next"),
+    (sentinel) => { sentinel.successorCorrectionOwner = "codex/unrelated-next"; },
+    (sentinel) => { sentinel.assuranceControlOwner = "codex/unrelated-next"; },
+  ]) {
+    const forged = structuredClone(truth);
+    mutate(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194));
+    assert.equal(unresolvedLateReviewSentinels(forged).length, 2, "known sentinel owner drift remains blocking");
+    assert.equal(lateReviewSentinelValidationState(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194)), "INTERNALLY_VALIDATED_OWNER_POLICY_INVALID");
+    assert.equal(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"), true);
+  }
 });
 
 test("known unassigned discovery sentinels derive owners only from the immutable registry", () => {
@@ -1859,6 +1869,29 @@ test("workflow executes only the protected default-branch evaluator", () => {
   assert.match(workflow, /pull_request_review_comment:\s*\n\s*types: \[created, edited, deleted\]/u);
   assert.match(workflow, /issue_comment:\s*\n\s*types: \[created, edited, deleted\]/u);
   assert.doesNotMatch(workflow, /pull_request_review_thread:/u, "unsupported webhook-only events cannot make the Actions workflow invalid");
+});
+
+test("Codex Review is optional advisory, owner-triggered only, and never an automatic merge gate", () => {
+  assert.deepEqual(contract.reviewPolicy, {
+    classification: "OPTIONAL_ADVISORY",
+    requiredStatusCheck: false,
+    blocksProgress: false,
+    blocksMerge: false,
+    ownerTriggeredOnly: true,
+    automaticReviewRequests: false,
+    quotaRetryAllowed: false,
+    providerReceiptRequired: false,
+    independentRepositoryValidationRequiredBeforeBlocking: true,
+    repositoryOwnedExactHeadReviewRequired: true,
+    requiredPhase1Checks: 13,
+    historicalIncidentsRetained: true
+  });
+  const workflow = fs.readFileSync(".github/workflows/codex-review-exact-head.yml", "utf8");
+  assert.match(workflow, /CODEX_REVIEW_POLICY:\s*OPTIONAL_ADVISORY/u);
+  assert.match(workflow, /continue-on-error:\s*true/u);
+  assert.doesNotMatch(workflow, /@codex\s+review|codex\s+review\s+request/iu);
+  const phase1 = fs.readFileSync(".github/workflows/phase1-ci.yml", "utf8");
+  assert.doesNotMatch(phase1, /@codex\s+review/iu);
 });
 
 test("every build and release entrypoint requires durable GitHub late-sentinel readback", () => {

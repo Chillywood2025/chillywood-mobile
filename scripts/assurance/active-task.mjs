@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
+import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -57,6 +57,12 @@ const bootstrapActiveTaskRegistry = [{
   implementationBranch: "codex/assurance-active-task-and-claim-freshness-a1",
   implementationBindingId: "assurance-late-review-owner-registry-bootstrap-pr205-v1",
   executionState: "ASSURANCE_CONTROL_A1_LATE_REVIEW_REGISTRY_BOOTSTRAP"
+}, {
+  featureId: "codex-security-scan-reliability-s0",
+  implementationPr: 206,
+  implementationBranch: "codex/assurance-codex-security-scan-reliability-s0",
+  implementationBindingId: "assurance-codex-security-scan-reliability-s0-pr206-v1",
+  executionState: "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP"
 }];
 const ownerBootstrapRepository = "Chillywood2025/chillywood-mobile";
 const ownerBootstrapAuthor = "Chillywood2025";
@@ -432,6 +438,9 @@ function resolveImplementation(truth, identity, facts, resolution) {
 
 export function activeTask(facts = {}) {
   const truth = facts.currentTruth ?? readJson("config/assurance/current-truth-v1.json");
+  if (!optionalCodexReviewPolicyValid(truth?.reviewPolicy)) {
+    return { ok: false, findings: ["CODEX_REVIEW_OPTIONAL_ADVISORY_POLICY_INVALID"] };
+  }
   const checked = facts.truthCheck ?? (() => {
     const run = spawnSync(process.execPath, ["scripts/assurance/current-truth.mjs"], {
       cwd: ROOT, encoding: "utf8", shell: false

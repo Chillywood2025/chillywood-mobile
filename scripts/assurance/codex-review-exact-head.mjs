@@ -1479,8 +1479,8 @@ async function readPullRequest(repository, prNumber, token, contract, sourcePush
 
 async function publishCheck({ repository, headSha, checkName, evaluation, token }) {
   const summary = evaluation.ok
-    ? `PASS ${evaluation.receipt.receiptHash}`
-    : `FAIL ${evaluation.codes.join(",")}`;
+    ? `OPTIONAL_ADVISORY_CURRENT ${evaluation.receipt.receiptHash}`
+    : `OPTIONAL_ADVISORY_UNAVAILABLE ${evaluation.codes.join(",")}`;
   return githubRequest(`https://api.github.com/repos/${repository}/check-runs`, token, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1488,12 +1488,12 @@ async function publishCheck({ repository, headSha, checkName, evaluation, token 
       name: checkName,
       head_sha: headSha,
       status: "completed",
-      conclusion: evaluation.ok ? "success" : "failure",
+      conclusion: evaluation.ok ? "success" : "neutral",
       external_id: evaluation.receipt?.receiptHash ?? evaluation.codes.join(","),
       output: {
-        title: evaluation.ok ? "Exact-head Codex Review is current" : "Exact-head Codex Review is blocked",
+        title: evaluation.ok ? "Optional Codex Review advisory is current" : "Optional Codex Review advisory is unavailable",
         summary,
-        text: JSON.stringify({ codes: evaluation.codes, receipt: evaluation.receipt }, null, 2).slice(0, 60000)
+        text: JSON.stringify({ policy: "OPTIONAL_ADVISORY", mergeBlocking: false, codes: evaluation.codes, receipt: evaluation.receipt }, null, 2).slice(0, 60000)
       }
     })
   });

@@ -54,6 +54,12 @@ const canonicalRules = new Map([
   { id: "focused-test", contractCommand: "node --test tests/assurance/efficiency-e0.test.mjs", file: "node", args: ["--test", "tests/assurance/efficiency-e0.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
   { id: "github-main-ruleset-readback-test", contractCommand: "node --test tests/assurance/github-main-ruleset-readback.test.mjs", file: "node", args: ["--test", "tests/assurance/github-main-ruleset-readback.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
   { id: "codex-review-exact-head-test", contractCommand: "node --test tests/assurance/codex-review-exact-head.test.mjs", file: "node", args: ["--test", "tests/assurance/codex-review-exact-head.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "s0-plan", contractCommand: "node scripts/assurance/plan.mjs --feature=codex-security-scan-reliability-s0", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=codex-security-scan-reliability-s0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } },
+  { id: "s0-active-task", contractCommand: "node scripts/assurance/active-task.mjs --feature=codex-security-scan-reliability-s0", file: "node", args: ["scripts/assurance/active-task.mjs", "--feature=codex-security-scan-reliability-s0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:active-task" } },
+  { id: "s0-scope", contractCommand: "node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json", file: "node", args: ["scripts/assurance/pr-scope.mjs", "--feature=codex-security-scan-reliability-s0", "--waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:pr-scope" } },
+  { id: "s0-target", contractCommand: "node scripts/assurance/codex-security-target.mjs --base=origin/main --target=HEAD", file: "node", args: ["scripts/assurance/codex-security-target.mjs", "--base=origin/main", "--target=HEAD"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:codex-security-target" } },
+  { id: "s0-benchmark", contractCommand: "node scripts/assurance/codex-security-reliability.mjs --benchmark=all", file: "node", args: ["scripts/assurance/codex-security-reliability.mjs", "--benchmark=all"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:codex-security-reliability" } },
+  { id: "s0-focused-test", contractCommand: "node --test tests/assurance/codex-security-reliability-s0.test.mjs", file: "node", args: ["--test", "tests/assurance/codex-security-reliability-s0.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
   { id: "lint", contractCommand: "npm run lint", file: "npm", args: ["run", "lint"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
   { id: "typecheck", contractCommand: "npm run typecheck", file: "npm", args: ["run", "typecheck"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
   { id: "diff-check", contractCommand: "git diff --check", file: "git", args: ["diff", "--check"], timeoutMs: 30000, resultContract: { type: "exit-zero-empty-v1" } },
@@ -62,6 +68,17 @@ const canonicalRules = new Map([
   { id: "d2a-native-handoff", contractCommand: "npm run test:chilly-chat-native-call-action-handoff", file: "npm", args: ["run", "test:chilly-chat-native-call-action-handoff"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
   { id: "d2a-plan", contractCommand: "assurance:plan", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } }
 ].map((rule) => [rule.id, rule]));
+
+export function governedReceiptRule(id) {
+  const rule = canonicalRules.get(id);
+  return rule ? structuredClone(rule) : null;
+}
+
+export function governedReceiptIdentityHash(receipt) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+  const { identityHash: _identityHash, artifactLocation: _artifactLocation, ...base } = receipt;
+  return sha256({ ...base, startedAtMs: null, endedAtMs: null, durationMs: null });
+}
 
 function safeRule(rule) {
   const canonical = canonicalRules.get(rule?.id);
@@ -98,7 +115,16 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
     shell: false,
     timeout: rule.timeoutMs,
     maxBuffer: rule.maxBuffer ?? 16 * 1024 * 1024,
-    env: { PATH: process.env.PATH, CI: "1", NO_COLOR: "1" }
+    env: {
+      PATH: process.env.PATH,
+      CI: "1",
+      NO_COLOR: "1",
+      GH_TELEMETRY: "0",
+      DO_NOT_TRACK: "1",
+      GH_PROMPT_DISABLED: "1",
+      GH_NO_UPDATE_NOTIFIER: "1",
+      GH_NO_EXTENSION_UPDATE_NOTIFIER: "1"
+    }
   });
   const endedAtMs = clock();
   if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs) || endedAtMs < startedAtMs) return { ok: false, finding: "CLOCK_INVALID" };

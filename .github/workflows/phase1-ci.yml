@@ -36,9 +36,33 @@ jobs:
         run: npm ci
 
       - name: Validate exact GitHub review and ruleset controls
+        env:
+          S0_EVENT_NAME: ${{ github.event_name }}
+          S0_EVENT_BEFORE: ${{ github.event.before }}
         run: |
           node --test tests/assurance/github-main-ruleset-readback.test.mjs
           node --test tests/assurance/codex-review-exact-head.test.mjs
+          S0_BASE_REF=origin/main
+          S0_TARGET_REF=HEAD
+          S0_INITIAL_COMMIT=false
+          if [ "$S0_EVENT_NAME" = "push" ]; then
+            if printf '%s' "$S0_EVENT_BEFORE" | grep -Eq '^[0-9a-f]{40}$' && [ "$S0_EVENT_BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$S0_EVENT_BEFORE^{commit}"; then
+              S0_BASE_REF="$S0_EVENT_BEFORE"
+            elif git rev-parse --verify "$S0_TARGET_REF^1" >/dev/null 2>&1; then
+              S0_BASE_REF="$S0_TARGET_REF^1"
+            else
+              S0_INITIAL_COMMIT=true
+            fi
+          fi
+          if [ "$S0_INITIAL_COMMIT" = "true" ]; then
+            test -n "$(git diff-tree --root --no-commit-id --name-only -r "$S0_TARGET_REF")"
+          else
+            test "$(git rev-parse "$S0_BASE_REF^{commit}")" != "$(git rev-parse "$S0_TARGET_REF^{commit}")"
+            node scripts/assurance/codex-security-target.mjs --base="$S0_BASE_REF" --target="$S0_TARGET_REF"
+          fi
+          node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json
+          node scripts/assurance/codex-security-reliability.mjs --benchmark=all
+          node --test tests/assurance/codex-security-reliability-s0.test.mjs
 
       - name: Validate all-platform autonomous contracts
         run: |

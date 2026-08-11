@@ -3,6 +3,20 @@
   "contractId": "codex-review-exact-head-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/codexReviewExactHeadContract",
   "checkName": "Chi'llywood / Codex Review Exact Head",
+  "reviewPolicy": {
+    "classification": "OPTIONAL_ADVISORY",
+    "requiredStatusCheck": false,
+    "blocksProgress": false,
+    "blocksMerge": false,
+    "ownerTriggeredOnly": true,
+    "automaticReviewRequests": false,
+    "quotaRetryAllowed": false,
+    "providerReceiptRequired": false,
+    "independentRepositoryValidationRequiredBeforeBlocking": true,
+    "repositoryOwnedExactHeadReviewRequired": true,
+    "requiredPhase1Checks": 13,
+    "historicalIncidentsRetained": true
+  },
   "reviewProviders": [
     "chatgpt-codex-connector",
     "chatgpt-codex-connector[bot]"
@@ -154,6 +168,12 @@
     "titlePrefix": "[Codex Review Late Sentinel]",
     "autoClose": false,
     "maxReadPages": 20
+  },
+  "lateReviewTriage": {
+    "unvalidatedDisposition": "OPTIONAL_ADVISORY_PENDING_TRIAGE",
+    "blockingDisposition": "INTERNALLY_VALIDATED_BLOCKING",
+    "validationAuthority": "PROTECTED_MAIN_FINDING_SET_REGISTRY",
+    "automaticGlobalBlock": false
   },
   "lateReviewClassification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
   "lateReviewBlocks": [

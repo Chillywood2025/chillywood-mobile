@@ -77,6 +77,7 @@ const truth = {
   ...canonicalTruth,
   lateReviewSentinels: [],
   activeTaskBinding: binding,
+  assuranceProgram: { ...canonicalTruth.assuranceProgram, active: binding.featureId },
   openImplementationPrs: [{
     number: binding.implementationPr,
     branch: binding.implementationBranch,
@@ -200,6 +201,7 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
     implementationBindingId: "assurance-active-task-claim-freshness-a1-pr201-v1",
     executionState: "ASSURANCE_CONTROL_A1"
   };
+  a1.assuranceProgram.active = a1.activeTaskBinding.featureId;
   const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(a1.activeTaskBinding);
   a1.openImplementationPrs = [{
     number: 201,
@@ -241,6 +243,40 @@ test("the exact owner-authorized A1 bootstrap identity is narrow and cannot wide
   const editedObservation = { ...ownerBootstrapAuthorizationObservation, body: `${ownerBootstrapAuthorizationObservation.body}\nedited` };
   assert.deepEqual(activeTask({ ...facts, currentTruth: a1, protectedMainTruth: canonicalTruth, identity: a1Identity, ownerBootstrapAuthorizationObservation: editedObservation }).findings, ["ACTIVE_TASK_AUTHORITY_UNVERIFIED"]);
 
+});
+
+test("the exact Owner-authorized S0 bootstrap identity is narrow and cannot widen feature, PR, branch or execution state", () => {
+  const s0 = structuredClone(truth);
+  s0.activeTaskBinding = {
+    ...s0.activeTaskBinding,
+    featureId: "codex-security-scan-reliability-s0",
+    implementationPr: 206,
+    implementationBranch: "codex/assurance-codex-security-scan-reliability-s0",
+    implementationBindingId: "assurance-codex-security-scan-reliability-s0-pr206-v1",
+    executionState: "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP"
+  };
+  s0.assuranceProgram.active = s0.activeTaskBinding.featureId;
+  const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(s0.activeTaskBinding);
+  s0.openImplementationPrs = [{
+    number: 206,
+    branch: s0.activeTaskBinding.implementationBranch,
+    head: s0.activeTaskBinding.currentImplementationHead,
+    state: "open-draft-current"
+  }];
+  const s0Identity = { ...identity, branch: s0.activeTaskBinding.implementationBranch };
+  assert.equal(activeTask({ ...facts, currentTruth: s0, protectedMainTruth: canonicalTruth, identity: s0Identity, ownerBootstrapAuthorizationObservation }).ok, true);
+  for (const [field, value] of [
+    ["featureId", "assurance-efficiency-e0"],
+    ["implementationPr", 999],
+    ["implementationBranch", "codex/unrelated"],
+    ["executionState", "UNRELATED"]
+  ]) {
+    const forged = structuredClone(s0);
+    forged.activeTaskBinding[field] = value;
+    const result = activeTask({ ...facts, currentTruth: forged, protectedMainTruth: canonicalTruth, identity: s0Identity, ownerBootstrapAuthorizationObservation });
+    assert.equal(result.ok, false, field);
+    assert(result.findings.some((finding) => ["ACTIVE_TASK_AUTHORITY_UNVERIFIED", "ACTIVE_TASK_BINDING_MALFORMED"].includes(finding)), field);
+  }
 });
 
 test("conflicting feature override fails closed", () => {
@@ -504,7 +540,7 @@ test("a completed binding is not an active task and no override can revive it", 
     currentTruth: sentinelBlockedTruth,
     protectedMainTruth: sentinelBlockedTruth,
     featureId: completedBinding.featureId
-  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"], "a known finding set with branch-local owner drift must remain blocking");
   const discoverySentinel = structuredClone(canonicalTruth.lateReviewSentinels.find(({ prNumber }) => prNumber === 195));
   discoverySentinel.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
   delete discoverySentinel.assuranceControlOwner;

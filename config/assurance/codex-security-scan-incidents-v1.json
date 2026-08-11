@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "contractId": "codex-security-scan-incidents-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/codexSecurityIncidentLedger",
+  "rawPayloadsRetained": false,
+  "incidents": [
+    {
+      "schemaVersion": 1,
+      "scanId": "508c30b1-cf43-4902-96f1-92563d490149",
+      "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
+      "errorFingerprint": "6a0048b0b7658aef8d3680d6a5d017d0c6d0a4001a6b8cd0822772a5661e4475",
+      "sourceReviewCompletionState": "SOURCE_REVIEW_COMPLETE",
+      "finalizationState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+      "mitigation": "S0 preflight would prevent the expensive scan from starting",
+      "tokenValues": null,
+      "wallValues": null,
+      "incidentHash": "16f826b7c4176e08a2b712923c12a6305e38347df6129f77b54380ec24c96c0a"
+    },
+    {
+      "schemaVersion": 1,
+      "scanId": "a64456db-438c-4857-8f01-c40fcc965936",
+      "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
+      "errorFingerprint": "6a0048b0b7658aef8d3680d6a5d017d0c6d0a4001a6b8cd0822772a5661e4475",
+      "sourceReviewCompletionState": "SOURCE_REVIEW_COMPLETE",
+      "finalizationState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+      "mitigation": "S0 preflight would prevent the expensive scan from starting",
+      "tokenValues": null,
+      "wallValues": null,
+      "incidentHash": "dcb42c77c982071478bbcbf6d6d9ce68f56dc6436bac3d612df2f4d3a74fb431"
+    }
+  ]
+}

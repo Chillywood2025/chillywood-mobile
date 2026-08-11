@@ -95,10 +95,28 @@ const claimRequiredFields = [
 const claimStatuses = new Set(["CURRENT", "STALE_BLOCKED"]);
 const claimPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 export const HISTORICAL_PROVIDER_FACT = "HISTORICAL_PROVIDER_FACT";
+export const optionalCodexReviewPolicy = {
+  classification: "OPTIONAL_ADVISORY",
+  requiredStatusCheck: false,
+  blocksProgress: false,
+  blocksMerge: false,
+  ownerTriggeredOnly: true,
+  automaticReviewRequests: false,
+  quotaRetryAllowed: false,
+  providerReceiptRequired: false,
+  independentRepositoryValidationRequiredBeforeBlocking: true,
+  repositoryOwnedExactHeadReviewRequired: true,
+  requiredPhase1Checks: 13,
+  historicalIncidentsRetained: true
+};
+export function optionalCodexReviewPolicyValid(policy) {
+  return stableJson(policy) === stableJson(optionalCodexReviewPolicy);
+}
 const canonicalLateReviewOwnerRegistry = [{
   repository: "Chillywood2025/chillywood-mobile",
   prNumber: 194,
   mergeSha: "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+  findingSetHash: "9474ccab70621250acc32aaa8bb765f0aba7423b44fa5fd073d2318f12701c99",
   successorCorrectionOwner: "codex/d2a-livekit-mic-post-merge-review-correction",
   assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   authorizedBootstrapOwners: [
@@ -109,6 +127,7 @@ const canonicalLateReviewOwnerRegistry = [{
   repository: "Chillywood2025/chillywood-mobile",
   prNumber: 195,
   mergeSha: "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+  findingSetHash: "6aa0de5907c7b504712a502b3072fcd06dd026801425aa5ff6912a67ffcb6b10",
   successorCorrectionOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   authorizedBootstrapOwners: [
@@ -174,6 +193,10 @@ const canonicalFactRegistry = [
   { factId: "repository.assurance-control.a1.post-merge-control-readback", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub" },
   { factId: "repository.assurance-control.a1.complete-late-sentinel-inventory", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records" },
   { factId: "repository.assurance-control.a1.late-review-tombstone-admission", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", requiresReadbackHash: true, historicalEvidence: "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor" },
+  { factId: "repository.assurance-control.s0.requirements", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 machine-readable contract pins exact target identity, digest preflight, lifecycle, evidence reuse, repository closure, and incident-sanitization requirements" },
+  { factId: "repository.assurance-control.s0.source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording" },
+  { factId: "repository.assurance-control.s0.model", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 executable model and adversarial fixtures prove preflight stops before discovery, one completion attempt, terminal no-retry, exact reuse, invalidation, closure integrity, and sanitized recurring incidents" },
+  { factId: "repository.assurance-control.s0.integration", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "S0 integration evidence binds the exact target descriptor, repository closure, governed commands, independent exact-head review, and Phase 1 CI to one frozen source" },
   { factId: "repository.active-implementation.immutable-synchronized-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d" },
   { factId: "repository.active-implementation.merge-identity", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree" },
   { factId: "repository.review-only-pr.disposition", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE", historicalEvidence: "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained" },
@@ -199,12 +222,16 @@ function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
 }
 
-function canonicalLateReviewOwnerEntry(sentinel) {
+function canonicalLateReviewIdentityEntry(sentinel) {
   const matches = canonicalLateReviewOwnerRegistry.filter((entry) => entry.repository === sentinel?.repository
     && entry.prNumber === sentinel?.prNumber
     && entry.mergeSha === sentinel?.mergeSha);
-  if (matches.length !== 1) return null;
-  const [entry] = matches;
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function canonicalLateReviewOwnerEntry(sentinel) {
+  const entry = canonicalLateReviewIdentityEntry(sentinel);
+  if (!entry) return null;
   const registryBoundDiscovery = sentinel.successorCorrectionOwner === "UNASSIGNED_BLOCKED"
     && sentinel.assuranceControlOwner === undefined
     && sentinel.authorizedBootstrapOwners === undefined;
@@ -212,6 +239,15 @@ function canonicalLateReviewOwnerEntry(sentinel) {
     || sentinel.assuranceControlOwner !== entry.assuranceControlOwner
     || !sameStringSet(sentinel.authorizedBootstrapOwners, entry.authorizedBootstrapOwners))) return null;
   return entry;
+}
+
+export function lateReviewSentinelValidationState(sentinel) {
+  const identityEntry = canonicalLateReviewIdentityEntry(sentinel);
+  const entry = canonicalLateReviewOwnerEntry(sentinel);
+  if (!identityEntry || lateReviewFindingSetHash(sentinel?.findings) !== identityEntry.findingSetHash) {
+    return "OPTIONAL_ADVISORY_PENDING_TRIAGE";
+  }
+  return entry ? "INTERNALLY_VALIDATED_BLOCKING" : "INTERNALLY_VALIDATED_OWNER_POLICY_INVALID";
 }
 
 export function lateReviewSuccessorCorrectionOwner(sentinel) {
@@ -232,6 +268,12 @@ export function lateReviewRegistryCoverageFindings(sentinels) {
       && sentinel?.mergeSha === entry.mergeSha);
     if (matches.length === 0) return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_MISSING", prNumber: entry.prNumber }];
     if (matches.length > 1) return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_DUPLICATE", prNumber: entry.prNumber }];
+    if (lateReviewFindingSetHash(matches[0]?.findings) !== entry.findingSetHash) {
+      return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_FINDING_SET_MISMATCH", prNumber: entry.prNumber }];
+    }
+    if (canonicalLateReviewOwnerEntry(matches[0]) === null) {
+      return [{ id: "LATE_REVIEW_OWNER_POLICY_INVALID", prNumber: entry.prNumber }];
+    }
     return [];
   });
 }
@@ -1456,6 +1498,16 @@ export const proofTierCompletionFeatureApplicability = {
     T5_SIGNED_ARTIFACT: "not-applicable-no-artifact-change",
     T6_INSTALLED_PHYSICAL: "not-applicable-no-installed-change",
     T7_PUBLIC_CANARY: "not-applicable-no-release"
+  },
+  "codex-security-scan-reliability-s0": {
+    T0_REQUIREMENT: "required",
+    T1_SOURCE: "required",
+    T2_MODEL: "required",
+    T3_INTEGRATION: "required",
+    T4_NATIVE_PROVIDER: "metadata-boundary-only-no-new-native-or-provider-proof",
+    T5_SIGNED_ARTIFACT: "not-applicable",
+    T6_INSTALLED_PHYSICAL: "not-applicable",
+    T7_PUBLIC_CANARY: "not-applicable"
   }
 };
 const proofTierCompletionPolicies = {
@@ -1499,6 +1551,42 @@ export const proofTierCompletionFactAuthorities = [
   {
     featureId: "assurance-efficiency-e0",
     factId: "repository.assurance-control.a1.integration",
+    proofTiers: ["T3_INTEGRATION"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.requirements",
+    proofTiers: ["T0_REQUIREMENT"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.source",
+    proofTiers: ["T1_SOURCE"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.model",
+    proofTiers: ["T2_MODEL"],
+    freshnessClass: "REPOSITORY_SOURCE",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE"
+  },
+  {
+    featureId: "codex-security-scan-reliability-s0",
+    factId: "repository.assurance-control.s0.integration",
     proofTiers: ["T3_INTEGRATION"],
     freshnessClass: "REPOSITORY_SOURCE",
     authorityAllowed: "REPOSITORY_ONLY",
@@ -1676,7 +1764,7 @@ export function renderCurrentState(record) {
   const lateReviews = (record.lateReviewSentinels ?? [])
     .map(({ prNumber, reviewedSha, findings, successorCorrectionOwner }) => `PR #${prNumber} reviewed \`${reviewedSha}\` after merge with ${(findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length} unresolved findings; successor \`${successorCorrectionOwner}\``)
     .join("; ") || "none";
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.${proofTierStatusLine}\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Late exact-head Codex Review sentinels: ${lateReviews}. These block post-merge completion claims, unrelated successor work, release, and proof-tier promotion.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.${proofTierStatusLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {

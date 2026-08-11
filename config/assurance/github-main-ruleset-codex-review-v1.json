@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "contractId": "github-main-ruleset-codex-review-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/githubMainRulesetReadbackContract",
-  "patchId": "main-pr-review-protection-codex-review-exact-head-v1",
+  "patchId": "main-pr-review-protection-solo-owner-optional-advisory-v1",
   "repository": "Chillywood2025/chillywood-mobile",
   "rulesetId": 18940814,
   "rulesetName": "main-pr-review-protection",
@@ -13,7 +13,7 @@
   "ownerFinalCarrierBindingReceipt": "config/assurance/a1-owner-final-carrier-binding-v1.json",
   "ownerFinalCarrierGithubReadback": "config/assurance/a1-owner-final-carrier-github-readback-v1.json",
   "bootstrapPhase1GithubReadback": "config/assurance/a1-bootstrap-phase1-github-readback-v1.json",
-  "requiredStatusCheckToAdd": "Chi'llywood / Codex Review Exact Head",
+  "advisoryStatusCheckExcluded": "Chi'llywood / Codex Review Exact Head",
   "preserveExistingRequiredStatusChecks": true,
   "strictRequiredStatusChecksPolicy": true,
   "requiredCheckPublisherBoundary": {
@@ -27,26 +27,25 @@
   },
   "pullRequestRequirements": {
     "allowedMergeMethods": ["merge", "squash", "rebase"],
-    "requiredApprovingReviewCount": 1,
-    "requiredReviewThreadResolution": true,
+    "requiredApprovingReviewCount": 0,
+    "requiredReviewThreadResolution": false,
     "dismissStaleReviewsOnPush": true,
     "requireCodeOwnerReview": false,
-    "requireLastPushApproval": true,
+    "requireLastPushApproval": false,
     "requiredReviewers": [],
     "preventDeletion": true,
     "preventNonFastForward": true,
     "bypassActors": []
   },
-  "applicationState": "APPLIED_AND_READ_BACK_POST_A1_MERGE",
+  "applicationState": "SOLO_OWNER_OPTIONAL_ADVISORY_APPLIED_AND_READ_BACK_S0",
   "applicationReadback": {
-    "rulesetVersionId": 46047691,
-    "rulesetUpdatedAt": "2026-08-10T00:32:55.241-05:00",
-    "changeClassification": "ENFORCED_CANONICAL_PULL_REQUEST_POLICY_AND_PRESERVED_EXACT_CHECK_BINDINGS",
+    "rulesetVersionId": 46160124,
+    "rulesetUpdatedAt": "2026-08-10T23:16:54.635-05:00",
+    "changeClassification": "SOLO_OWNER_REPOSITORY_REVIEW_PHASE1_13_REQUIRED",
     "enforcement": "active",
-    "requiredStatusCheckCount": 14,
-    "requiredStatusCheckPresent": true,
+    "requiredStatusCheckCount": 13,
+    "requiredStatusCheckPresent": false,
     "requiredStatusChecks": [
-      "Chi'llywood / Codex Review Exact Head",
       "Phase 1 / Android Regression Guards",
       "Phase 1 / Autonomous Systems All-Platform Contract",
       "Phase 1 / Autonomous Systems iOS Contract",
@@ -62,7 +61,6 @@
       "Phase 1 / iOS Configuration"
     ],
     "requiredStatusCheckBindings": [
-      {"context": "Chi'llywood / Codex Review Exact Head", "integration_id": 15368},
       {"context": "Phase 1 / Android Regression Guards", "integration_id": 15368},
       {"context": "Phase 1 / Autonomous Systems All-Platform Contract", "integration_id": 15368},
       {"context": "Phase 1 / Autonomous Systems iOS Contract", "integration_id": 15368},
@@ -77,8 +75,8 @@
       {"context": "Phase 1 / TypeScript", "integration_id": 15368},
       {"context": "Phase 1 / iOS Configuration", "integration_id": 15368}
     ],
-    "requiredStatusCheckSetSha256": "6a63d66bf1d13bf1a507932d11ee7a324b480e078077d269136325280ec5151d",
-    "requiredStatusCheckBindingSetSha256": "4ec5a6c6845c6e42f17125b327187a82e81c7d40306996f0d12a32037937d578",
+    "requiredStatusCheckSetSha256": "0132e85ed8b4d563e37520ea07caf214bb4fba3a653f6193d6244355b08304be",
+    "requiredStatusCheckBindingSetSha256": "1be202ff0cc738dc062d4a6d513d6a19d36771c6ac6ee3dc1aa50a287820da7a",
     "rulesetSource": {
       "sourceType": "Repository",
       "source": "Chillywood2025/chillywood-mobile"
@@ -93,9 +91,9 @@
           "allowedMergeMethods": ["merge", "squash", "rebase"],
           "dismissStaleReviewsOnPush": true,
           "requireCodeOwnerReview": false,
-          "requireLastPushApproval": true,
-          "requiredApprovingReviewCount": 1,
-          "requiredReviewThreadResolution": true,
+          "requireLastPushApproval": false,
+          "requiredApprovingReviewCount": 0,
+          "requiredReviewThreadResolution": false,
           "requiredReviewers": []
         }
       },
@@ -119,7 +117,6 @@
         "parameters": {
           "doNotEnforceOnCreate": false,
           "requiredStatusChecks": [
-            {"context": "Chi'llywood / Codex Review Exact Head", "integration_id": 15368},
             {"context": "Phase 1 / Android Regression Guards", "integration_id": 15368},
             {"context": "Phase 1 / Autonomous Systems All-Platform Contract", "integration_id": 15368},
             {"context": "Phase 1 / Autonomous Systems iOS Contract", "integration_id": 15368},
@@ -138,11 +135,12 @@
         }
       }
     ],
-    "effectiveMainRulesSha256": "1907992f25545b92264cf70b466027346ea6e5360abe9c113206d2418726e9e7",
+    "effectiveMainRulesSha256": "9565a9eb75bb59cb5e3ddd772a0c913cf10c4ca71f90db14967dd7ea3fd3d522",
+    "normalizedRulesetPayloadSha256": "bff1f827fec26127661ce4359ab3b75ef5a872fefadb97b57dabee953b0cf29f",
     "protectedMainReadback": {
       "ref": "refs/heads/main",
-      "observedHead": "a9bd887606f74996a9f5920e6fad922e7f20598b",
-      "observedAt": "2026-08-10T07:24:55Z",
+      "observedHead": "085960ba2d26ad14c44d758cbaf1924ec80a1e5d",
+      "observedAt": "2026-08-11T04:18:14Z",
       "evidenceMode": "github-read-only",
       "bootstrapMergeReachable": true
     },
@@ -150,19 +148,19 @@
     "doNotEnforceOnCreate": false,
     "repositorySourceFreshness": {
       "status": "CURRENT",
-      "observedAt": "2026-08-10T07:24:55Z",
-      "expiresAt": "2026-08-11T07:24:55Z",
+      "observedAt": "2026-08-11T04:18:14Z",
+      "expiresAt": "2026-08-12T04:18:14Z",
       "evidenceMode": "github-read-only",
       "factsCovered": ["repository.github.main-ruleset", "repository.github.main-ruleset-effective-rules", "repository.github.main-head"],
       "freshnessClass": "REPOSITORY_SOURCE"
     },
     "ruleTypes": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"],
     "allowedMergeMethods": ["merge", "squash", "rebase"],
-    "requiredApprovingReviewCount": 1,
-    "requiredReviewThreadResolution": true,
+    "requiredApprovingReviewCount": 0,
+    "requiredReviewThreadResolution": false,
     "dismissStaleReviewsOnPush": true,
     "requireCodeOwnerReview": false,
-    "requireLastPushApproval": true,
+    "requireLastPushApproval": false,
     "requiredReviewers": [],
     "preventDeletion": true,
     "preventNonFastForward": true,
