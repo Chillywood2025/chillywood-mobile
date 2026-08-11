@@ -4,10 +4,10 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "bbabb37a6fa3ea57c38524f14247b32530933329aa7667f7e2d29834a8e7efe2",
-    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "265063305dfbec9247f811e214e9d6ea80f7db4fe25104b3b48094a8c9a96906",
+    "hooks/use-livekit-chat-call-session.ts": "9a7412017836ed9b12c8b18a1e9593a5e2259fc66a7d2c1fee069ee0998e12ea",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "30825955b104a1d38fe47129b539e9f9c41fd6f45f9f0c3a7b7d8adf3b44c084",
     "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
-    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "781193f1d8b9f1b710463289fc9782953df697560ce08542f723e3b9fa2a0036"
+    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "0eba80b12f009c48226ec1e8237a9e9e311ccd7288b7a7bb1258f6c7f69410ae"
   },
   "sourceSlices": {
     "committed-session-layout-effect": {
@@ -20,7 +20,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const enqueueSessionMediaWrite",
       "end": "  const refreshParticipantViews",
-      "sha256": "9f7fe037fa56ccfc59d492ecd50bf46a6cd7419a72ca33409ea058b2304b2caa"
+      "sha256": "52075cf5fbc68d04da8c347b52a8a714e2f5d82d95c225665e3e719727446871"
     },
     "permission-reconciliation-separation": {
       "path": "hooks/use-livekit-chat-call-session.ts",
@@ -32,7 +32,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const setMicrophoneEnabled",
       "end": "  const setCameraEnabled",
-      "sha256": "c6e04ff4c8cf74d02a9f574869752c6cee3d8341e707b0073e108d3576c39dae"
+      "sha256": "e4f3ea8f0e64bd2a645bb2fa5260ceebbd32b6ee9abf2448ab568f903c36cf4b"
     }
   },
   "preFixReproductions": [
@@ -101,7 +101,11 @@
     "UNBOUNDED_MEDIA_WRITE_PREDECESSOR",
     "TERMINAL_SESSION_RESURRECTION",
     "DISABLE_ERASES_PERMISSION_DENIAL",
-    "STALE_CLEANUP_LEAVES_REPLACEMENT"
+    "STALE_CLEANUP_LEAVES_REPLACEMENT",
+    "MEDIA_QUEUE_TIMEOUT_DROPS_PREDECESSOR",
+    "ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION",
+    "STALE_CLEANUP_REUSES_DURABLE_SNAPSHOT",
+    "INITIAL_CONVERGENCE_FAILURE_MARKS_LIVE"
   ],
   "mountedHookEvidence": {
     "execution": "REACT_DOM_COMMIT_PHASE_EXACT_HOOK",

@@ -201,6 +201,41 @@ test("heartbeat support: a never-settling predecessor fails the strict toggle wi
   assert.equal(runtime.durableMic, false);
 });
 
+test("heartbeat support: a timed-out waiter cannot permanently block a converged strict owner", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const nativeGate = runtime.deferNative();
+  const firstToggle = await harness.startOperation(() => harness.getResult().setMicrophoneEnabled(true));
+  await waitFor(harness, () => runtime.micCalls.at(-1) === true, "strict enable reached native boundary");
+  await harness.fireHeartbeat();
+  await harness.fireMediaWriteTimeout();
+  nativeGate.resolve();
+  assert.equal(await settleOperation(firstToggle, harness), true);
+  assert.equal(harness.getResult().mediaReconciliationState, "clear");
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(false)), true);
+  assert.equal(runtime.durableMic, false);
+});
+
+test("heartbeat support: replacement cannot become live until a timed-out same-row predecessor converges", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const oldHeartbeat = runtime.deferTouch();
+  await harness.fireHeartbeat();
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room created");
+  await harness.fireMediaWriteTimeout();
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  assert.equal(harness.getResult().mediaReconciliationState, "warning");
+  assert.equal(runtime.durableMic, false);
+  oldHeartbeat.resolve();
+  await harness.flush(48);
+  await harness.fireHeartbeat();
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement converged after predecessor drain");
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().micEnabled, true);
+});
+
 test("heartbeat support: deferred reconciliation writes the restored state after compensated failure", async (t) => {
   const { harness, runtime } = await mountCase(t);
   const nativeGate = runtime.deferNative();
@@ -288,10 +323,25 @@ test("matrix 13: replacement of the LiveKit Room instance makes the old transact
   const originalRoom = runtime.rooms.at(-1);
   const toggle = await harness.startOperation(() => harness.getResult().setMicrophoneEnabled(true));
   await waitFor(harness, () => runtime.micCalls.at(-1) === true, "strict enable reached native boundary");
-  await harness.commitRender(defaultHookOptions({ allowBackgroundAudio: true }));
+  await harness.commitRender(defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
   await waitFor(harness, () => runtime.rooms.at(-1) !== originalRoom, "replacement LiveKit Room committed");
   nativeGate.resolve();
   assert.equal(await settleOperation(toggle, harness), false);
+});
+
+test("session support: a committed background-audio option update preserves the live session", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const originalRoom = runtime.rooms.at(-1);
+  const originalTokenCalls = runtime.providerTokenCalls;
+  const originalDisconnects = runtime.roomDisconnects ?? 0;
+  await harness.commitRender(defaultHookOptions({ allowBackgroundAudio: true }));
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.rooms.at(-1), originalRoom);
+  assert.equal(runtime.rooms.length, 1);
+  assert.equal(runtime.providerTokenCalls, originalTokenCalls);
+  assert.equal(runtime.roomDisconnects ?? 0, originalDisconnects);
 });
 
 test("matrix 14: a committed generation change makes the old transaction stale", async (t) => {
@@ -391,6 +441,24 @@ test("cleanup support: stale same-row cleanup cannot leave replacement membershi
   await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room created");
   await waitFor(harness, () => harness.getResult().channelState === "live", "replacement reached live");
   assert.equal(runtime.membershipLeaves, 0);
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: cleanup started before same-row replacement cannot leave replacement membership", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const oldCameraCleanup = runtime.deferCamera();
+  const oldMicrophoneCleanup = runtime.deferNative();
+  await harness.fireStopper("manual");
+  assert.equal(runtime.membershipLeaves, 0);
+  await harness.commitRender(defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room created");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement reached live");
   oldCameraCleanup.resolve();
   oldMicrophoneCleanup.resolve();
   await harness.flush(48);

@@ -189,6 +189,7 @@ export function useLiveKitChatCallSession({
   const cameraRequestedRef = useRef(initialCameraEnabled);
   const micRequestedRef = useRef(initialMicEnabled);
   const appStateRef = useRef(AppState.currentState);
+  const allowBackgroundAudioRef = useRef(allowBackgroundAudio);
   const endingCleanupOwnersRef = useRef<Set<object | symbol>>(new Set());
   const manualDisconnectRef = useRef(false);
   const cleanupCompletedOwnersRef = useRef<Set<object | symbol>>(new Set());
@@ -201,7 +202,6 @@ export function useLiveKitChatCallSession({
   const mediaControlRef = useRef<Promise<unknown> | null>(null);
   const mediaControlOwnerRef = useRef<MediaControlOwner | null>(null);
   const mediaWriteTailsRef = useRef<Map<string, Promise<void>>>(new Map());
-  const blockedMediaWriteKeysRef = useRef<Set<string>>(new Set());
   const deferredMediaReconciliationRef = useRef<DeferredMediaReconciliation | null>(null);
   const pendingMicToggleRef = useRef(false);
   const pendingMicOwnerRef = useRef<MediaControlOwner | null>(null);
@@ -281,6 +281,10 @@ export function useLiveKitChatCallSession({
   useEffect(() => {
     onRoomEndedRef.current = onRoomEnded;
   }, [onRoomEnded]);
+
+  useEffect(() => {
+    allowBackgroundAudioRef.current = allowBackgroundAudio;
+  }, [allowBackgroundAudio]);
 
   const telemetryBinding = useMemo(() => ({
     callInviteId: inviteId,
@@ -406,8 +410,9 @@ export function useLiveKitChatCallSession({
     const liveKitRoom = binding.liveKitRoom;
     if (!liveKitRoom) return null;
     const writeKey = `${binding.normalizedRoomId}:${binding.userId}`;
-    if (!binding.userId || blockedMediaWriteKeysRef.current.has(writeKey)) return null;
+    if (!binding.userId) return null;
     const predecessor = mediaWriteTailsRef.current.get(writeKey);
+    let predecessorTimedOut = false;
     let releaseReservation: () => void = () => {};
     const reservation = new Promise<void>((resolve) => {
       releaseReservation = () => resolve();
@@ -424,23 +429,24 @@ export function useLiveKitChatCallSession({
         ]);
         if (timeout) clearTimeout(timeout);
         if (!drained) {
-          blockedMediaWriteKeysRef.current.add(writeKey);
+          predecessorTimedOut = true;
           micReconciliationBlockedRef.current = true;
           setReconciliationWarning();
           return null;
         }
       }
-      if (
-        blockedMediaWriteKeysRef.current.has(writeKey)
-        || !isCommittedSessionCurrent(binding)
-      ) return null;
+      if (!isCommittedSessionCurrent(binding)) return null;
       return await operation();
     } catch {
       return null;
     } finally {
       releaseReservation();
       if (mediaWriteTailsRef.current.get(writeKey) === reservation) {
-        mediaWriteTailsRef.current.delete(writeKey);
+        if (predecessorTimedOut && predecessor) {
+          mediaWriteTailsRef.current.set(writeKey, predecessor);
+        } else {
+          mediaWriteTailsRef.current.delete(writeKey);
+        }
       }
     }
   }, [isCommittedSessionCurrent, setReconciliationWarning]);
@@ -634,8 +640,9 @@ export function useLiveKitChatCallSession({
     const nextState = appStateRef.current;
     const appActive = nextState === "active";
     const cameraTarget = cameraRequestedRef.current && appActive;
-    const microphoneTarget = micRequestedRef.current && (appActive || allowBackgroundAudio);
-    const membershipState = appActive || allowBackgroundAudio ? "active" : "reconnecting";
+    const allowBackgroundAudioNow = allowBackgroundAudioRef.current;
+    const microphoneTarget = micRequestedRef.current && (appActive || allowBackgroundAudioNow);
+    const membershipState = appActive || allowBackgroundAudioNow ? "active" : "reconnecting";
     setMediaReconciliationState("recovering");
     async function setSpeaker(nextSpeakerEnabled: boolean) {
       return applySpeakerOutput(nextSpeakerEnabled);
@@ -707,11 +714,11 @@ export function useLiveKitChatCallSession({
       setReconciliationWarning();
       return false;
     }
+    micReconciliationBlockedRef.current = false;
     clearReconciliationWarning();
     return true;
   }, [
     applySpeakerOutput,
-    allowBackgroundAudio,
     clearReconciliationWarning,
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
@@ -929,6 +936,7 @@ export function useLiveKitChatCallSession({
           if (!originStillCurrent() || !leaseStillOwned()) return false;
           micRequestedRef.current = nextEnabled;
           setMicEnabledState(nextEnabled);
+          micReconciliationBlockedRef.current = false;
           if (nextEnabled) {
             setMicrophonePermissionState("granted");
             setMicrophonePermissionMessage(null);
@@ -1152,25 +1160,26 @@ export function useLiveKitChatCallSession({
       || cleanupCompletedOwnersRef.current.has(cleanupOwner)
     ) return;
     endingCleanupOwnersRef.current.add(cleanupOwner);
-    const currentBinding = committedSessionRef.current;
-    const bindingStillCurrent = sameCommittedAuthority(currentBinding, binding);
-    const replacementReusesDurableAuthority = !bindingStillCurrent
-      && !!currentBinding
-      && currentBinding.normalizedRoomId === binding.normalizedRoomId
-      && currentBinding.participantAuthority.split(":").includes(binding.userId);
-    const mayTouchDurableAuthority = bindingStillCurrent || !replacementReusesDurableAuthority;
+    const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
+    const currentDurableContext = () => {
+      const currentBinding = committedSessionRef.current;
+      const currentStillMatches = sameCommittedAuthority(currentBinding, binding);
+      const replacementReusesDurableAuthority = !currentStillMatches
+        && !!currentBinding
+        && currentBinding.normalizedRoomId === binding.normalizedRoomId
+        && currentBinding.participantAuthority.split(":").includes(binding.userId);
+      if (replacementReusesDurableAuthority) return null;
+      const productRoom = normalizeRoomId(productRoomRef.current?.roomId) === binding.normalizedRoomId
+        ? productRoomRef.current
+        : null;
+      const currentIdentity = binding.userId && identityRef.current?.userId === binding.userId
+        ? identityRef.current
+        : null;
+      return productRoom && currentIdentity ? { currentIdentity, productRoom } : null;
+    };
     setCommittedRoomState(binding, "terminal");
     const liveKitRoom = binding.liveKitRoom;
     if (bindingStillCurrent || roomRef.current === liveKitRoom) manualDisconnectRef.current = true;
-    const productRoom = mayTouchDurableAuthority
-      && normalizeRoomId(productRoomRef.current?.roomId) === binding.normalizedRoomId
-      ? productRoomRef.current
-      : null;
-    const currentIdentity = mayTouchDurableAuthority
-      && binding.userId
-      && identityRef.current?.userId === binding.userId
-      ? identityRef.current
-      : null;
     try {
       if (liveKitRoom) {
         await Promise.allSettled([
@@ -1189,13 +1198,19 @@ export function useLiveKitChatCallSession({
           ownsIosAudioConfigurationRef.current = false;
         }
       }
-      if (productRoom && currentIdentity && options.endRoomIfHost && productRoom.hostUserId === currentIdentity.userId) {
-        await endCommunicationRoom(productRoom.roomId).catch(() => undefined);
+      const endContext = currentDurableContext();
+      if (
+        endContext
+        && options.endRoomIfHost
+        && endContext.productRoom.hostUserId === endContext.currentIdentity.userId
+      ) {
+        await endCommunicationRoom(endContext.productRoom.roomId).catch(() => undefined);
       }
-      if (productRoom && currentIdentity && options.leaveMembership !== false) {
+      const leaveContext = currentDurableContext();
+      if (leaveContext && options.leaveMembership !== false) {
         await leaveCommunicationRoomSession({
-          roomId: productRoom.roomId,
-          userId: currentIdentity.userId,
+          roomId: leaveContext.productRoom.roomId,
+          userId: leaveContext.currentIdentity.userId,
         }).catch(() => null);
       }
       if (tokenValidatedRef.current) {
@@ -1374,7 +1389,7 @@ export function useLiveKitChatCallSession({
       });
       if (!effectBinding) throw new Error("accepted_chat_call_committed_session_stale");
 
-      if (Platform.OS === "ios" && !allowBackgroundAudio) {
+      if (Platform.OS === "ios" && !allowBackgroundAudioRef.current) {
         await configureLiveKitIosAudioSession(inviteCallType === "video");
         ownsIosAudioConfigurationRef.current = true;
       }
@@ -1543,22 +1558,38 @@ export function useLiveKitChatCallSession({
           effectBinding,
         )
       ));
-      if (!initialMembership) setReconciliationWarning();
-      setCameraEnabledState(effectiveCameraEnabled);
-      setMicEnabledState(effectiveMicEnabled);
-      setLoading(false);
-      setChannelState("live");
-      setError(null);
-      refreshParticipantViews();
-      emitStage("room_connected", { connectionState: "connected" });
-      if (liveKitRoom.remoteParticipants.size > 0) {
-        emitStage("remote_participant_joined", { connectionState: "connected" });
+      if (!initialMembership) {
+        setReconciliationWarning();
+        setLoading(false);
+        setChannelState("reconnecting");
+        refreshParticipantViews();
+      } else {
+        micReconciliationBlockedRef.current = false;
+        setCameraEnabledState(effectiveCameraEnabled);
+        setMicEnabledState(effectiveMicEnabled);
+        setLoading(false);
+        setChannelState("live");
+        setError(null);
+        refreshParticipantViews();
+        emitStage("room_connected", { connectionState: "connected" });
+        if (liveKitRoom.remoteParticipants.size > 0) {
+          emitStage("remote_participant_joined", { connectionState: "connected" });
+        }
       }
 
       heartbeat = setInterval(() => {
         const heartbeatBinding = effectBinding;
         if (!active || !heartbeatBinding || !isCommittedSessionCurrent(heartbeatBinding)) return;
-        void scheduleLatestMediaReconciliation(false);
+        void scheduleLatestMediaReconciliation(false).then((reconciled) => {
+          if (
+            !reconciled
+            || !active
+            || !isCommittedSessionCurrent(heartbeatBinding)
+            || appStateRef.current !== "active"
+            || heartbeatBinding.liveKitRoom?.state !== ConnectionState.Connected
+          ) return;
+          setChannelState("live");
+        });
         void getCommunicationRoomSnapshot(heartbeatBinding.normalizedRoomId)
           .then((latestSnapshot) => {
             if (
@@ -1600,7 +1631,6 @@ export function useLiveKitChatCallSession({
     };
   }, [
     activateCommittedSession,
-    allowBackgroundAudio,
     clearReconciliationWarning,
     cleanupSession,
     emitStage,

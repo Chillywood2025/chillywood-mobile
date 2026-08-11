@@ -39,10 +39,10 @@
   },
   "focusedResults": {
     "mountedHook": {
-      "passed": 48,
+      "passed": 52,
       "failed": 0,
       "requiredMatrixPassed": 38,
-      "supportCasesPassed": 9,
+      "supportCasesPassed": 13,
       "t2ContractCasesPassed": 1
     },
     "sourceContract": {
@@ -50,7 +50,7 @@
       "failed": 0
     },
     "negativeControls": {
-      "passed": 19,
+      "passed": 23,
       "failed": 0
     },
     "typescript": "PASS",
@@ -64,11 +64,11 @@
     "T4": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE"
   },
   "digests": {
-    "contractSha256": "a30484acd1e9a280868d03cb37c2588bf6229c9af943fd1d9efd84c397bccdd7",
-    "hookSha256": "bbabb37a6fa3ea57c38524f14247b32530933329aa7667f7e2d29834a8e7efe2",
-    "mountedTestSha256": "265063305dfbec9247f811e214e9d6ea80f7db4fe25104b3b48094a8c9a96906",
+    "contractSha256": "ee03eed1e37c875fda63bcf1a4d4a376465ff2cf3d03ad42a43dfb0ae78a0324",
+    "hookSha256": "9a7412017836ed9b12c8b18a1e9593a5e2259fc66a7d2c1fee069ee0998e12ea",
+    "mountedTestSha256": "30825955b104a1d38fe47129b539e9f9c41fd6f45f9f0c3a7b7d8adf3b44c084",
     "mountedHelperSha256": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
-    "sourceContractTestSha256": "781193f1d8b9f1b710463289fc9782953df697560ce08542f723e3b9fa2a0036"
+    "sourceContractTestSha256": "0eba80b12f009c48226ec1e8237a9e9e311ccd7288b7a7bb1258f6c7f69410ae"
   },
   "exactHeadReviewCorrections": [
     "CLEANUP_BINDING_SCOPE_AND_TYPESCRIPT",
@@ -77,7 +77,11 @@
     "STALE_SAME_ROW_CLEANUP_SUPPRESSION",
     "TERMINAL_STATE_MONOTONICITY",
     "PERMISSION_DENIAL_PERSISTS_THROUGH_DISABLE",
-    "SUCCESSFUL_ENABLE_CLEARS_MATCHING_DENIAL_MESSAGE"
+    "SUCCESSFUL_ENABLE_CLEARS_MATCHING_DENIAL_MESSAGE",
+    "NON_AUTHORITY_BACKGROUND_AUDIO_UPDATE_PRESERVES_SESSION",
+    "CLEANUP_REVALIDATES_DURABLE_AUTHORITY_AFTER_NATIVE_AWAIT",
+    "TIMED_OUT_QUEUE_WAITER_PRESERVES_PREDECESSOR_QUARANTINE",
+    "INITIAL_DURABLE_DIVERGENCE_CANNOT_REPORT_LIVE"
   ],
   "nonInterference": {
     "providerCodexReview": "OPTIONAL_ADVISORY_NOT_REQUESTED",
