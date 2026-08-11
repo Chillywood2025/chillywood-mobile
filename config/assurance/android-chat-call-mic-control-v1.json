@@ -4,10 +4,10 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "30ad63121311392985b3bb788aa2f95d6b615dfe0df7599b812cf82fea05ab88",
-    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "9b6797826abb701ebb489e62ab8a5aa42a0404665af4e36257d98f371f34c578",
-    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "e403795ce1ea5764b15bc96709c48bf6300f27dfaf0e9c16d2819ac49ed7f0ac",
-    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "50e79a205f6d1aa1ae39c71fec6f2d7d1ea3a4b8062da20e6cfa99a04046213b"
+    "hooks/use-livekit-chat-call-session.ts": "644e1b7c7efaff9cdc05747b72c2f93caf8e740fdfb962458c285e40212b0a6f",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "265063305dfbec9247f811e214e9d6ea80f7db4fe25104b3b48094a8c9a96906",
+    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
+    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "781193f1d8b9f1b710463289fc9782953df697560ce08542f723e3b9fa2a0036"
   },
   "sourceSlices": {
     "committed-session-layout-effect": {
@@ -20,7 +20,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const enqueueSessionMediaWrite",
       "end": "  const refreshParticipantViews",
-      "sha256": "fe4f7267771aefc2857eb6cbd4bc71367c1ab3b4f74d48fd39384b6112b776e5"
+      "sha256": "eade687ea3a83efbebe31c0e6b38422049a3dc6ae73a2eb5255a9c5ed1760a73"
     },
     "permission-reconciliation-separation": {
       "path": "hooks/use-livekit-chat-call-session.ts",
@@ -32,7 +32,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const setMicrophoneEnabled",
       "end": "  const setCameraEnabled",
-      "sha256": "769701e48d94a996293a9b53066f5be7dfecde743cf4b7a74a0ff604749fbb78"
+      "sha256": "c6e04ff4c8cf74d02a9f574869752c6cee3d8341e707b0073e108d3576c39dae"
     }
   },
   "preFixReproductions": [
@@ -96,7 +96,12 @@
     "SUCCESS_BEFORE_DURABLE_CONVERGENCE",
     "TOKEN_REQUEST_DURING_TOGGLE",
     "PROVIDER_MUTATION_DURING_TOGGLE",
-    "CALL_CLEANUP_ON_TOGGLE_FAILURE"
+    "CALL_CLEANUP_ON_TOGGLE_FAILURE",
+    "DURABLE_QUEUE_KEYED_BY_SESSION_GENERATION",
+    "UNBOUNDED_MEDIA_WRITE_PREDECESSOR",
+    "TERMINAL_SESSION_RESURRECTION",
+    "DISABLE_ERASES_PERMISSION_DENIAL",
+    "STALE_CLEANUP_LEAVES_REPLACEMENT"
   ],
   "mountedHookEvidence": {
     "execution": "REACT_DOM_COMMIT_PHASE_EXACT_HOOK",

@@ -130,6 +130,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     snapshotReads: 0,
     stages: [],
     settingsCalls: 0,
+    timeoutCallbacks: [],
     userId: "local-user",
   };
 
@@ -150,6 +151,11 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.deferTouch = () => {
     const gate = deferred();
     runtime.queueTouch({ gate, outcome: "success" });
+    return gate;
+  };
+  runtime.deferSnapshot = () => {
+    const gate = deferred();
+    runtime.queueSnapshot({ gate, outcome: "active" });
     return gate;
   };
 
@@ -360,6 +366,7 @@ export function createLiveKitMountedRuntime(options = {}) {
   const commonJsModule = { exports: {} };
   const sandbox = {
     clearInterval: () => { runtime.intervalsCleared += 1; },
+    clearTimeout: (id) => { runtime.timeoutCallbacks[id - 1] = null; },
     console,
     exports: commonJsModule.exports,
     module: commonJsModule,
@@ -370,6 +377,10 @@ export function createLiveKitMountedRuntime(options = {}) {
     setInterval: (callback) => {
       runtime.heartbeatCallbacks.push(callback);
       return runtime.heartbeatCallbacks.length;
+    },
+    setTimeout: (callback) => {
+      runtime.timeoutCallbacks.push(callback);
+      return runtime.timeoutCallbacks.length;
     },
   };
   vm.runInNewContext(compiledHook, sandbox, { filename: "hooks/use-livekit-chat-call-session.ts" });
@@ -400,7 +411,7 @@ export const defaultHookOptions = (overrides = {}) => ({
   ...overrides,
 });
 
-export async function mountLiveKitHook(runtime, initialOptions = defaultHookOptions()) {
+export async function mountLiveKitHook(runtime, initialOptions = defaultHookOptions(), mountOptions = {}) {
   const container = createContainer();
   const root = createRoot(container);
   let committedResult = null;
@@ -424,12 +435,14 @@ export async function mountLiveKitHook(runtime, initialOptions = defaultHookOpti
     });
   };
 
-  await render(initialOptions, { turns: 48 });
-  for (let turn = 0; turn < 12 && committedResult?.channelState !== "live"; turn += 1) {
-    await act(async () => settle(24));
-  }
-  if (committedResult?.channelState !== "live") {
-    throw new Error(`MOUNTED_HOOK_DID_NOT_REACH_LIVE:${committedResult?.channelState}`);
+  await render(initialOptions, { turns: mountOptions.turns ?? 48 });
+  if (mountOptions.requireLive !== false) {
+    for (let turn = 0; turn < 12 && committedResult?.channelState !== "live"; turn += 1) {
+      await act(async () => settle(24));
+    }
+    if (committedResult?.channelState !== "live") {
+      throw new Error(`MOUNTED_HOOK_DID_NOT_REACH_LIVE:${committedResult?.channelState}`);
+    }
   }
 
   return {
@@ -457,6 +470,15 @@ export async function mountLiveKitHook(runtime, initialOptions = defaultHookOpti
     fireHeartbeat: async () => {
       const callback = runtime.heartbeatCallbacks.at(-1);
       if (!callback) throw new Error("MOUNTED_HEARTBEAT_NOT_REGISTERED");
+      await act(async () => {
+        callback();
+        await settle(24);
+      });
+    },
+    fireMediaWriteTimeout: async () => {
+      const callback = runtime.timeoutCallbacks.find((candidate) => typeof candidate === "function");
+      if (!callback) throw new Error("MOUNTED_MEDIA_WRITE_TIMEOUT_NOT_REGISTERED");
+      runtime.timeoutCallbacks[runtime.timeoutCallbacks.indexOf(callback)] = null;
       await act(async () => {
         callback();
         await settle(24);

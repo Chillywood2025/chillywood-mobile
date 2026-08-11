@@ -172,6 +172,35 @@ test("matrix 6: a deferred old-session heartbeat is discarded", async (t) => {
   );
 });
 
+test("heartbeat support: same-row replacement waits for the old writer before becoming usable", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const oldHeartbeat = runtime.deferTouch();
+  await harness.fireHeartbeat();
+  await harness.commitRender(defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  await harness.flush(48);
+  assert.notEqual(harness.getResult().channelState, "live");
+  oldHeartbeat.resolve();
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement reached live after old writer drained");
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(true)), true);
+  assert.equal(runtime.durableMic, true);
+});
+
+test("heartbeat support: a never-settling predecessor fails the strict toggle without deadlock or native change", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.deferTouch();
+  await harness.fireHeartbeat();
+  const nativeBaseline = runtime.micCalls.length;
+  const toggle = await harness.startOperation(() => harness.getResult().setMicrophoneEnabled(true));
+  await waitFor(harness, () => harness.getResult().mediaControlsBusy, "strict control waits for predecessor");
+  await harness.fireMediaWriteTimeout();
+  assert.equal(await settleOperation(toggle, harness), false);
+  assert.equal(harness.getResult().mediaControlsBusy, false);
+  assert.equal(runtime.micCalls.length, nativeBaseline);
+  assert.equal(runtime.durableMic, false);
+});
+
 test("heartbeat support: deferred reconciliation writes the restored state after compensated failure", async (t) => {
   const { harness, runtime } = await mountCase(t);
   const nativeGate = runtime.deferNative();
@@ -285,8 +314,11 @@ test("matrix 15: terminal product-room state makes the transaction stale", async
   await waitFor(harness, () => runtime.micCalls.at(-1) === true, "strict enable reached native boundary");
   runtime.queueSnapshot({ outcome: "terminal" });
   await harness.fireHeartbeat();
+  await harness.emitRoom("Reconnected");
   nativeGate.resolve();
   assert.equal(await settleOperation(toggle, harness), false);
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(true)), false);
+  assert.equal(runtime.durableMic, false);
 });
 
 test("matrix 17: a restarted abandoned render does not retire the active session", async (t) => {
@@ -349,6 +381,34 @@ test("matrix 21: old async work is stale after replacement commit and cleanup ca
   assert.equal(harness.getResult().channelState, "live");
 });
 
+test("cleanup support: stale same-row cleanup cannot leave replacement membership", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const oldCameraCleanup = runtime.deferCamera();
+  const oldMicrophoneCleanup = runtime.deferNative();
+  await harness.commitRender(defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room created");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement reached live");
+  assert.equal(runtime.membershipLeaves, 0);
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: pre-initialization unmount is bounded and produces no rejected cleanup", async () => {
+  const runtime = createLiveKitMountedRuntime();
+  const pendingSnapshot = runtime.deferSnapshot();
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false, turns: 4 });
+  await harness.unmount();
+  pendingSnapshot.resolve();
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(runtime.errors.length, 0);
+});
+
 test("matrix 22: confirmed microphone denial changes only microphone permission state", async (t) => {
   const hookOptions = defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: true, micEnabled: false },
@@ -372,6 +432,40 @@ test("matrix 23: confirmed camera denial changes only camera permission state", 
   assert.equal(harness.getResult().cameraPermissionState, "denied");
   assert.equal(harness.getResult().microphonePermissionState, "granted");
   assert.equal(harness.getResult().canOpenMediaSettings, true);
+});
+
+test("permission support: successful disable cannot erase a confirmed microphone denial", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.queueNative({ outcome: "permission-denied" });
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(true)), false);
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(false)), true);
+  assert.equal(harness.getResult().microphonePermissionState, "denied");
+  assert.match(harness.getResult().mediaPermissionMessage, /Microphone access is off/u);
+  assert.equal(harness.getResult().canOpenMediaSettings, true);
+});
+
+test("permission support: successful disable cannot erase a confirmed camera denial", async (t) => {
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const { harness, runtime } = await mountCase(t, { initialMic: true }, hookOptions);
+  runtime.queueCamera({ outcome: "permission-denied" });
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(true)), false);
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), true);
+  assert.equal(harness.getResult().cameraPermissionState, "denied");
+  assert.match(harness.getResult().mediaPermissionMessage, /Camera access is off/u);
+  assert.equal(harness.getResult().canOpenMediaSettings, true);
+});
+
+test("permission support: successful enabling proof clears the matching denial message and Settings CTA", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.queueNative({ outcome: "permission-denied" });
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(true)), false);
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(true)), true);
+  assert.equal(harness.getResult().microphonePermissionState, "granted");
+  assert.equal(harness.getResult().mediaPermissionMessage, null);
+  assert.equal(harness.getResult().canOpenMediaSettings, false);
 });
 
 test("matrix 25: membership network rejection is not native permission denial", async (t) => {
