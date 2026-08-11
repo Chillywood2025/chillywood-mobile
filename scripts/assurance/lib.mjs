@@ -132,7 +132,8 @@ const canonicalLateReviewOwnerRegistry = [{
   assuranceControlOwner: "codex/assurance-active-task-and-claim-freshness-a1",
   authorizedBootstrapOwners: [
     "codex/assurance-active-task-and-claim-freshness-a1",
-    "codex/assurance-codex-security-scan-reliability-s0"
+    "codex/assurance-codex-security-scan-reliability-s0",
+    "codex/d2a-livekit-mic-post-merge-review-correction"
   ]
 }];
 const claimClassPolicy = {

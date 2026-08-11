@@ -2,8 +2,8 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Keep D2A frozen until the sole next launch-critical implementation codex/d2a-livekit-mic-post-merge-review-correction begins under a separate Owner instruction.
-2. Correct all five internally validated PR #194 findings in that one product PR: heartbeat and strict-membership write serialization; stable committed room identity; commit-phase session generation; separate permission-denial and reconciliation-warning state; honest mounted-hook evidence with consistent T2 status.
+1. Keep D2A frozen while draft PR #210 immutable source ad9a6882b455060ae9a584b32847d9a450d00beb tree 67ffe81173207d616f11d796d52df8e27f5fae85 completes repository-owned exact-head review, final Phase 1 CI, and protected merge.
+2. Preserve the bounded PR #210 correction, which fixes all five internally validated PR #194 findings plus exact-review and CI defects without package, native, database, provider, build, OTA, or release changes.
 3. After that correction, resume D2A only for release-critical execution, create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.
 4. After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.
 5. D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.
