@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, sha256 as contractSha256, stableJson, validateProofTierStatuses } from "./lib.mjs";
+import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -41,7 +41,7 @@ const structuredBindingFields = [
   "ownerBootstrapAuthorization"
 ];
 const requiredStructuredBindingFields = structuredBindingFields.filter((field) => !["ownerBootstrapAuthorization", "proofTierStatuses", "proofTierApplicabilityHash"].includes(field));
-const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
+const freshnessClasses = new Set(["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
 const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const activeImplementationStates = new Set(["open", "open-draft-current"]);
 const proofTiers = new Set(["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]);
@@ -189,7 +189,10 @@ export function validateStructuredBinding(value, gateCatalog, registry, openImpl
       && (requirement.freshnessClass !== "REPOSITORY_SOURCE"
         || (sha40(requirement.subjectHead) && sha40(requirement.subjectTree)
           && requirement.subjectHead === value.immutableSourceHead
-          && requirement.subjectTree === value.immutableSourceTree)));
+          && requirement.subjectTree === value.immutableSourceTree))
+      && (requirement.freshnessClass !== "REPOSITORY_TASK_LEASE"
+        || (typeof requirement.leaseId === "string" && requirement.leaseId.length > 0
+          && /^[0-9a-f]{64}$/u.test(requirement.leaseHash ?? ""))));
   const declaredFreshnessClasses = requiredFreshnessClaimsValid
     ? new Set(value.requiredFreshnessClaims.map(({ freshnessClass }) => freshnessClass))
     : new Set();
@@ -359,46 +362,28 @@ function sourceIsAncestor(sourceHead, currentHead) {
   } catch { return false; }
 }
 
-function collectFiniteTaskCandidate(lease, binding, facts) {
+function collectFiniteTaskCandidate(lease, facts) {
   if (facts.finiteTaskCandidateObservation) return facts.finiteTaskCandidateObservation;
-  const response = spawnSync("gh", [
-    "api",
-    `repos/${ownerBootstrapRepository}/pulls/${lease.implementationPr}`,
-    "--jq",
-    "{pr:.number,branch:.head.ref,prState:.state,head:.head.sha}"
-  ], { cwd: ROOT, encoding: "utf8", shell: false });
-  if (response.status !== 0) return null;
-  try {
-    const provider = JSON.parse(response.stdout);
-    const head = provider.head;
-    const currentProtectedBase = facts.identity?.originMainHead ?? git(["rev-parse", "origin/main"]);
-    const candidateRange = `${currentProtectedBase}...${head}`;
-    const changedPaths = git(["diff", "--name-only", candidateRange]).split(/\r?\n/gu).filter(Boolean).sort();
-    const changedLines = git(["diff", "--numstat", candidateRange]).split(/\r?\n/gu).filter(Boolean)
-      .reduce((total, line) => total + line.split("\t").slice(0, 2)
-        .reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0), 0);
-    return {
-      ...provider,
-      tree: git(["rev-parse", `${head}^{tree}`]),
-      seedTree: git(["rev-parse", `${lease.admittedSeedHead}^{tree}`]),
-      seedIsAncestor: sourceIsAncestor(lease.admittedSeedHead, head),
-      baseIsAncestor: sourceIsAncestor(lease.admittedBase, head),
-      changedPaths,
-      changedLines,
-      diffHash: contractSha256(git(["diff", "--binary", "--no-ext-diff", candidateRange])),
-      changedPathHash: contractSha256(changedPaths),
-      finalReceiptHead: facts.finalReceiptHead ?? binding.currentImplementationHead,
-      repositoryReviewHead: facts.repositoryReviewHead ?? binding.currentImplementationHead,
-      phase1Head: facts.phase1Head ?? binding.currentImplementationHead,
-      findings: facts.releaseCriticalFindings ?? (lease.taskState === "BLOCKED_PRODUCT_FINDING"
-        ? { P0: 0, P1: 1, launchImpactingP2: 0 }
-        : { P0: 0, P1: 0, launchImpactingP2: 0 })
-    };
-  } catch { return null; }
+  const derived = deriveFiniteTaskCandidateObservation({
+    record: facts.currentTruth,
+    lease,
+    suppliedObservation: facts.finiteTaskRuntimeObservation,
+    githubEvent: facts.githubEvent,
+    checkoutHead: facts.githubCheckoutHead,
+    currentProtectedBase: facts.identity?.originMainHead
+  });
+  if (!derived.ok) return null;
+  return {
+    ...derived.candidate,
+    finalReceiptHead: facts.finalReceiptHead ?? null,
+    repositoryReviewHead: facts.repositoryReviewHead ?? null,
+    phase1Head: facts.phase1Head ?? null,
+    findings: facts.releaseCriticalFindings ?? derived.candidate.findings
+  };
 }
 
 function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease) {
-  const candidate = collectFiniteTaskCandidate(lease, binding, facts);
+  const candidate = collectFiniteTaskCandidate(lease, facts);
   const evaluated = evaluateFiniteTaskCandidate({ lease, registry: truth.finiteTaskLeases, candidate });
   const findings = [...evaluated.findings];
   if (candidate?.head !== identity.head) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
