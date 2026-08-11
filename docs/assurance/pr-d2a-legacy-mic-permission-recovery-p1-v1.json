@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "pr-d2a-legacy-mic-permission-recovery-p1-v1",
+  "classification": "D2A_BLOCKED_NEW_RELEASE_CRITICAL_PRODUCT_DEFECT",
+  "severity": "P1",
+  "findingId": "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS",
+  "sourceIdentity": {
+    "head": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+    "tree": "aadc47f810525d925b1a4a413d7ded1af581b678",
+    "e0PacketSha256": "59a497c586fc52c4368934a69ff925951b96c2541cc606c0346dafbfeb48abad",
+    "evidenceReuse": "NONE_EXACT_FULL_KEY_MISS"
+  },
+  "releaseReachability": {
+    "status": "REACHABLE_PUBLIC_DEFAULT",
+    "publicDefaultProvider": "legacy_webrtc",
+    "rolloutPath": "supabase/migrations/20260728141417_chilly_chat_livekit_media_rollout.sql",
+    "rolloutSha256": "569bc5df653527fbb1f20b0decd3d24259b5776f989b99a6854b6c15ef35fab0",
+    "providerRoutePath": "hooks/use-chat-call-media-session.ts",
+    "providerRouteSha256": "1ccbf8def5d8506cde6c17bec4be86d0e71b6388fad57247f5c2aa4a6ea77cc2",
+    "normalizationPath": "_lib/chillyChatCalls.ts",
+    "facts": [
+      "the rollout schema enforces legacy_webrtc as the public default and fallback",
+      "every non-livekit invite value normalizes to legacy_webrtc",
+      "useChatCallMediaSession activates and returns the legacy session for that provider"
+    ]
+  },
+  "productBinding": {
+    "path": "hooks/use-communication-room-session.ts",
+    "sha256": "0da0e6dcd12875fd56f295f2f99d11a29a0a145a0b4c444f4f3a94d63096347d",
+    "symbol": "useCommunicationRoomSession.setMicrophoneEnabled",
+    "transition": [
+      "an already-connected peer exists while localStreamRef is null and microphone permission is denied",
+      "permission restoration allows ensureTrackKind audio to create one live local track",
+      "the null-stream branch assigns localStreamRef but does not attach the track to existing peer connections or renegotiate",
+      "UI microphone state and durable membership become true and the operation returns true",
+      "the connected peer retains zero usable audio senders"
+    ]
+  },
+  "executableFailure": {
+    "command": "node --test --test-name-pattern='release-reachable' tests/assurance/android-chat-call-mic-control.test.mjs",
+    "test": "release-reachable legacy permission recovery attaches exactly one usable microphone sender",
+    "assertion": "product success requires one usable sender on the connected peer",
+    "expectedUsableAudioSenders": 1,
+    "actualUsableAudioSenders": 0,
+    "preAssertionFacts": {
+      "operationResult": true,
+      "uiMicEnabled": true,
+      "durableMicEnabled": true,
+      "usableLocalAudioTracks": 1,
+      "roomEndCalls": 0,
+      "tokenRequests": 0
+    },
+    "receiptClassification": "DIRECT_SANITIZED_TAP_OUTPUT_NOT_EXTERNALIZED",
+    "receiptLocation": null,
+    "outputSha256": null,
+    "reason": "The governed receipt runner correctly refuses a dirty reproducer; no receipt or output hash is fabricated."
+  },
+  "reproducer": {
+    "runnerPath": "scripts/assurance/android-chat-call-mic-control.mjs",
+    "runnerSha256": "d0140e661e096b98ed05c0a92aa2c0541c9d2d87d0932d8534dcf92985d41598",
+    "testPath": "tests/assurance/android-chat-call-mic-control.test.mjs",
+    "testSha256": "6bbf8c7a00ffe1163a685b437a29a30cdcff17dea7a7f3ed6c5c67f6aea1e3ce",
+    "twoFilePatchSha256": "c9849d4a3550b949b080c937b1d6290abfdaea9cca2bd037ee7c50c959d51fe8",
+    "scope": "ASSURANCE_HARNESS_ONLY"
+  },
+  "freshProofBeforeStop": {
+    "liveKitMountedHook": "56/56 PASS",
+    "liveKitMountedOutputSha256": "4f971a15c872371384214178c410be28d10179e634954cbaf10a994edb4d12f2",
+    "liveKitExactSourceContract": "5/5 PASS",
+    "liveKitNegativeControls": "28/28 PASS",
+    "liveKitExactReceiptIdentity": "ca80d1a0aedea7b40ca77b704620aba03e95b02a10b8b3573ed83118173aa187",
+    "liveKitExactOutputSha256": "a5794320c01a2ad931d521ba5af06879917d3df42fd3c85f49be3bcf6ce8e850",
+    "generatedNativeDeterminism": "3/3 PASS",
+    "generatedNativeDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+    "generatedNativeSecuritySupplementSha256": "0adb5d0a23211cc4bd076b418ebfa3ed75f0d482a6f38afd9f72230ad727be3a",
+    "nativeOriginNegativeControls": "23/23 PASS"
+  },
+  "stoppedProof": {
+    "gradle": "INTERRUPTED_0_OF_10_CERTIFIED",
+    "jvm": "NOT_CERTIFIED",
+    "lifecycleMatrix": "NOT_RUN_AFTER_P1_STOP",
+    "backupRestore": "NOT_RUN_AFTER_P1_STOP",
+    "fatalScan": "FOCUSED_MEDIA_CASE_NO_FATAL_OR_UNHANDLED_MARKER; FULL_NATIVE_SCAN_NOT_RUN",
+    "emulator": "NEVER_STARTED",
+    "installedPackage": "NONE",
+    "retainedApkAab": "NONE",
+    "androidResourceLock": "RELEASED"
+  },
+  "narrowCorrectionAuthorizationRequired": {
+    "objective": "When ensureTrackKind creates the first local audio stream for an already-connected legacy peer, attach exactly one usable audio track to every current peer and complete required renegotiation before reporting microphone success or committing durable and UI state.",
+    "requiredRegression": [
+      "permission denied then restored with an already-connected peer",
+      "exactly one usable audio sender per peer",
+      "no call termination or duplicate sender",
+      "failure does not report success or commit durable or UI microphone state"
+    ],
+    "authorizedByThisEvidence": false
+  },
+  "nonInterference": {
+    "productChanged": false,
+    "nativeProductChanged": false,
+    "databaseOrProviderMutation": false,
+    "d2aMerge": false,
+    "postD2aTruthMerge": false,
+    "signedCandidateBuild": false,
+    "ota": false,
+    "publicRelease": false
+  }
+}
