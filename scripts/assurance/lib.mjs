@@ -644,6 +644,19 @@ function repositoryReadbackEvidenceBound({ claim, source, committedSource, requi
     && source.readbackFacts?.observedAt === claim?.observedAt;
 }
 
+export function exactExternalSourceProvenance({ source, expectedSources, remoteImplementationHead, headParents, sourceTree }) {
+  const exactTuple = expectedSources.some((expected) => Object.entries(expected)
+    .every(([field, value]) => source?.[field] === value));
+  const exactRemoteBranch = remoteImplementationHead === source?.sourceCommit;
+  const exactPullRequestMerge = Array.isArray(headParents)
+    && headParents.length === 2
+    && headParents[1] === source?.sourceCommit
+    && sourceTree === source?.subjectTree;
+  return exactTuple
+    && source?.subjectHead === source?.sourceCommit
+    && (exactRemoteBranch || exactPullRequestMerge);
+}
+
 export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
@@ -673,10 +686,19 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
       protectedAdmissionPr: 215,
       ownerFinalTaskBindingCommentId: 5255996943
     }];
-    const exactProtectedAdmissionEvidence = exactProtectedAdmissionSources.some((expected) => Object.entries(expected)
-      .every(([field, value]) => source?.[field] === value))
-      && source.subjectHead === source.sourceCommit
-      && git(["show-ref", "--verify", "--hash", `refs/remotes/origin/${source.implementationBranch}`]) === source.sourceCommit;
+    let remoteImplementationHead = null;
+    try {
+      remoteImplementationHead = git(["show-ref", "--verify", "--hash", `refs/remotes/origin/${source.implementationBranch}`]);
+    } catch { /* own-PR merge refs do not necessarily materialize an origin/<branch> tracking ref */ }
+    const headParents = git(["show", "-s", "--format=%P", head]).split(/\s+/u).filter(Boolean);
+    const sourceTree = git(["rev-parse", `${source.sourceCommit}^{tree}`]);
+    const exactProtectedAdmissionEvidence = exactExternalSourceProvenance({
+      source,
+      expectedSources: exactProtectedAdmissionSources,
+      remoteImplementationHead,
+      headParents,
+      sourceTree
+    });
     if (!exactProtectedAdmissionEvidence) git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
     if (claim?.freshnessClass === "REPOSITORY_SOURCE") {
       if (!/^[0-9a-f]{40}$/u.test(claim?.subjectHead ?? "")

@@ -10,7 +10,7 @@ import {
   validateStructuredBinding,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
-import { renderCurrentState, stableJson, validateProofTierStatuses, verifyCommittedClaimEvidence, verifyCompletedImplementationMergeIdentity, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { exactExternalSourceProvenance, renderCurrentState, stableJson, validateProofTierStatuses, verifyCommittedClaimEvidence, verifyCompletedImplementationMergeIdentity, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -957,6 +957,36 @@ test("legacy correction final repository source is exact and fails closed on tup
   ]) {
     assert.equal(verify({ ...source, [field]: value }), false, field);
   }
+});
+
+test("exact final source provenance accepts only the remote branch or own-PR merge second parent", () => {
+  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-final-freeze");
+  const source = canonicalTruth.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
+  const expectedSources = [Object.fromEntries([
+    "exactExternalSourcePolicy",
+    "id",
+    "sourceCommit",
+    "subjectTree",
+    "implementationPr",
+    "implementationBranch",
+    "protectedAdmissionPr",
+    "ownerFinalTaskBindingCommentId"
+  ].map((field) => [field, source[field]]))];
+  const verify = (overrides = {}) => exactExternalSourceProvenance({
+    source,
+    expectedSources,
+    remoteImplementationHead: null,
+    headParents: ["a".repeat(40), source.sourceCommit],
+    sourceTree: source.subjectTree,
+    ...overrides
+  });
+  assert.equal(verify({ remoteImplementationHead: source.sourceCommit, headParents: [] }), true, "exact remote branch");
+  assert.equal(verify(), true, "own-PR exact second parent");
+  assert.equal(verify({ headParents: [source.sourceCommit, "a".repeat(40)] }), false, "source cannot be first parent");
+  assert.equal(verify({ headParents: ["a".repeat(40), "b".repeat(40), source.sourceCommit] }), false, "octopus merge denied");
+  assert.equal(verify({ headParents: ["a".repeat(40), "b".repeat(40)] }), false, "wrong second parent denied");
+  assert.equal(verify({ sourceTree: "b".repeat(40) }), false, "wrong tree denied");
+  assert.equal(verify({ source: { ...source, implementationPr: 999 } }), false, "tuple substitution denied");
 });
 
 test("protected correction admission and final-source synchronizations are exact", () => {
