@@ -663,6 +663,15 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
       implementationPr: 214,
       implementationBranch: "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
       protectedAdmissionPr: 215
+    }, {
+      exactExternalSourcePolicy: "D2A_LEGACY_WEBRTC_CORRECTION_FINAL_SOURCE_PR_214_V1",
+      id: "d2a-legacy-webrtc-correction-final-source-e76831f2edb2",
+      sourceCommit: "e76831f2edb2c17e9b827587594573bfef7c6fef",
+      subjectTree: "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3",
+      implementationPr: 214,
+      implementationBranch: "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
+      protectedAdmissionPr: 215,
+      ownerFinalTaskBindingCommentId: 5255996943
     }];
     const exactProtectedAdmissionEvidence = exactProtectedAdmissionSources.some((expected) => Object.entries(expected)
       .every(([field, value]) => source?.[field] === value))

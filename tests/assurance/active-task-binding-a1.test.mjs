@@ -937,8 +937,8 @@ test("protected legacy correction bootstrap is exact, unique, deterministic, fre
   }).ok, false, "mismatched Owner comment fails");
 });
 
-test("legacy correction repository-source admission is exact and fails closed on tuple substitution", () => {
-  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-admission");
+test("legacy correction final repository source is exact and fails closed on tuple substitution", () => {
+  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-final-freeze");
   const source = canonicalTruth.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
   const verify = (candidate) => verifyCommittedClaimEvidence({
     claim,
@@ -952,44 +952,47 @@ test("legacy correction repository-source admission is exact and fails closed on
     ["sourceCommit", "f".repeat(40)],
     ["subjectTree", "e".repeat(40)],
     ["protectedAdmissionPr", 999],
+    ["ownerFinalTaskBindingCommentId", 999],
     ["exactExternalSourcePolicy", "UNRELATED"]
   ]) {
     assert.equal(verify({ ...source, [field]: value }), false, field);
   }
 });
 
-test("protected correction admission synchronization is exact on PR, branch, first parent, ancestor, subject, and paths", () => {
-  const successor = currentTruthContract.synchronizationMerge.bootstrapMerge.successors.find(({ prNumber }) => prNumber === 215);
-  const mergeSha = "b".repeat(40);
-  const secondParent = "c".repeat(40);
-  const exactSubject = `Merge pull request #${successor.prNumber} from Chillywood2025/${successor.branch}`;
-  const verify = ({
-    recordedMain = successor.firstParent,
-    parents = [successor.firstParent, secondParent],
-    changedPaths = successor.changedPaths,
-    subject = exactSubject,
-    ancestorAllowed = true
-  } = {}) => verifyCurrentTruthSynchronization({
-    recordedMain,
-    remoteMain: mergeSha,
-    parents,
-    changedPaths,
-    requiredChangedPaths: currentTruthContract.synchronizationMerge.requiredChangedPaths,
-    allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
-    bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge,
-    gitCommand: (args) => {
-      if (args[0] === "show") return subject;
-      if (args[0] === "merge-base" && ancestorAllowed && args[2] === successor.requiredSecondParentAncestor && args[3] === secondParent) return "";
-      throw new Error("denied");
-    }
-  });
-  assert.equal(verify().ok, true);
-  assert.equal(verify({ recordedMain: "d".repeat(40) }).ok, false);
-  assert.equal(verify({ parents: [successor.firstParent, "d".repeat(40)] }).ok, false);
-  assert.equal(verify({ changedPaths: successor.changedPaths.slice(1) }).ok, false);
-  assert.equal(verify({ changedPaths: [...successor.changedPaths, "hooks/use-communication-room-session.ts"] }).ok, false);
-  assert.equal(verify({ subject: exactSubject.replace("#215", "#999") }).ok, false);
-  assert.equal(verify({ ancestorAllowed: false }).ok, false);
+test("protected correction admission and final-source synchronizations are exact", () => {
+  for (const prNumber of [215, 216]) {
+    const successor = currentTruthContract.synchronizationMerge.bootstrapMerge.successors.find(({ prNumber: candidate }) => candidate === prNumber);
+    const mergeSha = "b".repeat(40);
+    const secondParent = "c".repeat(40);
+    const exactSubject = `Merge pull request #${successor.prNumber} from Chillywood2025/${successor.branch}`;
+    const verify = ({
+      recordedMain = successor.firstParent,
+      parents = [successor.firstParent, secondParent],
+      changedPaths = successor.changedPaths,
+      subject = exactSubject,
+      ancestorAllowed = true
+    } = {}) => verifyCurrentTruthSynchronization({
+      recordedMain,
+      remoteMain: mergeSha,
+      parents,
+      changedPaths,
+      requiredChangedPaths: currentTruthContract.synchronizationMerge.requiredChangedPaths,
+      allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
+      bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge,
+      gitCommand: (args) => {
+        if (args[0] === "show") return subject;
+        if (args[0] === "merge-base" && ancestorAllowed && args[2] === successor.requiredSecondParentAncestor && args[3] === secondParent) return "";
+        throw new Error("denied");
+      }
+    });
+    assert.equal(verify().ok, true, `PR #${prNumber}`);
+    assert.equal(verify({ recordedMain: "d".repeat(40) }).ok, false);
+    assert.equal(verify({ parents: [successor.firstParent, "d".repeat(40)] }).ok, false);
+    assert.equal(verify({ changedPaths: successor.changedPaths.slice(1) }).ok, false);
+    assert.equal(verify({ changedPaths: [...successor.changedPaths, "hooks/use-communication-room-session.ts"] }).ok, false);
+    assert.equal(verify({ subject: exactSubject.replace(`#${prNumber}`, "#999") }).ok, false);
+    assert.equal(verify({ ancestorAllowed: false }).ok, false);
+  }
 });
 
 test("active-task CLI rejects caller-selected diff bases", () => {
