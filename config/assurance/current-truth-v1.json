@@ -501,8 +501,8 @@
     {
       "id": "repository-source-livekit-mic-post-merge-correction-final",
       "status": "CURRENT",
-      "observedAt": "2026-08-11T07:15:00Z",
-      "expiresAt": "2026-08-12T07:15:00Z",
+      "observedAt": "2026-08-11T07:16:00Z",
+      "expiresAt": "2026-08-12T07:16:00Z",
       "evidenceSourceId": "livekit-mic-post-merge-correction-final-review-source-freeze-20260811-0715",
       "evidenceMode": "local-offline-and-github-read-only",
       "factsCovered": ["repository.active-implementation.immutable-synchronized-source"],
@@ -771,9 +771,30 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T07:18:00Z",
-  "freshnessDeadline": "2026-08-12T07:15:00Z",
+  "timestamp": "2026-08-11T07:20:00Z",
+  "freshnessDeadline": "2026-08-12T07:16:00Z",
   "evidenceSources": [
+    {
+      "id": "livekit-mic-post-merge-correction-final-provenance-source-freeze-20260811-0720",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction and all exact-head launch-blocking review corrections",
+        "durable room-user write quarantine preserves unresolved predecessors after bounded timeout and prevents divergent replacement sessions from reporting live",
+        "cleanup revalidates durable authority after native awaits and non-authority background-audio commits preserve the active LiveKit Room",
+        "whole mounted hook execution passes 52 of 52 exact source contract passes 5 of 5 and all 23 required negative-control mutants are rejected",
+        "active-task and exact-head owner-registry suites pass 73 of 73 and contract validation passes",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:20:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "95a7e98dec35dc3154c7be3d3110d7ea673e44b6",
+      "subjectHead": "95a7e98dec35dc3154c7be3d3110d7ea673e44b6",
+      "subjectTree": "9ef97208a27ed68d8af37a330215786650abecc5"
+    },
     {
       "id": "livekit-mic-post-merge-correction-final-review-source-freeze-20260811-0715",
       "mode": "local-offline-and-github-read-only",
@@ -790,7 +811,7 @@
         "repository semantics changed-file lint contract current-truth and git diff validation pass; exact-head Phase 1 TypeScript remains mandatory",
         "no provider contact hosted scan build OTA native database D2A execution or release action"
       ],
-      "observedAt": "2026-08-11T07:15:00Z",
+      "observedAt": "2026-08-11T07:16:00Z",
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
