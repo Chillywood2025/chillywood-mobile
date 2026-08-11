@@ -2369,7 +2369,7 @@ export function useCommunicationRoomSession({
     const previousLocalStream = localStreamRef.current;
     const previousAuxiliaryStreams = [...auxiliaryStreamsRef.current];
     let createdStream: MediaStream | null = null;
-    let track = usableTracks[0] ?? null;
+    let track: ReturnType<typeof getCommunicationTrack> = usableTracks[0] ?? null;
     const previousTrackEnabled = track?.enabled !== false;
     const removedEndedTracks: { stream: MediaStream; track: any }[] = [];
     let addedCreatedTrackToPreviousLocalStream = false;
