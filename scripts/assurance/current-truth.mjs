@@ -23,6 +23,7 @@ import {
   verifyCommittedClaimEvidence,
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization,
+  validateFiniteTaskLeaseRegistry,
   validateProofTierStatuses
 } from "./lib.mjs";
 import { validateStructuredBinding } from "./active-task.mjs";
@@ -185,6 +186,7 @@ if (mode) {
   const headBindings = verifyCurrentTruthHeadBindings({
     openImplementationPrs: record.openImplementationPrs,
     observedRefs: observedImplementationRefs,
+    finiteTaskLeases: record.finiteTaskLeases,
     branch,
     head,
     remoteMain,
@@ -247,7 +249,9 @@ if (mode) {
   const reviewPolicyFindings = optionalCodexReviewPolicyValid(record.reviewPolicy)
     ? []
     : [{ id: "CODEX_REVIEW_OPTIONAL_ADVISORY_POLICY_INVALID", status: "BLOCKED_INTERNAL" }];
-  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...validateLateReviewSentinelState(record)];
+  const finiteLeaseFindings = validateFiniteTaskLeaseRegistry(record.finiteTaskLeases)
+    .map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
