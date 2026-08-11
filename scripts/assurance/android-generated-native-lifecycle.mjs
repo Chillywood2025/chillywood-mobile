@@ -51,8 +51,8 @@ const profile = (eas, name, seen = []) => {
 };
 
 const fixtureDefinitions = Object.freeze({
-  "answer-path-bypassed": ["ANDROID_ANSWER_ACTION_PATH_BYPASSED", (s) => { s.plugin = s.plugin.replace("buildActivityPendingIntent(context, data, \"answer\", 1)", "buildUntrustedIntent(context, data)"); }],
-  "persistence-order-invalid": ["ANDROID_ACTION_PERSISTENCE_ORDER_INVALID", (s) => { s.plugin = s.plugin.replace("if (!ChillyChatNativeCallActionStore.capture(context, intent)) return\n    clearIncomingCallNotification", "clearIncomingCallNotification"); }],
+  "answer-path-bypassed": ["ANDROID_ANSWER_ACTION_PATH_BYPASSED", (s) => { s.plugin = s.plugin.replace("buildActionPendingIntent(context, data, ACTION_ANSWER, 1)", "buildActivityPendingIntent(context, data, \"answer\", 1)"); }],
+  "persistence-order-invalid": ["ANDROID_ACTION_PERSISTENCE_ORDER_INVALID", (s) => { s.plugin = s.plugin.replace("if (!ChillyChatNativeCallActionStore.captureTrustedNotificationAction(", "context.startActivity(Intent())\n    if (!ChillyChatNativeCallActionStore.captureTrustedNotificationAction("); }],
   "warm-intent-handler-missing": ["ANDROID_WARM_INTENT_HANDLER_MISSING", (s) => { s.plugin = s.plugin.replaceAll("override fun onNewIntent(intent: Intent)", "fun removedOnNewIntent(intent: Intent)"); }],
   "consume-not-atomic": ["ANDROID_ACTION_CONSUME_NOT_ATOMIC", (s) => { s.plugin = s.plugin.replace("@Synchronized\n  fun consume", "fun consume"); }],
   "duplicate-extends-ttl": ["ANDROID_ACTION_DUPLICATE_EXTENDS_TTL", (s) => { s.plugin = s.plugin.replace("Log.i(LOG_TAG, \"ACTION_BUFFERED\")\n        return true", "return capture(context, intent)"); }],
@@ -72,13 +72,21 @@ const sourceState = () => {
 };
 export const validateSourceModel = (state = sourceState(), observedDigest = state.expectedDigest) => {
   const plugin = state.plugin;
+  const trustedLaunch = plugin.match(/fun launchAfterTrustedAction[\s\S]*?context\.startActivity\(intent\)/u)?.[0] ?? "";
+  const warmIntentHandler = plugin.match(/override fun onNewIntent\(intent: Intent\) \{[\s\S]*?\n  \}/u)?.[0] ?? "";
   gate(state.platform === "android", "PLATFORM_PROOF_SCOPE_MISMATCH", "Android lifecycle evidence cannot be supplied for another platform");
-  gate(plugin.includes('val answerIntent = buildActivityPendingIntent(context, data, "answer", 1)')
-    && plugin.includes("ChillyChatNativeCallActionStore.captureForActivity(this, intent)"), "ANDROID_ANSWER_ACTION_PATH_BYPASSED", "Answer must traverse explicit Activity capture and native persistence");
-  gate(/ChillyChatNativeCallActionStore\.capture\(context, intent\)[\s\S]{0,120}clearIncomingCallNotification[\s\S]{0,120}startActivity\(intent\)/u.test(plugin),
-    "ANDROID_ACTION_PERSISTENCE_ORDER_INVALID", "Receiver persistence must precede Activity launch");
-  gate(/override fun onNewIntent\(intent: Intent\)[\s\S]{0,180}captureForActivity\(this, intent\)[\s\S]{0,180}setIntent\(intent\)/u.test(plugin),
-    "ANDROID_WARM_INTENT_HANDLER_MISSING", "MainActivity must capture warm intents");
+  gate(plugin.includes("val answerIntent = buildActionPendingIntent(context, data, ACTION_ANSWER, 1)")
+    && plugin.includes('ChillyChatCallNotifications.ACTION_ANSWER -> "answer"')
+    && plugin.includes("ChillyChatCallNotifications.launchAfterTrustedAction(context, inviteId, threadId, nativeAction)")
+    && !plugin.includes('buildActivityPendingIntent(context, data, "answer"'), "ANDROID_ANSWER_ACTION_PATH_BYPASSED", "Answer must traverse the explicit private receiver and trusted native persistence path");
+  gate(trustedLaunch.indexOf("captureTrustedNotificationAction(") >= 0
+    && trustedLaunch.indexOf("captureTrustedNotificationAction(") < trustedLaunch.search(/context\.startActivity\(/u),
+  "ANDROID_ACTION_PERSISTENCE_ORDER_INVALID", "Trusted receiver persistence must precede Activity launch");
+  gate(warmIntentHandler.includes("shouldEmitPendingAction(intent, ChillyChatNativeCallActionStore.readStatus(reactContext))")
+    && warmIntentHandler.includes("pendingActionEmitter()")
+    && !warmIntentHandler.includes("captureTrustedNotificationAction")
+    && !plugin.includes("captureForActivity"),
+  "ANDROID_WARM_INTENT_HANDLER_MISSING", "Warm Activity delivery must emit an already-persisted trusted action without manufacturing authority");
   gate(/@Synchronized\s+fun consume\(context: Context\)/u.test(plugin) && /val editor = removePending\(preferences\.edit\(\)\)/u.test(plugin),
     "ANDROID_ACTION_CONSUME_NOT_ATOMIC", "Pending actions must be consumed atomically");
   gate(/existingRequestKey == requestKey[\s\S]{0,120}ACTION_BUFFERED[\s\S]{0,80}return true/u.test(plugin),
@@ -99,7 +107,8 @@ export const validateSourceModel = (state = sourceState(), observedDigest = stat
     && plugin.includes("component = launchComponent"), "ANDROID_PENDING_INTENT_TARGET_NOT_EXPLICIT", "PendingIntents must resolve to explicit app components");
   gate(/"android:exported": "false",\s+"android:name": "\.ChillyChatFirebaseMessagingService"/u.test(plugin),
     "ANDROID_SERVICE_EXPOSURE_INVALID", "Firebase service must be non-exported");
-  gate(observedDigest === state.expectedDigest, "ANDROID_GENERATED_NATIVE_DIGEST_STALE", "Generated source digest differs from the D1 target binding");
+  gate(observedDigest === state.expectedDigest, "ANDROID_GENERATED_NATIVE_DIGEST_STALE", "Generated source digest differs from the D1 target binding",
+    {observedDigest, expectedDigest: state.expectedDigest});
   const logCategories = [...plugin.matchAll(/Log\.i\([^,]+,\s*"([A-Z_]+)"\)/gu)].map((match) => match[1]).sort();
   const logging = state.contract.logging;
   const allowed = new Set([...logging.canonicalAllowlist, ...logging.observedNoncanonical.map((item) => item.category)]);
@@ -165,8 +174,9 @@ export const validateInstalledDirectPackageSet = ({modules, packageJson, lock, i
     let installed; try { installed = installedPackageReader(name); } catch {
       throw new GateError("DEPENDENCY_INSTALLED_IDENTITY_MISSING", `Installed direct package identity is missing for ${name}`);
     }
-    gate(installed.name === name && installed.version === locked.version, "DEPENDENCY_INSTALLED_VERSION_MISMATCH", `Installed direct package identity differs for ${name}`);
-    identities.push(`${name}@${locked.version}`);
+    const expectedPackageName = locked.name ?? name;
+    gate(installed.name === expectedPackageName && installed.version === locked.version, "DEPENDENCY_INSTALLED_VERSION_MISMATCH", `Installed direct package identity differs for ${name}`);
+    identities.push(`${name}=${expectedPackageName}@${locked.version}`);
   }
   return {directPackageCount: identities.length, productionPackageCount: Object.keys(production).length, developmentPackageCount: Object.keys(development).length,
     identityDigest: digest(identities.join("\n")), versionsMatched: identities.length, allDeclaredDirectDependenciesValidated: true, pathsRecorded: false};

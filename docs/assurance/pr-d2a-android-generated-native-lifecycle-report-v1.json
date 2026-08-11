@@ -25,14 +25,28 @@
   },
   "generatedSource": {
     "runs": "3/3",
-    "observedDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
-    "expectedD1Digest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b",
+    "observedDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+    "expectedD1Digest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
     "deterministic": true,
     "authoritativePaths": 22,
     "securitySupplementDigest": "PENDING_NEXT_AUTHORIZED_GENERATION",
     "securitySupplementBinding": "MANIFEST_PLUS_EXACT_REFERENCED_FULL_BACKUP_AND_DATA_EXTRACTION_XML",
     "d1DigestRemainsSeparate": true,
     "generatedDirectoryCommitted": false
+  },
+  "answerActionBypassClassification": {
+    "finding": "ANDROID_ANSWER_ACTION_PATH_BYPASSED",
+    "classification": "HARNESS_PATH_BYPASS",
+    "failingHarnessHead": "4f5fa3937ac506bcd3626d15a2815839df620789",
+    "failingWitness": "node scripts/assurance/android-generated-native-lifecycle.mjs -> ANDROID_ANSWER_ACTION_PATH_BYPASSED",
+    "reason": "The D2A harness required the retired exported-Activity capture path while production routes Answer through the explicit non-exported receiver, persists with captureTrustedNotificationAction, and launches only after persistence.",
+    "productionWitness": {
+      "command": "npm run test:chilly-chat-native-call-action-handoff",
+      "nativeOriginControls": "23/23 PASS",
+      "executableMutants": "6/6 KILLED"
+    },
+    "correction": "Harness source gates and mutants now follow the exact private-receiver production path and reject Activity-manufactured authority.",
+    "productOrNativeSourceModified": false
   },
   "dependencySet": {
     "classification": "EXACT_LOCKED_ALL_DECLARED_DIRECT_PACKAGE_IDENTITIES",

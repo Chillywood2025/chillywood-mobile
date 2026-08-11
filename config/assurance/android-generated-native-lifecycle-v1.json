@@ -22,7 +22,7 @@
     "nativeBuild": "86",
     "runtimeVersion": "1.0.0-android-chat-call-action-v1",
     "channel": "android-chat-livekit-qa",
-    "d1GeneratedSourceDigest": "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b"
+    "d1GeneratedSourceDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0"
   },
   "authoritativeInputs": [
     "app.json",

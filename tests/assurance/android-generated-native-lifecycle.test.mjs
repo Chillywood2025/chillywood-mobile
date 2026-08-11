@@ -23,7 +23,7 @@ const scopeWaiver = JSON.parse(fs.readFileSync("config/assurance/pr-d2a-scope-wa
 const report = JSON.parse(fs.readFileSync("docs/assurance/pr-d2a-android-generated-native-lifecycle-report-v1.json", "utf8"));
 assert.equal(contract.contractId, "android-generated-native-lifecycle-v1");
 assert.equal(contract.target.targetId, "android-chat-livekit-qa-build-86");
-assert.equal(contract.target.d1GeneratedSourceDigest, "4262e9434c0acbd5fc104d115b7dc7e0ea95aee40ad276e84f361caaf5410d2b");
+assert.equal(contract.target.d1GeneratedSourceDigest, "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0");
 assert.equal(contract.target.platform, "android");
 assert.equal(contract.scopeWaiver.maximumChangedFiles, 20);
 assert.equal(contract.scopeWaiver.maximumNetLines, 2500);
@@ -103,6 +103,11 @@ const directLockFixture = {packages: {"": {dependencies: {alpha: "^1.0.0"}, devD
   "node_modules/alpha": {version: "1.2.3"}, "node_modules/beta": {version: "2.0.0"}}};
 const installed = {alpha: {name: "alpha", version: "1.2.3"}, beta: {name: "beta", version: "2.0.0"}};
 assert.equal(validateInstalledDirectPackageSet({modules: "unused", packageJson: directPackageFixture, lock: directLockFixture, installedPackageReader: (name) => installed[name]}).versionsMatched, 2);
+const aliasPackageFixture = {dependencies: {alias: "file:vendor/alias.tgz"}};
+const aliasLockFixture = {packages: {"": {dependencies: {alias: "file:vendor/alias.tgz"}},
+  "node_modules/alias": {name: "@trusted/alias", version: "1.0.0"}}};
+assert.equal(validateInstalledDirectPackageSet({modules: "unused", packageJson: aliasPackageFixture, lock: aliasLockFixture,
+  installedPackageReader: () => ({name: "@trusted/alias", version: "1.0.0"})}).versionsMatched, 1);
 assert.throws(() => validateInstalledDirectPackageSet({modules: "unused", packageJson: directPackageFixture, lock: directLockFixture,
   installedPackageReader: (name) => name === "alpha" ? {name, version: "0.0.0"} : installed[name]}), (error) => error.code === "DEPENDENCY_INSTALLED_VERSION_MISMATCH");
 const dependencyEvidence = resolveDependencySet().evidence;
