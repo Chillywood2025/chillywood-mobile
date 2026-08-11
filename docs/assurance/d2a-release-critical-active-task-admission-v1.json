@@ -46,7 +46,7 @@
     }
   ],
   "admissionMatrix": {
-    "focusedTests": "75/75 PASS",
+    "focusedTests": "76/76 PASS",
     "contractValidation": "28/28 PASS",
     "currentTruth": "PASS",
     "packetDeterminism": "3/3 PASS",
@@ -69,6 +69,12 @@
       "id": "POST_MERGE_CURRENT_TRUTH_SUCCESSOR_BOOTSTRAP_MISSING",
       "state": "CORRECTED_BEFORE_MERGE",
       "correction": "Exact PR #213 subject, first parent, reviewed ancestor, and changed-path set are required for the one protected successor synchronization."
+    },
+    {
+      "severity": "P1",
+      "id": "ADMISSION_TEST_FILE_SCOPE_BROADER_THAN_OWNER_ALLOWLIST",
+      "state": "CORRECTED_BEFORE_MERGE",
+      "correction": "The successor assertions are contained in the authorized exact-head successor test; the extra current-truth synchronization test-file delta was removed."
     }
   ],
   "scope": {

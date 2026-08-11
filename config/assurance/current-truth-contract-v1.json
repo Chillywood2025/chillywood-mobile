@@ -61,8 +61,7 @@
             "scripts/assurance/late-review-sentinel.mjs",
             "scripts/assurance/lib.mjs",
             "tests/assurance/active-task-binding-a1.test.mjs",
-            "tests/assurance/codex-review-exact-head.test.mjs",
-            "tests/assurance/current-truth-sync.test.mjs"
+            "tests/assurance/codex-review-exact-head.test.mjs"
           ]
         }
       ]

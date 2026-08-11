@@ -30,7 +30,7 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewExactSuccessorCorrectionEvidenceHash, lateReviewExactSuccessorDispositionEvidenceHash, lateReviewExactSuccessorRepositoryVerificationHash, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSentinelValidationState, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewExactSuccessorCorrectionEvidenceHash, lateReviewExactSuccessorDispositionEvidenceHash, lateReviewExactSuccessorRepositoryVerificationHash, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSentinelValidationState, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
@@ -1919,6 +1919,55 @@ test("exact successor tombstones retain history and admit D2A only after protect
   const deleted = structuredClone(truth);
   deleted.lateReviewResolutionTombstones = deleted.lateReviewResolutionTombstones.filter(({ prNumber }) => prNumber !== 194);
   assert.equal(unresolvedLateReviewSentinels(deleted, { protectedMainRecord: deleted, tombstoneAdmissionVerifier: () => true }).some(({ prNumber }) => prNumber === 194), true, "deleted closure re-blocks D2A");
+});
+
+test("the admission synchronization successor is exact and fail closed", () => {
+  const recordedMain = "a".repeat(40);
+  const remoteMain = "e".repeat(40);
+  const requiredChangedPaths = [
+    "config/assurance/current-truth-v1.json",
+    "CURRENT_STATE.md",
+    "NEXT_TASK.md"
+  ];
+  const changedPaths = [...requiredChangedPaths, "scripts/assurance/lib.mjs", "docs/assurance/admission.json"];
+  const successor = {
+    prNumber: 213,
+    branch: "codex/d2a-release-critical-active-task-admission",
+    firstParent: recordedMain,
+    requiredSecondParentAncestor: "f".repeat(40),
+    changedPaths
+  };
+  const exactGit = (argv) => {
+    if (argv[0] === "show") return "Merge pull request #213 from Chillywood2025/codex/d2a-release-critical-active-task-admission";
+    if (argv[0] === "merge-base") return "";
+    throw new Error(`unexpected git command: ${argv.join(" ")}`);
+  };
+  const verify = (overrides = {}) => verifyCurrentTruthSynchronization({
+    recordedMain,
+    remoteMain,
+    parents: [recordedMain, "c".repeat(40)],
+    changedPaths,
+    requiredChangedPaths,
+    allowedChangedPaths: requiredChangedPaths,
+    bootstrapMerge: { mergeSha: "b".repeat(40), firstParent: recordedMain, changedPaths: requiredChangedPaths, successors: [successor] },
+    gitCommand: exactGit,
+    ...overrides
+  });
+
+  const admitted = verify();
+  assert.equal(admitted.ok, true);
+  assert.equal(admitted.mode, "protected-successor-bootstrap-synchronization-merge");
+  assert.equal(verify({
+    gitCommand: (argv) => argv[0] === "show" ? "Merge pull request #999 from Chillywood2025/codex/unrelated" : ""
+  }).ok, false, "wrong merge subject is denied");
+  assert.equal(verify({
+    gitCommand: (argv) => {
+      if (argv[0] === "show") return "Merge pull request #213 from Chillywood2025/codex/d2a-release-critical-active-task-admission";
+      throw new Error("required reviewed ancestor absent");
+    }
+  }).ok, false, "missing reviewed ancestor is denied");
+  assert.equal(verify({ changedPaths: [...changedPaths, "app/index.tsx"] }).ok, false, "extra path is denied");
+  assert.equal(verify({ parents: ["0".repeat(40), "c".repeat(40)] }).ok, false, "wrong first parent is denied");
 });
 
 test("workflow executes only the protected default-branch evaluator", () => {
