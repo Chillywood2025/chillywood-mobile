@@ -233,7 +233,7 @@
       ]
     },
     "stateModel": {
-      "dimensionCount": 17,
+      "dimensionCount": 18,
       "dimensions": [
         {"id": "provider", "values": ["legacy", "livekit"]},
         {"id": "invite", "values": ["ringing", "accepted", "declined", "missed", "canceled", "ended", "busy"]},
@@ -251,12 +251,13 @@
         {"id": "operation", "values": ["idle", "enabling", "disabling", "renegotiating", "quarantining", "compensating", "stale", "cleaning"]},
         {"id": "durableMembership", "values": ["active", "reconnecting", "ended"]},
         {"id": "ui", "values": ["mic-on", "mic-off", "busy", "warning", "permission-denied"]},
+        {"id": "cameraLifecycle", "values": ["desired-on", "captured-on", "background-paused", "durable-off", "foreground-restored"]},
         {"id": "nativeAction", "values": ["none", "answer", "decline", "mute", "end"]}
       ]
     },
     "transitionModel": {
-      "declaredLaunchCriticalTransitions": 36,
-      "mappedTransitions": 36,
+      "declaredLaunchCriticalTransitions": 38,
+      "mappedTransitions": 38,
       "transitions": [
         "invite-created->ringing",
         "ringing->server-accepted",
@@ -288,7 +289,9 @@
         "disabling->compensating",
         "foreground->background-audio-preserved",
         "foreground->background-media-paused",
+        "foreground-video-active->background-camera-paused-durable-off",
         "background->foreground-media-restored",
+        "background-camera-paused->foreground-camera-restored",
         "process-cold->accepted-call-recovered",
         "current->replacement",
         "stale-operation->discarded",
@@ -416,6 +419,16 @@
         "mutation": "use shared current refs from stale cleanup",
         "sourcePath": "hooks/use-communication-room-session.ts",
         "currentResult": "PASS_MOUNTED_REPLACEMENT_RESOURCE_IDENTITY"
+      },
+      {
+        "id": "I13",
+        "name": "BACKGROUND_MEDIA_CONVERGENCE",
+        "positiveWitness": "background video capture stop commits camera=false to durable membership, presence and broadcast while retaining current-session foreground restore intent",
+        "negativeWitness": "local video track is stopped while durable camera membership remains true",
+        "exactTest": "legacy call-domain closure: background pause converges durable camera false without erasing foreground intent",
+        "mutation": "ignore the camera=false lifecycle override during strict microphone synchronization",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_EXACT_SOURCE_AND_IOS_MEDIA_READINESS"
       }
     ],
     "discoveryPasses": [
@@ -471,8 +484,57 @@
           "ANDROID_MIC_LEGACY_STALE_ASYNC_SESSION_MUTATES_REPLACEMENT_RESOURCES"
         ],
         "result": "STABLE"
+      },
+      {
+        "id": "PASS_A_RERUN_AFTER_COVERAGE_FAILURE",
+        "focus": "background-state-transition-concurrency-and-durable-camera-convergence",
+        "mode": "INDEPENDENT_READ_ONLY_COMPLETE_MODEL_REREVIEW",
+        "reviewedSources": [
+          "hooks/use-communication-room-session.ts",
+          "scripts/proof-ios-media-readiness.mjs",
+          "scripts/assurance/android-chat-call-mic-control.mjs"
+        ],
+        "baseline": [
+          "iOS media readiness initially rejected missing pauseLocalMediaCapture",
+          "finite task lease retained with zero lease findings"
+        ],
+        "newDimensions": [],
+        "defectIds": [
+          "ANDROID_LEGACY_BACKGROUND_VIDEO_STOP_LEAVES_CAMERA_DURABLE_TRUE"
+        ],
+        "result": "RESTABILIZED"
+      },
+      {
+        "id": "PASS_B_RERUN_AFTER_COVERAGE_FAILURE",
+        "focus": "privacy-permissions-sender-topology-lifecycle-camera-and-cleanup",
+        "mode": "INDEPENDENT_READ_ONLY_COMPLETE_MODEL_REREVIEW",
+        "reviewedSources": [
+          "hooks/use-communication-room-session.ts",
+          "tests/assurance/android-chat-call-mic-control.test.mjs",
+          "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs"
+        ],
+        "baseline": [
+          "legacy and LiveKit exact call matrix 114/114 PASS",
+          "background camera durable mismatch mutant killed"
+        ],
+        "newDimensions": [],
+        "defectIds": [
+          "ANDROID_LEGACY_BACKGROUND_VIDEO_STOP_LEAVES_CAMERA_DURABLE_TRUE"
+        ],
+        "result": "RESTABILIZED"
       }
     ],
+    "preImplementationCoverageFailure": {
+      "classification": "PRE_IMPLEMENTATION_COVERAGE_FAILURE",
+      "trigger": "Phase 1 iOS media readiness proved that the original 17-dimension model omitted background camera capture versus durable camera state",
+      "addedStateDimensions": ["cameraLifecycle"],
+      "addedTransitions": [
+        "foreground-video-active->background-camera-paused-durable-off",
+        "background-camera-paused->foreground-camera-restored"
+      ],
+      "addedInvariants": ["I13"],
+      "defectLedgerStableAcrossIndependentReruns": true
+    },
     "defectLedger": [
       {
         "id": "ANDROID_MIC_LEGACY_DUPLICATE_USABLE_TRACKS_REMAIN_ENABLED_AFTER_FAIL_CLOSED_MUTE",
@@ -501,6 +563,13 @@
         "status": "RESOLVED_EXACT_MOUNTED_WITNESS",
         "invariants": ["I4", "I9", "I12"],
         "summary": "An old leave, cleanup, snapshot or lifecycle continuation can resume after shared refs identify a replacement session and mutate or destroy replacement media resources."
+      },
+      {
+        "id": "ANDROID_LEGACY_BACKGROUND_VIDEO_STOP_LEAVES_CAMERA_DURABLE_TRUE",
+        "severity": "LAUNCH_IMPACTING_P2",
+        "status": "RESOLVED_EXACT_SOURCE_AND_PHASE1_WITNESS",
+        "invariants": ["I3", "I11", "I13"],
+        "summary": "Background lifecycle stopped local video while strict microphone synchronization reused the desired camera flag, allowing durable membership, presence and broadcast to continue claiming camera=true."
       }
     ],
     "coverageBeforeImplementation": {
@@ -522,8 +591,8 @@
       "corrections": {
         "p0": 0,
         "p1": 3,
-        "launchImpactingP2": 1,
-        "total": 4
+        "launchImpactingP2": 2,
+        "total": 5
       },
       "properties": [
         "all non-ended stream and sender-bound audio tracks are collected by object identity",
@@ -532,23 +601,24 @@
         "enable success requires exactly one usable track, one sender per eligible peer, correlated answer application, stable signaling, durable membership, presence, broadcast, and UI convergence",
         "foreground and native-answer recovery route through the strict legacy microphone transaction",
         "an unexpected registered background-stopper controller rejection executes the local privacy fallback and reports the bounded runtime error instead of escaping as an unhandled rejection",
+        "background video pause commits camera=false through durable membership, presence and broadcast without erasing the desired foreground camera state",
         "session generation and captured-resource identity prevent stale continuation and cleanup mutation of replacements"
       ],
       "preMergeD2aStatus": "PENDING_EXACT_PR214_MERGE_REF"
     },
     "coverageAfterImplementation": {
-      "declaredLaunchCriticalTransitions": 36,
-      "coveredTransitions": 36,
+      "declaredLaunchCriticalTransitions": 38,
+      "coveredTransitions": 38,
       "uncoveredTransitions": 0,
-      "declaredInvariants": 12,
-      "invariantsWithPositiveWitness": 12,
-      "invariantsWithNegativeWitness": 12,
-      "targetedMutations": 12,
-      "mutantsKilled": 12,
+      "declaredInvariants": 13,
+      "invariantsWithPositiveWitness": 13,
+      "invariantsWithNegativeWitness": 13,
+      "targetedMutations": 13,
+      "mutantsKilled": 13,
       "mutantsSurviving": 0,
       "legacyMountedExactHook": {
-        "passed": 52,
-        "total": 52
+        "passed": 53,
+        "total": 53
       },
       "liveKitMountedAndExactSource": {
         "passed": 61,

@@ -130,6 +130,7 @@ function createLegacyMountedRuntime(options = {}) {
     cameraPermission: grantedPermission(),
     channels: [],
     cleanupCalls: 0,
+    durableCamera: false,
     durableMic: false,
     errors: [],
     intervals: [],
@@ -417,9 +418,10 @@ function createLegacyMountedRuntime(options = {}) {
         if (action.wait) await action.wait;
         if (action.outcome === "reject") throw new Error("membership rejected");
         if (action.outcome === "null") return null;
+        runtime.durableCamera = !!input.cameraEnabled;
         runtime.durableMic = !!input.micEnabled;
         return action.membership ?? makeMembership(runtime, {
-          cameraEnabled: !!input.cameraEnabled,
+          cameraEnabled: runtime.durableCamera,
           membershipState: input.membershipState,
           micEnabled: runtime.durableMic,
         });
@@ -592,8 +594,8 @@ test("current PR210 contract and bounded adapter remain deterministic", () => {
     assert.deepEqual(evidence.legacy, { passed: 20, total: 20 });
     assert.deepEqual(evidence.negativeControls, {
       ...evidence.negativeControls,
-      passed: 12,
-      total: 12,
+      passed: 13,
+      total: 13,
     });
     assert.equal(evidence.legacyReachability.status, "REACHABLE_PUBLIC_DEFAULT");
     assert.equal(evidence.source.files, 4);
@@ -910,11 +912,32 @@ test("legacy call-domain closure: unprovable quarantine never claims muted succe
   assert.equal(runtime.membershipTouches.some((touch) => touch.micEnabled === false), false);
 });
 
-test("legacy call-domain closure: background stopper catches controller rejection before local privacy fallback", () => {
+test("legacy call-domain closure: background lifecycle commits camera false and catches controller rejection", () => {
   const stopperBlock = legacyHookSource.match(/registerActiveMediaSessionStopper\(async \(reason\) => \{[\s\S]*?\n    \}\);/u)?.[0] ?? "";
-  assert.match(stopperBlock, /try \{[\s\S]*?await legacyMicControlRef\.current\?\.\(false\)[\s\S]*?\} catch \(error\) \{/u);
+  assert.match(stopperBlock, /try \{[\s\S]*?await legacyMicControlRef\.current\?\.\(\s*LEGACY_BACKGROUND_MEDIA_STATE\.micEnabled,\s*LEGACY_BACKGROUND_MEDIA_STATE\.cameraEnabled,\s*\)[\s\S]*?\} catch \(error\) \{/u);
   assert.match(stopperBlock, /catch \(error\) \{\s*legacyMicLocalPrivacyStopRef\.current\?\.\(\);/u);
   assert.match(stopperBlock, /reportRuntimeError\("communication-media-session-background"/u);
+  assert.match(legacyHookSource, /const LEGACY_BACKGROUND_MEDIA_STATE = \{\s*cameraEnabled: false,\s*micEnabled: false,/u);
+  assert.match(legacyHookSource, /legacyMicControlRef\.current\?\.\(true, false\)/u);
+});
+
+test("legacy call-domain closure: background pause converges durable camera false without erasing foreground intent", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.durableCamera = true;
+  runtime.durableMic = true;
+  const harness = await mountLegacyHook(runtime, {
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: true }, { sender: true, video: true });
+
+  const result = await harness.run(() => harness.getResult().setMicrophoneEnabled(false, false));
+
+  assert.equal(result, true);
+  assert.equal(runtime.durableCamera, false, "background lifecycle writes durable camera=false");
+  assert.equal(runtime.durableMic, false);
+  assert.equal(harness.getResult().cameraEnabled, true, "foreground camera intent remains available for restoration");
+  assert.equal(harness.getResult().micEnabled, false);
 });
 
 test("legacy call-domain closure: sender-only mute requires privacy and durable convergence", async (t) => {

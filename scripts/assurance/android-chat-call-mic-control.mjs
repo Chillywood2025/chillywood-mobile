@@ -39,7 +39,7 @@ const sourceBindings = () => {
   gate(
     legacy.includes("collectLegacyMicTopology")
       && legacy.includes("quarantineLegacyMicrophoneTopology")
-      && legacy.includes("commitProvedLegacyMicMute(authority)")
+      && legacy.includes("commitProvedLegacyMicMute(authority")
       && legacy.includes("prepareLegacyMicrophoneTrack(authority)")
       && legacy.includes("strictlyRenegotiateLegacyMicPeer")
       && legacy.includes("legacySessionGenerationRef.current === authority.generation")
@@ -93,7 +93,7 @@ export const evaluateLegacyReleaseReachability = () => {
   gate(
     legacyHook.includes("export function useCommunicationRoomSession")
       && legacyHook.includes("const setMicrophoneEnabled")
-      && legacyHook.includes("commitProvedLegacyMicMute(authority)")
+      && legacyHook.includes("commitProvedLegacyMicMute(authority")
       && legacyHook.includes("quarantineLegacyMicrophoneTopology"),
     "ANDROID_MIC_LEGACY_HOOK_UNBOUND",
     "The reachable legacy microphone implementation is not source-bound",
@@ -249,6 +249,7 @@ const negativeDefinitions = Object.freeze({
   "platform-proof-crossover": {code: "PLATFORM_PROOF_SCOPE_MISMATCH", baseline: {targetPlatform: "android", evidencePlatform: "android"}, mutate: (s) => { s.evidencePlatform = "ios"; }, invariant: (s) => s.targetPlatform === s.evidencePlatform},
   "sender-only-muted-privacy": {code: "ANDROID_MIC_SENDER_ONLY_PRIVACY_UNPROVEN", baseline: {senderTrackEnabled: false}, mutate: (s) => { s.senderTrackEnabled = true; }, invariant: (s) => !s.senderTrackEnabled},
   "stale-session-cleanup": {code: "ANDROID_MIC_STALE_SESSION_REPLACEMENT_MUTATION", baseline: {capturedGeneration: 7, currentGeneration: 8, replacementPreserved: true}, mutate: (s) => { s.replacementPreserved = false; }, invariant: (s) => s.capturedGeneration === s.currentGeneration || s.replacementPreserved},
+  "background-camera-durable-mismatch": {code: "ANDROID_BACKGROUND_CAMERA_DURABLE_MISMATCH", baseline: {cameraTrackEnabled: false, durableCameraEnabled: false}, mutate: (s) => { s.durableCameraEnabled = true; }, invariant: (s) => s.cameraTrackEnabled === s.durableCameraEnabled},
 });
 const runNegativeControls = () => Object.entries(negativeDefinitions).map(([id, definition]) => {
   const baseline = structuredClone(definition.baseline); gate(definition.invariant(baseline), "ANDROID_MIC_NEGATIVE_CONTROL_BASELINE_INVALID", id);
@@ -267,7 +268,7 @@ export const evaluateMicControl = () => {
     && nativeTemplate.includes("PeerConnectionFactory")
     && nativeTemplate.includes("track.setEnabled(false)")
     && nativeTemplate.includes("track.setEnabled(true)");
-  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, legacyReachability: evaluateLegacyReleaseReachability(), sourceBoundCandidates: [], modelClassification: "MODEL_CLEAR_MOUNTED_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 12, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: nativeTemplateBound, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
+  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, legacyReachability: evaluateLegacyReleaseReachability(), sourceBoundCandidates: [], modelClassification: "MODEL_CLEAR_MOUNTED_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: negatives.length, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: nativeTemplateBound, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
   evidence.deterministicEvidenceSha256 = hash(stable(evidence));
   return evidence;
 };

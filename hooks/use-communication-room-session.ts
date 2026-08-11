@@ -90,6 +90,11 @@ type LegacyMicAnswerWaiter = {
   resolve: (answered: boolean) => void;
 };
 
+const LEGACY_BACKGROUND_MEDIA_STATE = {
+  cameraEnabled: false,
+  micEnabled: false,
+} as const;
+
 const HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
 const SNAPSHOT_WARMUP_INITIAL_DELAY_MILLIS = 750;
 const SNAPSHOT_WARMUP_INTERVAL_MILLIS = 1_500;
@@ -384,7 +389,7 @@ export function useCommunicationRoomSession({
   const lastOfferSentAtRef = useRef<Record<string, number>>({});
   const legacyMicAnswerWaitersRef = useRef<Record<string, LegacyMicAnswerWaiter>>({});
   const legacyMicNegotiationSerialRef = useRef(0);
-  const legacyMicControlRef = useRef<((nextEnabled: boolean) => Promise<boolean>) | null>(null);
+  const legacyMicControlRef = useRef<((nextEnabled: boolean, cameraEnabledOverride?: boolean) => Promise<boolean>) | null>(null);
   const legacyMicLocalPrivacyStopRef = useRef<(() => boolean) | null>(null);
   const resumeMicAfterForegroundRef = useRef(false);
   const legacySessionGenerationRef = useRef(0);
@@ -603,6 +608,22 @@ export function useCommunicationRoomSession({
     return updated;
   }, []);
 
+  const pauseLocalMediaCapture = useCallback((
+    expectedLocalStream: MediaStream | null = localStreamRef.current,
+    expectedAuxiliaryStreams: MediaStream[] = [...auxiliaryStreamsRef.current],
+  ) => {
+    stopCommunicationStream(expectedLocalStream);
+    expectedAuxiliaryStreams.forEach((stream) => stopCommunicationStream(stream));
+    if (localStreamRef.current === expectedLocalStream) {
+      localStreamRef.current = null;
+      setLocalStreamURL("");
+      setLocalVideoStreamURL("");
+    }
+    auxiliaryStreamsRef.current = auxiliaryStreamsRef.current.filter((stream) => (
+      !expectedAuxiliaryStreams.includes(stream)
+    ));
+  }, []);
+
   const cleanupSessionMedia = useCallback((snapshot?: {
     answerWaiters: [string, LegacyMicAnswerWaiter][];
     auxiliaryStreams: MediaStream[];
@@ -633,18 +654,11 @@ export function useCommunicationRoomSession({
       waiter.resolve(false);
     });
     captured.peers.forEach(([userId, peerConnection]) => cleanupRemotePeer(userId, peerConnection));
-    stopCommunicationStream(captured.localStream);
-    captured.auxiliaryStreams.forEach((stream) => stopCommunicationStream(stream));
-    if (localStreamRef.current === captured.localStream) {
-      localStreamRef.current = null;
-      setLocalStreamURL("");
-      setLocalVideoStreamURL("");
-    }
-    auxiliaryStreamsRef.current = auxiliaryStreamsRef.current.filter((stream) => !captured.auxiliaryStreams.includes(stream));
+    pauseLocalMediaCapture(captured.localStream, captured.auxiliaryStreams);
     logChatRtc("session_media_cleanup_complete", {
       roomId,
     });
-  }, [cleanupRemotePeer, roomId]);
+  }, [cleanupRemotePeer, pauseLocalMediaCapture, roomId]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -657,7 +671,10 @@ export function useCommunicationRoomSession({
         const shouldResumeMic = micEnabledRef.current;
         stopLocalMediaKind("video");
         try {
-          const controlled = await legacyMicControlRef.current?.(false) ?? false;
+          const controlled = await legacyMicControlRef.current?.(
+            LEGACY_BACKGROUND_MEDIA_STATE.micEnabled,
+            LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled,
+          ) ?? false;
           if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
         } catch (error) {
           legacyMicLocalPrivacyStopRef.current?.();
@@ -2244,7 +2261,7 @@ export function useCommunicationRoomSession({
         channelStateRef.current = "live";
         setChannelState("live");
         setError(null);
-        void legacyMicControlRef.current?.(true).catch((error) => {
+        void legacyMicControlRef.current?.(true, false).catch((error) => {
           reportRuntimeError("communication-appstate-background-audio", error, {
             roomId: currentRoom.roomId,
           });
@@ -2265,7 +2282,10 @@ export function useCommunicationRoomSession({
           reason: "app_background",
         });
       }
-      void (legacyMicControlRef.current?.(false) ?? Promise.resolve(false))
+      void (legacyMicControlRef.current?.(
+        LEGACY_BACKGROUND_MEDIA_STATE.micEnabled,
+        LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled,
+      ) ?? Promise.resolve(false))
         .then((controlled) => {
           if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
           resumeMicAfterForegroundRef.current = shouldResumeMic;
@@ -2462,6 +2482,7 @@ export function useCommunicationRoomSession({
   const strictlyCommitLegacyMicPresence = useCallback(async (
     authority: LegacyMicSessionAuthority,
     nextMicEnabled: boolean,
+    nextCameraEnabled: boolean = cameraEnabledRef.current,
   ) => {
     const resolvedRoom = roomRef.current;
     const resolvedIdentity = identityRef.current;
@@ -2473,7 +2494,7 @@ export function useCommunicationRoomSession({
       roomId: authority.roomId,
       userId: authority.userId,
       membershipState,
-      cameraEnabled: cameraEnabledRef.current,
+      cameraEnabled: nextCameraEnabled,
       micEnabled: nextMicEnabled,
       displayName: resolvedIdentity.displayName,
       avatarUrl: resolvedIdentity.avatarUrl,
@@ -2482,6 +2503,7 @@ export function useCommunicationRoomSession({
       !membership
       || formatRoomId(membership.roomId) !== authority.roomId
       || membership.userId !== authority.userId
+      || membership.cameraEnabled !== nextCameraEnabled
       || membership.micEnabled !== nextMicEnabled
       || normalizeRoomMembershipState(membership.membershipState) !== membershipState
       || !isLegacyMicSessionAuthorityCurrent(authority)
@@ -2492,7 +2514,7 @@ export function useCommunicationRoomSession({
         identity: resolvedIdentity,
         room: resolvedRoom,
         media: {
-          cameraEnabled: cameraEnabledRef.current,
+          cameraEnabled: nextCameraEnabled,
           micEnabled: nextMicEnabled,
         },
         joinedAt: localJoinedAtRef.current,
@@ -2507,6 +2529,7 @@ export function useCommunicationRoomSession({
   const strictlyBroadcastLegacyMicState = useCallback(async (
     authority: LegacyMicSessionAuthority,
     nextMicEnabled: boolean,
+    nextCameraEnabled: boolean = cameraEnabledRef.current,
   ) => {
     if (!isLegacyMicSessionAuthorityCurrent(authority)) return { ok: false, sent: false };
     const result = await waitForRealtimeOperation(authority.channel.send({
@@ -2514,7 +2537,7 @@ export function useCommunicationRoomSession({
       event: "media:update",
       payload: {
         fromUserId: authority.userId,
-        cameraOn: cameraEnabledRef.current,
+        cameraOn: nextCameraEnabled,
         micOn: nextMicEnabled,
       },
     })).catch(() => null);
@@ -2686,7 +2709,10 @@ export function useCommunicationRoomSession({
     return false;
   };
 
-  const commitProvedLegacyMicMute = useCallback(async (authority: LegacyMicSessionAuthority) => {
+  const commitProvedLegacyMicMute = useCallback(async (
+    authority: LegacyMicSessionAuthority,
+    nextCameraEnabled: boolean = cameraEnabledRef.current,
+  ) => {
     if (!isLegacyMicSessionAuthorityCurrent(authority)) {
       return {
         committed: false,
@@ -2703,8 +2729,8 @@ export function useCommunicationRoomSession({
       setError("Microphone privacy could not be verified. Leave the call before continuing.");
       return { ...quarantine, committed: false };
     }
-    const presenceCommit = await strictlyCommitLegacyMicPresence(authority, false);
-    const broadcastCommit = await strictlyBroadcastLegacyMicState(authority, false);
+    const presenceCommit = await strictlyCommitLegacyMicPresence(authority, false, nextCameraEnabled);
+    const broadcastCommit = await strictlyBroadcastLegacyMicState(authority, false, nextCameraEnabled);
     const committed = quarantine.normalized
       && presenceCommit.ok
       && broadcastCommit.ok
@@ -2986,17 +3012,20 @@ export function useCommunicationRoomSession({
     await setCameraCaptureEnabled(!cameraEnabledRef.current);
   }, [setCameraCaptureEnabled]);
 
-  const setMicrophoneEnabled = useCallback((nextEnabled: boolean) => runSerializedMediaControl(async () => {
+  const setMicrophoneEnabled = useCallback((
+    nextEnabled: boolean,
+    cameraEnabledOverride: boolean = cameraEnabledRef.current,
+  ) => runSerializedMediaControl(async () => {
     if (!nextEnabled) resumeMicAfterForegroundRef.current = false;
     const authority = captureLegacyMicSessionAuthority();
     if (!authority) return false;
     if (nextEnabled) {
       const prepared = await prepareLegacyMicrophoneTrack(authority);
       if (!prepared) {
-        const muted = await commitProvedLegacyMicMute(authority);
+        const muted = await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
         if (muted.privacyProved && !muted.committed && isLegacyMicSessionAuthorityCurrent(authority)) {
-          await updatePresence(cameraEnabledRef.current, false);
-          await commitProvedLegacyMicMute(authority);
+          await updatePresence(cameraEnabledOverride, false);
+          await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
         }
         return false;
       }
@@ -3014,10 +3043,10 @@ export function useCommunicationRoomSession({
           || !prepared.senderInvariant()
           || !isLegacyMicSessionAuthorityCurrent(authority)
         ) throw new Error("LEGACY_MIC_ENABLED_TOPOLOGY_UNVERIFIED");
-        const presenceCommit = await strictlyCommitLegacyMicPresence(authority, true);
+        const presenceCommit = await strictlyCommitLegacyMicPresence(authority, true, cameraEnabledOverride);
         durableCommitted = presenceCommit.durableWritten;
         if (!presenceCommit.ok) throw new Error("LEGACY_MIC_DURABLE_COMMIT_FAILED");
-        const broadcastCommit = await strictlyBroadcastLegacyMicState(authority, true);
+        const broadcastCommit = await strictlyBroadcastLegacyMicState(authority, true, cameraEnabledOverride);
         broadcastCommitted = broadcastCommit.sent;
         if (
           !broadcastCommit.ok
@@ -3035,18 +3064,18 @@ export function useCommunicationRoomSession({
         prepared.track.enabled = false;
         let compensated = true;
         if (broadcastCommitted) {
-          const broadcastCompensation = await strictlyBroadcastLegacyMicState(authority, false);
+          const broadcastCompensation = await strictlyBroadcastLegacyMicState(authority, false, cameraEnabledOverride);
           compensated = broadcastCompensation.ok && compensated;
         }
         if (durableCommitted) {
-          const presenceCompensation = await strictlyCommitLegacyMicPresence(authority, false);
+          const presenceCompensation = await strictlyCommitLegacyMicPresence(authority, false, cameraEnabledOverride);
           compensated = presenceCompensation.ok && compensated;
         }
         const rolledBack = await prepared.rollback();
-        const muted = await commitProvedLegacyMicMute(authority);
+        const muted = await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
         if (muted.privacyProved && !muted.committed && isLegacyMicSessionAuthorityCurrent(authority)) {
-          await updatePresence(cameraEnabledRef.current, false);
-          await commitProvedLegacyMicMute(authority);
+          await updatePresence(cameraEnabledOverride, false);
+          await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
         }
         if (
           (!compensated || !rolledBack || !muted.committed)
@@ -3061,7 +3090,7 @@ export function useCommunicationRoomSession({
     const previousMicEnabled = micEnabledRef.current;
     const previousTopology = collectLegacyMicTopology();
     const previousTrackStates = new Map<any, boolean>(previousTopology.tracks.map((track) => [track, track.enabled !== false]));
-    const muted = await commitProvedLegacyMicMute(authority);
+    const muted = await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
     if (muted.committed) return true;
 
     const canCompensate = muted.privacyProved
@@ -3080,8 +3109,8 @@ export function useCommunicationRoomSession({
       const trackStateRestored = previousMicEnabled
         ? restoredTopology.tracks.length === 1 && restoredTopology.tracks[0]?.enabled !== false
         : restoredTopology.tracks.every(isLegacyMicTrackPrivacySafe);
-      const presenceCompensation = await strictlyCommitLegacyMicPresence(authority, previousMicEnabled);
-      const broadcastCompensation = await strictlyBroadcastLegacyMicState(authority, previousMicEnabled);
+      const presenceCompensation = await strictlyCommitLegacyMicPresence(authority, previousMicEnabled, cameraEnabledOverride);
+      const broadcastCompensation = await strictlyBroadcastLegacyMicState(authority, previousMicEnabled, cameraEnabledOverride);
       if (trackStateRestored && presenceCompensation.ok && broadcastCompensation.ok) {
         micEnabledRef.current = previousMicEnabled;
         setMicEnabled(previousMicEnabled);
