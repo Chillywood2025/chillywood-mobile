@@ -1,89 +1,145 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "contractId": "android-chat-call-mic-control-v1",
-  "targetId": "android-chat-livekit-qa-build-86",
-  "classification": "D2A_ANDROID_MIC_CONTROL_ASSURANCE",
+  "targetId": "livekit-mic-post-merge-correction",
+  "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "components/communication/communication-control-bar.tsx": "6f510ac9074a1a5b8f965ce16da61bad39b2990bbc3a16d2de0b1cc6366bc3ca",
-    "components/communication/in-room-communication-panel.tsx": "201fd733ee638956d5568d7faef794e9cf7afd2b9171abd2f8593c84a5c45327",
-    "hooks/use-chat-call-media-session.ts": "1ccbf8def5d8506cde6c17bec4be86d0e71b6388fad57247f5c2aa4a6ea77cc2",
-    "hooks/use-livekit-chat-call-session.ts": "80d3919d0d80123e02df97c7d3d5ae69f6c959a46a1b291adb050c6d57c4f07b",
-    "hooks/use-communication-room-session.ts": "0da0e6dcd12875fd56f295f2f99d11a29a0a145a0b4c444f4f3a94d63096347d",
-    "_lib/communication.ts": "efcdb6fc1151468928aea5bac45ca3c0a111782993b503ef49d744a67c122834",
-    "_lib/chatCallMediaProviderPolicy.ts": "33b45618fea1b2850081fa1396146a6f58ff76d93c20efa90ffe66cf5e4c0cf9",
-    "package-lock.json": "6818fdd11fd5044262b0aa08ba2fc56368757dfdf6fdd3e4d83b47096d43db28"
+    "hooks/use-livekit-chat-call-session.ts": "f16972de421ddaffffa008567f85ac4cffe6861f849a163adc143761087289fc",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "0ce49bb2ccd05fc9bd68fe07bc8573ee237b17d99b3b78f47a72cca642e64123",
+    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "9851a183abe9b4f7414e89d73c964a86b54901dd456305f068e5668e7a91dd49",
+    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "164bc0c0f50d9cf67e0e7a2754fb356b9ecd3fbbcd92c68674f0ac9493bcfbad"
   },
   "sourceSlices": {
-    "livekit-run-media-control": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const runMediaControl", "end": "  const updateMembershipMediaState", "sha256": "1a345aee43c21e6bca57d487c280d1fdec5fd49dd05c712d86baa94e3259f52d"},
-    "livekit-set-microphone": {"path": "hooks/use-livekit-chat-call-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const setCameraEnabled", "sha256": "d7852b05d3364ffa710f4a6f683e0a18a0fce9f0898ad8ed5526ed487ebde727"},
-    "legacy-run-serialized": {"path": "hooks/use-communication-room-session.ts", "start": "  const runSerializedMediaControl", "end": "  const ensureInitialLocalStream", "sha256": "3c9eb8ae860b0b967f34d8928b4b143a68546aed516ff57b7e5a19065f0c3388"},
-    "legacy-ensure-track-kind": {"path": "hooks/use-communication-room-session.ts", "start": "  const ensureTrackKind", "end": "  const setCameraCaptureEnabled", "sha256": "cc976894698106d1e3f1c80ecd536f7b7657bfdc2467eca3d76ac57d8888040b"},
-    "legacy-set-microphone": {"path": "hooks/use-communication-room-session.ts", "start": "  const setMicrophoneEnabled", "end": "  const toggleMic", "sha256": "a19d6f5b16e1a362e955a19e1605600f50879f71d09053642b8a559598348b52"}
-  },
-  "sharedUiCases": [
-    "MIC_ON_LABEL", "MIC_MUTED_LABEL", "MUTE_ACCESSIBILITY", "UNMUTE_ACCESSIBILITY", "SELECTED_ON",
-    "SELECTED_OFF", "DISABLED_BUSY", "DISABLED_LOADING", "DISABLED_ERROR_BOUNDARY", "PRESS_INVERTS_ONCE"
-  ],
-  "liveKitCases": [
-    "DISCONNECTED_ENABLE_DENIED", "DISCONNECTED_DISABLE_DENIED", "BUSY_ENABLE_DENIED", "BUSY_DISABLE_DENIED",
-    "ENABLE_AUDIO_SESSION_DENIED", "ENABLE_PUBLICATION_MISSING", "ENABLE_SUCCESS", "DISABLE_SUCCESS",
-    "NATIVE_SET_MIC_THROW_PROPAGATES", "THROW_PRESERVES_STATE", "MEMBERSHIP_FAILURE_NONFATAL", "CAMERA_STATE_PRESERVED",
-    "PERMISSION_ERROR_CLEARED", "PARTICIPANTS_REFRESHED", "FIRST_MEDIA_ON_ENABLE", "FIRST_MEDIA_UNCHANGED_ON_DISABLE",
-    "STAGE_EMITTED_ON_ENABLE", "NO_STAGE_ON_DISABLE", "SEQUENTIAL_ENABLE_DISABLE", "SEQUENTIAL_DISABLE_ENABLE"
-  ],
-  "legacyCases": [
-    "EXISTING_TRACK_ENABLE", "EXISTING_TRACK_DISABLE", "MISSING_TRACK_CREATED", "MISSING_TRACK_CREATE_FAILURE",
-    "DISABLE_WITHOUT_TRACK", "SAME_ENABLED_REASSERTS_TRACK", "SAME_ENABLED_MISSING_CREATES", "SAME_DISABLED_NOOP",
-    "PRESENCE_ENABLE", "PRESENCE_DISABLE", "BROADCAST_ENABLE", "BROADCAST_DISABLE", "CAMERA_STATE_PRESERVED",
-    "STATE_UPDATES_AFTER_TRACK", "TRACK_ENABLED_BEFORE_PRESENCE", "SERIAL_CONTROL", "FAILED_CONTROL_DOES_NOT_POISON_QUEUE",
-    "ORDERED_ENABLE_DISABLE", "NO_CALL_TERMINATION", "NO_UNHANDLED_CRASH_MODEL"
-  ],
-  "negativeControls": {
-    "unhandled-rejection": "ANDROID_MIC_TOGGLE_UNHANDLED_REJECTION",
-    "failure-terminates-call": "ANDROID_MIC_FAILURE_TERMINATES_CALL",
-    "duplicate-audio-track": "ANDROID_MIC_DUPLICATE_AUDIO_TRACK",
-    "track-restore-failed": "ANDROID_MIC_TRACK_RESTORE_FAILED",
-    "native-audio-fatal": "ANDROID_MIC_NATIVE_AUDIO_FATAL",
-    "serialization-bypassed": "ANDROID_MIC_CONTROL_SERIALIZATION_BYPASSED",
-    "membership-track-mismatch": "ANDROID_MIC_MEMBERSHIP_TRACK_MISMATCH",
-    "toggle-token-authority": "ANDROID_MIC_TOGGLE_TOKEN_AUTHORITY_VIOLATION",
-    "toggle-provider-immutability": "ANDROID_MIC_TOGGLE_PROVIDER_IMMUTABILITY_VIOLATION",
-    "platform-proof-crossover": "PLATFORM_PROOF_SCOPE_MISMATCH"
-  },
-  "nativeLayer": {
-    "dependency": "@livekit/react-native-webrtc",
-    "testClass": "ChillyChatMicControlInstrumentationTest",
-    "proof": "LOCAL_DEBUG_ANDROID_INSTRUMENTATION_ONLY",
-    "signedArtifactProof": false,
-    "physicalProof": false,
-    "providerContact": false,
-    "audioMatrix": {
-      "incompleteCode": "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE",
-      "required": [
-        {"id": "PERMISSION_GRANT", "method": "microphonePermissionGrantEnablesCapture", "runner": "INSTRUMENTATION"},
-        {"id": "PERMISSION_REVOKE", "method": "microphonePermissionRevokeFailsClosed", "runner": "INSTRUMENTATION"},
-        {"id": "PERMISSION_RECOVERY", "method": "microphonePermissionRecoveryRestoresCapture", "runner": "INSTRUMENTATION"},
-        {"id": "MICROPHONE_CAPTURER_STREAM", "method": "microphoneCapturerPublishesBoundAudioStream", "runner": "INSTRUMENTATION"},
-        {"id": "AUDIO_SESSION_START", "method": "audioSessionStartsForMicrophone", "runner": "INSTRUMENTATION"},
-        {"id": "AUDIO_SESSION_RESTART", "method": "audioSessionRestartsAfterInterruption", "runner": "INSTRUMENTATION"},
-        {"id": "ENDED_TRACK_RECREATION", "method": "endedTrackIsRecreated", "runner": "INSTRUMENTATION"},
-        {"id": "ENDED_TRACK_REPLACEMENT", "method": "recreatedTrackReplacesEndedTrack", "runner": "INSTRUMENTATION"},
-        {"id": "ACTIVITY_BACKGROUND", "method": "microphoneSurvivesActivityBackground", "runner": "INSTRUMENTATION"},
-        {"id": "ACTIVITY_RECREATION", "method": "microphoneSurvivesActivityRecreation", "runner": "INSTRUMENTATION"},
-        {"id": "ACTIVITY_FORCE_STOP", "method": "microphoneFailsClosedAcrossForceStop", "runner": "HOST_ADB"},
-        {"id": "SPEAKER_OVERLAP", "method": "speakerToggleSerializesWithMicrophone", "runner": "INSTRUMENTATION_WHEN_SUPPORTED"},
-        {"id": "NATIVE_AUDIO_RELEASE", "method": "nativeAudioResourcesReleaseExactlyOnce", "runner": "INSTRUMENTATION"},
-        {"id": "FATAL_LOGCAT_SCAN", "method": "fatalLogcatScan", "runner": "HOST_LOGCAT"}
-      ]
+    "committed-session-layout-effect": {
+      "path": "hooks/use-livekit-chat-call-session.ts",
+      "start": "  useLayoutEffect(() => {",
+      "end": "  useEffect(() => {\n    onRoomEndedRef.current = onRoomEnded;",
+      "sha256": "8e565b7b8fc9d567d44d2012aba8756df6b9fe5c60436a70bc0a969baaf4a536"
+    },
+    "session-media-write-coordinator": {
+      "path": "hooks/use-livekit-chat-call-session.ts",
+      "start": "  const enqueueSessionMediaWrite",
+      "end": "  const refreshParticipantViews",
+      "sha256": "a7eac773b5609f29c3364f4181d43043f859f41974aa3c72587eb3472e36c0d7"
+    },
+    "permission-reconciliation-separation": {
+      "path": "hooks/use-livekit-chat-call-session.ts",
+      "start": "  const setReconciliationWarning",
+      "end": "  const isCommittedSessionCurrent",
+      "sha256": "d95315cb36e6b0fcaedecf18c6b00b0953e0008dc140eae084bfc255b4b4a7a2"
+    },
+    "strict-microphone-transaction": {
+      "path": "hooks/use-livekit-chat-call-session.ts",
+      "start": "  const setMicrophoneEnabled",
+      "end": "  const setCameraEnabled",
+      "sha256": "0dbed09716d3c9fbb5bc1c5775822ed8f10bdade32d55228a1065b259ec71a52"
     }
+  },
+  "preFixReproductions": [
+    "HEARTBEAT_OLD_WRITE_OVERWROTE_STRICT_TOGGLE",
+    "SAME_ROOM_OBJECT_REFRESH_RETIRED_TRANSACTION",
+    "ABANDONED_RENDER_RETIRED_ACTIVE_SESSION",
+    "MEMBERSHIP_FAILURE_REPORTED_PERMISSION_DENIAL",
+    "T2_USED_EXTRACTED_ADAPTER_NOT_MOUNTED_HOOK"
+  ],
+  "requiredCaseMatrix": [
+    "01_OLD_HEARTBEAT_CANNOT_OVERWRITE_ENABLE",
+    "02_OLD_HEARTBEAT_CANNOT_OVERWRITE_DISABLE",
+    "03_HEARTBEAT_DURING_TRANSITION_DEFERS",
+    "04_DEFERRED_HEARTBEAT_RECOMPUTES_FINAL",
+    "05_MULTIPLE_HEARTBEATS_COALESCE",
+    "06_OLD_SESSION_HEARTBEAT_DISCARDED",
+    "07_APPSTATE_WRITE_SERIALIZED",
+    "08_NATIVE_AUDIO_RECONCILIATION_SERIALIZED",
+    "09_SAME_ROOM_NEW_OBJECT_VALID",
+    "10_DIFFERENT_ROOM_STALE",
+    "11_DIFFERENT_INVITE_STALE",
+    "12_DIFFERENT_USER_STALE",
+    "13_REPLACEMENT_LIVEKIT_ROOM_STALE",
+    "14_COMMITTED_GENERATION_CHANGE_STALE",
+    "15_TERMINAL_ROOM_STALE",
+    "16_ABANDONED_RENDER_NO_INCREMENT",
+    "17_RESTARTED_RENDER_NO_INCREMENT",
+    "18_SAME_SESSION_NO_INCREMENT",
+    "19_COMMITTED_REPLACEMENT_ONCE",
+    "20_OLD_VALID_UNTIL_REPLACEMENT_COMMIT",
+    "21_OLD_STALE_AFTER_REPLACEMENT_COMMIT",
+    "22_MIC_PERMISSION_DENIAL_ONLY",
+    "23_CAMERA_PERMISSION_DENIAL_ONLY",
+    "24_MEMBERSHIP_NULL_NOT_PERMISSION",
+    "25_NETWORK_REJECT_NOT_PERMISSION",
+    "26_INCONSISTENT_READBACK_NOT_PERMISSION",
+    "27_SETTINGS_ONLY_NATIVE_DENIAL",
+    "28_RECONCILIATION_RECOVERY_CLEARS_WARNING",
+    "29_CALL_REMAINS_ACTIVE",
+    "30_CAMERA_UNCHANGED",
+    "31_SPEAKER_UNCHANGED",
+    "32_ONE_USABLE_MIC_PUBLICATION",
+    "33_NO_TOKEN_REISSUE",
+    "34_NO_PROVIDER_CROSSOVER",
+    "35_NO_CLEANUP",
+    "36_NO_TERMINAL_MEMBERSHIP",
+    "37_NO_NATIVE_FATAL",
+    "38_NO_UNHANDLED_REJECTION"
+  ],
+  "negativeControls": [
+    "HEARTBEAT_BYPASSES_STRICT_LEASE",
+    "HEARTBEAT_QUEUES_STALE_MIC_VALUE",
+    "PRODUCT_ROOM_OBJECT_EQUALITY_RESTORED",
+    "GENERATION_MUTATED_DURING_RENDER",
+    "ABANDONED_RENDER_INCREMENTS_GENERATION",
+    "RECONCILIATION_MARKS_PERMISSION_DENIED",
+    "SETTINGS_ENABLED_BY_RECONCILIATION",
+    "EXTRACTED_ADAPTER_LABELED_MOUNTED",
+    "T2_CONTRACT_EVIDENCE_DISAGREEMENT",
+    "STALE_SESSION_WRITES_REPLACEMENT_STATE",
+    "SUCCESS_BEFORE_DURABLE_CONVERGENCE",
+    "TOKEN_REQUEST_DURING_TOGGLE",
+    "PROVIDER_MUTATION_DURING_TOGGLE",
+    "CALL_CLEANUP_ON_TOGGLE_FAILURE",
+    "DURABLE_QUEUE_KEYED_BY_SESSION_GENERATION",
+    "UNBOUNDED_MEDIA_WRITE_PREDECESSOR",
+    "TERMINAL_SESSION_RESURRECTION",
+    "DISABLE_ERASES_PERMISSION_DENIAL",
+    "STALE_CLEANUP_LEAVES_REPLACEMENT",
+    "MEDIA_QUEUE_TIMEOUT_DROPS_PREDECESSOR",
+    "MEDIA_QUEUE_TIMEOUT_RELEASES_INTERMEDIATE_RESERVATION",
+    "NATIVE_RECONCILIATION_ESCALATION_DROPPED",
+    "UNBOUNDED_MEDIA_WRITE_OPERATION",
+    "ACTIVE_OPERATION_TIMEOUT_IGNORED_BY_STRICT_TRANSACTION",
+    "RECONNECTED_BYPASSES_DURABLE_CONVERGENCE",
+    "ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION",
+    "STALE_CLEANUP_REUSES_DURABLE_SNAPSHOT",
+    "INITIAL_CONVERGENCE_FAILURE_MARKS_LIVE"
+  ],
+  "mountedHookEvidence": {
+    "execution": "REACT_DOM_COMMIT_PHASE_EXACT_HOOK",
+    "testFile": "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs",
+    "helperFile": "tests/assurance/helpers/livekit-mounted-hook-harness.mjs",
+    "executesWholeHookSource": true,
+    "executesInternalAdapterModel": false,
+    "mockedBoundaries": [
+      "LIVEKIT_ROOM_PARTICIPANT",
+      "MEMBERSHIP_API",
+      "AUDIO_SESSION",
+      "APPSTATE",
+      "TIMERS",
+      "TELEMETRY",
+      "TOKEN_BOUNDARY"
+    ],
+    "requiredCaseCount": 38,
+    "result": "PASS"
   },
   "proofTiers": {
     "T1_SOURCE": "SOURCE_BOUND",
-    "T2_MODEL": "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION",
+    "T2_MODEL": "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION",
     "T3_INTEGRATION": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE",
     "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE",
     "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
     "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
     "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
-  }
+  },
+  "providerContact": false,
+  "hostedCodexSecurity": false,
+  "providerCodexReview": "OPTIONAL_ADVISORY_NOT_REQUESTED"
 }

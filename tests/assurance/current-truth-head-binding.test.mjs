@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   baseSynchronizationFirstParentDistance,
+  baseSynchronizationReviewReceiptHash,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
@@ -14,6 +15,7 @@ import {
   sha256,
   stableJson,
   verifyBaseSynchronizedImplementationHead,
+  verifyCurrentTruthBindingSynchronization,
   verifyCurrentTruthHeadBindings,
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization
@@ -28,6 +30,10 @@ const pr52Branch = "codex/cognitive-level01-livekit-sentinel-live-activation";
 const pr64Branch = "codex/first-pass-assurance-models";
 const headBindingBranch = git(["branch", "--show-current"]) || "codex/first-pass-assurance-current-truth-head-binding";
 const headBindingHead = git(["rev-parse", "HEAD"]);
+const canonicalCurrentTruth = readJson("config/assurance/current-truth-v1.json");
+const expectedHeadBindingContext = canonicalCurrentTruth.openImplementationPrs.some(({ branch }) => branch === headBindingBranch)
+  ? "listed-implementation-branch"
+  : "unlisted-control-branch";
 assert.equal(isValidGitBranchName(headBindingBranch), true);
 const entries = [
   { number: 52, branch: pr52Branch, head: pr52Head, state: "open-draft", disposition: "reconcile" },
@@ -120,10 +126,16 @@ const baseSyncReviewEvidence = {
   reviewOnly: true,
   mergePermitted: false,
   criticalFindingCounts: { P0: 0, P1: 0 },
+  reviewProvider: "INDEPENDENT_REPOSITORY_REVIEW",
+  reviewerId: "independent-lane-1",
+  reviewedCommit: pr64Observed,
+  reviewedTree: synchronizedTree,
   reviewRef: "refs/remotes/origin/codex/pr64-review",
   reviewRefHead: "4".repeat(40),
+  reviewRefTree: "5".repeat(40),
   reviewTimestamp: "2026-08-01T20:00:00Z"
 };
+baseSyncReviewEvidence.reviewReceiptHash = baseSynchronizationReviewReceiptHash(baseSyncReviewEvidence);
 const baseSyncFacts = {
   sourceIsAncestor: true,
   commitDistance: 1,
@@ -143,6 +155,7 @@ const baseSyncFacts = {
   evaluationTime: "2026-08-01T20:30:00Z"
 };
 const verifyBaseSync = (facts = {}) => verify({
+  evaluationTime: baseSyncFacts.evaluationTime,
   observedRefs: { ...exactRefs, [implementationRemoteRef(pr64Branch)]: pr64Observed },
   baseSynchronizations: {
     [implementationRemoteRef(pr64Branch)]: { ...baseSyncFacts, ...facts }
@@ -155,6 +168,24 @@ const synchronizedBinding = matrix.baseSynchronized.bindings.find(({ number }) =
 assert.equal(synchronizedBinding.classification, "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH");
 assert.equal(synchronizedBinding.recordedHead, pr64Recorded);
 assert.equal(synchronizedBinding.observedHead, pr64Observed);
+
+const currentTruthBinding = verifyCurrentTruthBindingSynchronization({
+  sourceHead: pr64Recorded,
+  synchronizedHead: pr64Observed,
+  synchronizedTree: "f".repeat(40),
+  currentMain: main,
+  parents: [pr64Recorded],
+  commitDistance: 1,
+  changedPaths: ["NEXT_TASK.md", "config/assurance/current-truth-v1.json", "CURRENT_STATE.md"]
+});
+assert.equal(currentTruthBinding.ok, true);
+assert.equal(currentTruthBinding.classification, "CURRENT_TRUTH_BINDING_COMMIT");
+assert.equal(verifyCurrentTruthBindingSynchronization({
+  ...currentTruthBinding,
+  parents: [pr64Recorded],
+  commitDistance: 1,
+  changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json", "scripts/assurance/lib.mjs"]
+}).ok, false);
 
 const rejectionCases = [
   ["arbitraryCommit", { parents: [pr64Recorded] }, "ASSURANCE_BASE_SYNC_PARENT_SHAPE_INVALID"],
@@ -181,7 +212,9 @@ const rejectionCases = [
   ["expiredReview", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewTimestamp: "2026-07-30T20:00:00Z" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
   ["futureReview", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewTimestamp: "2026-08-02T20:00:00Z" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
   ["reviewAllowsMerge", { reviewEvidence: [{ ...baseSyncReviewEvidence, mergePermitted: true }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
-  ["reviewCriticalFinding", { reviewEvidence: [{ ...baseSyncReviewEvidence, criticalFindingCounts: { P0: 0, P1: 1 } }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"]
+  ["reviewCriticalFinding", { reviewEvidence: [{ ...baseSyncReviewEvidence, criticalFindingCounts: { P0: 0, P1: 1 } }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["reviewProviderForged", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewProvider: "SELF_ATTESTED" }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"],
+  ["reviewReceiptAltered", { reviewEvidence: [{ ...baseSyncReviewEvidence, reviewReceiptHash: "6".repeat(64) }] }, "ASSURANCE_BASE_SYNC_REVIEW_EVIDENCE_MISSING_OR_STALE"]
 ];
 for (const [label, facts, findingId] of rejectionCases) {
   const result = verifyBaseSync(facts);
@@ -346,9 +379,11 @@ for (const codePoint of [...Array.from({ length: 33 }, (_, index) => index), 127
 }
 const numberSchema = schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.number;
 assert.deepEqual(numberSchema, { type: "integer", minimum: 1 });
-const statePattern = new RegExp(schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.state.pattern, "u");
-for (const validState of ["open", "open-draft", "open draft"]) assert.equal(statePattern.test(validState), true);
-for (const invalidState of ["", " ", " open", "open ", "\topen"]) assert.equal(statePattern.test(invalidState), false);
+const stateValues = schemas.$defs.currentTruthRecord.properties.openImplementationPrs.items.properties.state.enum;
+assert.deepEqual(stateValues, ["open", "open-draft-current"]);
+for (const invalidState of ["", " ", " open", "open ", "\topen", "closed-unopened", "open-draft-stale"]) {
+  assert.equal(stateValues.includes(invalidState), false);
+}
 
 const baseSyncContract = readJson("config/assurance/current-truth-contract-v1.json").implementationHeadBinding.baseSynchronization;
 assert.equal(baseSyncContract.classification, "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH");
@@ -363,6 +398,8 @@ assert.equal(baseSyncContract.sourceDeltaMustBeByteEquivalent, true);
 assert.equal(baseSyncContract.changedPathSetMustBeEquivalent, true);
 assert.equal(baseSyncContract.providerRemoteRefMustMatch, true);
 assert.equal(baseSyncContract.reviewFreshnessHours, 24);
+assert.equal(baseSyncContract.reviewProvider, "INDEPENDENT_REPOSITORY_REVIEW");
+assert.equal(baseSyncContract.reviewReceiptHashAlgorithm, "sha256");
 assert.equal(baseSyncContract.repeatedMergeChainAllowed, false);
 assert.equal(baseSyncContract.manualResolutionAllowed, false);
 assert.deepEqual(baseSyncContract.criticalFindingMaximum, { P0: 0, P1: 0 });
@@ -425,10 +462,12 @@ try {
     return JSON.parse(cli.stdout.trim().split(/\r?\n/u).at(-1));
   };
 
-  const payload = runSnapshotCli("empty-open-implementation-inventory.json", `${JSON.stringify({ openImplementationPrs: [] })}\n`);
-  assert.equal(payload.headBindings.context, "unlisted-control-branch");
+  const payload = runSnapshotCli("unexpected-open-implementation-inventory.json", `${JSON.stringify({
+    openImplementationPrs: [{ number: 999, branch: "codex/unexpected-provider-implementation", head: "9".repeat(40), state: "open-draft" }]
+  })}\n`);
+  assert.equal(payload.headBindings.context, expectedHeadBindingContext);
   assert.equal(payload.providerImplementationSnapshot.ok, false);
-  assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_MISSING"));
+  assert(payload.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_PROVIDER_IMPLEMENTATION_EXTRA"));
 
   const invalidJsonPayload = runSnapshotCli("invalid.json", "{");
   assert.equal(invalidJsonPayload.ok, false);
@@ -441,4 +480,4 @@ try {
   fs.rmSync(tempDirectory, { recursive: true });
 }
 
-process.stdout.write(`current-truth head binding: PASS (exact-head cases unchanged; first-parent base-sync acceptance plus 25 fail-closed rejection cases; provider CLI fail-closed; deterministic 3/3; ${hashes[0]})\n`);
+process.stdout.write(`current-truth head binding: PASS (exact-head cases unchanged; first-parent base-sync acceptance plus ${rejectionCases.length} fail-closed rejection cases; provider CLI fail-closed; deterministic 3/3; ${hashes[0]})\n`);

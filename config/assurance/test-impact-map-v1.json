@@ -4,6 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/testImpactMap",
   "supportingDomain": "CI-test-infrastructure",
   "pathRules": [
+    {"match": ["scripts/assurance/codex-security-", "tests/assurance/codex-security-reliability-s0.test.mjs", "config/assurance/codex-security-"], "gates": ["assurance-codex-security-target", "assurance-codex-security-preflight", "assurance-codex-security-lifecycle", "assurance-codex-security-repository-closure", "assurance-final-summary"]},
     {"match": ["*.md", "docs/", "config/assurance/"], "gates": ["assurance-contracts", "assurance-current-truth", "assurance-pr-scope", "assurance-review-head", "links", "git-diff", "assurance-final-summary"]},
     {"match": ["supabase/migrations/", "supabase/tests/"], "gates": ["focused-pgTAP", "RLS", "assurance-concurrency", "assurance-migration-source", "full-database-frozen-head", "assurance-final-summary"]},
     {"match": ["plugins/", "modules/", "app.config.ts"], "gates": ["generated-native", "native-compile", "native-tests", "assurance-native", "assurance-ota-parity", "assurance-artifact"]},
@@ -12,7 +13,7 @@
     {"match": [".github/", "package.json", "package-lock.json"], "gates": ["assurance-contracts", "assurance-pr-scope", "supply-chain", "assurance-final-summary"]}
   ],
   "riskCommands": {
-    "A": ["node scripts/assurance/validate-contracts.mjs", "node scripts/assurance/current-truth.mjs", "git diff --check"],
+    "A": ["node scripts/assurance/validate-contracts.mjs", "node scripts/assurance/current-truth.mjs", "node --test tests/assurance/github-main-ruleset-readback.test.mjs", "node --test tests/assurance/codex-review-exact-head.test.mjs", "git diff --check"],
     "B": ["npm run lint", "npm run typecheck", "node scripts/assurance/impact.mjs", "full Phase 1 CI at frozen head"],
     "C": ["all Level B commands", "applicable model/property/concurrency/native/provider/artifact gates", "four exact-head review lanes", "full Phase 1 CI at frozen head"],
     "D": ["separate owner-authorized task", "external confirmation when applicable"]

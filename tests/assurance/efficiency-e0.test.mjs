@@ -8,6 +8,12 @@ import { runReceipt } from "../../scripts/assurance/receipt.mjs";
 import { archive, reviewHistory } from "../../scripts/assurance/review-history.mjs";
 import { benchmark } from "../../scripts/assurance/benchmark.mjs";
 import { exactKey, sha256 } from "../../scripts/assurance/efficiency-lib.mjs";
+import {
+  evaluateFreshnessClaims,
+  evaluateTaskFreshness,
+  externalEvidenceBindingHash,
+  externalEvidenceReceiptHash
+} from "../../scripts/assurance/lib.mjs";
 
 const root = process.cwd();
 const read = (file) => JSON.parse(fs.readFileSync(`${root}/${file}`, "utf8"));
@@ -15,6 +21,16 @@ const truth = read("config/assurance/current-truth-v1.json");
 const registry = read("config/assurance/feature-registry-v1.json");
 const allowlist = read("config/assurance/command-allowlist-v1.json");
 const feature = registry.features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
+const legacyTruth = structuredClone(truth);
+delete legacyTruth.activeTaskBinding;
+legacyTruth.lateReviewSentinels = [];
+legacyTruth.openImplementationPrs = [{
+  number: 185,
+  branch: "codex/assurance-efficiency-e0",
+  head: "a".repeat(40),
+  state: "open",
+  featureId: "assurance-efficiency-e0"
+}];
 const head = "a".repeat(40); const tree = "b".repeat(40);
 const identity = {
   branch: "codex/assurance-efficiency-e0",
@@ -28,15 +44,13 @@ const identity = {
   pathHash: "f".repeat(64),
   changedFiles: ["scripts/assurance/active-task.mjs", "tests/assurance/efficiency-e0.test.mjs"]
 };
-const implementation = { pr: null, branch: identity.branch, state: "LOCAL_PRE_PR", immutableSourceHead: head, immutableSourceTree: tree };
 const packetFacts = {
-  currentTruth: truth,
+  currentTruth: legacyTruth,
   registry,
   allowlist,
   identity,
-  implementation,
+  legacyImplementationObservations: { remoteHead: head, currentTree: tree },
   truthCheck: { ok: true },
-  inferredFeatures: [feature.featureId],
   directlyAffectedSymbols: ["scripts/assurance/active-task.mjs#activeTask"],
   blockers: [{ id: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT" }]
 };
@@ -47,7 +61,7 @@ test("active-task packet is deterministic 3/3 and compact", () => {
   assert.equal(JSON.stringify(packets[0]), JSON.stringify(packets[1]));
   assert.equal(JSON.stringify(packets[1]), JSON.stringify(packets[2]));
   assert.equal(packets[0].packet.authority.contractId, "current-truth-record-v1");
-  assert.equal(packets[0].packet.implementation.state, "LOCAL_PRE_PR");
+  assert.equal(packets[0].packet.implementation.state, "open");
   assert.equal(packets[0].packet.requiredCommandIds.length, feature.commands.length);
   assert.deepEqual(Object.keys(packets[0].packet.proofTiers).sort(), ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]);
   assert.equal(JSON.stringify(packets[0].packet).includes("assuranceProgram"), false, "unrelated historical truth excluded");
@@ -56,16 +70,16 @@ test("active-task packet is deterministic 3/3 and compact", () => {
 test("active-task identity, authority, ownership, P1 and mandatory-command controls fail closed", () => {
   assert.equal(activeTask({ ...packetFacts, truthCheck: { ok: false } }).ok, false, "stale current truth");
   assert.equal(activeTask({ ...packetFacts, featureId: "nope" }).ok, false, "active feature conflict");
-  assert.equal(activeTask({ ...packetFacts, inferredFeatures: [feature.featureId, "chilly-chat-call-lifecycle"] }).ok, false, "ambiguous task");
-  assert.equal(activeTask({ ...packetFacts, currentTruth: { ...truth, openImplementationPrs: [{ number: 1 }, { number: 2 }] }, implementation: undefined }).ok, false, "duplicate implementation ownership");
+  assert.equal(activeTask({ ...packetFacts, currentTruth: { ...legacyTruth, openImplementationPrs: [{ ...legacyTruth.openImplementationPrs[0], featureId: undefined }] } }).ok, false, "ambiguous task");
+  assert.equal(activeTask({ ...packetFacts, currentTruth: { ...legacyTruth, openImplementationPrs: [{ number: 1 }, { number: 2 }] }, implementation: undefined }).ok, false, "duplicate implementation ownership");
   assert.equal(activeTask({ ...packetFacts, stopConditions: { P0: "STOP" } }).ok, false, "P1 omitted");
   const missingCommand = { ...allowlist, commands: allowlist.commands.filter(({ id }) => id !== "focused-test") };
   assert.equal(activeTask({ ...packetFacts, allowlist: missingCommand }).ok, false, "mandatory test dropped");
 });
 
-test("post-E0 current truth resolves the frozen D2A checkpoint without resuming it", () => {
+test("legacy status text cannot substitute a historical frozen D2A checkpoint", () => {
   const d2aTruth = {
-    ...truth,
+    ...legacyTruth,
     openImplementationPrs: [],
     assuranceProgram: { ...truth.assuranceProgram, active: "E0_COMPLETE_D2A_READY_NOT_RESUMED" }
   };
@@ -79,11 +93,262 @@ test("post-E0 current truth resolves the frozen D2A checkpoint without resuming 
     directlyAffectedSymbols: [],
     blockers: [{ id: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT" }]
   });
-  assert.equal(result.ok, true, result.findings?.join(","));
-  assert.equal(result.packet.featureId, "chilly-chat-call-lifecycle");
-  assert.equal(result.packet.implementation.immutableSourceHead, "8c47a3a9bff9f9630ba14837652ec31c14be0629");
-  assert.equal(result.packet.implementation.immutableSourceTree, "f9e102649b51da84324e97b576823e910340df9f");
-  assert.equal(result.packet.commands.some(({ id, resultContract }) => id.startsWith("deferred:") && resultContract.executable === false), true, "generic pgTAP remains explicit and non-executable until D2A resolves it");
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.findings, ["ACTIVE_TASK_NONE"]);
+});
+
+const canonicalFreshnessContract = read("config/assurance/current-truth-contract-v1.json").freshness;
+const freshnessContract = {
+  ...canonicalFreshnessContract,
+  factRegistry: [
+    { factId: "repository.fixture.exact-source", freshnessClass: "REPOSITORY_SOURCE", authorityAllowed: "REPOSITORY_ONLY", platform: "NONE", provider: "NONE" },
+    { factId: "provider.supabase.fixture.historical", freshnessClass: "PROVIDER_CRITICAL", authorityAllowed: "PROVIDER_READBACK_ONLY", platform: "NONE", provider: "SUPABASE" },
+    { factId: "artifact.google-play.fixture.signed", freshnessClass: "SIGNED_ARTIFACT", authorityAllowed: "SIGNED_ARTIFACT_ONLY", platform: "ANDROID", provider: "GOOGLE_PLAY" }
+  ]
+};
+const externalEvidencePolicy = read("config/assurance/external-evidence-receipt-v1.json");
+const freshnessNow = new Date("2026-08-09T18:05:09Z");
+const repositorySource = {
+  id: "repository-source-fixture",
+  status: "CURRENT",
+  observedAt: "2026-08-09T18:05:08Z",
+  expiresAt: "2026-08-10T18:05:08Z",
+  evidenceSourceId: "repository-source-evidence",
+  evidenceMode: "local-offline-and-github-read-only",
+  factsCovered: ["repository.fixture.exact-source"],
+  freshnessClass: "REPOSITORY_SOURCE",
+  authorityAllowed: "REPOSITORY_ONLY",
+  platform: "NONE",
+  provider: "NONE",
+  subjectHead: "a".repeat(40),
+  subjectTree: "b".repeat(40)
+};
+const staleProvider = {
+  id: "provider-critical-fixture",
+  status: "STALE_BLOCKED",
+  observedAt: "2026-08-02T06:00:44Z",
+  expiresAt: "2026-08-02T14:00:44Z",
+  evidenceSourceId: "provider-readback-evidence",
+  evidenceMode: "local-and-linked-read-only",
+  factsCovered: ["provider.supabase.fixture.historical"],
+  freshnessClass: "PROVIDER_CRITICAL",
+  authorityAllowed: "PROVIDER_READBACK_ONLY",
+  platform: "NONE",
+  provider: "SUPABASE"
+};
+const freshnessSources = [
+  { id: repositorySource.evidenceSourceId, mode: repositorySource.evidenceMode, observedAt: repositorySource.observedAt, covers: repositorySource.factsCovered, freshnessClass: repositorySource.freshnessClass, authorityAllowed: repositorySource.authorityAllowed, platform: repositorySource.platform, provider: repositorySource.provider, subjectHead: repositorySource.subjectHead, subjectTree: repositorySource.subjectTree },
+  { id: staleProvider.evidenceSourceId, mode: staleProvider.evidenceMode, observedAt: staleProvider.observedAt, covers: staleProvider.factsCovered, freshnessClass: staleProvider.freshnessClass, authorityAllowed: staleProvider.authorityAllowed, platform: staleProvider.platform, provider: staleProvider.provider, payloadHash: "1".repeat(64) }
+];
+const sourceRequirement = {
+  freshnessClass: "REPOSITORY_SOURCE",
+  platform: "NONE",
+  evidenceSourceId: repositorySource.evidenceSourceId,
+  authorityAllowed: "REPOSITORY_ONLY",
+  requiredFacts: [repositorySource.factsCovered[0]],
+  subjectHead: repositorySource.subjectHead,
+  subjectTree: repositorySource.subjectTree
+};
+const providerRequirement = {
+  freshnessClass: "PROVIDER_CRITICAL",
+  platform: "NONE",
+  evidenceSourceId: staleProvider.evidenceSourceId,
+  authorityAllowed: "PROVIDER_READBACK_ONLY",
+  requiredFacts: [staleProvider.factsCovered[0]]
+};
+const syntheticExternalEvidenceVerifier = {
+  policy: externalEvidencePolicy,
+  receiptFor: ({ claim, source }) => {
+    const receipt = {
+      schemaVersion: 1,
+      receiptId: `synthetic:${claim.id}`,
+      evidenceClass: claim.freshnessClass,
+      provider: claim.provider ?? source.provider,
+      platform: claim.platform,
+      observedAt: claim.observedAt,
+      expiresAt: claim.expiresAt,
+      receiptIssuer: "SYNTHETIC_ASSURANCE_FIXTURE_ISSUER",
+      receiptSchema: "synthetic-assurance-external-evidence-v1",
+      payloadHash: source.payloadHash,
+      evidenceHash: externalEvidenceBindingHash({ claim, source }),
+      collectionCommand: externalEvidencePolicy.approvedCollectionCommands[claim.freshnessClass]?.[0],
+      selfAttested: false
+    };
+    receipt.receiptHash = externalEvidenceReceiptHash(receipt);
+    return receipt;
+  },
+  verifyIssuerReceipt: ({ receipt }) => receipt.receiptIssuer === "SYNTHETIC_ASSURANCE_FIXTURE_ISSUER"
+};
+const evaluateClaims = (input) => evaluateFreshnessClaims({
+  ...input,
+  allowSyntheticFactRegistry: true,
+  allowSyntheticExternalEvidence: true,
+  evidenceSourceVerifier: () => true,
+  externalEvidenceVerifier: syntheticExternalEvidenceVerifier
+});
+
+test("claim-scoped freshness denies crossover and keeps stale provider state scoped", () => {
+  const baseline = evaluateClaims({
+    claims: [repositorySource, staleProvider],
+    evidenceSources: freshnessSources,
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(baseline.ok, true);
+  assert.equal(baseline.liveProviderReadback, false);
+  assert.deepEqual(baseline.currentClaims.map(({ freshnessClass }) => freshnessClass), ["REPOSITORY_SOURCE"], "local/GitHub evidence refreshes repository truth only");
+  assert.deepEqual(baseline.blockedClaims.map(({ freshnessClass }) => freshnessClass), ["PROVIDER_CRITICAL"], "GitHub-only evidence does not refresh provider truth");
+
+  const providerAtDeadline = evaluateClaims({
+    claims: [{ ...staleProvider, status: "CURRENT" }],
+    evidenceSources: [freshnessSources[1]],
+    freshness: freshnessContract,
+    now: new Date(staleProvider.expiresAt)
+  });
+  assert.equal(providerAtDeadline.liveProviderReadback, true);
+  const providerAfterDeadline = evaluateClaims({
+    claims: [staleProvider], evidenceSources: [freshnessSources[1]], freshness: freshnessContract,
+    now: new Date(new Date(staleProvider.expiresAt).valueOf() + 1)
+  });
+  assert.equal(providerAfterDeadline.liveProviderReadback, false, "provider deadline expires after exactly eight hours");
+
+  const widenedProviderWindow = evaluateClaims({
+    claims: [staleProvider],
+    evidenceSources: [freshnessSources[1]],
+    freshness: {
+      ...freshnessContract,
+      classes: {
+        ...freshnessContract.classes,
+        PROVIDER_CRITICAL: { ...freshnessContract.classes.PROVIDER_CRITICAL, maximumHours: 24 }
+      }
+    },
+    now: freshnessNow
+  });
+  assert.equal(widenedProviderWindow.ok, false, "the named eight-hour provider window cannot be widened through its class rule");
+  assert.equal(widenedProviderWindow.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_CLASS_RULE_MISMATCH"), true);
+  const pairedWidening = evaluateClaims({
+    claims: [{ ...staleProvider, status: "CURRENT", expiresAt: "2026-08-03T06:00:44Z" }],
+    evidenceSources: [freshnessSources[1]],
+    freshness: {
+      ...freshnessContract,
+      providerCriticalHours: 24,
+      classes: {
+        ...freshnessContract.classes,
+        PROVIDER_CRITICAL: { ...freshnessContract.classes.PROVIDER_CRITICAL, maximumHours: 24 }
+      }
+    },
+    now: new Date("2026-08-02T20:00:44Z")
+  });
+  assert.equal(pairedWidening.ok, false, "provider TTL and class rule cannot be widened together");
+  assert.equal(pairedWidening.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_POLICY_MISMATCH"), true);
+  const forgedProviderTimestamp = evaluateFreshnessClaims({
+    claims: [staleProvider],
+    evidenceSources: [freshnessSources[1]],
+    freshness: freshnessContract,
+    now: freshnessNow,
+    allowSyntheticFactRegistry: true,
+    evidenceSourceVerifier: () => false
+  });
+  assert.equal(forgedProviderTimestamp.ok, false, "provider timestamp requires immutable committed provenance");
+  assert(forgedProviderTimestamp.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_EVIDENCE_PROVENANCE_UNVERIFIED"));
+
+  const extendedDocumentOnly = evaluateClaims({
+    claims: [staleProvider], evidenceSources: [freshnessSources[1]], freshness: freshnessContract,
+    now: freshnessNow, timestamp: "2099-01-01T00:00:00Z", freshnessDeadline: "2099-01-02T00:00:00Z"
+  });
+  assert.equal(extendedDocumentOnly.liveProviderReadback, false, "global document time cannot extend provider claims");
+  assert.equal(evaluateTaskFreshness(baseline, [providerRequirement]).eligible, false, "provider-dependent task fails closed");
+  assert.equal(evaluateTaskFreshness(baseline, [sourceRequirement]).eligible, true, "source-only review remains eligible");
+  assert.equal(evaluateTaskFreshness(providerAtDeadline, [providerRequirement]).eligible, true, "provider task accepts only its exact current fact and evidence identity");
+  assert.equal(evaluateTaskFreshness(providerAtDeadline, [{ ...providerRequirement, requiredFacts: ["unrelated provider fact"] }]).eligible, false, "unrelated provider evidence cannot authorize the task");
+  assert.equal(evaluateTaskFreshness(providerAtDeadline, ["PROVIDER_CRITICAL"]).eligible, false, "class-only provider requirements fail closed");
+
+  for (const [label, freshnessClass, evidenceMode, authorityAllowed] of [
+    ["signed cannot refresh installed", "INSTALLED_DEVICE", "signed-artifact-inspection", "INSTALLED_DEVICE_ONLY"],
+    ["installed cannot refresh physical", "PHYSICAL_DEVICE", "installed-device-readback", "PHYSICAL_DEVICE_ONLY"],
+    ["GitHub cannot refresh provider", "PROVIDER_CRITICAL", repositorySource.evidenceMode, "PROVIDER_READBACK_ONLY"]
+  ]) {
+    const claim = {
+      ...repositorySource,
+      id: label.replaceAll(" ", "-"),
+      freshnessClass,
+      evidenceMode,
+      authorityAllowed,
+      evidenceSourceId: `${label.replaceAll(" ", "-")}-evidence`
+    };
+    const result = evaluateClaims({
+      claims: [claim],
+      evidenceSources: [{ id: claim.evidenceSourceId, mode: claim.evidenceMode, observedAt: claim.observedAt, covers: claim.factsCovered, freshnessClass: claim.freshnessClass, authorityAllowed: claim.authorityAllowed, platform: claim.platform }],
+      freshness: freshnessContract,
+      now: freshnessNow
+    });
+    assert.equal(result.ok, false, label);
+    assert(result.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_CLASS_CROSSOVER"), label);
+  }
+
+  const androidSigned = {
+    ...repositorySource,
+    id: "android-signed",
+    freshnessClass: "SIGNED_ARTIFACT",
+    evidenceMode: "signed-artifact-inspection",
+    authorityAllowed: "SIGNED_ARTIFACT_ONLY",
+    platform: "ANDROID",
+    evidenceSourceId: "android-signed-evidence",
+    provider: "GOOGLE_PLAY"
+  };
+  androidSigned.factsCovered = ["artifact.google-play.fixture.signed"];
+  const androidSignedSource = { id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt, covers: androidSigned.factsCovered, freshnessClass: androidSigned.freshnessClass, authorityAllowed: androidSigned.authorityAllowed, platform: androidSigned.platform, provider: androidSigned.provider, payloadHash: "2".repeat(64) };
+  const androidEvaluation = evaluateClaims({
+    claims: [androidSigned],
+    evidenceSources: [androidSignedSource],
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(androidEvaluation.ok, true);
+  const androidRequirement = {
+    freshnessClass: "SIGNED_ARTIFACT",
+    platform: "ANDROID",
+    evidenceSourceId: androidSigned.evidenceSourceId,
+    authorityAllowed: "SIGNED_ARTIFACT_ONLY",
+    requiredFacts: [androidSigned.factsCovered[0]]
+  };
+  assert.equal(evaluateTaskFreshness(androidEvaluation, [{ ...androidRequirement, platform: "IOS" }]).eligible, false, "Android evidence cannot refresh iOS evidence");
+  const forgedCrossPlatform = evaluateClaims({
+    claims: [{ ...androidSigned, platform: "CROSS_PLATFORM" }],
+    evidenceSources: [{ id: androidSigned.evidenceSourceId, mode: androidSigned.evidenceMode, observedAt: androidSigned.observedAt, covers: androidSigned.factsCovered, freshnessClass: androidSigned.freshnessClass, authorityAllowed: androidSigned.authorityAllowed, platform: "CROSS_PLATFORM" }],
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(forgedCrossPlatform.ok, false, "a claim cannot self-attest cross-platform coverage");
+  assert.equal(forgedCrossPlatform.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_PLATFORM_MALFORMED"), true);
+
+  const unboundRepositoryFact = evaluateClaims({
+    claims: [{ ...repositorySource, factsCovered: ["unobserved source fact"] }],
+    evidenceSources: freshnessSources,
+    freshness: freshnessContract,
+    now: freshnessNow
+  });
+  assert.equal(unboundRepositoryFact.ok, false, "repository facts must be covered by the exact source");
+  assert.equal(unboundRepositoryFact.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_EVIDENCE_SOURCE_BINDING_MISMATCH"), true);
+
+  const selfAttestedProvider = evaluateFreshnessClaims({
+    claims: [{ ...staleProvider, status: "CURRENT" }],
+    evidenceSources: [freshnessSources[1]],
+    freshness: freshnessContract,
+    now: new Date(staleProvider.expiresAt),
+    allowSyntheticFactRegistry: true,
+    evidenceSourceVerifier: () => true
+  });
+  assert.equal(selfAttestedProvider.ok, false, "committed prose alone cannot mint external authority");
+  assert.equal(selfAttestedProvider.findings.some(({ id }) => id === "ASSURANCE_FRESHNESS_EXTERNAL_RECEIPT_UNVERIFIED"), true);
+
+  for (const [label, claim] of [
+    ["missing observedAt", Object.fromEntries(Object.entries(repositorySource).filter(([key]) => key !== "observedAt"))],
+    ["missing evidence source", { ...repositorySource, evidenceSourceId: "absent" }]
+  ]) {
+    const result = evaluateClaims({ claims: [claim], evidenceSources: freshnessSources, freshness: freshnessContract, now: freshnessNow });
+    assert.equal(result.ok, false, label);
+  }
 });
 
 const request = {
@@ -137,7 +402,8 @@ test("sealed security scan is reused once only for exact source and requests an 
 });
 
 const receiptIdentity = { sourceHead: head, sourceTree: tree };
-const okRule = { commands: [{ id: "ok", file: "node", args: ["--version"], timeoutMs: 1000, resultContract: { type: "node-version-v1" } }] };
+const canonicalRule = (id) => structuredClone(allowlist.commands.find((rule) => rule.id === id));
+const okRule = { commands: [canonicalRule("node-version")] };
 const deterministicDependencies = {
   ...receiptIdentity,
   clock: () => 10,
@@ -146,7 +412,7 @@ const deterministicDependencies = {
 };
 
 test("compact receipt is deterministic 3/3 and exposes no successful raw log", () => {
-  const receipts = [runReceipt(okRule, "ok", ["--version"], deterministicDependencies), runReceipt(okRule, "ok", ["--version"], deterministicDependencies), runReceipt(okRule, "ok", ["--version"], deterministicDependencies)];
+  const receipts = [runReceipt(okRule, "node-version", ["--version"], deterministicDependencies), runReceipt(okRule, "node-version", ["--version"], deterministicDependencies), runReceipt(okRule, "node-version", ["--version"], deterministicDependencies)];
   assert.equal(receipts.every(({ ok }) => ok), true);
   assert.equal(JSON.stringify(receipts[0]), JSON.stringify(receipts[1]));
   assert.equal(JSON.stringify(receipts[1]), JSON.stringify(receipts[2]));
@@ -156,25 +422,79 @@ test("compact receipt is deterministic 3/3 and exposes no successful raw log", (
   assert.equal(JSON.stringify(receipts[0]).includes("v22.1.0"), true, "bounded parsed result retained, not full log");
 });
 
+test("receipt subprocesses disable GitHub telemetry without forwarding ambient credentials", () => {
+  let observedEnvironment;
+  const result = runReceipt(okRule, "node-version", ["--version"], {
+    ...deterministicDependencies,
+    spawn: (_file, _args, options) => {
+      observedEnvironment = options.env;
+      return { status: 0, signal: null, stdout: "v22.1.0\n", stderr: "" };
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(observedEnvironment, {
+    PATH: process.env.PATH,
+    CI: "1",
+    NO_COLOR: "1",
+    GH_TELEMETRY: "0",
+    DO_NOT_TRACK: "1",
+    GH_PROMPT_DISABLED: "1",
+    GH_NO_UPDATE_NOTIFIER: "1",
+    GH_NO_EXTENSION_UPDATE_NOTIFIER: "1"
+  });
+  for (const secretName of ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN", "HOME", "XDG_CONFIG_HOME", "TMPDIR", "RUNNER_TEMP"]) {
+    assert.equal(Object.hasOwn(observedEnvironment, secretName), false, secretName);
+  }
+  assert.equal(JSON.stringify(result.receipt).includes(".config/gh"), false, "receipt excludes credential-bearing paths");
+});
+
 test("runner rejects unknown commands, shell injection, missing results, secrets and artifact failures", () => {
   assert.equal(runReceipt(okRule, "unknown", [], deterministicDependencies).ok, false, "unknown command");
-  assert.equal(runReceipt(okRule, "ok", ["--version", "; rm -rf /"], deterministicDependencies).ok, false, "arbitrary shell command");
+  assert.equal(runReceipt(okRule, "node-version", ["--version", "; rm -rf /"], deterministicDependencies).ok, false, "arbitrary shell command");
   const interpreterRule = { commands: [{ id: "eval", file: "node", args: ["-e", "process.exit(0)"], timeoutMs: 1000, resultContract: { type: "exit-zero-v1" } }] };
   assert.equal(runReceipt(interpreterRule, "eval", ["-e", "process.exit(0)"], deterministicDependencies).finding, "COMMAND_CONTRACT_INVALID", "interpreter code denied");
-  const jsonArgs = ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"];
-  const jsonRule = { commands: [{ id: "json", file: "node", args: jsonArgs, timeoutMs: 1000, resultContract: { type: "assurance-json-v1", command: "assurance:test" } }] };
-  assert.equal(runReceipt(jsonRule, "json", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "", stderr: "" }) }).finding, "RESULT_MISSING");
-  assert.equal(runReceipt(jsonRule, "json", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: '{"command":"assurance:test","ok":true}\n{"command":"assurance:test","ok":true}\n', stderr: "" }) }).finding, "RESULT_AMBIGUOUS");
-  const secretRule = { commands: [{ id: "secret", file: "node", args: ["--version"], timeoutMs: 1000, resultContract: { type: "exit-zero-v1" } }] };
-  assert.equal(runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "Bearer sk_abcdefghijklmnop", stderr: "" }) }).finding, "SENSITIVE_OUTPUT_DETECTED", "raw successful log injection denied");
-  const failed = runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "Bearer sk_abcdefghijklmnop" }) });
+  const jsonRule = { commands: [canonicalRule("plan")] };
+  const jsonArgs = jsonRule.commands[0].args;
+  assert.equal(runReceipt(jsonRule, "plan", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "", stderr: "" }) }).finding, "RESULT_MISSING");
+  assert.equal(runReceipt(jsonRule, "plan", jsonArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: '{"command":"assurance:plan","ok":true}\n{"command":"assurance:plan","ok":true}\n', stderr: "" }) }).finding, "RESULT_AMBIGUOUS");
+  const secretRule = { commands: [canonicalRule("lint")] };
+  const secretArgs = secretRule.commands[0].args;
+  assert.equal(runReceipt(secretRule, "lint", secretArgs, { ...deterministicDependencies, spawn: () => ({ status: 0, stdout: "Bearer sk_abcdefghijklmnop", stderr: "" }) }).finding, "SENSITIVE_OUTPUT_DETECTED", "raw successful log injection denied");
+  const failed = runReceipt(secretRule, "lint", secretArgs, { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "Bearer sk_abcdefghijklmnop" }) });
   assert.match(failed.failureExcerpt, /REDACTED/u, "failure excerpt redacted");
-  const deviceFailed = runReceipt(secretRule, "secret", ["--version"], { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "deviceSerial=R58M1234ABC UDID=00008101-001234567890001E ordinary diagnostic" }) });
+  const deviceFailed = runReceipt(secretRule, "lint", secretArgs, { ...deterministicDependencies, spawn: () => ({ status: 7, stdout: "", stderr: "deviceSerial=R58M1234ABC UDID=00008101-001234567890001E ordinary diagnostic" }) });
   assert.doesNotMatch(deviceFailed.failureExcerpt, /R58M1234ABC|00008101-001234567890001E/u, "device identifiers redacted");
   assert.match(deviceFailed.failureExcerpt, /ordinary diagnostic/u, "benign failure text retained");
-  assert.equal(runReceipt(okRule, "ok", ["--version"], { ...deterministicDependencies, artifactWriter: () => { throw new Error("no"); } }).finding, "ARTIFACT_WRITE_FAILED");
+  assert.equal(runReceipt(okRule, "node-version", ["--version"], { ...deterministicDependencies, artifactWriter: () => { throw new Error("no"); } }).finding, "ARTIFACT_WRITE_FAILED");
   const cli = spawnSync(process.execPath, ["scripts/assurance/receipt.mjs", "--unknown=value"], { cwd: root, encoding: "utf8" });
   assert.equal(cli.status, 1, "unknown CLI flag rejected");
+});
+
+test("receipt command IDs bind the complete canonical rule tuple", () => {
+  const stdoutFor = (resultContract) => {
+    if (resultContract.type === "assurance-json-v1") return `${JSON.stringify({ command: resultContract.command, ok: true })}\n`;
+    if (resultContract.type === "node-test-tap-v1") return "TAP version 13\n1..1\n# tests 1\n# pass 1\n# fail 0\n";
+    if (resultContract.type === "node-version-v1") return "v22.1.0\n";
+    return "";
+  };
+  for (const rule of allowlist.commands) {
+    const result = runReceipt(allowlist, rule.id, rule.args, {
+      ...deterministicDependencies,
+      spawn: () => ({ status: 0, signal: null, stdout: stdoutFor(rule.resultContract), stderr: "" })
+    });
+    assert.equal(result.ok, true, `${rule.id} canonical tuple must remain runnable`);
+  }
+  const invokeMutation = (mutate) => {
+    const candidate = structuredClone(allowlist);
+    const rule = candidate.commands.find(({ id }) => id === "codex-review-exact-head-test");
+    mutate(rule, candidate);
+    return runReceipt(candidate, "codex-review-exact-head-test", rule.args, deterministicDependencies);
+  };
+  assert.equal(invokeMutation((rule, candidate) => { rule.args = candidate.commands.find(({ id }) => id === "github-main-ruleset-readback-test").args; }).finding, "COMMAND_CONTRACT_INVALID", "cross-ID argv substitution denied");
+  assert.equal(invokeMutation((rule) => { rule.contractCommand = "node --test tests/assurance/github-main-ruleset-readback.test.mjs"; }).finding, "COMMAND_CONTRACT_INVALID", "display command substitution denied");
+  assert.equal(invokeMutation((rule) => { rule.resultContract = { type: "exit-zero-v1" }; }).finding, "COMMAND_CONTRACT_INVALID", "result contract downgrade denied");
+  assert.equal(invokeMutation((rule) => { rule.timeoutMs = 900000; }).finding, "COMMAND_CONTRACT_INVALID", "timeout widening denied");
+  assert.equal(invokeMutation((rule) => { rule.maxBuffer = 1024; }).finding, "COMMAND_CONTRACT_INVALID", "unbound max buffer denied");
 });
 
 test("review archive rejects active reviews and preserves four never-merge lanes", () => {

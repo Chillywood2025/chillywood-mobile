@@ -4,10 +4,14 @@ on:
   workflow_dispatch:
 
 permissions:
+  checks: read
   contents: read
+  issues: read
+  pull-requests: read
 
 jobs:
   manual-preview-build:
+    if: github.ref == 'refs/heads/main'
     name: Manual Preview Build
     runs-on: ubuntu-latest
 
@@ -16,6 +20,12 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Deny build while late Codex Review findings are unresolved
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/assurance/late-review-sentinel.mjs --require-github
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

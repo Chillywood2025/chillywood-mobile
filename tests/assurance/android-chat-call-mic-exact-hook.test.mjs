@@ -4,77 +4,318 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
-import vm from "node:vm";
-import ts from "typescript";
 
 const sourcePath = "hooks/use-livekit-chat-call-session.ts";
-const source = fs.readFileSync(sourcePath, "utf8");
-const contract = JSON.parse(fs.readFileSync("config/assurance/android-chat-call-mic-control-v1.json", "utf8"));
+const contractPath = "config/assurance/android-chat-call-mic-control-v1.json";
+const mountedTestPath = "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs";
+const mountedHelperPath = "tests/assurance/helpers/livekit-mounted-hook-harness.mjs";
+const exactTestPath = "tests/assurance/android-chat-call-mic-exact-hook.test.mjs";
+const expectedBindingPaths = [sourcePath, mountedTestPath, mountedHelperPath, exactTestPath];
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
-const between = (start, end) => {
-  const first = source.indexOf(start);
-  const last = source.indexOf(end, first + start.length);
-  assert.ok(first >= 0 && last > first, `exact product slice missing: ${start}`);
-  return source.slice(first, last);
+const source = fs.readFileSync(sourcePath, "utf8");
+const contract = JSON.parse(fs.readFileSync(contractPath, "utf8"));
+
+const slice = (value, startMarker, endMarker) => {
+  assert.equal(value.split(startMarker).length - 1, 1, `unique start marker: ${startMarker}`);
+  assert.equal(value.split(endMarker).length - 1, 1, `unique end marker: ${endMarker}`);
+  const start = value.indexOf(startMarker);
+  const end = value.indexOf(endMarker, start + startMarker.length);
+  assert.ok(start >= 0 && end > start, `ordered source slice: ${startMarker}`);
+  return value.slice(start, end);
 };
 
-const mediaControlBindingSlice = between("  const runMediaControl", "  const updateMembershipMediaState");
-const mediaControlSlice = between("  const runMediaControl", "  const setSpeaker");
-const microphoneSlice = between("  const setMicrophoneEnabled", "  const setCameraEnabled");
+const invariants = (candidate, candidateContract = contract) => {
+  const renderPrefix = slice(
+    candidate,
+    "export function useLiveKitChatCallSession",
+    "  useLayoutEffect(() => {",
+  );
+  const commitSlice = slice(
+    candidate,
+    "  useLayoutEffect(() => {",
+    "  useEffect(() => {\n    onRoomEndedRef.current = onRoomEnded;",
+  );
+  const schedulerSlice = slice(
+    candidate,
+    "  const scheduleLatestMediaReconciliation",
+    "  const setSpeaker",
+  );
+  const reconciliationSlice = slice(
+    candidate,
+    "  const reconcileLatestCommittedMedia",
+    "  const scheduleLatestMediaReconciliation",
+  );
+  const microphoneSlice = slice(candidate, "  const setMicrophoneEnabled", "  const setCameraEnabled");
+  const heartbeatSlice = slice(candidate, "      heartbeat = setInterval", "    };\n\n    void initialize()");
+  const permissionSlice = slice(candidate, "  const setReconciliationWarning", "  const isCommittedSessionCurrent");
+  const cleanupSlice = slice(candidate, "  const cleanupSession", "  const leaveRoom");
+  const reconnectedSlice = slice(
+    candidate,
+    "        .on(RoomEvent.Reconnected, () => {",
+    "        .on(RoomEvent.ConnectionStateChanged, (connectionState) => {",
+  );
+  const initialMembershipSlice = slice(candidate, "      const initialMembership", "      heartbeat = setInterval");
+  const reconciliationWarningOnly = slice(
+    candidate,
+    "  const setReconciliationWarning",
+    "  const clearReconciliationWarning",
+  );
+  const returnedState = slice(candidate, "  return {\n    room,", "  };\n}");
 
-const executeExactProductPath = async () => {
-  const wrapper = `
-const useCallback = (operation) => operation;
-const mediaControlRef = {current: null};
-const identityRef = {current: {userId: "local-user", displayName: "Local", avatarUrl: null}};
-const productRoomRef = {current: {roomId: "room-1"}};
-const membershipsRef = {current: [{userId: "local-user", micOn: false}]};
-const roomRef = {current: {state: "connected", localParticipant: {setMicrophoneEnabled: async (value) => {state.nativeCalls += 1; state.trackEnabled = value; return {track: {kind: "audio"}};}}}};
-const micRequestedRef = {current: false};
-const cameraRequestedRef = {current: false};
-const ConnectionState = {Connected: "connected"};
-const state = {nativeCalls: 0, membershipAttempts: 0, trackEnabled: false, uiMic: false, busy: false};
-const setMediaControlsBusy = (value) => {state.busy = value;};
-const touchCommunicationRoomSession = async () => {state.membershipAttempts += 1; return null;};
-const LiveKitAudioSession = {startAudioSession: async () => true};
-const setMicEnabledState = (value) => {state.uiMic = value;};
-const setMediaPermissionMessage = () => {};
-const refreshParticipantViews = () => {};
-const emitStage = () => {};
-const updateFirstMediaState = () => {};
-${mediaControlSlice}
-${microphoneSlice}
-module.exports = {setMicrophoneEnabled, micRequestedRef, membershipsRef, state};
-`;
-  const compiled = ts.transpileModule(wrapper, {
-    compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022},
-  }).outputText;
-  const sandbox = {module: {exports: {}}, exports: {}, Promise};
-  vm.runInNewContext(compiled, sandbox, {filename: sourcePath});
-  const controls = sandbox.module.exports;
-  const result = await controls.setMicrophoneEnabled(true);
-  return {
-    result,
-    nativeCalls: controls.state.nativeCalls,
-    membershipAttempts: controls.state.membershipAttempts,
-    trackEnabled: controls.state.trackEnabled,
-    requestedMic: controls.micRequestedRef.current,
-    uiMic: controls.state.uiMic,
-    membershipMic: controls.membershipsRef.current[0].micOn,
-  };
+  assert.doesNotMatch(renderPrefix, /sessionGenerationRef\.current\s*[+]?=/u, "generation is render-pure");
+  assert.doesNotMatch(renderPrefix, /committedSessionRef\.current\s*=/u, "session binding is render-pure");
+  assert.match(commitSlice, /sessionGenerationRef\.current = generation/u);
+  assert.match(commitSlice, /committedSessionRef\.current = Object\.freeze/u);
+  assert.match(schedulerSlice, /enqueueSessionMediaWrite\(binding/u);
+  assert.match(schedulerSlice, /const reconcileNativeNow = request\.reconcileNative/u);
+  assert.match(schedulerSlice, /request\.reconcileNative = false/u);
+  assert.match(schedulerSlice, /reconciled = await reconcileLatestCommittedMedia\(binding, reconcileNativeNow\)/u);
+  assert.match(schedulerSlice, /if \(request\.reconcileNative && isCommittedSessionCurrent\(binding\)\) continue/u);
+  assert.match(reconciliationSlice, /cameraRequestedRef\.current/u);
+  assert.match(reconciliationSlice, /micRequestedRef\.current/u);
+  assert.match(heartbeatSlice, /scheduleLatestMediaReconciliation\(false\)/u);
+  assert.doesNotMatch(heartbeatSlice, /performMembershipMediaWrite\(/u);
+  assert.doesNotMatch(candidate, /productRoomRef\.current\s*===/u);
+  assert.match(candidate, /left\.generation === right\.generation/u);
+  assert.match(candidate, /left\.liveKitRoom === right\.liveKitRoom/u);
+  assert.match(candidate, /left\.participantAuthority === right\.participantAuthority/u);
+  assert.match(candidate, /const writeKey = `\$\{binding\.normalizedRoomId\}:\$\{binding\.userId\}`/u);
+  assert.match(candidate, /const drained = await Promise\.race\(\[/u);
+  assert.match(candidate, /MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS/u);
+  assert.match(candidate, /MEDIA_WRITE_OPERATION_TIMEOUT_MS/u);
+  assert.match(candidate, /const operationResult = await Promise\.race\(\[/u);
+  assert.match(candidate, /operationTimedOut && activeOperation/u);
+  assert.match(candidate, /const transactionStillCurrent = \(\) => operationCurrent\(\) && originStillCurrent\(\)/u);
+  assert.match(candidate, /predecessorTimedOut && predecessor[\s\S]{0,160}mediaWriteTailsRef\.current\.set\(writeKey, predecessor\)/u);
+  assert.match(candidate, /void predecessor\.then\(releaseReservation, releaseReservation\)/u);
+  assert.doesNotMatch(candidate, /blockedMediaWriteKeysRef/u);
+  assert.match(candidate, /if \(!isCommittedSessionCurrent\(binding\)\) return null;/u);
+  assert.match(candidate, /current\.roomState === "terminal" && roomState !== "terminal"/u);
+  assert.match(reconnectedSlice, /scheduleLatestMediaReconciliation\(true\)\.then\(\(reconciled\) => \{/u);
+  assert.match(reconnectedSlice, /!reconciled[\s\S]{0,180}micReconciliationBlockedRef\.current/u);
+  assert.ok(
+    reconnectedSlice.indexOf("scheduleLatestMediaReconciliation(true)")
+      < reconnectedSlice.indexOf("setCommittedRoomState(effectBinding, \"active\")"),
+    "Reconnected proves durable convergence before live promotion",
+  );
+  assert.match(candidate, /const bindingStillCurrent = sameCommittedAuthority\(committedSessionRef\.current, binding\)/u);
+  assert.match(cleanupSlice, /if \(replacementReusesDurableAuthority\) return null;/u);
+  assert.match(cleanupSlice, /const endContext = currentDurableContext\(\);/u);
+  assert.match(cleanupSlice, /const leaveContext = currentDurableContext\(\);/u);
+  assert.ok(
+    cleanupSlice.indexOf("await liveKitRoom.disconnect") < cleanupSlice.indexOf("const endContext = currentDurableContext();"),
+    "cleanup revalidates durable authority after native shutdown",
+  );
+  assert.match(candidate, /allowBackgroundAudioRef\.current = allowBackgroundAudio/u);
+  assert.doesNotMatch(candidate, /\n    allowBackgroundAudio,\n/u);
+  assert.match(initialMembershipSlice, /if \(!initialMembership\) \{[\s\S]{0,180}setChannelState\("reconnecting"\)/u);
+  assert.ok(
+    initialMembershipSlice.indexOf("setChannelState(\"live\")")
+      > initialMembershipSlice.indexOf("} else {"),
+    "initial session becomes live only after durable convergence",
+  );
+  assert.match(permissionSlice, /setMediaReconciliationState\("warning"\)/u);
+  assert.doesNotMatch(reconciliationWarningOnly, /set(?:Camera|Microphone)PermissionState/u);
+  assert.doesNotMatch(permissionSlice, /setCameraPermissionState\("denied"\).*setReconciliationWarning/su);
+  assert.match(returnedState, /cameraPermissionState,/u);
+  assert.match(returnedState, /microphonePermissionState,/u);
+  assert.match(returnedState, /mediaReconciliationMessage,/u);
+  assert.match(returnedState, /cameraPermissionState === "denied" \|\| microphonePermissionState === "denied"/u);
+  assert.match(microphoneSlice, /const membership = await performMembershipMediaWrite/u);
+  assert.ok(
+    microphoneSlice.indexOf("const membership = await performMembershipMediaWrite")
+      < microphoneSlice.indexOf("micRequestedRef.current = nextEnabled"),
+    "durable convergence precedes requested/UI success commit",
+  );
+  const requestedCommit = microphoneSlice.indexOf("micRequestedRef.current = nextEnabled");
+  assert.ok(
+    microphoneSlice.indexOf("setMicEnabledState(nextEnabled)", requestedCommit)
+      < microphoneSlice.indexOf("return true;", requestedCommit),
+    "UI commit precedes success return",
+  );
+  assert.doesNotMatch(microphoneSlice, /requestLiveKitParticipantToken/u);
+  assert.doesNotMatch(microphoneSlice, /cleanupSession\(/u);
+  assert.doesNotMatch(microphoneSlice, /mediaProvider\s*=/u);
+  assert.match(microphoneSlice, /if \(nextEnabled\) \{\s*setMicrophonePermissionState\("granted"\)/u);
+
+  assert.equal(candidateContract.proofTiers.T2_MODEL, "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION");
+  assert.equal(candidateContract.mountedHookEvidence.execution, "REACT_DOM_COMMIT_PHASE_EXACT_HOOK");
+  assert.equal(candidateContract.mountedHookEvidence.testFile, mountedTestPath);
+  assert.equal(candidateContract.mountedHookEvidence.helperFile, mountedHelperPath);
+  assert.equal(candidateContract.mountedHookEvidence.executesInternalAdapterModel, false);
 };
 
-test("ANDROID_MIC_LIVEKIT_MEMBERSHIP_FAILURE_RETURNS_SUCCESS exact hook execution", async () => {
-  assert.equal(hash(source), contract.sourceBindings[sourcePath], "full product hook source binding");
-  assert.equal(hash(mediaControlBindingSlice), contract.sourceSlices["livekit-run-media-control"].sha256, "media serializer slice binding");
-  assert.equal(hash(microphoneSlice), contract.sourceSlices["livekit-set-microphone"].sha256, "microphone hook slice binding");
+test("source bindings cover only the exact product and executable evidence files", () => {
+  assert.deepEqual(Object.keys(contract.sourceBindings).sort(), [...expectedBindingPaths].sort());
+  for (const bindingPath of expectedBindingPaths) {
+    assert.equal(contract.sourceBindings[bindingPath], hash(fs.readFileSync(bindingPath)));
+  }
+});
 
-  const observed = await executeExactProductPath();
-  assert.equal(observed.nativeCalls, 1, "real hook invoked the LiveKit native microphone operation");
-  assert.equal(observed.membershipAttempts, 1, "real hook attempted durable membership reconciliation");
-  assert.equal(observed.trackEnabled, true, "native track became enabled");
-  assert.equal(observed.requestedMic, true, "requested mic state became enabled");
-  assert.equal(observed.uiMic, true, "UI mic state became enabled");
-  assert.equal(observed.membershipMic, false, "durable membership remained unchanged after the rejected operation");
-  assert.equal(observed.result, false, "P1: the exact hook must not report success when membership and actual track state diverge");
+test("declared source slices are unique, ordered, and digest-bound", () => {
+  for (const binding of Object.values(contract.sourceSlices)) {
+    assert.ok(expectedBindingPaths.includes(binding.path));
+    const content = fs.readFileSync(binding.path, "utf8");
+    assert.equal(hash(slice(content, binding.start, binding.end)), binding.sha256);
+  }
+});
+
+test("source structure and T2 contract preserve the five corrections", () => {
+  invariants(source, contract);
+  assert.equal(contract.requiredCaseMatrix.length, 38);
+  assert.equal(new Set(contract.requiredCaseMatrix).size, 38);
+});
+
+const mutateAfter = (value, marker, from, to) => {
+  const markerIndex = value.indexOf(marker);
+  const mutationIndex = value.indexOf(from, markerIndex);
+  assert.ok(markerIndex >= 0 && mutationIndex > markerIndex, `mutant target after ${marker}`);
+  return `${value.slice(0, mutationIndex)}${to}${value.slice(mutationIndex + from.length)}`;
+};
+
+const mutants = [
+  ["HEARTBEAT_BYPASSES_STRICT_LEASE", (value) => value.replace(
+    "void scheduleLatestMediaReconciliation(false).then((reconciled) => {",
+    "void performMembershipMediaWrite(false, false); Promise.resolve(false).then((reconciled) => {",
+  )],
+  ["HEARTBEAT_QUEUES_STALE_MIC_VALUE", (value) => value.replace(
+    "reconciled = await reconcileLatestCommittedMedia(binding, reconcileNativeNow);",
+    "reconciled = !!(await performMembershipMediaWrite(false, false, \"active\", true, binding));",
+  )],
+  ["PRODUCT_ROOM_OBJECT_EQUALITY_RESTORED", (value) => value.replace(
+    "|| roomRef.current !== binding.liveKitRoom",
+    "|| productRoomRef.current === productRoomRef.current\n      || roomRef.current !== binding.liveKitRoom",
+  )],
+  ["GENERATION_MUTATED_DURING_RENDER", (value) => value.replace(
+    "  useLayoutEffect(() => {",
+    "  sessionGenerationRef.current += 1;\n  useLayoutEffect(() => {",
+  )],
+  ["ABANDONED_RENDER_INCREMENTS_GENERATION", (value) => value.replace(
+    "  useLayoutEffect(() => {",
+    "  committedSessionRef.current = committedSessionRef.current;\n  useLayoutEffect(() => {",
+  )],
+  ["RECONCILIATION_MARKS_PERMISSION_DENIED", (value) => value.replace(
+    "setMediaReconciliationState(\"warning\");",
+    "setCameraPermissionState(\"denied\"); setMediaReconciliationState(\"warning\");",
+  )],
+  ["SETTINGS_ENABLED_BY_RECONCILIATION", (value) => value.replace(
+    "cameraPermissionState === \"denied\" || microphonePermissionState === \"denied\"",
+    "!!mediaReconciliationMessage",
+  )],
+  ["EXTRACTED_ADAPTER_LABELED_MOUNTED", (_value, value) => ({
+    ...value,
+    mountedHookEvidence: { ...value.mountedHookEvidence, execution: "EXTRACTED_SOURCE_SLICE_VM" },
+  })],
+  ["T2_CONTRACT_EVIDENCE_DISAGREEMENT", (_value, value) => ({
+    ...value,
+    proofTiers: { ...value.proofTiers, T2_MODEL: "BLOCKED_INTERNAL" },
+  })],
+  ["STALE_SESSION_WRITES_REPLACEMENT_STATE", (value) => mutateAfter(
+    value,
+    "  const enqueueSessionMediaWrite",
+    "if (!isCommittedSessionCurrent(binding)) return null;",
+    "if (!binding) return null;",
+  )],
+  ["SUCCESS_BEFORE_DURABLE_CONVERGENCE", (value) => value.replace(
+    "micRequestedRef.current = nextEnabled;",
+    "micRequestedRef.current = nextEnabled; return true;",
+  )],
+  ["TOKEN_REQUEST_DURING_TOGGLE", (value) => mutateAfter(
+    value,
+    "  const setMicrophoneEnabled",
+    "const binding = committedSessionRef.current;",
+    "void requestLiveKitParticipantToken({}); const binding = committedSessionRef.current;",
+  )],
+  ["PROVIDER_MUTATION_DURING_TOGGLE", (value) => mutateAfter(
+    value,
+    "  const setMicrophoneEnabled",
+    "const binding = committedSessionRef.current;",
+    "mediaProvider = \"webrtc\"; const binding = committedSessionRef.current;",
+  )],
+  ["CALL_CLEANUP_ON_TOGGLE_FAILURE", (value) => mutateAfter(
+    value,
+    "  const setMicrophoneEnabled",
+    "setReconciliationWarning();",
+    "void cleanupSession(); setReconciliationWarning();",
+  )],
+  ["DURABLE_QUEUE_KEYED_BY_SESSION_GENERATION", (value) => value.replace(
+    "const writeKey = `${binding.normalizedRoomId}:${binding.userId}`;",
+    "const writeKey = String(binding.generation);",
+  )],
+  ["UNBOUNDED_MEDIA_WRITE_PREDECESSOR", (value) => value.replace(
+    "const drained = await Promise.race([",
+    "const drained = await Promise.all([",
+  )],
+  ["TERMINAL_SESSION_RESURRECTION", (value) => value.replace(
+    "|| (current.roomState === \"terminal\" && roomState !== \"terminal\")",
+    "|| false",
+  )],
+  ["DISABLE_ERASES_PERMISSION_DENIAL", (value) => mutateAfter(
+    value,
+    "  const setMicrophoneEnabled",
+    "if (nextEnabled) {\n            setMicrophonePermissionState(\"granted\");",
+    "{\n            setMicrophonePermissionState(\"granted\");",
+  )],
+  ["STALE_CLEANUP_LEAVES_REPLACEMENT", (value) => value.replace(
+    "if (replacementReusesDurableAuthority) return null;",
+    "if (false) return null;",
+  )],
+  ["MEDIA_QUEUE_TIMEOUT_DROPS_PREDECESSOR", (value) => value.replace(
+    "mediaWriteTailsRef.current.set(writeKey, predecessor);",
+    "mediaWriteTailsRef.current.delete(writeKey);",
+  )],
+  ["MEDIA_QUEUE_TIMEOUT_RELEASES_INTERMEDIATE_RESERVATION", (value) => value.replace(
+    "void predecessor.then(releaseReservation, releaseReservation);",
+    "releaseReservation();",
+  )],
+  ["NATIVE_RECONCILIATION_ESCALATION_DROPPED", (value) => value.replace(
+    "if (request.reconcileNative && isCommittedSessionCurrent(binding)) continue;",
+    "if (false) continue;",
+  )],
+  ["UNBOUNDED_MEDIA_WRITE_OPERATION", (value) => value.replace(
+    "const operationResult = await Promise.race([",
+    "const operationResult = await Promise.all([",
+  )],
+  ["ACTIVE_OPERATION_TIMEOUT_IGNORED_BY_STRICT_TRANSACTION", (value) => value.replace(
+    "const transactionStillCurrent = () => operationCurrent() && originStillCurrent();",
+    "const transactionStillCurrent = () => originStillCurrent();",
+  )],
+  ["RECONNECTED_BYPASSES_DURABLE_CONVERGENCE", (value) => value.replace(
+    "!reconciled\n              || !active",
+    "false\n              || !active",
+  )],
+  ["ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION", (value) => value.replace(
+    "    activateCommittedSession,\n    clearReconciliationWarning,",
+    "    activateCommittedSession,\n    allowBackgroundAudio,\n    clearReconciliationWarning,",
+  )],
+  ["STALE_CLEANUP_REUSES_DURABLE_SNAPSHOT", (value) => value.replace(
+    "const leaveContext = currentDurableContext();",
+    "const leaveContext = endContext;",
+  )],
+  ["INITIAL_CONVERGENCE_FAILURE_MARKS_LIVE", (value) => value.replace(
+    "if (!initialMembership) {",
+    "if (false) {",
+  )],
+];
+
+test("all required negative-control mutants are rejected", () => {
+  assert.deepEqual(contract.negativeControls, mutants.map(([id]) => id));
+  for (const [id, mutate] of mutants) {
+    let mutatedSource = source;
+    let mutatedContract = contract;
+    const result = mutate(source, contract);
+    if (typeof result === "string") mutatedSource = result;
+    else mutatedContract = result;
+    assert.throws(() => invariants(mutatedSource, mutatedContract), undefined, id);
+  }
+});
+
+test("proof tiers remain separated after mounted T2 clears", () => {
+  assert.equal(contract.proofTiers.T1_SOURCE, "SOURCE_BOUND");
+  assert.equal(contract.proofTiers.T2_MODEL, "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION");
+  assert.equal(contract.proofTiers.T3_INTEGRATION, "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE");
+  assert.equal(contract.proofTiers.T4_NATIVE_PROVIDER, "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE");
+  assert.equal(contract.providerContact, false);
+  assert.equal(contract.hostedCodexSecurity, false);
+  assert.equal(contract.providerCodexReview, "OPTIONAL_ADVISORY_NOT_REQUESTED");
 });

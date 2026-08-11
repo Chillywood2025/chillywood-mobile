@@ -44,33 +44,53 @@ function externalize(identityHash, receipt, raw) {
   return root;
 }
 
+const canonicalRules = new Map([
+  { id: "contracts", contractCommand: "node scripts/assurance/validate-contracts.mjs", file: "node", args: ["scripts/assurance/validate-contracts.mjs"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:validate-contracts" } },
+  { id: "current-truth", contractCommand: "node scripts/assurance/current-truth.mjs", file: "node", args: ["scripts/assurance/current-truth.mjs"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:current-truth" } },
+  { id: "plan", contractCommand: "node scripts/assurance/plan.mjs --feature=assurance-efficiency-e0", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } },
+  { id: "active-task", contractCommand: "node scripts/assurance/active-task.mjs --feature=assurance-efficiency-e0", file: "node", args: ["scripts/assurance/active-task.mjs", "--feature=assurance-efficiency-e0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:active-task" } },
+  { id: "review-history", contractCommand: "node scripts/assurance/review-history.mjs", file: "node", args: ["scripts/assurance/review-history.mjs"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:review-history" } },
+  { id: "benchmark", contractCommand: "node scripts/assurance/benchmark.mjs --baseline=all", file: "node", args: ["scripts/assurance/benchmark.mjs", "--baseline=all"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:benchmark" } },
+  { id: "focused-test", contractCommand: "node --test tests/assurance/efficiency-e0.test.mjs", file: "node", args: ["--test", "tests/assurance/efficiency-e0.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "github-main-ruleset-readback-test", contractCommand: "node --test tests/assurance/github-main-ruleset-readback.test.mjs", file: "node", args: ["--test", "tests/assurance/github-main-ruleset-readback.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "codex-review-exact-head-test", contractCommand: "node --test tests/assurance/codex-review-exact-head.test.mjs", file: "node", args: ["--test", "tests/assurance/codex-review-exact-head.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "s0-plan", contractCommand: "node scripts/assurance/plan.mjs --feature=codex-security-scan-reliability-s0", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=codex-security-scan-reliability-s0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } },
+  { id: "s0-active-task", contractCommand: "node scripts/assurance/active-task.mjs --feature=codex-security-scan-reliability-s0", file: "node", args: ["scripts/assurance/active-task.mjs", "--feature=codex-security-scan-reliability-s0"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:active-task" } },
+  { id: "s0-scope", contractCommand: "node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json", file: "node", args: ["scripts/assurance/pr-scope.mjs", "--feature=codex-security-scan-reliability-s0", "--waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:pr-scope" } },
+  { id: "s0-target", contractCommand: "node scripts/assurance/codex-security-target.mjs --base=origin/main --target=HEAD", file: "node", args: ["scripts/assurance/codex-security-target.mjs", "--base=origin/main", "--target=HEAD"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:codex-security-target" } },
+  { id: "s0-benchmark", contractCommand: "node scripts/assurance/codex-security-reliability.mjs --benchmark=all", file: "node", args: ["scripts/assurance/codex-security-reliability.mjs", "--benchmark=all"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:codex-security-reliability" } },
+  { id: "s0-focused-test", contractCommand: "node --test tests/assurance/codex-security-reliability-s0.test.mjs", file: "node", args: ["--test", "tests/assurance/codex-security-reliability-s0.test.mjs"], timeoutMs: 30000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "lint", contractCommand: "npm run lint", file: "npm", args: ["run", "lint"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "typecheck", contractCommand: "npm run typecheck", file: "npm", args: ["run", "typecheck"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "diff-check", contractCommand: "git diff --check", file: "git", args: ["diff", "--check"], timeoutMs: 30000, resultContract: { type: "exit-zero-empty-v1" } },
+  { id: "node-version", contractCommand: "node --version", file: "node", args: ["--version"], timeoutMs: 10000, resultContract: { type: "node-version-v1" } },
+  { id: "d2a-call-semantics", contractCommand: "npm run test:chilly-chat-call-semantics", file: "npm", args: ["run", "test:chilly-chat-call-semantics"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-native-handoff", contractCommand: "npm run test:chilly-chat-native-call-action-handoff", file: "npm", args: ["run", "test:chilly-chat-native-call-action-handoff"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-plan", contractCommand: "assurance:plan", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } },
+  { id: "d2a-dependencies", contractCommand: "npm ci --no-audit --no-fund", file: "npm", args: ["ci", "--no-audit", "--no-fund"], timeoutMs: 900000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-lifecycle-focused", contractCommand: "node --test tests/assurance/android-generated-native-lifecycle.test.mjs", file: "node", args: ["--test", "tests/assurance/android-generated-native-lifecycle.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "d2a-mic-focused", contractCommand: "node --test tests/assurance/android-chat-call-mic-control.test.mjs", file: "node", args: ["--test", "tests/assurance/android-chat-call-mic-control.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "d2a-mic-exact-hook", contractCommand: "node --test tests/assurance/android-chat-call-mic-exact-hook.test.mjs", file: "node", args: ["--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "d2a-lifecycle-native", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --native --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--native", "--json"], timeoutMs: 900000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-lifecycle-emulator", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --emulator --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--emulator", "--json"], timeoutMs: 900000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-mic-native", contractCommand: "node scripts/assurance/android-chat-call-mic-control.mjs --native --json", file: "node", args: ["scripts/assurance/android-chat-call-mic-control.mjs", "--native", "--json"], timeoutMs: 900000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-runtime-backup", contractCommand: "node scripts/assurance/android-native-call-origin-backup.mjs --backup-restore --json", file: "node", args: ["scripts/assurance/android-native-call-origin-backup.mjs", "--backup-restore", "--json"], timeoutMs: 900000, resultContract: { type: "exit-zero-v1" } }
+].map((rule) => [rule.id, rule]));
+
+export function governedReceiptRule(id) {
+  const rule = canonicalRules.get(id);
+  return rule ? structuredClone(rule) : null;
+}
+
+export function governedReceiptIdentityHash(receipt) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+  const { identityHash: _identityHash, artifactLocation: _artifactLocation, ...base } = receipt;
+  return sha256({ ...base, startedAtMs: null, endedAtMs: null, durationMs: null });
+}
+
 function safeRule(rule) {
-  if (!Array.isArray(rule?.args) || !["node", "npm", "git"].includes(rule.file)) return false;
-  const argv = JSON.stringify(rule.args);
-  if (rule.file === "node") return new Set([
-    ["scripts/assurance/validate-contracts.mjs"],
-    ["scripts/assurance/current-truth.mjs"],
-    ["scripts/assurance/plan.mjs", "--feature=assurance-efficiency-e0"],
-    ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"],
-    ["scripts/assurance/active-task.mjs", "--feature=assurance-efficiency-e0"],
-    ["scripts/assurance/review-history.mjs"],
-    ["scripts/assurance/benchmark.mjs", "--baseline=all"],
-    ["--test", "tests/assurance/efficiency-e0.test.mjs"],
-    ["--test", "tests/assurance/android-generated-native-lifecycle.test.mjs"],
-    ["--test", "tests/assurance/android-chat-call-mic-control.test.mjs"],
-    ["--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"],
-    ["scripts/assurance/android-generated-native-lifecycle.mjs", "--native", "--json"],
-    ["scripts/assurance/android-generated-native-lifecycle.mjs", "--emulator", "--json"],
-    ["scripts/assurance/android-chat-call-mic-control.mjs", "--native", "--json"],
-    ["scripts/assurance/android-native-call-origin-backup.mjs", "--backup-restore", "--json"],
-    ["--version"]
-  ].map(JSON.stringify)).has(argv);
-  if (rule.file === "npm") {
-    if (argv === JSON.stringify(["ci", "--no-audit", "--no-fund"])) return true;
-    return new Set(["lint", "typecheck", "test:chilly-chat-call-semantics", "test:chilly-chat-native-call-action-handoff"]).has(rule.args[1])
-      && argv === JSON.stringify(["run", rule.args[1]]);
-  }
-  return argv === JSON.stringify(["diff", "--check"]);
+  const canonical = canonicalRules.get(rule?.id);
+  return canonical !== undefined && stableJson(rule) === stableJson(canonical);
 }
 
 export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) {
@@ -103,7 +123,16 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
     shell: false,
     timeout: rule.timeoutMs,
     maxBuffer: rule.maxBuffer ?? 16 * 1024 * 1024,
-    env: { PATH: process.env.PATH, CI: "1", NO_COLOR: "1" }
+    env: {
+      PATH: process.env.PATH,
+      CI: "1",
+      NO_COLOR: "1",
+      GH_TELEMETRY: "0",
+      DO_NOT_TRACK: "1",
+      GH_PROMPT_DISABLED: "1",
+      GH_NO_UPDATE_NOTIFIER: "1",
+      GH_NO_EXTENSION_UPDATE_NOTIFIER: "1"
+    }
   });
   const endedAtMs = clock();
   if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs) || endedAtMs < startedAtMs) return { ok: false, finding: "CLOCK_INVALID" };

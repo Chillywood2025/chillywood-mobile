@@ -3,10 +3,14 @@ import fs from "node:fs";
 import {
   args,
   baseSynchronizationFirstParentDistance,
+  baseSynchronizationReviewReceiptHash,
   emit,
+  evaluateFreshnessClaims,
+  evaluateTaskFreshness,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
+  optionalCodexReviewPolicyValid,
   providerMode,
   readJson,
   readText,
@@ -15,9 +19,14 @@ import {
   renderNextTask,
   sha256,
   verifyCurrentTruthHeadBindings,
+  verifyCompletedImplementationMergeIdentity,
+  verifyCommittedClaimEvidence,
   verifyProviderImplementationSnapshot,
-  verifyCurrentTruthSynchronization
+  verifyCurrentTruthSynchronization,
+  validateProofTierStatuses
 } from "./lib.mjs";
+import { validateStructuredBinding } from "./active-task.mjs";
+import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
 
 function safeGit(gitArgs, fallback = null) {
   try {
@@ -39,6 +48,8 @@ function collectBaseSynchronizationReviewEvidence(reviewEntries) {
     const reviewRef = implementationRemoteRef(review.branch);
     const reviewRefHead = safeGit(["show-ref", "--verify", "--hash", reviewRef]);
     if (!reviewRefHead) continue;
+    const reviewRefTree = safeGit(["rev-parse", `${reviewRefHead}^{tree}`]);
+    if (!reviewRefTree) continue;
     const files = safeGit(["ls-tree", "-r", "--name-only", reviewRef, "--", "docs/reviews", "config/assurance/reviews"], "")
       .split(/\r?\n/gu)
       .filter((file) => file.endsWith(".json"));
@@ -46,7 +57,9 @@ function collectBaseSynchronizationReviewEvidence(reviewEntries) {
       try {
         const manifest = JSON.parse(git(["show", `${reviewRef}:${file}`]));
         if (manifest?.classification !== "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH") continue;
-        evidence.push({ ...manifest, reviewRef, reviewRefHead });
+        const candidate = { ...manifest, reviewRef, reviewRefHead, reviewRefTree };
+        if (candidate.reviewReceiptHash !== baseSynchronizationReviewReceiptHash(candidate)) continue;
+        evidence.push(candidate);
       } catch {
         // A malformed candidate is ignored and the minimum-evidence gate fails closed.
       }
@@ -82,6 +95,7 @@ function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEv
   const synchronizedChangedFileBytes = safeGit(["diff", "--name-status", "-z", "--no-renames", currentMain, observedHead]);
   const reviewedChangedPaths = mergeBase ? splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", mergeBase, entry.head], "")) : null;
   const synchronizedChangedPaths = splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", currentMain, observedHead], ""));
+  const currentTruthBindingChangedPaths = splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", entry.head, observedHead], ""));
   return {
     sourceIsAncestor,
     commitDistance,
@@ -95,6 +109,12 @@ function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEv
     synchronizedChangedFileHash: synchronizedChangedFileBytes === null ? null : sha256(synchronizedChangedFileBytes),
     reviewedChangedPaths,
     synchronizedChangedPaths,
+    currentTruthBinding: {
+      parents,
+      commitDistance,
+      synchronizedTree: observedTree,
+      changedPaths: currentTruthBindingChangedPaths
+    },
     providerHead: observedHead,
     reviewEvidence
   };
@@ -191,11 +211,54 @@ if (mode) {
   const claimsMain = (branch || explicitImplementationBranch) === "main";
   const explicitMainMatches = explicitImplementationBranch !== "main" || explicitImplementationHead === remoteMain;
   const mainMatches = synchronization.ok && (claimsMain ? head === remoteMain && explicitMainMatches : mergeBase === remoteMain);
-  const freshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
-  const findings = [...headBindings.findings];
+  const documentFreshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
+  const claimFreshness = evaluateFreshnessClaims({
+    claims: record.freshnessClaims,
+    evidenceSources: record.evidenceSources,
+    freshness: currentTruthContract.freshness,
+    now,
+    evidenceSourceVerifier: ({ claim, source }) => verifyCommittedClaimEvidence({
+      claim,
+      source,
+      factRegistry: currentTruthContract.freshness.factRegistry
+    })
+  });
+  const taskFreshness = evaluateTaskFreshness(
+    claimFreshness,
+    record.activeTaskBinding?.requiredFreshnessClaims ?? []
+  );
+  const proofTierStatusFindings = validateProofTierStatuses(
+    record.activeTaskBinding,
+    readJson("config/assurance/gate-catalog-v1.json"),
+    readJson("config/assurance/feature-registry-v1.json")
+  );
+  const structuredBindingFindings = validateStructuredBinding(
+    record.activeTaskBinding,
+    readJson("config/assurance/gate-catalog-v1.json"),
+    readJson("config/assurance/feature-registry-v1.json"),
+    record.openImplementationPrs,
+    record.latestMergedImplementationPr
+  ).map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  const completedMergeFindings = verifyCompletedImplementationMergeIdentity({
+    activeTaskBinding: record.activeTaskBinding,
+    latestMergedImplementationPr: record.latestMergedImplementationPr,
+    remoteMain
+  });
+  const reviewPolicyFindings = optionalCodexReviewPolicyValid(record.reviewPolicy)
+    ? []
+    : [{ id: "CODEX_REVIEW_OPTIONAL_ADVISORY_POLICY_INVALID", status: "BLOCKED_INTERNAL" }];
+  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
-  if (!freshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
+  if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
+  if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
+    findings.push({
+      id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_FRESHNESS_DERIVATION_MISMATCH",
+      status: "BLOCKED_INTERNAL",
+      recorded: record.liveProviderReadback,
+      derived: claimFreshness.liveProviderReadback
+    });
+  }
   for (const [file, expected] of Object.entries(expectedDocs)) {
     if (readText(file) !== expected) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_DOC_DRIFT", status: "BLOCKED_INTERNAL", file });
   }
@@ -229,6 +292,20 @@ if (mode) {
   }
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
-    liveProviderReadback: record.liveProviderReadback, generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
+    liveProviderReadback: claimFreshness.liveProviderReadback,
+    lateReviewSentinels: (record.lateReviewSentinels ?? []).map(({ classification, prNumber, reviewedSha, successorCorrectionOwner, findings: lateFindings, blocks }) => ({
+      classification,
+      prNumber,
+      reviewedSha,
+      successorCorrectionOwner,
+      unresolvedFindings: (lateFindings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length,
+      blocks
+    })),
+    freshnessClaims: {
+      current: claimFreshness.currentClaims.map(({ id, freshnessClass, platform }) => ({ id, freshnessClass, platform })),
+      blocked: claimFreshness.blockedClaims.map(({ id, freshnessClass, platform, expiresAt }) => ({ id, freshnessClass, platform, expiresAt }))
+    },
+    taskFreshness,
+    generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
   }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — main ${record.mainSha.slice(0, 8)}, remote migration ${record.remoteMigrationHead}, deadline ${record.freshnessDeadline}`]);
 }

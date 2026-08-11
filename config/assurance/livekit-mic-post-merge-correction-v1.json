@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "livekit-mic-post-merge-correction-v1",
+  "classification": "LAUNCH_CRITICAL_BOUNDED_PRODUCT_CORRECTION",
+  "baseHead": "0a4e48bba0508b592f20c38225e240846c6d8f88",
+  "branch": "codex/d2a-livekit-mic-post-merge-review-correction",
+  "preFixReproduction": {
+    "head": "0a4e48bba0508b592f20c38225e240846c6d8f88",
+    "result": "0_OF_5_CORRECTED_BEHAVIORS_PASSED",
+    "findings": [
+      {
+        "id": "HEARTBEAT_STRICT_WRITE_RACE",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "PRODUCT_ROOM_OBJECT_IDENTITY_CANCELED_TOGGLE",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "RENDER_PHASE_GENERATION_MUTATION_RETIRED_ACTIVE_SESSION",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "MEMBERSHIP_FAILURE_MISREPORTED_PERMISSION_DENIAL",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "T2_EXTRACTED_ADAPTER_NOT_MOUNTED_HOOK",
+        "status": "REPRODUCED"
+      }
+    ]
+  },
+  "corrections": {
+    "writeSerialization": "DURABLE_ROW_QUEUE_WITH_STRICT_LEASE_BOUNDED_PREDECESSOR_DRAIN_PROPAGATED_TIMEOUT_QUARANTINE_AND_LATEST_STATE_RECOMPUTATION",
+    "sessionAuthority": "COMMITTED_GENERATION_STABLE_AUTHORITY_AND_LIVEKIT_ROOM_IDENTITY",
+    "renderPurity": "SESSION_GENERATION_ADVANCES_ONLY_IN_LAYOUT_EFFECT_COMMIT_PHASE",
+    "permissionState": "NATIVE_PERMISSION_STATE_SEPARATE_FROM_OPERATIONAL_RECONCILIATION",
+    "mountedEvidence": "WHOLE_HOOK_REACT_DOM_RENDER_COMMIT_EFFECT_TIMING_AND_UNMOUNT"
+  },
+  "focusedResults": {
+    "mountedHook": {
+      "passed": 56,
+      "failed": 0,
+      "requiredMatrixPassed": 38,
+      "supportCasesPassed": 17,
+      "t2ContractCasesPassed": 1
+    },
+    "sourceContract": {
+      "passed": 5,
+      "failed": 0
+    },
+    "negativeControls": {
+      "passed": 28,
+      "failed": 0
+    },
+    "typescript": "PASS",
+    "eslint": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "proofTiers": {
+    "T1": "SOURCE_BOUND",
+    "T2": "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION",
+    "T3": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE",
+    "T4": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE"
+  },
+  "digests": {
+    "contractSha256": "b150cd90e417104a027ffeaad009df5cdf1b3e37a5410c721340dc0492754eed",
+    "hookSha256": "f16972de421ddaffffa008567f85ac4cffe6861f849a163adc143761087289fc",
+    "mountedTestSha256": "0ce49bb2ccd05fc9bd68fe07bc8573ee237b17d99b3b78f47a72cca642e64123",
+    "mountedHelperSha256": "9851a183abe9b4f7414e89d73c964a86b54901dd456305f068e5668e7a91dd49",
+    "sourceContractTestSha256": "164bc0c0f50d9cf67e0e7a2754fb356b9ecd3fbbcd92c68674f0ac9493bcfbad"
+  },
+  "exactHeadReviewCorrections": [
+    "CLEANUP_BINDING_SCOPE_AND_TYPESCRIPT",
+    "DURABLE_ROW_CROSS_SESSION_SERIALIZATION",
+    "BOUNDED_PREDECESSOR_DRAIN",
+    "STALE_SAME_ROW_CLEANUP_SUPPRESSION",
+    "TERMINAL_STATE_MONOTONICITY",
+    "PERMISSION_DENIAL_PERSISTS_THROUGH_DISABLE",
+    "SUCCESSFUL_ENABLE_CLEARS_MATCHING_DENIAL_MESSAGE",
+    "NON_AUTHORITY_BACKGROUND_AUDIO_UPDATE_PRESERVES_SESSION",
+    "CLEANUP_REVALIDATES_DURABLE_AUTHORITY_AFTER_NATIVE_AWAIT",
+    "TIMED_OUT_QUEUE_WAITER_PRESERVES_PREDECESSOR_QUARANTINE",
+    "INITIAL_DURABLE_DIVERGENCE_CANNOT_REPORT_LIVE",
+    "TIMEOUT_QUARANTINE_PROPAGATES_ACROSS_SUCCESSOR_CHAIN",
+    "APPSTATE_NATIVE_RECONCILIATION_ESCALATION_IS_DRAINED",
+    "ACTIVE_MEDIA_WRITE_OPERATION_IS_BOUNDED_AND_LATE_SAFE",
+    "RECONNECTED_REQUIRES_EXACT_DURABLE_CONVERGENCE"
+  ],
+  "nonInterference": {
+    "providerCodexReview": "OPTIONAL_ADVISORY_NOT_REQUESTED",
+    "hostedCodexSecurity": "NOT_RUN",
+    "providerContact": false,
+    "buildOrOta": false,
+    "nativeSourceChanged": false,
+    "databaseChanged": false,
+    "packageOrLockChanged": false,
+    "d2aExecution": "FROZEN"
+  }
+}

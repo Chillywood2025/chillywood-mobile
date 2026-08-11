@@ -31,8 +31,12 @@ denial, independent semantic review, adjacent-defect discovery, and required CI.
 - `freeze`: record exact implementation head, tree, diff hash, path hash, input
   hash, and deterministic receipts. Source changes invalidate the freeze.
 - `review`: use the packet's current policy level and compact independent lanes.
-  Bind each lane to the frozen head/tree. Code Review is additional unless a
-  later contract says otherwise, and runs at most once per frozen source head.
+  Bind each lane to the frozen head/tree. Repository-owned independent review
+  and the P0/P1 stop line remain mandatory. Provider Codex Review is
+  `OPTIONAL_ADVISORY`, Owner-triggered only, and never a progress, CI, merge,
+  current-truth, build, or release prerequisite. Never request, retry, or poll
+  it automatically. Treat late provider commentary as advisory triage unless
+  an exact protected-main finding-set registration independently validates it.
 - `current-truth`: regenerate only through the canonical current-truth command.
   Never hand-edit its generated documents or treat the packet as canonical.
 - `closeout`: require applicable focused proof, review, exact final CI, retained
@@ -52,3 +56,33 @@ Never hardcode a model name in repository policy.
 Do not poll or keep a high-context agent alive for more than 15 minutes. Start a
 supported long task, preserve its receipt location, return, and resume from the
 compact receipt. Never promise unsupported background monitoring.
+
+## Codex Security reliability S0
+
+Run `node scripts/assurance/codex-security-target.mjs --base=origin/main
+--target=HEAD` to freeze the exact repository, refs, heads, trees, changed-path
+worklist, repository-owned snapshot digest, and contract hashes. Before hosted
+discovery, independently re-read the Git refs and require the host scan ID,
+`RUNNING` state, repository, base/target heads and trees, and nonempty
+`scan.target.snapshotDigest`. If the field is unavailable, stop with
+`HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE`; if it is exposed but empty, stop with
+`BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT`. Both states must
+report `workersStarted=false`; do not poll or begin expensive discovery.
+
+Keep the host digest and repository digest separate. Re-read the exact source
+lease before discovery, source-review completion, and finalization. Any pushed
+source or contract change invalidates prior evidence. Permit one completion
+attempt; a failed attempt and every terminal state are no-retry. Reuse only
+terminal repository-source security evidence for the identical lease.
+
+Never use hosted Codex Security to approve S0 itself. Its independent exact-head
+fallback must be labeled only
+`REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED`, bind complete changed-file
+coverage, P0=0/P1=0, closed finding dispositions, exact test-result hashes, no
+deferred work, and the exact reason hosted sealing was not used.
+
+The protected-main ruleset must require exactly the 13 Phase 1 checks with
+strict head freshness, stale-review dismissal, conversation resolution, and no
+bypass. `Chi'llywood / Codex Review Exact Head` must remain excluded from the
+required set. A missing, pending, failed, stale, unavailable, or quota-blocked
+provider review receipt is advisory only and cannot prevent repository closure.

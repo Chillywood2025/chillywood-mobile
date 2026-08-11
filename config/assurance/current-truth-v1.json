@@ -2,8 +2,22 @@
   "schemaVersion": 1,
   "contractId": "current-truth-record-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthRecord",
-  "mainSha": "c44482155feb22612e57e091b1f7da831a9f6e2a",
-  "latestMergedImplementationPr": {"number": 185, "state": "merged", "head": "010cc8806380631b675bf3c01d834e0408084ad9", "mergeSha": "c44482155feb22612e57e091b1f7da831a9f6e2a", "title": "Add Assurance Efficiency E0 context and evidence infrastructure"},
+  "reviewPolicy": {
+    "classification": "OPTIONAL_ADVISORY",
+    "requiredStatusCheck": false,
+    "blocksProgress": false,
+    "blocksMerge": false,
+    "ownerTriggeredOnly": true,
+    "automaticReviewRequests": false,
+    "quotaRetryAllowed": false,
+    "providerReceiptRequired": false,
+    "independentRepositoryValidationRequiredBeforeBlocking": true,
+    "repositoryOwnedExactHeadReviewRequired": true,
+    "requiredPhase1Checks": 13,
+    "historicalIncidentsRetained": true
+  },
+  "mainSha": "31087f37290f521d956e125e518f92c3c65a736e",
+  "latestMergedImplementationPr": {"number": 210, "state": "merged", "head": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d", "mergeSha": "31087f37290f521d956e125e518f92c3c65a736e", "title": "Resolve LiveKit microphone post-merge review findings"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -283,6 +297,21 @@
       "liveMoneyAction": false,
       "moneyMoved": false,
       "evidenceSource": "merged Money Operator closure evidence retained from pre-PR-A current-truth documents"
+    },
+    "codexSecurityScanReliabilityS0": {
+      "state": "S0_COMPLETE_LAUNCH_CRITICAL_MIC_CORRECTION_NEXT_D2A_FROZEN",
+      "implementationPr": 206,
+      "sourceHead": "78ea29c15f61aa235417cced13b53eb555fb7e3e",
+      "sourceTree": "d8d14d9056e918de7544f98d07ab2259b071cf3b",
+      "mergeSha": "331ccc77543ad56e911a81b90c5ce7164f6efb15",
+      "ruleset": {"id": 18940814, "versionId": 46160124, "requiredChecks": 13, "strict": true, "approvals": 0, "lastPushApproval": false, "conversationResolution": false, "bypassActors": []},
+      "providerCodexReview": "OPTIONAL_ADVISORY",
+      "repositoryReview": {"bundleId": "s0-solo-owner-final-closeout-pr206-78ea29c1-v1", "bundleSha256": "beee72deccd702822ae593c2027b16c7552d947ac9a7ce7b35c3c73a7cba2602", "P0": 0, "P1": 0, "blockingP2": 0},
+      "phase1Ci": {"runId": 31458933409, "head": "78ea29c15f61aa235417cced13b53eb555fb7e3e", "conclusion": "success", "jobs": "13/13"},
+      "proofTiers": {"T0_REQUIREMENT": "REQUIREMENTS_CLEAR", "T1_SOURCE": "SOURCE_CLEAR", "T2_MODEL": "MODEL_CLEAR", "T3_INTEGRATION": "INTEGRATION_CLEAR"},
+      "automaticFindingDispositions": {"CONFIRMED_FIXED": 7, "NOT_REPRODUCED_WITH_EVIDENCE": 0, "POST_LAUNCH_P2": 0},
+      "d2a": "FROZEN_NOT_RESUMED",
+      "nextImplementation": "codex/d2a-livekit-mic-post-merge-review-correction"
     }
   },
   "operatingPolicy": {
@@ -382,6 +411,284 @@
     },
     "state": "E0_COMPLETE_D2A_READY_NOT_RESUMED"
   },
+  "defectiveCurrentTruthPr195Binding": {
+    "implementationPr": 195,
+    "branch": "codex/d2a-livekit-mic-correction-current-truth-binding",
+    "reviewedSourceHead": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+    "reviewedSourceTree": "cea8c0a60b552f49e9a2fc8a6fb706956fbe1302",
+    "mergedHead": "fc7502bb51c2efde42a5fe4e77d84a2e1d16681b",
+    "mergedTree": "cea8c0a60b552f49e9a2fc8a6fb706956fbe1302",
+    "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+    "correctionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+    "mayProceed": {
+      "formalReviews": false,
+      "phase1Ci": true,
+      "merge": false,
+      "postMergeProductSuccessorRequired": true,
+      "d2aResume": false,
+      "buildOrOta": false,
+      "providerOrProductionMutation": false
+    },
+    "state": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"
+  },
+  "d2aMicrophoneCorrectionBinding": {
+    "implementationPr": 194,
+    "branch": "codex/d2a-livekit-mic-membership-convergence-correction",
+    "startingMain": "fc1616d5da5bc0e521c2158c6ffb68d24b898e7a",
+    "frozenHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+    "frozenTree": "4ce01fa17e4184f2523b82a10401e3b3f59dd641",
+    "synchronizedHead": "ada396a437e40a98acea75bf016c36fc3ea86739",
+    "synchronizedTree": "662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+    "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+    "scope": {"files": 4, "productFiles": 1, "additions": 1469, "deletions": 35, "netLines": 1434, "waiverMaximumNetLines": 1500, "status": "PASS"},
+    "security": {
+      "hostScanId": "a64456db-438c-4857-8f01-c40fcc965936",
+      "hostScanState": "UNSEALED_HOST_FINALIZATION_METADATA_FAILURE",
+      "hostError": "scan.target.snapshotDigest: expected a non-empty string",
+      "sourceReviewState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+      "coverage": "COMPLETE_4_OF_4",
+      "deferredWork": 0,
+      "codexSecuritySealedReportExists": false,
+      "repositoryClosureClassification": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
+      "repositorySnapshotDigest": "0cc18db4d668628f7cddce9da6531403bc0b4f939dc3d2df6e46fb3129d99d86",
+      "repositorySecurityClosureSha256": "7ec97ec736324cc8d23f8905daf4737dc3fcb29a9759a7feb7074c73d56960b1",
+      "independentReviewSha256": "6c25e4db4d81b155eda1d6e20bfa2a776a7727ae26f221def7208e122184b105",
+      "findings": {"P0": 0, "P1": 2, "P2": 3, "P3": 1},
+      "remainingP3": "authority-metadata.t2-proof-boundary-conflict",
+      "lateCodexReview": {"reviewId": 4892095448, "reviewedCommit": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "completedAt": "2026-08-09T18:11:34Z", "mergedAt": "2026-08-09T18:04:06Z", "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"},
+      "completionRetried": false
+    },
+    "reviewLanes": [
+      {"lane": "session-generation-stale-operation-lease-isolation", "pr": 196, "head": "319c005b113be9826d4994129c31a9d4c481fb0e", "evidenceSha256": "d47bcee0f294d00bcbbf6389548396ab5806c75f379352b3db914b0a33ef1e45", "state": "CLOSED_UNMERGED_P0_0_P1_0_P3_1_FAIL_CLOSED_BRANCH_RETAINED_NEVER_MERGE"},
+      {"lane": "state-convergence-compensation", "pr": 198, "head": "854ac461b88de30f89046b4fdd7226dbb85c54a9", "evidenceSha256": "785b63ff2251e177afe415ad0cc5f5dceb8b5d723d078f09c6973ac9a823bc07", "state": "CLOSED_UNMERGED_P0_0_P1_0_P3_1_FAIL_CLOSED_BRANCH_RETAINED_NEVER_MERGE"},
+      {"lane": "determinism-exhaustive-bindings", "pr": 197, "head": "5c6cedd24c32760a68aa07234b07a3aa28a09f0a", "evidenceSha256": "a421ed934fc6aad2074d2fe2fe96939e68ee07176f9f37b69f69c800d8c1137f", "state": "CLOSED_UNMERGED_P0_0_P1_0_P3_0_BRANCH_RETAINED_NEVER_MERGE"},
+      {"lane": "whole-call-authority-non-regression", "pr": 199, "head": "2aaf5f11d4740178dc20ff99a4c9e9a43d7cb581", "evidenceSha256": "30c8a239f74e2adc8382242b7081cdfc090c5dd24111260dc7250f9b3b05f150", "state": "CLOSED_UNMERGED_P0_0_P1_0_P3_1_FAIL_CLOSED_BRANCH_RETAINED_NEVER_MERGE"}
+    ],
+    "phase1Ci": {"runId": 31327771533, "head": "ada396a437e40a98acea75bf016c36fc3ea86739", "conclusion": "success", "jobs": "13/13"},
+    "postMergeCorrection": {
+      "implementationPr": 210,
+      "branch": "codex/d2a-livekit-mic-post-merge-review-correction",
+      "immutableSourceHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
+      "immutableSourceTree": "67ffe81173207d616f11d796d52df8e27f5fae85",
+      "synchronizedHead": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d",
+      "synchronizedTree": "820aae7845919268b3ed489cfa4ed2fddecdbdae",
+      "mergeSha": "31087f37290f521d956e125e518f92c3c65a736e",
+      "mergeTree": "820aae7845919268b3ed489cfa4ed2fddecdbdae",
+      "fiveFindings": "CONFIRMED_FIXED_5_OF_5",
+      "focusedTests": "61/61",
+      "mountedHookTests": "56/56",
+      "negativeControls": "28/28",
+      "repositoryOwnedReviewBundleSha256": "4b4da6c0b2c359348098a7f0167dd0d739e541a3b643be8e7c0c6aabe9fa6c96",
+      "repositoryOwnedReview": {"P0": 0, "P1": 0, "launchImpactingP2": 0},
+      "phase1Ci": {"runId": 31470393389, "head": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d", "conclusion": "success", "jobs": "13/13"},
+      "proofTiers": {"T0_REQUIREMENT": "REQUIREMENTS_CLEAR", "T1_SOURCE": "SOURCE_CLEAR", "T2_MODEL": "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION", "T3_INTEGRATION": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE"},
+      "providerCodexReview": "OPTIONAL_ADVISORY_NOT_MERGE_AUTHORITY",
+      "d2a": "FROZEN_READY_NOT_RESUMED",
+      "state": "MERGED_SOURCE_MODEL_CLEAR_D2A_READY_NOT_RESUMED"
+    },
+    "preservedD2A": {"head": "ebb0ac5e2dc6ba9005208b7e6b10474292e0972d", "tree": "c41a4d688e799483b67f35c956f1c95b273bf072", "state": "FROZEN_NOT_RESUMED"},
+    "mayProceed": {"formalReviews": false, "phase1Ci": true, "merge": false, "postMergeProductSuccessorRequired": true, "d2aResume": false, "buildOrOta": false, "providerOrProductionMutation": false},
+    "state": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"
+  },
+  "activeTaskBinding": {
+    "schemaVersion": 1,
+    "featureId": "chilly-chat-call-lifecycle",
+    "implementationPr": 210,
+    "implementationBranch": "codex/d2a-livekit-mic-post-merge-review-correction",
+    "implementationBindingId": "d2a-livekit-mic-post-merge-review-correction-pr210-v1",
+    "immutableSourceHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
+    "immutableSourceTree": "67ffe81173207d616f11d796d52df8e27f5fae85",
+    "currentImplementationHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
+    "currentImplementationTree": "67ffe81173207d616f11d796d52df8e27f5fae85",
+    "phase": "FORMAL_REVIEW",
+    "executionState": "LIVEKIT_MIC_POST_MERGE_CORRECTION_REVIEW_D2A_FROZEN",
+    "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "livekit-mic-post-merge-correction-final-bounded-operation-source-freeze-20260811-0746", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-implementation.immutable-synchronized-source"], "subjectHead": "ad9a6882b455060ae9a584b32847d9a450d00beb", "subjectTree": "67ffe81173207d616f11d796d52df8e27f5fae85"}],
+    "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    "ownerBootstrapAuthorization": {
+      "schemaVersion": 1,
+      "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 210,
+      "commentId": 5250432270,
+      "author": "Chillywood2025",
+      "authorAssociation": "OWNER",
+      "createdAt": "2026-08-11T07:46:17Z",
+      "updatedAt": "2026-08-11T07:46:17Z",
+      "bodySha256": "bd74fbc3313fd3403bbd7043379c49ce841f7de3bbe7e42ad82f1924767f12be",
+      "subjectHash": "06dcaed4f49b7363280166e7f683f5be69b0bc81d6092aa8be52c6f05fd7a1b5"
+    }
+  },
+  "freshnessClaims": [
+    {
+      "id": "repository-source-livekit-mic-post-merge-correction-final",
+      "status": "CURRENT",
+      "observedAt": "2026-08-11T07:46:00Z",
+      "expiresAt": "2026-08-12T07:46:00Z",
+      "evidenceSourceId": "livekit-mic-post-merge-correction-final-bounded-operation-source-freeze-20260811-0746",
+      "evidenceMode": "local-offline-and-github-read-only",
+      "factsCovered": ["repository.active-implementation.immutable-synchronized-source"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
+      "subjectTree": "67ffe81173207d616f11d796d52df8e27f5fae85"
+    },
+    {
+      "id": "repository-source-s0-exact-closure-reuse-final",
+      "status": "CURRENT",
+      "observedAt": "2026-08-11T04:34:00Z",
+      "expiresAt": "2026-08-12T04:34:00Z",
+      "evidenceSourceId": "s0-solo-owner-final-closeout-source-freeze-20260811-0434",
+      "evidenceMode": "local-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.s0.requirements", "repository.assurance-control.s0.source", "repository.assurance-control.s0.model", "repository.assurance-control.s0.integration"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "47091a7b2a30f9f15f57c581835fd75794defc71",
+      "subjectTree": "a40acd0b97ab9a10096c88074a72c741bd3d90ac"
+    },
+    {
+      "id": "repository-source-a1-exact-carrier-full-history",
+      "status": "STALE_BLOCKED",
+      "observedAt": "2026-08-10T04:07:31Z",
+      "expiresAt": "2026-08-11T04:07:31Z",
+      "evidenceSourceId": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
+      "evidenceMode": "local-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.late-review-tombstone-admission"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"
+    },
+    {
+      "id": "repository-source-a1-complete-late-sentinel-inventory",
+      "status": "STALE_BLOCKED",
+      "observedAt": "2026-08-10T03:25:40Z",
+      "expiresAt": "2026-08-11T03:25:40Z",
+      "evidenceSourceId": "a1-complete-late-sentinel-inventory-source-freeze-20260810-0325",
+      "evidenceMode": "local-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.complete-late-sentinel-inventory"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "3bb4eb5e51824e7dbfd98a2fbf9c86079c23706e",
+      "subjectTree": "ca8e99bdd968d704aecd38a0c7e2f0f65b501259"
+    },
+    {
+      "id": "repository-source-a1-post-merge-control-readback",
+      "status": "STALE_BLOCKED",
+      "observedAt": "2026-08-10T03:16:55Z",
+      "expiresAt": "2026-08-11T03:16:55Z",
+      "evidenceSourceId": "a1-post-merge-control-readback-source-freeze-20260810-0316",
+      "evidenceMode": "github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.post-merge-control-readback"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "09ee997c55fa38dce7682be1a7e2a11492dc89d6",
+      "subjectTree": "89b828b94e2af3b809613c2c2607db4d5b61abf1"
+    },
+    {
+      "id": "repository-source-a1-late-review-owner-registry-bootstrap",
+      "status": "STALE_BLOCKED",
+      "observedAt": "2026-08-10T02:48:20Z",
+      "expiresAt": "2026-08-11T02:48:20Z",
+      "evidenceSourceId": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
+      "evidenceMode": "local-offline-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.source"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectTree": "e90c18e159b8f671c8851df0398ce1996ede4b33"
+    },
+    {
+      "id": "repository-source-a1-assurance-control-final",
+      "status": "STALE_BLOCKED",
+      "observedAt": "2026-08-10T02:37:45Z",
+      "expiresAt": "2026-08-11T02:37:45Z",
+      "evidenceSourceId": "a1-merged-successor-head-isolation-source-freeze-20260810-0237",
+      "evidenceMode": "local-offline-and-github-read-only",
+      "factsCovered": ["repository.assurance-control.a1.source"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "f32d7b5298290035b1af38346339becd6227fd62",
+      "subjectTree": "9b5e2d049419ad16d1607510150412353d6a094c"
+    },
+    {
+      "id": "provider-critical-b3-linked-readback",
+      "status": "STALE_BLOCKED",
+      "observedAt": "2026-08-02T06:00:44Z",
+      "expiresAt": "2026-08-02T14:00:44Z",
+      "evidenceSourceId": "b3-immutable-source-binding-20260802-0600",
+      "evidenceMode": "local-and-linked-read-only",
+      "factsCovered": ["provider.supabase.b3.deployed-predecessor", "provider.supabase.b3.forward-correction", "provider.supabase.b3.live-acl"],
+      "freshnessClass": "PROVIDER_CRITICAL",
+      "authorityAllowed": "PROVIDER_READBACK_ONLY",
+      "platform": "NONE",
+      "provider": "SUPABASE"
+    }
+  ],
+  "lateReviewSentinels": [
+    {
+      "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+      "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 195,
+      "mergedAt": "2026-08-09T17:50:31Z",
+      "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+      "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+      "reviewId": 4892031892,
+      "reviewCompletedAt": "2026-08-09T17:53:16Z",
+      "bindingPath": "defectiveCurrentTruthPr195Binding",
+      "findings": [
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694410, "provider": "chatgpt-codex-connector", "bodyHash": "2fca573517d529bc456418b47438c64289824f0c6e87a4cd463c7f03f30a7805", "commentId": 3744694410, "commentNodeId": "PRRC_kwDORRwZUc7fM4CK", "threadId": "PRRT_kwDORRwZUc6Xp4BK", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694414, "provider": "chatgpt-codex-connector", "bodyHash": "51584c18df44cb4e4592642047223d2dc2c039bfe9e16b4d9472ba8fd28e3792", "commentId": 3744694414, "commentNodeId": "PRRC_kwDORRwZUc7fM4CO", "threadId": "PRRT_kwDORRwZUc6Xp4BO", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744694418, "provider": "chatgpt-codex-connector", "bodyHash": "694d7aa57c7484db5b16fb8243c6f01531c8dd1b167a7c5ad99fe8103f8e618d", "commentId": 3744694418, "commentNodeId": "PRRC_kwDORRwZUc7fM4CS", "threadId": "PRRT_kwDORRwZUc6Xp4BQ", "severity": "P1", "timestamp": "2026-08-09T17:53:16Z", "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["config/assurance/current-truth-v1.json"], "disposition": "UNRESOLVED"}
+      ],
+      "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "authorizedBootstrapOwners": [
+        "codex/assurance-active-task-and-claim-freshness-a1",
+        "codex/assurance-codex-security-scan-reliability-s0",
+        "codex/d2a-livekit-mic-post-merge-review-correction"
+      ],
+      "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
+    },
+    {
+      "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+      "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 194,
+      "mergedAt": "2026-08-09T18:04:06Z",
+      "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+      "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+      "reviewId": 4892095448,
+      "reviewCompletedAt": "2026-08-09T18:11:34Z",
+      "bindingPath": "d2aMicrophoneCorrectionBinding",
+      "findings": [
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746865, "provider": "chatgpt-codex-connector", "bodyHash": "d524691372b79106d0760f25e445118785e785abbfcc488545cb39c88fd2af37", "commentId": 3744746865, "commentNodeId": "PRRC_kwDORRwZUc7fNE1x", "threadId": "PRRT_kwDORRwZUc6XqB8L", "severity": "P1", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746868, "provider": "chatgpt-codex-connector", "bodyHash": "d54ed8690d12138ad37b6c47a3d2f986a0f331c69be6312cc7239e22842049f7", "commentId": 3744746868, "commentNodeId": "PRRC_kwDORRwZUc7fNE10", "threadId": "PRRT_kwDORRwZUc6XqB8O", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746869, "provider": "chatgpt-codex-connector", "bodyHash": "e174e6a0d2a9e245cb6ac82976cc72d45981926e04e06bee376376475595ad46", "commentId": 3744746869, "commentNodeId": "PRRC_kwDORRwZUc7fNE11", "threadId": "PRRT_kwDORRwZUc6XqB8P", "severity": "P1", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["docs/assurance/pr-d2a-livekit-mic-membership-convergence-correction-v1.json"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746872, "provider": "chatgpt-codex-connector", "bodyHash": "2e6fe51cb3e76b8a65ef438565caa0a082906176c0110a4617341c7c49a7464a", "commentId": 3744746872, "commentNodeId": "PRRC_kwDORRwZUc7fNE14", "threadId": "PRRT_kwDORRwZUc6XqB8S", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"},
+        {"sourceType": "INLINE_THREAD", "sourceId": 3744746873, "provider": "chatgpt-codex-connector", "bodyHash": "485b525f741508c8a6872800889cddcb10e053bcb870a72f0e78ec662509b978", "commentId": 3744746873, "commentNodeId": "PRRC_kwDORRwZUc7fNE15", "threadId": "PRRT_kwDORRwZUc6XqB8T", "severity": "P2", "timestamp": "2026-08-09T18:11:34Z", "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "reviewedHeadClassification": "STALE_HEAD", "threadResolutionState": "UNRESOLVED", "affectedPaths": ["hooks/use-livekit-chat-call-session.ts"], "disposition": "UNRESOLVED"}
+      ],
+      "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction",
+      "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
+      "authorizedBootstrapOwners": [
+        "codex/assurance-active-task-and-claim-freshness-a1",
+        "codex/assurance-codex-security-scan-reliability-s0"
+      ],
+      "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
+    }
+  ],
   "openImplementationPrs": [],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -414,6 +721,10 @@
     {"number": 110, "branch": "codex/first-pass-assurance-current-truth-before-model-final-review-review", "head": "d43b460cc2f82cb296668117a0bf73648dacd701", "reviewedImplementationHead": "502f9e2659d96389ae418b11f83171b171b5a708", "state": "open-draft-current", "disposition": "never-merge"}
   ],
   "closedReviewOnlyPrDispositions": [
+    {"number": 196, "branch": "codex/d2a-mic-review-session-lease-isolation", "head": "319c005b113be9826d4994129c31a9d4c481fb0e", "reviewedImplementationHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "evidenceSha256": "d47bcee0f294d00bcbbf6389548396ab5806c75f379352b3db914b0a33ef1e45", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p3-1-fail-closed-branch-retained-never-merge"},
+    {"number": 197, "branch": "codex/d2a-mic-review-determinism-bindings", "head": "5c6cedd24c32760a68aa07234b07a3aa28a09f0a", "reviewedImplementationHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "evidenceSha256": "a421ed934fc6aad2074d2fe2fe96939e68ee07176f9f37b69f69c800d8c1137f", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p3-0-branch-retained-never-merge"},
+    {"number": 198, "branch": "codex/d2a-mic-review-convergence-compensation", "head": "854ac461b88de30f89046b4fdd7226dbb85c54a9", "reviewedImplementationHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "evidenceSha256": "785b63ff2251e177afe415ad0cc5f5dceb8b5d723d078f09c6973ac9a823bc07", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p3-1-fail-closed-branch-retained-never-merge"},
+    {"number": 199, "branch": "codex/d2a-mic-review-whole-call-authority", "head": "2aaf5f11d4740178dc20ff99a4c9e9a43d7cb581", "reviewedImplementationHead": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e", "evidenceSha256": "30c8a239f74e2adc8382242b7081cdfc090c5dd24111260dc7250f9b3b05f150", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p3-1-fail-closed-branch-retained-never-merge"},
     {"number": 186, "branch": "codex/assurance-efficiency-e0-review-architecture-state", "head": "234d37b5f1ddaca73f6369e09e7373c4046e9050", "reviewedImplementationHead": "010cc8806380631b675bf3c01d834e0408084ad9", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "evidenceSha256": "d240c6445721f204f3cebc3c2ad7e44c2be8ec5adc1a5f3cd36c4090c36a4363", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-0-p3-0-branch-retained-never-merge"},
     {"number": 187, "branch": "codex/assurance-efficiency-e0-review-security-authority", "head": "4b91a07a0b4689287690edeb321ac67e11ec15f3", "reviewedImplementationHead": "010cc8806380631b675bf3c01d834e0408084ad9", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "evidenceSha256": "03d3629a41b61d3960792203b60c2b6be191b3505f97b94685f19152d333f9b7", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-0-p3-0-branch-retained-never-merge"},
     {"number": 188, "branch": "codex/assurance-efficiency-e0-review-proof-equivalence-native-provider", "head": "91c23ad4790bede58f41be051eec32921f9dc1b9", "reviewedImplementationHead": "010cc8806380631b675bf3c01d834e0408084ad9", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "evidenceSha256": "d06b2ed12019c1404fa61d2474856bd03a9f373c427d256a3aba723878d648dc", "state": "closed-unmerged", "disposition": "review-complete-p0-0-p1-0-p2-0-p3-0-branch-retained-never-merge"},
@@ -462,11 +773,12 @@
     {"number": 138, "branch": "codex/assurance-reconcile-revenuecat-transfer-review-concurrency-atomicity", "head": "ca69c38368be9bb1d65b717b94c039ebc8829e5a", "reviewedImplementationHead": "81892f3dae544713d8e35512da895cd99c610966", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185"],
-    "active": "E0_COMPLETE_D2A_READY_NOT_RESUMED",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210"],
+    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_chilly-chat-call-lifecycle_LIVEKIT_MIC_POST_MERGE_CORRECTION_PR210_MERGED_SOURCE_MODEL_CLEAR_D2A_READY_NOT_RESUMED",
     "nextActions": [
-      "Use the merged Chi'llywood assurance skill and compact active-task packet to resume D2A from checkpoint 8c47a3a9bff9f9630ba14837652ec31c14be0629 tree f9e102649b51da84324e97b576823e910340df9f; resolve current truth first, run only the next eligible phase, and stop on any new P0/P1.",
-      "E0 is complete and D2A is ready but was not resumed during E0 or its post-merge current-truth synchronization.",
+      "Keep D2A frozen in this synchronization; PR #210 merged at 31087f37290f521d956e125e518f92c3c65a736e after repository-owned exact-head review P0=0/P1=0 and Phase 1 run 31470393389 passed 13/13.",
+      "Preserve the merged bounded PR #210 correction, which fixes all five internally validated PR #194 findings without package, native, database, provider, build, OTA, or release changes; T0-T2 are clear and T3 remains BLOCKED_INTERNAL pending release-critical native execution.",
+      "Next, resume D2A only for release-critical execution: create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
@@ -480,9 +792,789 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-09T07:49:51Z",
-  "freshnessDeadline": "2026-08-10T07:49:51Z",
+  "timestamp": "2026-08-11T07:56:00Z",
+  "freshnessDeadline": "2026-08-12T07:56:00Z",
   "evidenceSources": [
+    {
+      "id": "livekit-mic-post-merge-correction-final-bounded-operation-source-freeze-20260811-0746",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction and all independently reproduced exact-head launch-blocking corrections",
+        "active media-write operations and predecessor drains are bounded while unresolved reservations remain quarantined until their underlying work settles",
+        "strict transactions cannot commit after timeout and Reconnected cannot promote a session to live without exact durable convergence",
+        "same-row successor quarantine and AppState native reconciliation escalation remain serialized",
+        "whole mounted hook execution passes 56 of 56 exact source contract passes 5 of 5 and all 28 required negative-control mutants are rejected",
+        "contract validation and Chi'lly Chat semantics pass with no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:46:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "ad9a6882b455060ae9a584b32847d9a450d00beb",
+      "subjectHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
+      "subjectTree": "67ffe81173207d616f11d796d52df8e27f5fae85"
+    },
+    {
+      "id": "livekit-mic-post-merge-correction-final-quarantine-source-freeze-20260811-0734",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction and all independently reproduced exact-head launch-blocking corrections",
+        "same-row queue timeout quarantine propagates across successor reservations until the unresolved root writer drains",
+        "AppState native reconciliation escalation is drained before a coalesced heartbeat reconciliation completes",
+        "whole mounted hook execution passes 54 of 54 exact source contract passes 5 of 5 and all 25 required negative-control mutants are rejected",
+        "contract validation and Chi'lly Chat semantics pass with no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:34:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "68e992238e84fc8fc380f95863f1037c9f7d03b1",
+      "subjectHead": "68e992238e84fc8fc380f95863f1037c9f7d03b1",
+      "subjectTree": "9e9b0ddd2af299aae1add5baf6acc1073f4458f1"
+    },
+    {
+      "id": "livekit-mic-post-merge-correction-canonical-provenance-source-freeze-20260811-0723",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction and all exact-head launch-blocking review corrections",
+        "durable room-user write quarantine preserves unresolved predecessors after bounded timeout and prevents divergent replacement sessions from reporting live",
+        "cleanup revalidates durable authority after native awaits and non-authority background-audio commits preserve the active LiveKit Room",
+        "whole mounted hook execution passes 52 of 52 exact source contract passes 5 of 5 and all 23 required negative-control mutants are rejected",
+        "active-task and exact-head owner-registry suites pass 73 of 73 and contract validation passes",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:23:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "eee55118b48159eb17782b1daad171fa525bd1fb",
+      "subjectHead": "eee55118b48159eb17782b1daad171fa525bd1fb",
+      "subjectTree": "fbad3e1514fbf47c785e6249606162ecd2dfad26"
+    },
+    {
+      "id": "livekit-mic-post-merge-correction-final-provenance-source-freeze-20260811-0720",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction and all exact-head launch-blocking review corrections",
+        "durable room-user write quarantine preserves unresolved predecessors after bounded timeout and prevents divergent replacement sessions from reporting live",
+        "cleanup revalidates durable authority after native awaits and non-authority background-audio commits preserve the active LiveKit Room",
+        "whole mounted hook execution passes 52 of 52 exact source contract passes 5 of 5 and all 23 required negative-control mutants are rejected",
+        "active-task and exact-head owner-registry suites pass 73 of 73 and contract validation passes",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:20:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "fdf26bb872905e77267012121e8d0feb44aad64d",
+      "subjectHead": "fdf26bb872905e77267012121e8d0feb44aad64d",
+      "subjectTree": "ad92b303be809328efda0727ddf5d16f8f7c7f08"
+    },
+    {
+      "id": "livekit-mic-post-merge-correction-final-review-source-freeze-20260811-0715",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction plus exact-head review corrections for non-authority option stability cleanup authority revalidation and predecessor timeout recovery",
+        "durable room-user media-write coordination preserves the unresolved predecessor after bounded timeout so later writers cannot bypass a stale in-flight write",
+        "replacement initialization remains reconnecting and warning-bound until durable membership converges and a heartbeat proves recovery",
+        "stable commit-phase session authority and monotonic terminal state prevent stale writers cleanup and transaction resurrection while ordinary background-audio option commits preserve the active room",
+        "native camera and microphone permission denial remains separate from recoverable durable membership reconciliation warning and Settings eligibility",
+        "whole mounted hook execution passes 52 of 52 exact source contract passes 5 of 5 and all 23 required negative-control mutants are rejected",
+        "active-task and exact-head owner-registry suites pass 73 of 73 with exact successor and drift-negative coverage",
+        "repository semantics changed-file lint contract current-truth and git diff validation pass; exact-head Phase 1 TypeScript remains mandatory",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:16:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "95a7e98dec35dc3154c7be3d3110d7ea673e44b6",
+      "subjectHead": "95a7e98dec35dc3154c7be3d3110d7ea673e44b6",
+      "subjectTree": "9ef97208a27ed68d8af37a330215786650abecc5"
+    },
+    {
+      "id": "livekit-mic-post-merge-correction-canonical-owner-registry-source-freeze-20260811-0700",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 source contains the bounded five-finding LiveKit microphone correction exact bootstrap registration and fail-closed substitution tests",
+        "the immutable late-review owner registry contract and schema authorize only codex/d2a-livekit-mic-post-merge-review-correction through PR #195 while free-form owner metadata remains rejected",
+        "durable room-user media-write coordination serializes strict microphone heartbeat AppState lifecycle and native-audio reconciliation writes with bounded predecessor failure",
+        "stable commit-phase session authority and monotonic terminal state prevent stale writers cleanup and transaction resurrection",
+        "native camera and microphone permission denial remains separate from recoverable durable membership reconciliation warning and Settings eligibility",
+        "whole mounted hook execution passes 48 of 48 exact source contract passes 5 of 5 and all 19 required negative-control mutants are rejected",
+        "active-task and exact-head owner-registry suites pass 73 of 73 with exact successor and drift-negative coverage",
+        "TypeScript repository semantics changed-file lint contract current-truth secret scan and git diff validation pass without package changes",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:00:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "5a2984cf130e69d2845adc8b115a851b10ea3447",
+      "subjectHead": "5a2984cf130e69d2845adc8b115a851b10ea3447",
+      "subjectTree": "6c226d05afc76c7fb087d7e4df7147e99d8516fc"
+    },
+    {
+      "id": "livekit-mic-post-merge-correction-successor-authority-source-freeze-20260811-0657",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 source includes the bounded five-finding LiveKit microphone correction exact bootstrap registration and fail-closed substitution tests",
+        "Owner authorization admits only codex/d2a-livekit-mic-post-merge-review-correction through the older unresolved PR #195 sentinel while preserving all sentinel blockers for every other branch",
+        "durable room-user media-write coordination serializes strict microphone heartbeat AppState lifecycle and native-audio reconciliation writes with bounded predecessor failure",
+        "stable commit-phase session authority and monotonic terminal state prevent stale writers cleanup and transaction resurrection",
+        "native camera and microphone permission denial remains separate from recoverable durable membership reconciliation warning and Settings eligibility",
+        "whole mounted hook execution passes 48 of 48 exact source contract passes 5 of 5 and all 19 required negative-control mutants are rejected",
+        "TypeScript repository semantics active-task tests changed-file lint contract current-truth and git diff validation pass without package changes",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T06:57:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "aa3705c7ddf9ab384b3b07fdeded49c80a08049e",
+      "subjectHead": "aa3705c7ddf9ab384b3b07fdeded49c80a08049e",
+      "subjectTree": "0523621a26a0a071ad7f4d8ae9da27a68372514d"
+    },
+    {
+      "id": "livekit-mic-post-merge-correction-final-source-freeze-20260811-0652",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 source 13503c7408298737c1adf57bbfb9afd9e9e3a32f tree 54e657f608ae784b556a984ac2e43508695699f5 contains the bounded five-finding LiveKit microphone correction and exact bootstrap control",
+        "durable room-user media-write coordination serializes strict microphone heartbeat AppState lifecycle and native-audio reconciliation writes with bounded predecessor failure",
+        "stable commit-phase session authority rejects true generation invite room user provider LiveKit Room and terminal changes while allowing same-room object refresh",
+        "native camera and microphone permission denial remains separate from recoverable durable membership reconciliation warning and Settings eligibility",
+        "whole mounted hook execution passes 48 of 48 including render commit heartbeat toggle permission returned state cleanup and stale operations",
+        "exact source and contract tests pass 5 of 5 and all 19 required negative-control mutants are rejected",
+        "exact Owner-authorized PR #210 bootstrap identity rejects feature PR branch binding and execution-state substitution",
+        "TypeScript repository semantics changed-file lint secret-safe evidence and git diff validation pass without package changes",
+        "no provider contact hosted scan build OTA native database token issuance call-invite authority D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T06:52:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "ad9b2c1a077909fde5a703e984325e3fcd5a5f86",
+      "subjectHead": "ad9b2c1a077909fde5a703e984325e3fcd5a5f86",
+      "subjectTree": "f7cd289f1ca3538083613cd494b8604d09f1e01f"
+    },
+    {
+      "id": "livekit-mic-correction-source-freeze-20260811-0622",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 frozen product source 88d1415ccacfa22e5b7ce3da545ecd5f523b3dbc tree 9167d58ebac2b7e7551b7b2c0304cc771e82e690 corrects all five internally validated post-merge PR #194 findings",
+        "one session-bound media-write coordinator serializes strict microphone transitions with heartbeat AppState native-audio and other nonterminal membership writes",
+        "immutable commit-phase session authority replaces product-room object equality and render-phase generation mutation",
+        "native camera and microphone permission state remains independent from membership reconciliation warnings and settings eligibility",
+        "whole mounted hook execution passes 41 of 41 including render commit heartbeat toggle returned state cleanup and stale operations",
+        "exact source and contract tests pass 5 of 5 and all 14 mandated negative-control mutants are rejected",
+        "no provider contact hosted scan build OTA package lock native database token issuance call-invite authority or release action"
+      ],
+      "observedAt": "2026-08-11T06:22:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "534b6346ba9ffdabb7afccff4432e4b6940d2715",
+      "subjectHead": "534b6346ba9ffdabb7afccff4432e4b6940d2715",
+      "subjectTree": "ff4e603fefa98268c991d03c0cad0a5301e5580a"
+    },
+    {
+      "id": "s0-solo-owner-final-closeout-source-freeze-20260811-0434",
+      "mode": "local-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.s0.requirements",
+        "repository.assurance-control.s0.source",
+        "repository.assurance-control.s0.model",
+        "repository.assurance-control.s0.integration",
+        "S0 machine-readable contract pins exact target identity, digest preflight, lifecycle, evidence reuse, repository closure, and incident-sanitization requirements",
+        "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording",
+        "S0 executable model and adversarial fixtures prove preflight stops before discovery, one completion attempt, terminal no-retry, exact reuse, invalidation, closure integrity, and sanitized recurring incidents",
+        "S0 integration evidence binds the exact target descriptor, repository closure, governed commands, independent exact-head review, and Phase 1 CI to one frozen source",
+        "S0 bounded corrections include persistent source-drift terminalization, exact main-push targeting, credential-isolated governed commands, fail-closed owner registry, named scope-waiver review authority, isolated benchmark cleanup, and accurate incident history",
+        "S0 final owner-registry regression proves known finding-set owner drift remains blocking",
+        "S0 protected-main ruleset 18940814 version 46160124 preserves strict 13-check enforcement and no bypass while requiring zero approvals, no last-push approval, and no provider-thread resolution",
+        "S0 provider Codex Review is optional advisory and all seven automatic findings have one bounded repository-owned disposition pass"
+      ],
+      "observedAt": "2026-08-11T04:34:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "47091a7b2a30f9f15f57c581835fd75794defc71",
+      "subjectHead": "47091a7b2a30f9f15f57c581835fd75794defc71",
+      "subjectTree": "a40acd0b97ab9a10096c88074a72c741bd3d90ac"
+    },
+    {
+      "id": "s0-solo-owner-final-closeout-source-freeze-20260811-0432",
+      "mode": "local-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.s0.requirements",
+        "repository.assurance-control.s0.source",
+        "repository.assurance-control.s0.model",
+        "repository.assurance-control.s0.integration",
+        "S0 bounded corrections include persistent source-drift terminalization, exact main-push targeting, credential-isolated governed commands, fail-closed owner registry, named scope-waiver review authority, isolated benchmark cleanup, and accurate incident history",
+        "S0 final owner-registry regression proves known finding-set owner drift remains blocking",
+        "S0 protected-main ruleset 18940814 version 46160124 preserves strict 13-check enforcement and no bypass while requiring zero approvals, no last-push approval, and no provider-thread resolution",
+        "S0 provider Codex Review is optional advisory and all seven automatic findings have one bounded repository-owned disposition pass"
+      ],
+      "observedAt": "2026-08-11T04:32:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "32030ff90f843873aef3fc287e559129244dba88",
+      "subjectHead": "32030ff90f843873aef3fc287e559129244dba88",
+      "subjectTree": "6b1d8891834fe35c957ed7f2b862078c06f981f3"
+    },
+    {
+      "id": "s0-solo-owner-final-closeout-source-freeze-20260811-0428",
+      "mode": "local-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.s0.requirements",
+        "repository.assurance-control.s0.source",
+        "repository.assurance-control.s0.model",
+        "repository.assurance-control.s0.integration",
+        "S0 machine-readable contract pins exact target identity, digest preflight, lifecycle, evidence reuse, repository closure, and incident-sanitization requirements",
+        "S0 source implements fail-closed Codex Security snapshot-digest preflight, exact source leasing, bounded lifecycle finalization, terminal no-retry, evidence invalidation, repository fallback, and sanitized incident recording",
+        "S0 executable model and adversarial fixtures prove preflight stops before discovery, one completion attempt, terminal no-retry, exact reuse, invalidation, closure integrity, and sanitized recurring incidents",
+        "S0 integration evidence binds the exact target descriptor, repository closure, governed commands, independent exact-head review, and Phase 1 CI to one frozen source",
+        "S0 optional-advisory extension binds Owner-triggered provider review, independent protected-main finding-set validation, repository-owned exact-head review, and the exact 13-check protected-main ruleset",
+        "S0 repository closure independently reconstructs the exact Git target descriptor and accepts only the complete code-pinned set of governed receipt artifacts",
+        "S0 lifecycle authority atomically registers full-snapshot-hash-bound scan transitions and consumes finalization before guards so stale or terminal snapshots cannot replay",
+        "S0 repository closure code-pins the exact known finding set and binds each closed disposition to the governed focused-test receipt",
+        "S0 tooling-fallback closure accepts only an authoritative exact-source terminal preflight transition and rejects caller-created or cross-source lifecycle objects",
+        "S0 unchanged-source reuse classifies source drift before old-closure validation and accepts only an exact source lease plus a complete hash-valid five-finding repository closure with governed test hashes",
+        "S0 source-drift finalization persists a terminal lifecycle transition before return and invalidates every prior lifecycle snapshot",
+        "S0 governed child commands receive no ambient GitHub credentials or credential-bearing configuration paths",
+        "S0 protected-main ruleset 18940814 version 46160124 preserves strict 13-check enforcement and no bypass while requiring zero approvals, no last-push approval, and no provider-thread resolution",
+        "S0 automatic review findings have one bounded repository-owned disposition pass; provider Codex Review remains optional advisory"
+      ],
+      "observedAt": "2026-08-11T04:28:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "ce568be25b04b7b03ff9ac9498ad040de5fa238d",
+      "subjectHead": "ce568be25b04b7b03ff9ac9498ad040de5fa238d",
+      "subjectTree": "dcfefbac0de64182eb6c75b57b8d83b61561219b"
+    },
+    {
+      "id": "a1-exact-carrier-full-history-source-freeze-20260810-0407",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T04:07:31Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "carrierExactMergeParentsRequired": true,
+          "carrierGithubReadbackRequired": true,
+          "carrierExactHeadReceiptRequired": true,
+          "carrierLatestSourcePushInvalidationRequired": true,
+          "carrierEvidenceMode": "github-read-only",
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "carrierRequirements": {
+          "normalTwoParentMerge": true,
+          "reviewedHeadIsExactSecondParent": true,
+          "protectedMainFirstParentIsExactBaseParent": true,
+          "currentPullRequestHeadAndTreeReadbackRequired": true,
+          "noSourceCommitAfterReview": true,
+          "exactReceiptAndCheckReadbackRequired": true,
+          "conversationResolutionReadbackRequired": true,
+          "committedHashBoundGithubEvidenceRequired": true
+        },
+        "fullHistoryCallers": [
+          ".github/workflows/ios-preview-build.yml",
+          ".github/workflows/ios-production-testflight.yml",
+          ".github/workflows/manual-public-v1-release.yml",
+          ".github/workflows/phase3a-manual-preview.yml"
+        ],
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "3f5d136a2a08dbcbb8e720772e18aa6bdb99b12a8435f83038869123e6fe75ad",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T04:07:31Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectHead": "100170bb0fead748eb01ee767d6f4f2151281955",
+      "subjectTree": "77ea8d5dcdc43c92e94d0163db1b5c7713c78b2d"
+    },
+    {
+      "id": "a1-exact-tombstone-carrier-readback-source-freeze-20260810-0402",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T04:02:24Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "carrierExactMergeParentsRequired": true,
+          "carrierGithubReadbackRequired": true,
+          "carrierExactHeadReceiptRequired": true,
+          "carrierLatestSourcePushInvalidationRequired": true,
+          "carrierEvidenceMode": "github-read-only",
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "carrierRequirements": {
+          "normalTwoParentMerge": true,
+          "reviewedHeadIsExactSecondParent": true,
+          "protectedMainFirstParentIsExactBaseParent": true,
+          "currentPullRequestHeadAndTreeReadbackRequired": true,
+          "noSourceCommitAfterReview": true,
+          "exactReceiptAndCheckReadbackRequired": true,
+          "conversationResolutionReadbackRequired": true,
+          "committedHashBoundGithubEvidenceRequired": true
+        },
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "32e6afff59b99fd3853cbddd6816b613df665c745144689a52154e0d24b2b865",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels, preserve the canonical correction owner, and require exact-head GitHub readback plus an exact two-parent protected-main carrier merge after the ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T04:02:24Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "35465b473ddbbafca95e191b91ce869daecf1af6",
+      "subjectHead": "35465b473ddbbafca95e191b91ce869daecf1af6",
+      "subjectTree": "8204eadd3a2845cdf0cd0ab6534f2aaeac69310b"
+    },
+    {
+      "id": "a1-tombstone-correction-carrier-separation-source-freeze-20260810-0354",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:54:07Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "correctionOwnerBindings": [
+          {
+            "prNumber": 194,
+            "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "authorizedAdmissionCarriers": [
+          {
+            "prNumber": 194,
+            "branches": [
+              "codex/assurance-active-task-and-claim-freshness-a1",
+              "codex/assurance-codex-security-scan-reliability-s0",
+              "codex/d2a-livekit-mic-post-merge-review-correction"
+            ]
+          },
+          {
+            "prNumber": 195,
+            "branches": [
+              "codex/assurance-active-task-and-claim-freshness-a1",
+              "codex/assurance-codex-security-scan-reliability-s0"
+            ]
+          }
+        ],
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": [],
+        "separationRule": "CORRECTION_OWNER_EXACT_ADMISSION_CARRIER_DISTINCT"
+      },
+      "readbackSha256": "cbaa1f6b1bfc172899fc9b882b61873f5055d4d9bac275f709e4689319e20c1e",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels and require byte-exact protected-main first-parent admission after the exact-review ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T03:54:07Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+      "subjectHead": "99dfa85cc8442d6deb64e624769aff1ceab3a16c",
+      "subjectTree": "96515ec2be0dc0ca2bfe971c69c3122d88a6b658"
+    },
+    {
+      "id": "a1-late-review-tombstone-admission-source-freeze-20260810-0342",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:42:14Z",
+        "admissionPolicy": {
+          "policyId": "EXACT_HEAD_PROTECTED_MAIN_V1",
+          "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "originalSentinelRetentionRequired": true,
+          "firstParentAdmissionRequired": true,
+          "branchLocalAdmissionAllowed": false,
+          "networkRequiredAfterAdmission": false
+        },
+        "retainedSentinelKeys": [
+          "Chillywood2025/chillywood-mobile:194:4ee283aa851bb2042a7559a54a1664d6eebcb446",
+          "Chillywood2025/chillywood-mobile:195:9f4f2d0c49160a0944c774bcf4175d9899bc01f7"
+        ],
+        "admittedTombstones": []
+      },
+      "readbackSha256": "09d12f2cd3b4d1d07067bdb5b068ebd90cabb8cab28890eeb29c054e9e8286f2",
+      "covers": [
+        "repository.assurance-control.a1.late-review-tombstone-admission",
+        "Late-review resolution tombstones retain original sentinels and require byte-exact protected-main first-parent admission after the exact-review ruleset anchor"
+      ],
+      "observedAt": "2026-08-10T03:42:14Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "57b6c125016b4d9054da78def825c993152393f8",
+      "subjectHead": "57b6c125016b4d9054da78def825c993152393f8",
+      "subjectTree": "56395d625481a14045d7bc39e06c3c2fb19402c7"
+    },
+    {
+      "id": "a1-complete-late-sentinel-inventory-source-freeze-20260810-0325",
+      "mode": "local-and-github-read-only",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:25:40Z",
+        "ownerRegistryEntries": [
+          {
+            "prNumber": 194,
+            "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+            "successorOwner": "codex/d2a-livekit-mic-post-merge-review-correction"
+          },
+          {
+            "prNumber": 195,
+            "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+            "successorOwner": "codex/assurance-active-task-and-claim-freshness-a1"
+          }
+        ],
+        "sentinels": [
+          {
+            "prNumber": 194,
+            "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+            "reviewedSha": "c15a58039b67d65eabdcaa03a9422ebc8d6dd95e",
+            "reviewId": 4892095448,
+            "findingCount": 5,
+            "durableIssue": 203,
+            "durableIssueBodySha256": "5120854b3e5f710e239b5910c61281ad961371654cf83194cae7f827f7368f5b"
+          },
+          {
+            "prNumber": 195,
+            "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+            "reviewedSha": "605039a1eec08e153f33380a2998ee1c4cef2a90",
+            "reviewId": 4892031892,
+            "findingCount": 3,
+            "durableIssue": null
+          }
+        ]
+      },
+      "readbackSha256": "6b970e4800625b4a79db0fae8212222093c2c5412e8e6264605ee8f5a4f12ecb",
+      "covers": [
+        "repository.assurance-control.a1.complete-late-sentinel-inventory",
+        "Canonical late-review owner registry and sentinel inventory include exact unresolved PR 194 and PR 195 records"
+      ],
+      "observedAt": "2026-08-10T03:25:40Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "3bb4eb5e51824e7dbfd98a2fbf9c86079c23706e",
+      "subjectHead": "3bb4eb5e51824e7dbfd98a2fbf9c86079c23706e",
+      "subjectTree": "ca8e99bdd968d704aecd38a0c7e2f0f65b501259"
+    },
+    {
+      "id": "a1-post-merge-control-readback-source-freeze-20260810-0316",
+      "mode": "github-read-only",
+      "observedAt": "2026-08-10T03:16:55Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "09ee997c55fa38dce7682be1a7e2a11492dc89d6",
+      "subjectHead": "09ee997c55fa38dce7682be1a7e2a11492dc89d6",
+      "subjectTree": "89b828b94e2af3b809613c2c2607db4d5b61abf1",
+      "readbackFacts": {
+        "schemaVersion": 1,
+        "repository": "Chillywood2025/chillywood-mobile",
+        "observedAt": "2026-08-10T03:16:55Z",
+        "a1Implementation": {
+          "prNumber": 201,
+          "head": "b6648d689287cd312fb548b966a44db24936e152",
+          "mergeSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48",
+          "mergedAt": "2026-08-10T02:45:58Z"
+        },
+        "phase1": {
+          "runId": 31350394428,
+          "head": "b6648d689287cd312fb548b966a44db24936e152",
+          "conclusion": "success",
+          "jobsPassed": 13,
+          "jobsTotal": 13
+        },
+        "ruleset": {
+          "id": 18940814,
+          "enforcement": "active",
+          "exactHeadContextRequired": true,
+          "phase1ContextCount": 13,
+          "strictStatusChecks": true,
+          "conversationResolutionRequired": true,
+          "dismissStaleReviewsOnPush": true,
+          "bypassActors": []
+        },
+        "lateSentinel": {
+          "issueNumber": 203,
+          "state": "open",
+          "classification": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW",
+          "affectedPr": 194,
+          "findingCount": 5,
+          "bodySha256": "5120854b3e5f710e239b5910c61281ad961371654cf83194cae7f827f7368f5b"
+        }
+      },
+      "readbackSha256": "a8ddbc4fdf2fcabbd32415d271fa1e19000d075ccfbc565b36934bb015623369",
+      "covers": [
+        "repository.assurance-control.a1.post-merge-control-readback",
+        "A1 PR 201 merge, exact Phase 1 run 31350394428, ruleset 18940814 protection, and durable PR 194 sentinel issue 203 were read back from GitHub"
+      ]
+    },
+    {
+      "id": "a1-pr195-late-review-registry-source-freeze-final-20260810-0310",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-10T02:48:20Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectHead": "abd6af9d77c97fd4e8040f8ab60c4f5929a37db7",
+      "subjectTree": "e90c18e159b8f671c8851df0398ce1996ede4b33",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
+      "id": "a1-pr195-late-review-registry-source-freeze-20260810-0306",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "PR 195 late-review discovery is bound to the immutable owner registry and its exact defective implementation"
+      ]
+    },
+    {
+      "id": "a1-post-merge-ruleset-readback-20260810-0248",
+      "mode": "github-read-only",
+      "covers": [
+        "A1 PR 201 merged as 08d8c04285c8dc0fbe0f0168b6750fc746d1af48 after exact Phase 1 run 31350394428 passed 13 of 13 jobs",
+        "GitHub ruleset 18940814 requires the exact-head review status check, resolved conversations, stale-review dismissal, strict status checks, and has no bypass actors",
+        "Durable late-review sentinel issue 203 preserves all five unresolved PR 194 findings"
+      ]
+    },
+    {
+      "id": "a1-merged-successor-head-isolation-source-freeze-20260810-0237",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-10T02:37:45Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "f32d7b5298290035b1af38346339becd6227fd62",
+      "subjectHead": "f32d7b5298290035b1af38346339becd6227fd62",
+      "subjectTree": "9b5e2d049419ad16d1607510150412353d6a094c",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
+      "id": "a1-shared-head-isolation-source-freeze-20260810-0233",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-10T02:33:28Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "9447b26841cbb48dabc7c1790a9b4df80fb7b332",
+      "subjectHead": "9447b26841cbb48dabc7c1790a9b4df80fb7b332",
+      "subjectTree": "01b58341c3ef73349cad3b4dfda8ccb8b563e570",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
+      "id": "a1-owner-authorized-source-freeze-final-20260810-0222",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-10T02:22:33Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "a7510536e281cd0d8c32d308b836974cb6819778",
+      "subjectHead": "a7510536e281cd0d8c32d308b836974cb6819778",
+      "subjectTree": "a65b71a1c6bc2ac87db14acf791f10399e267bf5",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
+      "id": "a1-owner-authorized-source-freeze-20260810-0220",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.assurance-control.a1.owner-authorized-source",
+        "A1 bootstrap source is bound to exact owner-authorized GitHub evidence and review-only leases are isolated by PR and same-repository owner authority"
+      ]
+    },
+    {
+      "id": "a1-assurance-control-source-freeze-final-20260809-1805",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-09T18:05:08Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "a40a8b9af33167ffbe8036cb4d052bfcad137099",
+      "subjectHead": "a40a8b9af33167ffbe8036cb4d052bfcad137099",
+      "subjectTree": "88c6780c388ee52a7f834ffadf0a4041c3bd9110",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
+      "id": "a1-assurance-control-source-freeze-20260809-1805",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-09T18:05:08Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "8e23e3b2d0f7a4d5eb9d30c2e3834c7696a22537",
+      "covers": [
+        "repository.assurance-control.a1.source",
+        "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"
+      ]
+    },
+    {
+      "id": "d2a-microphone-correction-merge-closeout-20260809-1805",
+      "mode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-09T18:05:08Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "718373286cb61efbcbafadb707f401ae3399d674",
+      "covers": [
+        "PR #194 immutable and synchronized source identity",
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 merge identity",
+        "repository.active-implementation.merge-identity",
+        "review-only PR disposition",
+        "repository.review-only-pr.disposition",
+        "exact Phase 1 CI identity",
+        "repository.phase1-ci.identity",
+        "D2A frozen state",
+        "repository.d2a.frozen-state",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #194 merged normally as 4ee283aa851bb2042a7559a54a1664d6eebcb446 with exact synchronized tree",
+        "failed host scan a64456db-438c-4857-8f01-c40fcc965936 was not retried or called sealed; complete four-of-four source review and repository closure REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED remain exact",
+        "review PRs #196 #197 #198 and #199 report aggregate P0=0 P1=0 and closed unmerged with branches retained",
+        "Phase 1 CI run 31327771533 passed 13/13 at synchronized head ada396a437e40a98acea75bf016c36fc3ea86739",
+        "D2A blocked evidence ebb0ac5e2dc6ba9005208b7e6b10474292e0972d tree c41a4d688e799483b67f35c956f1c95b273bf072 remains frozen and not resumed",
+        "no build OTA provider production database deployment B1 B2 B3 memory Level 2 or review-only merge occurred"
+      ]
+    },
+    {
+      "id": "d2a-microphone-correction-current-truth-binding-20260809-1743",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "draft PR #194 frozen correction head c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641",
+        "host scan a64456db-438c-4857-8f01-c40fcc965936 completed exact four-of-four source review with zero deferred work and zero findings but remains unsealed after terminal metadata error scan.target.snapshotDigest: expected a non-empty string",
+        "repository-owned snapshot digest 0cc18db4d668628f7cddce9da6531403bc0b4f939dc3d2df6e46fb3129d99d86 remains distinct from absent host snapshot metadata",
+        "authorized fallback classification REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED hash 7ec97ec736324cc8d23f8905daf4737dc3fcb29a9759a7feb7074c73d56960b1",
+        "independent exact-head review hash 6c25e4db4d81b155eda1d6e20bfa2a776a7727ae26f221def7208e122184b105 reports P0=0 P1=0 P2=0 P3=1 and zero deferred work",
+        "P3 authority-metadata.t2-proof-boundary-conflict is preserved fail closed because the contract remains blocked and no proof tier is promoted",
+        "D2A blocked evidence ebb0ac5e2dc6ba9005208b7e6b10474292e0972d tree c41a4d688e799483b67f35c956f1c95b273bf072 remains frozen and not resumed",
+        "no build OTA provider production database B1 B2 B3 deployment money entitlement role right auth RLS switch schedule user-derived memory or Level 2 mutation"
+      ]
+    },
     {
       "id": "e0-final-review-ancestry-merge-closeout-20260809-0749",
       "mode": "local-offline-and-github-read-only",
@@ -547,7 +1639,7 @@
     {"id": "pr-d-read-only-inventory-handoff-20260802-0647", "mode": "local-offline", "covers": ["draft PR #143", "branch codex/first-pass-assurance-native-provider-runtime-artifact", "worktree /Users/loverslane/chillywood-assurance-worktrees/d-native-provider-runtime-artifact", "base 62d4b526675e5a10177d37c53670709d63062293", "inventory head 165533d50a58947140982f1a5dbe3fd13add30a5 tree d76676e7ddff74c09ffa4bc2994153772b69b73a", "inventory SHA-256 0bc1e8e6f16cd6bc391ab93380742090ada68c7adbcd307f486b3dc977ab0582", "assurance plan eas-build-update-release requirements and architecture clear", "Android instrumentation and unit-test gaps mapped", "iOS generated-project and native-call XCTest gaps mapped", "EAS profile/runtime/channel/native-capability parity gap mapped", "provider fixture and signed-artifact proof gaps mapped", "first objective limited to offline deterministic T0/T1/T2 parity and eight negative controls", "no build, OTA, provider contact, signed artifact, install, physical proof, or public-canary claim"]},
     {"id": "pr52-pr53-source-coverage-disposition-20260802-0647", "mode": "local-and-github-read-only", "covers": ["PR #52 head 2b7f9fa491180cb1f2b9a883c07b317eb39ae43a tree ce08584a062185252885a825267f3481a9dbf5a1", "15/15 changed paths and 34/34 hunks classified", "B1 PR #70 preserves or hardens 17 hunks", "B2 PR #69 preserves or hardens 13 hunks", "four activation-contract bundle hunks intentionally rejected atomically with manifest, test, workflow registration, and package registration absent from main", "B3 PR #75 overlap zero", "zero unresolved required source, migrations, RevenueCat corrections, LiveKit corrections, room-host corrections, tests, workflow behavior, or package behavior", "machine-readable review-only matrix docs/reviews/pr52-source-coverage-matrix-v1.json at retained PR #53 head 4ce691197be7438a12877725cc75810d4080e10a", "matrix evidence SHA-256 2dab297aa099b2ade02f4411ae25a0f708c13529ad48b3c262c98fadea4c87d0", "P0=0 and P1=0", "PR #52 closed unmerged as superseded and PR #53 closed unmerged as stale review-only", "both branches retained", "no database, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
     {"id": "b3-merge-closeout-20260802-0634", "mode": "local-and-github-read-only", "covers": ["PR #75 merged normally at expected synchronized head 463c9160c403e466555702e1c9cc4cd4a8a53cc9", "merge b72ed6a5f1b9897504dccf14edad9df107d573b6 and canonical tree 2405577c7215140a3d731bff7b53012997a4d635", "immutable source a24efd543c5f19290879e7089c1c57768bc03a4d tree 7e473537accb4b2fd9a7ac1c6097ed46fa562a53 preserved", "deployed predecessor SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765 unchanged", "forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38 represented in Git and undeployed", "local pgTAP 48/48 plus compatibility 4/4", "linked dry-run PASS_NO_APPLY_SCOPED with B2 20260730170000, B1 20260730230022, and B3 20260730230031 pending exactly once", "review PRs #77, #78, #79, and #141 P0=0/P1=0 and closed unmerged with branches retained", "exact Phase 1 CI run 30735474318 attempt 2 passed 13/13", "post-merge source/readback 14/14 passed", "no migration, ACL, production row, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
-    {"id": "b3-immutable-source-binding-20260802-0600", "mode": "local-and-linked-read-only", "covers": ["starting main 483175fc1b3784fdc4db670c1aea2311d5d80e4f", "preserved successor b2cd931802329d3aee82a0ab2bad6ce843950387 tree 046f390851a2eec18d398a0599e8fea0124f502b without reset", "immutable B3 source a24efd543c5f19290879e7089c1c57768bc03a4d tree 7e473537accb4b2fd9a7ac1c6097ed46fa562a53 pushed normally to PR #75", "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765", "20260725224000 confirmed source-only and absent from executable source", "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38", "live pre-correction ACL explicitly includes anon but source correction revokes it", "null auth denied and never inferred as service role", "exact authenticated self or exact-room host contract", "explicit dual-provenance service_role contract", "empty SECURITY DEFINER search path and fully qualified objects", "source/model 14/14, deterministic 3/3, negative controls 8/8", "isolated local pgTAP 48/48 plus compatibility 4/4", "post-rollback fixture and pgTAP counts zero", "scope 7/8 files and 2122/2400 net lines in one database/RLS domain", "PRs #77-#79 retained historical/stale pending additive synchronized review", "B1 and B2 remain merged with forward corrections undeployed", "no linked migration, ACL, row, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
+    {"id": "b3-immutable-source-binding-20260802-0600", "mode": "local-and-linked-read-only", "observedAt": "2026-08-02T06:00:44Z", "sourceCommit": "4a3ccafe3416c71338627c4f0fe05209c2243460", "freshnessClass": "PROVIDER_CRITICAL", "authorityAllowed": "PROVIDER_READBACK_ONLY", "platform": "NONE", "provider": "SUPABASE", "covers": ["provider.supabase.b3.deployed-predecessor", "provider.supabase.b3.forward-correction", "provider.supabase.b3.live-acl", "starting main 483175fc1b3784fdc4db670c1aea2311d5d80e4f", "preserved successor b2cd931802329d3aee82a0ab2bad6ce843950387 tree 046f390851a2eec18d398a0599e8fea0124f502b without reset", "immutable B3 source a24efd543c5f19290879e7089c1c57768bc03a4d tree 7e473537accb4b2fd9a7ac1c6097ed46fa562a53 pushed normally to PR #75", "exact deployed 20260730161737 source SHA-256 6cb22f9719c5c1325ac4ee814998a39e50318d92499504e8f4ece52717d5a765", "20260725224000 confirmed source-only and absent from executable source", "undeployed forward correction 20260730230031 SHA-256 0d610a322fa54ae411609736d2db30031944e1d77ac9fc8ac722bd4cd6d70d38", "live pre-correction ACL explicitly includes anon but source correction revokes it", "null auth denied and never inferred as service role", "exact authenticated self or exact-room host contract", "explicit dual-provenance service_role contract", "empty SECURITY DEFINER search path and fully qualified objects", "source/model 14/14, deterministic 3/3, negative controls 8/8", "isolated local pgTAP 48/48 plus compatibility 4/4", "post-rollback fixture and pgTAP counts zero", "scope 7/8 files and 2122/2400 net lines in one database/RLS domain", "PRs #77-#79 retained historical/stale pending additive synchronized review", "B1 and B2 remain merged with forward corrections undeployed", "no linked migration, ACL, row, provider, build, OTA, switch, schedule, memory, or Level 2 mutation"]},
     {"id": "b2-merge-closeout-20260802-0431", "mode": "local-and-github-read-only", "covers": ["main and PR #69 merge 5bcfa8cd7d3ed6ce733dae1483bda6e8eb4e62d6", "immutable source fc451c509c7af5c220c11ab9f3d34a0db608f35d", "synchronized head 81892f3dae544713d8e35512da895cd99c610966", "synchronized and merged tree 50e49282a4087c9a784fec74b0f6bfa1ce2aa00a", "source delta 0ff30d73629020ac985c9bafb21100f7a6f6bf7df4f70cbfe0182b8dfd462c46", "changed-file hash 93f357c635ec14c8a357cd9bf7cee37c45bf6aeb584ee24a9484a9d61f289a4d", "migration-set hash 864a53d7732f014684f031eb30db908912fd8b49d6dd86f2eb25557d0fe6da37", "12 files with 3302 additions and 2 deletions in one RevenueCat/database domain", "deployed predecessor migrations byte-exact", "forward correction 5ecd5159055a704f0e76842ab56ff20fe98a760cdf001eea08abe25407ee30c9 merged to source but not deployed", "focused source tests 22/22 with store policy 14/14 and sanitized provider fixtures 8/8", "local pgTAP 120/120", "deterministic concurrency and atomicity 10/10", "all cleanup counters zero", "direct no-apply BLOCKED_INTERNAL_SOURCE_ASSEMBLY_REQUIRES_PRESERVED_B3 before planning with no apply", "assembled tree 47be54602eb3c9cc614e29aa21034237284a1d19 PASS_NO_APPLY_SCOPED with B2, B1, and B3 pending exactly once", "PRs #71, #72, #73, and #138 P0=0/P1=0, formal review-head PASS, closed unmerged with branches retained", "exact post-review Phase 1 CI run 30732164462 passed 13/13", "B3 successor b2cd931802329d3aee82a0ab2bad6ce843950387 tree 046f390851a2eec18d398a0599e8fea0124f502b clean and unpushed", "no migration apply, RevenueCat request, provider, production database, entitlement, money, payable-balance, or LiveKit mutation"]},
     {"id": "b1-merge-closeout-20260802-0151", "mode": "local-and-github-read-only", "covers": ["main 33674105cdbe5ffb72caefbde6a275e0425c8c29", "PR #70 merged normally from synchronized head d1840447c0bb5b069e78e1d2f03e6824170f2f16", "canonical tree 4d367db2eb70d08fa5be5688769c2171e099eddd", "CI run 30727344351 passed 13/13", "local pgTAP 28/28 and corrected predecessor 23/23", "concurrency 19/19", "linked dry-run PASS_NO_APPLY_SCOPED", "PRs #74, #76, #133, and #134 P0=0/P1=0 and closed unmerged", "no migration apply or provider/database mutation"]},
     {"id": "b1-ci-correction-readback-20260802-0120", "mode": "local-and-github-read-only", "covers": ["main 5a34a1da27cd7b1689d55889f966bfc3708541b7", "PR #70 corrected source 4425554ed713d05e17ef117c6fe33985b9800912", "CI run 30725970541 failed 12/13 only because predecessor pgTAP still expected retired v2 trigger", "corrected pgTAP requires enabled v3 and absent v2 and passes 23/23", "source contract 4/4", "scope 10/10 and 2500/2500", "migration-set unchanged", "no provider or database mutation"]},
@@ -559,6 +1651,6 @@
     {"id": "supabase-migration-readback-and-no-apply-dry-run-20260731", "mode": "read-only", "covers": ["remote migration versions", "names", "statement arrays", "hashes", "assembled source parity", "pending forward-only migrations", "no-apply dry-run"]},
     {"id": "owner-supplied-safety-snapshot-20260730", "mode": "provided", "covers": ["switches", "schedules", "effective baseline", "sentinel counts", "non-interference"]}
   ],
-  "liveProviderReadback": true,
-  "providerReadback": {"github": true, "supabase": true, "eas": false, "apple": false, "googlePlay": false, "revenueCat": false, "liveKit": false}
+  "liveProviderReadback": false,
+  "providerReadback": {"github": true, "supabase": false, "eas": false, "apple": false, "googlePlay": false, "revenueCat": false, "liveKit": false}
 }
