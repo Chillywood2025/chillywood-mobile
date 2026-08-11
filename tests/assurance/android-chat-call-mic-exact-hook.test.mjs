@@ -49,6 +49,11 @@ const invariants = (candidate, candidateContract = contract) => {
   const heartbeatSlice = slice(candidate, "      heartbeat = setInterval", "    };\n\n    void initialize()");
   const permissionSlice = slice(candidate, "  const setReconciliationWarning", "  const isCommittedSessionCurrent");
   const cleanupSlice = slice(candidate, "  const cleanupSession", "  const leaveRoom");
+  const reconnectedSlice = slice(
+    candidate,
+    "        .on(RoomEvent.Reconnected, () => {",
+    "        .on(RoomEvent.ConnectionStateChanged, (connectionState) => {",
+  );
   const initialMembershipSlice = slice(candidate, "      const initialMembership", "      heartbeat = setInterval");
   const reconciliationWarningOnly = slice(
     candidate,
@@ -75,13 +80,24 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.match(candidate, /left\.liveKitRoom === right\.liveKitRoom/u);
   assert.match(candidate, /left\.participantAuthority === right\.participantAuthority/u);
   assert.match(candidate, /const writeKey = `\$\{binding\.normalizedRoomId\}:\$\{binding\.userId\}`/u);
-  assert.match(candidate, /Promise\.race\(\[/u);
+  assert.match(candidate, /const drained = await Promise\.race\(\[/u);
   assert.match(candidate, /MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS/u);
+  assert.match(candidate, /MEDIA_WRITE_OPERATION_TIMEOUT_MS/u);
+  assert.match(candidate, /const operationResult = await Promise\.race\(\[/u);
+  assert.match(candidate, /operationTimedOut && activeOperation/u);
+  assert.match(candidate, /const transactionStillCurrent = \(\) => operationCurrent\(\) && originStillCurrent\(\)/u);
   assert.match(candidate, /predecessorTimedOut && predecessor[\s\S]{0,160}mediaWriteTailsRef\.current\.set\(writeKey, predecessor\)/u);
   assert.match(candidate, /void predecessor\.then\(releaseReservation, releaseReservation\)/u);
   assert.doesNotMatch(candidate, /blockedMediaWriteKeysRef/u);
   assert.match(candidate, /if \(!isCommittedSessionCurrent\(binding\)\) return null;/u);
   assert.match(candidate, /current\.roomState === "terminal" && roomState !== "terminal"/u);
+  assert.match(reconnectedSlice, /scheduleLatestMediaReconciliation\(true\)\.then\(\(reconciled\) => \{/u);
+  assert.match(reconnectedSlice, /!reconciled[\s\S]{0,180}micReconciliationBlockedRef\.current/u);
+  assert.ok(
+    reconnectedSlice.indexOf("scheduleLatestMediaReconciliation(true)")
+      < reconnectedSlice.indexOf("setCommittedRoomState(effectBinding, \"active\")"),
+    "Reconnected proves durable convergence before live promotion",
+  );
   assert.match(candidate, /const bindingStillCurrent = sameCommittedAuthority\(committedSessionRef\.current, binding\)/u);
   assert.match(cleanupSlice, /if \(replacementReusesDurableAuthority\) return null;/u);
   assert.match(cleanupSlice, /const endContext = currentDurableContext\(\);/u);
@@ -255,6 +271,18 @@ const mutants = [
   ["NATIVE_RECONCILIATION_ESCALATION_DROPPED", (value) => value.replace(
     "if (request.reconcileNative && isCommittedSessionCurrent(binding)) continue;",
     "if (false) continue;",
+  )],
+  ["UNBOUNDED_MEDIA_WRITE_OPERATION", (value) => value.replace(
+    "const operationResult = await Promise.race([",
+    "const operationResult = await Promise.all([",
+  )],
+  ["ACTIVE_OPERATION_TIMEOUT_IGNORED_BY_STRICT_TRANSACTION", (value) => value.replace(
+    "const transactionStillCurrent = () => operationCurrent() && originStillCurrent();",
+    "const transactionStillCurrent = () => originStillCurrent();",
+  )],
+  ["RECONNECTED_BYPASSES_DURABLE_CONVERGENCE", (value) => value.replace(
+    "!reconciled\n              || !active",
+    "false\n              || !active",
   )],
   ["ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION", (value) => value.replace(
     "    activateCommittedSession,\n    clearReconciliationWarning,",

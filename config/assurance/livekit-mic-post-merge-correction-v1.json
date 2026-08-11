@@ -39,10 +39,10 @@
   },
   "focusedResults": {
     "mountedHook": {
-      "passed": 54,
+      "passed": 56,
       "failed": 0,
       "requiredMatrixPassed": 38,
-      "supportCasesPassed": 15,
+      "supportCasesPassed": 17,
       "t2ContractCasesPassed": 1
     },
     "sourceContract": {
@@ -50,7 +50,7 @@
       "failed": 0
     },
     "negativeControls": {
-      "passed": 25,
+      "passed": 28,
       "failed": 0
     },
     "typescript": "PASS",
@@ -64,11 +64,11 @@
     "T4": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE"
   },
   "digests": {
-    "contractSha256": "319a9a46e2debd7286a9a2580ff540c3f97ed3136a09e78f8f985982d396f5e1",
-    "hookSha256": "57fe6f23dbc0c76d93e540c85174dd32b80fb1ddcb6c11110ece25b0ad5d387c",
-    "mountedTestSha256": "6c6cb89ae849f781c3803d90b128c3a8b6ea1ae4155d37425edcc1b9bb21903d",
-    "mountedHelperSha256": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
-    "sourceContractTestSha256": "6985d4cf53586125f5edf598966444e6bb55bf2d688e52c4f2c2072d4d06e692"
+    "contractSha256": "b150cd90e417104a027ffeaad009df5cdf1b3e37a5410c721340dc0492754eed",
+    "hookSha256": "f16972de421ddaffffa008567f85ac4cffe6861f849a163adc143761087289fc",
+    "mountedTestSha256": "0ce49bb2ccd05fc9bd68fe07bc8573ee237b17d99b3b78f47a72cca642e64123",
+    "mountedHelperSha256": "9851a183abe9b4f7414e89d73c964a86b54901dd456305f068e5668e7a91dd49",
+    "sourceContractTestSha256": "164bc0c0f50d9cf67e0e7a2754fb356b9ecd3fbbcd92c68674f0ac9493bcfbad"
   },
   "exactHeadReviewCorrections": [
     "CLEANUP_BINDING_SCOPE_AND_TYPESCRIPT",
@@ -83,7 +83,9 @@
     "TIMED_OUT_QUEUE_WAITER_PRESERVES_PREDECESSOR_QUARANTINE",
     "INITIAL_DURABLE_DIVERGENCE_CANNOT_REPORT_LIVE",
     "TIMEOUT_QUARANTINE_PROPAGATES_ACROSS_SUCCESSOR_CHAIN",
-    "APPSTATE_NATIVE_RECONCILIATION_ESCALATION_IS_DRAINED"
+    "APPSTATE_NATIVE_RECONCILIATION_ESCALATION_IS_DRAINED",
+    "ACTIVE_MEDIA_WRITE_OPERATION_IS_BOUNDED_AND_LATE_SAFE",
+    "RECONNECTED_REQUIRES_EXACT_DURABLE_CONVERGENCE"
   ],
   "nonInterference": {
     "providerCodexReview": "OPTIONAL_ADVISORY_NOT_REQUESTED",

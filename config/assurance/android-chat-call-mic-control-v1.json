@@ -4,10 +4,10 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "57fe6f23dbc0c76d93e540c85174dd32b80fb1ddcb6c11110ece25b0ad5d387c",
-    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "6c6cb89ae849f781c3803d90b128c3a8b6ea1ae4155d37425edcc1b9bb21903d",
-    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
-    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "6985d4cf53586125f5edf598966444e6bb55bf2d688e52c4f2c2072d4d06e692"
+    "hooks/use-livekit-chat-call-session.ts": "f16972de421ddaffffa008567f85ac4cffe6861f849a163adc143761087289fc",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "0ce49bb2ccd05fc9bd68fe07bc8573ee237b17d99b3b78f47a72cca642e64123",
+    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "9851a183abe9b4f7414e89d73c964a86b54901dd456305f068e5668e7a91dd49",
+    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "164bc0c0f50d9cf67e0e7a2754fb356b9ecd3fbbcd92c68674f0ac9493bcfbad"
   },
   "sourceSlices": {
     "committed-session-layout-effect": {
@@ -20,7 +20,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const enqueueSessionMediaWrite",
       "end": "  const refreshParticipantViews",
-      "sha256": "ffc222a17c93bf1b266766a5734bd43033d58676fe1fc3eeaf08aac628a3fc72"
+      "sha256": "a7eac773b5609f29c3364f4181d43043f859f41974aa3c72587eb3472e36c0d7"
     },
     "permission-reconciliation-separation": {
       "path": "hooks/use-livekit-chat-call-session.ts",
@@ -32,7 +32,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const setMicrophoneEnabled",
       "end": "  const setCameraEnabled",
-      "sha256": "e4f3ea8f0e64bd2a645bb2fa5260ceebbd32b6ee9abf2448ab568f903c36cf4b"
+      "sha256": "0dbed09716d3c9fbb5bc1c5775822ed8f10bdade32d55228a1065b259ec71a52"
     }
   },
   "preFixReproductions": [
@@ -105,6 +105,9 @@
     "MEDIA_QUEUE_TIMEOUT_DROPS_PREDECESSOR",
     "MEDIA_QUEUE_TIMEOUT_RELEASES_INTERMEDIATE_RESERVATION",
     "NATIVE_RECONCILIATION_ESCALATION_DROPPED",
+    "UNBOUNDED_MEDIA_WRITE_OPERATION",
+    "ACTIVE_OPERATION_TIMEOUT_IGNORED_BY_STRICT_TRANSACTION",
+    "RECONNECTED_BYPASSES_DURABLE_CONVERGENCE",
     "ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION",
     "STALE_CLEANUP_REUSES_DURABLE_SNAPSHOT",
     "INITIAL_CONVERGENCE_FAILURE_MARKS_LIVE"

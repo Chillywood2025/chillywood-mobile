@@ -194,11 +194,28 @@ test("heartbeat support: a never-settling predecessor fails the strict toggle wi
   const nativeBaseline = runtime.micCalls.length;
   const toggle = await harness.startOperation(() => harness.getResult().setMicrophoneEnabled(true));
   await waitFor(harness, () => harness.getResult().mediaControlsBusy, "strict control waits for predecessor");
-  await harness.fireMediaWriteTimeout();
+  await harness.fireMediaWriteTimeoutAt(1);
   assert.equal(await settleOperation(toggle, harness), false);
   assert.equal(harness.getResult().mediaControlsBusy, false);
   assert.equal(runtime.micCalls.length, nativeBaseline);
   assert.equal(runtime.durableMic, false);
+});
+
+test("heartbeat support: an active strict operation times out without a late native transition", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const snapshotGate = runtime.deferSnapshot();
+  const nativeCallCount = runtime.micCalls.length;
+  const toggle = await harness.startOperation(() => harness.getResult().setMicrophoneEnabled(true));
+  await waitFor(harness, () => runtime.snapshotReads >= 2, "strict transaction reached durable preflight");
+  await harness.fireMediaWriteTimeoutAt(0);
+  assert.equal(await settleOperation(toggle, harness), false);
+  assert.equal(harness.getResult().mediaControlsBusy, false);
+  assert.equal(runtime.micCalls.length, nativeCallCount);
+  snapshotGate.resolve();
+  await harness.flush(48);
+  assert.equal(runtime.micCalls.length, nativeCallCount);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(harness.getResult().mediaReconciliationState, "warning");
 });
 
 test("heartbeat support: a timed-out waiter cannot permanently block a converged strict owner", async (t) => {
@@ -207,7 +224,7 @@ test("heartbeat support: a timed-out waiter cannot permanently block a converged
   const firstToggle = await harness.startOperation(() => harness.getResult().setMicrophoneEnabled(true));
   await waitFor(harness, () => runtime.micCalls.at(-1) === true, "strict enable reached native boundary");
   await harness.fireHeartbeat();
-  await harness.fireMediaWriteTimeout();
+  await harness.fireMediaWriteTimeoutAt(1);
   nativeGate.resolve();
   assert.equal(await settleOperation(firstToggle, harness), true);
   assert.equal(harness.getResult().mediaReconciliationState, "clear");
@@ -224,7 +241,7 @@ test("heartbeat support: replacement cannot become live until a timed-out same-r
     invite: { ...defaultHookOptions().invite, id: "invite-2" },
   }));
   await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room created");
-  await harness.fireMediaWriteTimeout();
+  await harness.fireMediaWriteTimeoutAt(1);
   assert.equal(harness.getResult().channelState, "reconnecting");
   assert.equal(harness.getResult().mediaReconciliationState, "warning");
   assert.equal(runtime.durableMic, false);
@@ -234,6 +251,25 @@ test("heartbeat support: replacement cannot become live until a timed-out same-r
   await waitFor(harness, () => harness.getResult().channelState === "live", "replacement converged after predecessor drain");
   assert.equal(runtime.durableMic, true);
   assert.equal(harness.getResult().micEnabled, true);
+});
+
+test("heartbeat support: Reconnected cannot bypass quarantined durable convergence", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.deferTouch();
+  await harness.fireHeartbeat();
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room created");
+  await harness.fireMediaWriteTimeoutAt(1);
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  assert.equal(runtime.durableMic, false);
+  await harness.emitRoom("Reconnected");
+  await harness.flush(48);
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  assert.equal(runtime.durableMic, false);
+  assert.equal(harness.getResult().mediaReconciliationState, "warning");
 });
 
 test("heartbeat support: timeout quarantine propagates across three queued same-row writers", async (t) => {
@@ -251,7 +287,7 @@ test("heartbeat support: timeout quarantine propagates across three queued same-
     mediaActivationSerial: 1,
   }));
   const touchCountWhileRootBlocked = runtime.membershipTouches.length;
-  await harness.fireMediaWriteTimeout();
+  await harness.fireMediaWriteTimeoutAt(1);
   await harness.flush(48);
   assert.equal(runtime.membershipTouches.length, touchCountWhileRootBlocked);
   assert.equal(harness.getResult().channelState, "reconnecting");

@@ -484,6 +484,18 @@ export async function mountLiveKitHook(runtime, initialOptions = defaultHookOpti
         await settle(24);
       });
     },
+    fireMediaWriteTimeoutAt: async (activeIndex) => {
+      const callbacks = runtime.timeoutCallbacks
+        .map((callback, index) => ({ callback, index }))
+        .filter(({ callback }) => typeof callback === "function");
+      const selected = callbacks[activeIndex];
+      if (!selected) throw new Error("MOUNTED_MEDIA_WRITE_TIMEOUT_NOT_REGISTERED");
+      runtime.timeoutCallbacks[selected.index] = null;
+      await act(async () => {
+        selected.callback();
+        await settle(24);
+      });
+    },
     fireStopper: async (reason) => {
       const stopper = runtime.cleanupRegistrations.at(-1);
       if (!stopper) throw new Error("MOUNTED_MEDIA_STOPPER_NOT_REGISTERED");
