@@ -64,9 +64,9 @@
             "tests/assurance/codex-review-exact-head.test.mjs"
           ]
         },
-        {
-          "prNumber": 215,
-          "branch": "codex/d2a-legacy-webrtc-correction-admission",
+      {
+        "prNumber": 215,
+        "branch": "codex/d2a-legacy-webrtc-correction-admission",
           "firstParent": "e2a025d5efd9ab93187b65b2d5c24c6ea1f0a7df",
           "requiredSecondParentAncestor": "2e1cf306da1e1f44110fdb64e7d1116170a4f66c",
           "changedPaths": [
@@ -77,9 +77,22 @@
             "scripts/assurance/active-task.mjs",
             "scripts/assurance/lib.mjs",
             "tests/assurance/active-task-binding-a1.test.mjs",
-            "tests/assurance/codex-review-exact-head.test.mjs"
-          ]
-        }
+          "tests/assurance/codex-review-exact-head.test.mjs"
+        ]
+      },
+      {
+        "prNumber": 216,
+        "branch": "codex/d2a-legacy-webrtc-correction-final-source-binding",
+        "firstParent": "f609a6130a5120b68bea347d7f677496be43fffd",
+        "requiredSecondParentAncestor": "a1bd48a5040a011f405b4eddc0a0a148c47b7bed",
+        "changedPaths": [
+          "CURRENT_STATE.md",
+          "config/assurance/current-truth-contract-v1.json",
+          "config/assurance/current-truth-v1.json",
+          "scripts/assurance/lib.mjs",
+          "tests/assurance/active-task-binding-a1.test.mjs"
+        ]
+      }
       ]
     }
   },
