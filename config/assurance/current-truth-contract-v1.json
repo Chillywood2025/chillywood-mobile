@@ -76,7 +76,8 @@
             "config/assurance/current-truth-v1.json",
             "scripts/assurance/active-task.mjs",
             "scripts/assurance/lib.mjs",
-            "tests/assurance/active-task-binding-a1.test.mjs"
+            "tests/assurance/active-task-binding-a1.test.mjs",
+            "tests/assurance/codex-review-exact-head.test.mjs"
           ]
         }
       ]
