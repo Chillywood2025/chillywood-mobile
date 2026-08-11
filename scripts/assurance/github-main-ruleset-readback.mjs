@@ -36,11 +36,11 @@ export const requiredCheckPublisherBoundary = {
 };
 export const pullRequestRequirements = {
   allowedMergeMethods: ["merge", "squash", "rebase"],
-  requiredApprovingReviewCount: 1,
-  requiredReviewThreadResolution: true,
+  requiredApprovingReviewCount: 0,
+  requiredReviewThreadResolution: false,
   dismissStaleReviewsOnPush: true,
   requireCodeOwnerReview: false,
-  requireLastPushApproval: true,
+  requireLastPushApproval: false,
   requiredReviewers: [],
   preventDeletion: true,
   preventNonFastForward: true,
@@ -80,6 +80,16 @@ export const effectiveMainRules = [
     strictRequiredStatusChecksPolicy: true
   })
 ];
+export const normalizedRulesetPayload = {
+  rulesetId: 18940814,
+  rulesetName: "main-pr-review-protection",
+  target: "branch",
+  enforcement: "active",
+  conditions: mainBranchCondition,
+  bypassActors: [],
+  currentUserCanBypass: "never",
+  rules: effectiveMainRules,
+};
 const bootstrapPolicySnapshot = (checks) => ({
   rulesetId: 18940814,
   rulesetName: "main-pr-review-protection",
@@ -170,7 +180,7 @@ export const canonicalOwnerFinalCarrierBindingReceipt = {
 export const protectedMainReadback = {
   ref: "refs/heads/main",
   observedHead: "085960ba2d26ad14c44d758cbaf1924ec80a1e5d",
-  observedAt: "2026-08-10T12:47:52Z",
+  observedAt: "2026-08-11T04:18:14Z",
   evidenceMode: "github-read-only",
   bootstrapMergeReachable: true
 };
@@ -308,7 +318,7 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   const freshness = readback?.repositorySourceFreshness;
   const add = (id) => errors.push(`github ruleset readback: ${id}`);
 
-  if (contract?.applicationState !== "OPTIONAL_ADVISORY_APPLIED_AND_READ_BACK_S0"
+  if (contract?.applicationState !== "SOLO_OWNER_OPTIONAL_ADVISORY_APPLIED_AND_READ_BACK_S0"
     || contract?.advisoryStatusCheckExcluded !== exactHeadCheck
     || contract?.requiredStatusCheckToAdd !== undefined) add("application state mismatch");
   if (!same(contract?.conditions, mainBranchCondition)) add("protected main condition mismatch");
@@ -323,9 +333,10 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   if (!same(readback?.rulesetSource, repositoryRulesetSource)
     || !same(readback?.effectiveMainRules, effectiveMainRules)
     || readback?.effectiveMainRulesSha256 !== sha256(stableJson(effectiveMainRules))) add("effective repository ruleset mismatch");
-  if (readback?.rulesetVersionId !== 46082187
-    || readback?.rulesetUpdatedAt !== "2026-08-10T07:47:40.950-05:00"
-    || readback?.changeClassification !== "CODEX_REVIEW_OPTIONAL_ADVISORY_PHASE1_13_REQUIRED") add("current ruleset identity mismatch");
+  if (readback?.normalizedRulesetPayloadSha256 !== sha256(stableJson(normalizedRulesetPayload))) add("normalized ruleset payload mismatch");
+  if (readback?.rulesetVersionId !== 46160124
+    || readback?.rulesetUpdatedAt !== "2026-08-10T23:16:54.635-05:00"
+    || readback?.changeClassification !== "SOLO_OWNER_REPOSITORY_REVIEW_PHASE1_13_REQUIRED") add("current ruleset identity mismatch");
   const freshnessObservedAt = Date.parse(freshness?.observedAt ?? "");
   const freshnessExpiresAt = Date.parse(freshness?.expiresAt ?? "");
   const validationNow = now instanceof Date ? now.valueOf() : Date.parse(now ?? "");
@@ -347,10 +358,10 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
     || !same(readback?.ruleTypes, ["deletion", "non_fast_forward", "pull_request", "required_status_checks"])
     || !same(readback?.allowedMergeMethods, pullRequestRequirements.allowedMergeMethods)
     || readback?.requiredApprovingReviewCount !== pullRequestRequirements.requiredApprovingReviewCount
-    || readback?.requiredReviewThreadResolution !== true
+    || readback?.requiredReviewThreadResolution !== false
     || readback?.dismissStaleReviewsOnPush !== true
     || readback?.requireCodeOwnerReview !== false
-    || readback?.requireLastPushApproval !== true
+    || readback?.requireLastPushApproval !== false
     || !same(readback?.requiredReviewers, [])
     || readback?.preventDeletion !== true
     || readback?.preventNonFastForward !== true

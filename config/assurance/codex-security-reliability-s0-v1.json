@@ -79,6 +79,8 @@
     "initialStateVersion": 0,
     "completionSourceStateVersion": 3,
     "completionAttemptConsumedBeforeFinalizationGuards": true,
+    "sourceDriftTerminalTransitionPersistedBeforeReturn": true,
+    "newerTransitionInvalidatesPriorSnapshot": true,
     "duplicateScanCode": "CODEX_SECURITY_SCAN_ALREADY_REGISTERED",
     "staleOrReplayedCompletionCode": "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED"
   },
@@ -130,12 +132,14 @@
     "protectedMainFindingSetRegistryRequiredForBlocking": true,
     "requiredStatusCheckExcluded": "Chi'llywood / Codex Review Exact Head",
     "rulesetStrict": true,
-    "conversationResolutionRequired": true,
+    "conversationResolutionRequired": false,
     "staleReviewDismissalRequired": true,
     "bypassActors": []
   },
   "incidentSanitization": {
     "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
+    "observedFinalizationState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+    "mitigation": "S0 preflight would prevent the expensive scan from starting",
     "rawErrorRetained": false,
     "tokenValues": null,
     "wallValues": null,
@@ -150,6 +154,7 @@
     "a source push invalidates the exact lease and prior evidence",
     "one completion attempt maximum",
     "scan creation and completion attempts are atomically registered outside caller lifecycle snapshots",
+    "source or contract drift commits a terminal transition before returning and permanently invalidates the prior snapshot",
     "terminal scans cannot retry",
     "unchanged repository-source evidence may be reused only with an exact hash-valid repository closure",
     "repository fallback is never Codex Security sealed",
@@ -157,6 +162,7 @@
     "provider Codex Review remains optional advisory and is never requested or retried automatically",
     "only independently validated protected-main finding sets can turn provider commentary into a blocker",
     "the protected-main required set contains exactly the 13 strict Phase 1 checks and excludes the provider Codex Review context",
+    "solo-owner protected merge requires no second-person approval or provider-thread resolution and retains zero bypass actors",
     "repository closure requires every code-pinned prior finding disposition with governed correction evidence"
   ]
 }

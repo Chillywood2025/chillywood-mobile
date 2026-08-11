@@ -222,12 +222,16 @@ function claimFinding(id, claimId, detail = {}) {
   return { id, status: "BLOCKED_INTERNAL", claimId: claimId ?? null, ...detail };
 }
 
-function canonicalLateReviewOwnerEntry(sentinel) {
+function canonicalLateReviewIdentityEntry(sentinel) {
   const matches = canonicalLateReviewOwnerRegistry.filter((entry) => entry.repository === sentinel?.repository
     && entry.prNumber === sentinel?.prNumber
     && entry.mergeSha === sentinel?.mergeSha);
-  if (matches.length !== 1) return null;
-  const [entry] = matches;
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function canonicalLateReviewOwnerEntry(sentinel) {
+  const entry = canonicalLateReviewIdentityEntry(sentinel);
+  if (!entry) return null;
   const registryBoundDiscovery = sentinel.successorCorrectionOwner === "UNASSIGNED_BLOCKED"
     && sentinel.assuranceControlOwner === undefined
     && sentinel.authorizedBootstrapOwners === undefined;
@@ -238,10 +242,12 @@ function canonicalLateReviewOwnerEntry(sentinel) {
 }
 
 export function lateReviewSentinelValidationState(sentinel) {
+  const identityEntry = canonicalLateReviewIdentityEntry(sentinel);
   const entry = canonicalLateReviewOwnerEntry(sentinel);
-  return entry && lateReviewFindingSetHash(sentinel?.findings) === entry.findingSetHash
-    ? "INTERNALLY_VALIDATED_BLOCKING"
-    : "OPTIONAL_ADVISORY_PENDING_TRIAGE";
+  if (!identityEntry || lateReviewFindingSetHash(sentinel?.findings) !== identityEntry.findingSetHash) {
+    return "OPTIONAL_ADVISORY_PENDING_TRIAGE";
+  }
+  return entry ? "INTERNALLY_VALIDATED_BLOCKING" : "INTERNALLY_VALIDATED_OWNER_POLICY_INVALID";
 }
 
 export function lateReviewSuccessorCorrectionOwner(sentinel) {
@@ -264,6 +270,9 @@ export function lateReviewRegistryCoverageFindings(sentinels) {
     if (matches.length > 1) return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_DUPLICATE", prNumber: entry.prNumber }];
     if (lateReviewFindingSetHash(matches[0]?.findings) !== entry.findingSetHash) {
       return [{ id: "LATE_REVIEW_REQUIRED_SENTINEL_FINDING_SET_MISMATCH", prNumber: entry.prNumber }];
+    }
+    if (canonicalLateReviewOwnerEntry(matches[0]) === null) {
+      return [{ id: "LATE_REVIEW_OWNER_POLICY_INVALID", prNumber: entry.prNumber }];
     }
     return [];
   });

@@ -1772,11 +1772,17 @@ test("only a byte-exact post-anchor protected-main tombstone can retire a retain
 
 test("a late-review sentinel cannot authorize its own branch exceptions", () => {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
-  const forged = structuredClone(truth);
-  forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194).authorizedBootstrapOwners.push("codex/unrelated-next");
-  assert.equal(unresolvedLateReviewSentinels(forged).length, 1);
-  assert.equal(lateReviewSentinelValidationState(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194)), "OPTIONAL_ADVISORY_PENDING_TRIAGE");
-  assert.equal(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"), false);
+  for (const mutate of [
+    (sentinel) => sentinel.authorizedBootstrapOwners.push("codex/unrelated-next"),
+    (sentinel) => { sentinel.successorCorrectionOwner = "codex/unrelated-next"; },
+    (sentinel) => { sentinel.assuranceControlOwner = "codex/unrelated-next"; },
+  ]) {
+    const forged = structuredClone(truth);
+    mutate(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194));
+    assert.equal(unresolvedLateReviewSentinels(forged).length, 2, "known sentinel owner drift remains blocking");
+    assert.equal(lateReviewSentinelValidationState(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194)), "INTERNALLY_VALIDATED_OWNER_POLICY_INVALID");
+    assert.equal(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"), true);
+  }
 });
 
 test("known unassigned discovery sentinels derive owners only from the immutable registry", () => {

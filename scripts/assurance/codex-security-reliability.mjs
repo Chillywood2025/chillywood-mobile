@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { emit, git, sha256, stableJson } from "./lib.mjs";
 import { privateArtifactDirectory } from "./efficiency-lib.mjs";
@@ -157,25 +158,74 @@ function atomicPrivateRecord(kind, identityHash, name, value) {
   }
 }
 
-function registerLifecycle(record) {
-  return atomicPrivateRecord("codex-security-lifecycles", record.lifecycleIdentityHash, "lifecycle.json", record);
+const productionLifecycleStore = {
+  write(identityHash, name, value) {
+    return atomicPrivateRecord("codex-security-lifecycles", identityHash, name, value);
+  },
+  read(identityHash, name) {
+    try {
+      const directory = privateArtifactDirectory("codex-security-lifecycles", identityHash);
+      return JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
+    } catch {
+      return null;
+    }
+  },
+};
+
+function isolatedLifecycleStore(root) {
+  const resolvedRoot = fs.realpathSync(root);
+  const directory = (identityHash) => {
+    if (!digest(identityHash)) throw new Error("LIFECYCLE_IDENTITY_INVALID");
+    const candidate = path.join(resolvedRoot, identityHash);
+    fs.mkdirSync(candidate, { recursive: true, mode: 0o700 });
+    const resolved = fs.realpathSync(candidate);
+    if (path.dirname(resolved) !== resolvedRoot) throw new Error("LIFECYCLE_FIXTURE_PATH_ESCAPE");
+    return resolved;
+  };
+  return {
+    write(identityHash, name, value) {
+      try {
+        const parent = directory(identityHash);
+        const output = path.join(parent, name);
+        if (path.dirname(output) !== parent) return false;
+        const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0);
+        const file = fs.openSync(output, flags, 0o600);
+        try {
+          fs.writeFileSync(file, `${stableJson(value)}\n`);
+          fs.fsyncSync(file);
+        } finally {
+          fs.closeSync(file);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    read(identityHash, name) {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(directory(identityHash), name), "utf8"));
+      } catch {
+        return null;
+      }
+    },
+  };
 }
 
-function readLifecycleRecord(identityHash, name) {
-  try {
-    const directory = privateArtifactDirectory("codex-security-lifecycles", identityHash);
-    return JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
-  } catch {
-    return null;
-  }
+function registerLifecycle(record, lifecycleStore = productionLifecycleStore) {
+  return lifecycleStore.write(record.lifecycleIdentityHash, "lifecycle.json", record);
+}
+
+function readLifecycleRecord(identityHash, name, lifecycleStore = productionLifecycleStore) {
+  return lifecycleStore.read(identityHash, name);
 }
 
 const lifecycleSnapshotHash = (lifecycle) => sha256(lifecycle);
 
-function lifecycleAuthorityCurrent(lifecycle) {
+function lifecycleAuthorityCurrent(lifecycle, lifecycleStore = productionLifecycleStore) {
   if (!digest(lifecycle?.lifecycleIdentityHash) || !Number.isInteger(lifecycle?.stateVersion) || lifecycle.stateVersion < 0) return false;
+  if (readLifecycleRecord(lifecycle.lifecycleIdentityHash, `transition-${lifecycle.stateVersion + 1}.json`, lifecycleStore) !== null) return false;
   if (lifecycle.stateVersion === 0) {
-    const created = readLifecycleRecord(lifecycle.lifecycleIdentityHash, "lifecycle.json");
+    const created = readLifecycleRecord(lifecycle.lifecycleIdentityHash, "lifecycle.json", lifecycleStore);
     return created?.lifecycleIdentityHash === lifecycle.lifecycleIdentityHash
       && created?.scanId === lifecycle.scanId
       && created?.sourceLeaseHash === lifecycle?.sourceLease?.sourceLeaseHash
@@ -184,7 +234,7 @@ function lifecycleAuthorityCurrent(lifecycle) {
       && created?.lifecycleSnapshotHash === lifecycleSnapshotHash(lifecycle)
       && lifecycle.terminal === false;
   }
-  const transitionRecord = readLifecycleRecord(lifecycle.lifecycleIdentityHash, `transition-${lifecycle.stateVersion}.json`);
+  const transitionRecord = readLifecycleRecord(lifecycle.lifecycleIdentityHash, `transition-${lifecycle.stateVersion}.json`, lifecycleStore);
   return transitionRecord?.lifecycleIdentityHash === lifecycle.lifecycleIdentityHash
     && transitionRecord?.scanId === lifecycle.scanId
     && transitionRecord?.sourceLeaseHash === lifecycle?.sourceLease?.sourceLeaseHash
@@ -195,8 +245,8 @@ function lifecycleAuthorityCurrent(lifecycle) {
     && transitionRecord?.toLifecycleSnapshotHash === lifecycleSnapshotHash(lifecycle);
 }
 
-function recordLifecycleTransition(lifecycle, next) {
-  if (!lifecycleAuthorityCurrent(lifecycle)
+function recordLifecycleTransition(lifecycle, next, lifecycleStore = productionLifecycleStore) {
+  if (!lifecycleAuthorityCurrent(lifecycle, lifecycleStore)
     || next?.lifecycleIdentityHash !== lifecycle.lifecycleIdentityHash
     || next?.scanId !== lifecycle.scanId
     || next?.sourceLease?.sourceLeaseHash !== lifecycle?.sourceLease?.sourceLeaseHash
@@ -216,12 +266,12 @@ function recordLifecycleTransition(lifecycle, next) {
     fromLifecycleSnapshotHash: lifecycleSnapshotHash(lifecycle),
     toLifecycleSnapshotHash: lifecycleSnapshotHash(next),
   };
-  return atomicPrivateRecord("codex-security-lifecycles", lifecycle.lifecycleIdentityHash, `transition-${next.stateVersion}.json`, record);
+  return lifecycleStore.write(lifecycle.lifecycleIdentityHash, `transition-${next.stateVersion}.json`, record);
 }
 
-function consumeCompletionAttempt(record, lifecycle) {
-  return lifecycleAuthorityCurrent(lifecycle)
-    && atomicPrivateRecord("codex-security-lifecycles", record.lifecycleIdentityHash, "completion-attempt.json", record);
+function consumeCompletionAttempt(record, lifecycle, lifecycleStore = productionLifecycleStore) {
+  return lifecycleAuthorityCurrent(lifecycle, lifecycleStore)
+    && lifecycleStore.write(record.lifecycleIdentityHash, "completion-attempt.json", record);
 }
 
 function lifecycleIdentityCurrent(lifecycle, descriptor) {
@@ -246,11 +296,11 @@ function nextLifecycle(lifecycle, state, additions = {}) {
   return { ...lifecycle, ...additions, state, stateVersion: lifecycle.stateVersion + 1 };
 }
 
-function commitLifecycleTransition(lifecycle, next) {
-  return recordLifecycleTransition(lifecycle, next) ? next : null;
+function commitLifecycleTransition(lifecycle, next, lifecycleStore = productionLifecycleStore) {
+  return recordLifecycleTransition(lifecycle, next, lifecycleStore) ? next : null;
 }
 
-export function createLifecycle({ descriptor, scanId, scanState = "RUNNING" }) {
+export function createLifecycle({ descriptor, scanId, scanState = "RUNNING", lifecycleStore = productionLifecycleStore }) {
   if (!descriptorValid(descriptor) || !scanIdentifier(scanId) || scanState !== "RUNNING") {
     return { ok: false, status: "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID", workersStarted: false };
   }
@@ -278,7 +328,7 @@ export function createLifecycle({ descriptor, scanId, scanState = "RUNNING" }) {
     initialState: "TARGET_FROZEN",
     initialStateVersion: 0,
     lifecycleSnapshotHash: lifecycleSnapshotHash(lifecycle),
-  });
+  }, lifecycleStore);
   if (registered !== true) {
     return { ok: false, status: "CODEX_SECURITY_SCAN_ALREADY_REGISTERED", workersStarted: false };
   }
@@ -298,9 +348,9 @@ function terminalize(lifecycle, state, reason) {
   };
 }
 
-function blockedPreflight(lifecycle, status, fallback = null) {
+function blockedPreflight(lifecycle, status, fallback = null, lifecycleStore = productionLifecycleStore) {
   const next = terminalize(nextLifecycle(lifecycle, "HOST_PREFLIGHT_BLOCKED"), "HOST_PREFLIGHT_BLOCKED", status);
-  const committed = commitLifecycleTransition(lifecycle, next);
+  const committed = commitLifecycleTransition(lifecycle, next, lifecycleStore);
   if (!committed) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", discoveryAuthorized: false, workersStarted: false, lifecycle };
   }
@@ -324,25 +374,25 @@ function hostIdentityMatches(host, lifecycle, descriptor) {
     && host?.target?.tree === descriptor.target.tree;
 }
 
-export function preflight({ lifecycle, descriptor, host = {}, runGit = git }) {
+export function preflight({ lifecycle, descriptor, host = {}, runGit = git, lifecycleStore = productionLifecycleStore }) {
   if (!lifecycleAt(lifecycle, descriptor, "TARGET_FROZEN", 0)) {
     return { ok: false, status: "CODEX_SECURITY_PREFLIGHT_IDENTITY_INVALID", discoveryAuthorized: false, workersStarted: false, lifecycle };
   }
   if (!repositoryIdentityCurrent(descriptor, runGit)) {
-    return blockedPreflight(lifecycle, "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
+    return blockedPreflight(lifecycle, "CODEX_SECURITY_SOURCE_LEASE_CHANGED", null, lifecycleStore);
   }
   if (!hostIdentityMatches(host, lifecycle, descriptor)) {
-    return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH");
+    return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH", null, lifecycleStore);
   }
   if (host.snapshotDigestExposed !== true) {
-    return blockedPreflight(lifecycle, "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
+    return blockedPreflight(lifecycle, "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED", lifecycleStore);
   }
   const hostSnapshotDigest = host?.target?.snapshotDigest;
   if (!digest(hostSnapshotDigest)) {
-    return blockedPreflight(lifecycle, "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED");
+    return blockedPreflight(lifecycle, "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED", lifecycleStore);
   }
   if (hostSnapshotDigest === descriptor.repositorySourceSnapshotDigest) {
-    return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH");
+    return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH", null, lifecycleStore);
   }
   const next = nextLifecycle(lifecycle, "HOST_PREFLIGHT_CLEAR", {
     hostBinding: {
@@ -357,7 +407,7 @@ export function preflight({ lifecycle, descriptor, host = {}, runGit = git }) {
       },
     },
   });
-  const committed = commitLifecycleTransition(lifecycle, next);
+  const committed = commitLifecycleTransition(lifecycle, next, lifecycleStore);
   if (!committed) return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", discoveryAuthorized: false, workersStarted: false, lifecycle };
   return {
     ok: true,
@@ -368,44 +418,44 @@ export function preflight({ lifecycle, descriptor, host = {}, runGit = git }) {
   };
 }
 
-export function beginDiscovery({ lifecycle, descriptor, runGit = git }) {
+export function beginDiscovery({ lifecycle, descriptor, runGit = git, lifecycleStore = productionLifecycleStore }) {
   if (!lifecycleStateAt(lifecycle, "HOST_PREFLIGHT_CLEAR", 1)) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", workersStarted: false, lifecycle };
   }
   if (!lifecycleIdentityCurrent(lifecycle, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
     const next = terminalize(nextLifecycle(lifecycle, "TERMINAL_FAILED"), "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
-    const committed = commitLifecycleTransition(lifecycle, next);
+    const committed = commitLifecycleTransition(lifecycle, next, lifecycleStore);
     return { ok: false, status: committed ? "CODEX_SECURITY_SOURCE_LEASE_CHANGED" : "CODEX_SECURITY_ILLEGAL_TRANSITION", workersStarted: false, lifecycle: committed ?? lifecycle };
   }
   const next = nextLifecycle(lifecycle, "DISCOVERY_RUNNING", { workersStarted: true });
-  const committed = commitLifecycleTransition(lifecycle, next);
+  const committed = commitLifecycleTransition(lifecycle, next, lifecycleStore);
   return committed
     ? { ok: true, status: "DISCOVERY_RUNNING", workersStarted: true, lifecycle: committed }
     : { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", workersStarted: false, lifecycle };
 }
 
-export function completeSourceReview({ lifecycle, descriptor, complete, runGit = git }) {
+export function completeSourceReview({ lifecycle, descriptor, complete, runGit = git, lifecycleStore = productionLifecycleStore }) {
   if (!lifecycleStateAt(lifecycle, "DISCOVERY_RUNNING", 2)) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
   }
   if (!lifecycleIdentityCurrent(lifecycle, descriptor) || !repositoryIdentityCurrent(descriptor, runGit)) {
     const next = terminalize(nextLifecycle(lifecycle, "TERMINAL_FAILED"), "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
-    const committed = commitLifecycleTransition(lifecycle, next);
+    const committed = commitLifecycleTransition(lifecycle, next, lifecycleStore);
     return { ok: false, status: committed ? "CODEX_SECURITY_SOURCE_LEASE_CHANGED" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
   }
   if (complete !== true) {
     const next = terminalize(nextLifecycle(lifecycle, "SOURCE_REVIEW_INCOMPLETE"), "SOURCE_REVIEW_INCOMPLETE", "SOURCE_REVIEW_INCOMPLETE");
-    const committed = commitLifecycleTransition(lifecycle, next);
+    const committed = commitLifecycleTransition(lifecycle, next, lifecycleStore);
     return { ok: false, status: committed ? "SOURCE_REVIEW_INCOMPLETE" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
   }
   const next = nextLifecycle(lifecycle, "SOURCE_REVIEW_COMPLETE");
-  const committed = commitLifecycleTransition(lifecycle, next);
+  const committed = commitLifecycleTransition(lifecycle, next, lifecycleStore);
   return committed
     ? { ok: true, status: "SOURCE_REVIEW_COMPLETE", lifecycle: committed }
     : { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
 }
 
-export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplete, coverageComplete, deferredFindings = [], ledger, runGit = git }) {
+export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplete, coverageComplete, deferredFindings = [], ledger, runGit = git, lifecycleStore = productionLifecycleStore }) {
   if (lifecycle?.completionAttempts > 0 || lifecycle?.terminal === true) {
     return { ok: false, status: "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED", lifecycle };
   }
@@ -413,7 +463,9 @@ export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplet
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
   }
   if (!lifecycleIdentityCurrent(lifecycle, descriptor)) {
-    return { ok: false, status: "CODEX_SECURITY_SOURCE_LEASE_CHANGED", lifecycle: terminalize(lifecycle, "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED") };
+    const invalidated = terminalize(nextLifecycle(lifecycle, "TERMINAL_FAILED"), "TERMINAL_FAILED", "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
+    const committed = commitLifecycleTransition(lifecycle, invalidated, lifecycleStore);
+    return { ok: false, status: committed ? "CODEX_SECURITY_SOURCE_LEASE_CHANGED" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
   }
   const attemptRecord = {
     schemaVersion: 1,
@@ -426,16 +478,18 @@ export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplet
     nextStateVersion: lifecycle.stateVersion + 1,
     consumedLifecycleSnapshotHash: lifecycleSnapshotHash(lifecycle),
   };
-  if (consumeCompletionAttempt(attemptRecord, lifecycle) !== true) {
+  if (consumeCompletionAttempt(attemptRecord, lifecycle, lifecycleStore) !== true) {
     return { ok: false, status: "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED", lifecycle };
   }
   const attempted = nextLifecycle(lifecycle, "FINALIZATION_RUNNING", { completionAttempts: 1 });
   const snapshotDigest = host?.target?.snapshotDigest;
   if (host?.snapshotDigestExposed !== true || !digest(snapshotDigest)) {
+    const terminal = terminalize(attempted, "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION");
+    const committed = commitLifecycleTransition(lifecycle, terminal, lifecycleStore);
     return {
       ok: false,
-      status: host?.snapshotDigestExposed === true ? "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT" : "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
-      lifecycle: terminalize(attempted, "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION"),
+      status: committed ? (host?.snapshotDigestExposed === true ? "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT" : "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE") : "CODEX_SECURITY_ILLEGAL_TRANSITION",
+      lifecycle: committed ?? lifecycle,
     };
   }
   const guard = repositoryIdentityCurrent(descriptor, runGit)
@@ -446,17 +500,25 @@ export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplet
     && coverageComplete === true
     && Array.isArray(deferredFindings) && deferredFindings.length === 0
     && completeLedgers(ledger);
-  if (!guard) return { ok: false, status: "CODEX_SECURITY_FINALIZATION_GUARD", lifecycle: terminalize(attempted, "TERMINAL_FAILED", "CODEX_SECURITY_FINALIZATION_GUARD") };
-  return { ok: true, status: "SEALED", lifecycle: terminalize(attempted, "SEALED", "SEALED") };
+  if (!guard) {
+    const terminal = terminalize(attempted, "TERMINAL_FAILED", "CODEX_SECURITY_FINALIZATION_GUARD");
+    const committed = commitLifecycleTransition(lifecycle, terminal, lifecycleStore);
+    return { ok: false, status: committed ? "CODEX_SECURITY_FINALIZATION_GUARD" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
+  }
+  const sealed = terminalize(attempted, "SEALED", "SEALED");
+  const committed = commitLifecycleTransition(lifecycle, sealed, lifecycleStore);
+  return committed
+    ? { ok: true, status: "SEALED", lifecycle: committed }
+    : { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
 }
 
-export function transition(lifecycle, next) {
+export function transition(lifecycle, next, lifecycleStore = productionLifecycleStore) {
   if (!states.includes(lifecycle?.state) || lifecycle?.terminal === true || terminalStates.has(lifecycle?.state)) {
     return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
   }
   if (next !== "CANCELED") return { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
   const canceled = terminalize(nextLifecycle(lifecycle, "CANCELED"), "CANCELED", "CANCELED");
-  const committed = commitLifecycleTransition(lifecycle, canceled);
+  const committed = commitLifecycleTransition(lifecycle, canceled, lifecycleStore);
   return committed
     ? { ok: true, status: "CANCELED", lifecycle: committed }
     : { ok: false, status: "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle };
@@ -694,8 +756,8 @@ export function sanitizeIncident(value) {
   if (!exactKeys(value, allowedKeys)
     || recurringFailures.get(value.scanId) !== value.error
     || value.sourceReviewCompletionState !== "SOURCE_REVIEW_COMPLETE"
-    || value.finalizationState !== "HOST_PREFLIGHT_BLOCKED"
-    || value.mitigation !== "strict repository closure") return { ok: false, status: "CODEX_SECURITY_INCIDENT_UNSANITIZED" };
+    || value.finalizationState !== "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING"
+    || value.mitigation !== "S0 preflight would prevent the expensive scan from starting") return { ok: false, status: "CODEX_SECURITY_INCIDENT_UNSANITIZED" };
   const record = {
     schemaVersion: 1,
     scanId: value.scanId,
@@ -712,6 +774,10 @@ export function sanitizeIncident(value) {
 }
 
 export function benchmark() {
+  const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-s0-benchmark-"));
+  const lifecycleStore = isolatedLifecycleStore(fixtureDirectory);
+  let result;
+  try {
   const contractTexts = {
     "config/assurance/codex-security-reliability-s0-v1.json": "benchmark-policy-v1",
     "config/assurance/escaped-defect-catalog-v1.json": "benchmark-threat-v1",
@@ -754,28 +820,30 @@ export function benchmark() {
     }
     throw new Error("unexpected benchmark git read");
   };
-  const benchmarkScanId = `s0-benchmark:${process.pid}:${Date.now()}:${process.hrtime.bigint()}`;
-  const created = createLifecycle({ descriptor, scanId: benchmarkScanId });
+  const benchmarkScanId = "s0-benchmark:no-exposure";
+  const created = createLifecycle({ descriptor, scanId: benchmarkScanId, lifecycleStore });
   const noExposure = preflight({
     lifecycle: created.lifecycle,
     descriptor,
     host: { scanId: benchmarkScanId, scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree }, snapshotDigestExposed: false },
     runGit,
+    lifecycleStore,
   });
-  const second = createLifecycle({ descriptor, scanId: `${benchmarkScanId}:missing` });
+  const second = createLifecycle({ descriptor, scanId: "s0-benchmark:missing-digest", lifecycleStore });
   const missingDigest = preflight({
     lifecycle: second.lifecycle,
     descriptor,
-    host: { scanId: `${benchmarkScanId}:missing`, scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree, snapshotDigest: "" }, snapshotDigestExposed: true },
+    host: { scanId: "s0-benchmark:missing-digest", scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree, snapshotDigest: "" }, snapshotDigestExposed: true },
     runGit,
+    lifecycleStore,
   });
-  const incidentResults = [...recurringFailures].map(([scanId, error]) => sanitizeIncident({ scanId, error, sourceReviewCompletionState: "SOURCE_REVIEW_COMPLETE", finalizationState: "HOST_PREFLIGHT_BLOCKED", mitigation: "strict repository closure" }));
+  const incidentResults = [...recurringFailures].map(([scanId, error]) => sanitizeIncident({ scanId, error, sourceReviewCompletionState: "SOURCE_REVIEW_COMPLETE", finalizationState: "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", mitigation: "S0 preflight would prevent the expensive scan from starting" }));
   const ok = noExposure.status === "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE"
     && noExposure.workersStarted === false
     && missingDigest.status === "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"
     && missingDigest.workersStarted === false
     && incidentResults.every(({ ok: incidentOk }) => incidentOk);
-  return {
+  result = {
     ok,
     failedIncidents: [...recurringFailures.keys()],
     expensiveScanWorkAvoided: 2,
@@ -783,6 +851,16 @@ export function benchmark() {
     incidentHashes: incidentResults.map(({ record }) => record?.incidentHash),
     tokenValues: null,
     wallValues: null,
+  };
+  } finally {
+    fs.rmSync(fixtureDirectory, { recursive: true, force: true });
+  }
+  const cleanupComplete = !fs.existsSync(fixtureDirectory);
+  return {
+    ...result,
+    ok: result?.ok === true && cleanupComplete,
+    cleanupComplete,
+    retainedMutableArtifacts: cleanupComplete ? 0 : 1,
   };
 }
 

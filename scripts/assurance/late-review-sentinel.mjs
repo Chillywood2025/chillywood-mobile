@@ -7,6 +7,7 @@ export { lateReviewSentinelResolved } from "./lib.mjs";
 const requiredBlocks = ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"];
 const currentTruthPath = "config/assurance/current-truth-v1.json";
 const carrierEvidenceCover = "repository.assurance-control.late-review-tombstone-admission-carrier";
+const internallyValidated = (sentinel) => lateReviewSentinelValidationState(sentinel).startsWith("INTERNALLY_VALIDATED_");
 
 function protectedMainRecord(options = {}) {
   if (Object.hasOwn(options, "protectedMainRecord")) return options.protectedMainRecord;
@@ -153,7 +154,7 @@ function protectedTombstoneResolves(record, sentinel, options = {}) {
 }
 
 export function unresolvedLateReviewSentinels(record, options = {}) {
-  return (record?.lateReviewSentinels ?? []).filter((sentinel) => lateReviewSentinelValidationState(sentinel) === "INTERNALLY_VALIDATED_BLOCKING"
+  return (record?.lateReviewSentinels ?? []).filter((sentinel) => internallyValidated(sentinel)
     && !lateReviewSentinelResolved(sentinel, options)
     && !protectedTombstoneResolves(record, sentinel, options));
 }
@@ -173,7 +174,7 @@ export function validateLateReviewSentinelState(record, options = {}) {
     }
   }
   for (const sentinel of record?.lateReviewSentinels ?? []) {
-    if (lateReviewSentinelValidationState(sentinel) !== "INTERNALLY_VALIDATED_BLOCKING") continue;
+    if (!internallyValidated(sentinel)) continue;
     const dispositions = (sentinel.findings ?? []).map(({ disposition }) => disposition);
     const claimsResolution = dispositions.some((disposition) => disposition === "RESOLVED");
     const resolved = lateReviewSentinelResolved(sentinel, options) || protectedTombstoneResolves(record, sentinel, options);
@@ -226,7 +227,7 @@ export async function readDurableLateReviewSentinels(repository, token, options 
 export function mergeUnresolvedLateReviewSentinels({ globalLedgerSentinels = [], canonicalSentinels = [], durable = [] }) {
   const durableSentinels = durable.filter(({ resolutionVerified }) => resolutionVerified !== true).map(({ sentinel }) => sentinel);
   const blockingCandidates = [...canonicalSentinels, ...globalLedgerSentinels, ...durableSentinels]
-    .filter((sentinel) => lateReviewSentinelValidationState(sentinel) === "INTERNALLY_VALIDATED_BLOCKING");
+    .filter((sentinel) => internallyValidated(sentinel));
   const authoritative = mergeLateReviewSentinelRecords(blockingCandidates);
   return authoritative.filter((sentinel) => !durable.some((entry) => entry.resolutionVerified === true
     && entry.sentinel?.repository === sentinel.repository

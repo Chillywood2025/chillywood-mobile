@@ -10,11 +10,11 @@
       "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
       "errorFingerprint": "6a0048b0b7658aef8d3680d6a5d017d0c6d0a4001a6b8cd0822772a5661e4475",
       "sourceReviewCompletionState": "SOURCE_REVIEW_COMPLETE",
-      "finalizationState": "HOST_PREFLIGHT_BLOCKED",
-      "mitigation": "strict repository closure",
+      "finalizationState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+      "mitigation": "S0 preflight would prevent the expensive scan from starting",
       "tokenValues": null,
       "wallValues": null,
-      "incidentHash": "606e2be8d5cd542344a3b9f89ffe5f4a1a860aae386ec6eca674a2029a607355"
+      "incidentHash": "16f826b7c4176e08a2b712923c12a6305e38347df6129f77b54380ec24c96c0a"
     },
     {
       "schemaVersion": 1,
@@ -22,11 +22,11 @@
       "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
       "errorFingerprint": "6a0048b0b7658aef8d3680d6a5d017d0c6d0a4001a6b8cd0822772a5661e4475",
       "sourceReviewCompletionState": "SOURCE_REVIEW_COMPLETE",
-      "finalizationState": "HOST_PREFLIGHT_BLOCKED",
-      "mitigation": "strict repository closure",
+      "finalizationState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+      "mitigation": "S0 preflight would prevent the expensive scan from starting",
       "tokenValues": null,
       "wallValues": null,
-      "incidentHash": "2f4bba84b5a1af08ad1d87c81895d1e90593ea8ae406ae77ff9d871e51c120e8"
+      "incidentHash": "dcb42c77c982071478bbcbf6d6d9ce68f56dc6436bac3d612df2f4d3a74fb431"
     }
   ]
 }

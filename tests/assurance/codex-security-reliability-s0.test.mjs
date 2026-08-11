@@ -420,6 +420,37 @@ test("failed finalization is terminal and consumes the sole completion attempt",
   assert.equal(changedDuringReview.lifecycle.completionAttempts, 1);
 });
 
+test("source-drift finalization persists terminal invalidation before returning", () => {
+  const value = descriptor();
+  const reached = reachSourceReviewComplete(value);
+  const drifted = finalizeFor({
+    lifecycle: reached.lifecycle,
+    descriptor: changedDescriptor(value),
+    host: reached.host,
+    sourceReviewComplete: true,
+    coverageComplete: true,
+    deferredFindings: [],
+    ledger: { discovery: true, validation: true, attackPath: true, policy: true },
+    runGit: gitFor(value),
+  });
+  assert.equal(drifted.status, "CODEX_SECURITY_SOURCE_LEASE_CHANGED");
+  assert.equal(drifted.lifecycle.state, "TERMINAL_FAILED");
+  assert.equal(drifted.lifecycle.terminal, true);
+  assert.equal(drifted.lifecycle.stateVersion, 4);
+  assert.equal(finalizeFor({ lifecycle: drifted.lifecycle, descriptor: value, host: reached.host }).status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED");
+  const originalDescriptorReplay = finalizeFor({
+    lifecycle: reached.lifecycle,
+    descriptor: value,
+    host: reached.host,
+    sourceReviewComplete: true,
+    coverageComplete: true,
+    deferredFindings: [],
+    ledger: { discovery: true, validation: true, attackPath: true, policy: true },
+    runGit: gitFor(value),
+  });
+  assert.equal(originalDescriptorReplay.status, "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED", "the pre-drift snapshot cannot later seal");
+});
+
 test("authoritative lifecycle snapshot binding rejects caller-mutated finalization state", () => {
   const value = descriptor();
   const reached = reachSourceReviewComplete(value);
@@ -677,8 +708,8 @@ test("known recurring incidents are sanitized and unrecognized or sensitive payl
       scanId,
       error: "scan.target.snapshotDigest: expected a non-empty string",
       sourceReviewCompletionState: "SOURCE_REVIEW_COMPLETE",
-      finalizationState: "HOST_PREFLIGHT_BLOCKED",
-      mitigation: "strict repository closure",
+      finalizationState: "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+      mitigation: "S0 preflight would prevent the expensive scan from starting",
     });
     assert.equal(result.ok, true);
     assert.equal(Object.hasOwn(result.record, "error"), false);
@@ -690,8 +721,8 @@ test("known recurring incidents are sanitized and unrecognized or sensitive payl
     scanId: "508c30b1-cf43-4902-96f1-92563d490149",
     error: "scan.target.snapshotDigest: expected a non-empty string",
     sourceReviewCompletionState: "SOURCE_REVIEW_COMPLETE",
-    finalizationState: "HOST_PREFLIGHT_BLOCKED",
-    mitigation: "strict repository closure",
+    finalizationState: "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
+    mitigation: "S0 preflight would prevent the expensive scan from starting",
   };
   assert.equal(sanitizeIncident({ ...baseline, token: "secret" }).ok, false);
   assert.equal(sanitizeIncident({ ...baseline, privatePath: "/tmp/private" }).ok, false);
@@ -712,6 +743,8 @@ test("benchmark proves both recurring digest failures stop before expensive work
   ]);
   assert.equal(result.incidentHashes.length, 2);
   assert.equal(result.incidentHashes.every((value) => /^[0-9a-f]{64}$/u.test(value)), true);
+  assert.equal(result.cleanupComplete, true);
+  assert.equal(result.retainedMutableArtifacts, 0);
 });
 
 test("lease hash cannot be forged independently of exact source identity", () => {
@@ -827,6 +860,8 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
     initialStateVersion: 0,
     completionSourceStateVersion: 3,
     completionAttemptConsumedBeforeFinalizationGuards: true,
+    sourceDriftTerminalTransitionPersistedBeforeReturn: true,
+    newerTransitionInvalidatesPriorSnapshot: true,
     duplicateScanCode: "CODEX_SECURITY_SCAN_ALREADY_REGISTERED",
     staleOrReplayedCompletionCode: "CODEX_SECURITY_COMPLETION_ALREADY_ATTEMPTED",
   });
@@ -847,16 +882,18 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
     protectedMainFindingSetRegistryRequiredForBlocking: true,
     requiredStatusCheckExcluded: "Chi'llywood / Codex Review Exact Head",
     rulesetStrict: true,
-    conversationResolutionRequired: true,
+    conversationResolutionRequired: false,
     staleReviewDismissalRequired: true,
     bypassActors: [],
   });
-  assert.equal(scopeWaiver.reviewer, "s0-four-compact-independent-exact-head-review-lanes");
+  assert.equal(scopeWaiver.reviewer, "repository-owned-assurance-coordinator");
+  assert.equal(scopeWaiver.reviewerRole, "SOLO_OWNER_REPOSITORY_ASSURANCE_COORDINATOR");
   assert.equal(scopeWaiver.secondHighRiskDomain, false);
   assert.equal(scopeWaiver.newTimeboxHours, 8);
   assert.deepEqual(scopeWaiver.supportingDomains, ["CI-test-infrastructure", "documentation-metadata"]);
   assert.deepEqual(scopeWaiver.fileBudget, { default: 15, waivedMaximum: 35 });
-  assert.deepEqual(scopeWaiver.lineBudget, { default: 1200, waivedMaximum: 2600 });
+  assert.deepEqual(scopeWaiver.lineBudget, { default: 1200, waivedMaximum: 3000 });
+  assert.equal(scopeWaiver.reviewStatus, "ONE_COMBINED_EXACT_HEAD_REPOSITORY_REVIEW_BUNDLE_REQUIRED_BEFORE_MERGE");
 
   for (const record of incidents.incidents) {
     const sanitized = sanitizeIncident({
@@ -870,13 +907,20 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
     assert.deepEqual(sanitized.record, record);
   }
   for (const command of [
-    "node scripts/assurance/codex-security-target.mjs --base=origin/main --target=HEAD",
     "node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json",
     "node scripts/assurance/codex-security-reliability.mjs --benchmark=all",
     "node --test tests/assurance/codex-security-reliability-s0.test.mjs",
   ]) {
     assert.equal(workflow.includes(command), true, command);
   }
+  for (const mainPushControl of [
+    "S0_EVENT_BEFORE: ${{ github.event.before }}",
+    "S0_BASE_REF=\"$S0_EVENT_BEFORE\"",
+    "S0_BASE_REF=\"$S0_TARGET_REF^1\"",
+    "git diff-tree --root --no-commit-id --name-only -r",
+    "test \"$(git rev-parse \"$S0_BASE_REF^{commit}\")\" != \"$(git rev-parse \"$S0_TARGET_REF^{commit}\")\"",
+    "--base=\"$S0_BASE_REF\" --target=\"$S0_TARGET_REF\"",
+  ]) assert.equal(workflow.includes(mainPushControl), true, mainPushControl);
   for (const requiredText of [
     "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
     "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",
