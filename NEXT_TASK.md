@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Use only the code-pinned PR #206 S0 Owner-bootstrap registry tuple, immutable exact closure-reuse final bounded source 7e1c266042256495d0462eba535472e2d763579d tree c44d73100da35c24dec274ac733337197dfda88a, hash-bound source claim, and a fresh exact-subject Owner comment and active-task packet to authorize Codex Security Scan Reliability S0; no other PR, branch, head, fact, feature, product, provider, build, release, or D2A work is authorized.
+1. Use only the code-pinned PR #206 S0 Owner-bootstrap registry tuple, immutable exact closure-reuse final evidence anchor f4424b0169ed3f97df8646f951c4f4979045545f tree 126593669a05992797a1f766b01aa692c033893b, hash-bound source claim, canonical Owner comment 5248279539, and a fresh active-task packet to authorize Codex Security Scan Reliability S0; no other PR, branch, head, fact, feature, product, provider, build, release, or D2A work is authorized.
 2. Review the frozen Codex Security Scan Reliability S0 source on codex/assurance-codex-security-scan-reliability-s0 with independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, normal merge, and post-S0 truth; do not start a hosted Codex Security scan.
 3. Only after S0 completes may the five internally validated unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under repository-owned independent exact-head review; provider Codex Review remains optional advisory and D2A remains frozen.
 4. After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.
