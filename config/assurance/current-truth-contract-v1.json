@@ -4,7 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
-  "requiredFields": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "requiredFields": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,
@@ -89,6 +89,22 @@
           "CURRENT_STATE.md",
           "config/assurance/current-truth-contract-v1.json",
           "config/assurance/current-truth-v1.json",
+          "config/assurance/schemas-v1.json",
+          "scripts/assurance/active-task.mjs",
+          "scripts/assurance/current-truth.mjs",
+          "scripts/assurance/lib.mjs",
+          "tests/assurance/active-task-binding-a1.test.mjs"
+        ]
+      },
+      {
+        "prNumber": 217,
+        "branch": "codex/d2a-legacy-webrtc-pr-merge-ref-provenance",
+        "firstParent": "e6703552b986ea6182be02b2d01d62b36eba30f0",
+        "requiredSecondParentAncestor": "d286e51e52fbe9087755c6be4842dc1d5a9193f2",
+        "changedPaths": [
+          "CURRENT_STATE.md",
+          "config/assurance/current-truth-contract-v1.json",
+          "config/assurance/current-truth-v1.json",
           "scripts/assurance/lib.mjs",
           "tests/assurance/active-task-binding-a1.test.mjs"
         ]
@@ -139,6 +155,22 @@
       "networkAccess": "forbidden",
       "failureStatus": "BLOCKED_INTERNAL"
     }
+  },
+  "finiteTaskLeasePolicy": {
+    "policyId": "ASSURANCE_FINITE_TASK_LEASE_V1",
+    "terminalMetaPr": 217,
+    "candidateSource": "CURRENT_GITHUB_PULL_REQUEST_HEAD_READ_ONLY",
+    "taskStates": ["ACTIVE_IMPLEMENTATION", "BLOCKED_PRODUCT_FINDING", "MERGE_ELIGIBLE", "MERGED_VERIFIED", "ABANDONED_BY_OWNER"],
+    "candidateRequirements": ["exact-pr", "exact-branch", "open-pr", "admitted-seed-descendant", "admitted-seed-tree-unchanged", "admitted-base-ancestor", "allowed-paths", "scope-budget", "exclusive-domain-owner", "nonterminal-task"],
+    "sourcePushInvalidates": ["owner-final-receipt", "repository-owned-review", "phase1", "merge-eligibility"],
+    "sourcePushRequires": {"newAdmissionPr": false, "newCurrentTruthBindingPr": false, "newBootstrapTuple": false, "newMergeProvenancePr": false},
+    "finalReceiptFields": ["pr", "branch", "admitted-seed", "final-head", "final-tree", "diff-hash", "changed-path-hash", "scope-result", "call-domain-closure-ledger-hash", "focused-test-hash", "mutation-negative-control-hash", "repository-review-hash", "phase1-run-id-and-head", "owner-author-association", "body-and-subject-hashes"],
+    "mergeProvenance": {"parents": 2, "firstParent": "exact-current-protected-base", "secondParent": "exact-final-implementation-head", "sourceTree": "exact-final-receipt-tree", "syntheticMergeTreeRecorded": true, "actualMergeSecondParentExact": true, "actualMergeTreeExact": true, "squashRebaseOctopusAllowed": false},
+    "productFindingDisposition": {"state": "BLOCKED_PRODUCT_FINDING", "leaseRevoked": false},
+    "perTaskRecursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1},
+    "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE",
+    "providerCodexReview": "OPTIONAL_ADVISORY",
+    "authority": {"build": false, "provider": false, "database": false, "publicRelease": false}
   },
   "lateReviewOwnerRegistry": [
     {
