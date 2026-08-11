@@ -1251,6 +1251,7 @@ test("finite closure 22: PR 212 advances without another admission", () => {
 
 test("finite closure 23: recursive control dependency emits the terminal cycle code", () => {
   assert.deepEqual(detectAssuranceRecursion({ lease: pr214Lease, requestedDependency: "ADMISSION_PR", counts: { admissionPrs: 1 }, controlDependsOnControl: true }), { ok: false, code: "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE" });
+  assert.deepEqual(detectAssuranceRecursion({ lease: pr214Lease, requestedDependency: "ADMISSION_PR" }), { ok: false, code: "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE" });
 });
 
 test("finite closure 24: provider Codex Review remains optional advisory", () => {

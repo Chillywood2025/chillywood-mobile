@@ -869,7 +869,8 @@ export function verifyFiniteTaskMergeProvenance({ lease, receiptSubject, current
 
 export function detectAssuranceRecursion({ lease, requestedDependency, counts = {}, controlDependsOnControl = false }) {
   const budget = lease?.recursionBudget ?? {};
-  const exceeds = requestedDependency === "ADMISSION_PR" && (counts.admissionPrs ?? 0) >= budget.maximumAdmissionPrs
+  const admissionPrs = counts.admissionPrs ?? (Number.isInteger(lease?.protectedAdmissionPr) ? 1 : 0);
+  const exceeds = requestedDependency === "ADMISSION_PR" && admissionPrs >= budget.maximumAdmissionPrs
     || requestedDependency === "FINAL_SOURCE_BINDING_PR" && (counts.finalSourceBindingPrs ?? 0) >= budget.maximumFinalSourceBindingPrs
     || requestedDependency === "MERGE_PROVENANCE_PR" && (counts.mergeProvenancePrs ?? 0) >= budget.maximumMergeProvenancePrs
     || requestedDependency === "POST_MERGE_TRUTH_PR" && (counts.postMergeTruthPrs ?? 0) >= budget.maximumPostMergeTruthPrs;
