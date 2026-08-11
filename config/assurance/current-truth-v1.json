@@ -475,43 +475,43 @@
     "implementationPr": 210,
     "implementationBranch": "codex/d2a-livekit-mic-post-merge-review-correction",
     "implementationBindingId": "d2a-livekit-mic-post-merge-review-correction-pr210-v1",
-    "immutableSourceHead": "5a2984cf130e69d2845adc8b115a851b10ea3447",
-    "immutableSourceTree": "6c226d05afc76c7fb087d7e4df7147e99d8516fc",
-    "currentImplementationHead": "5a2984cf130e69d2845adc8b115a851b10ea3447",
-    "currentImplementationTree": "6c226d05afc76c7fb087d7e4df7147e99d8516fc",
+    "immutableSourceHead": "2b473e0c77a3a78cba7251518d5f8c590b4526c9",
+    "immutableSourceTree": "d1d36f30b9571a07f25e5aa64dc26d8932225a37",
+    "currentImplementationHead": "2b473e0c77a3a78cba7251518d5f8c590b4526c9",
+    "currentImplementationTree": "d1d36f30b9571a07f25e5aa64dc26d8932225a37",
     "phase": "FORMAL_REVIEW",
     "executionState": "LIVEKIT_MIC_POST_MERGE_CORRECTION_REVIEW_D2A_FROZEN",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "livekit-mic-post-merge-correction-canonical-owner-registry-source-freeze-20260811-0700", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-implementation.immutable-synchronized-source"], "subjectHead": "5a2984cf130e69d2845adc8b115a851b10ea3447", "subjectTree": "6c226d05afc76c7fb087d7e4df7147e99d8516fc"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "livekit-mic-post-merge-correction-final-review-source-freeze-20260811-0715", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-implementation.immutable-synchronized-source"], "subjectHead": "2b473e0c77a3a78cba7251518d5f8c590b4526c9", "subjectTree": "d1d36f30b9571a07f25e5aa64dc26d8932225a37"}],
     "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 210,
-      "commentId": 5250043182,
+      "commentId": 5250169324,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-11T07:01:00Z",
-      "updatedAt": "2026-08-11T07:01:00Z",
-      "bodySha256": "949ebf9ec1f2d9cac6b64254f63f69cac0b88d005e2d4ab438e7550a7cf53ea9",
-      "subjectHash": "3fba570664bca16dd5a6e04ed89437e18d03cadfeb6a798e6cd3a3bd48f01f38"
+      "createdAt": "2026-08-11T07:16:00Z",
+      "updatedAt": "2026-08-11T07:16:00Z",
+      "bodySha256": "919a41b4b28d53f96c61626910c66ba73d110b66434e7127d341fd394ca02a35",
+      "subjectHash": "283c03da096bacb580afaf0a72c49d18235660645cba8b95fe19eeb976961fb0"
     }
   },
   "freshnessClaims": [
     {
       "id": "repository-source-livekit-mic-post-merge-correction-final",
       "status": "CURRENT",
-      "observedAt": "2026-08-11T07:00:00Z",
-      "expiresAt": "2026-08-12T07:00:00Z",
-      "evidenceSourceId": "livekit-mic-post-merge-correction-canonical-owner-registry-source-freeze-20260811-0700",
+      "observedAt": "2026-08-11T07:15:00Z",
+      "expiresAt": "2026-08-12T07:15:00Z",
+      "evidenceSourceId": "livekit-mic-post-merge-correction-final-review-source-freeze-20260811-0715",
       "evidenceMode": "local-offline-and-github-read-only",
       "factsCovered": ["repository.active-implementation.immutable-synchronized-source"],
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "5a2984cf130e69d2845adc8b115a851b10ea3447",
-      "subjectTree": "6c226d05afc76c7fb087d7e4df7147e99d8516fc"
+      "subjectHead": "2b473e0c77a3a78cba7251518d5f8c590b4526c9",
+      "subjectTree": "d1d36f30b9571a07f25e5aa64dc26d8932225a37"
     },
     {
       "id": "repository-source-s0-exact-closure-reuse-final",
@@ -668,7 +668,7 @@
       "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
     }
   ],
-  "openImplementationPrs": [{"number": 210, "branch": "codex/d2a-livekit-mic-post-merge-review-correction", "head": "5a2984cf130e69d2845adc8b115a851b10ea3447", "state": "open-draft-current", "disposition": "complete-exact-review-ci-and-protected-merge"}],
+  "openImplementationPrs": [{"number": 210, "branch": "codex/d2a-livekit-mic-post-merge-review-correction", "head": "2b473e0c77a3a78cba7251518d5f8c590b4526c9", "state": "open-draft-current", "disposition": "complete-exact-review-ci-and-protected-merge"}],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -755,7 +755,7 @@
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206"],
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_chilly-chat-call-lifecycle_LIVEKIT_MIC_CORRECTION_EXACT_SOURCE_BOUND_FORMAL_REVIEW_D2A_FROZEN",
     "nextActions": [
-      "Keep D2A frozen while draft PR #210 immutable source 5a2984cf130e69d2845adc8b115a851b10ea3447 tree 6c226d05afc76c7fb087d7e4df7147e99d8516fc completes repository-owned exact-head review, final Phase 1 CI, and protected merge.",
+      "Keep D2A frozen while draft PR #210 immutable source 2b473e0c77a3a78cba7251518d5f8c590b4526c9 tree d1d36f30b9571a07f25e5aa64dc26d8932225a37 completes repository-owned exact-head review, final Phase 1 CI, and protected merge.",
       "Preserve the bounded PR #210 correction, which fixes all five internally validated PR #194 findings plus exact-review and CI defects without package, native, database, provider, build, OTA, or release changes.",
       "After that correction, resume D2A only for release-critical execution, create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -771,9 +771,34 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T07:00:00Z",
-  "freshnessDeadline": "2026-08-12T07:00:00Z",
+  "timestamp": "2026-08-11T07:16:00Z",
+  "freshnessDeadline": "2026-08-12T07:15:00Z",
   "evidenceSources": [
+    {
+      "id": "livekit-mic-post-merge-correction-final-review-source-freeze-20260811-0715",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction plus exact-head review corrections for non-authority option stability cleanup authority revalidation and predecessor timeout recovery",
+        "durable room-user media-write coordination preserves the unresolved predecessor after bounded timeout so later writers cannot bypass a stale in-flight write",
+        "replacement initialization remains reconnecting and warning-bound until durable membership converges and a heartbeat proves recovery",
+        "stable commit-phase session authority and monotonic terminal state prevent stale writers cleanup and transaction resurrection while ordinary background-audio option commits preserve the active room",
+        "native camera and microphone permission denial remains separate from recoverable durable membership reconciliation warning and Settings eligibility",
+        "whole mounted hook execution passes 52 of 52 exact source contract passes 5 of 5 and all 23 required negative-control mutants are rejected",
+        "active-task and exact-head owner-registry suites pass 73 of 73 with exact successor and drift-negative coverage",
+        "repository semantics changed-file lint contract current-truth and git diff validation pass; exact-head Phase 1 TypeScript remains mandatory",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:15:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "2b473e0c77a3a78cba7251518d5f8c590b4526c9",
+      "subjectHead": "2b473e0c77a3a78cba7251518d5f8c590b4526c9",
+      "subjectTree": "d1d36f30b9571a07f25e5aa64dc26d8932225a37"
+    },
     {
       "id": "livekit-mic-post-merge-correction-canonical-owner-registry-source-freeze-20260811-0700",
       "mode": "local-offline-and-github-read-only",
