@@ -10,13 +10,14 @@ import {
   validateStructuredBinding,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
-import { renderCurrentState, stableJson, validateProofTierStatuses, verifyCompletedImplementationMergeIdentity } from "../../scripts/assurance/lib.mjs";
+import { renderCurrentState, stableJson, validateProofTierStatuses, verifyCommittedClaimEvidence, verifyCompletedImplementationMergeIdentity } from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
 const registry = read("config/assurance/feature-registry-v1.json");
 const allowlist = read("config/assurance/command-allowlist-v1.json");
 const gateCatalog = read("config/assurance/gate-catalog-v1.json");
+const currentTruthContract = read("config/assurance/current-truth-contract-v1.json");
 const e0Feature = registry.features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
 const callFeature = registry.features.find(({ featureId }) => featureId === "chilly-chat-call-lifecycle");
 const creatorFeature = registry.features.find(({ featureId }) => featureId === "creator-money-ledger");
@@ -558,7 +559,7 @@ test("a completed binding is not an active task and no override can revive it", 
     currentTruth: unrelatedSentinelTruth,
     protectedMainTruth: unrelatedSentinelTruth,
     featureId: completedBinding.featureId
-  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"]);
+  }).findings, ["ACTIVE_TASK_NONE"], "exact protected tombstones keep the historical incidents visible without reviving their blocker");
   const assuranceBootstrapBinding = {
     ...completedBinding,
     implementationBranch: "codex/assurance-codex-security-scan-reliability-s0"
@@ -857,57 +858,67 @@ test("canonical rendering exposes every recorded proof-tier status separately", 
   assert.equal(rendered.includes("METADATA_BOUNDARY_CLEAR"), false);
 });
 
-test("protected D2A bootstrap is exact, unique, deterministic, and opens no build authority", () => {
-  const d2aTruth = structuredClone(canonicalTruth);
-  d2aTruth.lateReviewSentinels = [];
-  d2aTruth.assuranceProgram.active = "D2A_RELEASE_CRITICAL_EXECUTION_chilly-chat-call-lifecycle_PR212_ADMITTED";
-  const d2a = d2aTruth.activeTaskBinding;
-  const expectedBody = ownerBootstrapAuthorizationCommentBody(d2a);
+test("protected legacy correction bootstrap is exact, unique, deterministic, freezes D2A, and opens no build authority", () => {
+  const correctionTruth = structuredClone(canonicalTruth);
+  const correction = correctionTruth.activeTaskBinding;
+  const expectedBody = ownerBootstrapAuthorizationCommentBody(correction);
   const ownerBootstrapAuthorizationObservation = {
-    commentId: d2a.ownerBootstrapAuthorization.commentId,
-    author: d2a.ownerBootstrapAuthorization.author,
-    authorAssociation: d2a.ownerBootstrapAuthorization.authorAssociation,
+    commentId: correction.ownerBootstrapAuthorization.commentId,
+    author: correction.ownerBootstrapAuthorization.author,
+    authorAssociation: correction.ownerBootstrapAuthorization.authorAssociation,
     body: expectedBody,
-    createdAt: d2a.ownerBootstrapAuthorization.createdAt,
-    updatedAt: d2a.ownerBootstrapAuthorization.updatedAt,
-    issueUrl: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${d2a.implementationPr}`
+    createdAt: correction.ownerBootstrapAuthorization.createdAt,
+    updatedAt: correction.ownerBootstrapAuthorization.updatedAt,
+    issueUrl: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${correction.implementationPr}`
   };
   const protectedOld = structuredClone(canonicalTruth);
   protectedOld.activeTaskBinding = binding;
-  const d2aFacts = {
+  const correctionFacts = {
     ...facts,
-    currentTruth: d2aTruth,
+    currentTruth: correctionTruth,
     protectedMainTruth: protectedOld,
     identity: {
       ...identity,
-      branch: d2a.implementationBranch,
-      head: d2a.currentImplementationHead,
-      tree: d2a.currentImplementationTree
+      branch: correction.implementationBranch,
+      head: correction.currentImplementationHead,
+      tree: correction.currentImplementationTree
     },
     implementationObservations: {
-      remoteHead: d2a.currentImplementationHead,
-      immutableTree: d2a.immutableSourceTree,
-      currentTree: d2a.currentImplementationTree,
+      remoteHead: correction.currentImplementationHead,
+      immutableTree: correction.immutableSourceTree,
+      currentTree: correction.currentImplementationTree,
       immutableSourceIsAncestor: true,
-      providerPrHead: d2a.currentImplementationHead
+      providerPrHead: correction.currentImplementationHead
     },
     ownerBootstrapAuthorizationObservation
   };
-  const packets = [0, 1, 2].map(() => activeTask({ ...d2aFacts, featureId: "chilly-chat-call-lifecycle" }));
+  const packets = [0, 1, 2].map(() => activeTask({ ...correctionFacts, featureId: "chilly-chat-call-lifecycle" }));
   assert.equal(packets.every(({ ok }) => ok), true, packets.flatMap(({ findings = [] }) => findings).join(","));
   assert.equal(new Set(packets.map(({ packet }) => stableJson(packet))).size, 1, "packet generation is byte-identical 3/3");
   assert.equal(packets[0].packet.authority.contractId, "current-truth-record-v1");
-  assert.equal(packets[0].packet.implementation.pr, 212);
+  assert.equal(packets[0].packet.implementation.pr, 214);
+  assert.equal(packets[0].packet.implementation.branch, "codex/d2a-legacy-webrtc-first-track-renegotiation-correction");
   assert.equal(packets[0].packet.activeBlockers.some(({ freshnessClass, status }) => freshnessClass === "PROVIDER_CRITICAL" && status === "STALE_BLOCKED"), true);
-  assert.equal(d2aTruth.d2aMicrophoneCorrectionBinding.mayProceed.buildOrOta, false);
-  assert.equal(d2aTruth.d2aMicrophoneCorrectionBinding.mayProceed.providerOrProductionMutation, false);
-  assert.deepEqual(activeTask({ ...d2aFacts, featureId: "creator-money-ledger" }).findings, ["FEATURE_OVERRIDE_CONFLICT"]);
+  assert.deepEqual(correctionTruth.d2aMicrophoneCorrectionBinding.preservedD2A, {
+    implementationPr: 212,
+    head: "4f5fa3937ac506bcd3626d15a2815839df620789",
+    tree: "96795e544dc9d41f06086f248576d38f92d3be9a",
+    state: "OPEN_DRAFT_BLOCKED_PRODUCT_P1",
+    finding: "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS"
+  });
+  assert.equal(correctionTruth.d2aMicrophoneCorrectionBinding.mayProceed.d2aResume, false);
+  assert.equal(correctionTruth.d2aMicrophoneCorrectionBinding.mayProceed.buildOrOta, false);
+  assert.equal(correctionTruth.d2aMicrophoneCorrectionBinding.mayProceed.providerOrProductionMutation, false);
+  assert.equal(correctionTruth.lateReviewResolutionTombstones.some(({ prNumber }) => prNumber === 194), true);
+  assert.equal(correctionTruth.lateReviewResolutionTombstones.some(({ prNumber }) => prNumber === 195), true);
+  assert.deepEqual(activeTask({ ...correctionFacts, featureId: "creator-money-ledger" }).findings, ["FEATURE_OVERRIDE_CONFLICT"]);
   for (const branch of [
+    "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
     "codex/d2a-livekit-mic-membership-convergence-correction",
     "codex/d2a-livekit-mic-post-merge-review-correction",
     "codex/unrelated-next"
   ]) {
-    assert.equal(activeTask({ ...d2aFacts, identity: { ...d2aFacts.identity, branch } }).ok, false, `${branch} remains ineligible`);
+    assert.equal(activeTask({ ...correctionFacts, identity: { ...correctionFacts.identity, branch } }).ok, false, `${branch} remains ineligible`);
   }
 
   for (const mutate of [
@@ -916,14 +927,35 @@ test("protected D2A bootstrap is exact, unique, deterministic, and opens no buil
     (candidate) => { candidate.activeTaskBinding.currentImplementationHead = "f".repeat(40); },
     (candidate) => { candidate.activeTaskBinding.currentImplementationTree = "e".repeat(40); }
   ]) {
-    const forged = structuredClone(d2aTruth);
+    const forged = structuredClone(correctionTruth);
     mutate(forged);
-    assert.equal(activeTask({ ...d2aFacts, currentTruth: forged }).ok, false);
+    assert.equal(activeTask({ ...correctionFacts, currentTruth: forged }).ok, false);
   }
   assert.equal(activeTask({
-    ...d2aFacts,
+    ...correctionFacts,
     ownerBootstrapAuthorizationObservation: { ...ownerBootstrapAuthorizationObservation, body: `${expectedBody}\nsubstitution` }
   }).ok, false, "mismatched Owner comment fails");
+});
+
+test("legacy correction repository-source admission is exact and fails closed on tuple substitution", () => {
+  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-admission");
+  const source = canonicalTruth.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
+  const verify = (candidate) => verifyCommittedClaimEvidence({
+    claim,
+    source: candidate,
+    factRegistry: currentTruthContract.freshness.factRegistry
+  });
+  assert.equal(verify(source), true);
+  for (const [field, value] of [
+    ["implementationPr", 999],
+    ["implementationBranch", "codex/unrelated"],
+    ["sourceCommit", "f".repeat(40)],
+    ["subjectTree", "e".repeat(40)],
+    ["protectedAdmissionPr", 999],
+    ["exactExternalSourcePolicy", "UNRELATED"]
+  ]) {
+    assert.equal(verify({ ...source, [field]: value }), false, field);
+  }
 });
 
 test("active-task CLI rejects caller-selected diff bases", () => {
