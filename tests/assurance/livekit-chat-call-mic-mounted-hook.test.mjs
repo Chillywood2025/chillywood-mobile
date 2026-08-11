@@ -236,6 +236,31 @@ test("heartbeat support: replacement cannot become live until a timed-out same-r
   assert.equal(harness.getResult().micEnabled, true);
 });
 
+test("heartbeat support: timeout quarantine propagates across three queued same-row writers", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const oldHeartbeat = runtime.deferTouch();
+  await harness.fireHeartbeat();
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room created");
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+    mediaActivationSerial: 1,
+  }));
+  const touchCountWhileRootBlocked = runtime.membershipTouches.length;
+  await harness.fireMediaWriteTimeout();
+  await harness.flush(48);
+  assert.equal(runtime.membershipTouches.length, touchCountWhileRootBlocked);
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  oldHeartbeat.resolve();
+  await waitFor(harness, () => runtime.durableMic === true, "latest queued writer converged after root drained");
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(runtime.membershipTouches.at(-1).micEnabled, true);
+});
+
 test("heartbeat support: deferred reconciliation writes the restored state after compensated failure", async (t) => {
   const { harness, runtime } = await mountCase(t);
   const nativeGate = runtime.deferNative();
@@ -262,6 +287,23 @@ test("matrix 7: an AppState media write cannot race a strict toggle", async (t) 
   assert.equal(await settleOperation(toggle, harness), true);
   await harness.flush(48);
   assert.equal(runtime.membershipTouches.at(-1).micEnabled, false);
+});
+
+test("AppState support: native reconciliation escalation is not lost inside a running heartbeat", async (t) => {
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  const { harness, runtime } = await mountCase(t, { initialMic: true }, hookOptions);
+  const heartbeatGate = runtime.deferTouch();
+  await harness.fireHeartbeat();
+  const nativeCallCount = runtime.micCalls.length;
+  await harness.fireAppState("background");
+  assert.equal(runtime.micCalls.length, nativeCallCount);
+  heartbeatGate.resolve();
+  await waitFor(harness, () => runtime.micCalls.at(-1) === false, "background native reconciliation ran");
+  await waitFor(harness, () => runtime.durableMic === false, "background durable reconciliation ran");
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(harness.getResult().channelState, "reconnecting");
 });
 
 test("matrix 8: native-audio activation reconciliation cannot race a strict toggle", async (t) => {

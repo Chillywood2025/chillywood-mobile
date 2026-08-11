@@ -31,7 +31,7 @@
     ]
   },
   "corrections": {
-    "writeSerialization": "DURABLE_ROW_QUEUE_WITH_STRICT_LEASE_BOUNDED_PREDECESSOR_DRAIN_AND_LATEST_STATE_RECOMPUTATION",
+    "writeSerialization": "DURABLE_ROW_QUEUE_WITH_STRICT_LEASE_BOUNDED_PREDECESSOR_DRAIN_PROPAGATED_TIMEOUT_QUARANTINE_AND_LATEST_STATE_RECOMPUTATION",
     "sessionAuthority": "COMMITTED_GENERATION_STABLE_AUTHORITY_AND_LIVEKIT_ROOM_IDENTITY",
     "renderPurity": "SESSION_GENERATION_ADVANCES_ONLY_IN_LAYOUT_EFFECT_COMMIT_PHASE",
     "permissionState": "NATIVE_PERMISSION_STATE_SEPARATE_FROM_OPERATIONAL_RECONCILIATION",
@@ -39,10 +39,10 @@
   },
   "focusedResults": {
     "mountedHook": {
-      "passed": 52,
+      "passed": 54,
       "failed": 0,
       "requiredMatrixPassed": 38,
-      "supportCasesPassed": 13,
+      "supportCasesPassed": 15,
       "t2ContractCasesPassed": 1
     },
     "sourceContract": {
@@ -50,7 +50,7 @@
       "failed": 0
     },
     "negativeControls": {
-      "passed": 23,
+      "passed": 25,
       "failed": 0
     },
     "typescript": "PASS",
@@ -64,11 +64,11 @@
     "T4": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE"
   },
   "digests": {
-    "contractSha256": "ee03eed1e37c875fda63bcf1a4d4a376465ff2cf3d03ad42a43dfb0ae78a0324",
-    "hookSha256": "9a7412017836ed9b12c8b18a1e9593a5e2259fc66a7d2c1fee069ee0998e12ea",
-    "mountedTestSha256": "30825955b104a1d38fe47129b539e9f9c41fd6f45f9f0c3a7b7d8adf3b44c084",
+    "contractSha256": "319a9a46e2debd7286a9a2580ff540c3f97ed3136a09e78f8f985982d396f5e1",
+    "hookSha256": "57fe6f23dbc0c76d93e540c85174dd32b80fb1ddcb6c11110ece25b0ad5d387c",
+    "mountedTestSha256": "6c6cb89ae849f781c3803d90b128c3a8b6ea1ae4155d37425edcc1b9bb21903d",
     "mountedHelperSha256": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
-    "sourceContractTestSha256": "0eba80b12f009c48226ec1e8237a9e9e311ccd7288b7a7bb1258f6c7f69410ae"
+    "sourceContractTestSha256": "6985d4cf53586125f5edf598966444e6bb55bf2d688e52c4f2c2072d4d06e692"
   },
   "exactHeadReviewCorrections": [
     "CLEANUP_BINDING_SCOPE_AND_TYPESCRIPT",
@@ -81,7 +81,9 @@
     "NON_AUTHORITY_BACKGROUND_AUDIO_UPDATE_PRESERVES_SESSION",
     "CLEANUP_REVALIDATES_DURABLE_AUTHORITY_AFTER_NATIVE_AWAIT",
     "TIMED_OUT_QUEUE_WAITER_PRESERVES_PREDECESSOR_QUARANTINE",
-    "INITIAL_DURABLE_DIVERGENCE_CANNOT_REPORT_LIVE"
+    "INITIAL_DURABLE_DIVERGENCE_CANNOT_REPORT_LIVE",
+    "TIMEOUT_QUARANTINE_PROPAGATES_ACROSS_SUCCESSOR_CHAIN",
+    "APPSTATE_NATIVE_RECONCILIATION_ESCALATION_IS_DRAINED"
   ],
   "nonInterference": {
     "providerCodexReview": "OPTIONAL_ADVISORY_NOT_REQUESTED",

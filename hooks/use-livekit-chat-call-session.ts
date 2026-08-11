@@ -413,9 +413,14 @@ export function useLiveKitChatCallSession({
     if (!binding.userId) return null;
     const predecessor = mediaWriteTailsRef.current.get(writeKey);
     let predecessorTimedOut = false;
+    let reservationReleased = false;
     let releaseReservation: () => void = () => {};
     const reservation = new Promise<void>((resolve) => {
-      releaseReservation = () => resolve();
+      releaseReservation = () => {
+        if (reservationReleased) return;
+        reservationReleased = true;
+        resolve();
+      };
     });
     mediaWriteTailsRef.current.set(writeKey, reservation);
     try {
@@ -440,13 +445,17 @@ export function useLiveKitChatCallSession({
     } catch {
       return null;
     } finally {
-      releaseReservation();
-      if (mediaWriteTailsRef.current.get(writeKey) === reservation) {
-        if (predecessorTimedOut && predecessor) {
+      const reservationIsTail = mediaWriteTailsRef.current.get(writeKey) === reservation;
+      if (predecessorTimedOut && predecessor) {
+        if (reservationIsTail) {
           mediaWriteTailsRef.current.set(writeKey, predecessor);
+          releaseReservation();
         } else {
-          mediaWriteTailsRef.current.delete(writeKey);
+          void predecessor.then(releaseReservation, releaseReservation);
         }
+      } else {
+        releaseReservation();
+        if (reservationIsTail) mediaWriteTailsRef.current.delete(writeKey);
       }
     }
   }, [isCommittedSessionCurrent, setReconciliationWarning]);
@@ -740,10 +749,17 @@ export function useLiveKitChatCallSession({
       reconcileNative,
     };
     request.promise = enqueueSessionMediaWrite(binding, async () => {
-      if (deferredMediaReconciliationRef.current === request) {
-        deferredMediaReconciliationRef.current = null;
+      let reconciled = false;
+      while (true) {
+        const reconcileNativeNow = request.reconcileNative;
+        request.reconcileNative = false;
+        reconciled = await reconcileLatestCommittedMedia(binding, reconcileNativeNow);
+        if (request.reconcileNative && isCommittedSessionCurrent(binding)) continue;
+        if (deferredMediaReconciliationRef.current === request) {
+          deferredMediaReconciliationRef.current = null;
+        }
+        return reconciled;
       }
-      return reconcileLatestCommittedMedia(binding, request.reconcileNative);
     }).then((result) => result === true);
     deferredMediaReconciliationRef.current = request;
     void request.promise.finally(() => {

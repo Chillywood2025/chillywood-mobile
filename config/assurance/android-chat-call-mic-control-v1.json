@@ -4,10 +4,10 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "9a7412017836ed9b12c8b18a1e9593a5e2259fc66a7d2c1fee069ee0998e12ea",
-    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "30825955b104a1d38fe47129b539e9f9c41fd6f45f9f0c3a7b7d8adf3b44c084",
+    "hooks/use-livekit-chat-call-session.ts": "57fe6f23dbc0c76d93e540c85174dd32b80fb1ddcb6c11110ece25b0ad5d387c",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "6c6cb89ae849f781c3803d90b128c3a8b6ea1ae4155d37425edcc1b9bb21903d",
     "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
-    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "0eba80b12f009c48226ec1e8237a9e9e311ccd7288b7a7bb1258f6c7f69410ae"
+    "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "6985d4cf53586125f5edf598966444e6bb55bf2d688e52c4f2c2072d4d06e692"
   },
   "sourceSlices": {
     "committed-session-layout-effect": {
@@ -20,7 +20,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const enqueueSessionMediaWrite",
       "end": "  const refreshParticipantViews",
-      "sha256": "52075cf5fbc68d04da8c347b52a8a714e2f5d82d95c225665e3e719727446871"
+      "sha256": "ffc222a17c93bf1b266766a5734bd43033d58676fe1fc3eeaf08aac628a3fc72"
     },
     "permission-reconciliation-separation": {
       "path": "hooks/use-livekit-chat-call-session.ts",
@@ -103,6 +103,8 @@
     "DISABLE_ERASES_PERMISSION_DENIAL",
     "STALE_CLEANUP_LEAVES_REPLACEMENT",
     "MEDIA_QUEUE_TIMEOUT_DROPS_PREDECESSOR",
+    "MEDIA_QUEUE_TIMEOUT_RELEASES_INTERMEDIATE_RESERVATION",
+    "NATIVE_RECONCILIATION_ESCALATION_DROPPED",
     "ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION",
     "STALE_CLEANUP_REUSES_DURABLE_SNAPSHOT",
     "INITIAL_CONVERGENCE_FAILURE_MARKS_LIVE"

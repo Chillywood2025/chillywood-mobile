@@ -62,7 +62,10 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.match(commitSlice, /sessionGenerationRef\.current = generation/u);
   assert.match(commitSlice, /committedSessionRef\.current = Object\.freeze/u);
   assert.match(schedulerSlice, /enqueueSessionMediaWrite\(binding/u);
-  assert.match(schedulerSlice, /return reconcileLatestCommittedMedia\(binding, request\.reconcileNative\)/u);
+  assert.match(schedulerSlice, /const reconcileNativeNow = request\.reconcileNative/u);
+  assert.match(schedulerSlice, /request\.reconcileNative = false/u);
+  assert.match(schedulerSlice, /reconciled = await reconcileLatestCommittedMedia\(binding, reconcileNativeNow\)/u);
+  assert.match(schedulerSlice, /if \(request\.reconcileNative && isCommittedSessionCurrent\(binding\)\) continue/u);
   assert.match(reconciliationSlice, /cameraRequestedRef\.current/u);
   assert.match(reconciliationSlice, /micRequestedRef\.current/u);
   assert.match(heartbeatSlice, /scheduleLatestMediaReconciliation\(false\)/u);
@@ -74,7 +77,8 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.match(candidate, /const writeKey = `\$\{binding\.normalizedRoomId\}:\$\{binding\.userId\}`/u);
   assert.match(candidate, /Promise\.race\(\[/u);
   assert.match(candidate, /MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS/u);
-  assert.match(candidate, /predecessorTimedOut && predecessor[\s\S]{0,120}mediaWriteTailsRef\.current\.set\(writeKey, predecessor\)/u);
+  assert.match(candidate, /predecessorTimedOut && predecessor[\s\S]{0,160}mediaWriteTailsRef\.current\.set\(writeKey, predecessor\)/u);
+  assert.match(candidate, /void predecessor\.then\(releaseReservation, releaseReservation\)/u);
   assert.doesNotMatch(candidate, /blockedMediaWriteKeysRef/u);
   assert.match(candidate, /if \(!isCommittedSessionCurrent\(binding\)\) return null;/u);
   assert.match(candidate, /current\.roomState === "terminal" && roomState !== "terminal"/u);
@@ -159,8 +163,8 @@ const mutants = [
     "void performMembershipMediaWrite(false, false); Promise.resolve(false).then((reconciled) => {",
   )],
   ["HEARTBEAT_QUEUES_STALE_MIC_VALUE", (value) => value.replace(
-    "return reconcileLatestCommittedMedia(binding, request.reconcileNative);",
-    "return performMembershipMediaWrite(false, false, \"active\", true, binding);",
+    "reconciled = await reconcileLatestCommittedMedia(binding, reconcileNativeNow);",
+    "reconciled = !!(await performMembershipMediaWrite(false, false, \"active\", true, binding));",
   )],
   ["PRODUCT_ROOM_OBJECT_EQUALITY_RESTORED", (value) => value.replace(
     "|| roomRef.current !== binding.liveKitRoom",
@@ -243,6 +247,14 @@ const mutants = [
   ["MEDIA_QUEUE_TIMEOUT_DROPS_PREDECESSOR", (value) => value.replace(
     "mediaWriteTailsRef.current.set(writeKey, predecessor);",
     "mediaWriteTailsRef.current.delete(writeKey);",
+  )],
+  ["MEDIA_QUEUE_TIMEOUT_RELEASES_INTERMEDIATE_RESERVATION", (value) => value.replace(
+    "void predecessor.then(releaseReservation, releaseReservation);",
+    "releaseReservation();",
+  )],
+  ["NATIVE_RECONCILIATION_ESCALATION_DROPPED", (value) => value.replace(
+    "if (request.reconcileNative && isCommittedSessionCurrent(binding)) continue;",
+    "if (false) continue;",
   )],
   ["ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION", (value) => value.replace(
     "    activateCommittedSession,\n    clearReconciliationWarning,",
