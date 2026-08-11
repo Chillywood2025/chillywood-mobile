@@ -16,7 +16,7 @@
     "requiredPhase1Checks": 13,
     "historicalIncidentsRetained": true
   },
-  "mainSha": "31087f37290f521d956e125e518f92c3c65a736e",
+  "mainSha": "595d7a489b86234be0731042103cbfe0d40e8e72",
   "latestMergedImplementationPr": {"number": 210, "state": "merged", "head": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d", "mergeSha": "31087f37290f521d956e125e518f92c3c65a736e", "title": "Resolve LiveKit microphone post-merge review findings"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -421,15 +421,15 @@
     "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
     "correctionOwner": "codex/assurance-active-task-and-claim-freshness-a1",
     "mayProceed": {
-      "formalReviews": false,
+      "formalReviews": true,
       "phase1Ci": true,
-      "merge": false,
-      "postMergeProductSuccessorRequired": true,
-      "d2aResume": false,
+      "merge": true,
+      "postMergeProductSuccessorRequired": false,
+      "d2aResume": true,
       "buildOrOta": false,
       "providerOrProductionMutation": false
     },
-    "state": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"
+    "state": "RESOLVED_BY_EXACT_SUCCESSOR_PR_205"
   },
   "d2aMicrophoneCorrectionBinding": {
     "implementationPr": 194,
@@ -483,56 +483,56 @@
       "phase1Ci": {"runId": 31470393389, "head": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d", "conclusion": "success", "jobs": "13/13"},
       "proofTiers": {"T0_REQUIREMENT": "REQUIREMENTS_CLEAR", "T1_SOURCE": "SOURCE_CLEAR", "T2_MODEL": "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION", "T3_INTEGRATION": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE"},
       "providerCodexReview": "OPTIONAL_ADVISORY_NOT_MERGE_AUTHORITY",
-      "d2a": "FROZEN_READY_NOT_RESUMED",
-      "state": "MERGED_SOURCE_MODEL_CLEAR_D2A_READY_NOT_RESUMED"
+      "d2a": "EXACT_SUCCESSOR_CLOSED_D2A_ADMITTED",
+      "state": "MERGED_SOURCE_MODEL_CLEAR_D2A_ADMITTED_RELEASE_CRITICAL_EXECUTION"
     },
-    "preservedD2A": {"head": "ebb0ac5e2dc6ba9005208b7e6b10474292e0972d", "tree": "c41a4d688e799483b67f35c956f1c95b273bf072", "state": "FROZEN_NOT_RESUMED"},
-    "mayProceed": {"formalReviews": false, "phase1Ci": true, "merge": false, "postMergeProductSuccessorRequired": true, "d2aResume": false, "buildOrOta": false, "providerOrProductionMutation": false},
-    "state": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW"
+    "preservedD2A": {"head": "87833399360e99f7ad630ebbb1c5643a57f1481f", "tree": "aadc47f810525d925b1a4a413d7ded1af581b678", "state": "SYNCHRONIZED_PUBLISHED_DRAFT_PR_212_ADMITTED"},
+    "mayProceed": {"formalReviews": true, "phase1Ci": true, "merge": true, "postMergeProductSuccessorRequired": false, "d2aResume": true, "buildOrOta": false, "providerOrProductionMutation": false},
+    "state": "RESOLVED_BY_EXACT_SUCCESSOR_PR_210"
   },
   "activeTaskBinding": {
     "schemaVersion": 1,
     "featureId": "chilly-chat-call-lifecycle",
-    "implementationPr": 210,
-    "implementationBranch": "codex/d2a-livekit-mic-post-merge-review-correction",
-    "implementationBindingId": "d2a-livekit-mic-post-merge-review-correction-pr210-v1",
-    "immutableSourceHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
-    "immutableSourceTree": "67ffe81173207d616f11d796d52df8e27f5fae85",
-    "currentImplementationHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
-    "currentImplementationTree": "67ffe81173207d616f11d796d52df8e27f5fae85",
-    "phase": "FORMAL_REVIEW",
-    "executionState": "LIVEKIT_MIC_POST_MERGE_CORRECTION_REVIEW_D2A_FROZEN",
+    "implementationPr": 212,
+    "implementationBranch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+    "implementationBindingId": "d2a-release-critical-native-lifecycle-pr-212-v1",
+    "immutableSourceHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+    "immutableSourceTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
+    "currentImplementationHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+    "currentImplementationTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
+    "phase": "IMPLEMENTATION",
+    "executionState": "D2A_RELEASE_CRITICAL_EXECUTION",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "livekit-mic-post-merge-correction-final-bounded-operation-source-freeze-20260811-0746", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-implementation.immutable-synchronized-source"], "subjectHead": "ad9a6882b455060ae9a584b32847d9a450d00beb", "subjectTree": "67ffe81173207d616f11d796d52df8e27f5fae85"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "d2a-release-critical-admission-source-87833399360e", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-implementation.immutable-synchronized-source"], "subjectHead": "87833399360e99f7ad630ebbb1c5643a57f1481f", "subjectTree": "aadc47f810525d925b1a4a413d7ded1af581b678"}],
     "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
     "ownerBootstrapAuthorization": {
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
-      "prNumber": 210,
-      "commentId": 5250432270,
+      "prNumber": 212,
+      "commentId": 5251285787,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-11T07:46:17Z",
-      "updatedAt": "2026-08-11T07:46:17Z",
-      "bodySha256": "bd74fbc3313fd3403bbd7043379c49ce841f7de3bbe7e42ad82f1924767f12be",
-      "subjectHash": "06dcaed4f49b7363280166e7f683f5be69b0bc81d6092aa8be52c6f05fd7a1b5"
+      "createdAt": "2026-08-11T09:19:29Z",
+      "updatedAt": "2026-08-11T09:19:29Z",
+      "bodySha256": "522dcd51c5f341a2f071c4cf7737bbc04c533f304640952833115555c53c636d",
+      "subjectHash": "ec44ad5ae886c365fe29d0c3e1e32af698df2875160f060b03886d103c6cf15f"
     }
   },
   "freshnessClaims": [
     {
-      "id": "repository-source-livekit-mic-post-merge-correction-final",
+      "id": "repository-source-d2a-release-critical-admission",
       "status": "CURRENT",
-      "observedAt": "2026-08-11T07:46:00Z",
-      "expiresAt": "2026-08-12T07:46:00Z",
-      "evidenceSourceId": "livekit-mic-post-merge-correction-final-bounded-operation-source-freeze-20260811-0746",
-      "evidenceMode": "local-offline-and-github-read-only",
+      "observedAt": "2026-08-11T09:20:00Z",
+      "expiresAt": "2026-08-12T09:20:00Z",
+      "evidenceSourceId": "d2a-release-critical-admission-source-87833399360e",
+      "evidenceMode": "git-read-only",
       "factsCovered": ["repository.active-implementation.immutable-synchronized-source"],
       "freshnessClass": "REPOSITORY_SOURCE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "ad9a6882b455060ae9a584b32847d9a450d00beb",
-      "subjectTree": "67ffe81173207d616f11d796d52df8e27f5fae85"
+      "subjectHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+      "subjectTree": "aadc47f810525d925b1a4a413d7ded1af581b678"
     },
     {
       "id": "repository-source-s0-exact-closure-reuse-final",
@@ -689,7 +689,99 @@
       "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
     }
   ],
-  "openImplementationPrs": [],
+  "lateReviewResolutionTombstones": [
+    {
+      "schemaVersion": 1,
+      "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 195,
+      "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7",
+      "findingSetHash": "6aa0de5907c7b504712a502b3072fcd06dd026801425aa5ff6912a67ffcb6b10",
+      "resolutionEvidence": {
+        "schemaVersion": 1,
+        "successorPr": 205,
+        "successorBranch": "codex/assurance-active-task-and-claim-freshness-a1",
+        "successorHead": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
+        "successorTree": "2d22874811e87af621a7b9d1ca69891b005c780d",
+        "successorMergeSha": "a9bd887606f74996a9f5920e6fad922e7f20598b",
+        "successorMergedAt": "2026-08-10T04:17:26Z",
+        "correctedSourceIds": [3744694410, 3744694414, 3744694418],
+        "resolvedThreadIds": ["PRRT_kwDORRwZUc6Xp4BK", "PRRT_kwDORRwZUc6Xp4BO", "PRRT_kwDORRwZUc6Xp4BQ"],
+        "allThreadsResolved": true,
+        "threadDisposition": "RESOLVED_BY_EXACT_SUCCESSOR_HISTORICAL_THREAD_STATE_RETAINED",
+        "githubThreadResolutionReadbackAt": "2026-08-11T09:20:00Z",
+        "exactHeadReviewedCommit": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
+        "exactHeadReviewedTree": "2d22874811e87af621a7b9d1ca69891b005c780d",
+        "exactHeadReviewReceiptHash": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c",
+        "exactHeadCheckRunId": 31354601386,
+        "exactHeadReviewCompletedAt": "2026-08-10T04:16:26Z",
+        "reviewClassification": "REPOSITORY_OWNED_EXACT_HEAD",
+        "repositoryReviewP0": 0,
+        "repositoryReviewP1": 0,
+        "repositoryReviewBlockingP2": 0,
+        "phase1RunId": 31354601386,
+        "phase1Head": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
+        "phase1Conclusion": "success",
+        "phase1JobsPassed": 13,
+        "phase1JobsTotal": 13,
+        "correctionEvidenceHash": "6f90656aa9846dd20712929cbb141269ce9085ab35a34aad62e64cfd784d405d",
+        "dispositionEvidenceHash": "006cc68fbdfdfd9d47d1ec97f8fbf055edea07dbced35ae07a76fd122ddfa331",
+        "verificationSubjectHash": "5a7ef2fec9a9f5f4f5973911906ae8464458946d1c96b11ce95f335bb0eaaed7",
+        "repositoryVerificationHash": "1959084741e0b98a684af0bd04ae503c4fda0ac218266f320d4c3b911d0d9a07",
+        "completedAt": "2026-08-11T09:20:00Z"
+      },
+      "verificationSubjectHash": "5a7ef2fec9a9f5f4f5973911906ae8464458946d1c96b11ce95f335bb0eaaed7",
+      "protectedAdmission": {"prNumber": 213, "branch": "codex/d2a-release-critical-active-task-admission"},
+      "admissionPolicyId": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2",
+      "tombstoneHash": "f88364ab1d7a228473e333499e878a9e676deb97438eeec76828f1211972e9f1"
+    },
+    {
+      "schemaVersion": 1,
+      "repository": "Chillywood2025/chillywood-mobile",
+      "prNumber": 194,
+      "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446",
+      "findingSetHash": "9474ccab70621250acc32aaa8bb765f0aba7423b44fa5fd073d2318f12701c99",
+      "resolutionEvidence": {
+        "schemaVersion": 1,
+        "successorPr": 210,
+        "successorBranch": "codex/d2a-livekit-mic-post-merge-review-correction",
+        "successorHead": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d",
+        "successorTree": "820aae7845919268b3ed489cfa4ed2fddecdbdae",
+        "successorMergeSha": "31087f37290f521d956e125e518f92c3c65a736e",
+        "successorMergedAt": "2026-08-11T07:53:01Z",
+        "correctedSourceIds": [3744746865, 3744746868, 3744746869, 3744746872, 3744746873],
+        "resolvedThreadIds": [],
+        "allThreadsResolved": false,
+        "threadDisposition": "RESOLVED_BY_EXACT_SUCCESSOR_HISTORICAL_THREAD_STATE_RETAINED",
+        "githubThreadResolutionReadbackAt": "2026-08-11T09:20:00Z",
+        "exactHeadReviewedCommit": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d",
+        "exactHeadReviewedTree": "820aae7845919268b3ed489cfa4ed2fddecdbdae",
+        "exactHeadReviewReceiptHash": "4b4da6c0b2c359348098a7f0167dd0d739e541a3b643be8e7c0c6aabe9fa6c96",
+        "exactHeadCheckRunId": 31470393389,
+        "exactHeadReviewCompletedAt": "2026-08-11T07:46:00Z",
+        "reviewClassification": "REPOSITORY_OWNED_EXACT_HEAD",
+        "repositoryReviewP0": 0,
+        "repositoryReviewP1": 0,
+        "repositoryReviewBlockingP2": 0,
+        "phase1RunId": 31470393389,
+        "phase1Head": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d",
+        "phase1Conclusion": "success",
+        "phase1JobsPassed": 13,
+        "phase1JobsTotal": 13,
+        "correctionEvidenceHash": "dd39c305088a0231b685ed56f6215aea29c19edf352553ee2601a42d230a8a08",
+        "dispositionEvidenceHash": "e0c90ba93d410c3ad856e462d932850218afad565e55d0e60c38be491d081327",
+        "verificationSubjectHash": "d73ec3beb4fb28c14a11cb75201160924bf0b8844e5c72e3dae152832c91c923",
+        "repositoryVerificationHash": "db2b28c48f3375c7731df5c4c8e7b8d5813dc70836dd8d43f31a2ad581f5501b",
+        "completedAt": "2026-08-11T09:20:00Z"
+      },
+      "verificationSubjectHash": "d73ec3beb4fb28c14a11cb75201160924bf0b8844e5c72e3dae152832c91c923",
+      "protectedAdmission": {"prNumber": 213, "branch": "codex/d2a-release-critical-active-task-admission"},
+      "admissionPolicyId": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2",
+      "tombstoneHash": "842c2a2559a1d09f50320ff1d78c61cb46ad5e3f4d2af424db50d1b4bdc3b0e5"
+    }
+  ],
+  "openImplementationPrs": [
+    {"number": 212, "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation", "head": "87833399360e99f7ad630ebbb1c5643a57f1481f", "state": "open-draft-current", "disposition": "implementation", "featureId": "chilly-chat-call-lifecycle"}
+  ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -774,11 +866,11 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210"],
-    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_chilly-chat-call-lifecycle_LIVEKIT_MIC_POST_MERGE_CORRECTION_PR210_MERGED_SOURCE_MODEL_CLEAR_D2A_READY_NOT_RESUMED",
+    "active": "D2A_RELEASE_CRITICAL_EXECUTION_chilly-chat-call-lifecycle_PR212_ADMITTED",
     "nextActions": [
-      "Keep D2A frozen in this synchronization; PR #210 merged at 31087f37290f521d956e125e518f92c3c65a736e after repository-owned exact-head review P0=0/P1=0 and Phase 1 run 31470393389 passed 13/13.",
-      "Preserve the merged bounded PR #210 correction, which fixes all five internally validated PR #194 findings without package, native, database, provider, build, OTA, or release changes; T0-T2 are clear and T3 remains BLOCKED_INTERNAL pending release-critical native execution.",
-      "Next, resume D2A only for release-critical execution: create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.",
+      "D2A PR #212 is admitted from exact synchronized source 87833399360e99f7ad630ebbb1c5643a57f1481f tree aadc47f810525d925b1a4a413d7ded1af581b678 after protected admission PR #213 merges.",
+      "Execute only local release-critical Android generated-native, lifecycle, and current LiveKit microphone proof; preserve PR #210 product behavior and the historical PR #194 and PR #195 incident records.",
+      "Do not start either internal signed candidate until D2A merges and the post-D2A three-file current-truth authorization merges; do not release publicly.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
@@ -788,13 +880,34 @@
     ],
     "prohibitions": [
       "Do not resume Cognitive LiveKit activation.",
-      "Do not create a release or distribution build, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, or release publicly."
+      "Do not create a release or distribution build before D2A and its post-merge truth authorization, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, or release publicly."
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T07:56:00Z",
-  "freshnessDeadline": "2026-08-12T07:56:00Z",
+  "timestamp": "2026-08-11T09:20:00Z",
+  "freshnessDeadline": "2026-08-12T09:20:00Z",
   "evidenceSources": [
+    {
+      "id": "d2a-release-critical-admission-source-87833399360e",
+      "mode": "git-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "D2A PR #212 exact synchronized source 87833399360e99f7ad630ebbb1c5643a57f1481f tree aadc47f810525d925b1a4a413d7ded1af581b678 is the sole admitted implementation source",
+        "protected admission PR #213 authorizes release-critical local execution only; native builds and public release remain denied until their later exact gates"
+      ],
+      "observedAt": "2026-08-11T09:20:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+      "subjectHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+      "subjectTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
+      "exactExternalSourcePolicy": "D2A_PROTECTED_ADMISSION_PR_213_V1",
+      "implementationPr": 212,
+      "implementationBranch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+      "protectedAdmissionPr": 213
+    },
     {
       "id": "livekit-mic-post-merge-correction-final-bounded-operation-source-freeze-20260811-0746",
       "mode": "local-offline-and-github-read-only",

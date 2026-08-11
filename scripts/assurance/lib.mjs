@@ -384,15 +384,147 @@ export function lateReviewResolutionTombstoneHash(tombstone) {
   return sha256(stableValue(value));
 }
 
+export function lateReviewExactSuccessorCorrectionEvidenceHash(evidence) {
+  return sha256(stableValue({
+    schemaVersion: evidence?.schemaVersion ?? null,
+    successorPr: evidence?.successorPr ?? null,
+    successorBranch: evidence?.successorBranch ?? null,
+    successorHead: evidence?.successorHead ?? null,
+    successorTree: evidence?.successorTree ?? null,
+    successorMergeSha: evidence?.successorMergeSha ?? null,
+    successorMergedAt: evidence?.successorMergedAt ?? null,
+    exactHeadReviewedCommit: evidence?.exactHeadReviewedCommit ?? null,
+    exactHeadReviewedTree: evidence?.exactHeadReviewedTree ?? null,
+    exactHeadReviewReceiptHash: evidence?.exactHeadReviewReceiptHash ?? null,
+    exactHeadReviewCompletedAt: evidence?.exactHeadReviewCompletedAt ?? null,
+    reviewClassification: evidence?.reviewClassification ?? null,
+    repositoryReviewP0: evidence?.repositoryReviewP0 ?? null,
+    repositoryReviewP1: evidence?.repositoryReviewP1 ?? null,
+    repositoryReviewBlockingP2: evidence?.repositoryReviewBlockingP2 ?? null,
+    phase1RunId: evidence?.phase1RunId ?? null,
+    phase1Head: evidence?.phase1Head ?? null,
+    phase1Conclusion: evidence?.phase1Conclusion ?? null,
+    phase1JobsPassed: evidence?.phase1JobsPassed ?? null,
+    phase1JobsTotal: evidence?.phase1JobsTotal ?? null
+  }));
+}
+
+export function lateReviewExactSuccessorDispositionEvidenceHash(sentinel) {
+  return sha256(stableValue((sentinel?.findings ?? []).map((finding) => ({
+    sourceType: finding.sourceType,
+    sourceId: finding.sourceId,
+    bodyHash: finding.bodyHash,
+    severity: finding.severity,
+    threadId: finding.threadId ?? null,
+    historicalDisposition: finding.disposition,
+    historicalThreadResolutionState: finding.threadResolutionState,
+    closureDisposition: "RESOLVED_BY_EXACT_SUCCESSOR"
+  })).sort((left, right) => String(left.sourceId).localeCompare(String(right.sourceId)))));
+}
+
+export function lateReviewExactSuccessorRepositoryVerificationHash(sentinel) {
+  const evidence = sentinel?.resolutionEvidence ?? {};
+  return sha256(stableValue({
+    repository: sentinel?.repository ?? null,
+    prNumber: sentinel?.prNumber ?? null,
+    mergeSha: sentinel?.mergeSha ?? null,
+    verificationSubjectHash: evidence.verificationSubjectHash ?? null,
+    correctionEvidenceHash: evidence.correctionEvidenceHash ?? null,
+    dispositionEvidenceHash: evidence.dispositionEvidenceHash ?? null,
+    exactHeadReviewReceiptHash: evidence.exactHeadReviewReceiptHash ?? null,
+    phase1RunId: evidence.phase1RunId ?? null,
+    phase1Head: evidence.phase1Head ?? null,
+    phase1Conclusion: evidence.phase1Conclusion ?? null,
+    phase1JobsPassed: evidence.phase1JobsPassed ?? null,
+    phase1JobsTotal: evidence.phase1JobsTotal ?? null
+  }));
+}
+
+function lateReviewExactSuccessorResolutionValid(sentinel, tombstone) {
+  const evidence = tombstone?.resolutionEvidence;
+  const admission = tombstone?.protectedAdmission;
+  const exactSuccessor = ({
+    194: {
+      successorPr: 210,
+      successorBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
+      successorHead: "19c0b5eed34a03f33f48a955dbefc483e3d2d71d",
+      successorTree: "820aae7845919268b3ed489cfa4ed2fddecdbdae",
+      successorMergeSha: "31087f37290f521d956e125e518f92c3c65a736e",
+      exactHeadReviewReceiptHash: "4b4da6c0b2c359348098a7f0167dd0d739e541a3b643be8e7c0c6aabe9fa6c96",
+      phase1RunId: 31470393389
+    },
+    195: {
+      successorPr: 205,
+      successorBranch: "codex/assurance-active-task-and-claim-freshness-a1",
+      successorHead: "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
+      successorTree: "2d22874811e87af621a7b9d1ca69891b005c780d",
+      successorMergeSha: "a9bd887606f74996a9f5920e6fad922e7f20598b",
+      exactHeadReviewReceiptHash: "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c",
+      phase1RunId: 31354601386
+    }
+  })[sentinel?.prNumber];
+  const subject = { ...sentinel, resolutionEvidence: evidence };
+  const sourceIds = (sentinel?.findings ?? []).map(({ sourceId }) => sourceId).sort((left, right) => left - right);
+  const correctedSourceIds = Array.isArray(evidence?.correctedSourceIds) ? [...evidence.correctedSourceIds].sort((left, right) => left - right) : [];
+  const historicalThreadIds = (sentinel?.findings ?? []).map(({ threadId }) => threadId).filter(Boolean).sort();
+  const resolvedThreadIds = Array.isArray(evidence?.resolvedThreadIds) ? [...evidence.resolvedThreadIds].sort() : [];
+  const expectedResolvedThreadIds = sentinel?.prNumber === 195 ? historicalThreadIds : [];
+  const expectedAllThreadsResolved = sentinel?.prNumber === 195;
+  const reviewAt = new Date(evidence?.exactHeadReviewCompletedAt).valueOf();
+  const mergedAt = new Date(evidence?.successorMergedAt).valueOf();
+  const readbackAt = new Date(evidence?.githubThreadResolutionReadbackAt).valueOf();
+  const completedAt = new Date(evidence?.completedAt).valueOf();
+  return admission?.prNumber === 213
+    && admission?.branch === "codex/d2a-release-critical-active-task-admission"
+    && evidence?.reviewClassification === "REPOSITORY_OWNED_EXACT_HEAD"
+    && evidence?.repositoryReviewP0 === 0
+    && evidence?.repositoryReviewP1 === 0
+    && evidence?.repositoryReviewBlockingP2 === 0
+    && exactSuccessor !== undefined
+    && Object.entries(exactSuccessor).every(([field, expected]) => evidence?.[field] === expected)
+    && evidence?.schemaVersion === 1
+    && Number.isInteger(evidence?.successorPr)
+    && evidence.successorPr > 0
+    && evidence.successorBranch === lateReviewSuccessorCorrectionOwner(sentinel)
+    && gitShaPattern.test(evidence.successorHead ?? "")
+    && gitShaPattern.test(evidence.successorTree ?? "")
+    && gitShaPattern.test(evidence.successorMergeSha ?? "")
+    && evidence.exactHeadReviewedCommit === evidence.successorHead
+    && evidence.exactHeadReviewedTree === evidence.successorTree
+    && /^[0-9a-f]{64}$/u.test(evidence.exactHeadReviewReceiptHash ?? "")
+    && evidence.threadDisposition === "RESOLVED_BY_EXACT_SUCCESSOR_HISTORICAL_THREAD_STATE_RETAINED"
+    && evidence.allThreadsResolved === expectedAllThreadsResolved
+    && JSON.stringify(sourceIds) === JSON.stringify(correctedSourceIds)
+    && JSON.stringify(resolvedThreadIds) === JSON.stringify(expectedResolvedThreadIds)
+    && [reviewAt, mergedAt, readbackAt, completedAt].every(Number.isFinite)
+    && reviewAt <= mergedAt
+    && mergedAt <= readbackAt
+    && readbackAt <= completedAt
+    && Number.isInteger(evidence?.phase1RunId)
+    && evidence.phase1RunId > 0
+    && evidence.phase1Head === evidence.successorHead
+    && evidence.phase1Conclusion === "success"
+    && evidence.phase1JobsPassed === 13
+    && evidence.phase1JobsTotal === 13
+    && evidence.exactHeadCheckRunId === evidence.phase1RunId
+    && evidence.correctionEvidenceHash === lateReviewExactSuccessorCorrectionEvidenceHash(evidence)
+    && evidence.dispositionEvidenceHash === lateReviewExactSuccessorDispositionEvidenceHash(sentinel)
+    && evidence.repositoryVerificationHash === lateReviewExactSuccessorRepositoryVerificationHash(subject)
+    && lateReviewResolutionSubjectHash(subject) === tombstone.verificationSubjectHash;
+}
+
 export function lateReviewResolutionTombstoneValid(sentinel, tombstone) {
   if (!sentinel || !tombstone || tombstone.schemaVersion !== 1
     || tombstone.repository !== sentinel.repository
     || tombstone.prNumber !== sentinel.prNumber
     || tombstone.mergeSha !== sentinel.mergeSha
-    || tombstone.admissionPolicyId !== "EXACT_HEAD_PROTECTED_MAIN_V1"
     || tombstone.findingSetHash !== lateReviewFindingSetHash(sentinel.findings)
     || tombstone.verificationSubjectHash !== tombstone.resolutionEvidence?.verificationSubjectHash
     || tombstone.tombstoneHash !== lateReviewResolutionTombstoneHash(tombstone)) return false;
+  if (tombstone.admissionPolicyId === "EXACT_SUCCESSOR_PROTECTED_MAIN_V2") {
+    return lateReviewExactSuccessorResolutionValid(sentinel, tombstone);
+  }
+  if (tombstone.admissionPolicyId !== "EXACT_HEAD_PROTECTED_MAIN_V1") return false;
   const allowedOwners = lateReviewAllowedOwners(sentinel);
   const carrier = tombstone.admissionCarrier;
   const carrierLatestPushAt = new Date(carrier?.latestSourcePushAt).valueOf();
@@ -442,6 +574,22 @@ export function createLateReviewResolutionTombstone(resolvedSentinel, admissionC
     verificationSubjectHash: resolvedSentinel?.resolutionEvidence?.verificationSubjectHash,
     admissionCarrier: structuredClone(admissionCarrier),
     admissionPolicyId: "EXACT_HEAD_PROTECTED_MAIN_V1"
+  };
+  tombstone.tombstoneHash = lateReviewResolutionTombstoneHash(tombstone);
+  return tombstone;
+}
+
+export function createLateReviewExactSuccessorTombstone(resolvedSentinel, protectedAdmission) {
+  const tombstone = {
+    schemaVersion: 1,
+    repository: resolvedSentinel?.repository,
+    prNumber: resolvedSentinel?.prNumber,
+    mergeSha: resolvedSentinel?.mergeSha,
+    findingSetHash: lateReviewFindingSetHash(resolvedSentinel?.findings),
+    resolutionEvidence: structuredClone(resolvedSentinel?.resolutionEvidence),
+    verificationSubjectHash: resolvedSentinel?.resolutionEvidence?.verificationSubjectHash,
+    protectedAdmission: structuredClone(protectedAdmission),
+    admissionPolicyId: "EXACT_SUCCESSOR_PROTECTED_MAIN_V2"
   };
   tombstone.tombstoneHash = lateReviewResolutionTombstoneHash(tombstone);
   return tombstone;
@@ -499,7 +647,16 @@ function repositoryReadbackEvidenceBound({ claim, source, committedSource, requi
 export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
-    git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
+    const exactD2AAdmissionEvidence = source?.exactExternalSourcePolicy === "D2A_PROTECTED_ADMISSION_PR_213_V1"
+      && source.id === "d2a-release-critical-admission-source-87833399360e"
+      && source.sourceCommit === "87833399360e99f7ad630ebbb1c5643a57f1481f"
+      && source.subjectHead === source.sourceCommit
+      && source.subjectTree === "aadc47f810525d925b1a4a413d7ded1af581b678"
+      && source.implementationPr === 212
+      && source.implementationBranch === "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation"
+      && source.protectedAdmissionPr === 213
+      && git(["show-ref", "--verify", "--hash", "refs/remotes/origin/codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation"]) === source.sourceCommit;
+    if (!exactD2AAdmissionEvidence) git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
     if (claim?.freshnessClass === "REPOSITORY_SOURCE") {
       if (!/^[0-9a-f]{40}$/u.test(claim?.subjectHead ?? "")
         || !/^[0-9a-f]{40}$/u.test(claim?.subjectTree ?? "")
@@ -507,6 +664,22 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
         || source.subjectHead !== claim.subjectHead
         || source.subjectTree !== claim.subjectTree
         || git(["rev-parse", `${claim.subjectHead}^{tree}`]) !== claim.subjectTree) return false;
+    }
+    if (exactD2AAdmissionEvidence) {
+      const factsBound = Array.isArray(source.covers)
+        && claim.factsCovered.every((factId) => {
+          const entries = factRegistry.filter(({ factId: registered }) => registered === factId);
+          return entries.length === 1
+            && factRegistryEntryMatchesClaim(entries[0], claim)
+            && source.covers.includes(factId);
+        });
+      return claim.observedAt === source.observedAt
+        && source.mode === claim.evidenceMode
+        && source.freshnessClass === claim.freshnessClass
+        && source.authorityAllowed === claim.authorityAllowed
+        && source.platform === claim.platform
+        && source.provider === claim.provider
+        && factsBound;
     }
     const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
     const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
@@ -1414,7 +1587,8 @@ export function verifyCurrentTruthSynchronization({
   changedPaths,
   requiredChangedPaths,
   allowedChangedPaths,
-  bootstrapMerge
+  bootstrapMerge,
+  gitCommand = git
 }) {
   if (recordedMain === remoteMain) return { ok: true, mode: "exact-main" };
   const required = new Set(requiredChangedPaths);
@@ -1431,13 +1605,38 @@ export function verifyCurrentTruthSynchronization({
     && parentShapeMatches
     && JSON.stringify([...changed].sort()) === JSON.stringify([...bootstrapMerge.changedPaths].sort())
   );
+  const successorCandidates = (bootstrapMerge?.successors ?? []).filter((candidate) => candidate
+    && Number.isInteger(candidate.prNumber)
+    && candidate.prNumber > 0
+    && isValidGitBranchName(candidate.branch)
+    && gitShaPattern.test(candidate.firstParent ?? "")
+    && gitShaPattern.test(candidate.requiredSecondParentAncestor ?? "")
+    && candidate.firstParent === recordedMain
+    && parentShapeMatches
+    && JSON.stringify([...changed].sort()) === JSON.stringify([...(candidate.changedPaths ?? [])].sort()));
+  let successorBootstrapSynchronization = false;
+  if (successorCandidates.length === 1) {
+    const candidate = successorCandidates[0];
+    try {
+      const subject = gitCommand(["show", "-s", "--format=%s", remoteMain]);
+      gitCommand(["merge-base", "--is-ancestor", candidate.requiredSecondParentAncestor, parents[1]]);
+      successorBootstrapSynchronization = subject === `Merge pull request #${candidate.prNumber} from Chillywood2025/${candidate.branch}`;
+    } catch {
+      successorBootstrapSynchronization = false;
+    }
+  }
   return {
-    ok: normalSynchronization || bootstrapSynchronization,
-    mode: bootstrapSynchronization ? "bootstrap-synchronization-merge" : "synchronization-merge",
+    ok: normalSynchronization || bootstrapSynchronization || successorBootstrapSynchronization,
+    mode: bootstrapSynchronization
+      ? "bootstrap-synchronization-merge"
+      : successorBootstrapSynchronization
+        ? "protected-successor-bootstrap-synchronization-merge"
+        : "synchronization-merge",
     parentShapeMatches,
     requiredPathsPresent,
     changedPathsAllowed,
-    bootstrapSynchronization
+    bootstrapSynchronization,
+    successorBootstrapSynchronization
   };
 }
 
