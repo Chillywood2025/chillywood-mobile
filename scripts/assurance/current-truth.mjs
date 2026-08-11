@@ -5,8 +5,7 @@ import {
   baseSynchronizationFirstParentDistance,
   baseSynchronizationReviewReceiptHash,
   emit,
-  evaluateFreshnessClaims,
-  evaluateTaskFreshness,
+  evaluateFiniteTaskLeaseRuntime,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
@@ -20,7 +19,6 @@ import {
   sha256,
   verifyCurrentTruthHeadBindings,
   verifyCompletedImplementationMergeIdentity,
-  verifyCommittedClaimEvidence,
   verifyProviderImplementationSnapshot,
   verifyCurrentTruthSynchronization,
   validateFiniteTaskLeaseRegistry,
@@ -208,27 +206,22 @@ if (mode) {
     changedPaths: mainChangedPaths,
     requiredChangedPaths: currentTruthContract.synchronizationMerge.requiredChangedPaths,
     allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
-    bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge
+    bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge,
+    terminalControlMaintenance: currentTruthContract.synchronizationMerge.terminalControlMaintenance
   });
   const claimsMain = (branch || explicitImplementationBranch) === "main";
   const explicitMainMatches = explicitImplementationBranch !== "main" || explicitImplementationHead === remoteMain;
   const mainMatches = synchronization.ok && (claimsMain ? head === remoteMain && explicitMainMatches : mergeBase === remoteMain);
   const documentFreshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
-  const claimFreshness = evaluateFreshnessClaims({
-    claims: record.freshnessClaims,
-    evidenceSources: record.evidenceSources,
-    freshness: currentTruthContract.freshness,
+  const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({
+    record,
+    contract: currentTruthContract,
     now,
-    evidenceSourceVerifier: ({ claim, source }) => verifyCommittedClaimEvidence({
-      claim,
-      source,
-      factRegistry: currentTruthContract.freshness.factRegistry
-    })
+    checkoutHead: head,
+    currentProtectedBase: remoteMain
   });
-  const taskFreshness = evaluateTaskFreshness(
-    claimFreshness,
-    record.activeTaskBinding?.requiredFreshnessClaims ?? []
-  );
+  const claimFreshness = finiteTaskRuntime.claimFreshness;
+  const taskFreshness = finiteTaskRuntime.leaseFreshness;
   const proofTierStatusFindings = validateProofTierStatuses(
     record.activeTaskBinding,
     readJson("config/assurance/gate-catalog-v1.json"),
@@ -251,7 +244,8 @@ if (mode) {
     : [{ id: "CODEX_REVIEW_OPTIONAL_ADVISORY_POLICY_INVALID", status: "BLOCKED_INTERNAL" }];
   const finiteLeaseFindings = validateFiniteTaskLeaseRegistry(record.finiteTaskLeases)
     .map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
-  const findings = [...headBindings.findings, ...claimFreshness.findings, ...taskFreshness.blockers, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
+  const runtimeFindings = finiteTaskRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  const findings = [...headBindings.findings, ...runtimeFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
   if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
@@ -297,6 +291,16 @@ if (mode) {
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
     liveProviderReadback: claimFreshness.liveProviderReadback,
+    finiteTaskRuntime: {
+      leaseAuthorityEligible: finiteTaskRuntime.leaseAuthorityEligible,
+      candidateEligible: finiteTaskRuntime.candidateEligible,
+      candidateHead: finiteTaskRuntime.candidateHead,
+      candidateTree: finiteTaskRuntime.candidateTree,
+      scopeResult: finiteTaskRuntime.scopeResult,
+      sourceOnlyEligible: finiteTaskRuntime.sourceOnlyEligible,
+      providerDependentEligible: finiteTaskRuntime.providerDependentEligible,
+      findings: finiteTaskRuntime.findings
+    },
     lateReviewSentinels: (record.lateReviewSentinels ?? []).map(({ classification, prNumber, reviewedSha, successorCorrectionOwner, findings: lateFindings, blocks }) => ({
       classification,
       prNumber,

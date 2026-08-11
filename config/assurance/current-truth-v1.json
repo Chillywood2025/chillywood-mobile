@@ -16,7 +16,7 @@
     "requiredPhase1Checks": 13,
     "historicalIncidentsRetained": true
   },
-  "mainSha": "e6703552b986ea6182be02b2d01d62b36eba30f0",
+  "mainSha": "68d2f2b745425296fae2753e8a0cba9cc1137067",
   "latestMergedImplementationPr": {"number": 210, "state": "merged", "head": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d", "mergeSha": "31087f37290f521d956e125e518f92c3c65a736e", "title": "Resolve LiveKit microphone post-merge review findings"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -488,7 +488,7 @@
     },
     "preservedD2A": {"implementationPr": 212, "head": "4f5fa3937ac506bcd3626d15a2815839df620789", "tree": "96795e544dc9d41f06086f248576d38f92d3be9a", "state": "OPEN_DRAFT_BLOCKED_PRODUCT_P1", "finding": "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS"},
     "mayProceed": {"formalReviews": true, "phase1Ci": true, "merge": false, "postMergeProductSuccessorRequired": true, "d2aResume": false, "buildOrOta": false, "providerOrProductionMutation": false},
-    "state": "D2A_FROZEN_CORRECTION_PR_214_FINAL_SOURCE_REVIEW"
+    "state": "D2A_FROZEN_PR_214_FINITE_LEASE_DYNAMIC_CANDIDATE_ANSWER_CLASSIFICATION_PENDING"
   },
   "finiteTaskLeases": {
     "schemaVersion": 1,
@@ -497,6 +497,24 @@
     "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE",
     "providerCodexReview": "OPTIONAL_ADVISORY",
     "authority": {"build": false, "provider": false, "database": false, "publicRelease": false},
+    "amendmentPolicy": {
+      "marker": "chillywood-assurance-task-lease-amendment-v1",
+      "protectedMainUpdateRequired": false,
+      "ownerCommentRequired": true,
+      "domains": [{
+        "id": "chilly-chat-call-media",
+        "amendablePaths": [
+          "_lib/chillyChatNativeCallRouteBuffer.ts",
+          "_lib/nativeCallTransitionProvenance.mjs",
+          "app/+native-intent.tsx",
+          "app/_layout.tsx",
+          "app/chat/[threadId].tsx",
+          "plugins/withChillyChatNativeCallNotifications.js"
+        ],
+        "maximumFiles": 12,
+        "maximumChangedLines": 6000
+      }]
+    },
     "tasks": [
       {
         "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1",
@@ -556,49 +574,60 @@
       }
     ]
   },
+  "finiteTaskRuntime": {
+    "schemaVersion": 1,
+    "authority": "PROTECTED_FINITE_TASK_LEASE",
+    "candidatePolicy": "DYNAMIC_READ_ONLY_NOT_PROTECTED_TRUTH_AUTHORITY",
+    "candidateObservation": {
+      "pr": 214,
+      "branch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
+      "prState": "open",
+      "head": "f2525c0e6dd695c638533bc9c4544729a57280e6",
+      "tree": "7174d34d2a8552874a74e5094dc172a5b5bec756",
+      "classification": "NON_AUTHORITATIVE_READ_ONLY_OBSERVATION",
+      "observedAt": "2026-08-11T21:00:00Z"
+    },
+    "finalEvidence": {"ownerReceipt": false, "repositoryReview": false, "phase1": false, "mergeEligible": false},
+    "historicalCandidates": [{
+      "head": "e76831f2edb2c17e9b827587594573bfef7c6fef",
+      "tree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3",
+      "classification": "HISTORICAL_SUPERSEDED_CANDIDATE",
+      "phase1RunId": 31535089216,
+      "phase1Result": "FAILED_3_OF_13_STALE_PROVENANCE"
+    }],
+    "authorityClosed": {"build": true, "provider": true, "database": true, "publicRelease": true}
+  },
   "activeTaskBinding": {
     "schemaVersion": 1,
     "featureId": "chilly-chat-call-lifecycle",
     "implementationPr": 214,
     "implementationBranch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
     "implementationBindingId": "d2a-legacy-webrtc-first-track-correction-pr-214-v1",
-    "immutableSourceHead": "e76831f2edb2c17e9b827587594573bfef7c6fef",
-    "immutableSourceTree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3",
-    "currentImplementationHead": "e76831f2edb2c17e9b827587594573bfef7c6fef",
-    "currentImplementationTree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3",
-    "phase": "FORMAL_REVIEW",
-    "executionState": "D2A_LEGACY_WEBRTC_FIRST_TRACK_CORRECTION",
-    "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_SOURCE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "d2a-legacy-webrtc-correction-final-source-e76831f2edb2", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-implementation.immutable-synchronized-source"], "subjectHead": "e76831f2edb2c17e9b827587594573bfef7c6fef", "subjectTree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3"}],
-    "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
-    "ownerBootstrapAuthorization": {
-      "schemaVersion": 1,
-      "repository": "Chillywood2025/chillywood-mobile",
-      "prNumber": 214,
-      "commentId": 5255996943,
-      "author": "Chillywood2025",
-      "authorAssociation": "OWNER",
-      "createdAt": "2026-08-11T16:36:10Z",
-      "updatedAt": "2026-08-11T16:36:10Z",
-      "bodySha256": "cd8e4d79452c7ab1fde4a10aa565f91346644a9e9a115448ac12fe2db19ce19f",
-      "subjectHash": "3f2fd6a3ca01e5afe01f0f8899e566519b6a4d8fbac5d5a5f4c32d7d9d09e0d3"
-    }
+    "immutableSourceHead": "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
+    "immutableSourceTree": "d009ba762182e58fc054e395a790f29eacba4b55",
+    "currentImplementationHead": "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
+    "currentImplementationTree": "d009ba762182e58fc054e395a790f29eacba4b55",
+    "phase": "IMPLEMENTATION",
+    "executionState": "D2A_LEGACY_WEBRTC_FINITE_LEASE_RUNTIME_CANDIDATE",
+    "requiredFreshnessClasses": ["REPOSITORY_TASK_LEASE"],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_TASK_LEASE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "d2a-legacy-webrtc-finite-task-lease-authority-68d2f2b7", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-task.finite-lease-authority"], "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1", "leaseHash": "bbb2503315fe0da1dc0a91e9986d0d945e14bf30f7a53b96508470614ebf2eab"}],
+    "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]
   },
   "freshnessClaims": [
     {
-      "id": "repository-source-d2a-legacy-webrtc-correction-final-freeze",
+      "id": "repository-task-lease-d2a-legacy-webrtc-correction",
       "status": "CURRENT",
-      "observedAt": "2026-08-11T16:36:10Z",
-      "expiresAt": "2026-08-12T16:36:10Z",
-      "evidenceSourceId": "d2a-legacy-webrtc-correction-final-source-e76831f2edb2",
-      "evidenceMode": "git-read-only",
-      "factsCovered": ["repository.active-implementation.immutable-synchronized-source"],
-      "freshnessClass": "REPOSITORY_SOURCE",
+      "observedAt": "2026-08-11T21:00:00Z",
+      "expiresAt": "2036-08-08T21:00:00.000Z",
+      "evidenceSourceId": "d2a-legacy-webrtc-finite-task-lease-authority-68d2f2b7",
+      "evidenceMode": "protected-finite-task-lease",
+      "factsCovered": ["repository.active-task.finite-lease-authority"],
+      "freshnessClass": "REPOSITORY_TASK_LEASE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "subjectHead": "e76831f2edb2c17e9b827587594573bfef7c6fef",
-      "subjectTree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3"
+      "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1",
+      "leaseHash": "bbb2503315fe0da1dc0a91e9986d0d945e14bf30f7a53b96508470614ebf2eab"
     },
     {
       "id": "repository-source-s0-exact-closure-reuse-final",
@@ -846,7 +875,7 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 214, "branch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction", "head": "e76831f2edb2c17e9b827587594573bfef7c6fef", "state": "open-draft-current", "disposition": "implementation", "featureId": "chilly-chat-call-lifecycle"}
+    {"number": 214, "branch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction", "head": "f2525c0e6dd695c638533bc9c4544729a57280e6", "state": "open-draft-current", "disposition": "finite-lease-dynamic-implementation-candidate", "featureId": "chilly-chat-call-lifecycle"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -932,10 +961,11 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210"],
-    "active": "D2A_LEGACY_WEBRTC_FIRST_TRACK_CORRECTION_chilly-chat-call-lifecycle_PR214_ADMITTED_D2A_PR212_FROZEN",
+    "active": "D2A_LEGACY_WEBRTC_FINITE_TASK_LEASE_RUNTIME_PR214_DYNAMIC_CANDIDATE_D2A_PR212_FROZEN",
     "nextActions": [
       "D2A PR #212 is preserved open and frozen at blocked-evidence head 4f5fa3937ac506bcd3626d15a2815839df620789 tree 96795e544dc9d41f06086f248576d38f92d3be9a after reproducing ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS.",
-      "Execute only bounded legacy WebRTC first-track correction PR #214 from immutable source a5f0ff45131041e5d0a554c26311a64e7b72c5bc tree d009ba762182e58fc054e395a790f29eacba4b55; do not alter LiveKit or native product source.",
+      "Validate the current PR #214 candidate dynamically under finite lease d2a-legacy-webrtc-correction-pr-214-v1; do not write descendant candidate heads into protected current truth after each push.",
+      "Classify ANDROID_ANSWER_ACTION_PATH_BYPASSED with the exact production Answer path before PR #214 merge; keep product/native scope closed unless an immutable same-domain lease amendment succeeds.",
       "Do not resume D2A until correction PR #214 merges and a protected three-file return-to-D2A truth transition merges.",
       "Do not start either internal signed candidate until D2A merges and the post-D2A three-file current-truth authorization merges; do not release publicly.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -951,11 +981,32 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T16:36:10Z",
-  "freshnessDeadline": "2026-08-12T16:36:10Z",
+  "timestamp": "2026-08-11T21:00:00Z",
+  "freshnessDeadline": "2026-08-12T21:00:00Z",
   "evidenceSources": [
     {
+      "id": "d2a-legacy-webrtc-finite-task-lease-authority-68d2f2b7",
+      "mode": "protected-finite-task-lease",
+      "covers": [
+        "repository.active-task.finite-lease-authority",
+        "protected main 68d2f2b745425296fae2753e8a0cba9cc1137067 contains ASSURANCE_FINITE_TASK_LEASE_V1 for PR #214 admitted through PR #215",
+        "candidate identity is derived read-only; final receipt, repository review, Phase 1 and merge provenance remain exact-head evidence",
+        "build, provider, database, release, money, auth/RLS and credential authority remain closed"
+      ],
+      "observedAt": "2026-08-11T21:00:00Z",
+      "freshnessClass": "REPOSITORY_TASK_LEASE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "68d2f2b745425296fae2753e8a0cba9cc1137067",
+      "subjectHead": "68d2f2b745425296fae2753e8a0cba9cc1137067",
+      "subjectTree": "7dcb71b9182f34254686ba864510b106674bf708",
+      "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1",
+      "leaseHash": "bbb2503315fe0da1dc0a91e9986d0d945e14bf30f7a53b96508470614ebf2eab"
+    },
+    {
       "id": "d2a-legacy-webrtc-correction-final-source-e76831f2edb2",
+      "classification": "HISTORICAL_SUPERSEDED_CANDIDATE",
       "mode": "git-read-only",
       "covers": [
         "repository.active-implementation.immutable-synchronized-source",

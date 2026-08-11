@@ -10,7 +10,33 @@ import {
   validateStructuredBinding,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
-import { ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE, detectAssuranceRecursion, evaluateFiniteTaskCandidate, exactExternalSourceProvenance, finiteTaskFinalReceiptBody, finiteTaskFinalReceiptSubject, finiteTaskLeaseFor, renderCurrentState, stableJson, transitionFiniteTaskState, validateFiniteTaskLeaseRegistry, validateProofTierStatuses, verifyCommittedClaimEvidence, verifyCompletedImplementationMergeIdentity, verifyCurrentTruthSynchronization, verifyFiniteTaskFinalReceipt, verifyFiniteTaskMergeProvenance } from "../../scripts/assurance/lib.mjs";
+import {
+  ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE,
+  controlMaintenanceAuthorizationCommentBody,
+  controlMaintenanceAuthorizationSubject,
+  detectAssuranceRecursion,
+  evaluateFiniteTaskCandidate,
+  evaluateFiniteTaskLeaseRuntime,
+  exactExternalSourceProvenance,
+  finiteTaskFinalReceiptBody,
+  finiteTaskFinalReceiptSubject,
+  finiteTaskLeaseFor,
+  renderCurrentState,
+  renderNextTask,
+  stableJson,
+  taskLeaseAmendmentCommentBody,
+  taskLeaseAmendmentSubject,
+  transitionFiniteTaskState,
+  validateFiniteTaskLeaseRegistry,
+  validateProofTierStatuses,
+  verifyCommittedClaimEvidence,
+  verifyCompletedImplementationMergeIdentity,
+  verifyControlMaintenanceAuthorization,
+  verifyCurrentTruthSynchronization,
+  verifyFiniteTaskFinalReceipt,
+  verifyFiniteTaskMergeProvenance,
+  verifyTaskLeaseAmendment
+} from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -858,125 +884,46 @@ test("canonical rendering exposes every recorded proof-tier status separately", 
   assert.equal(rendered.includes("METADATA_BOUNDARY_CLEAR"), false);
 });
 
-test("protected legacy correction bootstrap is exact, unique, deterministic, freezes D2A, and opens no build authority", () => {
-  const correctionTruth = structuredClone(canonicalTruth);
-  const correction = correctionTruth.activeTaskBinding;
-  const expectedBody = ownerBootstrapAuthorizationCommentBody(correction);
-  const ownerBootstrapAuthorizationObservation = {
-    commentId: correction.ownerBootstrapAuthorization.commentId,
-    author: correction.ownerBootstrapAuthorization.author,
-    authorAssociation: correction.ownerBootstrapAuthorization.authorAssociation,
-    body: expectedBody,
-    createdAt: correction.ownerBootstrapAuthorization.createdAt,
-    updatedAt: correction.ownerBootstrapAuthorization.updatedAt,
-    issueUrl: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${correction.implementationPr}`
-  };
-  const protectedOld = structuredClone(canonicalTruth);
-  protectedOld.activeTaskBinding = binding;
-  const correctionFacts = {
-    ...facts,
-    currentTruth: correctionTruth,
-    protectedMainTruth: protectedOld,
-    identity: {
-      ...identity,
-      branch: correction.implementationBranch,
-      head: correction.currentImplementationHead,
-      tree: correction.currentImplementationTree
-    },
-    implementationObservations: {
-      remoteHead: correction.currentImplementationHead,
-      immutableTree: correction.immutableSourceTree,
-      currentTree: correction.currentImplementationTree,
-      immutableSourceIsAncestor: true,
-      providerPrHead: correction.currentImplementationHead
-    },
-    finiteTaskCandidateObservation: {
-      pr: correction.implementationPr,
-      branch: correction.implementationBranch,
-      prState: "open",
-      head: correction.currentImplementationHead,
-      tree: correction.currentImplementationTree,
-      seedTree: correctionTruth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 214).admittedSeedTree,
-      seedIsAncestor: true,
-      baseIsAncestor: true,
-      changedPaths: ["docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json"],
-      changedLines: 10,
-      diffHash: "a".repeat(64),
-      changedPathHash: "b".repeat(64),
-      findings: { P0: 0, P1: 1, launchImpactingP2: 0 }
-    },
-    ownerBootstrapAuthorizationObservation
-  };
-  const packets = [0, 1, 2].map(() => activeTask({ ...correctionFacts, featureId: "chilly-chat-call-lifecycle" }));
-  assert.equal(packets.every(({ ok }) => ok), true, packets.flatMap(({ findings = [] }) => findings).join(","));
-  assert.equal(new Set(packets.map(({ packet }) => stableJson(packet))).size, 1, "packet generation is byte-identical 3/3");
-  assert.equal(packets[0].packet.authority.contractId, "current-truth-record-v1");
-  assert.equal(packets[0].packet.implementation.pr, 214);
-  assert.equal(packets[0].packet.implementation.branch, "codex/d2a-legacy-webrtc-first-track-renegotiation-correction");
-  assert.equal(packets[0].packet.activeBlockers.some(({ freshnessClass, status }) => freshnessClass === "PROVIDER_CRITICAL" && status === "STALE_BLOCKED"), true);
-  assert.deepEqual(correctionTruth.d2aMicrophoneCorrectionBinding.preservedD2A, {
-    implementationPr: 212,
-    head: "4f5fa3937ac506bcd3626d15a2815839df620789",
-    tree: "96795e544dc9d41f06086f248576d38f92d3be9a",
-    state: "OPEN_DRAFT_BLOCKED_PRODUCT_P1",
-    finding: "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS"
-  });
-  assert.equal(correctionTruth.d2aMicrophoneCorrectionBinding.mayProceed.d2aResume, false);
-  assert.equal(correctionTruth.d2aMicrophoneCorrectionBinding.mayProceed.buildOrOta, false);
-  assert.equal(correctionTruth.d2aMicrophoneCorrectionBinding.mayProceed.providerOrProductionMutation, false);
-  assert.equal(correctionTruth.lateReviewResolutionTombstones.some(({ prNumber }) => prNumber === 194), true);
-  assert.equal(correctionTruth.lateReviewResolutionTombstones.some(({ prNumber }) => prNumber === 195), true);
-  assert.deepEqual(activeTask({ ...correctionFacts, featureId: "creator-money-ledger" }).findings, ["FEATURE_OVERRIDE_CONFLICT"]);
-  for (const branch of [
-    "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
-    "codex/d2a-livekit-mic-membership-convergence-correction",
-    "codex/d2a-livekit-mic-post-merge-review-correction",
-    "codex/unrelated-next"
-  ]) {
-    assert.equal(activeTask({ ...correctionFacts, identity: { ...correctionFacts.identity, branch } }).ok, false, `${branch} remains ineligible`);
-  }
-
-  for (const mutate of [
-    (candidate) => { candidate.activeTaskBinding.implementationPr = 999; },
-    (candidate) => { candidate.activeTaskBinding.implementationBranch = "codex/unrelated"; },
-    (candidate) => { candidate.activeTaskBinding.currentImplementationHead = "f".repeat(40); },
-    (candidate) => { candidate.activeTaskBinding.currentImplementationTree = "e".repeat(40); }
-  ]) {
-    const forged = structuredClone(correctionTruth);
-    mutate(forged);
-    assert.equal(activeTask({ ...correctionFacts, currentTruth: forged }).ok, false);
-  }
-  assert.equal(activeTask({
-    ...correctionFacts,
-    ownerBootstrapAuthorizationObservation: { ...ownerBootstrapAuthorizationObservation, body: `${expectedBody}\nsubstitution` }
-  }).ok, false, "mismatched Owner comment fails");
+test("protected legacy correction authority is the finite lease and not a descendant head", () => {
+  const correction = canonicalTruth.activeTaskBinding;
+  assert.deepEqual(correction.requiredFreshnessClasses, ["REPOSITORY_TASK_LEASE"]);
+  assert.equal(correction.immutableSourceHead, canonicalTruth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 214).admittedSeedHead);
+  assert.equal(correction.currentImplementationHead, correction.immutableSourceHead);
+  assert.equal(canonicalTruth.finiteTaskRuntime.candidateObservation.head, "f2525c0e6dd695c638533bc9c4544729a57280e6");
+  assert.equal(canonicalTruth.finiteTaskRuntime.candidateObservation.classification, "NON_AUTHORITATIVE_READ_ONLY_OBSERVATION");
+  assert.equal(canonicalTruth.finiteTaskRuntime.finalEvidence.ownerReceipt, false);
+  assert.equal(canonicalTruth.d2aMicrophoneCorrectionBinding.mayProceed.d2aResume, false);
+  assert.equal(canonicalTruth.d2aMicrophoneCorrectionBinding.mayProceed.buildOrOta, false);
+  assert.equal(canonicalTruth.d2aMicrophoneCorrectionBinding.mayProceed.providerOrProductionMutation, false);
 });
 
-test("legacy correction final repository source is exact and fails closed on tuple substitution", () => {
-  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-final-freeze");
+test("finite task lease committed evidence is exact and fails closed on lease substitution", () => {
+  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-task-lease-d2a-legacy-webrtc-correction");
   const source = canonicalTruth.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
   const verify = (candidate) => verifyCommittedClaimEvidence({
     claim,
     source: candidate,
-    factRegistry: currentTruthContract.freshness.factRegistry
+    factRegistry: currentTruthContract.freshness.factRegistry,
+    gitCommand: (args) => {
+      if (args[0] === "merge-base") return "";
+      if (args[0] === "rev-parse") return source.subjectTree;
+      if (args[0] === "show") return JSON.stringify(canonicalTruth);
+      throw new Error("unexpected git command");
+    }
   });
   assert.equal(verify(source), true);
   for (const [field, value] of [
-    ["implementationPr", 999],
-    ["implementationBranch", "codex/unrelated"],
     ["sourceCommit", "f".repeat(40)],
     ["subjectTree", "e".repeat(40)],
-    ["protectedAdmissionPr", 999],
-    ["ownerFinalTaskBindingCommentId", 999],
-    ["exactExternalSourcePolicy", "UNRELATED"]
+    ["leaseId", "unrelated-lease"],
+    ["leaseHash", "f".repeat(64)]
   ]) {
     assert.equal(verify({ ...source, [field]: value }), false, field);
   }
 });
 
-test("exact final source provenance accepts only the remote branch or own-PR merge second parent", () => {
-  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-final-freeze");
-  const source = canonicalTruth.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
+test("historical exact final source primitive accepts only remote branch or own-PR merge second parent", () => {
+  const source = canonicalTruth.evidenceSources.find(({ id }) => id === "d2a-legacy-webrtc-correction-final-source-e76831f2edb2");
   const expectedSources = [Object.fromEntries([
     "exactExternalSourcePolicy",
     "id",
@@ -1052,11 +999,6 @@ const finiteRegistry = canonicalTruth.finiteTaskLeases;
 const pr214Lease = finiteTaskLeaseFor(finiteRegistry, {
   implementationPr: 214,
   implementationBranch: "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
-  featureId: "chilly-chat-call-lifecycle"
-});
-const pr212Lease = finiteTaskLeaseFor(finiteRegistry, {
-  implementationPr: 212,
-  implementationBranch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
   featureId: "chilly-chat-call-lifecycle"
 });
 const descendantHead = (generation) => generation.toString(16).padStart(40, "a").slice(-40);
@@ -1277,4 +1219,305 @@ test("finite closure 24: provider Codex Review remains optional advisory", () =>
 
 test("finite closure 25: build provider database and public authority remain closed", () => {
   assert.deepEqual(finiteRegistry.authority, { build: false, provider: false, database: false, publicRelease: false });
+});
+
+const f252Head = "f2525c0e6dd695c638533bc9c4544729a57280e6";
+const f252Tree = "7174d34d2a8552874a74e5094dc172a5b5bec756";
+const e768Head = "e76831f2edb2c17e9b827587594573bfef7c6fef";
+const e768Tree = "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3";
+const protectedMain = "68d2f2b745425296fae2753e8a0cba9cc1137067";
+const runtimeAtF252 = () => evaluateFiniteTaskLeaseRuntime({
+  record: canonicalTruth,
+  contract: currentTruthContract,
+  now: new Date("2026-08-11T22:00:00Z"),
+  currentProtectedBase: protectedMain
+});
+const pullRequestCandidate = (overrides = {}) => finiteCandidate(pr214Lease, 400, {
+  head: f252Head,
+  tree: f252Tree,
+  observationSource: "GITHUB_PULL_REQUEST_EVENT",
+  currentProtectedBase: protectedMain,
+  eventBase: protectedMain,
+  mergeRefParents: [protectedMain, f252Head],
+  mergeRefSourceTree: f252Tree,
+  ...overrides
+});
+const maintenancePaths = currentTruthContract.synchronizationMerge.terminalControlMaintenance.allowedChangedPaths;
+const maintenanceSubject = (overrides = {}) => controlMaintenanceAuthorizationSubject({
+  schemaVersion: 1,
+  repository: "Chillywood2025/chillywood-mobile",
+  pr: 300,
+  branch: "codex/finite-task-lease-runtime-freshness-correction",
+  startingMain: protectedMain,
+  allowedChangedPaths: maintenancePaths,
+  maximumFiles: maintenancePaths.length,
+  maximumNetLines: 4500,
+  objective: "Complete finite-task lease runtime provenance without another control dependency",
+  prohibitedAuthorities: { product: false, native: false, database: false, provider: false, build: false, release: false, money: false, authRls: false, credentials: false },
+  nestedControlDependency: false,
+  secondMaintenancePrAllowed: false,
+  ...overrides
+});
+const maintenanceObservation = (subject, overrides = {}) => ({
+  id: 7001,
+  commentId: 7001,
+  author: "Chillywood2025",
+  authorAssociation: "OWNER",
+  createdAt: "2026-08-11T22:30:00Z",
+  updatedAt: "2026-08-11T22:30:00Z",
+  issueUrl: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${subject.pr}`,
+  body: controlMaintenanceAuthorizationCommentBody(subject),
+  ...overrides
+});
+const amendmentSubject = (addedPaths = ["plugins/withChillyChatNativeCallNotifications.js"], overrides = {}) => taskLeaseAmendmentSubject({
+  schemaVersion: 1,
+  repository: "Chillywood2025/chillywood-mobile",
+  leaseId: pr214Lease.leaseId,
+  pr: pr214Lease.implementationPr,
+  branch: pr214Lease.implementationBranch,
+  currentCandidateHead: f252Head,
+  currentLeaseHash: digest(stableJson(pr214Lease)),
+  addedPaths,
+  registeredDomain: pr214Lease.domain,
+  reason: "Classify and correct the same-domain native Answer action path if executable evidence requires it",
+  newScopeMaximum: { maximumFiles: 12, maximumChangedLines: 6000 },
+  excludedAuthority: { product: false, native: false, database: false, provider: false, build: false, release: false, money: false, authRls: false, credentials: false },
+  ...overrides
+});
+const amendmentObservation = (subject, overrides = {}) => ({
+  id: 7002,
+  commentId: 7002,
+  author: "Chillywood2025",
+  authorAssociation: "OWNER",
+  createdAt: "2026-08-11T22:35:00Z",
+  updatedAt: "2026-08-11T22:35:00Z",
+  issueUrl: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/214",
+  body: taskLeaseAmendmentCommentBody(subject),
+  ...overrides
+});
+
+test("terminal control maintenance accepts one exact immutable Owner authorization", () => {
+  const subject = maintenanceSubject();
+  const result = verifyControlMaintenanceAuthorization({
+    subject,
+    observation: maintenanceObservation(subject),
+    changedPaths: maintenancePaths,
+    netLines: 679
+  });
+  assert.equal(result.ok, true, result.findings.join(","));
+  assert.match(result.subjectHash, /^[0-9a-f]{64}$/u);
+  assert.match(result.bodyHash, /^[0-9a-f]{64}$/u);
+});
+
+test("terminal control maintenance merge is accepted once with its embedded exact contract", () => {
+  const secondParent = "c".repeat(40);
+  const merge = "d".repeat(40);
+  const result = verifyCurrentTruthSynchronization({
+    recordedMain: protectedMain,
+    remoteMain: merge,
+    parents: [protectedMain, secondParent],
+    changedPaths: maintenancePaths,
+    requiredChangedPaths: currentTruthContract.synchronizationMerge.requiredChangedPaths,
+    allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
+    bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge,
+    terminalControlMaintenance: currentTruthContract.synchronizationMerge.terminalControlMaintenance,
+    gitCommand: (args) => args[0] === "show" && args[1] === "-s"
+      ? "Merge pull request #300 from Chillywood2025/codex/finite-task-lease-runtime-freshness-correction"
+      : JSON.stringify(currentTruthContract)
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "terminal-control-maintenance-synchronization-merge");
+});
+
+test("finite runtime matrix 1: admitted PR 214 seed head passes", () => {
+  const candidate = finiteCandidate(pr214Lease, 1, { head: pr214Lease.admittedSeedHead, tree: pr214Lease.admittedSeedTree });
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate }).ok, true);
+});
+
+test("finite runtime matrix 2: PR 214 e768 descendant passes", () => {
+  const candidate = finiteCandidate(pr214Lease, 2, { head: e768Head, tree: e768Tree });
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate }).ok, true);
+});
+
+test("finite runtime matrix 3: PR 214 f252 dynamic descendant passes", () => {
+  const runtime = runtimeAtF252();
+  assert.deepEqual({ ok: runtime.candidateEligible, head: runtime.candidateHead, tree: runtime.candidateTree, scope: runtime.scopeResult }, { ok: true, head: f252Head, tree: f252Tree, scope: "PASS" });
+});
+
+test("finite runtime matrix 4: one descendant passes", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 1) }).ok, true);
+});
+
+test("finite runtime matrix 5: ten descendants pass", () => {
+  assert.equal(Array.from({ length: 10 }, (_, index) => evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, index + 1) }).ok).every(Boolean), true);
+});
+
+test("finite runtime matrix 6: one hundred descendants pass", () => {
+  assert.equal(Array.from({ length: 100 }, (_, index) => evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, index + 1) }).ok).every(Boolean), true);
+});
+
+test("finite runtime matrix 7: no protected current-truth source-head update is required", () => {
+  assert.equal(canonicalTruth.activeTaskBinding.currentImplementationHead, pr214Lease.admittedSeedHead);
+  assert.equal(runtimeAtF252().candidateHead, f252Head);
+  assert.notEqual(canonicalTruth.activeTaskBinding.currentImplementationHead, runtimeAtF252().candidateHead);
+});
+
+test("finite runtime matrix 8: old final evidence becomes stale after every source push", () => {
+  for (let generation = 2; generation <= 4; generation += 1) {
+    const prior = finiteCandidate(pr214Lease, generation - 1).head;
+    const candidate = finiteCandidate(pr214Lease, generation, { finalReceiptHead: prior, repositoryReviewHead: prior, phase1Head: prior });
+    assert.deepEqual(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate }).invalidated, { ownerFinalReceipt: true, repositoryReview: true, phase1: true, mergeEligibility: true });
+  }
+});
+
+test("finite runtime matrix 9: lease authority remains valid after each source push", () => {
+  assert.equal(runtimeAtF252().leaseAuthorityEligible, true);
+  assert.equal(canonicalTruth.freshnessClaims.find(({ freshnessClass }) => freshnessClass === "REPOSITORY_TASK_LEASE").leaseHash, digest(stableJson(pr214Lease)));
+});
+
+test("finite runtime matrix 10: wrong PR fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 10, { pr: 999 }) }).findings.includes("FINITE_TASK_WRONG_PR"), true);
+});
+
+test("finite runtime matrix 11: wrong branch fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 11, { branch: "codex/unrelated" }) }).findings.includes("FINITE_TASK_WRONG_BRANCH"), true);
+});
+
+test("finite runtime matrix 12: non-descendant fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 12, { seedIsAncestor: false }) }).findings.includes("FINITE_TASK_NON_DESCENDANT_HEAD"), true);
+});
+
+test("finite runtime matrix 13: rewritten admitted seed fails", () => {
+  const candidate = finiteCandidate(pr214Lease, 13, { seedIsAncestor: false, seedTree: "f".repeat(40) });
+  const findings = evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate }).findings;
+  assert.equal(findings.includes("FINITE_TASK_NON_DESCENDANT_HEAD") && findings.includes("FINITE_TASK_ADMITTED_ANCESTRY_REWRITTEN"), true);
+});
+
+test("finite runtime matrix 14: wrong admitted seed tree fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 14, { seedTree: "e".repeat(40) }) }).findings.includes("FINITE_TASK_ADMITTED_ANCESTRY_REWRITTEN"), true);
+});
+
+test("finite runtime matrix 15: unauthorized path fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 15, { changedPaths: ["package.json"] }) }).findings.includes("FINITE_TASK_UNAUTHORIZED_PATH"), true);
+});
+
+test("finite runtime matrix 16: scope overflow fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 16, { changedLines: pr214Lease.scopeBudget.maximumChangedLines + 1 }) }).findings.includes("FINITE_TASK_SCOPE_OVERFLOW"), true);
+});
+
+test("finite runtime matrix 17: competing active domain owner fails", () => {
+  const competing = structuredClone(finiteRegistry);
+  const other = competing.tasks.find(({ implementationPr }) => implementationPr === 212);
+  Object.assign(other, { taskState: "ACTIVE_IMPLEMENTATION", domainOwnership: "ACTIVE" });
+  const lease = competing.tasks.find(({ implementationPr }) => implementationPr === 214);
+  assert.equal(evaluateFiniteTaskCandidate({ lease, registry: competing, candidate: finiteCandidate(lease, 17) }).findings.includes("FINITE_TASK_COMPETING_DOMAIN_OWNER"), true);
+});
+
+test("finite runtime matrix 18: closed PR fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 18, { prState: "closed" }) }).findings.includes("FINITE_TASK_PR_NOT_OPEN"), true);
+});
+
+test("finite runtime matrix 19: malformed merge ref fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain] }) }).findings.includes("FINITE_TASK_MERGE_REF_MALFORMED"), true);
+});
+
+test("finite runtime matrix 20: wrong merge-ref first parent fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: ["a".repeat(40), f252Head] }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_FIRST_PARENT"), true);
+});
+
+test("finite runtime matrix 21: wrong merge-ref second parent fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain, "a".repeat(40)] }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_SECOND_PARENT"), true);
+});
+
+test("finite runtime matrix 22: wrong merge-ref source tree fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefSourceTree: "a".repeat(40) }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_SOURCE_TREE"), true);
+});
+
+test("finite runtime matrix 23: octopus merge ref fails", () => {
+  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain, f252Head, "a".repeat(40)] }) }).findings.includes("FINITE_TASK_MERGE_REF_MALFORMED"), true);
+});
+
+test("finite runtime matrix 24: edited Owner maintenance comment fails", () => {
+  const subject = maintenanceSubject();
+  const observation = maintenanceObservation(subject, { body: `${controlMaintenanceAuthorizationCommentBody(subject)}\nedited` });
+  assert.equal(verifyControlMaintenanceAuthorization({ subject, observation, changedPaths: maintenancePaths, netLines: 100 }).findings.includes("ASSURANCE_CONTROL_MAINTENANCE_COMMENT_INVALID"), true);
+});
+
+test("finite runtime matrix 25: unauthorized control-maintenance path fails", () => {
+  const subject = maintenanceSubject({ allowedChangedPaths: [...maintenancePaths, "hooks/use-communication-room-session.ts"], maximumFiles: maintenancePaths.length + 1 });
+  const observation = maintenanceObservation(subject);
+  assert.equal(verifyControlMaintenanceAuthorization({ subject, observation, changedPaths: subject.allowedChangedPaths, netLines: 100 }).findings.includes("ASSURANCE_CONTROL_MAINTENANCE_SUBJECT_MALFORMED"), true);
+});
+
+test("finite runtime matrix 26: valid in-place same-domain amendment succeeds", () => {
+  const subject = amendmentSubject();
+  const result = verifyTaskLeaseAmendment({ registry: finiteRegistry, lease: pr214Lease, candidate: { head: f252Head }, subject, observation: amendmentObservation(subject) });
+  assert.equal(result.ok, true, result.findings.join(","));
+  assert.equal(result.amendedLease.allowedPaths.includes("plugins/withChillyChatNativeCallNotifications.js"), true);
+});
+
+test("finite runtime matrix 27: unrelated-domain amendment fails", () => {
+  const subject = amendmentSubject(["package.json"]);
+  assert.equal(verifyTaskLeaseAmendment({ registry: finiteRegistry, lease: pr214Lease, candidate: { head: f252Head }, subject, observation: amendmentObservation(subject) }).ok, false);
+});
+
+test("finite runtime matrix 28: source-only Cognitive contract passes for f252", () => {
+  const result = runtimeAtF252();
+  assert.equal(result.sourceOnlyEligible && result.candidateHead === f252Head, true);
+});
+
+test("finite runtime matrix 29: source-only Autonomous All-Platform contract passes for f252", () => {
+  const result = runtimeAtF252();
+  assert.equal(result.sourceOnlyEligible && result.scopeResult === "PASS", true);
+});
+
+test("finite runtime matrix 30: source-only Autonomous iOS contract passes for f252", () => {
+  const result = runtimeAtF252();
+  assert.equal(result.sourceOnlyEligible && result.candidateTree === f252Tree, true);
+});
+
+test("finite runtime matrix 31: provider-dependent work remains denied", () => {
+  assert.equal(runtimeAtF252().providerDependentEligible, false);
+});
+
+test("unrelated repository-source expiry does not invalidate finite lease authority", () => {
+  const runtime = evaluateFiniteTaskLeaseRuntime({
+    record: canonicalTruth,
+    contract: currentTruthContract,
+    now: new Date("2026-08-12T05:00:00Z"),
+    currentProtectedBase: protectedMain
+  });
+  assert.equal(runtime.claimFreshness.ok, false, "the unrelated S0 claim is stale at this time");
+  assert.equal(runtime.leaseAuthorityEligible, true);
+  assert.equal(runtime.candidateEligible, true);
+  assert.equal(runtime.sourceOnlyEligible, true);
+  assert.equal(runtime.providerDependentEligible, false);
+});
+
+test("finite runtime matrix 32: no current-truth PR is required for descendant f252", () => {
+  const runtime = runtimeAtF252();
+  assert.equal(runtime.sourceOnlyEligible, true);
+  assert.equal(canonicalTruth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 214).recursionBudget.maximumFinalSourceBindingPrs, 0);
+});
+
+test("finite runtime matrix 33: another requested binding PR emits recursive bootstrap cycle", () => {
+  const subject = maintenanceSubject();
+  const result = verifyControlMaintenanceAuthorization({ subject, observation: maintenanceObservation(subject), changedPaths: maintenancePaths, netLines: 100, requestedDependency: "SOURCE_BINDING_PR" });
+  assert.equal(result.findings.includes(ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE), true);
+});
+
+test("finite runtime matrix 34: current-truth generation is deterministic three of three", () => {
+  const renders = Array.from({ length: 3 }, () => stableJson({ current: renderCurrentState(canonicalTruth), next: renderNextTask(canonicalTruth), runtime: runtimeAtF252() }));
+  assert.equal(new Set(renders).size, 1);
+});
+
+test("finite runtime matrix 35: all thirteen Phase 1 checks remain required", () => {
+  assert.equal(canonicalTruth.reviewPolicy.requiredPhase1Checks, 13);
+  assert.equal(currentTruthContract.reviewPolicy.requiredPhase1Checks, 13);
+});
+
+test("finite runtime matrix 36: provider Codex Review remains optional advisory", () => {
+  assert.equal(canonicalTruth.reviewPolicy.classification, "OPTIONAL_ADVISORY");
+  assert.equal(canonicalTruth.reviewPolicy.requiredStatusCheck, false);
+  assert.equal(finiteRegistry.providerCodexReview, "OPTIONAL_ADVISORY");
 });
