@@ -540,7 +540,7 @@ test("a completed binding is not an active task and no override can revive it", 
     currentTruth: sentinelBlockedTruth,
     protectedMainTruth: sentinelBlockedTruth,
     featureId: completedBinding.featureId
-  }).findings, ["ACTIVE_TASK_NONE"], "a branch-local owner mutation cannot promote an unregistered Codex finding set into a blocker");
+  }).findings, ["LATE_REVIEW_COMPLETION_CLAIM_BLOCKED"], "a known finding set with branch-local owner drift must remain blocking");
   const discoverySentinel = structuredClone(canonicalTruth.lateReviewSentinels.find(({ prNumber }) => prNumber === 195));
   discoverySentinel.successorCorrectionOwner = "UNASSIGNED_BLOCKED";
   delete discoverySentinel.assuranceControlOwner;
