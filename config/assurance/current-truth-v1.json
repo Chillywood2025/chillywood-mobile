@@ -462,8 +462,8 @@
     "implementationBindingId": "assurance-codex-security-scan-reliability-s0-pr206-v1",
     "immutableSourceHead": "f4424b0169ed3f97df8646f951c4f4979045545f",
     "immutableSourceTree": "126593669a05992797a1f766b01aa692c033893b",
-    "currentImplementationHead": "f4424b0169ed3f97df8646f951c4f4979045545f",
-    "currentImplementationTree": "126593669a05992797a1f766b01aa692c033893b",
+    "currentImplementationHead": "27ead7b470b1a690bcab3e64fb4346e2feeb9c6d",
+    "currentImplementationTree": "a4d65fa4671ca9e54b3e008031d92f2be3d32053",
     "phase": "FORMAL_REVIEW",
     "executionState": "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP",
     "requiredFreshnessClasses": ["REPOSITORY_SOURCE"],
@@ -473,13 +473,13 @@
       "schemaVersion": 1,
       "repository": "Chillywood2025/chillywood-mobile",
       "prNumber": 206,
-      "commentId": 5248279539,
+      "commentId": 5248286767,
       "author": "Chillywood2025",
       "authorAssociation": "OWNER",
-      "createdAt": "2026-08-11T02:20:00Z",
-      "updatedAt": "2026-08-11T02:20:00Z",
-      "bodySha256": "8d52154dacc63400b67924b3b69ee8db0f026e575d34ddce203286285226d1dd",
-      "subjectHash": "353bb6d2bce2e590a0f680ff3208be80d42601135b638e2e5c6406d9d9e0914e"
+      "createdAt": "2026-08-11T02:21:23Z",
+      "updatedAt": "2026-08-11T02:21:23Z",
+      "bodySha256": "4b7bda5d2fed0edb4be553f2a8927af79ba70d031cba98090aaa9613a64f5e46",
+      "subjectHash": "2f0bf3efb0357ccf7ac639b46ecb2a8b2bfe3cdecd8690e6a0022528d16cd699"
     }
   },
   "freshnessClaims": [
@@ -638,7 +638,7 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "f4424b0169ed3f97df8646f951c4f4979045545f", "state": "open-draft-current", "disposition": "S0 exact closure-reuse final evidence anchor and Owner comment 5248279539 frozen; only this exact generated three-file binding follows before independent review"}
+    {"number": 206, "branch": "codex/assurance-codex-security-scan-reliability-s0", "head": "27ead7b470b1a690bcab3e64fb4346e2feeb9c6d", "state": "open-draft-current", "disposition": "S0 exact closure-reuse current carrier and exact-subject Owner comment 5248286767 frozen; only this exact generated three-file binding follows before independent review"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -726,7 +726,7 @@
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208"],
     "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP_codex-security-scan-reliability-s0_D2A_FROZEN",
     "nextActions": [
-      "Use only the code-pinned PR #206 S0 Owner-bootstrap registry tuple, immutable exact closure-reuse final evidence anchor f4424b0169ed3f97df8646f951c4f4979045545f tree 126593669a05992797a1f766b01aa692c033893b, hash-bound source claim, canonical Owner comment 5248279539, and a fresh active-task packet to authorize Codex Security Scan Reliability S0; no other PR, branch, head, fact, feature, product, provider, build, release, or D2A work is authorized.",
+      "Use only the code-pinned PR #206 S0 Owner-bootstrap registry tuple, immutable exact closure-reuse final evidence anchor f4424b0169ed3f97df8646f951c4f4979045545f tree 126593669a05992797a1f766b01aa692c033893b, current carrier 27ead7b470b1a690bcab3e64fb4346e2feeb9c6d tree a4d65fa4671ca9e54b3e008031d92f2be3d32053, hash-bound source claim, canonical Owner comment 5248286767, and a fresh active-task packet to authorize Codex Security Scan Reliability S0; no other PR, branch, head, fact, feature, product, provider, build, release, or D2A work is authorized.",
       "Review the frozen Codex Security Scan Reliability S0 source on codex/assurance-codex-security-scan-reliability-s0 with independent exact-head repository security closure, compact review lanes, exact Phase 1 CI, normal merge, and post-S0 truth; do not start a hosted Codex Security scan.",
       "Only after S0 completes may the five internally validated unresolved PR #194 review findings be corrected on codex/d2a-livekit-mic-post-merge-review-correction under repository-owned independent exact-head review; provider Codex Review remains optional advisory and D2A remains frozen.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
