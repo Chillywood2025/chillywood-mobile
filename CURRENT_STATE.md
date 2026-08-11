@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Main SHA observed at this assurance checkpoint: `595d7a489b86234be0731042103cbfe0d40e8e72`.
+- Main SHA observed at this assurance checkpoint: `e2a025d5efd9ab93187b65b2d5c24c6ea1f0a7df`.
 - Latest merged implementation: PR #210, `19c0b5eed34a03f33f48a955dbefc483e3d2d71d`; merge `31087f37290f521d956e125e518f92c3c65a736e`.
 - Structured implementation binding: feature `chilly-chat-call-lifecycle`, PR #214, immutable `a5f0ff45131041e5d0a554c26311a64e7b72c5bc` / `d009ba762182e58fc054e395a790f29eacba4b55`, synchronized `a5f0ff45131041e5d0a554c26311a64e7b72c5bc` / `d009ba762182e58fc054e395a790f29eacba4b55`, phase `IMPLEMENTATION`, execution `D2A_LEGACY_WEBRTC_FIRST_TRACK_CORRECTION`.
 - Review policy: provider Codex Review is `OPTIONAL_ADVISORY`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all 13 Phase 1 checks and repository-owned exact-head review remain required.

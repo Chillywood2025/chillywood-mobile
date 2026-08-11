@@ -10,7 +10,7 @@ import {
   validateStructuredBinding,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
-import { renderCurrentState, stableJson, validateProofTierStatuses, verifyCommittedClaimEvidence, verifyCompletedImplementationMergeIdentity } from "../../scripts/assurance/lib.mjs";
+import { renderCurrentState, stableJson, validateProofTierStatuses, verifyCommittedClaimEvidence, verifyCompletedImplementationMergeIdentity, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -956,6 +956,40 @@ test("legacy correction repository-source admission is exact and fails closed on
   ]) {
     assert.equal(verify({ ...source, [field]: value }), false, field);
   }
+});
+
+test("protected correction admission synchronization is exact on PR, branch, first parent, ancestor, subject, and paths", () => {
+  const successor = currentTruthContract.synchronizationMerge.bootstrapMerge.successors.find(({ prNumber }) => prNumber === 215);
+  const mergeSha = "b".repeat(40);
+  const secondParent = "c".repeat(40);
+  const exactSubject = `Merge pull request #${successor.prNumber} from Chillywood2025/${successor.branch}`;
+  const verify = ({
+    recordedMain = successor.firstParent,
+    parents = [successor.firstParent, secondParent],
+    changedPaths = successor.changedPaths,
+    subject = exactSubject,
+    ancestorAllowed = true
+  } = {}) => verifyCurrentTruthSynchronization({
+    recordedMain,
+    remoteMain: mergeSha,
+    parents,
+    changedPaths,
+    requiredChangedPaths: currentTruthContract.synchronizationMerge.requiredChangedPaths,
+    allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
+    bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge,
+    gitCommand: (args) => {
+      if (args[0] === "show") return subject;
+      if (args[0] === "merge-base" && ancestorAllowed && args[2] === successor.requiredSecondParentAncestor && args[3] === secondParent) return "";
+      throw new Error("denied");
+    }
+  });
+  assert.equal(verify().ok, true);
+  assert.equal(verify({ recordedMain: "d".repeat(40) }).ok, false);
+  assert.equal(verify({ parents: [successor.firstParent, "d".repeat(40)] }).ok, false);
+  assert.equal(verify({ changedPaths: successor.changedPaths.slice(1) }).ok, false);
+  assert.equal(verify({ changedPaths: [...successor.changedPaths, "hooks/use-communication-room-session.ts"] }).ok, false);
+  assert.equal(verify({ subject: exactSubject.replace("#215", "#999") }).ok, false);
+  assert.equal(verify({ ancestorAllowed: false }).ok, false);
 });
 
 test("active-task CLI rejects caller-selected diff bases", () => {

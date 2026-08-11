@@ -63,6 +63,21 @@
             "tests/assurance/active-task-binding-a1.test.mjs",
             "tests/assurance/codex-review-exact-head.test.mjs"
           ]
+        },
+        {
+          "prNumber": 215,
+          "branch": "codex/d2a-legacy-webrtc-correction-admission",
+          "firstParent": "e2a025d5efd9ab93187b65b2d5c24c6ea1f0a7df",
+          "requiredSecondParentAncestor": "2e1cf306da1e1f44110fdb64e7d1116170a4f66c",
+          "changedPaths": [
+            "CURRENT_STATE.md",
+            "NEXT_TASK.md",
+            "config/assurance/current-truth-contract-v1.json",
+            "config/assurance/current-truth-v1.json",
+            "scripts/assurance/active-task.mjs",
+            "scripts/assurance/lib.mjs",
+            "tests/assurance/active-task-binding-a1.test.mjs"
+          ]
         }
       ]
     }
