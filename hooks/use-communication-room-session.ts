@@ -656,14 +656,21 @@ export function useCommunicationRoomSession({
         }
         const shouldResumeMic = micEnabledRef.current;
         stopLocalMediaKind("video");
-        const controlled = await legacyMicControlRef.current?.(false) ?? false;
-        if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
+        try {
+          const controlled = await legacyMicControlRef.current?.(false) ?? false;
+          if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
+        } catch (error) {
+          legacyMicLocalPrivacyStopRef.current?.();
+          reportRuntimeError("communication-media-session-background", error, {
+            roomId: roomRef.current?.roomId ?? roomId,
+          });
+        }
         resumeMicAfterForegroundRef.current = shouldResumeMic;
         return;
       }
       cleanupSessionMedia();
     });
-  }, [cleanupSessionMedia, enabled, stopLocalMediaKind]);
+  }, [cleanupSessionMedia, enabled, roomId, stopLocalMediaKind]);
 
   const cleanupChannel = useCallback(async (expectedChannel?: RealtimeChannel | null) => {
     const channel = expectedChannel ?? channelRef.current;

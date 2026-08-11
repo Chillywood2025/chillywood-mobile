@@ -531,6 +531,7 @@
         "mute success requires privacy readback plus durable membership, presence, and broadcast convergence",
         "enable success requires exactly one usable track, one sender per eligible peer, correlated answer application, stable signaling, durable membership, presence, broadcast, and UI convergence",
         "foreground and native-answer recovery route through the strict legacy microphone transaction",
+        "an unexpected registered background-stopper controller rejection executes the local privacy fallback and reports the bounded runtime error instead of escaping as an unhandled rejection",
         "session generation and captured-resource identity prevent stale continuation and cleanup mutation of replacements"
       ],
       "preMergeD2aStatus": "PENDING_EXACT_PR214_MERGE_REF"
@@ -546,8 +547,8 @@
       "mutantsKilled": 12,
       "mutantsSurviving": 0,
       "legacyMountedExactHook": {
-        "passed": 51,
-        "total": 51
+        "passed": 52,
+        "total": 52
       },
       "liveKitMountedAndExactSource": {
         "passed": 61,

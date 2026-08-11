@@ -28,7 +28,7 @@ const legacyRefMarker = "  const microphonePermissionRef = useRef<MediaPermissio
 assert.equal(legacyHookSource.split(legacyRefMarker).length - 1, 1, "unique legacy ref exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
 );
 const compiledLegacyHook = ts.transpileModule(instrumentedLegacyHookSource, {
   compilerOptions: {
@@ -135,6 +135,7 @@ function createLegacyMountedRuntime(options = {}) {
     intervals: [],
     localStreams: [],
     mediaActions: [],
+    mediaSessionStopper: null,
     mediaCreateCalls: [],
     membershipActions: [],
     membershipTouches: [],
@@ -444,7 +445,13 @@ function createLegacyMountedRuntime(options = {}) {
       UNDETERMINED_MEDIA_PERMISSION: permissionSnapshot({ canAskAgain: true, granted: false }),
     },
     "../_lib/mediaSessionLifecycle": {
-      registerActiveMediaSessionStopper: () => () => { runtime.cleanupCalls += 1; },
+      registerActiveMediaSessionStopper: (stopper) => {
+        runtime.mediaSessionStopper = stopper;
+        return () => {
+          runtime.cleanupCalls += 1;
+          if (runtime.mediaSessionStopper === stopper) runtime.mediaSessionStopper = null;
+        };
+      },
     },
     "../_lib/performancePolicy": { ROOM_HEARTBEAT_MS: 15_000 },
     "../_lib/roomRules": { normalizeRoomMembershipState: (value) => value },
@@ -901,6 +908,13 @@ test("legacy call-domain closure: unprovable quarantine never claims muted succe
   assert.equal(harness.getResult().micEnabled, true, "UI does not falsely claim a proved mute");
   assert.match(harness.getResult().error, /privacy could not be verified/u);
   assert.equal(runtime.membershipTouches.some((touch) => touch.micEnabled === false), false);
+});
+
+test("legacy call-domain closure: background stopper catches controller rejection before local privacy fallback", () => {
+  const stopperBlock = legacyHookSource.match(/registerActiveMediaSessionStopper\(async \(reason\) => \{[\s\S]*?\n    \}\);/u)?.[0] ?? "";
+  assert.match(stopperBlock, /try \{[\s\S]*?await legacyMicControlRef\.current\?\.\(false\)[\s\S]*?\} catch \(error\) \{/u);
+  assert.match(stopperBlock, /catch \(error\) \{\s*legacyMicLocalPrivacyStopRef\.current\?\.\(\);/u);
+  assert.match(stopperBlock, /reportRuntimeError\("communication-media-session-background"/u);
 });
 
 test("legacy call-domain closure: sender-only mute requires privacy and durable convergence", async (t) => {
