@@ -937,8 +937,8 @@ test("protected legacy correction bootstrap is exact, unique, deterministic, fre
   }).ok, false, "mismatched Owner comment fails");
 });
 
-test("legacy correction repository-source admission is exact and fails closed on tuple substitution", () => {
-  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-admission");
+test("legacy correction final repository source is exact and fails closed on tuple substitution", () => {
+  const claim = canonicalTruth.freshnessClaims.find(({ id }) => id === "repository-source-d2a-legacy-webrtc-correction-final-freeze");
   const source = canonicalTruth.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
   const verify = (candidate) => verifyCommittedClaimEvidence({
     claim,
@@ -952,6 +952,7 @@ test("legacy correction repository-source admission is exact and fails closed on
     ["sourceCommit", "f".repeat(40)],
     ["subjectTree", "e".repeat(40)],
     ["protectedAdmissionPr", 999],
+    ["ownerFinalTaskBindingCommentId", 999],
     ["exactExternalSourcePolicy", "UNRELATED"]
   ]) {
     assert.equal(verify({ ...source, [field]: value }), false, field);
