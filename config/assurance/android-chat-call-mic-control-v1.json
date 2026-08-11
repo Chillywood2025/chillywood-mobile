@@ -4,7 +4,7 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "644e1b7c7efaff9cdc05747b72c2f93caf8e740fdfb962458c285e40212b0a6f",
+    "hooks/use-livekit-chat-call-session.ts": "bbabb37a6fa3ea57c38524f14247b32530933329aa7667f7e2d29834a8e7efe2",
     "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "265063305dfbec9247f811e214e9d6ea80f7db4fe25104b3b48094a8c9a96906",
     "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "48df92348d2d4fde9c04a7989e6bc655e0884bb0ec989c9f1cb96952df15957d",
     "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "781193f1d8b9f1b710463289fc9782953df697560ce08542f723e3b9fa2a0036"
@@ -20,7 +20,7 @@
       "path": "hooks/use-livekit-chat-call-session.ts",
       "start": "  const enqueueSessionMediaWrite",
       "end": "  const refreshParticipantViews",
-      "sha256": "eade687ea3a83efbebe31c0e6b38422049a3dc6ae73a2eb5255a9c5ed1760a73"
+      "sha256": "9f7fe037fa56ccfc59d492ecd50bf46a6cd7419a72ca33409ea058b2304b2caa"
     },
     "permission-reconciliation-separation": {
       "path": "hooks/use-livekit-chat-call-session.ts",

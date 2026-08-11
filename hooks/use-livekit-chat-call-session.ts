@@ -408,8 +408,10 @@ export function useLiveKitChatCallSession({
     const writeKey = `${binding.normalizedRoomId}:${binding.userId}`;
     if (!binding.userId || blockedMediaWriteKeysRef.current.has(writeKey)) return null;
     const predecessor = mediaWriteTailsRef.current.get(writeKey);
-    let releaseReservation = () => undefined;
-    const reservation = new Promise<void>((resolve) => { releaseReservation = resolve; });
+    let releaseReservation: () => void = () => {};
+    const reservation = new Promise<void>((resolve) => {
+      releaseReservation = () => resolve();
+    });
     mediaWriteTailsRef.current.set(writeKey, reservation);
     try {
       if (predecessor) {
@@ -610,6 +612,18 @@ export function useLiveKitChatCallSession({
     return membership;
   }, [isCommittedSessionCurrent, readCurrentMembershipMediaState]);
 
+  const applySpeakerOutput = useCallback(async (nextSpeakerEnabled: boolean) => {
+    for (const output of getAudioOutputCandidates(nextSpeakerEnabled)) {
+      const selected = await selectLiveKitAudioOutput(output).catch(() => false);
+      if (selected) {
+        speakerRequestedRef.current = nextSpeakerEnabled;
+        setSpeakerEnabledState(nextSpeakerEnabled);
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
   const reconcileLatestCommittedMedia = useCallback(async (
     binding: CommittedSession,
     reconcileNative: boolean,
@@ -617,15 +631,24 @@ export function useLiveKitChatCallSession({
     if (!isCommittedSessionCurrent(binding) || !binding.liveKitRoom) return false;
     const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
     const liveKitRoom = binding.liveKitRoom ?? (bindingStillCurrent ? roomRef.current : null);
-    const appActive = appStateRef.current === "active";
+    const nextState = appStateRef.current;
+    const appActive = nextState === "active";
     const cameraTarget = cameraRequestedRef.current && appActive;
     const microphoneTarget = micRequestedRef.current && (appActive || allowBackgroundAudio);
     const membershipState = appActive || allowBackgroundAudio ? "active" : "reconnecting";
     setMediaReconciliationState("recovering");
+    async function setSpeaker(nextSpeakerEnabled: boolean) {
+      return applySpeakerOutput(nextSpeakerEnabled);
+    }
 
     if (reconcileNative) {
       try {
-        if (microphoneTarget) await LiveKitAudioSession.startAudioSession();
+        if (nextState === "active") {
+          await LiveKitAudioSession.startAudioSession();
+          await setSpeaker(speakerRequestedRef.current);
+        } else if (microphoneTarget) {
+          await LiveKitAudioSession.startAudioSession();
+        }
         await liveKitRoom.localParticipant.setMicrophoneEnabled(microphoneTarget);
       } catch (microphoneError) {
         if (!isCommittedSessionCurrent(binding)) return false;
@@ -687,6 +710,7 @@ export function useLiveKitChatCallSession({
     clearReconciliationWarning();
     return true;
   }, [
+    applySpeakerOutput,
     allowBackgroundAudio,
     clearReconciliationWarning,
     isCommittedSessionCurrent,
@@ -728,16 +752,8 @@ export function useLiveKitChatCallSession({
       .then(() => true)
       .catch(() => false);
     if (!audioSessionReady) return false;
-    for (const output of getAudioOutputCandidates(nextSpeakerEnabled)) {
-      const selected = await selectLiveKitAudioOutput(output).catch(() => false);
-      if (selected) {
-        speakerRequestedRef.current = nextSpeakerEnabled;
-        setSpeakerEnabledState(nextSpeakerEnabled);
-        return true;
-      }
-    }
-    return false;
-  }, []);
+    return applySpeakerOutput(nextSpeakerEnabled);
+  }, [applySpeakerOutput]);
 
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
     const binding = committedSessionRef.current;
@@ -963,6 +979,11 @@ export function useLiveKitChatCallSession({
   const setCameraEnabled = useCallback(async (nextEnabled: boolean) => {
     const binding = committedSessionRef.current;
     if (!binding || !isCommittedSessionCurrent(binding)) return false;
+    const finalizeCameraEnable = async (liveKitRoom: Room) => {
+      emitStage("local_video_published", { connectionState: String(liveKitRoom.state) });
+      updateFirstMediaState({ localVideoPublished: true });
+      await setSpeaker(speakerRequestedRef.current);
+    };
     const result = await runMediaControl(() => enqueueSessionMediaWrite(binding, async () => {
       const liveKitRoom = binding.liveKitRoom;
       if (!liveKitRoom || !isCommittedSessionCurrent(binding)) return false;
@@ -1048,9 +1069,7 @@ export function useLiveKitChatCallSession({
       clearReconciliationWarning();
       refreshParticipantViews();
       if (nextEnabled) {
-        emitStage("local_video_published", { connectionState: String(liveKitRoom.state) });
-        updateFirstMediaState({ localVideoPublished: true });
-        await setSpeaker(speakerRequestedRef.current);
+        await finalizeCameraEnable(liveKitRoom);
       }
       return true;
     }), binding);
@@ -1074,7 +1093,8 @@ export function useLiveKitChatCallSession({
   const toggleCamera = useCallback(async () => {
     try {
       const updated = await setCameraEnabled(!cameraRequestedRef.current);
-      return updated;
+      if (!updated) return false;
+      return true;
     } catch (mediaError) {
       if (isConfirmedNativePermissionDenial(mediaError)) setConfirmedPermissionDenied("camera");
       else setReconciliationWarning("Camera state could not be synchronized. The call remains connected.");
@@ -1631,9 +1651,8 @@ export function useLiveKitChatCallSession({
       emitStage(nextState === "active" ? "foregrounded" : "backgrounded", {
         connectionState: String(liveKitRoom.state),
       });
-      void scheduleLatestMediaReconciliation(true).then(async (reconciled) => {
+      void scheduleLatestMediaReconciliation(true).then((reconciled) => {
         if (!reconciled) return;
-        if (nextState === "active") await setSpeaker(speakerRequestedRef.current);
         setChannelState(
           nextState === "active" && liveKitRoom.state === ConnectionState.Connected
             ? "live"
@@ -1649,14 +1668,12 @@ export function useLiveKitChatCallSession({
     refreshParticipantViews,
     scheduleLatestMediaReconciliation,
     sessionKey,
-    setSpeaker,
   ]);
 
   useEffect(() => {
     if (!sessionKey || mediaActivationSerial <= 0 || !roomRef.current) return;
-    void scheduleLatestMediaReconciliation(true).then(async (reconciled) => {
+    void scheduleLatestMediaReconciliation(true).then((reconciled) => {
       if (!reconciled) return;
-      await setSpeaker(speakerRequestedRef.current);
       refreshParticipantViews();
     });
   }, [
@@ -1664,7 +1681,6 @@ export function useLiveKitChatCallSession({
     refreshParticipantViews,
     scheduleLatestMediaReconciliation,
     sessionKey,
-    setSpeaker,
   ]);
 
   return {

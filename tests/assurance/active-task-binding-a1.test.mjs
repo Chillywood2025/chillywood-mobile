@@ -279,6 +279,53 @@ test("the exact Owner-authorized S0 bootstrap identity is narrow and cannot wide
   }
 });
 
+test("the exact Owner-authorized PR 210 bootstrap identity is narrow and cannot widen feature, PR, branch or execution state", () => {
+  const correction = structuredClone(truth);
+  correction.activeTaskBinding = {
+    ...correction.activeTaskBinding,
+    featureId: "chilly-chat-call-lifecycle",
+    implementationPr: 210,
+    implementationBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
+    implementationBindingId: "d2a-livekit-mic-post-merge-review-correction-pr210-v1",
+    executionState: "LIVEKIT_MIC_POST_MERGE_CORRECTION_REVIEW_D2A_FROZEN"
+  };
+  correction.assuranceProgram.active = correction.activeTaskBinding.featureId;
+  const ownerBootstrapAuthorizationObservation = authorizeOwnerBootstrap(correction.activeTaskBinding);
+  correction.openImplementationPrs = [{
+    number: 210,
+    branch: correction.activeTaskBinding.implementationBranch,
+    head: correction.activeTaskBinding.currentImplementationHead,
+    state: "open-draft-current"
+  }];
+  const correctionIdentity = { ...identity, branch: correction.activeTaskBinding.implementationBranch };
+  assert.equal(activeTask({
+    ...facts,
+    currentTruth: correction,
+    protectedMainTruth: canonicalTruth,
+    identity: correctionIdentity,
+    ownerBootstrapAuthorizationObservation
+  }).ok, true);
+  for (const [field, value] of [
+    ["featureId", "assurance-efficiency-e0"],
+    ["implementationPr", 999],
+    ["implementationBranch", "codex/unrelated"],
+    ["implementationBindingId", "unrelated-binding"],
+    ["executionState", "UNRELATED"]
+  ]) {
+    const forged = structuredClone(correction);
+    forged.activeTaskBinding[field] = value;
+    const result = activeTask({
+      ...facts,
+      currentTruth: forged,
+      protectedMainTruth: canonicalTruth,
+      identity: correctionIdentity,
+      ownerBootstrapAuthorizationObservation
+    });
+    assert.equal(result.ok, false, field);
+    assert(result.findings.some((finding) => ["ACTIVE_TASK_AUTHORITY_UNVERIFIED", "ACTIVE_TASK_BINDING_MALFORMED"].includes(finding)), field);
+  }
+});
+
 test("conflicting feature override fails closed", () => {
   const result = activeTask({ ...facts, featureId: "assurance-efficiency-e0" });
   assert.equal(result.ok, false);

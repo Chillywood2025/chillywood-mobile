@@ -63,6 +63,12 @@ const bootstrapActiveTaskRegistry = [{
   implementationBranch: "codex/assurance-codex-security-scan-reliability-s0",
   implementationBindingId: "assurance-codex-security-scan-reliability-s0-pr206-v1",
   executionState: "CODEX_SECURITY_SCAN_RELIABILITY_S0_BOOTSTRAP"
+}, {
+  featureId: "chilly-chat-call-lifecycle",
+  implementationPr: 210,
+  implementationBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
+  implementationBindingId: "d2a-livekit-mic-post-merge-review-correction-pr210-v1",
+  executionState: "LIVEKIT_MIC_POST_MERGE_CORRECTION_REVIEW_D2A_FROZEN"
 }];
 const ownerBootstrapRepository = "Chillywood2025/chillywood-mobile";
 const ownerBootstrapAuthor = "Chillywood2025";
