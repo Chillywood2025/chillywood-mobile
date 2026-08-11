@@ -130,6 +130,18 @@
     "branchLocalAdmissionAllowed": false,
     "networkRequiredAfterAdmission": false
   },
+  "lateReviewExactSuccessorAdmission": {
+    "policyId": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2",
+    "protectedMainAnchorSha": "595d7a489b86234be0731042103cbfe0d40e8e72",
+    "admissionPr": 213,
+    "admissionBranch": "codex/d2a-release-critical-active-task-admission",
+    "originalSentinelRetentionRequired": true,
+    "firstParentAdmissionRequired": true,
+    "normalTwoParentMergeRequired": true,
+    "repositoryOwnedReviewRequired": true,
+    "phase1JobsRequired": 13,
+    "branchLocalAdmissionAllowed": false
+  },
   "freshness": {
     "defaultHours": 24,
     "providerCriticalHours": 8,

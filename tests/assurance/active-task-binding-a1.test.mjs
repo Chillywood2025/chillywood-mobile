@@ -857,6 +857,75 @@ test("canonical rendering exposes every recorded proof-tier status separately", 
   assert.equal(rendered.includes("METADATA_BOUNDARY_CLEAR"), false);
 });
 
+test("protected D2A bootstrap is exact, unique, deterministic, and opens no build authority", () => {
+  const d2aTruth = structuredClone(canonicalTruth);
+  d2aTruth.lateReviewSentinels = [];
+  d2aTruth.assuranceProgram.active = "D2A_RELEASE_CRITICAL_EXECUTION_chilly-chat-call-lifecycle_PR212_ADMITTED";
+  const d2a = d2aTruth.activeTaskBinding;
+  const expectedBody = ownerBootstrapAuthorizationCommentBody(d2a);
+  const ownerBootstrapAuthorizationObservation = {
+    commentId: d2a.ownerBootstrapAuthorization.commentId,
+    author: d2a.ownerBootstrapAuthorization.author,
+    authorAssociation: d2a.ownerBootstrapAuthorization.authorAssociation,
+    body: expectedBody,
+    createdAt: d2a.ownerBootstrapAuthorization.createdAt,
+    updatedAt: d2a.ownerBootstrapAuthorization.updatedAt,
+    issueUrl: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${d2a.implementationPr}`
+  };
+  const protectedOld = structuredClone(canonicalTruth);
+  protectedOld.activeTaskBinding = binding;
+  const d2aFacts = {
+    ...facts,
+    currentTruth: d2aTruth,
+    protectedMainTruth: protectedOld,
+    identity: {
+      ...identity,
+      branch: d2a.implementationBranch,
+      head: d2a.currentImplementationHead,
+      tree: d2a.currentImplementationTree
+    },
+    implementationObservations: {
+      remoteHead: d2a.currentImplementationHead,
+      immutableTree: d2a.immutableSourceTree,
+      currentTree: d2a.currentImplementationTree,
+      immutableSourceIsAncestor: true,
+      providerPrHead: d2a.currentImplementationHead
+    },
+    ownerBootstrapAuthorizationObservation
+  };
+  const packets = [0, 1, 2].map(() => activeTask({ ...d2aFacts, featureId: "chilly-chat-call-lifecycle" }));
+  assert.equal(packets.every(({ ok }) => ok), true, packets.flatMap(({ findings = [] }) => findings).join(","));
+  assert.equal(new Set(packets.map(({ packet }) => stableJson(packet))).size, 1, "packet generation is byte-identical 3/3");
+  assert.equal(packets[0].packet.authority.contractId, "current-truth-record-v1");
+  assert.equal(packets[0].packet.implementation.pr, 212);
+  assert.equal(packets[0].packet.activeBlockers.some(({ freshnessClass, status }) => freshnessClass === "PROVIDER_CRITICAL" && status === "STALE_BLOCKED"), true);
+  assert.equal(d2aTruth.d2aMicrophoneCorrectionBinding.mayProceed.buildOrOta, false);
+  assert.equal(d2aTruth.d2aMicrophoneCorrectionBinding.mayProceed.providerOrProductionMutation, false);
+  assert.deepEqual(activeTask({ ...d2aFacts, featureId: "creator-money-ledger" }).findings, ["FEATURE_OVERRIDE_CONFLICT"]);
+  for (const branch of [
+    "codex/d2a-livekit-mic-membership-convergence-correction",
+    "codex/d2a-livekit-mic-post-merge-review-correction",
+    "codex/unrelated-next"
+  ]) {
+    assert.equal(activeTask({ ...d2aFacts, identity: { ...d2aFacts.identity, branch } }).ok, false, `${branch} remains ineligible`);
+  }
+
+  for (const mutate of [
+    (candidate) => { candidate.activeTaskBinding.implementationPr = 999; },
+    (candidate) => { candidate.activeTaskBinding.implementationBranch = "codex/unrelated"; },
+    (candidate) => { candidate.activeTaskBinding.currentImplementationHead = "f".repeat(40); },
+    (candidate) => { candidate.activeTaskBinding.currentImplementationTree = "e".repeat(40); }
+  ]) {
+    const forged = structuredClone(d2aTruth);
+    mutate(forged);
+    assert.equal(activeTask({ ...d2aFacts, currentTruth: forged }).ok, false);
+  }
+  assert.equal(activeTask({
+    ...d2aFacts,
+    ownerBootstrapAuthorizationObservation: { ...ownerBootstrapAuthorizationObservation, body: `${expectedBody}\nsubstitution` }
+  }).ok, false, "mismatched Owner comment fails");
+});
+
 test("active-task CLI rejects caller-selected diff bases", () => {
   const cli = spawnSync(process.execPath, ["scripts/assurance/active-task.mjs", "--base=HEAD"], { encoding: "utf8" });
   assert.notEqual(cli.status, 0);

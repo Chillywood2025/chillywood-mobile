@@ -83,7 +83,7 @@
     },
     "currentTruthContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["recordPath", "generatedDocuments", "requiredFields", "reviewPolicy", "synchronizationMerge", "implementationHeadBinding", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "freshness", "staleFindingIds"],
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "reviewPolicy", "synchronizationMerge", "implementationHeadBinding", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "lateReviewExactSuccessorAdmission", "freshness", "staleFindingIds"],
       "properties": {
         "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
         "synchronizationMerge": {
@@ -130,6 +130,7 @@
         },
         "lateReviewOwnerRegistry": {"const": [{"repository": "Chillywood2025/chillywood-mobile", "prNumber": 194, "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446", "findingSetHash": "9474ccab70621250acc32aaa8bb765f0aba7423b44fa5fd073d2318f12701c99", "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}, {"repository": "Chillywood2025/chillywood-mobile", "prNumber": 195, "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7", "findingSetHash": "6aa0de5907c7b504712a502b3072fcd06dd026801425aa5ff6912a67ffcb6b10", "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0", "codex/d2a-livekit-mic-post-merge-review-correction"]}]},
         "lateReviewTombstoneAdmission": {"const": {"policyId": "EXACT_HEAD_PROTECTED_MAIN_V1", "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48", "originalSentinelRetentionRequired": true, "firstParentAdmissionRequired": true, "carrierExactMergeParentsRequired": true, "carrierGithubReadbackRequired": true, "carrierExactHeadReceiptRequired": true, "carrierLatestSourcePushInvalidationRequired": true, "carrierEvidenceMode": "github-read-only", "branchLocalAdmissionAllowed": false, "networkRequiredAfterAdmission": false}},
+        "lateReviewExactSuccessorAdmission": {"const": {"policyId": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2", "protectedMainAnchorSha": "595d7a489b86234be0731042103cbfe0d40e8e72", "admissionPr": 213, "admissionBranch": "codex/d2a-release-critical-active-task-admission", "originalSentinelRetentionRequired": true, "firstParentAdmissionRequired": true, "normalTwoParentMergeRequired": true, "repositoryOwnedReviewRequired": true, "phase1JobsRequired": 13, "branchLocalAdmissionAllowed": false}},
         "freshness": {
           "type": "object",
           "required": ["defaultHours", "providerCriticalHours", "clock", "failClosed", "classes", "factRegistry"],
@@ -378,13 +379,23 @@
                   "successorMergedAt": {"type": "string", "format": "date-time"},
                   "correctedSourceIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "number"}},
                   "resolvedThreadIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-                  "allThreadsResolved": {"const": true},
+                  "allThreadsResolved": {"type": "boolean"},
+                  "threadDisposition": {"const": "RESOLVED_BY_EXACT_SUCCESSOR_HISTORICAL_THREAD_STATE_RETAINED"},
                   "githubThreadResolutionReadbackAt": {"type": "string", "format": "date-time"},
                   "exactHeadReviewedCommit": {"$ref": "#/$defs/gitSha"},
                   "exactHeadReviewedTree": {"$ref": "#/$defs/gitSha"},
                   "exactHeadReviewReceiptHash": {"pattern": "^[0-9a-f]{64}$"},
                   "exactHeadCheckRunId": {"type": "integer", "minimum": 1},
                   "exactHeadReviewCompletedAt": {"type": "string", "format": "date-time"},
+                  "reviewClassification": {"const": "REPOSITORY_OWNED_EXACT_HEAD"},
+                  "repositoryReviewP0": {"const": 0},
+                  "repositoryReviewP1": {"const": 0},
+                  "repositoryReviewBlockingP2": {"const": 0},
+                  "phase1RunId": {"type": "integer", "minimum": 1},
+                  "phase1Head": {"$ref": "#/$defs/gitSha"},
+                  "phase1Conclusion": {"const": "success"},
+                  "phase1JobsPassed": {"const": 13},
+                  "phase1JobsTotal": {"const": 13},
                   "correctionEvidenceHash": {"pattern": "^[0-9a-f]{64}$"},
                   "dispositionEvidenceHash": {"pattern": "^[0-9a-f]{64}$"},
                   "verificationSubjectHash": {"pattern": "^[0-9a-f]{64}$"},
@@ -401,14 +412,24 @@
           "uniqueItems": true,
           "items": {
             "type": "object",
-            "required": ["schemaVersion", "repository", "prNumber", "mergeSha", "findingSetHash", "resolutionEvidence", "verificationSubjectHash", "admissionCarrier", "admissionPolicyId", "tombstoneHash"],
+            "required": ["schemaVersion", "repository", "prNumber", "mergeSha", "findingSetHash", "resolutionEvidence", "verificationSubjectHash", "admissionPolicyId", "tombstoneHash"],
+            "oneOf": [
+              {
+                "required": ["admissionCarrier"],
+                "properties": {"admissionPolicyId": {"const": "EXACT_HEAD_PROTECTED_MAIN_V1"}}
+              },
+              {
+                "required": ["protectedAdmission"],
+                "properties": {"admissionPolicyId": {"const": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2"}}
+              }
+            ],
             "properties": {
               "schemaVersion": {"const": 1},
               "repository": {"type": "string", "minLength": 1},
               "prNumber": {"type": "integer", "minimum": 1},
               "mergeSha": {"$ref": "#/$defs/gitSha"},
               "findingSetHash": {"pattern": "^[0-9a-f]{64}$"},
-              "resolutionEvidence": {"$ref": "#/$defs/currentTruthRecord/properties/lateReviewSentinels/items/properties/resolutionEvidence"},
+              "resolutionEvidence": {"type": "object"},
               "verificationSubjectHash": {"pattern": "^[0-9a-f]{64}$"},
               "admissionCarrier": {
                 "type": "object",
@@ -428,7 +449,15 @@
                   "repositoryVerificationHash": {"pattern": "^[0-9a-f]{64}$"}
                 }
               },
-              "admissionPolicyId": {"const": "EXACT_HEAD_PROTECTED_MAIN_V1"},
+              "protectedAdmission": {
+                "type": "object",
+                "required": ["prNumber", "branch"],
+                "properties": {
+                  "prNumber": {"const": 213},
+                  "branch": {"const": "codex/d2a-release-critical-active-task-admission"}
+                }
+              },
+              "admissionPolicyId": {"enum": ["EXACT_HEAD_PROTECTED_MAIN_V1", "EXACT_SUCCESSOR_PROTECTED_MAIN_V2"]},
               "tombstoneHash": {"pattern": "^[0-9a-f]{64}$"}
             }
           }
