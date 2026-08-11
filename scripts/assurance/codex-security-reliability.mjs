@@ -467,18 +467,24 @@ export const repositoryClosureRequiredFindingIds = [
   "REPOSITORY_CLOSURE_CALLER_REHASH_BYPASS",
   "TERMINAL_FINALIZATION_CAN_BE_REPLAYED_FROM_PRE_ATTEMPT_SNAPSHOT",
   "TOOLING_FALLBACK_LIFECYCLE_SELF_ATTESTED",
+  "UNCHANGED_SOURCE_REUSE_SELF_ATTESTED",
 ];
+
+function findingEvidenceHash(findingId, descriptor, focusedTestResultSha256) {
+  if (!repositoryClosureRequiredFindingIds.includes(findingId) || !descriptorValid(descriptor) || !digest(focusedTestResultSha256)) return null;
+  return sha256({
+    findingId,
+    target: descriptor.target,
+    changedPathWorklistSha256: descriptor.changedPathWorklistSha256,
+    focusedTestResultSha256,
+  });
+}
 
 export function repositoryClosureFindingEvidenceHash(findingId, descriptor, tests) {
   if (!repositoryClosureRequiredFindingIds.includes(findingId) || !descriptorValid(descriptor) || !Array.isArray(tests)) return null;
   const focused = tests.filter(({ id }) => id === "s0-focused-test");
   if (focused.length !== 1 || !digest(focused[0]?.resultSha256) || stableJson(focused[0]?.target) !== stableJson(descriptor.target)) return null;
-  return sha256({
-    findingId,
-    target: descriptor.target,
-    changedPathWorklistSha256: descriptor.changedPathWorklistSha256,
-    focusedTestResultSha256: focused[0].resultSha256,
-  });
+  return findingEvidenceHash(findingId, descriptor, focused[0].resultSha256);
 }
 
 function reviewHash(review) {
@@ -620,16 +626,50 @@ export function repositoryClosure(value, { runGit = git, readReceipt, receiptArt
   return { ok: true, status: closure.classification, sealed: false, closure };
 }
 
+function closureValidForReuse(closure, descriptor) {
+  if (!exactKeys(closure, ["schemaVersion", "classification", "sealed", "reason", "repository", "target", "changedPathWorklistSha256", "repositorySourceSnapshotDigest", "exactReviewHash", "findingDispositions", "testResultHashes", "p0", "p1", "deferredWork", "closureHash"])
+    || closure.schemaVersion !== 1
+    || closure.classification !== "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"
+    || closure.sealed !== false
+    || !["HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED", "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"].includes(closure.reason)
+    || closure.repository !== descriptor.repository.slug
+    || stableJson(closure.target) !== stableJson(descriptor.target)
+    || closure.changedPathWorklistSha256 !== descriptor.changedPathWorklistSha256
+    || closure.repositorySourceSnapshotDigest !== descriptor.repositorySourceSnapshotDigest
+    || !digest(closure.exactReviewHash)
+    || closure.p0 !== 0
+    || closure.p1 !== 0
+    || closure.deferredWork !== 0
+    || !Array.isArray(closure.testResultHashes)
+    || stableJson(closure.testResultHashes.map(({ id }) => id)) !== stableJson(repositoryClosureTestIds)
+    || !closure.testResultHashes.every((item) => exactKeys(item, ["id", "resultSha256"]) && digest(item.resultSha256))) return false;
+  const focused = closure.testResultHashes.find(({ id }) => id === "s0-focused-test")?.resultSha256;
+  if (!Array.isArray(closure.findingDispositions)
+    || stableJson(closure.findingDispositions.map(({ findingId }) => findingId)) !== stableJson(repositoryClosureRequiredFindingIds)
+    || !closure.findingDispositions.every((item) => exactKeys(item, ["findingId", "evidenceHash"])
+      && item.evidenceHash === findingEvidenceHash(item.findingId, descriptor, focused))) return false;
+  const { closureHash, ...payload } = closure;
+  return digest(closureHash) && closureHash === sha256(payload);
+}
+
 export function reusable(entry, descriptor) {
   const sourceExact = leaseCurrent(entry?.sourceLease, descriptor);
+  if (!sourceExact) return { ok: false, status: "MISS_SOURCE_OR_CONTRACT_CHANGED" };
+  if (!exactKeys(entry, ["id", "classification", "evidenceClass", "sourceLease", "terminal", "terminalState", "p0", "p1", "deferredFindings", "evidenceHash", "closure"])) {
+    return { ok: false, status: "MISS_DENIED_EVIDENCE_CLASS" };
+  }
   const evidenceClassAllowed = entry?.evidenceClass === "REPOSITORY_SOURCE_SECURITY";
-  const classificationAllowed = ["CODEX_SECURITY_SEALED", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"].includes(entry?.classification);
-  const expectedTerminalState = entry?.classification === "CODEX_SECURITY_SEALED" ? "SEALED" : "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING";
-  const proofComplete = typeof entry?.id === "string" && entry.id.length > 0
+  const classificationAllowed = entry?.classification === "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED";
+  const expectedTerminalState = "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING";
+  const entryShapeAllowed = typeof entry?.id === "string" && entry.id.length > 0
     && entry?.terminal === true && entry?.terminalState === expectedTerminalState && entry?.p0 === 0 && entry?.p1 === 0
-    && Array.isArray(entry?.deferredFindings) && entry.deferredFindings.length === 0 && digest(entry?.evidenceHash);
-  if (!classificationAllowed || !evidenceClassAllowed || !proofComplete) return { ok: false, status: "MISS_DENIED_EVIDENCE_CLASS" };
-  return sourceExact ? { ok: true, status: "EXACT_UNCHANGED_SOURCE_REUSE" } : { ok: false, status: "MISS_SOURCE_OR_CONTRACT_CHANGED" };
+    && Array.isArray(entry?.deferredFindings) && entry.deferredFindings.length === 0;
+  if (!classificationAllowed || !evidenceClassAllowed || !entryShapeAllowed) return { ok: false, status: "MISS_DENIED_EVIDENCE_CLASS" };
+  const proofComplete = closureValidForReuse(entry.closure, descriptor)
+    && entry.evidenceHash === entry.closure.closureHash;
+  return proofComplete
+    ? { ok: true, status: "EXACT_UNCHANGED_SOURCE_REUSE" }
+    : { ok: false, status: "MISS_DENIED_EVIDENCE_CLASS" };
 }
 
 export function invalidateChangedSourceEvidence(entries, descriptor) {

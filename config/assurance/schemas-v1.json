@@ -550,7 +550,7 @@
             "classification": {"const": "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"},
             "sealed": {"const": false},
             "hostedSelfApprovalReason": {"const": "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"},
-            "requiredFindingIds": {"const": ["PRIOR_FINDING_OMISSION_SELF_ATTESTED", "REPOSITORY_CLOSURE_CALLER_REHASH_BYPASS", "TERMINAL_FINALIZATION_CAN_BE_REPLAYED_FROM_PRE_ATTEMPT_SNAPSHOT", "TOOLING_FALLBACK_LIFECYCLE_SELF_ATTESTED"]}
+            "requiredFindingIds": {"const": ["PRIOR_FINDING_OMISSION_SELF_ATTESTED", "REPOSITORY_CLOSURE_CALLER_REHASH_BYPASS", "TERMINAL_FINALIZATION_CAN_BE_REPLAYED_FROM_PRE_ATTEMPT_SNAPSHOT", "TOOLING_FALLBACK_LIFECYCLE_SELF_ATTESTED", "UNCHANGED_SOURCE_REUSE_SELF_ATTESTED"]}
           }
         },
         "reviewGovernance": {"const": {"providerCodexReview": "OPTIONAL_ADVISORY", "ownerTriggeredOnly": true, "automaticRequestAllowed": false, "automaticRetryAllowed": false, "providerReceiptRequired": false, "providerFailureBlocks": [], "requiredPhase1Checks": 13, "repositoryOwnedIndependentExactHeadReviewRequired": true, "p0P1StopLineRequired": true, "lateProviderFindingDisposition": "ADVISORY_UNTIL_INDEPENDENT_REPOSITORY_VALIDATION", "protectedMainFindingSetRegistryRequiredForBlocking": true, "requiredStatusCheckExcluded": "Chi'llywood / Codex Review Exact Head", "rulesetStrict": true, "conversationResolutionRequired": true, "staleReviewDismissalRequired": true, "bypassActors": []}},

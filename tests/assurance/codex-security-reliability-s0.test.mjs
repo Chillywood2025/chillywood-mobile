@@ -456,6 +456,9 @@ test("incomplete source review and every terminal lifecycle are no-retry", () =>
 
 test("unchanged source evidence is reusable and any source or contract drift invalidates it", () => {
   const value = descriptor();
+  const fixture = closureFixture(value);
+  const closureResult = repositoryClosure(fixture.input, fixture.dependencies);
+  assert.equal(closureResult.ok, true);
   const entry = {
     id: "closure-1",
     classification: "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
@@ -466,14 +469,77 @@ test("unchanged source evidence is reusable and any source or contract drift inv
     p0: 0,
     p1: 0,
     deferredFindings: [],
-    evidenceHash: "f".repeat(64),
+    evidenceHash: closureResult.closure.closureHash,
+    closure: closureResult.closure,
   };
   assert.equal(reusable(entry, value).status, "EXACT_UNCHANGED_SOURCE_REUSE");
-  assert.equal(reusable(entry, changedDescriptor(value)).status, "MISS_SOURCE_OR_CONTRACT_CHANGED");
+  const changedSource = changedDescriptor(value);
+  assert.equal(reusable(entry, changedSource).status, "MISS_SOURCE_OR_CONTRACT_CHANGED");
   for (const evidenceClass of ["PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY", "time-limited"]) {
     assert.equal(reusable({ ...entry, evidenceClass }, value).status, "MISS_DENIED_EVIDENCE_CLASS");
   }
-  const ledger = invalidateChangedSourceEvidence([entry], changedDescriptor(value));
+  assert.equal(reusable({ ...entry, classification: "CODEX_SECURITY_SEALED", terminalState: "SEALED" }, value).ok, false);
+  assert.equal(reusable({ ...entry, evidenceHash: "f".repeat(64) }, value).ok, false);
+
+  const missingClosure = structuredClone(entry);
+  delete missingClosure.closure;
+  assert.equal(reusable(missingClosure, value).ok, false);
+  assert.equal(reusable(missingClosure, changedSource).status, "MISS_SOURCE_OR_CONTRACT_CHANGED", "source drift is classified before old-closure validation");
+
+  const partialClosure = structuredClone(entry);
+  delete partialClosure.closure.exactReviewHash;
+  assert.equal(reusable(partialClosure, value).ok, false);
+
+  const staleClosure = structuredClone(entry);
+  staleClosure.sourceLease = lease(changedSource);
+  assert.equal(reusable(staleClosure, changedSource).ok, false, "a new source lease cannot promote an old repository closure");
+
+  const changedTestHash = structuredClone(entry);
+  changedTestHash.closure.testResultHashes[0].resultSha256 = "a".repeat(64);
+  assert.equal(reusable(changedTestHash, value).ok, false);
+
+  const omittedFinding = structuredClone(entry);
+  omittedFinding.closure.findingDispositions.pop();
+  const { closureHash: _ignored, ...closurePayload } = omittedFinding.closure;
+  omittedFinding.closure.closureHash = sha256(closurePayload);
+  omittedFinding.evidenceHash = omittedFinding.closure.closureHash;
+  assert.equal(reusable(omittedFinding, value).ok, false);
+
+  const mismatchedClosureHash = structuredClone(entry);
+  mismatchedClosureHash.closure.closureHash = "b".repeat(64);
+  mismatchedClosureHash.evidenceHash = mismatchedClosureHash.closure.closureHash;
+  assert.equal(reusable(mismatchedClosureHash, value).ok, false);
+
+  const wrongHead = structuredClone(value);
+  wrongHead.target.head = "a".repeat(40);
+  wrongHead.repositorySourceSnapshotDigest = repositorySnapshotDigest(wrongHead);
+  assert.equal(descriptorValid(wrongHead), true);
+  assert.equal(reusable(entry, wrongHead).status, "MISS_SOURCE_OR_CONTRACT_CHANGED");
+
+  const wrongTree = structuredClone(value);
+  wrongTree.target.tree = "b".repeat(40);
+  wrongTree.repositorySourceSnapshotDigest = repositorySnapshotDigest(wrongTree);
+  assert.equal(descriptorValid(wrongTree), true);
+  assert.equal(reusable(entry, wrongTree).status, "MISS_SOURCE_OR_CONTRACT_CHANGED");
+
+  const changedWorklist = structuredClone(value);
+  changedWorklist.changedPaths[2].afterBlob = "c".repeat(40);
+  changedWorklist.changedPathWorklistSha256 = sha256(changedWorklist.changedPaths);
+  changedWorklist.repositorySourceSnapshotDigest = repositorySnapshotDigest(changedWorklist);
+  assert.equal(descriptorValid(changedWorklist), true);
+  assert.equal(reusable(entry, changedWorklist).status, "MISS_SOURCE_OR_CONTRACT_CHANGED");
+
+  const changedPolicy = structuredClone(value);
+  changedPolicy.contractHashes.policySha256 = sha256("policy-v2");
+  changedPolicy.repositorySourceSnapshotDigest = repositorySnapshotDigest(changedPolicy);
+  assert.equal(descriptorValid(changedPolicy), true);
+  assert.equal(reusable(entry, changedPolicy).status, "MISS_SOURCE_OR_CONTRACT_CHANGED");
+
+  const changedSnapshotDigest = structuredClone(value);
+  changedSnapshotDigest.repositorySourceSnapshotDigest = "d".repeat(64);
+  assert.equal(reusable(entry, changedSnapshotDigest).status, "MISS_SOURCE_OR_CONTRACT_CHANGED");
+
+  const ledger = invalidateChangedSourceEvidence([entry], changedSource);
   assert.deepEqual(ledger.reusable, []);
   assert.deepEqual(ledger.invalidated, [{ id: "closure-1", status: "MISS_SOURCE_OR_CONTRACT_CHANGED" }]);
 });
