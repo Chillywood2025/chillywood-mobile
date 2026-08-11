@@ -42,6 +42,55 @@ const sourceBindings = () => {
   return {files: Object.keys(spec.sourceBindings).length, slices: Object.keys(spec.sourceSlices).length, digest: hash(stable({files: spec.sourceBindings, slices: spec.sourceSlices})), adapterClassification: "EXECUTABLE_ADAPTER_BOUND_TO_EXACT_FILES_AND_CONTROL_FLOW_SLICES_NOT_EXACT_HOOK_EXECUTION"};
 };
 
+export const evaluateLegacyReleaseReachability = () => {
+  const provider = read("hooks/use-chat-call-media-session.ts");
+  const inviteSource = read("_lib/chillyChatCalls.ts");
+  const rollout = read("supabase/migrations/20260728141417_chilly_chat_livekit_media_rollout.sql");
+  const legacyHook = read("hooks/use-communication-room-session.ts");
+  const releaseInputs = {
+    "_lib/chillyChatCalls.ts": hash(inviteSource),
+    "hooks/use-chat-call-media-session.ts": hash(provider),
+    "hooks/use-communication-room-session.ts": hash(legacyHook),
+    "supabase/migrations/20260728141417_chilly_chat_livekit_media_rollout.sql": hash(rollout),
+  };
+
+  gate(
+    rollout.includes("public_default_provider text not null default 'legacy_webrtc'")
+      && rollout.includes("check (public_default_provider = 'legacy_webrtc')")
+      && rollout.includes("else 'legacy_webrtc'"),
+    "ANDROID_MIC_LEGACY_RELEASE_DEFAULT_UNBOUND",
+    "The release rollout no longer fails closed to legacy WebRTC for non-canary calls",
+  );
+  gate(
+    inviteSource.includes('toText(value).toLowerCase() === "livekit" ? "livekit" : "legacy_webrtc"'),
+    "ANDROID_MIC_LEGACY_INVITE_NORMALIZATION_UNBOUND",
+    "Invite provider normalization no longer selects legacy WebRTC for non-LiveKit values",
+  );
+  gate(
+    provider.includes('provider: options.invite?.mediaProvider === "livekit" ? "livekit" : "legacy_webrtc"')
+      && provider.includes("legacyTransportActive: shouldEnableLegacy")
+      && provider.includes("...legacySession"),
+    "ANDROID_MIC_LEGACY_CLIENT_ROUTE_UNBOUND",
+    "The release client no longer routes legacy invites into the legacy media hook",
+  );
+  gate(
+    legacyHook.includes("export function useCommunicationRoomSession")
+      && legacyHook.includes("const setMicrophoneEnabled")
+      && legacyHook.includes('setLocalMediaKindEnabled("audio", nextEnabled)'),
+    "ANDROID_MIC_LEGACY_HOOK_UNBOUND",
+    "The reachable legacy microphone implementation is not source-bound",
+  );
+
+  return {
+    status: "REACHABLE_PUBLIC_DEFAULT",
+    publicDefaultProvider: "legacy_webrtc",
+    exactHook: "hooks/use-communication-room-session.ts",
+    sourceSha256: releaseInputs,
+    sourceSetSha256: hash(stable(releaseInputs)),
+    providerContact: false,
+  };
+};
+
 export const uiModel = ({micEnabled, busy = false, loading = false, error = false, invert = true}) => ({
   label: micEnabled ? "Mic On" : "Mic Muted",
   accessibilityLabel: micEnabled ? "Mute microphone" : "Unmute microphone",
@@ -193,11 +242,10 @@ const runNegativeControls = () => Object.entries(negativeDefinitions).map(([id, 
 export const evaluateMicControl = () => {
   const source = sourceBindings();
   const sharedUi = runShared(); const liveKit = runLiveKit(); const legacy = runLegacy();
-  const sourceBoundCandidates = runSourceBoundCandidateProbes();
   const negatives = runNegativeControls();
   const nativeTemplate = read(nativeTemplatePath);
   gate(nativeTemplate.includes("PeerConnectionFactory") && nativeTemplate.includes("track.setEnabled(false)") && nativeTemplate.includes("track.setEnabled(true)"), "ANDROID_MIC_NATIVE_WEBRTC_TOGGLE_MISSING", "Native WebRTC template is incomplete");
-  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, sourceBoundCandidates, modelClassification: "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 10, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: true, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
+  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, legacyReachability: evaluateLegacyReleaseReachability(), sourceBoundCandidates: [], modelClassification: "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 10, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: true, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
   evidence.deterministicEvidenceSha256 = hash(stable(evidence));
   return evidence;
 };
