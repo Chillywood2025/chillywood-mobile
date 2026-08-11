@@ -2,10 +2,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  evaluateFreshnessClaims,
-  evaluateTaskFreshness,
-  HISTORICAL_PROVIDER_FACT,
-  verifyCommittedClaimEvidence
+  evaluateFiniteTaskLeaseRuntime,
+  HISTORICAL_PROVIDER_FACT
 } from "./assurance/lib.mjs";
 
 const root = process.cwd();
@@ -43,26 +41,12 @@ const includes = (source, needle, label) => {
 const notIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
 };
-const claimFreshness = evaluateFreshnessClaims({
-  claims: currentTruth.freshnessClaims,
-  evidenceSources: currentTruth.evidenceSources,
-  freshness: currentTruthContract.freshness,
-  now: new Date(),
-  evidenceSourceVerifier: ({ claim, source }) => verifyCommittedClaimEvidence({
-    claim,
-    source,
-    factRegistry: currentTruthContract.freshness.factRegistry
-  })
-});
-const sourceOnlyFreshness = evaluateTaskFreshness(claimFreshness, currentTruth.activeTaskBinding.requiredFreshnessClaims);
-const providerDependentFreshness = evaluateTaskFreshness(claimFreshness, [{
-  freshnessClass: "PROVIDER_CRITICAL",
-  platform: "NONE",
-  evidenceSourceId: "b3-immutable-source-binding-20260802-0600",
-  authorityAllowed: "PROVIDER_READBACK_ONLY",
-  requiredFacts: ["provider.supabase.b3.live-acl"]
-}]);
+const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract });
+const claimFreshness = finiteTaskRuntime.claimFreshness;
+const sourceOnlyFreshness = { eligible: finiteTaskRuntime.sourceOnlyEligible };
+const providerDependentFreshness = { eligible: finiteTaskRuntime.providerDependentEligible };
 if (!claimFreshness.ok) fail(`shared freshness evaluation failed: ${claimFreshness.findings.map(({ id }) => id).join(",")}`);
+if (!finiteTaskRuntime.candidateEligible) fail(`finite task runtime candidate failed: ${finiteTaskRuntime.findings.join(",")}`);
 if (currentTruth.liveProviderReadback !== claimFreshness.liveProviderReadback) fail("live provider readback must derive from the shared freshness evaluator");
 if (!sourceOnlyFreshness.eligible) fail("source-only autonomous contract requires shared evaluator eligibility");
 if (providerDependentFreshness.eligible) fail("provider-dependent autonomous contract must remain blocked on stale provider evidence");

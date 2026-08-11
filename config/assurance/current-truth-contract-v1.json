@@ -4,7 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
-  "requiredFields": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "requiredFields": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "finiteTaskRuntime", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,
@@ -33,6 +33,28 @@
       "CURRENT_STATE.md",
       "NEXT_TASK.md"
     ],
+    "terminalControlMaintenance": {
+      "marker": "chillywood-assurance-control-maintenance-v1",
+      "branch": "codex/finite-task-lease-runtime-freshness-correction",
+      "startingMain": "68d2f2b745425296fae2753e8a0cba9cc1137067",
+      "allowedChangedPaths": [
+        "CURRENT_STATE.md",
+        "NEXT_TASK.md",
+        "config/assurance/current-truth-contract-v1.json",
+        "config/assurance/current-truth-v1.json",
+        "config/assurance/schemas-v1.json",
+        "scripts/assurance/active-task.mjs",
+        "scripts/assurance/current-truth.mjs",
+        "scripts/assurance/lib.mjs",
+        "scripts/guard-autonomous-systems-contract.mjs",
+        "scripts/proof-autonomous-systems-contract.mjs",
+        "tests/assurance/active-task-binding-a1.test.mjs"
+      ],
+      "maximumFiles": 11,
+      "maximumNetLines": 4500,
+      "nestedControlDependency": false,
+      "secondMaintenancePrAllowed": false
+    },
     "bootstrapMerge": {
       "mergeSha": "ebefdd26a278533b51a5a2e5b981640b6518a777",
       "firstParent": "2f3b0d1cc4765c4196cd831ab782417a0f000c23",
@@ -159,7 +181,8 @@
   "finiteTaskLeasePolicy": {
     "policyId": "ASSURANCE_FINITE_TASK_LEASE_V1",
     "terminalMetaPr": 217,
-    "candidateSource": "CURRENT_GITHUB_PULL_REQUEST_HEAD_READ_ONLY",
+    "candidateSources": ["GITHUB_PULL_REQUEST_EVENT_EXACT_MERGE_REF", "LOCAL_REMOTE_IMPLEMENTATION_BRANCH_WITH_SUPPLIED_PR_TUPLE"],
+    "leaseAuthorityFreshnessClass": "REPOSITORY_TASK_LEASE",
     "taskStates": ["ACTIVE_IMPLEMENTATION", "BLOCKED_PRODUCT_FINDING", "MERGE_ELIGIBLE", "MERGED_VERIFIED", "ABANDONED_BY_OWNER"],
     "candidateRequirements": ["exact-pr", "exact-branch", "open-pr", "admitted-seed-descendant", "admitted-seed-tree-unchanged", "admitted-base-ancestor", "allowed-paths", "scope-budget", "exclusive-domain-owner", "nonterminal-task"],
     "sourcePushInvalidates": ["owner-final-receipt", "repository-owned-review", "phase1", "merge-eligibility"],
@@ -167,6 +190,7 @@
     "finalReceiptFields": ["pr", "branch", "admitted-seed", "final-head", "final-tree", "diff-hash", "changed-path-hash", "scope-result", "call-domain-closure-ledger-hash", "focused-test-hash", "mutation-negative-control-hash", "repository-review-hash", "phase1-run-id-and-head", "owner-author-association", "body-and-subject-hashes"],
     "mergeProvenance": {"parents": 2, "firstParent": "exact-current-protected-base", "secondParent": "exact-final-implementation-head", "sourceTree": "exact-final-receipt-tree", "syntheticMergeTreeRecorded": true, "actualMergeSecondParentExact": true, "actualMergeTreeExact": true, "squashRebaseOctopusAllowed": false},
     "productFindingDisposition": {"state": "BLOCKED_PRODUCT_FINDING", "leaseRevoked": false},
+    "inPlaceAmendment": {"marker": "chillywood-assurance-task-lease-amendment-v1", "ownerCommentRequired": true, "protectedMainUpdateRequired": false, "sameDomainOnly": true, "wildcardsAllowed": false, "authorityExpansionAllowed": false},
     "perTaskRecursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1},
     "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE",
     "providerCodexReview": "OPTIONAL_ADVISORY",
@@ -230,6 +254,12 @@
     "clock": "UTC",
     "failClosed": true,
     "classes": {
+      "REPOSITORY_TASK_LEASE": {
+        "maximumHours": 87600,
+        "allowedEvidenceModes": ["protected-finite-task-lease"],
+        "authorityAllowed": "REPOSITORY_ONLY",
+        "requiresCommittedEvidence": true
+      },
       "REPOSITORY_SOURCE": {
         "maximumHours": 24,
         "allowedEvidenceModes": ["local-source", "git-read-only", "github-read-only", "exact-ci", "local-offline", "local-read-only", "local-and-github-read-only", "local-offline-and-github-read-only"],
@@ -268,6 +298,7 @@
       }
     },
     "factRegistry": [
+      {"factId": "repository.active-task.finite-lease-authority", "freshnessClass": "REPOSITORY_TASK_LEASE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "Protected main authorizes the finite task lease; current candidate identity is derived read-only and is not written back after every descendant push"},
       {"factId": "repository.assurance-control.a1.requirements", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 Owner control requirements, prohibited mutations, review-gate, claim-freshness, and bootstrap boundaries are recorded as executable assurance requirements"},
       {"factId": "repository.assurance-control.a1.source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"},
       {"factId": "repository.assurance-control.a1.model", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 executable focused regressions reject task, head, review-surface, pagination, freshness, receipt, and proof-status substitutions"},
