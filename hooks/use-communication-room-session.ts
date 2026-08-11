@@ -2612,6 +2612,9 @@ export function useCommunicationRoomSession({
       if (!prepared) {
         setMicEnabled(false);
         micEnabledRef.current = false;
+        if (isLegacyMicSessionAuthorityCurrent(authority)) {
+          await updatePresence(cameraEnabledRef.current, false);
+        }
         return false;
       }
       let durableCommitted = false;
