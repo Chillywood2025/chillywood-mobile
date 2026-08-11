@@ -63,6 +63,14 @@
     "providerCriticalEvidence": "STALE_BLOCKED",
     "buildOrProviderAuthority": "NOT_OPENED"
   },
+  "reviewCorrections": [
+    {
+      "severity": "P1",
+      "id": "POST_MERGE_CURRENT_TRUTH_SUCCESSOR_BOOTSTRAP_MISSING",
+      "state": "CORRECTED_BEFORE_MERGE",
+      "correction": "Exact PR #213 subject, first parent, reviewed ancestor, and changed-path set are required for the one protected successor synchronization."
+    }
+  ],
   "scope": {
     "product": false,
     "native": false,

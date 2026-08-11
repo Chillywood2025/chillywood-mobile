@@ -101,7 +101,22 @@
               "properties": {
                 "mergeSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
                 "firstParent": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-                "changedPaths": {"type": "array", "minItems": 3, "uniqueItems": true}
+                "changedPaths": {"type": "array", "minItems": 3, "uniqueItems": true},
+                "successors": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "required": ["prNumber", "branch", "firstParent", "requiredSecondParentAncestor", "changedPaths"],
+                    "properties": {
+                      "prNumber": {"type": "integer", "minimum": 1},
+                      "branch": {"$ref": "#/$defs/gitBranch"},
+                      "firstParent": {"$ref": "#/$defs/gitSha"},
+                      "requiredSecondParentAncestor": {"$ref": "#/$defs/gitSha"},
+                      "changedPaths": {"type": "array", "minItems": 3, "uniqueItems": true}
+                    }
+                  }
+                }
               }
             }
           }

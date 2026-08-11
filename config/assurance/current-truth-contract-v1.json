@@ -43,6 +43,28 @@
         "config/assurance/current-truth-v1.json",
         "config/assurance/schemas-v1.json",
         "scripts/assurance/lib.mjs"
+      ],
+      "successors": [
+        {
+          "prNumber": 213,
+          "branch": "codex/d2a-release-critical-active-task-admission",
+          "firstParent": "595d7a489b86234be0731042103cbfe0d40e8e72",
+          "requiredSecondParentAncestor": "cbe63165ddb96f78df8700ff6cd1fdf41595b9b3",
+          "changedPaths": [
+            "CURRENT_STATE.md",
+            "NEXT_TASK.md",
+            "config/assurance/current-truth-contract-v1.json",
+            "config/assurance/current-truth-v1.json",
+            "config/assurance/schemas-v1.json",
+            "docs/assurance/d2a-release-critical-active-task-admission-v1.json",
+            "scripts/assurance/active-task.mjs",
+            "scripts/assurance/late-review-sentinel.mjs",
+            "scripts/assurance/lib.mjs",
+            "tests/assurance/active-task-binding-a1.test.mjs",
+            "tests/assurance/codex-review-exact-head.test.mjs",
+            "tests/assurance/current-truth-sync.test.mjs"
+          ]
+        }
       ]
     }
   },

@@ -1587,7 +1587,8 @@ export function verifyCurrentTruthSynchronization({
   changedPaths,
   requiredChangedPaths,
   allowedChangedPaths,
-  bootstrapMerge
+  bootstrapMerge,
+  gitCommand = git
 }) {
   if (recordedMain === remoteMain) return { ok: true, mode: "exact-main" };
   const required = new Set(requiredChangedPaths);
@@ -1604,13 +1605,38 @@ export function verifyCurrentTruthSynchronization({
     && parentShapeMatches
     && JSON.stringify([...changed].sort()) === JSON.stringify([...bootstrapMerge.changedPaths].sort())
   );
+  const successorCandidates = (bootstrapMerge?.successors ?? []).filter((candidate) => candidate
+    && Number.isInteger(candidate.prNumber)
+    && candidate.prNumber > 0
+    && isValidGitBranchName(candidate.branch)
+    && gitShaPattern.test(candidate.firstParent ?? "")
+    && gitShaPattern.test(candidate.requiredSecondParentAncestor ?? "")
+    && candidate.firstParent === recordedMain
+    && parentShapeMatches
+    && JSON.stringify([...changed].sort()) === JSON.stringify([...(candidate.changedPaths ?? [])].sort()));
+  let successorBootstrapSynchronization = false;
+  if (successorCandidates.length === 1) {
+    const candidate = successorCandidates[0];
+    try {
+      const subject = gitCommand(["show", "-s", "--format=%s", remoteMain]);
+      gitCommand(["merge-base", "--is-ancestor", candidate.requiredSecondParentAncestor, parents[1]]);
+      successorBootstrapSynchronization = subject === `Merge pull request #${candidate.prNumber} from Chillywood2025/${candidate.branch}`;
+    } catch {
+      successorBootstrapSynchronization = false;
+    }
+  }
   return {
-    ok: normalSynchronization || bootstrapSynchronization,
-    mode: bootstrapSynchronization ? "bootstrap-synchronization-merge" : "synchronization-merge",
+    ok: normalSynchronization || bootstrapSynchronization || successorBootstrapSynchronization,
+    mode: bootstrapSynchronization
+      ? "bootstrap-synchronization-merge"
+      : successorBootstrapSynchronization
+        ? "protected-successor-bootstrap-synchronization-merge"
+        : "synchronization-merge",
     parentShapeMatches,
     requiredPathsPresent,
     changedPathsAllowed,
-    bootstrapSynchronization
+    bootstrapSynchronization,
+    successorBootstrapSynchronization
   };
 }
 
