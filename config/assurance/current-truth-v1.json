@@ -489,6 +489,21 @@
   },
   "freshnessClaims": [
     {
+      "id": "repository-source-livekit-mic-correction-final",
+      "status": "CURRENT",
+      "observedAt": "2026-08-11T06:22:00Z",
+      "expiresAt": "2026-08-12T06:22:00Z",
+      "evidenceSourceId": "livekit-mic-correction-source-freeze-20260811-0622",
+      "evidenceMode": "local-offline-and-github-read-only",
+      "factsCovered": ["repository.active-implementation.immutable-synchronized-source"],
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "subjectHead": "534b6346ba9ffdabb7afccff4432e4b6940d2715",
+      "subjectTree": "ff4e603fefa98268c991d03c0cad0a5301e5580a"
+    },
+    {
       "id": "repository-source-s0-exact-closure-reuse-final",
       "status": "CURRENT",
       "observedAt": "2026-08-11T04:34:00Z",
@@ -727,9 +742,9 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206"],
-    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_LIVEKIT_MIC_CORRECTION_SOURCE_FROZEN_BINDING_IN_PROGRESS_D2A_FROZEN",
+    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_LIVEKIT_MIC_CORRECTION_EXACT_SOURCE_BOUND_REVIEW_IN_PROGRESS_D2A_FROZEN",
     "nextActions": [
-      "Keep D2A frozen while draft PR #210 completes its single exact current-truth binding, repository-owned exact-head review, final Phase 1 CI, and protected merge.",
+      "Keep D2A frozen while draft PR #210 source 534b6346ba9ffdabb7afccff4432e4b6940d2715 tree ff4e603fefa98268c991d03c0cad0a5301e5580a completes repository-owned exact-head review, final Phase 1 CI, and protected merge.",
       "Preserve frozen product source 88d1415ccacfa22e5b7ce3da545ecd5f523b3dbc tree 9167d58ebac2b7e7551b7b2c0304cc771e82e690, which corrects all five internally validated PR #194 findings in one bounded product change.",
       "After that correction, resume D2A only for release-critical execution, create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -745,7 +760,7 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T06:22:00Z",
+  "timestamp": "2026-08-11T06:27:00Z",
   "freshnessDeadline": "2026-08-12T06:22:00Z",
   "evidenceSources": [
     {
@@ -767,9 +782,9 @@
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "sourceCommit": "88d1415ccacfa22e5b7ce3da545ecd5f523b3dbc",
-      "subjectHead": "88d1415ccacfa22e5b7ce3da545ecd5f523b3dbc",
-      "subjectTree": "9167d58ebac2b7e7551b7b2c0304cc771e82e690"
+      "sourceCommit": "534b6346ba9ffdabb7afccff4432e4b6940d2715",
+      "subjectHead": "534b6346ba9ffdabb7afccff4432e4b6940d2715",
+      "subjectTree": "ff4e603fefa98268c991d03c0cad0a5301e5580a"
     },
     {
       "id": "s0-solo-owner-final-closeout-source-freeze-20260811-0434",
