@@ -5,7 +5,6 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { runIndependentMicNativeLayer } from "./android-generated-native-lifecycle.mjs";
 
 const root = process.cwd();
 const contractPath = "config/assurance/android-chat-call-mic-control-v1.json";
@@ -36,7 +35,14 @@ const sourceBindings = () => {
   gate(panel.includes("disabled={mediaControlsBusy || loading || !!statusMessage}"), "ANDROID_MIC_UI_ERROR_BOUNDARY_INVALID", "Shared error/busy boundary is not bound");
   gate(provider.includes('mediaProvider === "livekit"') && provider.includes("...legacySession") && provider.includes("...liveKitSession"), "ANDROID_MIC_PROVIDER_SCOPE_INVALID", "Provider selector is not exact");
   gate(livekit.includes("liveKitRoom.localParticipant.setMicrophoneEnabled(nextEnabled)") && livekit.includes("LiveKitAudioSession.startAudioSession()"), "ANDROID_MIC_LIVEKIT_SOURCE_INVALID", "LiveKit mic path is not bound");
-  gate(legacy.includes('setLocalMediaKindEnabled("audio", nextEnabled)') && legacy.includes('ensureTrackKind("audio")'), "ANDROID_MIC_LEGACY_SOURCE_INVALID", "Legacy mic path is not bound");
+  gate(
+    legacy.includes('setLocalMediaKindEnabled("audio", false)')
+      && legacy.includes("prepareLegacyMicrophoneTrack(authority)")
+      && legacy.includes("strictlyRenegotiateLegacyMicPeer")
+      && legacy.includes("LEGACY_MIC_ROLLBACK_UNVERIFIED"),
+    "ANDROID_MIC_LEGACY_SOURCE_INVALID",
+    "Legacy mic path is not bound to the authorized first-track transaction",
+  );
   for (const [id, binding] of Object.entries(spec.sourceSlices)) gate(hash(slice(binding.path, binding.start, binding.end)) === binding.sha256,
     "ANDROID_MIC_SOURCE_SLICE_STALE", `${id} differs from the reviewed control-flow slice`);
   return {files: Object.keys(spec.sourceBindings).length, slices: Object.keys(spec.sourceSlices).length, digest: hash(stable({files: spec.sourceBindings, slices: spec.sourceSlices})), adapterClassification: "EXECUTABLE_ADAPTER_BOUND_TO_EXACT_FILES_AND_CONTROL_FLOW_SLICES_NOT_EXACT_HOOK_EXECUTION"};
@@ -243,9 +249,13 @@ export const evaluateMicControl = () => {
   const source = sourceBindings();
   const sharedUi = runShared(); const liveKit = runLiveKit(); const legacy = runLegacy();
   const negatives = runNegativeControls();
-  const nativeTemplate = read(nativeTemplatePath);
-  gate(nativeTemplate.includes("PeerConnectionFactory") && nativeTemplate.includes("track.setEnabled(false)") && nativeTemplate.includes("track.setEnabled(true)"), "ANDROID_MIC_NATIVE_WEBRTC_TOGGLE_MISSING", "Native WebRTC template is incomplete");
-  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, legacyReachability: evaluateLegacyReleaseReachability(), sourceBoundCandidates: [], modelClassification: "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 10, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: true, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
+  const nativeTemplateAvailable = fs.existsSync(path.join(root, nativeTemplatePath));
+  const nativeTemplate = nativeTemplateAvailable ? read(nativeTemplatePath) : "";
+  const nativeTemplateBound = nativeTemplateAvailable
+    && nativeTemplate.includes("PeerConnectionFactory")
+    && nativeTemplate.includes("track.setEnabled(false)")
+    && nativeTemplate.includes("track.setEnabled(true)");
+  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, legacyReachability: evaluateLegacyReleaseReachability(), sourceBoundCandidates: [], modelClassification: "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 10, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: nativeTemplateBound, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
   evidence.deterministicEvidenceSha256 = hash(stable(evidence));
   return evidence;
 };
@@ -260,7 +270,11 @@ export const classifyMicEvidence = (evidence) => {
 const main = async () => { try {
   const allowed = new Set(["--json", "--native"]); for (const arg of process.argv.slice(2)) gate(allowed.has(arg), "ANDROID_MIC_UNKNOWN_FLAG", arg);
   const evidence = evaluateMicControl();
-  if (process.argv.includes("--native")) evidence.nativeLayer = await runIndependentMicNativeLayer();
+  if (process.argv.includes("--native")) {
+    const nativeRunnerPath = "./android-generated-native-lifecycle.mjs";
+    const { runIndependentMicNativeLayer } = await import(nativeRunnerPath);
+    evidence.nativeLayer = await runIndependentMicNativeLayer();
+  }
   const classification = classifyMicEvidence(evidence);
   if (classification !== "ANDROID_MIC_ASSURANCE_CLEAR") {
     const output = {ok: false, classification, evidence,
