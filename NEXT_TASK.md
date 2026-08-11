@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Keep D2A frozen while draft PR #210 immutable source ad9b2c1a077909fde5a703e984325e3fcd5a5f86 tree f7cd289f1ca3538083613cd494b8604d09f1e01f completes repository-owned exact-head review, final Phase 1 CI, and protected merge.
+1. Keep D2A frozen while draft PR #210 completes its final exact source binding after the Owner-authorized PR #195 sentinel successor allowlist correction, repository-owned exact-head review, final Phase 1 CI, and protected merge.
 2. Preserve the bounded PR #210 correction, which fixes all five internally validated PR #194 findings plus exact-review and CI defects without package, native, database, provider, build, OTA, or release changes.
 3. After that correction, resume D2A only for release-critical execution, create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.
 4. After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.

@@ -637,7 +637,8 @@
       "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1",
       "authorizedBootstrapOwners": [
         "codex/assurance-active-task-and-claim-freshness-a1",
-        "codex/assurance-codex-security-scan-reliability-s0"
+        "codex/assurance-codex-security-scan-reliability-s0",
+        "codex/d2a-livekit-mic-post-merge-review-correction"
       ],
       "blocks": ["post-merge-completion-claim", "next-implementation", "release", "proof-tier-promotion"]
     },
@@ -752,9 +753,9 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206"],
-    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_chilly-chat-call-lifecycle_LIVEKIT_MIC_CORRECTION_EXACT_SOURCE_BOUND_FORMAL_REVIEW_D2A_FROZEN",
+    "active": "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_chilly-chat-call-lifecycle_LIVEKIT_MIC_CORRECTION_SUCCESSOR_AUTHORITY_SEEDED_FINAL_BINDING_PENDING_D2A_FROZEN",
     "nextActions": [
-      "Keep D2A frozen while draft PR #210 immutable source ad9b2c1a077909fde5a703e984325e3fcd5a5f86 tree f7cd289f1ca3538083613cd494b8604d09f1e01f completes repository-owned exact-head review, final Phase 1 CI, and protected merge.",
+      "Keep D2A frozen while draft PR #210 completes its final exact source binding after the Owner-authorized PR #195 sentinel successor allowlist correction, repository-owned exact-head review, final Phase 1 CI, and protected merge.",
       "Preserve the bounded PR #210 correction, which fixes all five internally validated PR #194 findings plus exact-review and CI defects without package, native, database, provider, build, OTA, or release changes.",
       "After that correction, resume D2A only for release-critical execution, create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
@@ -770,9 +771,33 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T06:56:00Z",
+  "timestamp": "2026-08-11T06:57:00Z",
   "freshnessDeadline": "2026-08-12T06:52:00Z",
   "evidenceSources": [
+    {
+      "id": "livekit-mic-post-merge-correction-successor-authority-source-freeze-20260811-0657",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 source includes the bounded five-finding LiveKit microphone correction exact bootstrap registration and fail-closed substitution tests",
+        "Owner authorization admits only codex/d2a-livekit-mic-post-merge-review-correction through the older unresolved PR #195 sentinel while preserving all sentinel blockers for every other branch",
+        "durable room-user media-write coordination serializes strict microphone heartbeat AppState lifecycle and native-audio reconciliation writes with bounded predecessor failure",
+        "stable commit-phase session authority and monotonic terminal state prevent stale writers cleanup and transaction resurrection",
+        "native camera and microphone permission denial remains separate from recoverable durable membership reconciliation warning and Settings eligibility",
+        "whole mounted hook execution passes 48 of 48 exact source contract passes 5 of 5 and all 19 required negative-control mutants are rejected",
+        "TypeScript repository semantics active-task tests changed-file lint contract current-truth and git diff validation pass without package changes",
+        "no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T06:57:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "37d62d52de51ce72122af6c011e59d6001bd278a",
+      "subjectHead": "37d62d52de51ce72122af6c011e59d6001bd278a",
+      "subjectTree": "2c54c54a782d383bcb299ec6c30d36e9af7553c6"
+    },
     {
       "id": "livekit-mic-post-merge-correction-final-source-freeze-20260811-0652",
       "mode": "local-offline-and-github-read-only",
