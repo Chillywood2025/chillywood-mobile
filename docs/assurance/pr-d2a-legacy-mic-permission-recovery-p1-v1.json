@@ -96,6 +96,61 @@
     ],
     "authorizedByThisEvidence": false
   },
+  "authorizedCorrection": {
+    "status": "IMPLEMENTED_EXACT_HEAD_CLEAR_PENDING_INDEPENDENT_REVIEW",
+    "authorization": {
+      "protectedAdmissionMerge": "f609a6130a5120b68bea347d7f677496be43fffd",
+      "correctionBaseHead": "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
+      "correctionBaseTree": "d009ba762182e58fc054e395a790f29eacba4b55",
+      "e0PacketSha256": "09c34f3af7d98763286a3edf491dc6cf2fd7842f7c4d644cf700a2a1ba0652d9",
+      "scope": "LEGACY_WEBRTC_FIRST_TRACK_RENEGOTIATION_ONLY"
+    },
+    "implementation": {
+      "head": "93774deebc1ca6094bc9091f9b4bf2bf1ee27d22",
+      "tree": "848a86a83eb79643f57f630e751035e0c5e70951",
+      "productPath": "hooks/use-communication-room-session.ts",
+      "productSha256": "6a3ce1c42b8f42800d602836bda9ece2043d0234e215ff2cb55f628eb47ccdbf",
+      "runnerPath": "scripts/assurance/android-chat-call-mic-control.mjs",
+      "runnerSha256": "3f6eab0ac3fc5f52471ea7d0b7932b56be4d59414c5b3055dd5aab6d4ec4ebfe",
+      "testPath": "tests/assurance/android-chat-call-mic-control.test.mjs",
+      "testSha256": "023300faac6e8604c21a0502f705c09a7ef64e3554f8660aa95b3813b1a1c7f6",
+      "design": [
+        "capture exact channel, normalized room, user and connected-or-reconnecting session authority",
+        "create or restore one usable audio track while keeping it disabled",
+        "preflight every current peer for at most one audio sender and rollback capability",
+        "add or replace the current audio sender exactly once",
+        "force a correlated offer and bounded answer on changed peers including connected peers",
+        "enable the track and commit UI only after all peer, durable membership, presence and media-broadcast steps succeed",
+        "compensate durable and signaling state and restore sender/local-stream state on any incomplete transaction"
+      ]
+    },
+    "focusedProof": {
+      "command": "NODE_PATH=/Users/loverslane/chillywood-mobile/node_modules node --test tests/assurance/android-chat-call-mic-control.test.mjs",
+      "legacyFirstTrackMatrix": "42/42 PASS",
+      "preservedPr210Adapter": "1/1 PASS",
+      "total": "43/43 PASS",
+      "combinedOutputSha256": "952577d4d5af9cff5865d34fee705b4973a1c37e0d0413d43af24d7c39515400",
+      "receiptClassification": "DIRECT_SANITIZED_EXACT_CLEAN_HEAD_OUTPUT",
+      "typecheck": "PASS",
+      "focusedLint": "0 ERRORS; 5 PRE_EXISTING WARNINGS",
+      "roomEndCalls": 0,
+      "tokenRequests": 0,
+      "fatalOrUnhandledMarkers": 0
+    },
+    "result": {
+      "originalFindingPreservedAsHistorical": true,
+      "exactlyOneUsableLocalAudioTrack": true,
+      "exactlyOneCurrentUsableAudioSenderPerPeer": true,
+      "connectedPeerOfferAnswerCompleted": true,
+      "trackDisabledUntilAtomicSuccess": true,
+      "permissionRecovery": true,
+      "endedOrMissingTrackRestoration": true,
+      "durableRejectionReturnsFalse": true,
+      "rollbackAndCompensationVerified": true,
+      "callTermination": false,
+      "providerOrTokenChange": false
+    }
+  },
   "nonInterference": {
     "productChanged": false,
     "nativeProductChanged": false,
