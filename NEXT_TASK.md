@@ -2,8 +2,8 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. Keep D2A frozen while draft PR #210 source 534b6346ba9ffdabb7afccff4432e4b6940d2715 tree ff4e603fefa98268c991d03c0cad0a5301e5580a completes repository-owned exact-head review, final Phase 1 CI, and protected merge.
-2. Preserve frozen product source 88d1415ccacfa22e5b7ce3da545ecd5f523b3dbc tree 9167d58ebac2b7e7551b7b2c0304cc771e82e690, which corrects all five internally validated PR #194 findings in one bounded product change.
+1. Keep D2A frozen while draft PR #210 source 13503c7408298737c1adf57bbfb9afd9e9e3a32f tree 54e657f608ae784b556a984ac2e43508695699f5 completes one exact current-truth binding, repository-owned exact-head review, final Phase 1 CI, and protected merge.
+2. Preserve the bounded PR #210 correction, which fixes all five internally validated PR #194 findings plus exact-review and CI defects without package, native, database, provider, build, OTA, or release changes.
 3. After that correction, resume D2A only for release-critical execution, create new signed Android and iOS candidates, run critical physical release smoke, and prepare controlled U.S. rollout.
 4. After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.
 5. D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.
