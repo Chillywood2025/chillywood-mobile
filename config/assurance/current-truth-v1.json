@@ -490,6 +490,72 @@
     "mayProceed": {"formalReviews": true, "phase1Ci": true, "merge": false, "postMergeProductSuccessorRequired": true, "d2aResume": false, "buildOrOta": false, "providerOrProductionMutation": false},
     "state": "D2A_FROZEN_CORRECTION_PR_214_FINAL_SOURCE_REVIEW"
   },
+  "finiteTaskLeases": {
+    "schemaVersion": 1,
+    "policyId": "ASSURANCE_FINITE_TASK_LEASE_V1",
+    "terminalMetaPr": 217,
+    "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE",
+    "providerCodexReview": "OPTIONAL_ADVISORY",
+    "authority": {"build": false, "provider": false, "database": false, "publicRelease": false},
+    "tasks": [
+      {
+        "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1",
+        "featureId": "chilly-chat-call-lifecycle",
+        "implementationPr": 214,
+        "implementationBranch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
+        "admittedSeedHead": "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
+        "admittedSeedTree": "d009ba762182e58fc054e395a790f29eacba4b55",
+        "admittedBase": "e2a025d5efd9ab93187b65b2d5c24c6ea1f0a7df",
+        "protectedAdmissionPr": 215,
+        "ownerAuthorizationCommentId": 5255348786,
+        "domain": "chilly-chat-call-media",
+        "domainOwnership": "ACTIVE",
+        "taskState": "BLOCKED_PRODUCT_FINDING",
+        "allowedPaths": [
+          "docs/assurance/chilly-chat-call-domain-closure-v1.json",
+          "docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json",
+          "hooks/use-communication-room-session.ts",
+          "scripts/assurance/android-chat-call-mic-control.mjs",
+          "tests/assurance/android-chat-call-mic-control.test.mjs"
+        ],
+        "scopeBudget": {"maximumFiles": 8, "maximumChangedLines": 4000},
+        "recursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1}
+      },
+      {
+        "leaseId": "d2a-release-critical-pr-212-v1",
+        "featureId": "chilly-chat-call-lifecycle",
+        "implementationPr": 212,
+        "implementationBranch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+        "admittedSeedHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+        "admittedSeedTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
+        "admittedBase": "595d7a489b86234be0731042103cbfe0d40e8e72",
+        "protectedAdmissionPr": 213,
+        "ownerAuthorizationCommentId": 5251285787,
+        "domain": "chilly-chat-call-media",
+        "domainOwnership": "PRESERVED_DEPENDENT",
+        "taskState": "BLOCKED_PRODUCT_FINDING",
+        "allowedPaths": [
+          "config/assurance/android-generated-native-lifecycle-v1.json",
+          "config/assurance/command-allowlist-v1.json",
+          "config/assurance/feature-registry-v1.json",
+          "config/assurance/pr-d2a-scope-waiver-v1.json",
+          "docs/assurance/pr-d2a-android-generated-native-lifecycle-report-v1.json",
+          "docs/assurance/pr-d2a-android-mic-p1-reproduction-v1.json",
+          "docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json",
+          "scripts/assurance/android-chat-call-mic-control.mjs",
+          "scripts/assurance/android-generated-native-lifecycle.mjs",
+          "scripts/assurance/receipt.mjs",
+          "tests/assurance/android-chat-call-mic-control.test.mjs",
+          "tests/assurance/android-generated-native-lifecycle.test.mjs",
+          "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt",
+          "tools/android-native-call-harness/ChillyChatNativeCallActionStoreTest.kt",
+          "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt"
+        ],
+        "scopeBudget": {"maximumFiles": 15, "maximumChangedLines": 3000},
+        "recursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1}
+      }
+    ]
+  },
   "activeTaskBinding": {
     "schemaVersion": 1,
     "featureId": "chilly-chat-call-lifecycle",

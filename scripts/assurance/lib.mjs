@@ -657,6 +657,227 @@ export function exactExternalSourceProvenance({ source, expectedSources, remoteI
     && (exactRemoteBranch || exactPullRequestMerge);
 }
 
+export const ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE = "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE";
+export const finiteTaskStates = [
+  "ACTIVE_IMPLEMENTATION",
+  "BLOCKED_PRODUCT_FINDING",
+  "MERGE_ELIGIBLE",
+  "MERGED_VERIFIED",
+  "ABANDONED_BY_OWNER"
+];
+const finiteTaskActiveStates = new Set(finiteTaskStates.slice(0, 3));
+const finiteTaskTerminalStates = new Set(finiteTaskStates.slice(3));
+const sha256Pattern = /^[0-9a-f]{64}$/u;
+
+export function finiteTaskLeaseFor(registry, { implementationPr, implementationBranch, featureId } = {}) {
+  const matches = (registry?.tasks ?? []).filter((task) => task?.implementationPr === implementationPr
+    && task?.implementationBranch === implementationBranch
+    && (featureId === undefined || task?.featureId === featureId));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+export function validateFiniteTaskLeaseRegistry(registry) {
+  const findings = [];
+  const tasks = Array.isArray(registry?.tasks) ? registry.tasks : [];
+  if (registry?.schemaVersion !== 1
+    || registry?.policyId !== "ASSURANCE_FINITE_TASK_LEASE_V1"
+    || registry?.terminalMetaPr !== 217
+    || registry?.recursiveFailureCode !== ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE
+    || registry?.providerCodexReview !== "OPTIONAL_ADVISORY"
+    || registry?.authority?.build !== false
+    || registry?.authority?.provider !== false
+    || registry?.authority?.database !== false
+    || registry?.authority?.publicRelease !== false
+    || tasks.length < 1) findings.push("FINITE_TASK_LEASE_REGISTRY_MALFORMED");
+  const seenPrs = new Set();
+  const seenBranches = new Set();
+  for (const task of tasks) {
+    if (!task || typeof task !== "object"
+      || typeof task.leaseId !== "string" || !task.leaseId
+      || typeof task.featureId !== "string" || !task.featureId
+      || !Number.isInteger(task.implementationPr) || task.implementationPr < 1
+      || !isValidGitBranchName(task.implementationBranch)
+      || !gitShaPattern.test(task.admittedSeedHead ?? "")
+      || !gitShaPattern.test(task.admittedSeedTree ?? "")
+      || !gitShaPattern.test(task.admittedBase ?? "")
+      || !Number.isInteger(task.protectedAdmissionPr) || task.protectedAdmissionPr < 1
+      || !Number.isInteger(task.ownerAuthorizationCommentId) || task.ownerAuthorizationCommentId < 1
+      || typeof task.domain !== "string" || !task.domain
+      || !["ACTIVE", "PRESERVED_DEPENDENT"].includes(task.domainOwnership)
+      || !finiteTaskStates.includes(task.taskState)
+      || !Array.isArray(task.allowedPaths) || task.allowedPaths.length < 1
+      || new Set(task.allowedPaths).size !== task.allowedPaths.length
+      || task.allowedPaths.some((entry) => typeof entry !== "string" || !entry || entry.startsWith("/") || entry.includes(".."))
+      || !Number.isInteger(task.scopeBudget?.maximumFiles) || task.scopeBudget.maximumFiles < 1
+      || !Number.isInteger(task.scopeBudget?.maximumChangedLines) || task.scopeBudget.maximumChangedLines < 1
+      || stableJson(task.recursionBudget) !== stableJson({ maximumAdmissionPrs: 1, maximumFinalSourceBindingPrs: 0, maximumMergeProvenancePrs: 0, maximumPostMergeTruthPrs: 1 })) {
+      findings.push("FINITE_TASK_LEASE_MALFORMED");
+    }
+    if (seenPrs.has(task?.implementationPr) || seenBranches.has(task?.implementationBranch)) findings.push("FINITE_TASK_LEASE_DUPLICATE");
+    seenPrs.add(task?.implementationPr);
+    seenBranches.add(task?.implementationBranch);
+  }
+  return [...new Set(findings)].sort();
+}
+
+export function evaluateFiniteTaskCandidate({ lease, registry, candidate }) {
+  const findings = validateFiniteTaskLeaseRegistry(registry);
+  if (!lease || !candidate) return { ok: false, leaseRetained: false, findings: [...new Set([...findings, "FINITE_TASK_CANDIDATE_MALFORMED"])].sort() };
+  if (candidate.pr !== lease.implementationPr) findings.push("FINITE_TASK_WRONG_PR");
+  if (candidate.branch !== lease.implementationBranch) findings.push("FINITE_TASK_WRONG_BRANCH");
+  if (candidate.prState !== "open") findings.push("FINITE_TASK_PR_NOT_OPEN");
+  if (!gitShaPattern.test(candidate.head ?? "") || !gitShaPattern.test(candidate.tree ?? "")) findings.push("FINITE_TASK_CANDIDATE_MALFORMED");
+  if (candidate.seedTree !== lease.admittedSeedTree) findings.push("FINITE_TASK_ADMITTED_ANCESTRY_REWRITTEN");
+  if (candidate.seedIsAncestor !== true) findings.push("FINITE_TASK_NON_DESCENDANT_HEAD");
+  if (candidate.baseIsAncestor !== true) findings.push("FINITE_TASK_ADMITTED_BASE_MISSING");
+  const changedPaths = Array.isArray(candidate.changedPaths) ? candidate.changedPaths : [];
+  if (changedPaths.some((entry) => !lease.allowedPaths.includes(entry))) findings.push("FINITE_TASK_UNAUTHORIZED_PATH");
+  if (changedPaths.length > lease.scopeBudget.maximumFiles
+    || !Number.isInteger(candidate.changedLines)
+    || candidate.changedLines < 0
+    || candidate.changedLines > lease.scopeBudget.maximumChangedLines) findings.push("FINITE_TASK_SCOPE_OVERFLOW");
+  const competitors = (registry?.tasks ?? []).filter((task) => task.leaseId !== lease.leaseId
+    && task.domain === lease.domain
+    && task.domainOwnership === "ACTIVE"
+    && !finiteTaskTerminalStates.has(task.taskState));
+  if (competitors.length) findings.push("FINITE_TASK_COMPETING_DOMAIN_OWNER");
+  if (!finiteTaskActiveStates.has(lease.taskState)) findings.push("FINITE_TASK_TERMINAL");
+  const blockingFinding = candidate.findings?.P0 > 0
+    || candidate.findings?.P1 > 0
+    || candidate.findings?.launchImpactingP2 > 0;
+  const invalidated = {
+    ownerFinalReceipt: blockingFinding || candidate.finalReceiptHead !== candidate.head,
+    repositoryReview: blockingFinding || candidate.repositoryReviewHead !== candidate.head,
+    phase1: blockingFinding || candidate.phase1Head !== candidate.head,
+    mergeEligibility: blockingFinding
+      || candidate.finalReceiptHead !== candidate.head
+      || candidate.repositoryReviewHead !== candidate.head
+      || candidate.phase1Head !== candidate.head
+  };
+  const taskState = blockingFinding
+    ? "BLOCKED_PRODUCT_FINDING"
+    : invalidated.mergeEligibility
+      ? "ACTIVE_IMPLEMENTATION"
+      : "MERGE_ELIGIBLE";
+  const unique = [...new Set(findings)].sort();
+  return { ok: unique.length === 0, leaseRetained: !unique.includes("FINITE_TASK_TERMINAL"), taskState, invalidated, findings: unique };
+}
+
+const finalReceiptFields = [
+  "schemaVersion", "policyId", "repository", "featureId", "implementationPr", "implementationBranch",
+  "admittedSeedHead", "finalHead", "finalTree", "diffHash", "changedPathHash", "scopeResult",
+  "callDomainClosureLedgerHash", "focusedTestHash", "mutationNegativeControlHash", "repositoryReviewHash",
+  "phase1RunId", "phase1Head"
+];
+const finalReceiptMarker = "<!-- chillywood-assurance-final-task-receipt-v1 -->";
+
+export function finiteTaskFinalReceiptSubject(value) {
+  return Object.fromEntries(finalReceiptFields.map((field) => [field, structuredClone(value?.[field])]));
+}
+
+export function finiteTaskFinalReceiptBody(value) {
+  const subject = finiteTaskFinalReceiptSubject(value);
+  return `${finalReceiptMarker}\n${stableJson({ subject, subjectHash: sha256(subject) })}`;
+}
+
+export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation }) {
+  const subject = finiteTaskFinalReceiptSubject({
+    schemaVersion: 1,
+    policyId: "ASSURANCE_FINITE_TASK_LEASE_V1",
+    repository: "Chillywood2025/chillywood-mobile",
+    featureId: lease?.featureId,
+    implementationPr: lease?.implementationPr,
+    implementationBranch: lease?.implementationBranch,
+    admittedSeedHead: lease?.admittedSeedHead,
+    finalHead: candidate?.head,
+    finalTree: candidate?.tree,
+    diffHash: candidate?.diffHash,
+    changedPathHash: candidate?.changedPathHash,
+    scopeResult: evidence?.scopeResult,
+    callDomainClosureLedgerHash: evidence?.callDomainClosureLedgerHash,
+    focusedTestHash: evidence?.focusedTestHash,
+    mutationNegativeControlHash: evidence?.mutationNegativeControlHash,
+    repositoryReviewHash: evidence?.repositoryReviewHash,
+    phase1RunId: evidence?.phase1RunId,
+    phase1Head: evidence?.phase1Head
+  });
+  const hashesValid = [subject.diffHash, subject.changedPathHash, subject.callDomainClosureLedgerHash,
+    subject.focusedTestHash, subject.mutationNegativeControlHash, subject.repositoryReviewHash]
+    .every((value) => sha256Pattern.test(value ?? ""));
+  const body = finiteTaskFinalReceiptBody(subject);
+  const subjectHash = sha256(subject);
+  const bodyHash = sha256(body);
+  const ok = hashesValid
+    && subject.scopeResult === "PASS"
+    && Number.isInteger(subject.phase1RunId) && subject.phase1RunId > 0
+    && subject.phase1Head === candidate?.head
+    && receipt?.subjectHash === subjectHash
+    && receipt?.bodySha256 === bodyHash
+    && Number.isInteger(receipt?.commentId) && receipt.commentId > 0
+    && receipt?.commentId === observation?.commentId
+    && receipt?.author === "Chillywood2025"
+    && receipt?.authorAssociation === "OWNER"
+    && observation?.author === receipt.author
+    && observation?.authorAssociation === receipt.authorAssociation
+    && typeof observation?.createdAt === "string"
+    && observation.createdAt === observation.updatedAt
+    && observation.issueUrl === `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${lease?.implementationPr}`
+    && observation.body === body;
+  return { ok, stale: typeof receipt?.subjectHash === "string" && receipt.subjectHash !== subjectHash, subject, subjectHash, bodyHash };
+}
+
+export function transitionFiniteTaskState(currentState, event) {
+  if (!finiteTaskStates.includes(currentState)) return { ok: false, state: currentState, finding: "FINITE_TASK_STATE_MALFORMED" };
+  if (finiteTaskTerminalStates.has(currentState)) return { ok: false, state: currentState, finding: "FINITE_TASK_TERMINAL" };
+  const transitions = {
+    SOURCE_PUSH: "ACTIVE_IMPLEMENTATION",
+    PRODUCT_FINDING: "BLOCKED_PRODUCT_FINDING",
+    EVIDENCE_CLEAR: "MERGE_ELIGIBLE",
+    OWNER_ABANDONED: "ABANDONED_BY_OWNER"
+  };
+  if (event === "MERGE_VERIFIED") {
+    return currentState === "MERGE_ELIGIBLE"
+      ? { ok: true, state: "MERGED_VERIFIED", finding: null }
+      : { ok: false, state: currentState, finding: "FINITE_TASK_MERGE_NOT_ELIGIBLE" };
+  }
+  const state = transitions[event];
+  return state ? { ok: true, state, finding: null } : { ok: false, state: currentState, finding: "FINITE_TASK_EVENT_MALFORMED" };
+}
+
+export function verifyFiniteTaskMergeProvenance({ lease, receiptSubject, currentProtectedBase, mergeRef, actualMerge = null }) {
+  const findings = [];
+  if (mergeRef?.pr !== lease?.implementationPr) findings.push("FINITE_MERGE_WRONG_PR");
+  if (mergeRef?.branch !== lease?.implementationBranch) findings.push("FINITE_MERGE_WRONG_BRANCH");
+  if (!Array.isArray(mergeRef?.parents) || mergeRef.parents.length !== 2) findings.push("FINITE_MERGE_NOT_TWO_PARENT");
+  else {
+    if (mergeRef.parents[0] !== currentProtectedBase) findings.push("FINITE_MERGE_WRONG_FIRST_PARENT");
+    if (mergeRef.parents[1] !== receiptSubject?.finalHead) findings.push("FINITE_MERGE_WRONG_SECOND_PARENT");
+  }
+  if (mergeRef?.sourceTree !== receiptSubject?.finalTree) findings.push("FINITE_MERGE_WRONG_SOURCE_TREE");
+  if (!gitShaPattern.test(mergeRef?.tree ?? "")) findings.push("FINITE_MERGE_TREE_MALFORMED");
+  if (actualMerge) {
+    if (!Array.isArray(actualMerge.parents) || actualMerge.parents.length !== 2) findings.push("FINITE_ACTUAL_MERGE_NOT_TWO_PARENT");
+    else {
+      if (actualMerge.parents[0] !== currentProtectedBase) findings.push("FINITE_ACTUAL_MERGE_WRONG_FIRST_PARENT");
+      if (actualMerge.parents[1] !== receiptSubject?.finalHead) findings.push("FINITE_ACTUAL_MERGE_WRONG_SECOND_PARENT");
+    }
+    if (actualMerge.tree !== mergeRef?.tree) findings.push("FINITE_ACTUAL_MERGE_TREE_MISMATCH");
+  }
+  const unique = [...new Set(findings)].sort();
+  return { ok: unique.length === 0, syntheticMergeTree: mergeRef?.tree ?? null, findings: unique };
+}
+
+export function detectAssuranceRecursion({ lease, requestedDependency, counts = {}, controlDependsOnControl = false }) {
+  const budget = lease?.recursionBudget ?? {};
+  const exceeds = requestedDependency === "ADMISSION_PR" && (counts.admissionPrs ?? 0) >= budget.maximumAdmissionPrs
+    || requestedDependency === "FINAL_SOURCE_BINDING_PR" && (counts.finalSourceBindingPrs ?? 0) >= budget.maximumFinalSourceBindingPrs
+    || requestedDependency === "MERGE_PROVENANCE_PR" && (counts.mergeProvenancePrs ?? 0) >= budget.maximumMergeProvenancePrs
+    || requestedDependency === "POST_MERGE_TRUTH_PR" && (counts.postMergeTruthPrs ?? 0) >= budget.maximumPostMergeTruthPrs;
+  return controlDependsOnControl || exceeds
+    ? { ok: false, code: ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE }
+    : { ok: true, code: null };
+}
+
 export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
@@ -1428,6 +1649,7 @@ export function verifyBaseSynchronizedImplementationHead({
 export function verifyCurrentTruthHeadBindings({
   openImplementationPrs,
   observedRefs,
+  finiteTaskLeases = null,
   branch,
   head,
   remoteMain,
@@ -1480,28 +1702,64 @@ export function verifyCurrentTruthHeadBindings({
     const observedValid = typeof observed === "string" && gitShaPattern.test(observed);
     let classification = observed === entry?.head ? "EXACT_SOURCE_HEAD" : "UNVERIFIED_HEAD";
     let synchronization = null;
+    let finiteLeaseCandidate = null;
     if (observedValid && headValid && observed !== entry.head) {
-      const inspection = baseSynchronizations?.[ref] ?? {};
-      const truthBinding = inspection.currentTruthBinding
-        ? verifyCurrentTruthBindingSynchronization({
-          ...inspection.currentTruthBinding,
-          sourceHead: entry.head,
-          synchronizedHead: observed,
-          currentMain: remoteMain
-        })
-        : null;
-      synchronization = truthBinding?.ok ? truthBinding : verifyBaseSynchronizedImplementationHead({
-          ...inspection,
-          number: entry.number,
-          branch: entry.branch,
-          sourceHead: entry.head,
-          synchronizedHead: observed,
-          currentMain: remoteMain,
-          minimumReviewEvidence: minimumBaseSynchronizationReviewEvidence,
-          reviewFreshnessHours: baseSynchronizationReviewFreshnessHours,
-          evaluationTime
+      const lease = finiteTaskLeaseFor(finiteTaskLeases, {
+        implementationPr: entry.number,
+        implementationBranch: entry.branch,
+        featureId: entry.featureId
+      });
+      if (lease) {
+        const isAncestor = (ancestor, descendant) => {
+          try { git(["merge-base", "--is-ancestor", ancestor, descendant]); return true; } catch { return false; }
+        };
+        const candidateRange = `${remoteMain}...${observed}`;
+        const changedPaths = git(["diff", "--name-only", candidateRange]).split(/\r?\n/gu).filter(Boolean).sort();
+        const changedLines = git(["diff", "--numstat", candidateRange]).split(/\r?\n/gu).filter(Boolean)
+          .reduce((total, line) => total + line.split("\t").slice(0, 2)
+            .reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0), 0);
+        finiteLeaseCandidate = evaluateFiniteTaskCandidate({
+          lease,
+          registry: finiteTaskLeases,
+          candidate: {
+            pr: entry.number,
+            branch: entry.branch,
+            prState: "open",
+            head: observed,
+            tree: git(["rev-parse", `${observed}^{tree}`]),
+            seedTree: git(["rev-parse", `${lease.admittedSeedHead}^{tree}`]),
+            seedIsAncestor: isAncestor(lease.admittedSeedHead, observed),
+            baseIsAncestor: isAncestor(lease.admittedBase, observed),
+            changedPaths,
+            changedLines,
+            findings: lease.taskState === "BLOCKED_PRODUCT_FINDING" ? { P0: 0, P1: 1, launchImpactingP2: 0 } : { P0: 0, P1: 0, launchImpactingP2: 0 }
+          }
         });
-      if (synchronization.ok) classification = synchronization.classification;
+        if (finiteLeaseCandidate.ok) classification = "FINITE_TASK_LEASE_CANDIDATE";
+      }
+      if (!finiteLeaseCandidate?.ok) {
+        const inspection = baseSynchronizations?.[ref] ?? {};
+        const truthBinding = inspection.currentTruthBinding
+          ? verifyCurrentTruthBindingSynchronization({
+            ...inspection.currentTruthBinding,
+            sourceHead: entry.head,
+            synchronizedHead: observed,
+            currentMain: remoteMain
+          })
+          : null;
+        synchronization = truthBinding?.ok ? truthBinding : verifyBaseSynchronizedImplementationHead({
+            ...inspection,
+            number: entry.number,
+            branch: entry.branch,
+            sourceHead: entry.head,
+            synchronizedHead: observed,
+            currentMain: remoteMain,
+            minimumReviewEvidence: minimumBaseSynchronizationReviewEvidence,
+            reviewFreshnessHours: baseSynchronizationReviewFreshnessHours,
+            evaluationTime
+          });
+        if (synchronization.ok) classification = synchronization.classification;
+      }
     }
     bindings.push({
       branch: entry.branch,
@@ -1510,14 +1768,15 @@ export function verifyCurrentTruthHeadBindings({
       observedHead: observed,
       recordedHead: entry?.head ?? null,
       ref,
-      synchronization
+      synchronization,
+      finiteLeaseCandidate
     });
 
     if (observed === null || observed === undefined || observed === "") {
       findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_REF_MISSING", status: "BLOCKED_INTERNAL", branch: entry.branch, number: numberValid ? entry.number : null, ref });
     } else if (!observedValid) {
       findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_OBSERVED_HEAD_MALFORMED", status: "BLOCKED_INTERNAL", branch: entry.branch, number: numberValid ? entry.number : null, observed });
-    } else if (headValid && observed !== entry.head && !synchronization?.ok) {
+    } else if (headValid && observed !== entry.head && !synchronization?.ok && !finiteLeaseCandidate?.ok) {
       findings.push({
         id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE",
         status: "BLOCKED_INTERNAL",
@@ -1586,6 +1845,7 @@ export function verifyCurrentTruthHeadBindings({
   const currentRef = currentEntry && isValidGitBranchName(currentEntry.branch) ? implementationRemoteRef(currentEntry.branch) : null;
   const currentBinding = bindings.find((binding) => binding.ref === currentRef);
   const acceptedCheckoutHead = ["BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH", "CURRENT_TRUTH_BINDING_COMMIT"].includes(currentBinding?.classification)
+    || currentBinding?.classification === "FINITE_TASK_LEASE_CANDIDATE"
     ? currentBinding.observedHead
     : currentEntry?.head;
   if (currentEntry && checkoutHeadValid && gitShaPattern.test(currentEntry.head) && head !== acceptedCheckoutHead) {
@@ -1990,6 +2250,14 @@ export function renderCurrentState(record) {
   const installedQa = record.operationalClosures.installedProductQa;
   const revenueCat = record.operationalClosures.revenueCat;
   const active = record.activeTaskBinding;
+  const activeLease = finiteTaskLeaseFor(record.finiteTaskLeases, {
+    implementationPr: active.implementationPr,
+    implementationBranch: active.implementationBranch,
+    featureId: active.featureId
+  });
+  const leaseLine = activeLease
+    ? `\n- Finite task lease: \`${record.finiteTaskLeases.policyId}\`, admitted seed \`${activeLease.admittedSeedHead}\` / \`${activeLease.admittedSeedTree}\`, protected admission PR #${activeLease.protectedAdmissionPr}, state \`${activeLease.taskState}\`; descendant heads do not require another admission, source binding, or merge-provenance PR.`
+    : "";
   const proofTierStatusLine = active.proofTierStatuses
     ? `\n- Proof-tier statuses: ${tierIds.map((tier) => {
       const status = active.proofTierStatuses[tier];
@@ -2007,7 +2275,7 @@ export function renderCurrentState(record) {
   const lateReviews = (record.lateReviewSentinels ?? [])
     .map(({ prNumber, reviewedSha, findings, successorCorrectionOwner }) => `PR #${prNumber} reviewed \`${reviewedSha}\` after merge with ${(findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length} unresolved findings; successor \`${successorCorrectionOwner}\``)
     .join("; ") || "none";
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.${proofTierStatusLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {

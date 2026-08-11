@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
+import { ROOT, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, sha256 as contractSha256, stableJson, validateProofTierStatuses } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -359,7 +359,90 @@ function sourceIsAncestor(sourceHead, currentHead) {
   } catch { return false; }
 }
 
+function collectFiniteTaskCandidate(lease, binding, facts) {
+  if (facts.finiteTaskCandidateObservation) return facts.finiteTaskCandidateObservation;
+  const response = spawnSync("gh", [
+    "api",
+    `repos/${ownerBootstrapRepository}/pulls/${lease.implementationPr}`,
+    "--jq",
+    "{pr:.number,branch:.head.ref,prState:.state,head:.head.sha}"
+  ], { cwd: ROOT, encoding: "utf8", shell: false });
+  if (response.status !== 0) return null;
+  try {
+    const provider = JSON.parse(response.stdout);
+    const head = provider.head;
+    const currentProtectedBase = facts.identity?.originMainHead ?? git(["rev-parse", "origin/main"]);
+    const candidateRange = `${currentProtectedBase}...${head}`;
+    const changedPaths = git(["diff", "--name-only", candidateRange]).split(/\r?\n/gu).filter(Boolean).sort();
+    const changedLines = git(["diff", "--numstat", candidateRange]).split(/\r?\n/gu).filter(Boolean)
+      .reduce((total, line) => total + line.split("\t").slice(0, 2)
+        .reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0), 0);
+    return {
+      ...provider,
+      tree: git(["rev-parse", `${head}^{tree}`]),
+      seedTree: git(["rev-parse", `${lease.admittedSeedHead}^{tree}`]),
+      seedIsAncestor: sourceIsAncestor(lease.admittedSeedHead, head),
+      baseIsAncestor: sourceIsAncestor(lease.admittedBase, head),
+      changedPaths,
+      changedLines,
+      diffHash: contractSha256(git(["diff", "--binary", "--no-ext-diff", candidateRange])),
+      changedPathHash: contractSha256(changedPaths),
+      finalReceiptHead: facts.finalReceiptHead ?? binding.currentImplementationHead,
+      repositoryReviewHead: facts.repositoryReviewHead ?? binding.currentImplementationHead,
+      phase1Head: facts.phase1Head ?? binding.currentImplementationHead,
+      findings: facts.releaseCriticalFindings ?? (lease.taskState === "BLOCKED_PRODUCT_FINDING"
+        ? { P0: 0, P1: 1, launchImpactingP2: 0 }
+        : { P0: 0, P1: 0, launchImpactingP2: 0 })
+    };
+  } catch { return null; }
+}
+
+function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease) {
+  const candidate = collectFiniteTaskCandidate(lease, binding, facts);
+  const evaluated = evaluateFiniteTaskCandidate({ lease, registry: truth.finiteTaskLeases, candidate });
+  const findings = [...evaluated.findings];
+  if (candidate?.head !== identity.head) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
+  if (candidate?.tree !== identity.tree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
+  if (candidate?.branch !== identity.branch) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_BRANCH_MISMATCH");
+  if (findings.length) return { ok: false, findings: [...new Set(findings)].sort() };
+  return {
+    ok: true,
+    value: {
+      pr: lease.implementationPr,
+      branch: lease.implementationBranch,
+      state: evaluated.taskState,
+      implementationBindingId: binding.implementationBindingId,
+      leaseId: lease.leaseId,
+      protectedAdmissionPr: lease.protectedAdmissionPr,
+      immutableSourceHead: lease.admittedSeedHead,
+      immutableSourceTree: lease.admittedSeedTree,
+      currentSynchronizedHead: candidate.head,
+      currentSynchronizedTree: candidate.tree,
+      immutableSource: { head: lease.admittedSeedHead, tree: lease.admittedSeedTree },
+      currentSynchronizedSource: { head: candidate.head, tree: candidate.tree },
+      finiteLease: {
+        policyId: truth.finiteTaskLeases.policyId,
+        taskState: evaluated.taskState,
+        leaseRetained: evaluated.leaseRetained,
+        evidenceInvalidated: evaluated.invalidated,
+        admittedBase: lease.admittedBase,
+        diffHash: candidate.diffHash,
+        changedPathHash: candidate.changedPathHash,
+        scope: { changedFiles: candidate.changedPaths.length, changedLines: candidate.changedLines, result: "PASS" }
+      }
+    }
+  };
+}
+
 function resolveStructuredImplementation(truth, identity, facts, binding) {
+  const finiteLease = finiteTaskLeaseFor(truth?.finiteTaskLeases, {
+    implementationPr: binding.implementationPr,
+    implementationBranch: binding.implementationBranch,
+    featureId: binding.featureId
+  });
+  if (finiteLease && (facts.finiteTaskCandidateObservation || facts.currentTruth === undefined)) {
+    return resolveFiniteTaskImplementation(truth, identity, facts, binding, finiteLease);
+  }
   const findings = [];
   const open = truth?.openImplementationPrs ?? [];
   if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };
