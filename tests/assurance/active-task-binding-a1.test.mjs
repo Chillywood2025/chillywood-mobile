@@ -890,6 +890,21 @@ test("protected legacy correction bootstrap is exact, unique, deterministic, fre
       immutableSourceIsAncestor: true,
       providerPrHead: correction.currentImplementationHead
     },
+    finiteTaskCandidateObservation: {
+      pr: correction.implementationPr,
+      branch: correction.implementationBranch,
+      prState: "open",
+      head: correction.currentImplementationHead,
+      tree: correction.currentImplementationTree,
+      seedTree: correctionTruth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 214).admittedSeedTree,
+      seedIsAncestor: true,
+      baseIsAncestor: true,
+      changedPaths: ["docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json"],
+      changedLines: 10,
+      diffHash: "a".repeat(64),
+      changedPathHash: "b".repeat(64),
+      findings: { P0: 0, P1: 1, launchImpactingP2: 0 }
+    },
     ownerBootstrapAuthorizationObservation
   };
   const packets = [0, 1, 2].map(() => activeTask({ ...correctionFacts, featureId: "chilly-chat-call-lifecycle" }));

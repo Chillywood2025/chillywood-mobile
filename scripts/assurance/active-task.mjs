@@ -440,7 +440,7 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
     implementationBranch: binding.implementationBranch,
     featureId: binding.featureId
   });
-  if (finiteLease && (facts.finiteTaskCandidateObservation || facts.currentTruth === undefined)) {
+  if (finiteLease) {
     return resolveFiniteTaskImplementation(truth, identity, facts, binding, finiteLease);
   }
   const findings = [];
