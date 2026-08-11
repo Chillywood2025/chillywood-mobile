@@ -771,9 +771,30 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T07:24:00Z",
+  "timestamp": "2026-08-11T07:34:00Z",
   "freshnessDeadline": "2026-08-12T07:23:00Z",
   "evidenceSources": [
+    {
+      "id": "livekit-mic-post-merge-correction-final-quarantine-source-freeze-20260811-0734",
+      "mode": "local-offline-and-github-read-only",
+      "covers": [
+        "repository.active-implementation.immutable-synchronized-source",
+        "PR #194 immutable correction c15a58039b67d65eabdcaa03a9422ebc8d6dd95e tree 4ce01fa17e4184f2523b82a10401e3b3f59dd641 remained byte-exact through synchronized head ada396a437e40a98acea75bf016c36fc3ea86739 tree 662dc601bf54b8abdc78cc915d757a6c55c2b39d",
+        "PR #210 contains the bounded five-finding LiveKit microphone correction and all independently reproduced exact-head launch-blocking corrections",
+        "same-row queue timeout quarantine propagates across successor reservations until the unresolved root writer drains",
+        "AppState native reconciliation escalation is drained before a coalesced heartbeat reconciliation completes",
+        "whole mounted hook execution passes 54 of 54 exact source contract passes 5 of 5 and all 25 required negative-control mutants are rejected",
+        "contract validation and Chi'lly Chat semantics pass with no provider contact hosted scan build OTA native database D2A execution or release action"
+      ],
+      "observedAt": "2026-08-11T07:34:00Z",
+      "freshnessClass": "REPOSITORY_SOURCE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "543fc7cabcf5fdbde8104eb1f903e5c912a02e00",
+      "subjectHead": "543fc7cabcf5fdbde8104eb1f903e5c912a02e00",
+      "subjectTree": "3ca495f6cb35a8b655973196b741308cdab49066"
+    },
     {
       "id": "livekit-mic-post-merge-correction-canonical-provenance-source-freeze-20260811-0723",
       "mode": "local-offline-and-github-read-only",
