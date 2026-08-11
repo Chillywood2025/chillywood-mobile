@@ -1797,7 +1797,8 @@ test("a late-review sentinel cannot authorize its own branch exceptions", () => 
   ]) {
     const forged = structuredClone(truth);
     mutate(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194));
-    assert.equal(unresolvedLateReviewSentinels(forged).length, 2, "known sentinel owner drift remains blocking");
+    const unresolved = unresolvedLateReviewSentinels(forged);
+    assert.deepEqual(unresolved.map(({ prNumber }) => prNumber), [194], "known PR #194 owner drift re-blocks only its exact sentinel while the independent PR #195 tombstone remains resolved");
     assert.equal(lateReviewSentinelValidationState(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194)), "INTERNALLY_VALIDATED_OWNER_POLICY_INVALID");
     assert.equal(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"), true);
   }

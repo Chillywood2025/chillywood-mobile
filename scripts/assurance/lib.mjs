@@ -647,16 +647,28 @@ function repositoryReadbackEvidenceBound({ claim, source, committedSource, requi
 export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
-    const exactD2AAdmissionEvidence = source?.exactExternalSourcePolicy === "D2A_PROTECTED_ADMISSION_PR_213_V1"
-      && source.id === "d2a-release-critical-admission-source-87833399360e"
-      && source.sourceCommit === "87833399360e99f7ad630ebbb1c5643a57f1481f"
+    const exactProtectedAdmissionSources = [{
+      exactExternalSourcePolicy: "D2A_PROTECTED_ADMISSION_PR_213_V1",
+      id: "d2a-release-critical-admission-source-87833399360e",
+      sourceCommit: "87833399360e99f7ad630ebbb1c5643a57f1481f",
+      subjectTree: "aadc47f810525d925b1a4a413d7ded1af581b678",
+      implementationPr: 212,
+      implementationBranch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+      protectedAdmissionPr: 213
+    }, {
+      exactExternalSourcePolicy: "D2A_LEGACY_WEBRTC_CORRECTION_PROTECTED_ADMISSION_PR_215_V1",
+      id: "d2a-legacy-webrtc-correction-source-a5f0ff451310",
+      sourceCommit: "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
+      subjectTree: "d009ba762182e58fc054e395a790f29eacba4b55",
+      implementationPr: 214,
+      implementationBranch: "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
+      protectedAdmissionPr: 215
+    }];
+    const exactProtectedAdmissionEvidence = exactProtectedAdmissionSources.some((expected) => Object.entries(expected)
+      .every(([field, value]) => source?.[field] === value))
       && source.subjectHead === source.sourceCommit
-      && source.subjectTree === "aadc47f810525d925b1a4a413d7ded1af581b678"
-      && source.implementationPr === 212
-      && source.implementationBranch === "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation"
-      && source.protectedAdmissionPr === 213
-      && git(["show-ref", "--verify", "--hash", "refs/remotes/origin/codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation"]) === source.sourceCommit;
-    if (!exactD2AAdmissionEvidence) git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
+      && git(["show-ref", "--verify", "--hash", `refs/remotes/origin/${source.implementationBranch}`]) === source.sourceCommit;
+    if (!exactProtectedAdmissionEvidence) git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
     if (claim?.freshnessClass === "REPOSITORY_SOURCE") {
       if (!/^[0-9a-f]{40}$/u.test(claim?.subjectHead ?? "")
         || !/^[0-9a-f]{40}$/u.test(claim?.subjectTree ?? "")
@@ -665,7 +677,7 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
         || source.subjectTree !== claim.subjectTree
         || git(["rev-parse", `${claim.subjectHead}^{tree}`]) !== claim.subjectTree) return false;
     }
-    if (exactD2AAdmissionEvidence) {
+    if (exactProtectedAdmissionEvidence) {
       const factsBound = Array.isArray(source.covers)
         && claim.factsCovered.every((factId) => {
           const entries = factRegistry.filter(({ factId: registered }) => registered === factId);
