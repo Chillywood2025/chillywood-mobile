@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "livekit-mic-post-merge-correction-v1",
+  "classification": "LAUNCH_CRITICAL_BOUNDED_PRODUCT_CORRECTION",
+  "baseHead": "0a4e48bba0508b592f20c38225e240846c6d8f88",
+  "branch": "codex/d2a-livekit-mic-post-merge-review-correction",
+  "preFixReproduction": {
+    "head": "0a4e48bba0508b592f20c38225e240846c6d8f88",
+    "result": "0_OF_5_CORRECTED_BEHAVIORS_PASSED",
+    "findings": [
+      {
+        "id": "HEARTBEAT_STRICT_WRITE_RACE",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "PRODUCT_ROOM_OBJECT_IDENTITY_CANCELED_TOGGLE",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "RENDER_PHASE_GENERATION_MUTATION_RETIRED_ACTIVE_SESSION",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "MEMBERSHIP_FAILURE_MISREPORTED_PERMISSION_DENIAL",
+        "status": "REPRODUCED"
+      },
+      {
+        "id": "T2_EXTRACTED_ADAPTER_NOT_MOUNTED_HOOK",
+        "status": "REPRODUCED"
+      }
+    ]
+  },
+  "corrections": {
+    "writeSerialization": "SESSION_BOUND_ROOM_QUEUE_WITH_STRICT_LEASE_AND_LATEST_STATE_RECOMPUTATION",
+    "sessionAuthority": "COMMITTED_GENERATION_STABLE_AUTHORITY_AND_LIVEKIT_ROOM_IDENTITY",
+    "renderPurity": "SESSION_GENERATION_ADVANCES_ONLY_IN_LAYOUT_EFFECT_COMMIT_PHASE",
+    "permissionState": "NATIVE_PERMISSION_STATE_SEPARATE_FROM_OPERATIONAL_RECONCILIATION",
+    "mountedEvidence": "WHOLE_HOOK_REACT_DOM_RENDER_COMMIT_EFFECT_TIMING_AND_UNMOUNT"
+  },
+  "focusedResults": {
+    "mountedHook": {
+      "passed": 41,
+      "failed": 0,
+      "requiredMatrixPassed": 38,
+      "supportCasesPassed": 2,
+      "t2ContractCasesPassed": 1
+    },
+    "sourceContract": {
+      "passed": 5,
+      "failed": 0
+    },
+    "negativeControls": {
+      "passed": 14,
+      "failed": 0
+    },
+    "typescript": "PASS",
+    "eslint": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "proofTiers": {
+    "T1": "SOURCE_BOUND",
+    "T2": "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION",
+    "T3": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE",
+    "T4": "BLOCKED_INTERNAL_NATIVE_AUDIO_MATRIX_INCOMPLETE"
+  },
+  "digests": {
+    "contractSha256": "8bf57ea6f9820154910c26be91b0197699fa9e69f5e32ce47867c450a81e94ed",
+    "hookSha256": "30ad63121311392985b3bb788aa2f95d6b615dfe0df7599b812cf82fea05ab88",
+    "mountedTestSha256": "9b6797826abb701ebb489e62ab8a5aa42a0404665af4e36257d98f371f34c578",
+    "mountedHelperSha256": "e403795ce1ea5764b15bc96709c48bf6300f27dfaf0e9c16d2819ac49ed7f0ac",
+    "sourceContractTestSha256": "50e79a205f6d1aa1ae39c71fec6f2d7d1ea3a4b8062da20e6cfa99a04046213b"
+  },
+  "nonInterference": {
+    "providerCodexReview": "OPTIONAL_ADVISORY_NOT_REQUESTED",
+    "hostedCodexSecurity": "NOT_RUN",
+    "providerContact": false,
+    "buildOrOta": false,
+    "nativeSourceChanged": false,
+    "databaseChanged": false,
+    "packageOrLockChanged": false,
+    "d2aExecution": "FROZEN"
+  }
+}
