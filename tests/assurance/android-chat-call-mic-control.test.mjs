@@ -28,7 +28,7 @@ const legacyRefMarker = "  const microphonePermissionRef = useRef<MediaPermissio
 assert.equal(legacyHookSource.split(legacyRefMarker).length - 1, 1, "unique legacy ref exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, localStreamRef, micEnabledRef, microphonePermissionRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
 );
 const compiledLegacyHook = ts.transpileModule(instrumentedLegacyHookSource, {
   compilerOptions: {
@@ -125,6 +125,7 @@ const makeRoom = (runtime) => ({
 function createLegacyMountedRuntime(options = {}) {
   const runtime = {
     appState: "active",
+    appStateListeners: [],
     broadcasts: [],
     cameraPermission: grantedPermission(),
     channels: [],
@@ -150,6 +151,7 @@ function createLegacyMountedRuntime(options = {}) {
     senderAdds: 0,
     senderRemoves: 0,
     senderReplacements: 0,
+    removedChannels: [],
     sendActions: [],
     timeoutHandles: [],
     timeoutCallbacks: [],
@@ -162,14 +164,23 @@ function createLegacyMountedRuntime(options = {}) {
 
   class FakeTrack {
     constructor(kind, trackOptions = {}) {
-      this.enabled = trackOptions.enabled ?? true;
-      this.id = `${kind}-${++nextTrackId}`;
+      this._enabled = trackOptions.enabled ?? true;
+      this.id = trackOptions.id ?? `${kind}-${++nextTrackId}`;
       this.kind = kind;
       this.muted = false;
       this.readyState = trackOptions.readyState ?? "live";
+      this.refuseDisable = !!trackOptions.refuseDisable;
+      this.refuseStop = !!trackOptions.refuseStop;
+    }
+
+    get enabled() { return this._enabled; }
+    set enabled(nextEnabled) {
+      if (nextEnabled === false && this.refuseDisable) return;
+      this._enabled = nextEnabled;
     }
 
     stop() {
+      if (this.refuseStop) return;
       this.enabled = false;
       this.readyState = "ended";
     }
@@ -182,7 +193,7 @@ function createLegacyMountedRuntime(options = {}) {
     }
 
     addTrack(track) {
-      if (!this.tracks.some((candidate) => candidate.id === track.id)) this.tracks.push(track);
+      if (!this.tracks.some((candidate) => candidate === track)) this.tracks.push(track);
     }
 
     getAudioTracks() { return this.tracks.filter((track) => track.kind === "audio"); }
@@ -268,6 +279,10 @@ function createLegacyMountedRuntime(options = {}) {
   runtime.queuePermission = (permission) => runtime.permissionActions.push(permission);
   runtime.queueSend = (action) => runtime.sendActions.push(action);
   runtime.queuePresenceTrack = (action) => runtime.presenceTrackActions.push(action);
+  runtime.emitAppState = async (nextState) => {
+    runtime.appState = nextState;
+    for (const listener of runtime.appStateListeners) await listener(nextState);
+  };
   runtime.createPeer = () => new FakePeerConnection();
   runtime.createStream = (tracks = []) => new FakeStream(tracks);
   runtime.createTrack = (kind = "audio", trackOptions = {}) => new FakeTrack(kind, trackOptions);
@@ -352,7 +367,10 @@ function createLegacyMountedRuntime(options = {}) {
   }
 
   const AppState = {
-    addEventListener: () => ({ remove: () => undefined }),
+    addEventListener: (_event, listener) => {
+      runtime.appStateListeners.push(listener);
+      return { remove: () => { runtime.appStateListeners = runtime.appStateListeners.filter((candidate) => candidate !== listener); } };
+    },
     get currentState() { return runtime.appState; },
   };
   const requestCameraPermission = async () => runtime.cameraPermission;
@@ -379,7 +397,10 @@ function createLegacyMountedRuntime(options = {}) {
       getCommunicationStreamURL: (stream) => stream?.toURL?.() ?? "",
       getCommunicationTrack: getTrack,
       joinCommunicationRoomSession: async () => makeMembership(runtime),
-      leaveCommunicationRoomSession: async () => null,
+      leaveCommunicationRoomSession: async () => {
+        await options.leaveBarrier;
+        return null;
+      },
       readCommunicationIdentity: async () => ({ avatarUrl: null, displayName: "Local", userId: runtime.userId }),
       setCommunicationTrackEnabled: (stream, kind, enabled) => {
         const track = getTrack(stream, kind);
@@ -392,6 +413,7 @@ function createLegacyMountedRuntime(options = {}) {
         runtime.membershipTouches.push({ ...input });
         const action = runtime.membershipActions.shift() ?? { outcome: "success" };
         action.mutate?.({ input, runtime });
+        if (action.wait) await action.wait;
         if (action.outcome === "reject") throw new Error("membership rejected");
         if (action.outcome === "null") return null;
         runtime.durableMic = !!input.micEnabled;
@@ -430,7 +452,7 @@ function createLegacyMountedRuntime(options = {}) {
       supabase: {
         channel: (topic) => new FakeChannel(topic),
         getChannels: () => runtime.channels,
-        removeChannel: () => undefined,
+        removeChannel: (channel) => { runtime.removedChannels.push(channel); },
       },
     },
     "expo-av": {
@@ -563,8 +585,8 @@ test("current PR210 contract and bounded adapter remain deterministic", () => {
     assert.deepEqual(evidence.legacy, { passed: 20, total: 20 });
     assert.deepEqual(evidence.negativeControls, {
       ...evidence.negativeControls,
-      passed: 10,
-      total: 10,
+      passed: 12,
+      total: 12,
     });
     assert.equal(evidence.legacyReachability.status, "REACHABLE_PUBLIC_DEFAULT");
     assert.equal(evidence.source.files, 4);
@@ -829,3 +851,205 @@ for (const matrixCase of legacyFirstTrackCases) {
     assert.equal(runtime.errors.length, 0, `${matrixCase.id}: no reported native/React fatal or unhandled path`);
   });
 }
+
+test("legacy call-domain closure: muted privacy quarantines all local and sender-bound audio tracks", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const first = runtime.createTrack("audio", { id: "object-identity-collision" });
+  const second = runtime.createTrack("audio", { id: "object-identity-collision" });
+  const senderOnly = runtime.createTrack("audio");
+  const primary = runtime.createStream([first, second]);
+  const auxiliary = runtime.createStream([runtime.createTrack("audio")]);
+  harness.refs.localStreamRef.current = primary;
+  harness.refs.auxiliaryStreamsRef.current = [auxiliary];
+  runtime.peers[0].addTrack(first, primary);
+  runtime.peers[0].addTrack(second, primary);
+  runtime.peers[0].addTrack(senderOnly, runtime.createStream());
+
+  const result = await harness.run(() => harness.getResult().setMicrophoneEnabled(true));
+
+  assert.equal(result, false, "duplicate topology cannot report enabled success");
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  for (const track of [first, second, senderOnly, ...auxiliary.getAudioTracks()]) {
+    assert.equal(track.enabled && track.readyState !== "ended", false, `${track.id}: no usable enabled path remains`);
+  }
+  const remainingSenders = runtime.peers[0].getSenders().filter((sender) => sender.track?.kind === "audio");
+  assert.ok(remainingSenders.length <= 1, "duplicate audio senders are removed");
+  assert.ok(remainingSenders.every((sender) => sender.track.enabled === false || sender.track.readyState === "ended"));
+  assert.ok(runtime.senderRemoves >= 2, "sender topology was quarantined, not only stream topology");
+});
+
+test("legacy call-domain closure: unprovable quarantine never claims muted success", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.durableMic = true;
+  const harness = await mountLegacyHook(runtime, {
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, {
+    enabled: true,
+    refuseDisable: true,
+    refuseStop: true,
+  }, { sender: true });
+
+  const result = await harness.run(() => harness.getResult().setMicrophoneEnabled(false));
+
+  assert.equal(result, false);
+  assert.equal(track.enabled, true, "failed readback remains visible to the proof");
+  assert.equal(harness.getResult().micEnabled, true, "UI does not falsely claim a proved mute");
+  assert.match(harness.getResult().error, /privacy could not be verified/u);
+  assert.equal(runtime.membershipTouches.some((touch) => touch.micEnabled === false), false);
+});
+
+test("legacy call-domain closure: sender-only mute requires privacy and durable convergence", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.durableMic = true;
+  const harness = await mountLegacyHook(runtime, {
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  const senderOnly = runtime.createTrack("audio", { enabled: true });
+  runtime.peers[0].addTrack(senderOnly, runtime.createStream());
+
+  const result = await harness.run(() => harness.getResult().setMicrophoneEnabled(false));
+
+  assert.equal(result, true);
+  assert.equal(senderOnly.enabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.broadcasts.at(-1)?.payload?.micOn, false);
+});
+
+test("legacy call-domain closure: mute durable failure compensates without split state", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.durableMic = true;
+  const harness = await mountLegacyHook(runtime, {
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  runtime.queueMembership({ outcome: "reject" });
+
+  const result = await harness.run(() => harness.getResult().setMicrophoneEnabled(false));
+
+  assert.equal(result, false);
+  assert.equal(track.enabled, true, "local state is restored when the false durable write fails");
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(runtime.broadcasts.at(-1)?.payload?.micOn, true, "broadcast state is compensated");
+});
+
+test("legacy call-domain closure: same-state recovery requires one sender and stable answer per peer", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.durableMic = true;
+  const harness = await mountLegacyHook(runtime, {
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: false, readyState: "ended" }, { sender: true });
+
+  const result = await harness.run(() => harness.getResult().setMicrophoneEnabled(true));
+
+  assert.equal(result, true);
+  assert.equal(runtime.peers[0].offerCalls, 1);
+  assert.equal(runtime.negotiationTimeline.length, 1);
+  assert.equal(runtime.peers[0].signalingState, "stable");
+  const usableSenders = runtime.peers[0].getSenders().filter((sender) => (
+    sender.track?.kind === "audio" && sender.track.enabled && sender.track.readyState !== "ended"
+  ));
+  assert.equal(usableSenders.length, 1);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(runtime.durableMic, true);
+});
+
+test("legacy call-domain closure: sender-only recovery replaces the orphan with one fresh track", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const orphanedTrack = runtime.createTrack("audio", { enabled: true });
+  runtime.peers[0].addTrack(orphanedTrack, runtime.createStream());
+
+  const result = await harness.run(() => harness.getResult().setMicrophoneEnabled(true));
+
+  assert.equal(result, true);
+  assert.equal(orphanedTrack.readyState, "ended");
+  const audioSenders = runtime.peers[0].getSenders().filter((sender) => sender.track?.kind === "audio");
+  assert.equal(audioSenders.length, 1);
+  assert.notEqual(audioSenders[0].track, orphanedTrack);
+  assert.equal(audioSenders[0].track.enabled, true);
+  assert.equal(audioSenders[0].track.readyState, "live");
+  assert.equal(runtime.peers[0].signalingState, "stable");
+});
+
+test("legacy call-domain closure: stale mic continuation cannot quarantine replacement topology", async (t) => {
+  let releaseMembership;
+  const membershipBarrier = new Promise((resolve) => { releaseMembership = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: false }, { sender: true });
+  runtime.queueMembership({ wait: membershipBarrier });
+
+  let controlPromise;
+  await act(async () => {
+    controlPromise = harness.getResult().setMicrophoneEnabled(true);
+    await settle(12);
+  });
+  const replacementChannel = runtime.createChannel("replacement-control-session");
+  const replacementPeer = runtime.createPeer();
+  const replacementTrack = runtime.createTrack("audio", { enabled: true });
+  const replacementStream = runtime.createStream([replacementTrack]);
+  replacementPeer.addTrack(replacementTrack, replacementStream);
+  harness.refs.legacySessionGenerationRef.current += 1;
+  harness.refs.channelRef.current = replacementChannel;
+  harness.refs.localStreamRef.current = replacementStream;
+  harness.refs.peerConnectionsRef.current[runtime.remoteUserId] = replacementPeer;
+  releaseMembership();
+
+  const result = await harness.run(() => controlPromise);
+  assert.equal(result, false);
+  assert.equal(harness.refs.channelRef.current, replacementChannel);
+  assert.equal(harness.refs.localStreamRef.current, replacementStream);
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], replacementPeer);
+  assert.equal(replacementTrack.enabled, true);
+  assert.equal(replacementTrack.readyState, "live");
+  assert.equal(replacementPeer.connectionState, "connected");
+});
+
+test("legacy call-domain closure: stale cleanup preserves replacement session resources", async (t) => {
+  let releaseLeave;
+  const leaveBarrier = new Promise((resolve) => { releaseLeave = resolve; });
+  const runtime = createLegacyMountedRuntime({ leaveBarrier });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const oldChannel = harness.refs.channelRef.current;
+  const oldPeer = runtime.peers[0];
+  const oldStream = runtime.createStream([runtime.createTrack("audio")]);
+  harness.refs.localStreamRef.current = oldStream;
+
+  let leavePromise;
+  await act(async () => {
+    leavePromise = harness.getResult().leaveRoom();
+    await settle(12);
+  });
+  const replacementChannel = runtime.createChannel("replacement-session");
+  const replacementPeer = runtime.createPeer();
+  const replacementTrack = runtime.createTrack("audio");
+  const replacementStream = runtime.createStream([replacementTrack]);
+  harness.refs.channelRef.current = replacementChannel;
+  harness.refs.localStreamRef.current = replacementStream;
+  harness.refs.peerConnectionsRef.current[runtime.remoteUserId] = replacementPeer;
+  releaseLeave();
+  await harness.run(() => leavePromise);
+
+  assert.equal(harness.refs.channelRef.current, replacementChannel);
+  assert.equal(harness.refs.localStreamRef.current, replacementStream);
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], replacementPeer);
+  assert.equal(replacementPeer.connectionState, "connected");
+  assert.equal(replacementTrack.readyState, "live");
+  assert.equal(runtime.removedChannels.includes(oldChannel), true);
+  assert.equal(runtime.removedChannels.includes(replacementChannel), false);
+  assert.equal(oldPeer.connectionState, "closed");
+});
