@@ -990,7 +990,7 @@ test("exact final source provenance accepts only the remote branch or own-PR mer
 });
 
 test("protected correction admission and final-source synchronizations are exact", () => {
-  for (const prNumber of [215, 216]) {
+  for (const prNumber of [215, 216, 217]) {
     const successor = currentTruthContract.synchronizationMerge.bootstrapMerge.successors.find(({ prNumber: candidate }) => candidate === prNumber);
     const mergeSha = "b".repeat(40);
     const secondParent = "c".repeat(40);

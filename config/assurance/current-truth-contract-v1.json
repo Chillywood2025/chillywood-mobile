@@ -92,6 +92,19 @@
           "scripts/assurance/lib.mjs",
           "tests/assurance/active-task-binding-a1.test.mjs"
         ]
+      },
+      {
+        "prNumber": 217,
+        "branch": "codex/d2a-legacy-webrtc-pr-merge-ref-provenance",
+        "firstParent": "e6703552b986ea6182be02b2d01d62b36eba30f0",
+        "requiredSecondParentAncestor": "d286e51e52fbe9087755c6be4842dc1d5a9193f2",
+        "changedPaths": [
+          "CURRENT_STATE.md",
+          "config/assurance/current-truth-contract-v1.json",
+          "config/assurance/current-truth-v1.json",
+          "scripts/assurance/lib.mjs",
+          "tests/assurance/active-task-binding-a1.test.mjs"
+        ]
       }
       ]
     }
