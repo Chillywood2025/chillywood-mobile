@@ -66,7 +66,15 @@ const canonicalRules = new Map([
   { id: "node-version", contractCommand: "node --version", file: "node", args: ["--version"], timeoutMs: 10000, resultContract: { type: "node-version-v1" } },
   { id: "d2a-call-semantics", contractCommand: "npm run test:chilly-chat-call-semantics", file: "npm", args: ["run", "test:chilly-chat-call-semantics"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
   { id: "d2a-native-handoff", contractCommand: "npm run test:chilly-chat-native-call-action-handoff", file: "npm", args: ["run", "test:chilly-chat-native-call-action-handoff"], timeoutMs: 120000, resultContract: { type: "exit-zero-v1" } },
-  { id: "d2a-plan", contractCommand: "assurance:plan", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } }
+  { id: "d2a-plan", contractCommand: "assurance:plan", file: "node", args: ["scripts/assurance/plan.mjs", "--feature=chilly-chat-call-lifecycle"], timeoutMs: 30000, resultContract: { type: "assurance-json-v1", command: "assurance:plan" } },
+  { id: "d2a-dependencies", contractCommand: "npm ci --no-audit --no-fund", file: "npm", args: ["ci", "--no-audit", "--no-fund"], timeoutMs: 900000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-lifecycle-focused", contractCommand: "node --test tests/assurance/android-generated-native-lifecycle.test.mjs", file: "node", args: ["--test", "tests/assurance/android-generated-native-lifecycle.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "d2a-mic-focused", contractCommand: "node --test tests/assurance/android-chat-call-mic-control.test.mjs", file: "node", args: ["--test", "tests/assurance/android-chat-call-mic-control.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "d2a-mic-exact-hook", contractCommand: "node --test tests/assurance/android-chat-call-mic-exact-hook.test.mjs", file: "node", args: ["--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
+  { id: "d2a-lifecycle-native", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --native --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--native", "--json"], timeoutMs: 21600000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-lifecycle-emulator", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --emulator --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--emulator", "--json"], timeoutMs: 21600000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-mic-native", contractCommand: "node scripts/assurance/android-chat-call-mic-control.mjs --native --json", file: "node", args: ["scripts/assurance/android-chat-call-mic-control.mjs", "--native", "--json"], timeoutMs: 21600000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-runtime-backup", contractCommand: "node scripts/assurance/android-native-call-origin-backup.mjs --backup-restore --json", file: "node", args: ["scripts/assurance/android-native-call-origin-backup.mjs", "--backup-restore", "--json"], timeoutMs: 1200000, resultContract: { type: "exit-zero-v1" } }
 ].map((rule) => [rule.id, rule]));
 
 export function governedReceiptRule(id) {
@@ -89,7 +97,10 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
   const matches = allowlist.commands?.filter((item) => item.id === id) ?? [];
   if (matches.length !== 1) return { ok: false, finding: matches.length ? "COMMAND_ID_AMBIGUOUS" : "COMMAND_NOT_ALLOWLISTED" };
   const rule = matches[0];
-  if (!safeRule(rule) || !Number.isInteger(rule.timeoutMs) || rule.timeoutMs < 1 || rule.timeoutMs > 900000) {
+  const nativeCommand = ["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native", "d2a-runtime-backup"].includes(rule.id);
+  const maximumTimeoutMs = ["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native"].includes(rule.id)
+    ? 21600000 : rule.id === "d2a-runtime-backup" ? 1200000 : 900000;
+  if (!safeRule(rule) || !Number.isInteger(rule.timeoutMs) || rule.timeoutMs < 1 || rule.timeoutMs > maximumTimeoutMs) {
     return { ok: false, finding: "COMMAND_CONTRACT_INVALID" };
   }
   if (!Array.isArray(suppliedArgs) || suppliedArgs.some((value) => typeof value !== "string")) {
@@ -117,6 +128,9 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
     maxBuffer: rule.maxBuffer ?? 16 * 1024 * 1024,
     env: {
       PATH: process.env.PATH,
+      ...(nativeCommand && process.env.JAVA_HOME
+        ? { JAVA_HOME: process.env.JAVA_HOME }
+        : {}),
       CI: "1",
       NO_COLOR: "1",
       GH_TELEMETRY: "0",
@@ -157,14 +171,31 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
     },
     cleanupState: "SYNCHRONOUS_CHILD_EXITED"
   };
+  const preserveFailure = (failureCategory, finding, includeExcerpt = false) => {
+    const failed = { ...base, failureCategory };
+    const identityHash = sha256({ ...failed, startedAtMs: null, endedAtMs: null, durationMs: null });
+    const writer = dependencies.artifactWriter ?? ((receipt, output) => externalize(identityHash, receipt, output));
+    try {
+      const artifactLocation = writer({ ...failed, identityHash }, redactText(raw));
+      if (typeof artifactLocation !== "string" || artifactLocation.length === 0) throw new Error("missing artifact");
+      return {
+        ok: false,
+        receipt: { ...failed, identityHash, artifactLocation },
+        ...(includeExcerpt ? { failureExcerpt: redactText(raw) } : {}),
+        finding
+      };
+    } catch {
+      return { ok: false, receipt: { ...failed, identityHash, failureCategory: "ARTIFACT_WRITE_FAILED" }, finding: "ARTIFACT_WRITE_FAILED" };
+    }
+  };
   if (execution.error?.code === "ETIMEDOUT") {
-    return { ok: false, receipt: { ...base, failureCategory: "COMMAND_TIMEOUT" }, finding: "COMMAND_TIMEOUT" };
+    return preserveFailure("COMMAND_TIMEOUT", "COMMAND_TIMEOUT");
   }
   if (execution.status !== 0) {
-    return { ok: false, receipt: { ...base, failureCategory: "COMMAND_FAILED" }, failureExcerpt: redactText(raw), finding: "COMMAND_FAILED" };
+    return preserveFailure("COMMAND_FAILED", "COMMAND_FAILED", true);
   }
   if (!parsed.ok) {
-    return { ok: false, receipt: { ...base, failureCategory: parsed.category }, failureExcerpt: redactText(raw), finding: parsed.category };
+    return preserveFailure(parsed.category, parsed.category, true);
   }
   if (successDiagnostic) {
     return { ok: false, receipt: { ...base, failureCategory: "SUCCESS_DIAGNOSTIC_REJECTED" }, failureExcerpt: redactText(raw), finding: "SUCCESS_DIAGNOSTIC_REJECTED" };

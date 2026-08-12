@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "reportId": "pr-d2a-android-generated-native-lifecycle-report-v1",
+  "classification": "HARNESS_PATH_BYPASS_CORRECTED_PRE_MERGE_D2A_CLEAR",
+  "objective": "ANDROID_GENERATED_NATIVE_LIFECYCLE_INSTRUMENTATION",
+  "startingMain": "ddc5bfa92d8bf70a3374e1dee6983c2bc8cf9874",
+  "startingTree": "2c95fb46943e61318dce43a26540f812ca3837e7",
+  "scopeWaiver": {
+    "file": "config/assurance/pr-d2a-scope-waiver-v1.json",
+    "contractId": "pr-d2a-scope-waiver-v1",
+    "ownerAuthorizedMaximumFiles": 20,
+    "ownerAuthorizedMaximumNetLines": 2500,
+    "timeboxHours": 8,
+    "actualFilesFromMain": 11,
+    "actualNetLinesFromMain": 2047,
+    "oneAssuranceDomain": true,
+    "productOrProviderChangeAllowed": false,
+    "classification": "HISTORICAL_INITIAL_SCOPE_SNAPSHOT_SUPERSEDED_BY_FINITE_LEASE"
+  },
+  "finiteLeaseRuntimeScope": {
+    "leaseId": "d2a-release-critical-pr-212-v1",
+    "maximumFiles": 15,
+    "maximumChangedLines": 3000,
+    "observedFiles": 12,
+    "observedChangedLines": 2331,
+    "result": "PASS"
+  },
+  "target": {
+    "targetId": "android-chat-livekit-qa-build-86",
+    "packageIdentifier": "com.chillywood.mobile",
+    "nativeBuild": "86",
+    "runtimeVersion": "1.0.0-android-chat-call-action-v1",
+    "channel": "android-chat-livekit-qa"
+  },
+  "generatedSource": {
+    "runs": "3/3",
+    "observedDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+    "expectedD1Digest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+    "deterministic": true,
+    "authoritativePaths": 22,
+    "securitySupplementDigest": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634",
+    "securitySupplementBinding": "MANIFEST_PLUS_EXACT_REFERENCED_FULL_BACKUP_AND_DATA_EXTRACTION_XML",
+    "d1DigestRemainsSeparate": true,
+    "generatedDirectoryCommitted": false
+  },
+  "answerActionBypassClassification": {
+    "finding": "ANDROID_ANSWER_ACTION_PATH_BYPASSED",
+    "classification": "HARNESS_PATH_BYPASS",
+    "failingHarnessHead": "4f5fa3937ac506bcd3626d15a2815839df620789",
+    "failingWitness": "node scripts/assurance/android-generated-native-lifecycle.mjs -> ANDROID_ANSWER_ACTION_PATH_BYPASSED",
+    "reason": "The D2A harness required the retired exported-Activity capture path while production routes Answer through the explicit non-exported receiver, persists with captureTrustedNotificationAction, and launches only after persistence.",
+    "productionWitness": {
+      "command": "npm run test:chilly-chat-native-call-action-handoff",
+      "nativeOriginControls": "23/23 PASS",
+      "executableMutants": "6/6 KILLED"
+    },
+    "correction": "Harness source gates and mutants now follow the exact private-receiver production path and reject Activity-manufactured authority.",
+    "productOrNativeSourceModified": false
+  },
+  "dependencySet": {
+    "classification": "EXACT_VERSION_LINE_COMPATIBLE_LOCK_GRAPH",
+    "inputs": ["package.json", "package-lock.json", "installed direct package metadata"],
+    "identityAndVersionComparison": true,
+    "declaredDirect": 67,
+    "production": 60,
+    "development": 7,
+    "validated": 67,
+    "packagePathsRecorded": true,
+    "dependencyIdentitySha256": "577185512d0536a8897dac500b89d59bc22a418eb5f21eaca11e4cb5d5d75f68",
+    "packageJsonSha256": "bbcbda9b79c702eb0d7d387a24fd731eda3d9cc176bc06557c8258d57e2ee7f5",
+    "packageLockSha256": "07f5c8d340c814240ac258a513fc0934eac0d0bd17fa350702c4d3e69af29237",
+    "prerequisite": {
+      "pr": 220,
+      "branch": "codex/brace-expansion-version-line-compatibility-correction",
+      "head": "0d68b3cda9c0cbc49e7a57b7b82a0c91de14a58d",
+      "tree": "18c61a3d94de63e3d57cc777a34247c31f7263af",
+      "merge": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
+      "classification": "OWNER_AUTHORIZED_SHARED_DEPENDENCY_PREREQUISITE"
+    },
+    "mapping": [
+      {"minimatch": "3.1.5", "braceExpansion": "1.1.18", "interface": "CALLABLE_COMMONJS"},
+      {"minimatch": "9.0.9", "braceExpansion": "2.1.4", "interface": "CALLABLE_COMMONJS_AND_ESM_INTEROP"},
+      {"minimatch": "10.2.4", "braceExpansion": "5.0.9", "interface": "NAMED_COMMONJS_AND_ESM_EXPORT"},
+      {"minimatch": "10.2.5", "braceExpansion": "5.0.9", "interface": "NAMED_COMMONJS_AND_ESM_EXPORT"}
+    ],
+    "cleanInstallRequired": true,
+    "cleanInstallRetryAuthorized": false,
+    "cleanInstallProof": {
+      "ignoreScriptsOutputSha256": "6062c9da8d8dd96c5a7f7de6b9dc8db27b7494be448252d16b05c212fedded6c",
+      "normalOutputSha256": "842bdf067763dfe0a5822566dc2bbf783702c1d3d941bce7cc2ac0546757b8f6",
+      "apiAndSourceEquivalenceSha256": "41b60012c1ce8ef53e6f236bc2f26d6de1acda15a963e71369e3ff62bb459c28",
+      "postinstallMutationRemoved": true,
+      "installedSourceMutation": false
+    },
+    "directIdentityResult": "PASS_67_OF_67",
+    "runtimeCompatibility": {
+      "priorFailureCode": "ANDROID_GRADLE_COMPILE_FAILED",
+      "priorFailedTask": ":app:compileDebugKotlin",
+      "rootCause": "DEPENDENCY_VERSION_LINE_COLLAPSE_HIDDEN_BY_POSTINSTALL_MUTATION",
+      "requiredContract": "VERSION_LINE_COMPATIBLE_COMMONJS_AND_ESM_EXPORTS",
+      "contractSatisfied": true,
+      "executableWitnessSha256": "f6c5894d31e8ad6a785307d4b71206b85573a6ffce7202a0093bd43dd0bbc802",
+      "compatibilityTestSha256": "f9d17f78398464d55dfa1cf55cc442eabbbb83740d3cbf3975de5568a4666ee3",
+      "negativeControls": "16/16 KILLED",
+      "syntheticCompileDebugKotlin": "PASS",
+      "syntheticCompileOutputSha256": "a871b9af506dbcea5d43d25cbcd01b08cc0b157f49f6a53a2b71dd9251421c48",
+      "currentD2ANativeRerunRequired": false
+    },
+    "result": "PREREQUISITE_MERGED_CURRENT_D2A_NATIVE_RERUN_PASS"
+  },
+  "currentD2AClosure": {
+    "classification": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+    "terminalClassificationAfterRequiredFinalGates": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+    "startingMain": "416f9e162501940f34da55a084a3fc3d0680d59c",
+    "synchronizedExecutionHead": "d1bfa02973066408c7fb5ae39479f03aa5a16b67",
+    "synchronizedExecutionTree": "428b9910e1a9984ef216a83483de8e05bf6da78e",
+    "synchronization": {
+      "method": "NORMAL_NO_FF_MERGE",
+      "currentMainAncestor": true,
+      "pr214MergeAncestor": true,
+      "pr219TruthAncestor": true,
+      "admittedSeedAncestor": true,
+      "answerHarnessCorrectionPresent": true
+    },
+    "finiteLease": {
+      "leaseId": "d2a-release-critical-pr-212-v1",
+      "protectedAdmissionPr": 213,
+      "leaseAuthorityEligible": true,
+      "candidateEligible": true,
+      "preFinalReportUpdatePacketSha256": "bc8c150ad7335c7fa431c5c88f6c088b43f93800932a254495ee7bfcba7954d9",
+      "packetDeterminism": "3/3",
+      "recursionDetected": false,
+      "amendmentUsed": false
+    },
+    "evidenceReuse": {
+      "fullKeySha256": "d36052e124bc19d81321b9eebc78e59d69c8a3d19c754a1831b23426ae9b48e6",
+      "canonicalIndexDecision": "CURRENT_EXACT_EXECUTION_PLUS_LAYER_SCOPED_EXACT_REUSE",
+      "priorNativeBundle": "STALE_NOT_REUSABLE",
+      "currentNativeLayers": "AFFECTED_RERUN_COMPLETE",
+      "lifecycleLayer": "CURRENT_EXACT_EXECUTION",
+      "microphoneLayer": "EXACT_REUSABLE_UNCHANGED_NATIVE_MIC_INPUT_KEY",
+      "callDomainLayer": "EXACT_REUSABLE_UNCHANGED_PR214_PRODUCT_INPUT_KEY",
+      "truthOnlyDelta": "EXACT_REUSABLE",
+      "pr214ActualMerge": "40f57256500b05f083c71acc77c8b020609692cf",
+      "pr214ActualAndSyntheticTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
+      "pr219TruthOnlyDeltaSha256": "c50083530c90b47ad579a9e190bb840c973505a24ed7bedc70bfaca2f20252a4",
+      "inputs": {
+        "appJsonSha256": "2880ed32a73d7a89742219721da128223527876a0df2da23dffc578b51b8f3ec",
+        "appConfigSha256": "9104ed5f76581875be6075166830a07ca9473d913b07177ddd78700170675070",
+        "easJsonSha256": "81590c6609f50023aa46d9246c6bd7842cff9158a2865e60dabcd7fdb57e476c",
+        "releaseTargetParitySha256": "be042630c00addc1bb1de4689694c77b6612f2a29c3342b1b2d211f31b4e54d6",
+        "nativeCapabilityRegistrySha256": "43ff7e65122f4b5866e9f430c5c1462d53f2420702f3afe2280848f5c8b3b99b",
+        "pluginSha256": "4696b53375cbf857483d407d51f3d19a00efc4628e501fcd312ff83aa4929ad3",
+        "packageJsonSha256": "bbcbda9b79c702eb0d7d387a24fd731eda3d9cc176bc06557c8258d57e2ee7f5",
+        "packageLockSha256": "07f5c8d340c814240ac258a513fc0934eac0d0bd17fa350702c4d3e69af29237",
+        "contractSha256": "329ee5853f830d19b48a0b064da1b632797bade42d8e31bba29932c3156eb659",
+        "runnerSha256": "40e23832c2f4520ec8b8e4fa8db75c89b6697d2df9a16436e41d4c4dd0600f4a",
+        "testSha256": "843164da46fcac73733b03bbf54c5fe78bb342fa8b8fbdf25cdb1e3cfb680a78",
+        "micHarnessSha256": "f93b3e337d353e042b916fc644ce0c0d566d7a98dacadcefee5f8f6d2685fc85",
+        "storeHarnessSha256": "56c4c0b1301cb8cbc53b5de4d19c01853973de0ad49fe782e720d99be4a70b77",
+        "lifecycleHarnessSha256": "00cc8d995091eaa5b50ede8e843ce49d5dbe2e1fa205c61b1be0d01b6e5d2a95",
+        "generatedSourceDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+        "securitySupplementDigest": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634",
+        "jdkClassification": "OPENJDK_21_0_9",
+        "androidSdkClassification": "PLATFORMS_34_36_36_1",
+        "gradleWrapperClassification": "GRADLE_8_14_3",
+        "emulatorClassification": "API_34_GOOGLE_APIS_X86_64"
+      }
+    },
+    "generatedNative": {
+      "determinism": "3/3 PASS",
+      "authoritativePaths": "22/22",
+      "sourceDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+      "securitySupplementDigest": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634",
+      "schemaV2PendingActionStore": "PASS",
+      "schemaV1Invalidation": "PASS",
+      "privateReceiver": "PASS_NON_EXPORTED",
+      "trustedPersistenceBeforeLaunch": "PASS",
+      "externalActivityAuthorityManufacture": "DENIED",
+      "cloudBackupExclusion": "PASS",
+      "deviceTransferExclusion": "PASS",
+      "generatedSecrets": 0
+    },
+    "gradle": {
+      "contractDeclaredTasks": 6,
+      "passed": 6,
+      "execution": "PASS_CURRENT_EXACT_EXECUTION",
+      "historicalFirstFailure": ":app:compileDebugKotlin",
+      "tasks": [
+        ":app:compileDebugKotlin",
+        ":app:compileDebugUnitTestKotlin",
+        ":app:testDebugUnitTest",
+        ":app:assembleDebug",
+        ":app:compileDebugAndroidTestKotlin",
+        ":app:assembleDebugAndroidTest"
+      ]
+    },
+    "jvm": "PASS_CURRENT_EXACT_7_OF_7",
+    "lifecycle": {
+      "result": "PASS_CURRENT_EXACT_12_OF_12",
+      "historicalSupersededResultSha256": "bdc492f042286be9034ca22c864f05a2e7bcd7258b0d271a151032aae459789c",
+      "externalOriginRejected": "PASS_EXACT_PRODUCTION_PATH",
+      "receiptSha256": "2ef197a28b3e16f5ed197632663d0c732be4c5eed1b9e2f11c37af15266a1236",
+      "outputSha256": "ef38479832885c4b4a763b46b40d8674cfa133667845ecd518f89108d8cac29a",
+      "deterministicEvidenceSha256": "07499c7ab8df71a2cfb5d96aeab7b7f7a572dc378b1712893c76558ccb178e04",
+      "durationMs": 2810410
+    },
+    "microphone": {
+      "nativeInstrumentation": "PASS_EXACT_REUSABLE_4_OF_4",
+      "receiptSha256": "bb67feda0c68bedb77848e2b787d548c5a9e106ccd5dda86751274b324d6ec4b",
+      "receiptSourceHead": "5f339ec1fbf5d2bd1449ef6f223365f79b8e50be",
+      "receiptSourceTree": "b13fb9e1f89310acc74d03a70fe07e931a1ddf7b",
+      "outputSha256": "b55358e79375f679b9359df279b73a470de5e56bb21748fbb13bd32b5c42553f",
+      "callDomainPasses": [
+        "114/114",
+        "114/114"
+      ],
+      "nativeOriginControls": "23/23 PASS",
+      "nativeOriginMutants": "6/6 KILLED",
+      "providerContact": false
+    },
+    "backupRestore": {
+      "classification": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+      "subreason": "ANDROID_GRADLE_GATE_TIMEOUT_BEFORE_TRANSPORT",
+      "sourceExclusion": "CLEAR",
+      "compiledPolicy": "CLEAR",
+      "restoredValues": null,
+      "transportResultFabricated": false,
+      "retryLoop": false,
+      "receiptSha256": "dadc0ef2c3cff31cc14c3cb9aaaa77c86f897f731b4e5ab23cec567caecef2da",
+      "outputSha256": "8bbb5850832d0906d61551ed4efe91419de5ebb86352c7b5b39b45ed06a8a5f1",
+      "attempts": 1,
+      "maximumTransportAttemptMinutes": 20
+    },
+    "fatalAndCleanup": {
+      "lifecycleLogSha256": "ef38479832885c4b4a763b46b40d8674cfa133667845ecd518f89108d8cac29a",
+      "microphoneLogSha256": "b55358e79375f679b9359df279b73a470de5e56bb21748fbb13bd32b5c42553f",
+      "androidRuntimeFatal": 0,
+      "reactNativeFatal": 0,
+      "anr": 0,
+      "unhandledRejection": 0,
+      "stalePendingAction": 0,
+      "disposableProjectRemoved": true,
+      "emulatorStopped": true,
+      "emulatorPackagesRemaining": 0,
+      "trackedApkOrAab": 0,
+      "deviceIdentifierRecorded": false,
+      "secretOrPrivateLogRetained": false
+    },
+    "currentProofTiers": {
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "CLEAR_JVM_7_OF_7",
+      "T3_INTEGRATION": "CLEAR_LOCAL_EMULATOR_LIFECYCLE_12_OF_12_AND_MIC_4_OF_4",
+      "T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED",
+      "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
+      "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "finalExternalEvidence": {
+      "repositoryReview": "PENDING_FINAL_EXACT_HEAD",
+      "phase1": "PENDING_FINAL_EXACT_HEAD",
+      "ownerReceipt": "PENDING_FINAL_EXACT_HEAD",
+      "mergeProvenance": "PENDING_FINAL_EXACT_HEAD"
+    }
+  },
+  "productDefects": [
+    {
+      "code": "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING",
+      "severity": "P1",
+      "status": "RESOLVED_BY_GENERATED_EXACT_BACKUP_RULES",
+      "sourcePath": "plugins/withChillyChatNativeCallNotifications.js",
+      "generatedPath": "android/app/src/main/AndroidManifest.xml",
+      "lifecycleState": "PENDING_NATIVE_ACTION_AT_REST",
+      "expected": "The private pending-action preferences file is excluded from cloud backup and device-to-device transfer, or application backup is disabled.",
+      "actual": "The generated manifest binds exact fullBackupContent and dataExtractionRules resources; the hardened gate verifies the pending-action shared-preference exclusion in legacy backup, Android 12 cloud backup, and Android 12 device transfer.",
+      "effect": "Thread and invite identifiers plus pending Answer/Decline routing state can become eligible for Android backup or transfer outside the intended 45-second lifecycle.",
+      "newBinaryRequired": true,
+      "evidenceTier": "T1_GENERATED_NATIVE_SOURCE",
+      "emulatorRequiredToReproduce": false
+    }
+  ],
+  "preservedSecurityTest": {
+    "code": "ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED",
+    "path": "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt",
+    "scenario": "EXTERNAL_CUSTOM_SCHEME_ORIGIN",
+    "sourceConcern": "An external custom-scheme Activity launch must not establish trusted notification authority or persist Answer/Decline state; only the explicit non-exported receiver may capture a trusted action before application routing.",
+    "antiVacuity": "ACTION_VIEW_ACTIVITY_LAUNCH_PRECEDES_EMPTY_STORE_ASSERTION",
+    "expectedCurrentProductResult": "PASS_EXTERNAL_ACTIVITY_CANNOT_PERSIST_TRUSTED_ACTION",
+    "emulatorResult": "PASS_EXACT_PRODUCTION_PATH",
+    "classification": "RESOLVED_EXACT_PRIVATE_RECEIVER_PROVENANCE"
+  },
+  "compile": {
+    "java": "OPENJDK_21_LOCAL",
+    "androidSdk": "LOCAL_PLATFORMS_34_36_36_1",
+    "gradle": "GENERATED_PROJECT_WRAPPER",
+    "tasks": [
+      {"task": ":app:compileDebugKotlin", "result": "PASS"},
+      {"task": ":app:compileDebugUnitTestKotlin", "result": "PASS"},
+      {"task": ":app:testDebugUnitTest", "result": "PASS_7_OF_7"},
+      {"task": ":app:assembleDebug", "result": "PASS"},
+      {"task": ":app:compileDebugAndroidTestKotlin", "result": "PASS"},
+      {"task": ":app:assembleDebugAndroidTest", "result": "PASS"}
+    ],
+    "lint": {
+      "result": "HISTORICAL_GENERATED_EXPO_BASELINE",
+      "errors": 34,
+      "warnings": 81,
+      "admittedCallOrNativeActionErrors": 0,
+      "classification": "NON_LAUNCH_BLOCKING_GENERATED_BASELINE"
+    },
+    "releaseOrDistributionBuild": false,
+    "signedArtifactProof": false
+  },
+  "failClosedOrder": [
+    "GENERATE_AND_BIND_D1_DIGEST_THREE_TIMES",
+    "RESOLVE_AND_BIND_BACKUP_XML_REFERENCES",
+    "VERIFY_EXACT_BACKUP_EXCLUSIONS",
+    "INJECT_TESTS_IN_DISPOSABLE_GENERATED_PROJECT",
+    "RUN_REQUIRED_GRADLE_TASKS",
+    "EXECUTE_SELECTED_EMULATOR_ONLY",
+    "UNINSTALL_ONLY_PACKAGES_INSTALLED_BY_THIS_RUN"
+  ],
+  "scenarioMatrix": {
+    "required": 12,
+    "implementedExecutableMethods": 12,
+    "executed": 12,
+    "status": "PASS_12_OF_12_EXACT_PRODUCTION_PATH",
+    "futureMarkerOnlyClearAllowed": false,
+    "missing": []
+  },
+  "tests": {
+    "contractAssertions": "UPDATED_DEPENDENCY_FREE_SUITE",
+    "sourceModelAssertions": "17/17",
+    "mandatoryNegativeControls": "12/12",
+    "cliFailClosed": "14/14",
+    "d1GeneratedDigestContinuity": "3/3",
+    "backupPolicyFixtures": "14/14",
+    "jvmUnit": "7/7 PASS",
+    "emulatorLifecycle": "12/12 PASS",
+    "nativeMicInstrumentation": "4/4 PASS",
+    "fatalAnrUnhandledScan": "0 MATCHES"
+  },
+  "micControlAddendum": {
+    "contract": "config/assurance/android-chat-call-mic-control-v1.json",
+    "sourceBindings": "8_FILES_PLUS_5_CONTROL_FLOW_SLICES",
+    "layerA": {
+      "sharedUi": "10/10",
+      "liveKit": "20/20",
+      "legacy": "20/20",
+      "negativeControls": "13/13_ADAPTER_ANTI_VACUITY",
+      "deterministic": "3/3",
+      "classification": "PASS_EXACT_PR214_CALL_DOMAIN_TWO_COMPLETE_PASSES"
+    },
+    "layerB": {
+      "test": "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt",
+      "classification": "PASS_BOUNDED_NATIVE_MIC_INSTRUMENTATION",
+      "nativeAudioMatrix": {"required": 4, "executed": 4, "complete": true, "status": "CALL_DOMAIN_114_OF_114_PLUS_NATIVE_EXECUTABLE_4_OF_4"},
+      "gradleTasks": "COMPILE_ASSEMBLE_ANDROID_TEST_PASS",
+      "compileObservation": "Exact PR #214 merge-ref generated Android project compiled; JVM and androidTest sources compiled and both debug APKs assembled.",
+      "instrumentation": "4/4 PASS",
+      "fatalLogcatScan": "0 MATCHES",
+      "localDebugApp": "INSTALLED_THEN_REMOVED_AND_VERIFIED",
+      "emulator": "SHUTDOWN_AND_ZERO_CONNECTED",
+      "signedArtifactProof": false,
+      "physicalProof": false
+    },
+    "historicalSourceBoundP1Candidates": [
+      "ANDROID_MIC_LEGACY_ENDED_TRACK_REUSED",
+      "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS",
+      "ANDROID_MIC_LEGACY_CONNECTED_PEER_RENEGOTIATION_SKIPPED",
+      "ANDROID_MIC_LEGACY_MEMBERSHIP_FAILURE_RETURNS_SUCCESS",
+      "ANDROID_MIC_LIVEKIT_MEMBERSHIP_FAILURE_RETURNS_SUCCESS",
+      "ANDROID_MIC_LIVEKIT_BACKGROUND_REJECTION_UNHANDLED",
+      "ANDROID_MIC_LIVEKIT_NATIVE_MUTE_STATE_NOT_RECONCILED",
+      "ANDROID_MIC_LIVEKIT_SPEAKER_OUTSIDE_MEDIA_SERIALIZER"
+    ],
+    "historicalCandidateDisposition": "SUPERSEDED_BY_PR214_BOUNDED_13_INVARIANT_LEDGER_WITH_ALL_RELEASE_CRITICAL_DEFECTS_RESOLVED",
+    "productSourceModified": false,
+    "providerOrRealCallUsed": false
+  },
+  "capabilities": {
+    "d1SourceParity": {"required": 21, "sourceProvided": 21, "sourceMissing": 0, "derivation": "D1 target requirements compared with independently evaluated registry providedBy source evidence"},
+    "compiledRuntimeParity": {"provided": 21, "missing": 0, "status": "PASS_EXACT_GENERATED_PROJECT_COMPILE_AND_INSTRUMENTATION"},
+    "compiledRegistrationProof": "EXACT_GENERATED_PROJECT_COMPILE_JVM_AND_ANDROIDTEST_ASSEMBLY"
+  },
+  "logging": {
+    "categoriesOnly": true,
+    "rawIdentifierValuesRetained": false,
+    "canonicalAllowlistEnforced": true,
+    "noncanonical": [{"category": "ACTION_BUFFERED", "classification": "P2_D2B_LOGGING_NORMALIZATION"}]
+  },
+  "determinism": {
+    "durationNormalization": "gradle.tasks[].durationMs omitted from deterministic evidence hash",
+    "unexplainedContentNormalization": false
+  },
+  "emulatorCleanupContract": {
+    "selectedEmulatorOnly": true,
+    "preexistingTargetOrTestPackage": "REFUSE",
+    "uninstallOnlyPackagesInstalledByCurrentRun": true,
+    "verifyRemoval": true,
+    "iterateAcrossConnectedEmulators": false
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "SOURCE_CLEAR",
+    "T2_MODEL": "CLEAR_JVM_7_OF_7",
+    "T3_INTEGRATION": "CLEAR_LOCAL_EMULATOR_LIFECYCLE_12_OF_12_AND_MIC_4_OF_4",
+    "T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED",
+    "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
+    "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "historicalD2BCorrectionAuthorizationSatisfied": {
+    "scope": "Android native-action provenance plus backup exclusion in the same generated-native notification domain",
+    "mustPreserve": [
+      "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING failing gate",
+      "ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED instrumentation gate",
+      "server-authoritative JavaScript acceptance",
+      "no native LiveKit token or media authority"
+    ],
+    "mustNotInclude": ["release build", "provider contact", "OTA", "iOS implementation", "product behavior outside native call action capture"]
+  },
+  "nonInterference": {
+    "productNativeSourceModified": false,
+    "releaseManifestModified": false,
+    "packageOrWorkflowModified": false,
+    "providerContact": false,
+    "releaseBuild": false,
+    "ota": false,
+    "physicalDevice": false,
+    "databaseMutation": false,
+    "generatedAndroidCommitted": false
+  },
+  "cleanup": {
+    "disposableProjectsRemoved": true,
+    "debugOrTestApksRetained": false,
+    "emulatorPackagesRemaining": false,
+    "micDebugPackageInstalledThenRemoved": true,
+    "connectedEmulatorsAfterCleanup": 0,
+    "emulatorSerialRecorded": false,
+    "secretOrPrivateLogRetained": false
+  },
+  "preMergeD2AEvidence": {
+    "implementationPr": 214,
+    "mergeRef": "7fb03e65d7f14848e3a5475c4fc007c397efef42",
+    "firstParent": "46e4e26365eb5abc4ba2becbf1606dbe86ca5032",
+    "secondParent": "532243450bccd3d373cc17804da98bd01490c2ae",
+    "sourceTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
+    "syntheticMergeTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
+    "generatedSource": "3/3",
+    "sourceAssertions": "17/17",
+    "negativeControls": "12/12",
+    "cliFailClosed": "14/14",
+    "callDomainPasses": ["114/114", "114/114"],
+    "nativeOriginControls": "23/23",
+    "nativeOriginMutantsKilled": "6/6",
+    "jvmUnit": "7/7",
+    "lifecycleInstrumentation": "12/12",
+    "micInstrumentation": "4/4",
+    "fatalAnrUnhandledMatches": 0,
+    "lifecycleLogSha256": "5431f792ba5f286e8cab5da27c6db36e607695cc373d5980e62699ea8397ce33",
+    "micLogSha256": "740281891712d9a5e8adc37d8156d88f69ab150b95e48513e93e341221b98748",
+    "fatalScanLogSha256": "7ebc0df277a302fe2802646dc127a81e69514a83f62d24b8ac5930e7f3226331",
+    "emulatorExitInfoSha256": "0af305046367ba21d5cb21a383b870aa504aa197d10b9bb58f8f12ec91d72bbf",
+    "result": "CLEAR"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "contractId": "pr-d2a-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Add Android generated-native lifecycle and microphone-control assurance infrastructure for the registered EAS build/update/release feature without changing product behavior.",
+  "exactReason": "The Owner-authorized D2A lifecycle contract, disposable generation and Gradle harness, JVM and instrumentation templates, fail-closed source/model checks, sanitized evidence report, and microphone-control addendum require more than the default 1,200 net lines while remaining one Android release/native assurance domain.",
+  "reviewer": "d2a-four-lane-exact-head-review-set",
+  "mandatingReviewEvidence": [
+    "generated source and Gradle compile lane",
+    "action store, receiver, and Activity lifecycle lane",
+    "module registration, manifest, and security lane",
+    "scope, proof strength, determinism, and negative-control lane"
+  ],
+  "approvalState": "OWNER_AUTHORIZED_PENDING_FRESH_EXACT_HEAD_REVIEW",
+  "supportingDomains": [
+    "CI-test-infrastructure"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 20
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 2500
+  },
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "application or generated product-native behavior changes",
+    "release manifest or release configuration changes",
+    "package.json, package-lock.json, or runtime dependency changes",
+    "GitHub workflow changes",
+    "provider contact or provider-state mutation",
+    "release, distribution, signed-artifact, OTA, or store operations",
+    "database, auth, role, entitlement, money, switch, or schedule changes",
+    "current-truth files"
+  ]
+}
