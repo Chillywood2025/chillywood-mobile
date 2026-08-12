@@ -60,6 +60,29 @@
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"],
     "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE"
   },
+  "terminalTaskTransitionPolicy": {
+    "policyId": "FINITE_TASK_TERMINAL_HANDOFF_V1",
+    "phase": "TERMINAL",
+    "completionScope": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+    "requiredLeaseState": "MERGED_VERIFIED",
+    "requiredDomainOwnership": "PRESERVED_DEPENDENT",
+    "clearThroughTier": "T3_INTEGRATION",
+    "laterTierStatuses": {
+      "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL",
+      "T5_SIGNED_ARTIFACT": "BLOCKED_EXTERNAL",
+      "T6_INSTALLED_PHYSICAL": "BLOCKED_EXTERNAL",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+    },
+    "mergeIdentityRequired": true,
+    "ownerReceiptRequired": true,
+    "repositoryReviewRequired": true,
+    "phase1PassCount": 13,
+    "openImplementationCount": 0,
+    "terminalPacketAllowed": true,
+    "additionalControlPrRequired": false,
+    "publicReleaseAuthorized": false,
+    "otaAuthorized": false
+  },
   "synchronizationMerge": {
     "required": true,
     "parentCount": 2,

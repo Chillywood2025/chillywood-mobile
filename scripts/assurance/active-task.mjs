@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
+import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -38,9 +38,11 @@ const structuredBindingFields = [
   "proofTiersUnderEvaluation",
   "proofTierStatuses",
   "proofTierApplicabilityHash",
+  "completionScope",
+  "terminalEvidence",
   "ownerBootstrapAuthorization"
 ];
-const requiredStructuredBindingFields = structuredBindingFields.filter((field) => !["ownerBootstrapAuthorization", "proofTierStatuses", "proofTierApplicabilityHash"].includes(field));
+const requiredStructuredBindingFields = structuredBindingFields.filter((field) => !["ownerBootstrapAuthorization", "proofTierStatuses", "proofTierApplicabilityHash", "completionScope", "terminalEvidence"].includes(field));
 const freshnessClasses = new Set(["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
 const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const activeImplementationStates = new Set(["open", "open-draft-current"]);
@@ -154,6 +156,29 @@ function sameBinding(left, right) {
   return structuredBindingFields.every((field) => JSON.stringify(left?.[field]) === JSON.stringify(right?.[field]));
 }
 
+function terminalTransitionMatches(binding, protectedBinding, truth) {
+  const immutableFields = [
+    "schemaVersion",
+    "featureId",
+    "implementationPr",
+    "implementationBranch",
+    "implementationBindingId",
+    "immutableSourceHead",
+    "immutableSourceTree",
+    "requiredFreshnessClasses",
+    "requiredFreshnessClaims"
+  ];
+  return binding?.phase === "TERMINAL"
+    && !["TERMINAL", "COMPLETE"].includes(protectedBinding?.phase)
+    && immutableFields.every((field) => stableJson(binding?.[field]) === stableJson(protectedBinding?.[field]))
+    && Array.isArray(truth?.openImplementationPrs)
+    && truth.openImplementationPrs.length === 0
+    && truth?.latestMergedImplementationPr?.state === "merged"
+    && truth.latestMergedImplementationPr.number === binding.implementationPr
+    && truth.latestMergedImplementationPr.head === binding.currentImplementationHead
+    && validateTerminalTaskEvidence(binding, truth.latestMergedImplementationPr).length === 0;
+}
+
 function structuredBindingAuthority(truth, facts) {
   let protectedMainTruth = facts.protectedMainTruth;
   if (!protectedMainTruth) {
@@ -161,6 +186,9 @@ function structuredBindingAuthority(truth, facts) {
   }
   if (sameBinding(truth?.activeTaskBinding, protectedMainTruth?.activeTaskBinding)) return "PROTECTED_MAIN_CURRENT_TRUTH";
   const binding = truth?.activeTaskBinding;
+  if (terminalTransitionMatches(binding, protectedMainTruth?.activeTaskBinding, truth)) {
+    return "PROTECTED_MAIN_TERMINAL_TRANSITION";
+  }
   const bootstrapMatches = bootstrapActiveTaskRegistry.filter((entry) => Object.entries(entry)
     .every(([field, expected]) => binding?.[field] === expected));
   if (bootstrapMatches.length !== 1) return null;
@@ -234,7 +262,7 @@ export function validateStructuredBinding(value, gateCatalog, registry, openImpl
     || !sha40(value.immutableSourceTree)
     || !sha40(value.currentImplementationHead)
     || !sha40(value.currentImplementationTree)
-    || !["IMPLEMENTATION", "FORMAL_REVIEW", "FINAL_CI", "MERGE_ELIGIBLE", "COMPLETE"].includes(value.phase)
+    || !["IMPLEMENTATION", "FORMAL_REVIEW", "FINAL_CI", "MERGE_ELIGIBLE", "COMPLETE", "TERMINAL"].includes(value.phase)
     || typeof value.executionState !== "string"
     || !value.executionState
     || !Array.isArray(value.requiredFreshnessClasses)
@@ -251,7 +279,8 @@ export function validateStructuredBinding(value, gateCatalog, registry, openImpl
     || !proofFreshnessAligned
     || !bootstrapAuthorizationValid) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
   if (validateProofTierStatuses(value, gateCatalog, registry).length) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
-  if (value.phase === "COMPLETE") {
+  if (validateTerminalTaskEvidence(value, latestMergedImplementationPr).length) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+  if (["COMPLETE", "TERMINAL"].includes(value.phase)) {
     if (!Array.isArray(openImplementationPrs)) findings.push("IMPLEMENTATION_INVENTORY_MALFORMED");
     else if (openImplementationPrs.length) findings.push("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION");
     if (latestMergedImplementationPr?.state !== "merged"
@@ -269,7 +298,7 @@ function resolveFeature(truth, facts, registry) {
     const binding = truth.activeTaskBinding;
     const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs, truth.latestMergedImplementationPr);
     if (findings.length) return { ok: false, findings };
-    if (binding.phase === "COMPLETE" && unresolvedLateReviewSentinels(truth).some((sentinel) => {
+    if (["COMPLETE", "TERMINAL"].includes(binding.phase) && unresolvedLateReviewSentinels(truth).some((sentinel) => {
       const allowedOwners = lateReviewAllowedOwners(sentinel);
       return lateReviewSuccessorCorrectionOwner(sentinel) === binding.implementationBranch
         || !allowedOwners.includes(binding.implementationBranch);
@@ -383,6 +412,46 @@ function collectFiniteTaskCandidate(lease, facts) {
 }
 
 function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease) {
+  if (binding.phase === "TERMINAL" && lease.taskState === "MERGED_VERIFIED") {
+    const findings = [];
+    if (identity.branch !== binding.implementationBranch) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_BRANCH_MISMATCH");
+    if (identity.head !== binding.currentImplementationHead) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
+    if (identity.tree !== binding.currentImplementationTree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
+    if (validateTerminalTaskEvidence(binding, truth.latestMergedImplementationPr).length) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
+    if (findings.length) return { ok: false, findings: [...new Set(findings)].sort() };
+    return {
+      ok: true,
+      value: {
+        pr: lease.implementationPr,
+        branch: lease.implementationBranch,
+        state: lease.taskState,
+        implementationBindingId: binding.implementationBindingId,
+        leaseId: lease.leaseId,
+        protectedAdmissionPr: lease.protectedAdmissionPr,
+        immutableSourceHead: lease.admittedSeedHead,
+        immutableSourceTree: lease.admittedSeedTree,
+        currentSynchronizedHead: binding.currentImplementationHead,
+        currentSynchronizedTree: binding.currentImplementationTree,
+        immutableSource: { head: lease.admittedSeedHead, tree: lease.admittedSeedTree },
+        currentSynchronizedSource: { head: binding.currentImplementationHead, tree: binding.currentImplementationTree },
+        finiteLease: {
+          policyId: truth.finiteTaskLeases.policyId,
+          taskState: lease.taskState,
+          leaseRetained: true,
+          evidenceInvalidated: {
+            ownerFinalReceipt: false,
+            repositoryOwnedReview: false,
+            phase1: false,
+            mergeEligibility: true
+          },
+          admittedBase: lease.admittedBase,
+          terminal: true,
+          mergeSha: truth.latestMergedImplementationPr.mergeSha,
+          scope: { changedFiles: 0, changedLines: 0, result: "TERMINAL_HISTORICAL" }
+        }
+      }
+    };
+  }
   const candidate = collectFiniteTaskCandidate(lease, facts);
   const evaluated = evaluateFiniteTaskCandidate({ lease, registry: truth.finiteTaskLeases, candidate });
   const findings = [...evaluated.findings];
@@ -561,6 +630,20 @@ export function activeTask(facts = {}) {
         featureId: resolution.binding.featureId
       }) : null;
       if (finiteLease && checkoutBranch !== finiteLease.implementationBranch) {
+        if (resolution.binding.phase === "TERMINAL" && finiteLease.taskState === "MERGED_VERIFIED") {
+          identity = {
+            branch: resolution.binding.implementationBranch,
+            head: resolution.binding.currentImplementationHead,
+            tree: resolution.binding.currentImplementationTree,
+            originMainHead: baseHead,
+            originMainTree: git(["rev-parse", `${baseHead}^{tree}`]),
+            baseHead,
+            baseTree: git(["rev-parse", `${baseHead}^{tree}`]),
+            diffHash: sha256(stableJson({ mergeSha: truth.latestMergedImplementationPr.mergeSha, sourceHead: resolution.binding.currentImplementationHead })),
+            pathHash: sha256([]),
+            changedFiles: []
+          };
+        } else {
         const derived = deriveFiniteTaskCandidateObservation({ record: truth, lease: finiteLease, currentProtectedBase: baseHead });
         if (!derived.ok) return { ok: false, findings: derived.findings };
         identity = {
@@ -575,6 +658,7 @@ export function activeTask(facts = {}) {
           pathHash: derived.candidate.changedPathHash,
           changedFiles: derived.candidate.changedPaths
         };
+        }
       } else {
         const changedFiles = git(["diff", "--no-ext-diff", "--name-only", `${baseHead}..HEAD`]).split("\n").filter(Boolean).sort();
         identity = {
@@ -625,7 +709,16 @@ export function activeTask(facts = {}) {
     .map(({ id, affectedDomains, requiredProofTier, blocks }) => ({ id, affectedDomains, requiredProofTier, blocks }));
   if (defects.length !== feature.knownDefectTags.length) return { ok: false, findings: ["HISTORICAL_DEFECT_UNRESOLVED"] };
   const changedFiles = identity.changedFiles ?? [];
-  const directFiles = changedFiles.length ? changedFiles : (facts.directlyAffectedFiles ?? []);
+  const finiteLeaseScopeFiles = implementation.value.finiteLease
+    ? (finiteTaskLeaseFor(truth?.finiteTaskLeases, {
+        implementationPr: resolution.binding.implementationPr,
+        implementationBranch: resolution.binding.implementationBranch,
+        featureId: resolution.binding.featureId
+      })?.allowedPaths ?? [])
+    : [];
+  const directFiles = changedFiles.length
+    ? changedFiles
+    : (facts.directlyAffectedFiles ?? finiteLeaseScopeFiles);
   const directDomains = [...new Set([...(feature.components ?? []), ...(feature.platformScope ?? []), ...(feature.providers ?? [])])];
   const transitiveDomains = [...new Set(defects.flatMap(({ affectedDomains }) => affectedDomains ?? []))];
   const contract = facts.contract ?? readJson("config/assurance/efficiency-e0-v1.json");

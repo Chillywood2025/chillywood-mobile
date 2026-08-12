@@ -1073,6 +1073,69 @@ export function evaluateFiniteTaskLeaseRuntime({
   };
   const leaseFreshness = scopedFreshness(binding?.requiredFreshnessClaims ?? []);
   const providerFreshness = scopedFreshness(providerCriticalRuntimeRequirement);
+  const terminalTask = binding?.phase === "TERMINAL" || finiteTaskTerminalStates.has(lease?.taskState);
+  if (terminalTask) {
+    const observation = record?.finiteTaskRuntime?.candidateObservation;
+    const latest = record?.latestMergedImplementationPr;
+    const terminalFindings = [];
+    if (binding?.phase !== "TERMINAL"
+      || lease?.taskState !== "MERGED_VERIFIED"
+      || lease?.domainOwnership !== "PRESERVED_DEPENDENT") terminalFindings.push("FINITE_TASK_TERMINAL_STATE_MISMATCH");
+    if (observation?.pr !== lease?.implementationPr
+      || observation?.branch !== lease?.implementationBranch
+      || observation?.prState !== "merged"
+      || observation?.head !== binding?.currentImplementationHead
+      || observation?.tree !== binding?.currentImplementationTree) terminalFindings.push("FINITE_TASK_TERMINAL_OBSERVATION_MISMATCH");
+    if (latest?.state !== "merged"
+      || latest?.number !== lease?.implementationPr
+      || latest?.head !== binding?.currentImplementationHead
+      || !gitShaPattern.test(latest?.mergeSha ?? "")) terminalFindings.push("FINITE_TASK_TERMINAL_MERGE_IDENTITY_MISMATCH");
+    try {
+      if (gitCommand(["rev-parse", `${binding.currentImplementationHead}^{tree}`]) !== binding.currentImplementationTree) {
+        terminalFindings.push("FINITE_TASK_TERMINAL_SOURCE_TREE_MISMATCH");
+      }
+      gitCommand(["merge-base", "--is-ancestor", binding.currentImplementationHead, latest.mergeSha]);
+      gitCommand(["merge-base", "--is-ancestor", latest.mergeSha, currentProtectedBase]);
+    } catch {
+      terminalFindings.push("FINITE_TASK_TERMINAL_MERGE_ANCESTRY_INVALID");
+    }
+    const findings = [...new Set([
+      ...leaseFreshness.blockers.map(({ id }) => id),
+      ...terminalFindings
+    ])].sort();
+    const terminalEligible = leaseFreshness.eligible && findings.length === 0;
+    return {
+      leaseAuthorityEligible: leaseFreshness.eligible,
+      candidateEligible: terminalEligible,
+      candidateHead: binding?.currentImplementationHead ?? null,
+      candidateTree: binding?.currentImplementationTree ?? null,
+      scopeResult: terminalEligible ? "PASS" : "FAIL",
+      findings,
+      providerDependentEligible: false,
+      sourceOnlyEligible: terminalEligible,
+      claimFreshness,
+      leaseFreshness,
+      providerFreshness,
+      candidate: terminalEligible ? {
+        pr: lease.implementationPr,
+        branch: lease.implementationBranch,
+        prState: "merged",
+        head: binding.currentImplementationHead,
+        tree: binding.currentImplementationTree,
+        mergeSha: latest.mergeSha,
+        observationSource: "PROTECTED_MAIN_TERMINAL_MERGE"
+      } : null,
+      candidateEvaluation: {
+        ok: terminalEligible,
+        leaseRetained: true,
+        taskState: lease?.taskState ?? null,
+        invalidated: { ownerFinalReceipt: false, repositoryReview: false, phase1: false, mergeEligibility: true },
+        findings
+      },
+      taskState: lease?.taskState ?? null,
+      terminal: true
+    };
+  }
   const derived = deriveFiniteTaskCandidateObservation({
     record,
     lease,
@@ -1107,7 +1170,9 @@ export function evaluateFiniteTaskLeaseRuntime({
     leaseFreshness,
     providerFreshness,
     candidate: derived.candidate,
-    candidateEvaluation
+    candidateEvaluation,
+    taskState: lease?.taskState ?? null,
+    terminal: false
   };
 }
 
@@ -1345,7 +1410,10 @@ export function evaluateProtectedMainAdvancement({
       candidateCurrent = false;
     }
   }
-  const candidateBaseStatus = candidateCurrent === true ? "CURRENT_WITH_PROTECTED_MAIN" : "BASE_SYNC_REQUIRED";
+  const terminalTask = finiteTaskRuntime?.terminal === true && finiteTaskRuntime?.taskState === "MERGED_VERIFIED";
+  const candidateBaseStatus = terminalTask
+    ? "TERMINAL_MERGED_VERIFIED"
+    : candidateCurrent === true ? "CURRENT_WITH_PROTECTED_MAIN" : "BASE_SYNC_REQUIRED";
   const authorityControlEligible = !findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT")
     && !findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
   const authorityCheckpointEligible = identityValid && ancestor === true
@@ -1357,7 +1425,7 @@ export function evaluateProtectedMainAdvancement({
     && (finiteTaskRuntime?.providerDependentEligible ?? false);
   const finalEvidence = record?.finiteTaskRuntime?.finalEvidence ?? {};
   const finalEvidenceCurrent = ["ownerReceipt", "repositoryReview", "phase1", "mergeEligible"].every((key) => finalEvidence[key] === true);
-  const mergeEligible = sourceOnlyEligible && candidateCurrent === true && finalEvidenceCurrent;
+  const mergeEligible = !terminalTask && sourceOnlyEligible && candidateCurrent === true && finalEvidenceCurrent;
   const aggregateChangedPaths = [...new Set(advancements.flatMap(({ changedPaths }) => changedPaths))].sort();
   let aggregateDiffHash = sha256("");
   if (identityValid && ancestor === true && checkpointSha !== observedSha) {
@@ -1381,7 +1449,9 @@ export function evaluateProtectedMainAdvancement({
     activeTaskInputsInvalidated,
     evidenceInvalidation,
     candidateBaseStatus,
-    nextRequiredAction: candidateBaseStatus === "BASE_SYNC_REQUIRED" ? "MERGE_CURRENT_PROTECTED_MAIN_NORMALLY" : "CONTINUE_ACTIVE_TASK",
+    nextRequiredAction: terminalTask
+      ? "CONTINUE_TERMINAL_HANDOFF"
+      : candidateBaseStatus === "BASE_SYNC_REQUIRED" ? "MERGE_CURRENT_PROTECTED_MAIN_NORMALLY" : "CONTINUE_ACTIVE_TASK",
     sourceOnlyEligible,
     providerDependentEligible,
     mergeEligible,
@@ -2597,7 +2667,7 @@ export function verifyCurrentTruthSynchronization({
 }
 
 export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, latestMergedImplementationPr, remoteMain, gitCommand = git }) {
-  if (activeTaskBinding?.phase !== "COMPLETE") return [];
+  if (!["COMPLETE", "TERMINAL"].includes(activeTaskBinding?.phase)) return [];
   const finding = (id, extra = {}) => ({ id, status: "BLOCKED_INTERNAL", ...extra });
   if (latestMergedImplementationPr?.state !== "merged"
     || latestMergedImplementationPr.number !== activeTaskBinding.implementationPr
@@ -2639,6 +2709,38 @@ export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, 
 }
 
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
+
+export function validateTerminalTaskEvidence(binding, latestMergedImplementationPr) {
+  if (binding?.phase !== "TERMINAL") return [];
+  const evidence = binding?.terminalEvidence;
+  const findings = [];
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)
+    || evidence.schemaVersion !== 1
+    || evidence.completionScope !== binding.completionScope
+    || evidence.sourceHead !== binding.currentImplementationHead
+    || evidence.sourceTree !== binding.currentImplementationTree
+    || evidence.mergeSha !== latestMergedImplementationPr?.mergeSha
+    || evidence.mergeTree !== binding.currentImplementationTree
+    || !Number.isInteger(evidence.ownerReceiptCommentId) || evidence.ownerReceiptCommentId < 1
+    || !Number.isInteger(evidence.repositoryReviewCommentId) || evidence.repositoryReviewCommentId < 1
+    || evidence.repositoryReview?.P0 !== 0
+    || evidence.repositoryReview?.P1 !== 0
+    || evidence.repositoryReview?.launchImpactingP2 !== 0
+    || !Number.isInteger(evidence.phase1?.runId) || evidence.phase1.runId < 1
+    || evidence.phase1?.head !== binding.currentImplementationHead
+    || evidence.phase1?.result !== "PASS_13_OF_13"
+    || evidence.proofLimitations?.T4_NATIVE_PROVIDER !== "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED"
+    || evidence.proofLimitations?.backupClassification !== "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT"
+    || evidence.proofLimitations?.T5_SIGNED_ARTIFACT !== "NOT_CURRENT"
+    || evidence.proofLimitations?.T6_INSTALLED_PHYSICAL !== "NOT_CURRENT"
+    || evidence.proofLimitations?.T7_PUBLIC_CANARY !== "BLOCKED_EXTERNAL"
+    || evidence.publicReleaseAuthorized !== false
+    || evidence.otaAuthorized !== false) {
+    findings.push({ id: "ASSURANCE_TERMINAL_TASK_EVIDENCE_MALFORMED", status: "BLOCKED_INTERNAL" });
+  }
+  return findings;
+}
+
 export const featureRequired = ["featureId", "currentState", "ownerSystems", "productOwner", "routes", "components", "edgeFunctions", "tablesRpcs", "nativeModulesPlugins", "providers", "platformScope", "environments", "riskLevel", "requirements", "nonGoals", "states", "transitions", "invariants", "knownDefectTags", "threatFailureModes", "proofTierApplicability", "commands", "artifactRequirements", "installedRequirements", "physicalGoldenCases", "rollback", "emergencyStop", "evidenceRetention", "reviewRequirements", "unresolvedBlockers"];
 export const proofTierApplicabilityPolicies = {
   REQUIRE_CLEAR: ["admin-display-only", "control-ui-only", "layout-matrix", "provider-required", "provider-when-used", "release-only", "required", "required-for-public-release", "required-for-release", "required-shadow-workflow", "setup-display-only", "store-flow-only", "when-delivered"],
@@ -2753,15 +2855,18 @@ export const proofTierCompletionFactAuthorities = [
 
 export function validateProofTierStatuses(binding, gateCatalog, featureRegistry) {
   const value = binding?.proofTierStatuses;
+  const terminalTask = binding?.phase === "TERMINAL";
+  const completionPhase = binding?.phase === "COMPLETE";
+  const statusPhase = completionPhase || terminalTask;
   if (value === undefined) {
     if (binding?.proofTierApplicabilityHash !== undefined) {
       return [{ id: "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE", status: "BLOCKED_INTERNAL", phase: binding?.phase ?? null }];
     }
-    return binding?.phase === "COMPLETE"
+    return statusPhase
       ? [{ id: "ASSURANCE_PROOF_TIER_STATUSES_MISSING", status: "BLOCKED_INTERNAL" }]
       : [];
   }
-  if (binding?.phase !== "COMPLETE") {
+  if (!statusPhase) {
     return [{ id: "ASSURANCE_PROOF_TIER_STATUSES_PREMATURE", status: "BLOCKED_INTERNAL", phase: binding?.phase ?? null }];
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -2787,14 +2892,16 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
   const registeredFeatures = Array.isArray(featureRegistry) ? featureRegistry : featureRegistry?.features;
   const featureMatches = (registeredFeatures ?? []).filter(({ featureId }) => featureId === binding?.featureId);
   const feature = featureMatches.length === 1 ? featureMatches[0] : null;
-  if (binding?.phase === "COMPLETE" && !feature) {
+  if (statusPhase && !feature) {
     return [{ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_MISSING", status: "BLOCKED_INTERNAL", featureId: binding?.featureId ?? null }];
   }
   const findings = [];
-  const authoritativeApplicability = proofTierCompletionFeatureApplicability[binding?.featureId];
-  if (binding?.phase === "COMPLETE"
+  const authoritativeApplicability = terminalTask
+    ? feature?.proofTierApplicability
+    : proofTierCompletionFeatureApplicability[binding?.featureId];
+  if (statusPhase
     && (!authoritativeApplicability
-      || stableJson(feature.proofTierApplicability) !== stableJson(authoritativeApplicability)
+      || (completionPhase && stableJson(feature.proofTierApplicability) !== stableJson(authoritativeApplicability))
       || binding.proofTierApplicabilityHash !== sha256(stableJson(authoritativeApplicability)))) {
     findings.push({ id: "ASSURANCE_PROOF_TIER_APPLICABILITY_HASH_MISMATCH", status: "BLOCKED_INTERNAL", featureId: binding.featureId });
   }
@@ -2823,9 +2930,9 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
     if (completePass) clearTiers.push(tier);
     if (!statusShapeValid || !catalogValuesValid) {
       findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_INVALID", status: "BLOCKED_INTERNAL", tier, value: proofStatus ?? null });
-    } else if (binding?.phase === "COMPLETE" && !completePass && proofStatus !== "NOT_APPLICABLE") {
+    } else if (completionPhase && !completePass && proofStatus !== "NOT_APPLICABLE") {
       findings.push({ id: "ASSURANCE_COMPLETED_PROOF_TIER_BLOCKED", status: "BLOCKED_INTERNAL", tier, value: proofStatus });
-    } else if (binding?.phase === "COMPLETE") {
+    } else if (completionPhase) {
       const applicability = (authoritativeApplicability ?? feature?.proofTierApplicability)?.[tier];
       const modes = Object.entries(proofTierApplicabilityPolicies)
         .filter(([, values]) => values.includes(applicability))
@@ -2846,7 +2953,28 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
   for (const tier of keys) {
     if (!tierIds.includes(tier)) findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_UNKNOWN", status: "BLOCKED_INTERNAL", tier });
   }
-  if (binding?.phase === "COMPLETE") {
+  if (terminalTask) {
+    const expected = {
+      T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
+      T1_SOURCE: "SOURCE_CLEAR",
+      T2_MODEL: "MODEL_CLEAR",
+      T3_INTEGRATION: "INTEGRATION_CLEAR",
+      T4_NATIVE_PROVIDER: "BLOCKED_INTERNAL",
+      T5_SIGNED_ARTIFACT: "BLOCKED_EXTERNAL",
+      T6_INSTALLED_PHYSICAL: "BLOCKED_EXTERNAL",
+      T7_PUBLIC_CANARY: "BLOCKED_EXTERNAL"
+    };
+    if (binding?.completionScope !== "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE"
+      || stableJson(value) !== stableJson(expected)) {
+      findings.push({ id: "ASSURANCE_TERMINAL_TASK_SCOPE_STATUS_MISMATCH", status: "BLOCKED_INTERNAL" });
+    }
+    const clearTiersExpected = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"];
+    const underEvaluation = Array.isArray(binding.proofTiersUnderEvaluation) ? binding.proofTiersUnderEvaluation : [];
+    if (stableJson([...underEvaluation].sort()) !== stableJson([...clearTiersExpected].sort())) {
+      findings.push({ id: "ASSURANCE_TERMINAL_TASK_PROOF_TIER_EVALUATION_MISMATCH", status: "BLOCKED_INTERNAL" });
+    }
+  }
+  if (completionPhase) {
     const underEvaluation = Array.isArray(binding.proofTiersUnderEvaluation) ? binding.proofTiersUnderEvaluation : [];
     if (new Set(underEvaluation).size !== underEvaluation.length
       || stableJson([...underEvaluation].sort()) !== stableJson([...clearTiers].sort())) {
@@ -2913,7 +3041,9 @@ export function renderCurrentState(record) {
     ? `\n- Finite task lease: \`${record.finiteTaskLeases.policyId}\`, admitted seed \`${activeLease.admittedSeedHead}\` / \`${activeLease.admittedSeedTree}\`, protected admission PR #${activeLease.protectedAdmissionPr}, state \`${activeLease.taskState}\`; descendant heads do not require another admission, source binding, or merge-provenance PR.`
     : "";
   const runtimeObservation = record.finiteTaskRuntime?.candidateObservation;
-  const implementationBindingLine = active.requiredFreshnessClasses?.includes("REPOSITORY_TASK_LEASE")
+  const implementationBindingLine = active.phase === "TERMINAL"
+    ? `- Structured terminal task binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, admitted seed \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, final source \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`TERMINAL\`, completion scope \`${active.completionScope}\`. The finite lease remains retained as historical authority; later signed, installed, physical, and public tiers remain independently gated.`
+    : active.requiredFreshnessClasses?.includes("REPOSITORY_TASK_LEASE")
     ? `- Structured task-lease binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, admitted seed \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`. Current candidate${runtimeObservation ? ` \`${runtimeObservation.head}\` / \`${runtimeObservation.tree}\`` : ""} is a non-authoritative read-only observation; final receipt, review, Phase 1, and merge provenance bind the frozen final head.`
     : `- Structured implementation binding: feature \`${active.featureId}\`, PR #${active.implementationPr}, immutable \`${active.immutableSourceHead}\` / \`${active.immutableSourceTree}\`, synchronized \`${active.currentImplementationHead}\` / \`${active.currentImplementationTree}\`, phase \`${active.phase}\`, execution \`${active.executionState}\`.`;
   const proofTierStatusLine = active.proofTierStatuses

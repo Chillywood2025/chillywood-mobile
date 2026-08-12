@@ -22,7 +22,8 @@ import {
   verifyCompletedImplementationMergeIdentity,
   verifyProviderImplementationSnapshot,
   validateFiniteTaskLeaseRegistry,
-  validateProofTierStatuses
+  validateProofTierStatuses,
+  validateTerminalTaskEvidence
 } from "./lib.mjs";
 import { validateStructuredBinding } from "./active-task.mjs";
 import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
@@ -227,6 +228,10 @@ if (mode) {
     latestMergedImplementationPr: record.latestMergedImplementationPr,
     remoteMain
   });
+  const terminalEvidenceFindings = validateTerminalTaskEvidence(
+    record.activeTaskBinding,
+    record.latestMergedImplementationPr
+  );
   const reviewPolicyFindings = optionalCodexReviewPolicyValid(record.reviewPolicy)
     ? []
     : [{ id: "CODEX_REVIEW_OPTIONAL_ADVISORY_POLICY_INVALID", status: "BLOCKED_INTERNAL" }];
@@ -234,7 +239,7 @@ if (mode) {
     .map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const runtimeFindings = finiteTaskRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const protectedMainFindings = protectedMainRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
-  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
+  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({
