@@ -65,5 +65,13 @@
     "repositoryReview": "REQUIRED",
     "phase1": "13_OF_13_REQUIRED",
     "postArchitectureTruthPr": false
+  },
+  "mergeSubjectCorrection": {
+    "implementationPr": 222,
+    "startingMain": "d3871b008ddb16898c114037c26605bf35b433f9",
+    "actualPredecessorMerge": "d3871b008ddb16898c114037c26605bf35b433f9",
+    "selfHostingSubject": "Accept protected GitHub merge subject formats (#222)",
+    "classification": "OWNER_AUTHORIZED_ROLLING_MAIN_ARCHITECTURE_CORRECTION",
+    "postCorrectionTruthPr": false
   }
 }
