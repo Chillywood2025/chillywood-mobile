@@ -601,6 +601,7 @@ export function activeTask(facts = {}) {
 
   const implementation = resolveImplementation(truth, identity, {
     ...facts,
+    currentTruth: truth,
     identity,
     acceptedBaseSynchronizations: facts.acceptedBaseSynchronizations ?? checked.headBindings?.acceptedBaseSynchronizations ?? {}
   }, resolution);
