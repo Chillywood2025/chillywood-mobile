@@ -2158,7 +2158,10 @@ test("terminal protected-base resolution 21: document freshness remains claim sc
 });
 
 test("terminal protected-base resolution 22: exact PR 224 terminal state passes against origin/main f471", () => {
-  const result = evaluateTerminalD2a();
+  const result = evaluateTerminalD2a({ gitCommand: (args) => (
+    args.join(" ") === "rev-parse origin/main" ? terminalProtectedBase : exactGit(args)
+  ) });
+  assert.equal(result.currentProtectedBaseResolution.source, "EXACT_LOCAL_REMOTE");
   assert.equal(result.currentProtectedBaseResolution.protectedBase, terminalProtectedBase);
   assert.equal(result.candidate.mergeSha, terminalMerge);
   assert.equal(result.candidateEligible, true, result.findings.join(","));
