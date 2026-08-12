@@ -16,7 +16,6 @@ const pluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const unitTemplate = "tools/android-native-call-harness/ChillyChatNativeCallActionStoreTest.kt";
 const instrumentationTemplate = "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt";
 const micInstrumentationTemplate = "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt";
-const micContractPath = "config/assurance/android-chat-call-mic-control-v1.json";
 const digest = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const read = (relative) => fs.readFileSync(path.join(root, relative));
 const readText = (relative) => read(relative).toString("utf8");
@@ -525,8 +524,11 @@ export const deterministicEvidenceDigest = (value) => {
   return digest(stable(normalized));
 };
 
-export const evaluateMicNativeAudioMatrix = (template = readText(micInstrumentationTemplate), hostMethods = []) => {
-  const required = readJson(micContractPath).nativeLayer.audioMatrix.required;
+export const evaluateMicNativeAudioMatrix = (template = readText(micInstrumentationTemplate), hostMethods = [], required = readJson(contractPath).nativeMicrophoneScenarios) => {
+  gate(Array.isArray(required) && required.length === 4
+    && required.every(({id, method, runner}) => typeof id === "string" && id.length > 0
+      && typeof method === "string" && method.length > 0 && typeof runner === "string" && runner.length > 0),
+  "ANDROID_MIC_NATIVE_AUDIO_CONTRACT_INVALID", "The D2A contract must declare four bounded native microphone scenarios");
   const implemented = required.filter(({method, runner}) => runner.startsWith("INSTRUMENTATION")
     ? methodDeclared(template, method) : hostMethods.includes(method));
   return {required: required.map(({id}) => id), implemented: implemented.map(({id}) => id),

@@ -144,6 +144,28 @@
     "EXTERNAL_CUSTOM_SCHEME_ORIGIN",
     "BACKUP_POLICY"
   ],
+  "nativeMicrophoneScenarios": [
+    {
+      "id": "NATIVE_AUDIO_TRACK_MUTE_UNMUTE",
+      "method": "nativeAudioTrackMutesAndUnmutesWithoutTermination",
+      "runner": "INSTRUMENTATION"
+    },
+    {
+      "id": "NATIVE_AUDIO_TRACK_REPEATED_TOGGLE",
+      "method": "repeatedToggleRemainsLiveAndDeterministic",
+      "runner": "INSTRUMENTATION"
+    },
+    {
+      "id": "NATIVE_AUDIO_TRACK_IDEMPOTENT_TOGGLE",
+      "method": "duplicateMuteAndUnmuteAreIdempotent",
+      "runner": "INSTRUMENTATION"
+    },
+    {
+      "id": "NATIVE_AUDIO_TRACK_NON_INTERFERENCE",
+      "method": "audioToggleDoesNotCreateVideoOrNetworkAuthority",
+      "runner": "INSTRUMENTATION"
+    }
+  ],
   "requiredCapabilities": [
     "android.image-manipulator",
     "android.livekit-webrtc",

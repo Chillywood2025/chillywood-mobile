@@ -10,6 +10,7 @@ import {
   deterministicEvidenceDigest,
   evaluateBackupPolicy,
   evaluateD1SourceCapabilityParity,
+  evaluateMicNativeAudioMatrix,
   evaluateScenarioMatrix,
   fixtureIds,
   resolveDependencySet,
@@ -52,6 +53,7 @@ assert.equal(contract.componentRules.serverAuthority.requestLiveKitToken, false)
 assert.equal(contract.componentRules.serverAuthority.startMedia, false);
 assert.equal(contract.requiredCapabilities.length, 21);
 assert.equal(contract.lifecycleScenarios.length, 12);
+assert.equal(contract.nativeMicrophoneScenarios.length, 4);
 assert.equal(contract.requiredGradleTasks.length, 6);
 assert.equal(Object.keys(contract.negativeControls).length, 12);
 assert.deepEqual(Object.keys(contract.negativeControls), fixtureIds);
@@ -135,6 +137,14 @@ assert.doesNotThrow(() => assertCompleteScenarioMatrix(scenarioMatrix));
 const missingBackgroundTemplate = scenarioTemplate.replace("fun backgroundActionResumesAndConsumesOnce()", "fun removedBackgroundActionResumesAndConsumesOnce()");
 assert.equal(evaluateScenarioMatrix(missingBackgroundTemplate, true).complete, false);
 assert.throws(() => assertCompleteScenarioMatrix(evaluateScenarioMatrix(missingBackgroundTemplate, true)), (error) => error.code === "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE");
+const micTemplate = fs.readFileSync("tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt", "utf8");
+const micMatrix = evaluateMicNativeAudioMatrix(micTemplate);
+assert.equal(micMatrix.complete, true);
+assert.deepEqual(micMatrix.required, contract.nativeMicrophoneScenarios.map(({id}) => id));
+assert.deepEqual(micMatrix.missing, []);
+const missingMicTemplate = micTemplate.replace("fun repeatedToggleRemainsLiveAndDeterministic()", "fun removedRepeatedToggleRemainsLiveAndDeterministic()");
+assert.equal(evaluateMicNativeAudioMatrix(missingMicTemplate).complete, false);
+assert.throws(() => evaluateMicNativeAudioMatrix(micTemplate, [], null), (error) => error.code === "ANDROID_MIC_NATIVE_AUDIO_CONTRACT_INVALID");
 assert.equal(assertNativeEntryPreflight({backupPolicyClear: true}).complete, true);
 const evidenceA = {gradle: {tasks: [{task: "compile", passed: true, durationMs: 1}]}, value: "same"};
 const evidenceB = {gradle: {tasks: [{task: "compile", passed: true, durationMs: 9999}]}, value: "same"};
