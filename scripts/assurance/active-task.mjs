@@ -554,19 +554,42 @@ export function activeTask(facts = {}) {
       if (git(["status", "--porcelain"])) return { ok: false, findings: ["WORKING_TREE_NOT_IMMUTABLE"] };
       const base = "origin/main";
       const baseHead = git(["rev-parse", "--verify", `${base}^{commit}`]);
-      const changedFiles = git(["diff", "--no-ext-diff", "--name-only", `${baseHead}..HEAD`]).split("\n").filter(Boolean).sort();
-      identity = {
-        branch: git(["branch", "--show-current"]) || "DETACHED",
-        head: git(["rev-parse", "HEAD"]),
-        tree: git(["rev-parse", "HEAD^{tree}"]),
-        originMainHead: git(["rev-parse", "origin/main^{commit}"]),
-        originMainTree: git(["rev-parse", "origin/main^{tree}"]),
-        baseHead,
-        baseTree: git(["rev-parse", `${baseHead}^{tree}`]),
-        diffHash: sha256(git(["diff", "--no-ext-diff", "--binary", `${baseHead}..HEAD`])),
-        pathHash: sha256(changedFiles),
-        changedFiles
-      };
+      const checkoutBranch = git(["branch", "--show-current"]) || "DETACHED";
+      const finiteLease = resolution.binding ? finiteTaskLeaseFor(truth?.finiteTaskLeases, {
+        implementationPr: resolution.binding.implementationPr,
+        implementationBranch: resolution.binding.implementationBranch,
+        featureId: resolution.binding.featureId
+      }) : null;
+      if (finiteLease && checkoutBranch !== finiteLease.implementationBranch) {
+        const derived = deriveFiniteTaskCandidateObservation({ record: truth, lease: finiteLease, currentProtectedBase: baseHead });
+        if (!derived.ok) return { ok: false, findings: derived.findings };
+        identity = {
+          branch: derived.candidate.branch,
+          head: derived.candidate.head,
+          tree: derived.candidate.tree,
+          originMainHead: baseHead,
+          originMainTree: git(["rev-parse", `${baseHead}^{tree}`]),
+          baseHead,
+          baseTree: git(["rev-parse", `${baseHead}^{tree}`]),
+          diffHash: derived.candidate.diffHash,
+          pathHash: derived.candidate.changedPathHash,
+          changedFiles: derived.candidate.changedPaths
+        };
+      } else {
+        const changedFiles = git(["diff", "--no-ext-diff", "--name-only", `${baseHead}..HEAD`]).split("\n").filter(Boolean).sort();
+        identity = {
+          branch: checkoutBranch,
+          head: git(["rev-parse", "HEAD"]),
+          tree: git(["rev-parse", "HEAD^{tree}"]),
+          originMainHead: git(["rev-parse", "origin/main^{commit}"]),
+          originMainTree: git(["rev-parse", "origin/main^{tree}"]),
+          baseHead,
+          baseTree: git(["rev-parse", `${baseHead}^{tree}`]),
+          diffHash: sha256(git(["diff", "--no-ext-diff", "--binary", `${baseHead}..HEAD`])),
+          pathHash: sha256(changedFiles),
+          changedFiles
+        };
+      }
     }
   } catch { return { ok: false, findings: ["SOURCE_IDENTITY_UNRESOLVED"] }; }
 
