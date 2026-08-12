@@ -491,10 +491,16 @@ const emulatorEvidence = (generated, native, installState) => {
     }
     const result = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", `com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#${method}`, component]);
     const passed = result.status === 0 && /OK \(1 test\)/u.test(result.stdout) && !result.stdout.includes("FAILURES!!!");
+    const diagnostic = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
+      .split("\n")
+      .filter((line) => /(?:FAILURES|Failure in|ComparisonFailure|AssertionError|expected:|but was:|INSTRUMENTATION_FAILED)/u.test(line))
+      .slice(-24)
+      .join(" | ")
+      .slice(0, 1600);
     if (scenario === "EXTERNAL_CUSTOM_SCHEME_ORIGIN" && !passed) throw new GateError("ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED",
       "An external custom-scheme Activity launch persisted a trusted native call action", {compiled: true, emulatorReproduced: true, identifiersRecorded: false});
     methodResults.push({scenario, method, runner, passed});
-    gate(passed, "ANDROID_EMULATOR_LIFECYCLE_FAILED", `${scenario} failed`);
+    gate(passed, "ANDROID_EMULATOR_LIFECYCLE_FAILED", `${scenario} failed${diagnostic ? `: ${diagnostic}` : ""}`);
   }
   gate(methodResults.length === scenarioMatrix.required.length && methodResults.every(({passed}) => passed),
     "ANDROID_EMULATOR_SCENARIO_EXECUTION_INCOMPLETE", "Every required scenario must execute exactly once and pass");

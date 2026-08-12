@@ -177,7 +177,7 @@ const consumeTest = unitTemplate.slice(unitTemplate.indexOf("fun consumeReturnsE
 assert.match(consumeTest, /for \(field in listOf\("thread_id", "call_invite_id", "native_action", "request_key", "capture_generation", "created_at", "created_elapsed_at"\)\)/u);
 assert.match(consumeTest, /assertFalse\("Pending field must be removed after consume: \$field", preferences\.contains\(field\)\)/u);
 assert.match(instrumentationTemplate, /verifyExternallyLaunchedActionWasNotPersisted/u);
-assert.match(instrumentationTemplate, /PendingIntent\.getBroadcast\([\s\S]*PendingIntent\.FLAG_UPDATE_CURRENT or PendingIntent\.FLAG_IMMUTABLE[\s\S]*\)\.send\(\)/u);
+assert.match(instrumentationTemplate, /PendingIntent\.getBroadcast\([\s\S]*PendingIntent\.FLAG_UPDATE_CURRENT or PendingIntent\.FLAG_IMMUTABLE[\s\S]*\)\.send\(/u);
 assert.doesNotMatch(instrumentationTemplate, /ChillyChatCallNotificationActionReceiver\(\)\.onReceive/u);
 assert.match(instrumentationTemplate, /An external custom-scheme launch must not establish trusted native call action state/u);
 const externalTest = instrumentationTemplate.slice(instrumentationTemplate.indexOf("fun verifyExternallyLaunchedActionWasNotPersisted"));
@@ -272,5 +272,10 @@ try {
 assert.match(runner, /ANDROID_GRADLE_TASK_TIMEOUT/u);
 assert.match(runner, /ANDROID_MIC_NATIVE_TASK_TIMEOUT/u);
 assert.match(runner, /timeout: 2 \* 60 \* 60 \* 1000/u);
+assert.match(instrumentationTemplate, /CountDownLatch\(1\)/u);
+assert.match(instrumentationTemplate, /PendingIntent\.OnFinished[\s\S]*completion\.countDown\(\)/u);
+assert.match(instrumentationTemplate, /completion\.await\(10, TimeUnit\.SECONDS\)/u);
+assert.ok(instrumentationTemplate.indexOf("completion.await") < instrumentationTemplate.indexOf("waitForIdleSync", instrumentationTemplate.indexOf("private fun dispatchTrusted")));
+assert.match(runner, /ANDROID_EMULATOR_LIFECYCLE_FAILED[\s\S]*diagnostic/u);
 
 console.log("android generated-native lifecycle source/model tests passed (hardened contract/report assertions; source 17/17; negative controls 12/12; CLI fail-closed 14/14; backup fixtures 14/14; capability and all direct dependency identities fail closed).");

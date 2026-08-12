@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -16,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class ChillyChatNativeLifecycleInstrumentationTest {
@@ -50,12 +54,20 @@ class ChillyChatNativeLifecycleInstrumentationTest {
   }
 
   private fun dispatchTrusted(action: String = "answer") {
+    val completion = CountDownLatch(1)
     PendingIntent.getBroadcast(
       context,
       if (action == "decline") 2 else 1,
       receiverIntent(action),
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    ).send()
+    ).send(
+      context,
+      0,
+      null,
+      PendingIntent.OnFinished { _, _, _, _, _ -> completion.countDown() },
+      Handler(Looper.getMainLooper()),
+    )
+    assertTrue("Trusted receiver did not complete", completion.await(10, TimeUnit.SECONDS))
     InstrumentationRegistry.getInstrumentation().waitForIdleSync()
   }
 
