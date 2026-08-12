@@ -3,7 +3,6 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "postinstall": "node ./scripts/patch-brace-expansion-consumers.mjs",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
@@ -678,10 +677,30 @@
     "@istanbuljs/load-nyc-config": {
       "js-yaml": "3.15.1"
     },
-    "brace-expansion": "5.0.9",
+    "@expo/fingerprint@0.15.5": {
+      "minimatch@10.2.5": {
+        "brace-expansion": "5.0.9"
+      }
+    },
+    "@typescript-eslint/typescript-estree@8.57.2": {
+      "minimatch@10.2.4": {
+        "brace-expansion": "5.0.9"
+      }
+    },
     "fast-uri": "3.1.5",
+    "glob@13.0.6": {
+      "minimatch@10.2.4": {
+        "brace-expansion": "5.0.9"
+      }
+    },
     "image-size": "$image-size",
     "js-yaml": "4.3.1",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "minimatch@9.0.9": {
+      "brace-expansion": "2.1.4"
+    },
     "nanoid": "3.3.17",
     "postcss": "8.5.22"
   },

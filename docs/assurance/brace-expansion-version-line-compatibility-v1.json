@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "reportId": "brace-expansion-version-line-compatibility-v1",
+  "classification": "OWNER_AUTHORIZED_SHARED_DEPENDENCY_PREREQUISITE",
+  "rootCause": "DEPENDENCY_VERSION_LINE_COLLAPSE_HIDDEN_BY_POSTINSTALL_MUTATION",
+  "implementationPr": 220,
+  "branch": "codex/brace-expansion-version-line-compatibility-correction",
+  "base": {
+    "commit": "416f9e162501940f34da55a084a3fc3d0680d59c",
+    "tree": "982bc5fcf81edb6198ecf0aaae57a3497bfe7dc9"
+  },
+  "toolchain": {
+    "node": "20.20.2",
+    "npm": "10.8.2",
+    "classification": "EXACT_REPOSITORY_TOOLCHAIN"
+  },
+  "preFixConsumerInventory": {
+    "lockfileVersion": 3,
+    "inventorySha256": "4af14ded160200a637bb26b37f2b6c415ec7ad57b45399bc9e32a03d8b3bab69",
+    "minimatchCopies": 5,
+    "entries": [
+      {
+        "packagePath": "node_modules/@expo/fingerprint/node_modules/minimatch",
+        "version": "10.2.5",
+        "declaringParents": ["node_modules/@expo/fingerprint@0.15.5:^10.2.2"],
+        "declaredBraceExpansionRange": "^5.0.5",
+        "resolvedBraceExpansionPath": "node_modules/brace-expansion",
+        "resolvedBraceExpansionVersion": "5.0.9",
+        "requiredApi": {"commonjs": "NAMED_EXPAND", "esm": "NAMED_EXPAND"}
+      },
+      {
+        "packagePath": "node_modules/@typescript-eslint/typescript-estree/node_modules/minimatch",
+        "version": "10.2.4",
+        "declaringParents": ["node_modules/@typescript-eslint/typescript-estree@8.57.2:^10.2.2"],
+        "declaredBraceExpansionRange": "^5.0.2",
+        "resolvedBraceExpansionPath": "node_modules/brace-expansion",
+        "resolvedBraceExpansionVersion": "5.0.9",
+        "requiredApi": {"commonjs": "NAMED_EXPAND", "esm": "NAMED_EXPAND"}
+      },
+      {
+        "packagePath": "node_modules/expo/node_modules/minimatch",
+        "version": "9.0.9",
+        "declaringParents": ["node_modules/expo/node_modules/@expo/cli@54.0.26:^9.0.0"],
+        "declaredBraceExpansionRange": "^2.0.2",
+        "resolvedBraceExpansionPath": "node_modules/brace-expansion",
+        "resolvedBraceExpansionVersion": "5.0.9",
+        "requiredApi": {"commonjs": "CALLABLE_DEFAULT_INTEROP", "esm": "DEFAULT_CALLABLE"}
+      },
+      {
+        "packagePath": "node_modules/glob/node_modules/minimatch",
+        "version": "10.2.4",
+        "declaringParents": ["node_modules/glob@13.0.6:^10.2.2"],
+        "declaredBraceExpansionRange": "^5.0.2",
+        "resolvedBraceExpansionPath": "node_modules/brace-expansion",
+        "resolvedBraceExpansionVersion": "5.0.9",
+        "requiredApi": {"commonjs": "NAMED_EXPAND", "esm": "NAMED_EXPAND"}
+      },
+      {
+        "packagePath": "node_modules/minimatch",
+        "version": "3.1.5",
+        "declaringParents": [
+          "node_modules/@eslint/config-array@0.21.2:^3.1.5",
+          "node_modules/@eslint/eslintrc@3.3.5:^3.1.5",
+          "node_modules/@react-native/codegen/node_modules/glob@7.2.3:^3.1.1",
+          "node_modules/eslint@9.39.4:^3.1.5",
+          "node_modules/eslint-plugin-import@2.32.0:^3.1.2",
+          "node_modules/eslint-plugin-react@7.37.5:^3.1.2",
+          "node_modules/react-native/node_modules/glob@7.2.3:^3.1.1",
+          "node_modules/rimraf/node_modules/glob@7.2.3:^3.1.1",
+          "node_modules/test-exclude@6.0.0:^3.0.4",
+          "node_modules/test-exclude/node_modules/glob@7.2.3:^3.1.1"
+        ],
+        "declaredBraceExpansionRange": "^1.1.7",
+        "resolvedBraceExpansionPath": "node_modules/brace-expansion",
+        "resolvedBraceExpansionVersion": "5.0.9",
+        "requiredApi": {"commonjs": "CALLABLE_FUNCTION", "esm": "NOT_EXPORTED"}
+      }
+    ]
+  },
+  "preFixWitness": {
+    "startingStateWitnessSha256": "f6c5894d31e8ad6a785307d4b71206b85573a6ffce7202a0093bd43dd0bbc802",
+    "currentExecutionWitnessSha256": "2edd0ab95220faae58194f8031a1b9d532139bac8a19897534945d4e1d300f8a",
+    "installOutputSha256": "f8df9aa483e5d192295aa1adff770765a8c94314d41ca2a8b6615daba4ba2ac3",
+    "install": "npm ci --ignore-scripts --no-audit --no-fund",
+    "scriptsDisabled": true,
+    "head": "416f9e162501940f34da55a084a3fc3d0680d59c",
+    "minimatch": "3.1.5",
+    "minimatchDeclaredRange": "^1.1.7",
+    "braceExpansion": "5.0.9",
+    "commonJsType": "object",
+    "expandMemberType": "function",
+    "sourceExpected": "CALLABLE_FUNCTION",
+    "sanitizedError": "TypeError: expand is not a function",
+    "probeLocationDisposition": "CLEAN_EXACT_MAIN_IMPLEMENTATION_WORKTREE_USED_AFTER_DISPOSABLE_PROBE_CWD_ERROR",
+    "oldInstalledTreeRemovedBeforeCorrection": true,
+    "repeated": false
+  },
+  "correctedGraph": {
+    "classification": "EXACT_VERSION_LINE_COMPATIBLE_LOCK_GRAPH",
+    "graphSha256": "577185512d0536a8897dac500b89d59bc22a418eb5f21eaca11e4cb5d5d75f68",
+    "mapping": [
+      {"minimatch": "3.1.5", "braceExpansion": "1.1.18", "installedPath": "node_modules/minimatch/node_modules/brace-expansion", "api": "CALLABLE_COMMONJS"},
+      {"minimatch": "9.0.9", "braceExpansion": "2.1.4", "installedPath": "node_modules/expo/node_modules/brace-expansion", "api": "CALLABLE_COMMONJS_AND_ESM_INTEROP"},
+      {"minimatch": "10.2.4", "braceExpansion": "5.0.9", "installedPath": "node_modules/brace-expansion", "api": "NAMED_COMMONJS_AND_ESM_EXPORT"},
+      {"minimatch": "10.2.5", "braceExpansion": "5.0.9", "installedPath": "node_modules/brace-expansion", "api": "NAMED_COMMONJS_AND_ESM_EXPORT"}
+    ],
+    "minimatchVersionsUnchanged": true,
+    "braceExpansionVersions": ["1.1.18", "2.1.4", "5.0.9"],
+    "globalBraceExpansionOverrideRemoved": true,
+    "postinstallRemoved": true,
+    "patchScriptDeleted": true,
+    "installedSourceMutation": false,
+    "imageSizeSafePreserved": true,
+    "unrelatedPackageEntries": 1162,
+    "unrelatedPackageGraphSha256": "bbc595ff9f44ccb196e9cb6753e5ba872a58bbd81cf4d42a7bc7de1355983f27"
+  },
+  "sourceHashes": {
+    "packageJsonSha256": "bbcbda9b79c702eb0d7d387a24fd731eda3d9cc176bc06557c8258d57e2ee7f5",
+    "packageLockSha256": "07f5c8d340c814240ac258a513fc0934eac0d0bd17fa350702c4d3e69af29237",
+    "compatibilityTestSha256": "f9d17f78398464d55dfa1cf55cc442eabbbb83740d3cbf3975de5568a4666ee3",
+    "lockfileDeterminism": "3/3",
+    "lockfileDeterministicSha256": "07f5c8d340c814240ac258a513fc0934eac0d0bd17fa350702c4d3e69af29237"
+  },
+  "cleanInstallProofs": {
+    "installA": {
+      "mode": "IGNORE_SCRIPTS",
+      "result": "PASS",
+      "installOutputSha256": "6062c9da8d8dd96c5a7f7de6b9dc8db27b7494be448252d16b05c212fedded6c",
+      "compatibilityOutputSha256": "25136f4adecb45d1ad4d2940e1ea8ba0bf4f8ebeabaecddac30921d887cf21ac",
+      "compatibilityResultSha256": "b20f64a15618e16f95cd03a3b5bb5c0612d3d235297d6db89154fc0ae3e86fb6",
+      "trackedRepositoryChanges": 0
+    },
+    "installB": {
+      "mode": "NORMAL",
+      "result": "PASS",
+      "installOutputSha256": "842bdf067763dfe0a5822566dc2bbf783702c1d3d941bce7cc2ac0546757b8f6",
+      "compatibilityOutputSha256": "b4986a460987399e339334bc5536438610d908276e4d3bccdd1a684c8109700f",
+      "compatibilityResultSha256": "9b3162d20d4261deedd0166bcad0398c953d147097d8422111d95905a9021378",
+      "trackedRepositoryChanges": 0
+    },
+    "relevantApiAndSourceEquivalenceSha256": "41b60012c1ce8ef53e6f236bc2f26d6de1acda15a963e71369e3ff62bb459c28",
+    "sourceHashCount": 13,
+    "postinstallPatchObserved": false
+  },
+  "compatibility": {
+    "minimatchContexts": 5,
+    "commonJsPassed": 5,
+    "esmApplicable": 4,
+    "esmPassed": 4,
+    "bracePatternsPassed": 5,
+    "boundedMaliciousFixturesPassed": 5,
+    "npmLsProblems": 0,
+    "negativeControlsRequired": 16,
+    "negativeControlsKilled": 16,
+    "negativeControlSha256": "6304308d2568646b61f82e38b14e979bf7487157945552c0315f4b0ebd7bd057",
+    "apiObservationSha256": "a1e7e559e7e8e57b920b740595c92ac1b181a1bd95fac182108fb3bc8c40de88"
+  },
+  "validation": {
+    "imageSizeSafe": {"result": "PASS", "outputSha256": "d42f435c4d996e1e70203dba093b34d11d2530c492fee38fd7502233d8c909bb"},
+    "rootProductionAudit": {"critical": 0, "high": 0, "moderate": 21, "low": 0, "outputSha256": "d5591ca42cfa63787f5b69d4c8cb4fe96f2491010a8d89dffe49bf5138ced7c2"},
+    "alertAutomationAudit": {"critical": 0, "high": 0, "moderate": 0, "low": 0, "outputSha256": "6a3f6e231fb951ae52fe376a7f7cb9d050e8b1dd54dcb8abbbd42c0e1f0f1c3d"},
+    "expoDoctor": {"result": "18/18 PASS", "outputSha256": "a655a1f3c6510bbe5227a37df94c25749953a1e92084df30fd6748a0b7240be4"},
+    "typescript": {"result": "PASS_AFTER_REQUIRED_ALERT_AUTOMATION_CI_INSTALL", "outputSha256": "db503202b13fa3950d60c86497b5ea00eb5e2ccfce87190200c92a910d1f8ac4", "alertInstallOutputSha256": "5cab23bea3ecc081803c62e7dde3af9d34d07cb8e82fe36a14139c9ca23e82ba"},
+    "repositoryLint": {"errors": 0, "existingWarnings": 88, "outputSha256": "1983676030da9595dc25025ba9e56e38fc3067b8ee34e93e150c28ce1d460ad8"},
+    "metroAssetApi": {"result": "PASS", "coveredBy": "test:image-size-safe-compat"},
+    "offlineAndroidBundle": {"result": "PASS", "fileCount": 37, "bundleFiles": 1, "manifestPresent": true, "outputSha256": "a7f317fcda5b510336d3fe939ffe1865a5da49d473a13c9dd04a5f429a182e3a", "logSha256": "e2d24e0795af2279201d98989312138a908e446046d8a3e2d08a9dccc24712aa"},
+    "assuranceContracts": "PASS_28_CONTRACTS_22_FEATURES_25_ESCAPED_DEFECTS",
+    "currentTruth": "PASS_NO_CURRENT_TRUTH_CHANGE",
+    "gitDiffCheck": "PASS",
+    "secretOrPrivateEvidenceMatches": 0
+  },
+  "syntheticD2AIntegration": {
+    "pushed": false,
+    "pr212Head": "28b1a7b9dd26e7e0a1cf2bb1bb07247fe721e7d9",
+    "dependencyCandidateHead": "4c986c8840bba40260c94201f06ad5c73acc1a5d",
+    "syntheticHead": "d5803b637652edcef29b426a582d842ef8ebc623",
+    "syntheticTree": "bc41e7c716341cf2a5066cc31644eb5ea67a04c5",
+    "cleanInstall": "PASS",
+    "cleanInstallOutputSha256": "842bdf067763dfe0a5822566dc2bbf783702c1d3d941bce7cc2ac0546757b8f6",
+    "sourceModel": "PASS",
+    "sourceModelOutputSha256": "c32ebb63a867cd2c82eb062f809dc19a59d335b565ef462ed228186c1e37dbfe",
+    "generatedNative": "3/3 PASS",
+    "generatedDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+    "generatedSecurityDigest": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634",
+    "generationOutputSha256": "443b308e36fddb625bb64f011c3ca55614cdbceadb54ba917f7b70456b6f69d8",
+    "compileTask": ":app:compileDebugKotlin",
+    "compileResult": "PASS",
+    "compileOutputSha256": "a871b9af506dbcea5d43d25cbcd01b08cc0b157f49f6a53a2b71dd9251421c48"
+  },
+  "externalClosure": {
+    "ownerReceipt": "IMMUTABLE_GITHUB_COMMENT_REQUIRED_AT_FINAL_HEAD",
+    "repositoryReview": "EXACT_HEAD_BUNDLE_REQUIRED",
+    "phase1": "13_OF_13_REQUIRED",
+    "mergeProvenance": "EXACT_TWO_PARENT_REQUIRED"
+  },
+  "nonInterference": {
+    "productSourceChanged": false,
+    "nativeProductSourceChanged": false,
+    "expoOrReactNativeVersionChanged": false,
+    "workflowChanged": false,
+    "currentTruthChanged": false,
+    "featureRegistryChanged": false,
+    "databaseOrProviderChanged": false,
+    "easOrReleaseConfigurationChanged": false,
+    "imageSizeVendoredPackageChanged": false,
+    "buildOrOtaStarted": false,
+    "publicReleaseAuthority": false
+  }
+}
