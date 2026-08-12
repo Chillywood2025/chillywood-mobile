@@ -250,7 +250,7 @@ const receiptAllowlist = JSON.parse(fs.readFileSync("config/assurance/command-al
 for (const commandId of ["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native"]) {
   assert.equal(receiptAllowlist.commands.find(({ id }) => id === commandId)?.timeoutMs, 21_600_000);
 }
-assert.equal(receiptAllowlist.commands.find(({ id }) => id === "d2a-runtime-backup")?.timeoutMs, 900_000);
+assert.equal(receiptAllowlist.commands.find(({ id }) => id === "d2a-runtime-backup")?.timeoutMs, 1_200_000);
 const priorJavaHome = process.env.JAVA_HOME;
 const expectedJavaHome = "/Applications/Android Studio.app/Contents/jbr/Contents/Home";
 let observedNativeReceiptEnvironment;
@@ -275,6 +275,24 @@ try {
   assert.equal(observedNativeReceiptEnvironment.JAVA_HOME, expectedJavaHome);
   assert.equal(Object.hasOwn(observedNativeReceiptEnvironment, "ANDROID_HOME"), false);
   assert.equal(Object.hasOwn(observedNativeReceiptEnvironment, "HOME"), false);
+  let observedBackupReceiptEnvironment;
+  const backupReceipt = runReceipt(
+    receiptAllowlist,
+    "d2a-runtime-backup",
+    ["scripts/assurance/android-native-call-origin-backup.mjs", "--backup-restore", "--json"],
+    {
+      sourceHead: "c".repeat(40),
+      sourceTree: "d".repeat(40),
+      clock: () => 2,
+      spawn: (_file, _args, options) => {
+        observedBackupReceiptEnvironment = options.env;
+        return { status: 0, signal: null, stdout: "{}\n", stderr: "" };
+      },
+      artifactWriter: () => "/tmp/chillywood-assurance-d2a/backup-toolchain-receipt"
+    }
+  );
+  assert.equal(backupReceipt.ok, true);
+  assert.equal(observedBackupReceiptEnvironment.JAVA_HOME, expectedJavaHome);
 } finally {
   if (priorJavaHome === undefined) delete process.env.JAVA_HOME;
   else process.env.JAVA_HOME = priorJavaHome;

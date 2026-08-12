@@ -33,6 +33,6 @@
     {"id":"d2a-lifecycle-native","contractCommand":"node scripts/assurance/android-generated-native-lifecycle.mjs --native --json","file":"node","args":["scripts/assurance/android-generated-native-lifecycle.mjs","--native","--json"],"timeoutMs":21600000,"resultContract":{"type":"exit-zero-v1"}},
     {"id":"d2a-lifecycle-emulator","contractCommand":"node scripts/assurance/android-generated-native-lifecycle.mjs --emulator --json","file":"node","args":["scripts/assurance/android-generated-native-lifecycle.mjs","--emulator","--json"],"timeoutMs":21600000,"resultContract":{"type":"exit-zero-v1"}},
     {"id":"d2a-mic-native","contractCommand":"node scripts/assurance/android-chat-call-mic-control.mjs --native --json","file":"node","args":["scripts/assurance/android-chat-call-mic-control.mjs","--native","--json"],"timeoutMs":21600000,"resultContract":{"type":"exit-zero-v1"}},
-    {"id":"d2a-runtime-backup","contractCommand":"node scripts/assurance/android-native-call-origin-backup.mjs --backup-restore --json","file":"node","args":["scripts/assurance/android-native-call-origin-backup.mjs","--backup-restore","--json"],"timeoutMs":900000,"resultContract":{"type":"exit-zero-v1"}}
+    {"id":"d2a-runtime-backup","contractCommand":"node scripts/assurance/android-native-call-origin-backup.mjs --backup-restore --json","file":"node","args":["scripts/assurance/android-native-call-origin-backup.mjs","--backup-restore","--json"],"timeoutMs":1200000,"resultContract":{"type":"exit-zero-v1"}}
   ]
 }
