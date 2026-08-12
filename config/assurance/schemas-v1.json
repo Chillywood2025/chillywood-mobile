@@ -94,7 +94,7 @@
             "policyId": {"const": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1"},
             "checkpointMustBeAncestor": {"const": true},
             "observedMainSource": {"const": "EXACT_ORIGIN_MAIN_OR_PROTECTED_CI_EVENT"},
-            "ordinaryAdvancement": {"const": {"parentCount": 2, "firstParentContinuous": true, "pullRequestMergeRequired": true, "octopusAllowed": false, "forceRewriteAllowed": false}},
+            "ordinaryAdvancement": {"const": {"parentCount": 2, "firstParentContinuous": true, "pullRequestMergeRequired": true, "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"], "octopusAllowed": false, "forceRewriteAllowed": false}},
             "authorityControlPaths": {"type": "array", "minItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
             "activeTaskModelPaths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
             "activeTaskAuthoritativeInputs": {"type": "array", "minItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
@@ -300,7 +300,7 @@
         "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
         "protectedMainAuthority": {
           "type": "object",
-          "required": ["schemaVersion", "policyId", "checkpointSha", "checkpointTree", "allowProtectedAdvancement", "terminalSynchronizationRequiredFor"],
+          "required": ["schemaVersion", "policyId", "checkpointSha", "checkpointTree", "allowProtectedAdvancement", "acceptedMergeSubjectFormats", "terminalSynchronizationRequiredFor"],
           "additionalProperties": false,
           "properties": {
             "schemaVersion": {"const": 1},
@@ -308,6 +308,7 @@
             "checkpointSha": {"$ref": "#/$defs/gitSha"},
             "checkpointTree": {"$ref": "#/$defs/gitSha"},
             "allowProtectedAdvancement": {"const": true},
+            "acceptedMergeSubjectFormats": {"const": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"]},
             "terminalSynchronizationRequiredFor": {"const": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]}
           }
         },

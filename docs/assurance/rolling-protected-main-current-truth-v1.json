@@ -8,6 +8,7 @@
     "authorityCheckpoint": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
     "authorityCheckpointTree": "18c61a3d94de63e3d57cc777a34247c31f7263af",
     "observedProtectedMain": "DERIVED_READ_ONLY_AT_RUNTIME",
+    "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "ordinaryProtectedAdvancementRequiresTruthPr": false,
     "terminalSynchronizationRequiredFor": [
       "active-task-identity-change",
@@ -38,11 +39,12 @@
     "candidateAfterBaseSync": {"head": "eafd5697cc05b68e193d9e00c268b993ba5f376d", "candidateBaseStatus": "CURRENT_WITH_PROTECTED_MAIN", "sourceOnlyEligible": true},
     "authorityDrift": "CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT",
     "historyRewrite": "CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_NOT_ANCESTOR",
-    "expiredDocument": {"sourceOnlyEligible": true, "providerDependentEligible": false}
+    "expiredDocument": {"sourceOnlyEligible": true, "providerDependentEligible": false},
+    "actualArchitectureMerge": {"merge": "d3871b008ddb16898c114037c26605bf35b433f9", "subject": "Allow canonical truth to follow protected-main advancement (#221)", "format": "GITHUB_TITLE_WITH_PR_SUFFIX", "result": "PASS"}
   },
   "regressionMatrix": {
-    "tests": 25,
-    "passed": 25,
+    "tests": 28,
+    "passed": 28,
     "failed": 0,
     "scale": {"zeroAdvancements": "PASS", "oneAdvancement": "PASS", "tenAdvancements": "PASS", "oneHundredAdvancements": "PASS"},
     "protectedPhase1ChecksRequired": 13,
@@ -63,5 +65,13 @@
     "repositoryReview": "REQUIRED",
     "phase1": "13_OF_13_REQUIRED",
     "postArchitectureTruthPr": false
+  },
+  "mergeSubjectCorrection": {
+    "implementationPr": 222,
+    "startingMain": "d3871b008ddb16898c114037c26605bf35b433f9",
+    "actualPredecessorMerge": "d3871b008ddb16898c114037c26605bf35b433f9",
+    "selfHostingSubject": "Accept protected GitHub merge subject formats (#222)",
+    "classification": "OWNER_AUTHORIZED_ROLLING_MAIN_ARCHITECTURE_CORRECTION",
+    "postCorrectionTruthPr": false
   }
 }

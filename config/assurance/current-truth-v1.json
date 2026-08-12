@@ -22,6 +22,7 @@
     "checkpointSha": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
     "checkpointTree": "18c61a3d94de63e3d57cc777a34247c31f7263af",
     "allowProtectedAdvancement": true,
+    "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
   "mainSha": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
