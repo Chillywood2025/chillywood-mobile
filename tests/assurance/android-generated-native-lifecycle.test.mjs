@@ -237,6 +237,10 @@ assert.equal(report.cleanup.disposableProjectsRemoved, true);
 assert.equal(report.cleanup.debugOrTestApksRetained, false);
 
 const receiptAllowlist = JSON.parse(fs.readFileSync("config/assurance/command-allowlist-v1.json", "utf8"));
+for (const commandId of ["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native"]) {
+  assert.equal(receiptAllowlist.commands.find(({ id }) => id === commandId)?.timeoutMs, 1_800_000);
+}
+assert.equal(receiptAllowlist.commands.find(({ id }) => id === "d2a-runtime-backup")?.timeoutMs, 900_000);
 const priorJavaHome = process.env.JAVA_HOME;
 const expectedJavaHome = "/Applications/Android Studio.app/Contents/jbr/Contents/Home";
 let observedNativeReceiptEnvironment;
