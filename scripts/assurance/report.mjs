@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { args, classifyMigration, emit, git, readJson, tierIds } from "./lib.mjs";
+import { args, classifyMigration, emit, evaluateFiniteTaskLeaseRuntime, evaluateProtectedMainAdvancement, git, readJson, tierIds } from "./lib.mjs";
 
 const options = args();
 if (options.dogfood) {
@@ -39,7 +39,7 @@ if (options.dogfood) {
     }
     if (subject.type === "remote_migrations" && facts.remoteHead > facts.mainSourceHead) add(subject.id, "ASSURANCE_REMOTE_MIGRATION_DRIFT", "BLOCKED_INTERNAL", { remoteHead: facts.remoteHead, mainSourceHead: facts.mainSourceHead });
     if (subject.type === "hot_path_document") {
-      if (facts.recordedMainSha && facts.recordedMainSha !== facts.actualMainSha) add(subject.id, "ASSURANCE_CURRENT_TRUTH_MAIN_STALE");
+      if (facts.recordedMainSha && facts.recordedMainSha !== facts.actualMainSha && facts.recordedMainIsAncestor === false) add(subject.id, "CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_NOT_ANCESTOR");
       if (facts.recordedAndroidBuild && facts.recordedAndroidBuild !== facts.actualAndroidBuild) add(subject.id, "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE", "BLOCKED_INTERNAL", { platform: "android" });
       if (facts.recordedIosUpdate && facts.recordedIosUpdate !== facts.actualIosUpdate) add(subject.id, "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE", "BLOCKED_INTERNAL", { platform: "ios" });
       if (facts.resolvedProviderBlockerStillActive) add(subject.id, "ASSURANCE_CURRENT_TRUTH_PROVIDER_STALE");
@@ -72,6 +72,16 @@ if (options.dogfood) {
     const supplied = options.evidence ? readJson(options.evidence) : {};
     const allowedStatuses = new Set(readJson("config/assurance/gate-catalog-v1.json").statuses);
     const evidenceFindings = [];
+    const currentTruth = readJson("config/assurance/current-truth-v1.json");
+    const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
+    const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract });
+    const protectedMainRuntime = evaluateProtectedMainAdvancement({
+      record: currentTruth,
+      contract: currentTruthContract,
+      candidateHead: finiteTaskRuntime.candidateHead,
+      finiteTaskRuntime
+    });
+    evidenceFindings.push(...protectedMainRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" })));
     const statuses = Object.fromEntries(tierIds.map((tier) => {
       const applicability = feature.proofTierApplicability[tier];
       const evidence = supplied.tiers?.[tier];
@@ -95,6 +105,7 @@ if (options.dogfood) {
       gateApplicability: feature.proofTierApplicability,
       statuses,
       architectureStatus: "ARCHITECTURE_CLEAR",
+      protectedMainRuntime,
       knownDefectClassesChecked: supplied.knownDefectClassesChecked ?? [],
       invariantsChecked: supplied.invariantsChecked ?? [],
       concurrencySchedulesTested: supplied.concurrencySchedulesTested ?? [],

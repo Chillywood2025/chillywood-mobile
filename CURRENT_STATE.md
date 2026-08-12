@@ -2,7 +2,9 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Main SHA observed at this assurance checkpoint: `40f57256500b05f083c71acc77c8b020609692cf`.
+- Protected authority checkpoint: `93d0bdc8604f32ff09ccb59986ee34015f2ca5cd` / tree `18c61a3d94de63e3d57cc777a34247c31f7263af`.
+- Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
+- Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
 - Latest merged implementation: PR #214, `532243450bccd3d373cc17804da98bd01490c2ae`; merge `40f57256500b05f083c71acc77c8b020609692cf`.
 - Structured task-lease binding: feature `chilly-chat-call-lifecycle`, PR #212, admitted seed `87833399360e99f7ad630ebbb1c5643a57f1481f` / `aadc47f810525d925b1a4a413d7ded1af581b678`, phase `IMPLEMENTATION`, execution `D2A_NATIVE_LIFECYCLE_EXECUTION`. Current candidate `6fa8c3c0477078aabf35b2fb37e44586391abc5b` / `6c01f2dbb3846ef1e2415e0ec769db7355ef1d6a` is a non-authoritative read-only observation; final receipt, review, Phase 1, and merge provenance bind the frozen final head.
 - Finite task lease: `ASSURANCE_FINITE_TASK_LEASE_V1`, admitted seed `87833399360e99f7ad630ebbb1c5643a57f1481f` / `aadc47f810525d925b1a4a413d7ded1af581b678`, protected admission PR #213, state `ACTIVE_IMPLEMENTATION`; descendant heads do not require another admission, source binding, or merge-provenance PR.
@@ -21,7 +23,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Current freshness claims: `repository-task-lease-d2a-release-critical` (REPOSITORY_TASK_LEASE, expires `2036-08-09T00:04:54.000Z`), `repository-source-s0-exact-closure-reuse-final` (REPOSITORY_SOURCE, expires `2026-08-12T04:34:00Z`).
 - Blocked freshness claims: `repository-source-a1-exact-carrier-full-history` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T04:07:31Z`), `repository-source-a1-complete-late-sentinel-inventory` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:25:40Z`), `repository-source-a1-post-merge-control-readback` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:16:55Z`), `repository-source-a1-late-review-owner-registry-bootstrap` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:48:20Z`), `repository-source-a1-assurance-control-final` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:37:45Z`), `provider-critical-b3-linked-readback` (PROVIDER_CRITICAL, STALE_BLOCKED, expired `2026-08-02T14:00:44Z`).
 - Internally validated historical review sentinels: PR #195 reviewed `605039a1eec08e153f33380a2998ee1c4cef2a90` after merge with 3 unresolved findings; successor `codex/assurance-active-task-and-claim-freshness-a1`; PR #194 reviewed `c15a58039b67d65eabdcaa03a9422ebc8d6dd95e` after merge with 5 unresolved findings; successor `codex/d2a-livekit-mic-post-merge-review-correction`. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.
-- Document rendered at `2026-08-12T00:04:54Z`; document deadline `2026-08-13T00:04:54Z`. This deadline authorizes no claim. Derived live provider readback: false.
+- Document rendered at `2026-08-12T00:04:54Z`; document deadline `2026-08-13T00:04:54Z` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: false.
 
 ## Open implementation PRs
 

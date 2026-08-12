@@ -905,7 +905,8 @@ export function detectAssuranceRecursion({ lease, requestedDependency, counts = 
   const exceeds = requestedDependency === "ADMISSION_PR" && admissionPrs >= budget.maximumAdmissionPrs
     || requestedDependency === "FINAL_SOURCE_BINDING_PR" && (counts.finalSourceBindingPrs ?? 0) >= budget.maximumFinalSourceBindingPrs
     || requestedDependency === "MERGE_PROVENANCE_PR" && (counts.mergeProvenancePrs ?? 0) >= budget.maximumMergeProvenancePrs
-    || requestedDependency === "POST_MERGE_TRUTH_PR" && (counts.postMergeTruthPrs ?? 0) >= budget.maximumPostMergeTruthPrs;
+    || requestedDependency === "POST_MERGE_TRUTH_PR" && (counts.postMergeTruthPrs ?? 0) >= budget.maximumPostMergeTruthPrs
+    || ["CURRENT_TRUTH_BINDING_PR", "TRUTH_ONLY_PR"].includes(requestedDependency);
   return controlDependsOnControl || exceeds
     ? { ok: false, code: ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE }
     : { ok: true, code: null };
@@ -1107,6 +1108,266 @@ export function evaluateFiniteTaskLeaseRuntime({
     providerFreshness,
     candidate: derived.candidate,
     candidateEvaluation
+  };
+}
+
+const protectedMainClasses = Object.freeze({
+  authority: "AUTHORITY_CONTROL_PLANE",
+  model: "ACTIVE_TASK_MODEL",
+  input: "ACTIVE_TASK_AUTHORITATIVE_INPUT",
+  unrelated: "UNRELATED_PROTECTED_ADVANCEMENT",
+  terminal: "TERMINAL_TRUTH_CHANGE"
+});
+
+function protectedMainEvidenceInvalidation(paths) {
+  const changed = new Set(paths);
+  const packageChanged = changed.has("package.json") || changed.has("package-lock.json");
+  const nativeInputChanged = packageChanged
+    || [...changed].some((file) => file === "app.json"
+      || file === "app.config.ts"
+      || file === "eas.json"
+      || file.startsWith("plugins/")
+      || file.includes("android-generated-native-lifecycle")
+      || file.startsWith("tools/android-native-call-harness/"));
+  const callInputChanged = [...changed].some((file) => file.includes("chat-call")
+    || file.includes("communication-room-session")
+    || file.includes("legacy-mic-permission-recovery"));
+  const affectedEvidenceClasses = [];
+  const requiredReruns = [];
+  if (packageChanged) {
+    affectedEvidenceClasses.push("DEPENDENCY_IDENTITY");
+    requiredReruns.push("CLEAN_DEPENDENCY_IDENTITY");
+  }
+  if (nativeInputChanged) {
+    affectedEvidenceClasses.push("GENERATED_NATIVE", "GRADLE_COMPILE", "JVM_NATIVE_MODEL", "LOCAL_EMULATOR_LIFECYCLE");
+    requiredReruns.push("GENERATED_NATIVE", "GRADLE_SIX_TASKS", "JVM_7_OF_7", "LIFECYCLE_AND_MIC_INSTRUMENTATION");
+  }
+  if (callInputChanged) {
+    affectedEvidenceClasses.push("CALL_DOMAIN");
+    requiredReruns.push("AFFECTED_CALL_DOMAIN_MATRIX");
+  }
+  return {
+    affectedEvidenceClasses: [...new Set(affectedEvidenceClasses)].sort(),
+    changedPaths: [...changed].sort(),
+    reason: changed.size ? "PROTECTED_MAIN_ADVANCED_ACTIVE_TASK_INPUTS" : "NO_ACTIVE_TASK_INPUT_ADVANCEMENT",
+    requiredReruns: [...new Set(requiredReruns)].sort(),
+    reusableEvidence: [
+      ...(nativeInputChanged ? [] : ["GENERATED_NATIVE", "GRADLE_COMPILE", "JVM_NATIVE_MODEL", "LOCAL_EMULATOR_LIFECYCLE"]),
+      ...(callInputChanged ? [] : ["CALL_DOMAIN"]),
+      "PROVIDER_EVIDENCE_REMAINS_CLAIM_SCOPED"
+    ].sort()
+  };
+}
+
+function classifyProtectedMainPaths(paths, policy, activeLeasePaths) {
+  const authorityPaths = new Set(policy.authorityControlPaths ?? []);
+  const modelPaths = new Set(policy.activeTaskModelPaths ?? []);
+  const inputPaths = new Set([...(policy.activeTaskAuthoritativeInputs ?? []), ...activeLeasePaths]);
+  const terminalPaths = new Set(policy.terminalTruthPaths ?? []);
+  const changesAuthorityLogic = paths.some((file) => authorityPaths.has(file));
+  return paths.map((file) => {
+    let classification = protectedMainClasses.unrelated;
+    if (authorityPaths.has(file) || (changesAuthorityLogic && file === "config/assurance/current-truth-v1.json")) {
+      classification = protectedMainClasses.authority;
+    } else if (terminalPaths.has(file)) {
+      classification = protectedMainClasses.terminal;
+    } else if (modelPaths.has(file)) {
+      classification = protectedMainClasses.model;
+    } else if (inputPaths.has(file)) {
+      classification = protectedMainClasses.input;
+    }
+    return { path: file, classification };
+  });
+}
+
+function readProtectedAdvancementObservations(checkpoint, observed, gitCommand) {
+  const commits = gitCommand(["rev-list", "--first-parent", "--reverse", `${checkpoint}..${observed}`])
+    .split(/\r?\n/gu).filter(Boolean);
+  return commits.map((commit) => ({
+    commit,
+    parents: gitCommand(["show", "-s", "--format=%P", commit]).split(/\s+/u).filter(Boolean),
+    tree: gitCommand(["rev-parse", `${commit}^{tree}`]),
+    subject: gitCommand(["show", "-s", "--format=%s", commit]),
+    changedPaths: gitCommand(["diff", "--name-only", `${commit}^1`, commit]).split(/\r?\n/gu).filter(Boolean)
+  }));
+}
+
+function embeddedRollingAuthorityBound(commit, checkpoint, gitCommand) {
+  try {
+    const embedded = JSON.parse(gitCommand(["show", `${commit}:config/assurance/current-truth-v1.json`]));
+    const authority = embedded.protectedMainAuthority;
+    gitCommand(["merge-base", "--is-ancestor", authority.checkpointSha, commit]);
+    return authority.schemaVersion === 1
+      && authority.policyId === "ROLLING_PROTECTED_MAIN_AUTHORITY_V1"
+      && authority.allowProtectedAdvancement === true
+      && gitShaPattern.test(authority.checkpointSha ?? "")
+      && gitShaPattern.test(authority.checkpointTree ?? "")
+      && (authority.checkpointSha === checkpoint || authority.checkpointSha === commit || authority.checkpointSha === embedded.mainSha);
+  } catch {
+    return false;
+  }
+}
+
+export function evaluateProtectedMainAdvancement({
+  record,
+  contract,
+  observedProtectedMainSha,
+  candidateHead,
+  finiteTaskRuntime,
+  gitCommand = git,
+  advancementObservations,
+  checkpointTreeObservation,
+  checkpointIsAncestor,
+  candidateContainsObservedMain
+} = {}) {
+  const policy = contract?.rollingProtectedMain ?? {};
+  const authority = record?.protectedMainAuthority ?? {};
+  const checkpointSha = authority.checkpointSha ?? record?.mainSha ?? null;
+  const observedSha = observedProtectedMainSha ?? (() => {
+    try { return gitCommand(["rev-parse", "origin/main"]); } catch { return null; }
+  })();
+  const findings = [];
+  const identityValid = policy.policyId === "ROLLING_PROTECTED_MAIN_AUTHORITY_V1"
+    && authority.schemaVersion === 1
+    && authority.policyId === policy.policyId
+    && authority.allowProtectedAdvancement === true
+    && authority.checkpointSha === record?.mainSha
+    && gitShaPattern.test(checkpointSha ?? "")
+    && gitShaPattern.test(authority.checkpointTree ?? "")
+    && gitShaPattern.test(observedSha ?? "");
+  if (!identityValid) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_AUTHORITY_MALFORMED");
+  let observedTree = null;
+  let actualCheckpointTree = checkpointTreeObservation ?? null;
+  if (identityValid) {
+    try {
+      observedTree = gitCommand(["rev-parse", `${observedSha}^{tree}`]);
+      actualCheckpointTree ??= gitCommand(["rev-parse", `${checkpointSha}^{tree}`]);
+    } catch {
+      findings.push("CURRENT_TRUTH_PROTECTED_MAIN_IDENTITY_UNRESOLVED");
+    }
+  }
+  if (actualCheckpointTree && actualCheckpointTree !== authority.checkpointTree) {
+    findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_TREE_MISMATCH");
+  }
+  let ancestor = checkpointIsAncestor;
+  if (identityValid && checkpointSha === observedSha) ancestor = true;
+  if (identityValid && checkpointSha !== observedSha && ancestor === undefined) {
+    try {
+      gitCommand(["merge-base", "--is-ancestor", checkpointSha, observedSha]);
+      ancestor = true;
+    } catch {
+      ancestor = false;
+    }
+  }
+  if (identityValid && ancestor !== true) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_NOT_ANCESTOR");
+  const mainRelation = checkpointSha === observedSha
+    ? "EXACT_CHECKPOINT"
+    : ancestor === true
+      ? "PROTECTED_MAIN_ADVANCED"
+      : "BLOCKED_HISTORY_REWRITE";
+  let observations = [];
+  if (identityValid && ancestor === true && checkpointSha !== observedSha) {
+    try {
+      observations = advancementObservations ?? readProtectedAdvancementObservations(checkpointSha, observedSha, gitCommand);
+    } catch {
+      findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
+    }
+  }
+  const activeLease = finiteTaskLeaseFor(record?.finiteTaskLeases, {
+    implementationPr: record?.activeTaskBinding?.implementationPr,
+    implementationBranch: record?.activeTaskBinding?.implementationBranch,
+    featureId: record?.activeTaskBinding?.featureId
+  });
+  const activeLeasePaths = new Set(activeLease?.allowedPaths ?? []);
+  let prior = checkpointSha;
+  const advancements = [];
+  for (const observation of observations) {
+    const pathClassifications = classifyProtectedMainPaths(observation.changedPaths ?? [], policy, activeLeasePaths);
+    const classifications = [...new Set(pathClassifications.map(({ classification }) => classification))].sort();
+    const normalPrMerge = observation.parents?.length === policy.ordinaryAdvancement?.parentCount
+      && observation.parents[0] === prior
+      && /^Merge pull request #[1-9][0-9]* from [^/\s]+\/.+/u.test(observation.subject ?? "")
+      && gitShaPattern.test(observation.commit ?? "")
+      && gitShaPattern.test(observation.tree ?? "");
+    if (!normalPrMerge) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
+    const authorityChanged = classifications.includes(protectedMainClasses.authority);
+    const terminalChanged = classifications.includes(protectedMainClasses.terminal) && !authorityChanged;
+    const companionPresent = (policy.authorityRequiredCompanionPaths ?? []).every((file) => (observation.changedPaths ?? []).includes(file));
+    const authorityBound = observation.authorityUpdateBound === true
+      || (observation.authorityUpdateBound !== false && authorityChanged && embeddedRollingAuthorityBound(observation.commit, checkpointSha, gitCommand));
+    if (authorityChanged && (!companionPresent || !authorityBound)) findings.push("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT");
+    if (terminalChanged && !(policy.terminalTruthPaths ?? []).every((file) => (observation.changedPaths ?? []).includes(file))) {
+      findings.push("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE");
+    }
+    advancements.push({
+      mergeSha: observation.commit,
+      tree: observation.tree,
+      firstParent: observation.parents?.[0] ?? null,
+      secondParent: observation.parents?.[1] ?? null,
+      subject: observation.subject,
+      changedPaths: [...(observation.changedPaths ?? [])].sort(),
+      changedPathHash: sha256([...(observation.changedPaths ?? [])].sort()),
+      pathClassifications,
+      classifications,
+      authorityBound: authorityChanged ? authorityBound : null
+    });
+    prior = observation.commit;
+  }
+  if (observations.length && prior !== observedSha) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
+  const activeTaskInputsInvalidated = [...new Set(advancements.flatMap(({ pathClassifications }) => pathClassifications
+    .filter(({ classification }) => classification === protectedMainClasses.input)
+    .map(({ path: file }) => file)))].sort();
+  const activeTaskModelInvalidated = advancements.some(({ classifications }) => classifications.includes(protectedMainClasses.model));
+  let candidateCurrent = candidateContainsObservedMain;
+  if (candidateHead && candidateCurrent === undefined) {
+    try {
+      gitCommand(["merge-base", "--is-ancestor", observedSha, candidateHead]);
+      candidateCurrent = true;
+    } catch {
+      candidateCurrent = false;
+    }
+  }
+  const candidateBaseStatus = candidateCurrent === true ? "CURRENT_WITH_PROTECTED_MAIN" : "BASE_SYNC_REQUIRED";
+  const authorityControlEligible = !findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT")
+    && !findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
+  const authorityCheckpointEligible = identityValid && ancestor === true
+    && actualCheckpointTree === authority.checkpointTree
+    && authorityControlEligible;
+  const sourceOnlyEligible = authorityCheckpointEligible
+    && (finiteTaskRuntime?.sourceOnlyEligible ?? true);
+  const providerDependentEligible = sourceOnlyEligible
+    && (finiteTaskRuntime?.providerDependentEligible ?? false);
+  const finalEvidence = record?.finiteTaskRuntime?.finalEvidence ?? {};
+  const finalEvidenceCurrent = ["ownerReceipt", "repositoryReview", "phase1", "mergeEligible"].every((key) => finalEvidence[key] === true);
+  const mergeEligible = sourceOnlyEligible && candidateCurrent === true && finalEvidenceCurrent;
+  const aggregateChangedPaths = [...new Set(advancements.flatMap(({ changedPaths }) => changedPaths))].sort();
+  let aggregateDiffHash = sha256("");
+  if (identityValid && ancestor === true && checkpointSha !== observedSha) {
+    try { aggregateDiffHash = sha256(gitCommand(["diff", "--binary", checkpointSha, observedSha])); } catch { findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"); }
+  }
+  const evidenceInvalidation = protectedMainEvidenceInvalidation(activeTaskInputsInvalidated);
+  return {
+    authorityCheckpointEligible,
+    checkpointSha,
+    checkpointTree: authority.checkpointTree ?? null,
+    observedProtectedMainSha: observedSha,
+    observedProtectedMainTree: observedTree,
+    mainRelation,
+    protectedAdvancementCount: advancements.length,
+    protectedAdvancementChainHash: sha256(advancements.map(({ mergeSha, firstParent, secondParent, tree, changedPathHash }) => ({ mergeSha, firstParent, secondParent, tree, changedPathHash }))),
+    aggregateChangedPathHash: sha256(aggregateChangedPaths),
+    aggregateDiffHash,
+    advancementClassifications: advancements,
+    authorityControlEligible,
+    activeTaskModelInvalidated,
+    activeTaskInputsInvalidated,
+    evidenceInvalidation,
+    candidateBaseStatus,
+    nextRequiredAction: candidateBaseStatus === "BASE_SYNC_REQUIRED" ? "MERGE_CURRENT_PROTECTED_MAIN_NORMALLY" : "CONTINUE_ACTIVE_TASK",
+    sourceOnlyEligible,
+    providerDependentEligible,
+    mergeEligible,
+    findings: [...new Set(findings)].sort()
   };
 }
 
@@ -2611,6 +2872,7 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
 }
 
 export function renderCurrentState(record) {
+  const protectedMainAuthority = record.protectedMainAuthority;
   const enabled = record.enabledCognitiveSwitches.length ? record.enabledCognitiveSwitches.map((entry) => `\`${entry}\``).join(", ") : "none";
   const blocked = record.blockedProviders.length
     ? record.blockedProviders.map((entry) => `- ${entry.provider}: ${entry.status} — ${entry.scope}. Resume: ${entry.resumptionAction}`).join("\n")
@@ -2653,12 +2915,12 @@ export function renderCurrentState(record) {
   const lateReviews = (record.lateReviewSentinels ?? [])
     .map(({ prNumber, reviewedSha, findings, successorCorrectionOwner }) => `PR #${prNumber} reviewed \`${reviewedSha}\` after merge with ${(findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length} unresolved findings; successor \`${successorCorrectionOwner}\``)
     .join("; ") || "none";
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Main SHA observed at this assurance checkpoint: \`${record.mainSha}\`.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n${implementationBindingLine}${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\`. This deadline authorizes no claim. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Protected authority checkpoint: \`${protectedMainAuthority.checkpointSha}\` / tree \`${protectedMainAuthority.checkpointTree}\`.\n- Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.\n- Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n${implementationBindingLine}${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: ${record.liveProviderReadback}.\n\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {
   const actions = record.assuranceProgram.nextActions.map((entry, index) => `${index + 1}. ${entry}`).join("\n");
-  return `# NEXT TASK\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n${actions}\n\nDo not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.\n\n${record.assuranceProgram.prohibitions.join("\n")}\n`;
+  return `# NEXT TASK\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n${actions}\n\nOrdinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.\n\nDo not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.\n\n${record.assuranceProgram.prohibitions.join("\n")}\n`;
 }
 
 export function classifyMigration(remote, source) {

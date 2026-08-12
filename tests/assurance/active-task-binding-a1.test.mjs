@@ -17,6 +17,7 @@ import {
   detectAssuranceRecursion,
   evaluateFiniteTaskCandidate,
   evaluateFiniteTaskLeaseRuntime,
+  evaluateProtectedMainAdvancement,
   exactExternalSourceProvenance,
   finiteTaskFinalReceiptBody,
   finiteTaskFinalReceiptSubject,
@@ -1520,4 +1521,242 @@ test("finite runtime matrix 36: provider Codex Review remains optional advisory"
   assert.equal(canonicalTruth.reviewPolicy.classification, "OPTIONAL_ADVISORY");
   assert.equal(canonicalTruth.reviewPolicy.requiredStatusCheck, false);
   assert.equal(finiteRegistry.providerCodexReview, "OPTIONAL_ADVISORY");
+});
+
+const historicalCheckpoint = "40f57256500b05f083c71acc77c8b020609692cf";
+const historicalCheckpointTree = "8b9e4082a96b7a83cfa86559c01ea955fb35717b";
+const dependencyMain = "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd";
+const beforeDependencyCandidate = "28b1a7b9dd26e7e0a1cf2bb1bb07247fe721e7d9";
+const afterDependencyCandidate = "eafd5697cc05b68e193d9e00c268b993ba5f376d";
+
+function historicalRollingRecord() {
+  const record = structuredClone(canonicalTruth);
+  record.mainSha = historicalCheckpoint;
+  record.protectedMainAuthority = {
+    ...record.protectedMainAuthority,
+    checkpointSha: historicalCheckpoint,
+    checkpointTree: historicalCheckpointTree
+  };
+  return record;
+}
+
+function syntheticRollingEvaluation(count, {
+  changedPath = "docs/unrelated.md",
+  changedPaths,
+  candidateCurrent = true,
+  authorityUpdateBound,
+  parentCount = 2,
+  breakFirstParent = false,
+  providerDependentEligible = false,
+  finalEvidence = false
+} = {}) {
+  const record = structuredClone(canonicalTruth);
+  record.finiteTaskRuntime.finalEvidence = { ownerReceipt: finalEvidence, repositoryReview: finalEvidence, phase1: finalEvidence, mergeEligible: finalEvidence };
+  const checkpoint = record.protectedMainAuthority.checkpointSha;
+  let prior = checkpoint;
+  const observations = Array.from({ length: count }, (_, index) => {
+    const commit = digest(`rolling-main-${count}-${index}`).slice(0, 40);
+    const secondParent = digest(`rolling-side-${count}-${index}`).slice(0, 40);
+    const parents = [breakFirstParent && index === count - 1 ? "f".repeat(40) : prior, secondParent];
+    if (parentCount === 3 && index === count - 1) parents.push("e".repeat(40));
+    const observation = {
+      commit,
+      parents,
+      tree: digest(`rolling-tree-${count}-${index}`).slice(0, 40),
+      subject: `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
+      changedPaths: changedPaths ?? [changedPath]
+    };
+    if (authorityUpdateBound !== undefined) observation.authorityUpdateBound = authorityUpdateBound;
+    prior = commit;
+    return observation;
+  });
+  const observed = observations.at(-1)?.commit ?? checkpoint;
+  return evaluateProtectedMainAdvancement({
+    record,
+    contract: currentTruthContract,
+    observedProtectedMainSha: observed,
+    candidateHead: "d".repeat(40),
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible },
+    advancementObservations: observations,
+    checkpointTreeObservation: record.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: true,
+    candidateContainsObservedMain: candidateCurrent,
+    gitCommand: (argv) => argv[0] === "rev-parse" ? digest(argv.join(":" )).slice(0, 40) : ""
+  });
+}
+
+test("rolling main matrix 1: exact historical checkpoint is eligible", () => {
+  const result = evaluateProtectedMainAdvancement({
+    record: historicalRollingRecord(),
+    contract: currentTruthContract,
+    observedProtectedMainSha: historicalCheckpoint,
+    candidateHead: beforeDependencyCandidate,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }
+  });
+  assert.equal(result.mainRelation, "EXACT_CHECKPOINT");
+  assert.equal(result.authorityCheckpointEligible, true, result.findings.join(","));
+});
+
+test("rolling main matrix 2: real PR 220 advancement invalidates D2A inputs without invalidating authority", () => {
+  const result = evaluateProtectedMainAdvancement({
+    record: historicalRollingRecord(),
+    contract: currentTruthContract,
+    observedProtectedMainSha: dependencyMain,
+    candidateHead: afterDependencyCandidate,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }
+  });
+  const dependency = result.advancementClassifications.find(({ mergeSha }) => mergeSha === dependencyMain);
+  assert.equal(result.authorityCheckpointEligible, true, result.findings.join(","));
+  assert.equal(dependency.classifications.includes("ACTIVE_TASK_AUTHORITATIVE_INPUT"), true);
+  assert.deepEqual(result.activeTaskInputsInvalidated.filter((file) => file.startsWith("package")), ["package-lock.json", "package.json"]);
+  assert.equal(result.evidenceInvalidation.affectedEvidenceClasses.includes("GENERATED_NATIVE"), true);
+});
+
+test("rolling main matrix 3: candidate before dependency base sync receives usable BASE_SYNC_REQUIRED packet state", () => {
+  const result = evaluateProtectedMainAdvancement({
+    record: historicalRollingRecord(),
+    contract: currentTruthContract,
+    observedProtectedMainSha: dependencyMain,
+    candidateHead: beforeDependencyCandidate,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }
+  });
+  assert.equal(result.candidateBaseStatus, "BASE_SYNC_REQUIRED");
+  assert.equal(result.sourceOnlyEligible, true);
+  assert.equal(result.mergeEligible, false);
+  assert.equal(result.nextRequiredAction, "MERGE_CURRENT_PROTECTED_MAIN_NORMALLY");
+});
+
+test("rolling main matrix 4: candidate after dependency base sync proceeds without truth PR", () => {
+  const result = evaluateProtectedMainAdvancement({
+    record: historicalRollingRecord(),
+    contract: currentTruthContract,
+    observedProtectedMainSha: dependencyMain,
+    candidateHead: afterDependencyCandidate,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }
+  });
+  assert.equal(result.candidateBaseStatus, "CURRENT_WITH_PROTECTED_MAIN");
+  assert.equal(result.sourceOnlyEligible, true);
+  assert.equal(result.providerDependentEligible, false);
+});
+
+test("rolling main matrix 5: one unrelated protected merge passes", () => {
+  const result = syntheticRollingEvaluation(1);
+  assert.equal(result.findings.length, 0);
+  assert.equal(result.advancementClassifications[0].classifications.includes("UNRELATED_PROTECTED_ADVANCEMENT"), true);
+});
+
+test("rolling main matrix 6: one active-input merge passes with affected-layer invalidation", () => {
+  const result = syntheticRollingEvaluation(1, { changedPath: "package-lock.json" });
+  assert.equal(result.authorityCheckpointEligible, true);
+  assert.equal(result.evidenceInvalidation.requiredReruns.includes("GRADLE_SIX_TASKS"), true);
+});
+
+test("rolling main matrix 7: ten valid protected merges pass", () => {
+  assert.equal(syntheticRollingEvaluation(10).findings.length, 0);
+});
+
+test("rolling main matrix 8: one hundred valid protected merges pass", () => {
+  const result = syntheticRollingEvaluation(100);
+  assert.equal(result.protectedAdvancementCount, 100);
+  assert.equal(result.findings.length, 0);
+});
+
+test("rolling main matrix 9: no truth PR is required for ordinary advancement", () => {
+  assert.equal(syntheticRollingEvaluation(100).nextRequiredAction, "CONTINUE_ACTIVE_TASK");
+  assert.equal(currentTruthContract.rollingProtectedMain.recursiveFailureCode, ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE);
+});
+
+test("rolling main matrix 10: behind candidate remains source eligible but not merge eligible", () => {
+  const result = syntheticRollingEvaluation(1, { candidateCurrent: false, finalEvidence: true });
+  assert.equal(result.candidateBaseStatus, "BASE_SYNC_REQUIRED");
+  assert.equal(result.sourceOnlyEligible, true);
+  assert.equal(result.mergeEligible, false);
+});
+
+test("rolling main matrix 11: exact final merge requires current protected base", () => {
+  assert.equal(syntheticRollingEvaluation(1, { candidateCurrent: true, finalEvidence: true }).mergeEligible, true);
+  assert.equal(syntheticRollingEvaluation(1, { candidateCurrent: false, finalEvidence: true }).mergeEligible, false);
+});
+
+test("rolling main matrix 12: unbound authority-control mutation fails closed", () => {
+  const result = syntheticRollingEvaluation(1, { changedPath: "scripts/assurance/lib.mjs", authorityUpdateBound: false });
+  assert.equal(result.findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT"), true);
+});
+
+test("rolling main matrix 13: non-ancestor checkpoint fails closed", () => {
+  const record = structuredClone(canonicalTruth);
+  const result = evaluateProtectedMainAdvancement({
+    record,
+    contract: currentTruthContract,
+    observedProtectedMainSha: "a".repeat(40),
+    candidateHead: "b".repeat(40),
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false },
+    checkpointTreeObservation: record.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: false,
+    candidateContainsObservedMain: false,
+    gitCommand: () => "c".repeat(40)
+  });
+  assert.equal(result.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_NOT_ANCESTOR"), true);
+});
+
+test("rolling main matrix 14: octopus advancement fails", () => {
+  assert.equal(syntheticRollingEvaluation(1, { parentCount: 3 }).findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true);
+});
+
+test("rolling main matrix 15: broken first-parent chain fails", () => {
+  assert.equal(syntheticRollingEvaluation(2, { breakFirstParent: true }).findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true);
+});
+
+test("rolling main matrix 16: stale task-input evidence fails only affected layers", () => {
+  const result = syntheticRollingEvaluation(1, { changedPath: "package.json" });
+  assert.equal(result.evidenceInvalidation.affectedEvidenceClasses.includes("DEPENDENCY_IDENTITY"), true);
+  assert.equal(result.evidenceInvalidation.affectedEvidenceClasses.includes("CALL_DOMAIN"), false);
+});
+
+test("rolling main matrix 17: unrelated evidence remains reusable", () => {
+  const result = syntheticRollingEvaluation(1);
+  assert.equal(result.evidenceInvalidation.affectedEvidenceClasses.length, 0);
+  assert.equal(result.evidenceInvalidation.reusableEvidence.includes("LOCAL_EMULATOR_LIFECYCLE"), true);
+});
+
+test("rolling main matrix 18: document deadline does not block source-only finite lease", () => {
+  const finite = evaluateFiniteTaskLeaseRuntime({ record: canonicalTruth, contract: currentTruthContract, now: new Date("2030-01-01T00:00:00Z"), currentProtectedBase: dependencyMain });
+  const rolling = syntheticRollingEvaluation(0);
+  assert.equal(finite.leaseAuthorityEligible, true);
+  assert.equal(rolling.sourceOnlyEligible, true);
+});
+
+test("rolling main matrix 19: stale provider evidence independently blocks provider work", () => {
+  assert.equal(syntheticRollingEvaluation(0, { providerDependentEligible: false }).providerDependentEligible, false);
+});
+
+test("rolling main matrix 20: proof-tier promotion requires canonical synchronization", () => {
+  assert.equal(canonicalTruth.protectedMainAuthority.terminalSynchronizationRequiredFor.includes("proof-tier-promotion"), true);
+});
+
+test("rolling main matrix 21: active-task identity and terminal state require canonical synchronization", () => {
+  assert.equal(canonicalTruth.protectedMainAuthority.terminalSynchronizationRequiredFor.includes("active-task-identity-change"), true);
+  assert.equal(canonicalTruth.protectedMainAuthority.terminalSynchronizationRequiredFor.includes("task-terminal-state"), true);
+});
+
+test("rolling main matrix 22: architecture synthetic merge is accepted without post-merge truth", () => {
+  const result = syntheticRollingEvaluation(1, { changedPaths: ["scripts/assurance/lib.mjs", "config/assurance/current-truth-v1.json"], authorityUpdateBound: true, candidateCurrent: false });
+  assert.equal(result.authorityCheckpointEligible, true, result.findings.join(","));
+  assert.equal(result.candidateBaseStatus, "BASE_SYNC_REQUIRED");
+});
+
+test("rolling main matrix 23: requested truth-only dependency emits recursion cycle", () => {
+  assert.equal(currentTruthContract.rollingProtectedMain.recursiveFailureCode, "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE");
+  assert.equal(detectAssuranceRecursion({ requestedDependency: "CURRENT_TRUTH_BINDING_PR" }).code, ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE);
+});
+
+test("rolling main matrix 24: current-truth rendering is deterministic three of three", () => {
+  const rendered = Array.from({ length: 3 }, () => stableJson({ current: renderCurrentState(canonicalTruth), next: renderNextTask(canonicalTruth) }));
+  assert.equal(new Set(rendered).size, 1);
+});
+
+test("rolling main matrix 25: protected checks and advisory provider review remain unchanged", () => {
+  assert.equal(canonicalTruth.reviewPolicy.requiredPhase1Checks, 13);
+  assert.equal(canonicalTruth.reviewPolicy.classification, "OPTIONAL_ADVISORY");
+  assert.equal(canonicalTruth.reviewPolicy.requiredStatusCheck, false);
 });

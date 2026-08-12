@@ -536,7 +536,10 @@ export function activeTask(facts = {}) {
       return { ...result, ok: run.status === 0 && result.ok === true };
     } catch { return { ok: false }; }
   })();
-  if (!checked.ok) return { ok: false, findings: ["CURRENT_TRUTH_STALE_OR_UNPARSEABLE"] };
+  if (!checked.ok) {
+    const findings = (checked.findings ?? []).map((finding) => finding?.id ?? finding).filter(Boolean);
+    return { ok: false, findings: findings.length ? [...new Set(findings)].sort() : ["CURRENT_TRUTH_VALIDATION_FAILED"] };
+  }
 
   const registry = facts.registry ?? readJson("config/assurance/feature-registry-v1.json");
   const resolution = resolveFeature(truth, facts, registry);
@@ -625,6 +628,7 @@ export function activeTask(facts = {}) {
     }
   });
   if (!built.ok) return built;
+  built.packet.protectedMainRuntime = checked.protectedMainRuntime ?? null;
   const safe = redact(built.packet);
   if (stableJson(safe) !== stableJson(built.packet)) return { ok: false, findings: ["PACKET_SECRET_OR_PRIVATE_VALUE"] };
   return { ok: true, packet: safe };

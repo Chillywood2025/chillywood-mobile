@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   evaluateFiniteTaskLeaseRuntime,
+  evaluateProtectedMainAdvancement,
   HISTORICAL_PROVIDER_FACT
 } from "./assurance/lib.mjs";
 
@@ -42,11 +43,17 @@ const notIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
 };
 const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract });
+const protectedMainRuntime = evaluateProtectedMainAdvancement({
+  record: currentTruth,
+  contract: currentTruthContract,
+  candidateHead: finiteTaskRuntime.candidateHead,
+  finiteTaskRuntime
+});
 const claimFreshness = finiteTaskRuntime.claimFreshness;
-const sourceOnlyFreshness = { eligible: finiteTaskRuntime.sourceOnlyEligible };
-const providerDependentFreshness = { eligible: finiteTaskRuntime.providerDependentEligible };
-if (!claimFreshness.ok) fail(`shared freshness evaluation failed: ${claimFreshness.findings.map(({ id }) => id).join(",")}`);
+const sourceOnlyFreshness = { eligible: protectedMainRuntime.sourceOnlyEligible };
+const providerDependentFreshness = { eligible: protectedMainRuntime.providerDependentEligible };
 if (!finiteTaskRuntime.candidateEligible) fail(`finite task runtime candidate failed: ${finiteTaskRuntime.findings.join(",")}`);
+if (protectedMainRuntime.findings.length) fail(`rolling protected-main evaluation failed: ${protectedMainRuntime.findings.join(",")}`);
 if (currentTruth.liveProviderReadback !== claimFreshness.liveProviderReadback) fail("live provider readback must derive from the shared freshness evaluator");
 if (!sourceOnlyFreshness.eligible) fail("source-only autonomous contract requires shared evaluator eligibility");
 if (providerDependentFreshness.eligible) fail("provider-dependent autonomous contract must remain blocked on stale provider evidence");

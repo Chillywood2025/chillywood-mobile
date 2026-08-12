@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   evaluateFiniteTaskLeaseRuntime,
+  evaluateProtectedMainAdvancement,
   HISTORICAL_PROVIDER_FACT
 } from "./assurance/lib.mjs";
 
@@ -64,9 +65,15 @@ const approvalRequesterSystems = [
   "owner_command_operator",
 ];
 const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract });
+const protectedMainRuntime = evaluateProtectedMainAdvancement({
+  record: currentTruth,
+  contract: currentTruthContract,
+  candidateHead: finiteTaskRuntime.candidateHead,
+  finiteTaskRuntime
+});
 const claimFreshness = finiteTaskRuntime.claimFreshness;
-const sourceOnlyFreshness = { eligible: finiteTaskRuntime.sourceOnlyEligible };
-const providerDependentFreshness = { eligible: finiteTaskRuntime.providerDependentEligible };
+const sourceOnlyFreshness = { eligible: protectedMainRuntime.sourceOnlyEligible };
+const providerDependentFreshness = { eligible: protectedMainRuntime.providerDependentEligible };
 
 const scopedSystems = [
   {
@@ -427,7 +434,7 @@ const checks = [
   {
     name: "historical provider facts remain recorded without current provider proof",
     passes: () => (
-      claimFreshness.ok
+      protectedMainRuntime.findings.length === 0
       && sourceOnlyFreshness.eligible
       && !providerDependentFreshness.eligible
       && claimFreshness.liveProviderReadback === false
@@ -476,5 +483,7 @@ console.log(JSON.stringify({
   currentProviderProof: claimFreshness.liveProviderReadback,
   sourceOnlyEligible: sourceOnlyFreshness.eligible,
   providerDependentEligible: providerDependentFreshness.eligible,
+  protectedMainRelation: protectedMainRuntime.mainRelation,
+  candidateBaseStatus: protectedMainRuntime.candidateBaseStatus,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));
