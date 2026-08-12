@@ -19,16 +19,16 @@
   "protectedMainAuthority": {
     "schemaVersion": 1,
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
-    "checkpointSha": "f4718f3e4ace89bd469468e30325789b5d43ef17",
-    "checkpointTree": "6fdcb9a50d88da2872587c1b3bb19bb61ef862ed",
+    "checkpointSha": "ee122547b182a4d539ba2de1aecf1ae2c7815db4",
+    "checkpointTree": "4ce080f245c9290b043f27bb88fc8681bdd4b59b",
     "allowProtectedAdvancement": true,
     "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
-  "mainSha": "f4718f3e4ace89bd469468e30325789b5d43ef17",
-  "latestMergedImplementationPr": {"number": 214, "state": "merged", "head": "532243450bccd3d373cc17804da98bd01490c2ae", "mergeSha": "40f57256500b05f083c71acc77c8b020609692cf", "title": "Correct legacy WebRTC microphone convergence"},
-  "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
-  "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
+  "mainSha": "ee122547b182a4d539ba2de1aecf1ae2c7815db4",
+  "latestMergedImplementationPr": {"number": 212, "state": "merged", "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6", "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1", "title": "Complete Android native lifecycle and release-critical media proof"},
+  "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "HISTORICAL_ONLY_PR_50_DOES_NOT_CONTAIN_FINAL_D2B_D2A"},
+  "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "HISTORICAL_ONLY_PR_50_NOT_EXACT_FINAL_MAIN"},
   "remoteMigrationHead": "20260730161737",
   "sourceOnlyPendingCorrections": [
     {"program": "B2", "version": "20260730170000", "name": "revenuecat_transfer_authoritative_ordering", "deployed": false},
@@ -307,6 +307,29 @@
       "moneyMoved": false,
       "evidenceSource": "merged Money Operator closure evidence retained from pre-PR-A current-truth documents"
     },
+    "d2aNativeLifecycle": {
+      "completionScope": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+      "implementationPr": 212,
+      "sourceHead": "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
+      "sourceTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+      "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1",
+      "mergeTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+      "dependencyCorrection": {"implementationPr": 220, "mergeSha": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd", "classification": "EXACT_VERSION_LINE_COMPATIBLE_LOCK_GRAPH"},
+      "terminalArchitecture": {"implementationPr": 223, "mergeSha": "f4718f3e4ace89bd469468e30325789b5d43ef17", "policyId": "FINITE_TASK_TERMINAL_HANDOFF_V1"},
+      "generatedNative": {"determinism": "PASS_3_OF_3", "digest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0", "securitySupplement": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634"},
+      "gradle": {"tasksPassed": 6, "tasksRequired": 6},
+      "jvm": "PASS_7_OF_7",
+      "lifecycle": "PASS_12_OF_12",
+      "microphone": {"native": "PASS_4_OF_4", "callDomainPasses": "PASS_114_OF_114_TWICE", "sharedUi": "PASS_10_OF_10", "liveKit": "PASS_20_OF_20", "legacy": "PASS_20_OF_20", "negativeControls": "PASS_13_OF_13", "duplicateSenderOrPublication": 0, "callTermination": 0, "providerTokenCrossover": 0},
+      "securityAuthority": {"externalActivityAuthorityDenied": true, "privateReceiverPersistenceBeforeLaunch": true, "consumeOnce": true, "boundedTtl": true, "malformedReplayFailClosed": true, "backupSourceExclusionsClear": true, "cloudAndDeviceTransferExclusionClear": true},
+      "fatalCleanup": {"androidRuntimeFatal": 0, "reactNativeFatal": 0, "anr": 0, "unhandledRejection": 0, "staleAction": 0, "emulatorStopped": true, "installedTestPackageRemoved": true, "generatedProjectRemoved": true, "trackedApkAab": 0, "retainedDeviceIdentifiers": 0, "retainedSecrets": 0},
+      "backupClassification": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+      "restoredValues": null,
+      "repositoryReview": {"commentId": 5268063533, "P0": 0, "P1": 0, "launchImpactingP2": 0},
+      "phase1": {"runId": 31605891078, "result": "PASS_13_OF_13"},
+      "proofTiers": {"T0_REQUIREMENT": "REQUIREMENTS_CLEAR", "T1_SOURCE": "SOURCE_CLEAR", "T2_MODEL": "CLEAR_JVM_7_OF_7", "T3_INTEGRATION": "CLEAR_LOCAL_EMULATOR_LIFECYCLE_12_OF_12_AND_MIC_4_OF_4", "T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED", "T5_SIGNED_ARTIFACT": "NOT_CURRENT", "T6_INSTALLED_PHYSICAL": "NOT_CURRENT", "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"},
+      "state": "MERGED_VERIFIED"
+    },
     "codexSecurityScanReliabilityS0": {
       "state": "S0_COMPLETE_LAUNCH_CRITICAL_MIC_CORRECTION_NEXT_D2A_FROZEN",
       "implementationPr": 206,
@@ -561,8 +584,8 @@
         "protectedAdmissionPr": 213,
         "ownerAuthorizationCommentId": 5251285787,
         "domain": "chilly-chat-call-media",
-        "domainOwnership": "ACTIVE",
-        "taskState": "ACTIVE_IMPLEMENTATION",
+        "domainOwnership": "PRESERVED_DEPENDENT",
+        "taskState": "MERGED_VERIFIED",
         "allowedPaths": [
           "config/assurance/android-generated-native-lifecycle-v1.json",
           "config/assurance/command-allowlist-v1.json",
@@ -592,11 +615,11 @@
     "candidateObservation": {
       "pr": 212,
       "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
-      "prState": "open",
-      "head": "6fa8c3c0477078aabf35b2fb37e44586391abc5b",
-      "tree": "6c01f2dbb3846ef1e2415e0ec769db7355ef1d6a",
-      "classification": "NON_AUTHORITATIVE_READ_ONLY_OBSERVATION",
-      "observedAt": "2026-08-12T00:04:54Z"
+      "prState": "merged",
+      "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
+      "tree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+      "classification": "TERMINAL_MERGED_VERIFIED_OBSERVATION",
+      "observedAt": "2026-08-12T17:04:43Z"
     },
     "finalEvidence": {"ownerReceipt": false, "repositoryReview": false, "phase1": false, "mergeEligible": false},
     "historicalCandidates": [
@@ -628,13 +651,31 @@
     "implementationBindingId": "d2a-release-critical-pr-212-v1",
     "immutableSourceHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
     "immutableSourceTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
-    "currentImplementationHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
-    "currentImplementationTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
-    "phase": "IMPLEMENTATION",
-    "executionState": "D2A_NATIVE_LIFECYCLE_EXECUTION",
+    "currentImplementationHead": "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
+    "currentImplementationTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+    "phase": "TERMINAL",
+    "executionState": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+    "completionScope": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
     "requiredFreshnessClasses": ["REPOSITORY_TASK_LEASE"],
     "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_TASK_LEASE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "d2a-release-critical-finite-task-lease-authority-40f57256", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-task.finite-lease-authority"], "leaseId": "d2a-release-critical-pr-212-v1", "leaseHash": "9fad8fdfa32f3cfcc5fed9d5b063a6e1f2f2531586094185e6168734903f0ab4"}],
-    "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]
+    "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    "proofTierStatuses": {"T0_REQUIREMENT": "REQUIREMENTS_CLEAR", "T1_SOURCE": "SOURCE_CLEAR", "T2_MODEL": "MODEL_CLEAR", "T3_INTEGRATION": "INTEGRATION_CLEAR", "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL", "T5_SIGNED_ARTIFACT": "BLOCKED_EXTERNAL", "T6_INSTALLED_PHYSICAL": "BLOCKED_EXTERNAL", "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"},
+    "proofTierApplicabilityHash": "be22c1dab8cf5b8c59eb6d8c82d5468611688b746dea2f5be0fcdfd16262455c",
+    "terminalEvidence": {
+      "schemaVersion": 1,
+      "completionScope": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+      "sourceHead": "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
+      "sourceTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+      "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1",
+      "mergeTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+      "ownerReceiptCommentId": 5268095229,
+      "repositoryReviewCommentId": 5268063533,
+      "repositoryReview": {"P0": 0, "P1": 0, "launchImpactingP2": 0},
+      "phase1": {"runId": 31605891078, "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6", "result": "PASS_13_OF_13"},
+      "proofLimitations": {"T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED", "backupClassification": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT", "T5_SIGNED_ARTIFACT": "NOT_CURRENT", "T6_INSTALLED_PHYSICAL": "NOT_CURRENT", "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"},
+      "publicReleaseAuthorized": false,
+      "otaAuthorized": false
+    }
   },
   "freshnessClaims": [
     {
@@ -897,9 +938,7 @@
       "tombstoneHash": "842c2a2559a1d09f50320ff1d78c61cb46ad5e3f4d2af424db50d1b4bdc3b0e5"
     }
   ],
-  "openImplementationPrs": [
-    {"number": 212, "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation", "head": "6fa8c3c0477078aabf35b2fb37e44586391abc5b", "state": "open-draft-current", "disposition": "resume-d2a-native-lifecycle-under-existing-pr213-finite-lease", "featureId": "chilly-chat-call-lifecycle"}
-  ],
+  "openImplementationPrs": [],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -983,27 +1022,44 @@
     {"number": 138, "branch": "codex/assurance-reconcile-revenuecat-transfer-review-concurrency-atomicity", "head": "ca69c38368be9bb1d65b717b94c039ebc8829e5a", "reviewedImplementationHead": "81892f3dae544713d8e35512da895cd99c610966", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210", "FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218", "PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214"],
-    "active": "TERMINAL_PROTECTED_BASE_RESOLUTION_CORRECTION_RESUME_PR224",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210", "FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218", "PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214", "BRACE-EXPANSION-VERSION-LINE-CORRECTION-PR-220", "FINITE-TASK-TERMINAL-HANDOFF-PR-223", "PR-D2A-NATIVE-LIFECYCLE-PR-212", "TERMINAL-PROTECTED-BASE-RESOLUTION-PR-225"],
+    "active": "ACTIVATE_WHOLE_APP_ENGINEERING_DOCTRINE",
     "nextActions": [
-      "RESUME_EXISTING_POST_D2A_TRUTH_PR_224",
-      "After the terminal protected-base resolver correction merges, merge current protected main normally into existing PR #224 without rebasing.",
-      "Keep PR #224 limited to its exact three terminal-truth files, validate D2A as MERGED_VERIFIED, and merge it after repository-owned review and 13/13 Phase 1.",
-      "Keep build, submission, provider, OTA, and public-release authority closed; do not create signed candidates in this task.",
-      "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
-      "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
-      "Keep B1 20260730230022, B2 20260730170000, and B3 20260730230031 represented in Git and undeployed.",
-      "Keep PR E blocked until every required PR D successor merges; keep PR F blocked until PR E merges.",
-      "Keep all review-only branches retained and never merge them."
+      "ACTIVATE_WHOLE_APP_ENGINEERING_DOCTRINE",
+      "Perform doctrine-governed whole-app pre-release engineering closure.",
+      "Complete approved frontend, backend, native, provider, and UX changes under the doctrine.",
+      "Freeze final source only after the launch defect/change ledger closes.",
+      "Create signed Android/iOS candidates only after that final freeze."
     ],
+    "internalSignedCandidateAuthorization": {
+      "schemaVersion": 1,
+      "status": "CLOSED_PENDING_WHOLE_APP_DOCTRINE_FINAL_FREEZE",
+      "sourcePolicy": "NO_BUILD_AUTHORITY_BEFORE_DOCTRINE_GOVERNED_FINAL_FREEZE",
+      "requiredBinaryFlags": {"NEW_ANDROID_BINARY_REQUIRED": true, "NEW_IOS_BINARY_REQUIRED": true},
+      "candidates": [],
+      "INTERNAL_ANDROID_BUILD_AUTHORIZED": false,
+      "INTERNAL_IOS_BUILD_AUTHORIZED": false,
+      "ANDROID_SUBMISSION_AUTHORIZED": false,
+      "IOS_SUBMISSION_AUTHORIZED": false,
+      "OTA_AUTHORIZED": false,
+      "PUBLIC_RELEASE_AUTHORIZED": false,
+      "GOOGLE_PLAY_PRODUCTION_AUTHORIZED": false,
+      "APP_STORE_PUBLIC_SUBMISSION_AUTHORIZED": false,
+      "EXTERNAL_TESTFLIGHT_AUTHORIZED": false,
+      "otaAuthorized": false,
+      "publicReleaseAuthorized": false,
+      "googlePlayProductionAuthorized": false,
+      "appStorePublicSubmissionAuthorized": false,
+      "externalTestFlightAuthorized": false
+    },
     "prohibitions": [
       "Do not resume Cognitive LiveKit activation.",
-      "Do not create a release or distribution build, submit an artifact, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, or release publicly."
+      "Do not create a release or distribution build, submit an artifact, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, submit public App Review, use external TestFlight, or release publicly."
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-12T18:17:06Z",
-  "freshnessDeadline": "2026-08-13T18:17:06Z",
+  "timestamp": "2026-08-12T18:46:27Z",
+  "freshnessDeadline": "2026-08-13T18:46:27Z",
   "evidenceSources": [
     {
       "id": "d2a-release-critical-finite-task-lease-authority-40f57256",
