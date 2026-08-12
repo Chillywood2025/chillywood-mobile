@@ -110,8 +110,11 @@ assert.equal(validateInstalledDirectPackageSet({modules: "unused", packageJson: 
   installedPackageReader: () => ({name: "@trusted/alias", version: "1.0.0"})}).versionsMatched, 1);
 assert.throws(() => validateInstalledDirectPackageSet({modules: "unused", packageJson: directPackageFixture, lock: directLockFixture,
   installedPackageReader: (name) => name === "alpha" ? {name, version: "0.0.0"} : installed[name]}), (error) => error.code === "DEPENDENCY_INSTALLED_VERSION_MISMATCH");
-const dependencyEvidence = resolveDependencySet().evidence;
+const dependencyResolution = resolveDependencySet();
+const dependencyEvidence = dependencyResolution.evidence;
 const repositoryPackage = JSON.parse(fs.readFileSync("package.json", "utf8"));
+assert.equal(fs.realpathSync(dependencyResolution.modules), fs.realpathSync("node_modules"));
+assert.equal(dependencyEvidence.dependencySource, "CURRENT_D2A_WORKTREE_ONLY");
 assert.equal(dependencyEvidence.status, "EXACT_LOCKED_ALL_DECLARED_DIRECT_PACKAGE_IDENTITIES");
 assert.equal(dependencyEvidence.directPackageCount, Object.keys(repositoryPackage.dependencies).length + Object.keys(repositoryPackage.devDependencies).length);
 assert.equal(dependencyEvidence.productionPackageCount, Object.keys(repositoryPackage.dependencies).length);
@@ -173,6 +176,8 @@ const consumeTest = unitTemplate.slice(unitTemplate.indexOf("fun consumeReturnsE
 assert.match(consumeTest, /for \(field in listOf\("thread_id", "call_invite_id", "native_action", "request_key", "capture_generation", "created_at", "created_elapsed_at"\)\)/u);
 assert.match(consumeTest, /assertFalse\("Pending field must be removed after consume: \$field", preferences\.contains\(field\)\)/u);
 assert.match(instrumentationTemplate, /verifyExternallyLaunchedActionWasNotPersisted/u);
+assert.match(instrumentationTemplate, /PendingIntent\.getBroadcast\([\s\S]*PendingIntent\.FLAG_UPDATE_CURRENT or PendingIntent\.FLAG_IMMUTABLE[\s\S]*\)\.send\(\)/u);
+assert.doesNotMatch(instrumentationTemplate, /ChillyChatCallNotificationActionReceiver\(\)\.onReceive/u);
 assert.match(instrumentationTemplate, /An external custom-scheme launch must not establish trusted native call action state/u);
 const externalTest = instrumentationTemplate.slice(instrumentationTemplate.indexOf("fun verifyExternallyLaunchedActionWasNotPersisted"));
 assert.ok(externalTest.indexOf("Intent.ACTION_VIEW") >= 0);
@@ -188,8 +193,11 @@ assert.ok(runner.indexOf("assertCompleteScenarioMatrix(scenarioMatrix)") < runne
 assert.match(runner, /scenarioMatrix\.executionPlan\.length === scenarioMatrix\.required\.length/u);
 assert.match(runner, /for \(const \{scenario, method, runner\} of scenarioMatrix\.executionPlan\)/u);
 assert.match(runner, /methodResults\.length === scenarioMatrix\.required\.length/u);
+assert.match(runner, /result\.status === 0 && \/OK \\\(1 test\\\)\//u);
 assert.ok(runner.indexOf("assertNativeEntryPreflight();") < runner.indexOf("const generated = generateOnce({retain: true})"));
 assert.match(runner, /ANDROID_EMULATOR_PACKAGE_PREEXISTED/u);
+assert.match(runner, /dependencySource: "CURRENT_D2A_WORKTREE_ONLY"/u);
+assert.doesNotMatch(runner, /git\("worktree", "list"/u);
 assert.match(runner, /cleanupSelectedEmulator\(installState\)/u);
 assert.doesNotMatch(runner, /const cleanupEmulator/u);
 assert.ok(runner.indexOf("ANDROID_EMULATOR_PACKAGE_PREEXISTED") < runner.indexOf('adbRun(serial, ["install", appApk])'));
@@ -197,8 +205,8 @@ assert.doesNotMatch(runner, /\["install", "-r"/u);
 assert.match(runner, /if \(!state\.installedTest && !state\.installedApp\) return \{attempted: false, verified: true\}/u);
 assert.match(runner, /if \(state\.installedTest\)[\s\S]{0,180}\["uninstall", state\.testPackage\]/u);
 assert.match(runner, /if \(state\.installedApp\)[\s\S]{0,180}\["uninstall", state\.appPackage\]/u);
-assert.match(runner, /installedApp = appInstall\.status === 0[\s\S]{0,150}packagePresent/u);
-assert.match(runner, /installedTest = testInstall\.status === 0[\s\S]{0,150}packagePresent/u);
+assert.match(runner, /installedApp = packagePresent\([\s\S]{0,150}appInstall\.status === 0/u);
+assert.match(runner, /installedTest = packagePresent\([\s\S]{0,150}testInstall\.status === 0/u);
 assert.equal(report.classification, "HARNESS_PATH_BYPASS_CORRECTED_PRE_MERGE_D2A_CLEAR");
 assert.equal(report.finiteLeaseRuntimeScope.result, "PASS");
 assert.ok(report.finiteLeaseRuntimeScope.observedFiles <= report.finiteLeaseRuntimeScope.maximumFiles);

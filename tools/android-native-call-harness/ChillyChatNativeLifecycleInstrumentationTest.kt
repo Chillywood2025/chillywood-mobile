@@ -1,5 +1,6 @@
 package com.chillywood.mobile
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -49,7 +50,12 @@ class ChillyChatNativeLifecycleInstrumentationTest {
   }
 
   private fun dispatchTrusted(action: String = "answer") {
-    ChillyChatCallNotificationActionReceiver().onReceive(context, receiverIntent(action))
+    PendingIntent.getBroadcast(
+      context,
+      if (action == "decline") 2 else 1,
+      receiverIntent(action),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    ).send()
     InstrumentationRegistry.getInstrumentation().waitForIdleSync()
   }
 
@@ -145,7 +151,13 @@ class ChillyChatNativeLifecycleInstrumentationTest {
       putExtra("threadId", threadId)
       putExtra("callInviteId", inviteId)
     }
-    ChillyChatCallNotificationActionReceiver().onReceive(context, receiverIntent)
+    PendingIntent.getBroadcast(
+      context,
+      3,
+      receiverIntent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    ).send()
+    InstrumentationRegistry.getInstrumentation().waitForIdleSync()
     assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
   }
 

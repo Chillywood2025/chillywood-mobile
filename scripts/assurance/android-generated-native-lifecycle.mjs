@@ -186,18 +186,19 @@ export const resolveDependencySet = () => {
   const packageBytes = read("package.json"); const lockBytes = read("package-lock.json");
   const packageHash = digest(packageBytes); const lockHash = digest(lockBytes);
   const packageJson = JSON.parse(packageBytes); const lock = JSON.parse(lockBytes);
-  const candidates = git("worktree", "list", "--porcelain").split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9));
-  for (const candidate of candidates) {
-    const modules = path.join(candidate, "node_modules");
-    if (!fs.existsSync(modules)) continue;
-    if (!fs.existsSync(path.join(candidate, "package.json")) || !fs.existsSync(path.join(candidate, "package-lock.json"))) continue;
-    if (digest(fs.readFileSync(path.join(candidate, "package.json"))) !== packageHash || digest(fs.readFileSync(path.join(candidate, "package-lock.json"))) !== lockHash) continue;
-    try {
-      const direct = validateInstalledDirectPackageSet({modules, packageJson, lock});
-      return { modules, evidence: { packageSha256: packageHash, lockSha256: lockHash, ...direct, status: "EXACT_LOCKED_ALL_DECLARED_DIRECT_PACKAGE_IDENTITIES" } };
-    } catch { continue; }
-  }
-  throw new GateError("DEPENDENCY_SET_MISMATCH", "No exact installed dependency set is available");
+  const modules = path.join(root, "node_modules");
+  gate(fs.existsSync(modules), "DEPENDENCY_SET_MISMATCH", "The current D2A worktree dependency set is unavailable");
+  const direct = validateInstalledDirectPackageSet({modules, packageJson, lock});
+  return {
+    modules,
+    evidence: {
+      packageSha256: packageHash,
+      lockSha256: lockHash,
+      ...direct,
+      dependencySource: "CURRENT_D2A_WORKTREE_ONLY",
+      status: "EXACT_LOCKED_ALL_DECLARED_DIRECT_PACKAGE_IDENTITIES"
+    }
+  };
 };
 const copyTracked = (destination) => {
   for (const relative of git("ls-files", "-z").split("\0").filter(Boolean)) {
@@ -467,12 +468,12 @@ const emulatorEvidence = (generated, native, installState) => {
   const testApk = path.join(generated.temp, "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
   gate(fs.existsSync(appApk) && fs.existsSync(testApk), "ANDROID_TEST_APK_MISSING", "Disposable debug/test APKs were not produced");
   const appInstall = adbRun(serial, ["install", appApk]);
-  installState.installedApp = appInstall.status === 0;
-  const appVerified = installState.installedApp && packagePresent(serial, installState.appPackage);
+  installState.installedApp = packagePresent(serial, installState.appPackage);
+  const appVerified = appInstall.status === 0 && installState.installedApp;
   gate(appVerified, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
   const testInstall = adbRun(serial, ["install", testApk]);
-  installState.installedTest = testInstall.status === 0;
-  const testVerified = installState.installedTest && packagePresent(serial, installState.testPackage);
+  installState.installedTest = packagePresent(serial, installState.testPackage);
+  const testVerified = testInstall.status === 0 && installState.installedTest;
   gate(testVerified, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
   const component = "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner";
   gate(scenarioMatrix.executionPlan.length === scenarioMatrix.required.length
@@ -488,7 +489,7 @@ const emulatorEvidence = (generated, native, installState) => {
       gate(launch.status === 0, "ANDROID_EXTERNAL_ACTION_TEST_SETUP_FAILED", "External custom-scheme launch setup failed");
     }
     const result = adbRun(serial, ["shell", "am", "instrument", "-w", "-e", "class", `com.chillywood.mobile.ChillyChatNativeLifecycleInstrumentationTest#${method}`, component]);
-    const passed = result.status === 0 && !result.stdout.includes("FAILURES!!!");
+    const passed = result.status === 0 && /OK \(1 test\)/u.test(result.stdout) && !result.stdout.includes("FAILURES!!!");
     if (scenario === "EXTERNAL_CUSTOM_SCHEME_ORIGIN" && !passed) throw new GateError("ANDROID_EXTERNAL_NATIVE_ACTION_ORIGIN_UNTRUSTED",
       "An external custom-scheme Activity launch persisted a trusted native call action", {compiled: true, emulatorReproduced: true, identifiersRecorded: false});
     methodResults.push({scenario, method, runner, passed});
@@ -570,11 +571,13 @@ dependencies {
     gate(installState.preexistingNone, "ANDROID_EMULATOR_PACKAGE_PREEXISTED", "Target or test package already existed on the selected emulator");
     const appApk = path.join(generated.temp, "android/app/build/outputs/apk/debug/app-debug.apk");
     const testApk = path.join(generated.temp, "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
-    const appInstall = adbRun(installState.serial, ["install", appApk]); installState.installedApp = appInstall.status === 0;
-    const appVerified = installState.installedApp && packagePresent(installState.serial, installState.appPackage);
+    const appInstall = adbRun(installState.serial, ["install", appApk]);
+    installState.installedApp = packagePresent(installState.serial, installState.appPackage);
+    const appVerified = appInstall.status === 0 && installState.installedApp;
     gate(appVerified, "ANDROID_DEBUG_APK_INSTALL_FAILED", "Disposable debug APK installation failed");
-    const testInstall = adbRun(installState.serial, ["install", testApk]); installState.installedTest = testInstall.status === 0;
-    const testVerified = installState.installedTest && packagePresent(installState.serial, installState.testPackage);
+    const testInstall = adbRun(installState.serial, ["install", testApk]);
+    installState.installedTest = packagePresent(installState.serial, installState.testPackage);
+    const testVerified = testInstall.status === 0 && installState.installedTest;
     gate(testVerified, "ANDROID_TEST_APK_INSTALL_FAILED", "Disposable test APK installation failed");
     const instrumentation = adbRun(installState.serial, ["shell", "am", "instrument", "-w", "-e", "class", "com.chillywood.mobile.ChillyChatMicControlInstrumentationTest", "com.chillywood.mobile.test/androidx.test.runner.AndroidJUnitRunner"]);
     gate(instrumentation.status === 0 && /OK \(4 tests\)/u.test(instrumentation.stdout) && !instrumentation.stdout.includes("FAILURES!!!"),
