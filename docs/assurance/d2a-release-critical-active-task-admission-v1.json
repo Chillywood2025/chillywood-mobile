@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "reportId": "d2a-release-critical-active-task-admission-v1",
+  "classification": "ASSURANCE_CONTROL_ONLY_PROTECTED_MAIN_ADMISSION",
+  "startingMain": "595d7a489b86234be0731042103cbfe0d40e8e72",
+  "d2a": {
+    "implementationPr": 212,
+    "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+    "head": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+    "tree": "aadc47f810525d925b1a4a413d7ded1af581b678",
+    "ownerBindingCommentId": 5251285787,
+    "ownerBindingBodySha256": "522dcd51c5f341a2f071c4cf7737bbc04c533f304640952833115555c53c636d",
+    "ownerBindingSubjectSha256": "ec44ad5ae886c365fe29d0c3e1e32af698df2875160f060b03886d103c6cf15f"
+  },
+  "admission": {
+    "implementationPr": 213,
+    "branch": "codex/d2a-release-critical-active-task-admission",
+    "authoredSourceHead": "da203abc75803335387ee0242bac4d525f2de2f7",
+    "authoredSourceTree": "52c747c42b07f5d48d298d8999cb0b9dfd89e6b8",
+    "policy": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2",
+    "branchLocalAdmissionAllowed": false,
+    "normalProtectedMergeRequired": true
+  },
+  "sentinelClosures": [
+    {
+      "historicalPr": 194,
+      "state": "RESOLVED_BY_EXACT_SUCCESSOR_PR_210",
+      "successorPr": 210,
+      "successorHead": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d",
+      "successorMerge": "31087f37290f521d956e125e518f92c3c65a736e",
+      "repositoryReviewSha256": "4b4da6c0b2c359348098a7f0167dd0d739e541a3b643be8e7c0c6aabe9fa6c96",
+      "phase1RunId": 31470393389,
+      "phase1": "13/13 PASS",
+      "historicalProviderThreads": "5 UNRESOLVED RETAINED"
+    },
+    {
+      "historicalPr": 195,
+      "state": "RESOLVED_BY_EXACT_SUCCESSOR_PR_205",
+      "successorPr": 205,
+      "successorHead": "9ed2ba65eff7658f13329bc3ea118d533c96c2b6",
+      "successorMerge": "a9bd887606f74996a9f5920e6fad922e7f20598b",
+      "repositoryReviewSha256": "2f10c3848885bc5ae78fe3125ba148cfbb651f0a83c0fa951741e1463439ea1c",
+      "phase1RunId": 31354601386,
+      "phase1": "13/13 PASS",
+      "historicalProviderThreads": "3 RESOLVED RETAINED"
+    }
+  ],
+  "admissionMatrix": {
+    "focusedTests": "76/76 PASS",
+    "contractValidation": "28/28 PASS",
+    "currentTruth": "PASS",
+    "packetDeterminism": "3/3 PASS",
+    "wrongSuccessorPr": "DENIED",
+    "wrongSuccessorBranch": "DENIED",
+    "wrongSuccessorHead": "DENIED",
+    "wrongSuccessorTree": "DENIED",
+    "missingReviewBundle": "DENIED",
+    "repositoryReviewP1GreaterThanZero": "DENIED",
+    "missingPhase1ThirteenOfThirteen": "DENIED",
+    "unmergedSuccessor": "DENIED",
+    "deletedClosure": "REBLOCKS",
+    "unrelatedBranch": "DENIED",
+    "providerCriticalEvidence": "STALE_BLOCKED",
+    "buildOrProviderAuthority": "NOT_OPENED"
+  },
+  "reviewCorrections": [
+    {
+      "severity": "P1",
+      "id": "POST_MERGE_CURRENT_TRUTH_SUCCESSOR_BOOTSTRAP_MISSING",
+      "state": "CORRECTED_BEFORE_MERGE",
+      "correction": "Exact PR #213 subject, first parent, reviewed ancestor, and changed-path set are required for the one protected successor synchronization."
+    },
+    {
+      "severity": "P1",
+      "id": "ADMISSION_TEST_FILE_SCOPE_BROADER_THAN_OWNER_ALLOWLIST",
+      "state": "CORRECTED_BEFORE_MERGE",
+      "correction": "The successor assertions are contained in the authorized exact-head successor test; the extra current-truth synchronization test-file delta was removed."
+    }
+  ],
+  "scope": {
+    "product": false,
+    "native": false,
+    "provider": false,
+    "build": false,
+    "database": false,
+    "ota": false,
+    "publicRelease": false
+  }
+}

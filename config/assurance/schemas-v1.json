@@ -33,7 +33,7 @@
               "passStatus": {"oneOf": [{"$ref": "#/$defs/status"}, {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/status"}}]},
               "requiredBefore": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
               "missingStatus": {"enum": ["BLOCKED_INTERNAL", "BLOCKED_EXTERNAL"]},
-              "completionFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}}
+              "completionFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}}
             }
           }
         },
@@ -83,25 +83,55 @@
     },
     "currentTruthContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["recordPath", "generatedDocuments", "requiredFields", "reviewPolicy", "synchronizationMerge", "implementationHeadBinding", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "freshness", "staleFindingIds"],
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "reviewPolicy", "synchronizationMerge", "implementationHeadBinding", "finiteTaskLeasePolicy", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "lateReviewExactSuccessorAdmission", "freshness", "staleFindingIds"],
       "properties": {
         "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
         "synchronizationMerge": {
           "type": "object",
-          "required": ["required", "parentCount", "recordedMainMustBeFirstParent", "requiredChangedPaths", "allowedChangedPaths", "bootstrapMerge"],
+          "required": ["required", "parentCount", "recordedMainMustBeFirstParent", "requiredChangedPaths", "allowedChangedPaths", "terminalControlMaintenance", "bootstrapMerge"],
           "properties": {
             "required": {"const": true},
             "parentCount": {"const": 2},
             "recordedMainMustBeFirstParent": {"const": true},
             "requiredChangedPaths": {"type": "array", "minItems": 3, "uniqueItems": true},
             "allowedChangedPaths": {"type": "array", "minItems": 3, "uniqueItems": true},
+            "terminalControlMaintenance": {
+              "type": "object",
+              "required": ["marker", "branch", "startingMain", "allowedChangedPaths", "maximumFiles", "maximumNetLines", "nestedControlDependency", "secondMaintenancePrAllowed"],
+              "additionalProperties": false,
+              "properties": {
+                "marker": {"const": "chillywood-assurance-control-maintenance-v1"},
+                "branch": {"const": "codex/finite-task-lease-runtime-freshness-correction"},
+                "startingMain": {"const": "68d2f2b745425296fae2753e8a0cba9cc1137067"},
+                "allowedChangedPaths": {"type": "array", "minItems": 1, "maxItems": 11, "uniqueItems": true},
+                "maximumFiles": {"const": 11},
+                "maximumNetLines": {"const": 4500},
+                "nestedControlDependency": {"const": false},
+                "secondMaintenancePrAllowed": {"const": false}
+              }
+            },
             "bootstrapMerge": {
               "type": "object",
               "required": ["mergeSha", "firstParent", "changedPaths"],
               "properties": {
                 "mergeSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
                 "firstParent": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-                "changedPaths": {"type": "array", "minItems": 3, "uniqueItems": true}
+                "changedPaths": {"type": "array", "minItems": 3, "uniqueItems": true},
+                "successors": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "required": ["prNumber", "branch", "firstParent", "requiredSecondParentAncestor", "changedPaths"],
+                    "properties": {
+                      "prNumber": {"type": "integer", "minimum": 1},
+                      "branch": {"$ref": "#/$defs/gitBranch"},
+                      "firstParent": {"$ref": "#/$defs/gitSha"},
+                      "requiredSecondParentAncestor": {"$ref": "#/$defs/gitSha"},
+                      "changedPaths": {"type": "array", "minItems": 3, "uniqueItems": true}
+                    }
+                  }
+                }
               }
             }
           }
@@ -128,8 +158,10 @@
             "baseSynchronization": {"const": {"classification": "BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH", "exactHeadMatchingRemainsDefault": true, "sourceMustBeAncestor": true, "commitDistance": 1, "commitDistanceTraversal": "first-parent", "ordinaryMergeParentCount": 2, "firstParent": "recorded-source-head", "secondParent": "exact-origin-main", "canonicalMergeTreeRequired": true, "sourceDeltaMustBeByteEquivalent": true, "changedPathSetMustBeEquivalent": true, "providerRemoteRefMustMatch": true, "reviewEvidenceRefNamespace": "refs/remotes/origin/", "reviewEvidenceRoots": ["docs/reviews", "config/assurance/reviews"], "minimumReviewEvidence": 1, "reviewFreshnessHours": 24, "reviewEvidenceMustBeReviewOnly": true, "reviewProvider": "INDEPENDENT_REPOSITORY_REVIEW", "reviewReceiptHashAlgorithm": "sha256", "reviewReceiptRequiredFields": ["reviewId", "reviewProvider", "reviewerId", "reviewedCommit", "reviewedTree", "reviewRef", "reviewTimestamp", "reviewReceiptHash"], "criticalFindingMaximum": {"P0": 0, "P1": 0}, "repeatedMergeChainAllowed": false, "manualResolutionAllowed": false, "networkAccess": "forbidden", "failureStatus": "BLOCKED_INTERNAL"}}
           }
         },
+        "finiteTaskLeasePolicy": {"const": {"policyId": "ASSURANCE_FINITE_TASK_LEASE_V1", "terminalMetaPr": 217, "candidateSources": ["GITHUB_PULL_REQUEST_EVENT_EXACT_MERGE_REF", "LOCAL_REMOTE_IMPLEMENTATION_BRANCH_WITH_SUPPLIED_PR_TUPLE"], "leaseAuthorityFreshnessClass": "REPOSITORY_TASK_LEASE", "taskStates": ["ACTIVE_IMPLEMENTATION", "BLOCKED_PRODUCT_FINDING", "MERGE_ELIGIBLE", "MERGED_VERIFIED", "ABANDONED_BY_OWNER"], "candidateRequirements": ["exact-pr", "exact-branch", "open-pr", "admitted-seed-descendant", "admitted-seed-tree-unchanged", "admitted-base-ancestor", "allowed-paths", "scope-budget", "exclusive-domain-owner", "nonterminal-task"], "sourcePushInvalidates": ["owner-final-receipt", "repository-owned-review", "phase1", "merge-eligibility"], "sourcePushRequires": {"newAdmissionPr": false, "newCurrentTruthBindingPr": false, "newBootstrapTuple": false, "newMergeProvenancePr": false}, "finalReceiptFields": ["pr", "branch", "admitted-seed", "final-head", "final-tree", "diff-hash", "changed-path-hash", "scope-result", "call-domain-closure-ledger-hash", "focused-test-hash", "mutation-negative-control-hash", "repository-review-hash", "phase1-run-id-and-head", "owner-author-association", "body-and-subject-hashes"], "mergeProvenance": {"parents": 2, "firstParent": "exact-current-protected-base", "secondParent": "exact-final-implementation-head", "sourceTree": "exact-final-receipt-tree", "syntheticMergeTreeRecorded": true, "actualMergeSecondParentExact": true, "actualMergeTreeExact": true, "squashRebaseOctopusAllowed": false}, "productFindingDisposition": {"state": "BLOCKED_PRODUCT_FINDING", "leaseRevoked": false}, "inPlaceAmendment": {"marker": "chillywood-assurance-task-lease-amendment-v1", "ownerCommentRequired": true, "protectedMainUpdateRequired": false, "sameDomainOnly": true, "wildcardsAllowed": false, "authorityExpansionAllowed": false}, "perTaskRecursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1}, "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE", "providerCodexReview": "OPTIONAL_ADVISORY", "authority": {"build": false, "provider": false, "database": false, "publicRelease": false}}},
         "lateReviewOwnerRegistry": {"const": [{"repository": "Chillywood2025/chillywood-mobile", "prNumber": 194, "mergeSha": "4ee283aa851bb2042a7559a54a1664d6eebcb446", "findingSetHash": "9474ccab70621250acc32aaa8bb765f0aba7423b44fa5fd073d2318f12701c99", "successorCorrectionOwner": "codex/d2a-livekit-mic-post-merge-review-correction", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0"]}, {"repository": "Chillywood2025/chillywood-mobile", "prNumber": 195, "mergeSha": "9f4f2d0c49160a0944c774bcf4175d9899bc01f7", "findingSetHash": "6aa0de5907c7b504712a502b3072fcd06dd026801425aa5ff6912a67ffcb6b10", "successorCorrectionOwner": "codex/assurance-active-task-and-claim-freshness-a1", "assuranceControlOwner": "codex/assurance-active-task-and-claim-freshness-a1", "authorizedBootstrapOwners": ["codex/assurance-active-task-and-claim-freshness-a1", "codex/assurance-codex-security-scan-reliability-s0", "codex/d2a-livekit-mic-post-merge-review-correction"]}]},
         "lateReviewTombstoneAdmission": {"const": {"policyId": "EXACT_HEAD_PROTECTED_MAIN_V1", "protectedMainAnchorSha": "08d8c04285c8dc0fbe0f0168b6750fc746d1af48", "originalSentinelRetentionRequired": true, "firstParentAdmissionRequired": true, "carrierExactMergeParentsRequired": true, "carrierGithubReadbackRequired": true, "carrierExactHeadReceiptRequired": true, "carrierLatestSourcePushInvalidationRequired": true, "carrierEvidenceMode": "github-read-only", "branchLocalAdmissionAllowed": false, "networkRequiredAfterAdmission": false}},
+        "lateReviewExactSuccessorAdmission": {"const": {"policyId": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2", "protectedMainAnchorSha": "595d7a489b86234be0731042103cbfe0d40e8e72", "admissionPr": 213, "admissionBranch": "codex/d2a-release-critical-active-task-admission", "originalSentinelRetentionRequired": true, "firstParentAdmissionRequired": true, "normalTwoParentMergeRequired": true, "repositoryOwnedReviewRequired": true, "phase1JobsRequired": 13, "branchLocalAdmissionAllowed": false}},
         "freshness": {
           "type": "object",
           "required": ["defaultHours", "providerCriticalHours", "clock", "failClosed", "classes", "factRegistry"],
@@ -139,6 +171,7 @@
             "clock": {"const": "UTC"},
             "failClosed": {"const": true},
             "factRegistry": {"const": [
+              {"factId": "repository.active-task.finite-lease-authority", "freshnessClass": "REPOSITORY_TASK_LEASE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "Protected main authorizes the finite task lease; current candidate identity is derived read-only and is not written back after every descendant push"},
               {"factId": "repository.assurance-control.a1.requirements", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 Owner control requirements, prohibited mutations, review-gate, claim-freshness, and bootstrap boundaries are recorded as executable assurance requirements"},
               {"factId": "repository.assurance-control.a1.source", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 assurance-control source implements structured active-task authority, exact-head review gating, late-review detection, claim-scoped freshness, and fail-closed external receipt verification"},
               {"factId": "repository.assurance-control.a1.model", "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE", "historicalEvidence": "A1 executable focused regressions reject task, head, review-surface, pagination, freshness, receipt, and proof-status substitutions"},
@@ -161,9 +194,19 @@
             ]},
             "classes": {
               "type": "object",
-              "required": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"],
+              "required": ["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"],
               "additionalProperties": false,
               "properties": {
+                "REPOSITORY_TASK_LEASE": {
+                  "type": "object",
+                  "required": ["maximumHours", "allowedEvidenceModes", "authorityAllowed", "requiresCommittedEvidence"],
+                  "properties": {
+                    "maximumHours": {"const": 87600},
+                    "allowedEvidenceModes": {"const": ["protected-finite-task-lease"]},
+                    "authorityAllowed": {"const": "REPOSITORY_ONLY"},
+                    "requiresCommittedEvidence": {"const": true}
+                  }
+                },
                 "REPOSITORY_SOURCE": {
                   "type": "object",
                   "required": ["maximumHours", "allowedEvidenceModes", "authorityAllowed"],
@@ -217,24 +260,103 @@
       "type": "object",
       "required": ["freshnessClass", "platform", "evidenceSourceId", "authorityAllowed", "requiredFacts"],
       "properties": {
-        "freshnessClass": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
+        "freshnessClass": {"enum": ["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
         "platform": {"enum": ["ANDROID", "IOS", "NONE"]},
         "evidenceSourceId": {"$ref": "#/$defs/lowerId"},
         "authorityAllowed": {"enum": ["REPOSITORY_ONLY", "PROVIDER_READBACK_ONLY", "SIGNED_ARTIFACT_ONLY", "INSTALLED_DEVICE_ONLY", "PHYSICAL_DEVICE_ONLY", "PUBLIC_CANARY_ONLY"]},
         "requiredFacts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
         "subjectHead": {"$ref": "#/$defs/gitSha"},
-        "subjectTree": {"$ref": "#/$defs/gitSha"}
+        "subjectTree": {"$ref": "#/$defs/gitSha"},
+        "leaseId": {"$ref": "#/$defs/lowerId"},
+        "leaseHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       },
-      "allOf": [{"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_SOURCE"}}}, "then": {"required": ["subjectHead", "subjectTree"]}}]
+      "allOf": [
+        {"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_SOURCE"}}}, "then": {"required": ["subjectHead", "subjectTree"]}},
+        {"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_TASK_LEASE"}}}, "then": {"required": ["leaseId", "leaseHash"]}}
+      ]
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "activeTaskBinding", "freshnessClaims", "lateReviewSentinels", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "required": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "finiteTaskRuntime", "activeTaskBinding", "freshnessClaims", "lateReviewSentinels", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
       "properties": {
         "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
         "mainSha": {"$ref": "#/$defs/gitSha"},
         "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
         "liveProviderReadback": {"type": "boolean"},
+        "finiteTaskLeases": {
+          "type": "object",
+          "required": ["schemaVersion", "policyId", "terminalMetaPr", "recursiveFailureCode", "providerCodexReview", "authority", "amendmentPolicy", "tasks"],
+          "additionalProperties": false,
+          "properties": {
+            "schemaVersion": {"const": 1},
+            "policyId": {"const": "ASSURANCE_FINITE_TASK_LEASE_V1"},
+            "terminalMetaPr": {"const": 217},
+            "recursiveFailureCode": {"const": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE"},
+            "providerCodexReview": {"const": "OPTIONAL_ADVISORY"},
+            "authority": {"const": {"build": false, "provider": false, "database": false, "publicRelease": false}},
+            "amendmentPolicy": {
+              "type": "object",
+              "required": ["marker", "protectedMainUpdateRequired", "ownerCommentRequired", "domains"],
+              "additionalProperties": false,
+              "properties": {
+                "marker": {"const": "chillywood-assurance-task-lease-amendment-v1"},
+                "protectedMainUpdateRequired": {"const": false},
+                "ownerCommentRequired": {"const": true},
+                "domains": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {
+                  "type": "object",
+                  "required": ["id", "amendablePaths", "maximumFiles", "maximumChangedLines"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {"$ref": "#/$defs/lowerId"},
+                    "amendablePaths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                    "maximumFiles": {"type": "integer", "minimum": 1},
+                    "maximumChangedLines": {"type": "integer", "minimum": 1}
+                  }
+                }}
+              }
+            },
+            "tasks": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "required": ["leaseId", "featureId", "implementationPr", "implementationBranch", "admittedSeedHead", "admittedSeedTree", "admittedBase", "protectedAdmissionPr", "ownerAuthorizationCommentId", "domain", "domainOwnership", "taskState", "allowedPaths", "scopeBudget", "recursionBudget"],
+                "additionalProperties": false,
+                "properties": {
+                  "leaseId": {"$ref": "#/$defs/lowerId"},
+                  "featureId": {"$ref": "#/$defs/lowerId"},
+                  "implementationPr": {"type": "integer", "minimum": 1},
+                  "implementationBranch": {"$ref": "#/$defs/gitBranch"},
+                  "admittedSeedHead": {"$ref": "#/$defs/gitSha"},
+                  "admittedSeedTree": {"$ref": "#/$defs/gitSha"},
+                  "admittedBase": {"$ref": "#/$defs/gitSha"},
+                  "protectedAdmissionPr": {"type": "integer", "minimum": 1},
+                  "ownerAuthorizationCommentId": {"type": "integer", "minimum": 1},
+                  "domain": {"$ref": "#/$defs/lowerId"},
+                  "domainOwnership": {"enum": ["ACTIVE", "PRESERVED_DEPENDENT"]},
+                  "taskState": {"enum": ["ACTIVE_IMPLEMENTATION", "BLOCKED_PRODUCT_FINDING", "MERGE_ELIGIBLE", "MERGED_VERIFIED", "ABANDONED_BY_OWNER"]},
+                  "allowedPaths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                  "scopeBudget": {"type": "object", "required": ["maximumFiles", "maximumChangedLines"], "additionalProperties": false, "properties": {"maximumFiles": {"type": "integer", "minimum": 1}, "maximumChangedLines": {"type": "integer", "minimum": 1}}},
+                  "recursionBudget": {"const": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1}}
+                }
+              }
+            }
+          }
+        },
+        "finiteTaskRuntime": {
+          "type": "object",
+          "required": ["schemaVersion", "authority", "candidatePolicy", "candidateObservation", "finalEvidence", "historicalCandidates", "authorityClosed"],
+          "properties": {
+            "schemaVersion": {"const": 1},
+            "authority": {"const": "PROTECTED_FINITE_TASK_LEASE"},
+            "candidatePolicy": {"const": "DYNAMIC_READ_ONLY_NOT_PROTECTED_TRUTH_AUTHORITY"},
+            "candidateObservation": {"type": "object", "required": ["pr", "branch", "prState", "head", "tree", "classification", "observedAt"]},
+            "finalEvidence": {"const": {"ownerReceipt": false, "repositoryReview": false, "phase1": false, "mergeEligible": false}},
+            "historicalCandidates": {"type": "array", "minItems": 1},
+            "authorityClosed": {"const": {"build": true, "provider": true, "database": true, "publicRelease": true}}
+          }
+        },
         "activeTaskBinding": {
           "type": "object",
           "required": ["schemaVersion", "featureId", "implementationPr", "implementationBranch", "implementationBindingId", "immutableSourceHead", "immutableSourceTree", "currentImplementationHead", "currentImplementationTree", "phase", "executionState", "requiredFreshnessClasses", "requiredFreshnessClaims", "proofTiersUnderEvaluation"],
@@ -250,7 +372,7 @@
             "currentImplementationTree": {"$ref": "#/$defs/gitSha"},
             "phase": {"enum": ["IMPLEMENTATION", "FORMAL_REVIEW", "FINAL_CI", "MERGE_ELIGIBLE", "COMPLETE"]},
             "executionState": {"type": "string", "minLength": 1},
-            "requiredFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}},
+            "requiredFreshnessClasses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]}},
             "requiredFreshnessClaims": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/requiredFreshnessClaim"}},
             "proofTiersUnderEvaluation": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]}},
             "proofTierStatuses": {
@@ -302,14 +424,19 @@
               "evidenceSourceId": {"$ref": "#/$defs/lowerId"},
               "evidenceMode": {"type": "string", "minLength": 1},
               "factsCovered": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
-              "freshnessClass": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
+              "freshnessClass": {"enum": ["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
               "authorityAllowed": {"enum": ["REPOSITORY_ONLY", "PROVIDER_READBACK_ONLY", "SIGNED_ARTIFACT_ONLY", "INSTALLED_DEVICE_ONLY", "PHYSICAL_DEVICE_ONLY", "PUBLIC_CANARY_ONLY"]},
               "platform": {"enum": ["ANDROID", "IOS", "NONE"]},
               "provider": {"type": "string", "minLength": 1}
               ,"subjectHead": {"$ref": "#/$defs/gitSha"}
               ,"subjectTree": {"$ref": "#/$defs/gitSha"}
+              ,"leaseId": {"$ref": "#/$defs/lowerId"}
+              ,"leaseHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
             },
-            "allOf": [{"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_SOURCE"}}}, "then": {"required": ["subjectHead", "subjectTree"]}}]
+            "allOf": [
+              {"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_SOURCE"}}}, "then": {"required": ["subjectHead", "subjectTree"]}},
+              {"if": {"properties": {"freshnessClass": {"const": "REPOSITORY_TASK_LEASE"}}}, "then": {"required": ["leaseId", "leaseHash"]}}
+            ]
           }
         },
         "openImplementationPrs": {
@@ -378,13 +505,23 @@
                   "successorMergedAt": {"type": "string", "format": "date-time"},
                   "correctedSourceIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "number"}},
                   "resolvedThreadIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-                  "allThreadsResolved": {"const": true},
+                  "allThreadsResolved": {"type": "boolean"},
+                  "threadDisposition": {"const": "RESOLVED_BY_EXACT_SUCCESSOR_HISTORICAL_THREAD_STATE_RETAINED"},
                   "githubThreadResolutionReadbackAt": {"type": "string", "format": "date-time"},
                   "exactHeadReviewedCommit": {"$ref": "#/$defs/gitSha"},
                   "exactHeadReviewedTree": {"$ref": "#/$defs/gitSha"},
                   "exactHeadReviewReceiptHash": {"pattern": "^[0-9a-f]{64}$"},
                   "exactHeadCheckRunId": {"type": "integer", "minimum": 1},
                   "exactHeadReviewCompletedAt": {"type": "string", "format": "date-time"},
+                  "reviewClassification": {"const": "REPOSITORY_OWNED_EXACT_HEAD"},
+                  "repositoryReviewP0": {"const": 0},
+                  "repositoryReviewP1": {"const": 0},
+                  "repositoryReviewBlockingP2": {"const": 0},
+                  "phase1RunId": {"type": "integer", "minimum": 1},
+                  "phase1Head": {"$ref": "#/$defs/gitSha"},
+                  "phase1Conclusion": {"const": "success"},
+                  "phase1JobsPassed": {"const": 13},
+                  "phase1JobsTotal": {"const": 13},
                   "correctionEvidenceHash": {"pattern": "^[0-9a-f]{64}$"},
                   "dispositionEvidenceHash": {"pattern": "^[0-9a-f]{64}$"},
                   "verificationSubjectHash": {"pattern": "^[0-9a-f]{64}$"},
@@ -401,14 +538,24 @@
           "uniqueItems": true,
           "items": {
             "type": "object",
-            "required": ["schemaVersion", "repository", "prNumber", "mergeSha", "findingSetHash", "resolutionEvidence", "verificationSubjectHash", "admissionCarrier", "admissionPolicyId", "tombstoneHash"],
+            "required": ["schemaVersion", "repository", "prNumber", "mergeSha", "findingSetHash", "resolutionEvidence", "verificationSubjectHash", "admissionPolicyId", "tombstoneHash"],
+            "oneOf": [
+              {
+                "required": ["admissionCarrier"],
+                "properties": {"admissionPolicyId": {"const": "EXACT_HEAD_PROTECTED_MAIN_V1"}}
+              },
+              {
+                "required": ["protectedAdmission"],
+                "properties": {"admissionPolicyId": {"const": "EXACT_SUCCESSOR_PROTECTED_MAIN_V2"}}
+              }
+            ],
             "properties": {
               "schemaVersion": {"const": 1},
               "repository": {"type": "string", "minLength": 1},
               "prNumber": {"type": "integer", "minimum": 1},
               "mergeSha": {"$ref": "#/$defs/gitSha"},
               "findingSetHash": {"pattern": "^[0-9a-f]{64}$"},
-              "resolutionEvidence": {"$ref": "#/$defs/currentTruthRecord/properties/lateReviewSentinels/items/properties/resolutionEvidence"},
+              "resolutionEvidence": {"type": "object"},
               "verificationSubjectHash": {"pattern": "^[0-9a-f]{64}$"},
               "admissionCarrier": {
                 "type": "object",
@@ -428,7 +575,15 @@
                   "repositoryVerificationHash": {"pattern": "^[0-9a-f]{64}$"}
                 }
               },
-              "admissionPolicyId": {"const": "EXACT_HEAD_PROTECTED_MAIN_V1"},
+              "protectedAdmission": {
+                "type": "object",
+                "required": ["prNumber", "branch"],
+                "properties": {
+                  "prNumber": {"const": 213},
+                  "branch": {"const": "codex/d2a-release-critical-active-task-admission"}
+                }
+              },
+              "admissionPolicyId": {"enum": ["EXACT_HEAD_PROTECTED_MAIN_V1", "EXACT_SUCCESSOR_PROTECTED_MAIN_V2"]},
               "tombstoneHash": {"pattern": "^[0-9a-f]{64}$"}
             }
           }
@@ -445,9 +600,13 @@
               "observedAt": {"type": "string", "format": "date-time"},
               "sourceCommit": {"$ref": "#/$defs/gitSha"},
               "covers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-              "freshnessClass": {"enum": ["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
+              "freshnessClass": {"enum": ["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]},
               "authorityAllowed": {"enum": ["REPOSITORY_ONLY", "PROVIDER_READBACK_ONLY", "SIGNED_ARTIFACT_ONLY", "INSTALLED_DEVICE_ONLY", "PHYSICAL_DEVICE_ONLY", "PUBLIC_CANARY_ONLY"]},
-              "platform": {"enum": ["ANDROID", "IOS", "NONE"]}
+              "platform": {"enum": ["ANDROID", "IOS", "NONE"]},
+              "subjectHead": {"$ref": "#/$defs/gitSha"},
+              "subjectTree": {"$ref": "#/$defs/gitSha"},
+              "leaseId": {"$ref": "#/$defs/lowerId"},
+              "leaseHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
             },
             "allOf": [{
               "if": {"required": ["observedAt"]},

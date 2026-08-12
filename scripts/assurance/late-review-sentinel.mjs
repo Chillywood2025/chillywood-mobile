@@ -112,6 +112,41 @@ function tombstoneFirstProtectedMainAdmission(tombstone, admittedRecord, options
   if (typeof options.tombstoneAdmissionVerifier === "function") {
     try { return options.tombstoneAdmissionVerifier(tombstone) === true; } catch { return false; }
   }
+  if (tombstone?.admissionPolicyId === "EXACT_SUCCESSOR_PROTECTED_MAIN_V2") {
+    const policy = options.exactSuccessorAdmissionPolicy
+      ?? readJson("config/assurance/current-truth-contract-v1.json").lateReviewExactSuccessorAdmission;
+    const admission = tombstone.protectedAdmission;
+    if (policy?.policyId !== "EXACT_SUCCESSOR_PROTECTED_MAIN_V2"
+      || policy?.protectedMainAnchorSha !== "595d7a489b86234be0731042103cbfe0d40e8e72"
+      || policy?.admissionPr !== 213
+      || policy?.admissionBranch !== "codex/d2a-release-critical-active-task-admission"
+      || policy.originalSentinelRetentionRequired !== true
+      || policy.firstParentAdmissionRequired !== true
+      || policy.normalTwoParentMergeRequired !== true
+      || policy.repositoryOwnedReviewRequired !== true
+      || policy.phase1JobsRequired !== 13
+      || policy.branchLocalAdmissionAllowed !== false
+      || admission?.prNumber !== policy.admissionPr
+      || admission?.branch !== policy.admissionBranch) return false;
+    try {
+      const commits = git(["log", "--first-parent", "--reverse", "--format=%H", "origin/main", "--", currentTruthPath]).split(/\r?\n/u).filter(Boolean);
+      const expected = stableJson(tombstone);
+      const firstAppearance = commits.find((commit) => {
+        try {
+          const record = JSON.parse(git(["show", `${commit}:${currentTruthPath}`]));
+          return (record.lateReviewResolutionTombstones ?? []).some((candidate) => stableJson(candidate) === expected);
+        } catch { return false; }
+      });
+      if (!firstAppearance || firstAppearance === policy.protectedMainAnchorSha) return false;
+      const parents = git(["show", "-s", "--format=%P", firstAppearance]).split(/\s+/u).filter(Boolean);
+      const subject = git(["show", "-s", "--format=%s", firstAppearance]);
+      if (parents.length !== 2
+        || subject !== `Merge pull request #${admission.prNumber} from Chillywood2025/${admission.branch}`) return false;
+      git(["merge-base", "--is-ancestor", policy.protectedMainAnchorSha, parents[0]]);
+      git(["merge-base", "--is-ancestor", tombstone.resolutionEvidence.successorMergeSha, parents[0]]);
+      return true;
+    } catch { return false; }
+  }
   const policy = options.tombstoneAdmissionPolicy ?? readJson("config/assurance/current-truth-contract-v1.json").lateReviewTombstoneAdmission;
   if (policy?.policyId !== "EXACT_HEAD_PROTECTED_MAIN_V1"
     || !/^[0-9a-f]{40}$/u.test(policy?.protectedMainAnchorSha ?? "")
@@ -181,6 +216,12 @@ export function validateLateReviewSentinelState(record, options = {}) {
     if (lateReviewAllowedOwners(sentinel).length === 0) findings.push({ id: "LATE_REVIEW_OWNER_POLICY_INVALID", prNumber: sentinel.prNumber });
     if (claimsResolution && !resolved) findings.push({ id: "LATE_REVIEW_RESOLUTION_EVIDENCE_INVALID", prNumber: sentinel.prNumber });
     if (resolved) continue;
+    const pendingExactProtectedAdmission = (record?.lateReviewResolutionTombstones ?? []).some((tombstone) => tombstone?.repository === sentinel.repository
+      && tombstone?.prNumber === sentinel.prNumber
+      && tombstone?.mergeSha === sentinel.mergeSha
+      && tombstone?.admissionPolicyId === "EXACT_SUCCESSOR_PROTECTED_MAIN_V2"
+      && lateReviewResolutionTombstoneValid(sentinel, tombstone));
+    if (pendingExactProtectedAdmission) continue;
     const activeImplementationBranch = record?.activeTaskBinding?.implementationBranch;
     if (record?.activeTaskBinding?.phase === "COMPLETE"
       && (lateReviewSuccessorCorrectionOwner(sentinel) === activeImplementationBranch

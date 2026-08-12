@@ -30,13 +30,31 @@ import {
   verifyLateReviewResolutionGithub
 } from "../../scripts/assurance/codex-review-exact-head.mjs";
 import { mergeUnresolvedLateReviewSentinels, readDurableLateReviewSentinels, tombstoneAdmissionCarrierGitIdentityValid, tombstoneAdmissionCarrierReadbackValid, unresolvedLateReviewSentinels, validateLateReviewSentinelState } from "../../scripts/assurance/late-review-sentinel.mjs";
-import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSentinelValidationState, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash } from "../../scripts/assurance/lib.mjs";
+import { createLateReviewResolutionTombstone, lateReviewAllowedOwners, lateReviewExactSuccessorCorrectionEvidenceHash, lateReviewExactSuccessorDispositionEvidenceHash, lateReviewExactSuccessorRepositoryVerificationHash, lateReviewResolutionStructureValid, lateReviewResolutionSubjectHash, lateReviewResolutionTombstoneHash, lateReviewResolutionTombstoneValid, lateReviewSentinelValidationState, lateReviewSuccessorCorrectionOwner, repositoryReadbackEvidenceHash, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/codex-review-exact-head-v1.json", "utf8"));
 const headA = "a".repeat(40);
 const headB = "b".repeat(40);
 const treeA = "c".repeat(40);
 const treeB = "d".repeat(40);
+function historicalBlockedTruth() {
+  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  truth.lateReviewResolutionTombstones = [];
+  truth.defectiveCurrentTruthPr195Binding.state = "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW";
+  truth.defectiveCurrentTruthPr195Binding.mayProceed = {
+    formalReviews: false,
+    phase1Ci: true,
+    merge: false,
+    postMergeProductSuccessorRequired: true,
+    d2aResume: false,
+    buildOrOta: false,
+    providerOrProductionMutation: false
+  };
+  truth.d2aMicrophoneCorrectionBinding.state = "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW";
+  truth.d2aMicrophoneCorrectionBinding.mayProceed = structuredClone(truth.defectiveCurrentTruthPr195Binding.mayProceed);
+  truth.assuranceProgram.active = "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW_chilly-chat-call-lifecycle";
+  return truth;
+}
 const baseCurrent = {
   repository: "Chillywood2025/chillywood-mobile",
   prNumber: 201,
@@ -1471,7 +1489,7 @@ test("only protected-main registered finding sets block; unvalidated Codex findi
 });
 
 test("canonical PR 194 sentinel blocks release and preserves every unresolved thread identity", () => {
-  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const truth = historicalBlockedTruth();
   const sentinels = unresolvedLateReviewSentinels(truth);
   assert.equal(sentinels.length, 2);
   assert.deepEqual(validateLateReviewSentinelState(truth), []);
@@ -1490,7 +1508,7 @@ test("canonical PR 194 sentinel blocks release and preserves every unresolved th
 });
 
 test("an unresolved late-review sentinel blocks only its exact correction owner's phase COMPLETE claim", () => {
-  const complete = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const complete = historicalBlockedTruth();
   complete.activeTaskBinding.phase = "COMPLETE";
   complete.activeTaskBinding.implementationBranch = "codex/assurance-active-task-and-claim-freshness-a1";
   const findings = validateLateReviewSentinelState(complete);
@@ -1537,7 +1555,7 @@ test("every immutable late-review owner entry permanently retains one canonical 
 });
 
 test("only a byte-exact post-anchor protected-main tombstone can retire a retained sentinel offline", () => {
-  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const truth = historicalBlockedTruth();
   const original = truth.lateReviewSentinels.find(({ prNumber }) => prNumber === 195);
   const resolved = structuredClone(original);
   resolved.findings = resolved.findings.map((finding) => ({ ...finding, disposition: "RESOLVED", threadResolutionState: "RESOLVED" }));
@@ -1779,7 +1797,8 @@ test("a late-review sentinel cannot authorize its own branch exceptions", () => 
   ]) {
     const forged = structuredClone(truth);
     mutate(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194));
-    assert.equal(unresolvedLateReviewSentinels(forged).length, 2, "known sentinel owner drift remains blocking");
+    const unresolved = unresolvedLateReviewSentinels(forged);
+    assert.deepEqual(unresolved.map(({ prNumber }) => prNumber), [194], "known PR #194 owner drift re-blocks only its exact sentinel while the independent PR #195 tombstone remains resolved");
     assert.equal(lateReviewSentinelValidationState(forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194)), "INTERNALLY_VALIDATED_OWNER_POLICY_INVALID");
     assert.equal(validateLateReviewSentinelState(forged).some(({ id }) => id === "LATE_REVIEW_OWNER_POLICY_INVALID"), true);
   }
@@ -1808,7 +1827,7 @@ test("known unassigned discovery sentinels derive owners only from the immutable
 });
 
 test("free-form resolved dispositions cannot clear a late-review sentinel", () => {
-  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  const truth = historicalBlockedTruth();
   const forged = structuredClone(truth);
   const sentinel = forged.lateReviewSentinels.find(({ prNumber }) => prNumber === 194);
   for (const finding of sentinel.findings) finding.disposition = "RESOLVED";
@@ -1854,6 +1873,102 @@ test("free-form resolved dispositions cannot clear a late-review sentinel", () =
   assert.deepEqual(validateLateReviewSentinelState(forged, verifiedOptions), []);
   sentinel.resolutionEvidence.exactHeadReviewedCommit = "7".repeat(40);
   assert.equal(unresolvedLateReviewSentinels(forged).length, 2);
+});
+
+test("exact successor tombstones retain history and admit D2A only after protected-main merge", () => {
+  const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  assert.equal(truth.lateReviewSentinels.length, 2, "historical incidents remain visible");
+  assert.equal(truth.lateReviewResolutionTombstones.length, 2);
+  for (const sentinel of truth.lateReviewSentinels) {
+    const tombstone = truth.lateReviewResolutionTombstones.find(({ prNumber }) => prNumber === sentinel.prNumber);
+    assert.equal(lateReviewResolutionTombstoneValid(sentinel, tombstone), true, `PR ${sentinel.prNumber}`);
+  }
+  assert.deepEqual(validateLateReviewSentinelState(truth), [], "a valid branch candidate remains pending, not invalid");
+  assert.equal(unresolvedLateReviewSentinels(truth, { protectedMainRecord: { ...truth, lateReviewResolutionTombstones: [] } }).length, 2, "branch-local closure cannot authorize itself");
+  const admitted = { protectedMainRecord: truth, tombstoneAdmissionVerifier: () => true };
+  assert.equal(unresolvedLateReviewSentinels(truth, admitted).length, 0);
+
+  const sentinel = truth.lateReviewSentinels.find(({ prNumber }) => prNumber === 194);
+  const original = truth.lateReviewResolutionTombstones.find(({ prNumber }) => prNumber === 194);
+  function rehash(tombstone) {
+    const evidence = tombstone.resolutionEvidence;
+    evidence.correctionEvidenceHash = lateReviewExactSuccessorCorrectionEvidenceHash(evidence);
+    evidence.dispositionEvidenceHash = lateReviewExactSuccessorDispositionEvidenceHash(sentinel);
+    const subject = { ...sentinel, resolutionEvidence: evidence };
+    evidence.verificationSubjectHash = lateReviewResolutionSubjectHash(subject);
+    evidence.repositoryVerificationHash = lateReviewExactSuccessorRepositoryVerificationHash(subject);
+    tombstone.verificationSubjectHash = evidence.verificationSubjectHash;
+    tombstone.tombstoneHash = lateReviewResolutionTombstoneHash(tombstone);
+  }
+  const substitutions = [
+    (candidate) => { candidate.resolutionEvidence.successorPr = 999; },
+    (candidate) => { candidate.resolutionEvidence.successorBranch = "codex/unrelated"; },
+    (candidate) => { candidate.resolutionEvidence.successorHead = "a".repeat(40); candidate.resolutionEvidence.exactHeadReviewedCommit = "a".repeat(40); candidate.resolutionEvidence.phase1Head = "a".repeat(40); },
+    (candidate) => { candidate.resolutionEvidence.successorTree = "b".repeat(40); candidate.resolutionEvidence.exactHeadReviewedTree = "b".repeat(40); },
+    (candidate) => { delete candidate.resolutionEvidence.exactHeadReviewReceiptHash; },
+    (candidate) => { candidate.resolutionEvidence.repositoryReviewP1 = 1; },
+    (candidate) => { candidate.resolutionEvidence.phase1JobsPassed = 12; },
+    (candidate) => { candidate.resolutionEvidence.successorMergeSha = "c".repeat(40); }
+  ];
+  for (const mutate of substitutions) {
+    const candidate = structuredClone(original);
+    mutate(candidate);
+    rehash(candidate);
+    assert.equal(lateReviewResolutionTombstoneValid(sentinel, candidate), false);
+  }
+
+  const deleted = structuredClone(truth);
+  deleted.lateReviewResolutionTombstones = deleted.lateReviewResolutionTombstones.filter(({ prNumber }) => prNumber !== 194);
+  assert.equal(unresolvedLateReviewSentinels(deleted, { protectedMainRecord: deleted, tombstoneAdmissionVerifier: () => true }).some(({ prNumber }) => prNumber === 194), true, "deleted closure re-blocks D2A");
+});
+
+test("the admission synchronization successor is exact and fail closed", () => {
+  const recordedMain = "a".repeat(40);
+  const remoteMain = "e".repeat(40);
+  const requiredChangedPaths = [
+    "config/assurance/current-truth-v1.json",
+    "CURRENT_STATE.md",
+    "NEXT_TASK.md"
+  ];
+  const changedPaths = [...requiredChangedPaths, "scripts/assurance/lib.mjs", "docs/assurance/admission.json"];
+  const successor = {
+    prNumber: 213,
+    branch: "codex/d2a-release-critical-active-task-admission",
+    firstParent: recordedMain,
+    requiredSecondParentAncestor: "f".repeat(40),
+    changedPaths
+  };
+  const exactGit = (argv) => {
+    if (argv[0] === "show") return "Merge pull request #213 from Chillywood2025/codex/d2a-release-critical-active-task-admission";
+    if (argv[0] === "merge-base") return "";
+    throw new Error(`unexpected git command: ${argv.join(" ")}`);
+  };
+  const verify = (overrides = {}) => verifyCurrentTruthSynchronization({
+    recordedMain,
+    remoteMain,
+    parents: [recordedMain, "c".repeat(40)],
+    changedPaths,
+    requiredChangedPaths,
+    allowedChangedPaths: requiredChangedPaths,
+    bootstrapMerge: { mergeSha: "b".repeat(40), firstParent: recordedMain, changedPaths: requiredChangedPaths, successors: [successor] },
+    gitCommand: exactGit,
+    ...overrides
+  });
+
+  const admitted = verify();
+  assert.equal(admitted.ok, true);
+  assert.equal(admitted.mode, "protected-successor-bootstrap-synchronization-merge");
+  assert.equal(verify({
+    gitCommand: (argv) => argv[0] === "show" ? "Merge pull request #999 from Chillywood2025/codex/unrelated" : ""
+  }).ok, false, "wrong merge subject is denied");
+  assert.equal(verify({
+    gitCommand: (argv) => {
+      if (argv[0] === "show") return "Merge pull request #213 from Chillywood2025/codex/d2a-release-critical-active-task-admission";
+      throw new Error("required reviewed ancestor absent");
+    }
+  }).ok, false, "missing reviewed ancestor is denied");
+  assert.equal(verify({ changedPaths: [...changedPaths, "app/index.tsx"] }).ok, false, "extra path is denied");
+  assert.equal(verify({ parents: ["0".repeat(40), "c".repeat(40)] }).ok, false, "wrong first parent is denied");
 });
 
 test("workflow executes only the protected default-branch evaluator", () => {

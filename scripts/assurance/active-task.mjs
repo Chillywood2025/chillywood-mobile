@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, emit, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
+import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 
@@ -41,7 +41,7 @@ const structuredBindingFields = [
   "ownerBootstrapAuthorization"
 ];
 const requiredStructuredBindingFields = structuredBindingFields.filter((field) => !["ownerBootstrapAuthorization", "proofTierStatuses", "proofTierApplicabilityHash"].includes(field));
-const freshnessClasses = new Set(["REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
+const freshnessClasses = new Set(["REPOSITORY_TASK_LEASE", "REPOSITORY_SOURCE", "PROVIDER_CRITICAL", "SIGNED_ARTIFACT", "INSTALLED_DEVICE", "PHYSICAL_DEVICE", "PUBLIC_CANARY"]);
 const freshnessPlatforms = new Set(["ANDROID", "IOS", "NONE"]);
 const activeImplementationStates = new Set(["open", "open-draft-current"]);
 const proofTiers = new Set(["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"]);
@@ -69,6 +69,18 @@ const bootstrapActiveTaskRegistry = [{
   implementationBranch: "codex/d2a-livekit-mic-post-merge-review-correction",
   implementationBindingId: "d2a-livekit-mic-post-merge-review-correction-pr210-v1",
   executionState: "LIVEKIT_MIC_POST_MERGE_CORRECTION_REVIEW_D2A_FROZEN"
+}, {
+  featureId: "chilly-chat-call-lifecycle",
+  implementationPr: 212,
+  implementationBranch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+  implementationBindingId: "d2a-release-critical-native-lifecycle-pr-212-v1",
+  executionState: "D2A_RELEASE_CRITICAL_EXECUTION"
+}, {
+  featureId: "chilly-chat-call-lifecycle",
+  implementationPr: 214,
+  implementationBranch: "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
+  implementationBindingId: "d2a-legacy-webrtc-first-track-correction-pr-214-v1",
+  executionState: "D2A_LEGACY_WEBRTC_FIRST_TRACK_CORRECTION"
 }];
 const ownerBootstrapRepository = "Chillywood2025/chillywood-mobile";
 const ownerBootstrapAuthor = "Chillywood2025";
@@ -177,7 +189,10 @@ export function validateStructuredBinding(value, gateCatalog, registry, openImpl
       && (requirement.freshnessClass !== "REPOSITORY_SOURCE"
         || (sha40(requirement.subjectHead) && sha40(requirement.subjectTree)
           && requirement.subjectHead === value.immutableSourceHead
-          && requirement.subjectTree === value.immutableSourceTree)));
+          && requirement.subjectTree === value.immutableSourceTree))
+      && (requirement.freshnessClass !== "REPOSITORY_TASK_LEASE"
+        || (typeof requirement.leaseId === "string" && requirement.leaseId.length > 0
+          && /^[0-9a-f]{64}$/u.test(requirement.leaseHash ?? ""))));
   const declaredFreshnessClasses = requiredFreshnessClaimsValid
     ? new Set(value.requiredFreshnessClaims.map(({ freshnessClass }) => freshnessClass))
     : new Set();
@@ -347,7 +362,72 @@ function sourceIsAncestor(sourceHead, currentHead) {
   } catch { return false; }
 }
 
+function collectFiniteTaskCandidate(lease, facts) {
+  if (facts.finiteTaskCandidateObservation) return facts.finiteTaskCandidateObservation;
+  const derived = deriveFiniteTaskCandidateObservation({
+    record: facts.currentTruth,
+    lease,
+    suppliedObservation: facts.finiteTaskRuntimeObservation,
+    githubEvent: facts.githubEvent,
+    checkoutHead: facts.githubCheckoutHead,
+    currentProtectedBase: facts.identity?.originMainHead
+  });
+  if (!derived.ok) return null;
+  return {
+    ...derived.candidate,
+    finalReceiptHead: facts.finalReceiptHead ?? null,
+    repositoryReviewHead: facts.repositoryReviewHead ?? null,
+    phase1Head: facts.phase1Head ?? null,
+    findings: facts.releaseCriticalFindings ?? derived.candidate.findings
+  };
+}
+
+function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease) {
+  const candidate = collectFiniteTaskCandidate(lease, facts);
+  const evaluated = evaluateFiniteTaskCandidate({ lease, registry: truth.finiteTaskLeases, candidate });
+  const findings = [...evaluated.findings];
+  if (candidate?.head !== identity.head) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
+  if (candidate?.tree !== identity.tree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
+  if (candidate?.branch !== identity.branch) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_BRANCH_MISMATCH");
+  if (findings.length) return { ok: false, findings: [...new Set(findings)].sort() };
+  return {
+    ok: true,
+    value: {
+      pr: lease.implementationPr,
+      branch: lease.implementationBranch,
+      state: evaluated.taskState,
+      implementationBindingId: binding.implementationBindingId,
+      leaseId: lease.leaseId,
+      protectedAdmissionPr: lease.protectedAdmissionPr,
+      immutableSourceHead: lease.admittedSeedHead,
+      immutableSourceTree: lease.admittedSeedTree,
+      currentSynchronizedHead: candidate.head,
+      currentSynchronizedTree: candidate.tree,
+      immutableSource: { head: lease.admittedSeedHead, tree: lease.admittedSeedTree },
+      currentSynchronizedSource: { head: candidate.head, tree: candidate.tree },
+      finiteLease: {
+        policyId: truth.finiteTaskLeases.policyId,
+        taskState: evaluated.taskState,
+        leaseRetained: evaluated.leaseRetained,
+        evidenceInvalidated: evaluated.invalidated,
+        admittedBase: lease.admittedBase,
+        diffHash: candidate.diffHash,
+        changedPathHash: candidate.changedPathHash,
+        scope: { changedFiles: candidate.changedPaths.length, changedLines: candidate.changedLines, result: "PASS" }
+      }
+    }
+  };
+}
+
 function resolveStructuredImplementation(truth, identity, facts, binding) {
+  const finiteLease = finiteTaskLeaseFor(truth?.finiteTaskLeases, {
+    implementationPr: binding.implementationPr,
+    implementationBranch: binding.implementationBranch,
+    featureId: binding.featureId
+  });
+  if (finiteLease) {
+    return resolveFiniteTaskImplementation(truth, identity, facts, binding, finiteLease);
+  }
   const findings = [];
   const open = truth?.openImplementationPrs ?? [];
   if (!Array.isArray(open)) return { ok: false, findings: ["IMPLEMENTATION_INVENTORY_MALFORMED"] };

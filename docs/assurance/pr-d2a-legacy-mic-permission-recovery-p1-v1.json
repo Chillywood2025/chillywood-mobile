@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "evidenceId": "pr-d2a-legacy-mic-permission-recovery-p1-v1",
-  "classification": "D2A_BLOCKED_NEW_RELEASE_CRITICAL_PRODUCT_DEFECT",
+  "classification": "D2A_CALL_DOMAIN_CORRECTION_IMPLEMENTED_PREMERGE_D2A_PENDING",
   "severity": "P1",
   "findingId": "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS",
   "sourceIdentity": {
@@ -96,8 +96,549 @@
     ],
     "authorizedByThisEvidence": false
   },
+  "authorizedCorrection": {
+    "status": "HISTORICAL_FIRST_TRACK_CORRECTION_SUPERSEDED_BY_CALL_DOMAIN_CLOSURE",
+    "authorization": {
+      "protectedAdmissionMerge": "f609a6130a5120b68bea347d7f677496be43fffd",
+      "correctionBaseHead": "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
+      "correctionBaseTree": "d009ba762182e58fc054e395a790f29eacba4b55",
+      "e0PacketSha256": "09c34f3af7d98763286a3edf491dc6cf2fd7842f7c4d644cf700a2a1ba0652d9",
+      "scope": "LEGACY_WEBRTC_FIRST_TRACK_RENEGOTIATION_ONLY"
+    },
+    "implementation": {
+      "head": "93774deebc1ca6094bc9091f9b4bf2bf1ee27d22",
+      "tree": "848a86a83eb79643f57f630e751035e0c5e70951",
+      "productPath": "hooks/use-communication-room-session.ts",
+      "productSha256": "bf9815740e9ec7846dc281c40448fbec21664f1c6ce87193e866f9f9114397c4",
+      "runnerPath": "scripts/assurance/android-chat-call-mic-control.mjs",
+      "runnerSha256": "3f6eab0ac3fc5f52471ea7d0b7932b56be4d59414c5b3055dd5aab6d4ec4ebfe",
+      "testPath": "tests/assurance/android-chat-call-mic-control.test.mjs",
+      "testSha256": "023300faac6e8604c21a0502f705c09a7ef64e3554f8660aa95b3813b1a1c7f6",
+      "design": [
+        "capture exact channel, normalized room, user and connected-or-reconnecting session authority",
+        "create or restore one usable audio track while keeping it disabled",
+        "preflight every current peer for at most one audio sender and rollback capability",
+        "add or replace the current audio sender exactly once",
+        "force a correlated offer and bounded answer on changed peers including connected peers",
+        "enable the track and commit UI only after all peer, durable membership, presence and media-broadcast steps succeed",
+        "compensate durable and signaling state and restore sender/local-stream state on any incomplete transaction"
+      ]
+    },
+    "focusedProof": {
+      "command": "NODE_PATH=/Users/loverslane/chillywood-mobile/node_modules node --test tests/assurance/android-chat-call-mic-control.test.mjs",
+      "legacyFirstTrackMatrix": "42/42 PASS",
+      "preservedPr210Adapter": "1/1 PASS",
+      "total": "43/43 PASS",
+      "combinedOutputSha256": "0a6fe7dc9c189feb971b5de3c0d0381776c07672e8b4cbd6759be79b6def2777",
+      "receiptClassification": "DIRECT_SANITIZED_EXACT_CLEAN_HEAD_OUTPUT",
+      "typecheck": "PASS",
+      "focusedLint": "0 ERRORS; 5 PRE_EXISTING WARNINGS",
+      "roomEndCalls": 0,
+      "tokenRequests": 0,
+      "fatalOrUnhandledMarkers": 0
+    },
+    "result": {
+      "originalFindingPreservedAsHistorical": true,
+      "exactlyOneUsableLocalAudioTrack": true,
+      "exactlyOneCurrentUsableAudioSenderPerPeer": true,
+      "connectedPeerOfferAnswerCompleted": true,
+      "trackDisabledUntilAtomicSuccess": true,
+      "permissionRecovery": true,
+      "endedOrMissingTrackRestoration": true,
+      "durableRejectionReturnsFalse": true,
+      "rollbackAndCompensationVerified": true,
+      "callTermination": false,
+      "providerOrTokenChange": false
+    }
+  },
+  "callDomainClosure": {
+    "schemaVersion": 1,
+    "closureId": "chilly-chat-call-domain-closure-v1",
+    "storageDisposition": {
+      "authorizedPath": "docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json",
+      "separateArtifactCommitted": false,
+      "interruptedArtifactFound": false,
+      "interruptedArtifactSha256": null,
+      "reason": "The exact PR 214 worktree was clean at fdf324c4853cf1f44d00d8e78fee7f63df7677c0; no local 8088-line artifact existed to migrate. The bounded model is retained in this already-authorized evidence file."
+    },
+    "scope": {
+      "implementationPr": 214,
+      "branch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
+      "lease": "ASSURANCE_FINITE_TASK_LEASE_V1",
+      "admissionPr": 215,
+      "domain": "chilly-chat-call-media",
+      "providerReview": "OPTIONAL_ADVISORY_NOT_REQUESTED",
+      "hostedSecurity": "NOT_RUN",
+      "productMutationPaths": [
+        "hooks/use-communication-room-session.ts"
+      ],
+      "evidenceAndTestPaths": [
+        "docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json",
+        "scripts/assurance/android-chat-call-mic-control.mjs",
+        "tests/assurance/android-chat-call-mic-control.test.mjs"
+      ],
+      "excludedMutations": [
+        "LiveKit product source",
+        "native Android or iOS source",
+        "database or provider state",
+        "packages or lockfiles",
+        "workflow, build, OTA or release configuration"
+      ]
+    },
+    "dependencyModel": {
+      "nodeCount": 20,
+      "nodes": [
+        {"id": "invite", "authority": "server", "source": "_lib/chillyChatCalls.ts"},
+        {"id": "acceptance", "authority": "chilly-chat-call-transition", "source": "app/chat/[threadId].tsx"},
+        {"id": "identity", "authority": "authenticated-session", "source": "_lib/communication.ts"},
+        {"id": "room", "authority": "communication-room-snapshot", "source": "_lib/communication.ts"},
+        {"id": "provider-selector", "authority": "invite-fixed", "source": "hooks/use-chat-call-media-session.ts"},
+        {"id": "legacy-webrtc", "authority": "legacy-only", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "livekit", "authority": "livekit-only", "source": "hooks/use-livekit-chat-call-session.ts"},
+        {"id": "native-audio-session", "authority": "platform-runtime", "source": "_lib/communicationCallMediaPolicy.mjs"},
+        {"id": "permission", "authority": "native-os", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "local-streams", "authority": "media-capture", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "local-tracks", "authority": "media-capture", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "peer-connections", "authority": "legacy-session", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "rtp-senders", "authority": "peer-connection", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "offer-answer", "authority": "correlated-realtime-negotiation", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "realtime", "authority": "room-channel", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "durable-membership", "authority": "communication-room-membership", "source": "_lib/communication.ts"},
+        {"id": "presence", "authority": "room-channel", "source": "hooks/use-communication-room-session.ts"},
+        {"id": "ui", "authority": "committed-hook-state", "source": "app/chat/[threadId].tsx"},
+        {"id": "native-action", "authority": "attested-consume-once-claim", "source": "_lib/communicationCallMediaPolicy.mjs"},
+        {"id": "cleanup", "authority": "captured-session", "source": "hooks/use-communication-room-session.ts"}
+      ],
+      "edges": [
+        "invite->acceptance",
+        "acceptance->identity",
+        "acceptance->room",
+        "invite->provider-selector",
+        "provider-selector->legacy-webrtc",
+        "provider-selector->livekit",
+        "native-action->acceptance",
+        "room->durable-membership",
+        "room->realtime",
+        "permission->local-streams",
+        "local-streams->local-tracks",
+        "local-tracks->rtp-senders",
+        "peer-connections->rtp-senders",
+        "rtp-senders->offer-answer",
+        "offer-answer->realtime",
+        "durable-membership->presence",
+        "presence->ui",
+        "native-audio-session->local-tracks",
+        "realtime->cleanup",
+        "cleanup->local-streams"
+      ]
+    },
+    "stateModel": {
+      "dimensionCount": 18,
+      "dimensions": [
+        {"id": "provider", "values": ["legacy", "livekit"]},
+        {"id": "invite", "values": ["ringing", "accepted", "declined", "missed", "canceled", "ended", "busy"]},
+        {"id": "session", "values": ["current", "stale", "replacement", "terminal"]},
+        {"id": "appLifecycle", "values": ["foreground", "background", "recreated", "process-cold", "terminated"]},
+        {"id": "permission", "values": ["unknown", "granted", "denied", "blocked", "restored"]},
+        {"id": "localStreams", "values": ["zero", "one", "multiple"]},
+        {"id": "localAudioTracks", "values": ["zero", "one", "multiple"]},
+        {"id": "trackState", "values": ["enabled", "disabled", "ended"]},
+        {"id": "peerCount", "values": ["zero", "one", "multiple"]},
+        {"id": "audioSendersPerPeer", "values": ["zero", "one", "multiple"]},
+        {"id": "senderTrack", "values": ["null", "current", "conflicting", "ended"]},
+        {"id": "signaling", "values": ["stable", "local-offer", "remote-offer", "closed"]},
+        {"id": "network", "values": ["healthy", "delayed", "failed", "recovered"]},
+        {"id": "operation", "values": ["idle", "enabling", "disabling", "renegotiating", "quarantining", "compensating", "stale", "cleaning"]},
+        {"id": "durableMembership", "values": ["active", "reconnecting", "ended"]},
+        {"id": "ui", "values": ["mic-on", "mic-off", "busy", "warning", "permission-denied"]},
+        {"id": "cameraLifecycle", "values": ["desired-on", "captured-on", "background-paused", "durable-off", "foreground-restored"]},
+        {"id": "nativeAction", "values": ["none", "answer", "decline", "mute", "end"]}
+      ]
+    },
+    "transitionModel": {
+      "declaredLaunchCriticalTransitions": 38,
+      "mappedTransitions": 38,
+      "transitions": [
+        "invite-created->ringing",
+        "ringing->server-accepted",
+        "ringing->declined",
+        "ringing->canceled",
+        "ringing->missed",
+        "accepted->provider-fixed",
+        "accepted->durable-room-join",
+        "joined->realtime-subscribed",
+        "subscribed->legacy-peer-created",
+        "subscribed->livekit-connected",
+        "permission-unknown->granted",
+        "permission-unknown->denied",
+        "permission-denied->restored",
+        "zero-track->one-disabled-track",
+        "ended-track->fresh-disabled-track",
+        "multiple-track->privacy-quarantine",
+        "zero-sender->one-current-sender",
+        "ended-sender->current-sender",
+        "conflicting-sender->current-sender",
+        "stable->local-offer",
+        "local-offer->answer-applied",
+        "answer-applied->stable",
+        "mic-off->enabling",
+        "enabling->mic-on-converged",
+        "enabling->compensating",
+        "mic-on->disabling",
+        "disabling->mic-off-converged",
+        "disabling->compensating",
+        "foreground->background-audio-preserved",
+        "foreground->background-media-paused",
+        "foreground-video-active->background-camera-paused-durable-off",
+        "background->foreground-media-restored",
+        "background-camera-paused->foreground-camera-restored",
+        "process-cold->accepted-call-recovered",
+        "current->replacement",
+        "stale-operation->discarded",
+        "accepted->ended",
+        "ended->cleanup-complete"
+      ]
+    },
+    "invariantCoverage": [
+      {
+        "id": "I1",
+        "name": "MUTED_PRIVACY",
+        "positiveWitness": "mute and failed-enable quarantine leave zero enabled usable stream or sender audio paths",
+        "negativeWitness": "sender-only enabled track and two usable local tracks",
+        "exactTest": "legacy call-domain closure: muted privacy quarantines all local and sender-bound audio tracks",
+        "mutation": "skip sender-track disable or retain one enabled duplicate",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_MOUNTED_EXACT_HOOK"
+      },
+      {
+        "id": "I2",
+        "name": "ENABLED_CONVERGENCE",
+        "positiveWitness": "one usable track, one sender per eligible peer, answered stable signaling, durable true and UI true",
+        "negativeWitness": "ended stream reuse and connected peer with zero sender negotiation",
+        "exactTest": "legacy call-domain closure: same-state recovery requires one sender and stable answer per peer",
+        "mutation": "treat offer broadcast or ended-track reuse as success",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_MOUNTED_EXACT_HOOK"
+      },
+      {
+        "id": "I3",
+        "name": "FAILURE_ATOMICITY",
+        "positiveWitness": "failed enable or disable restores the exact prior converged state or commits proved muted state",
+        "negativeWitness": "durable false write or broadcast failure after local disable",
+        "exactTest": "legacy call-domain closure: mute durable and broadcast failure compensates without split state",
+        "mutation": "swallow durable failure and return true",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_MOUNTED_EXACT_HOOK"
+      },
+      {
+        "id": "I4",
+        "name": "STALE_SESSION_ISOLATION",
+        "positiveWitness": "old leave, cleanup, foreground and negotiation continuations cannot mutate a replacement authority",
+        "negativeWitness": "old leave completes after channel, room, peer and stream refs point at a replacement",
+        "exactTest": "legacy call-domain closure: stale cleanup preserves replacement session resources",
+        "mutation": "remove captured generation check",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_STALE_CONTINUATION_AND_CLEANUP_EXACT_HOOK"
+      },
+      {
+        "id": "I5",
+        "name": "NO_DUPLICATE_OUTBOUND_PATH",
+        "positiveWitness": "all peers bind one object-identical usable target track",
+        "negativeWitness": "two usable local tracks or two audio senders",
+        "exactTest": "legacy call-domain closure: muted privacy quarantines all local and sender-bound audio tracks",
+        "mutation": "deduplicate by id instead of object identity",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_OBJECT_IDENTITY_AND_SENDER_TOPOLOGY"
+      },
+      {
+        "id": "I6",
+        "name": "PERMISSION_SEPARATION",
+        "positiveWitness": "only native permission denial produces permission-denied UI",
+        "negativeWitness": "membership, network, offer, answer and cleanup failure",
+        "exactTest": "matrix 25: membership network rejection is not native permission denial",
+        "mutation": "map reconciliation warning to permission denied",
+        "sourcePath": "hooks/use-livekit-chat-call-session.ts",
+        "currentResult": "PASS_LIVEKIT_56_AND_LEGACY_COMPENSATION"
+      },
+      {
+        "id": "I7",
+        "name": "SIGNALING_COMPLETION",
+        "positiveWitness": "correlated answer is applied and signaling returns stable",
+        "negativeWitness": "send succeeds but answer times out or rollback fails",
+        "exactTest": "legacy first-track 42-case matrix: answer_timeout_rolls_back",
+        "mutation": "return success immediately after channel send",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_EXISTING_42_CASE_MATRIX"
+      },
+      {
+        "id": "I8",
+        "name": "PROVIDER_AUTHORITY",
+        "positiveWitness": "invite-fixed provider enables exactly one transport",
+        "negativeWitness": "legacy token request or LiveKit legacy signaling mutation",
+        "exactTest": "current PR210 contract and bounded adapter remain deterministic",
+        "mutation": "switch provider after accepted invite",
+        "sourcePath": "hooks/use-chat-call-media-session.ts",
+        "currentResult": "PASS_SOURCE_BOUND_AND_MUTANT_KILLED"
+      },
+      {
+        "id": "I9",
+        "name": "TERMINAL_MONOTONICITY",
+        "positiveWitness": "declined, canceled, missed and ended calls reject resume and media activation",
+        "negativeWitness": "stale accepted event after terminal transition",
+        "exactTest": "node scripts/test-chilly-chat-call-semantics.mjs",
+        "mutation": "accept terminal invite as resumable",
+        "sourcePath": "app/chat/[threadId].tsx",
+        "currentResult": "PASS_CALL_SEMANTICS"
+      },
+      {
+        "id": "I10",
+        "name": "UNPROVEN_PRIVACY",
+        "positiveWitness": "unverifiable track mutation returns false and surfaces privacy-critical warning",
+        "negativeWitness": "enabled property remains true after attempted quarantine",
+        "exactTest": "legacy call-domain closure: unprovable quarantine never claims muted success",
+        "mutation": "ignore post-disable track readback",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_MOUNTED_UNPROVABLE_READBACK"
+      },
+      {
+        "id": "I11",
+        "name": "NON_INTERFERENCE",
+        "positiveWitness": "mic transaction preserves camera, speaker, room, thread and provider",
+        "negativeWitness": "camera toggle, room end, token request or provider crossover during mic operation",
+        "exactTest": "legacy first-track 42-case matrix: camera_true_preserved",
+        "mutation": "change camera or terminate room on mic failure",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_CAMERA_ROOM_PROVIDER_NON_INTERFERENCE"
+      },
+      {
+        "id": "I12",
+        "name": "CLEANUP_ISOLATION",
+        "positiveWitness": "captured old-session cleanup closes only captured peers, streams, waiters and channels",
+        "negativeWitness": "replacement refs installed before old cleanup continuation resumes",
+        "exactTest": "legacy call-domain closure: cleanup cannot delete replacement resources",
+        "mutation": "use shared current refs from stale cleanup",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_MOUNTED_REPLACEMENT_RESOURCE_IDENTITY"
+      },
+      {
+        "id": "I13",
+        "name": "BACKGROUND_MEDIA_CONVERGENCE",
+        "positiveWitness": "background video capture stop commits camera=false to durable membership, presence and broadcast while retaining current-session foreground restore intent",
+        "negativeWitness": "local video track is stopped while durable camera membership remains true",
+        "exactTest": "legacy call-domain closure: background pause converges durable camera false without erasing foreground intent",
+        "mutation": "ignore the camera=false lifecycle override during strict microphone synchronization",
+        "sourcePath": "hooks/use-communication-room-session.ts",
+        "currentResult": "PASS_EXACT_SOURCE_AND_IOS_MEDIA_READINESS"
+      }
+    ],
+    "discoveryPasses": [
+      {
+        "id": "PASS_A",
+        "focus": "state-transition-concurrency-signaling",
+        "mode": "READ_ONLY_COMPLETE_MODEL_REVIEW",
+        "reviewedSources": [
+          "_lib/chillyChatCalls.ts",
+          "_lib/communication.ts",
+          "app/chat/[threadId].tsx",
+          "hooks/use-chat-call-media-session.ts",
+          "hooks/use-communication-room-session.ts",
+          "scripts/test-chilly-chat-call-semantics.mjs",
+          "scripts/test-chilly-chat-native-call-action-handoff.mjs"
+        ],
+        "baseline": [
+          "legacy mounted hook 43/43 PASS",
+          "call semantics PASS",
+          "native action origin and negative controls 23/23 PASS"
+        ],
+        "newDimensions": [],
+        "defectIds": [
+          "ANDROID_MIC_LEGACY_DUPLICATE_USABLE_TRACKS_REMAIN_ENABLED_AFTER_FAIL_CLOSED_MUTE",
+          "ANDROID_MIC_LEGACY_DISABLE_SUCCESS_WITH_UNPROVEN_SENDER_OR_DURABLE_STATE",
+          "ANDROID_MIC_LEGACY_RECOVERY_CAN_REPORT_ENABLED_WITHOUT_STABLE_OUTBOUND_TOPOLOGY",
+          "ANDROID_MIC_LEGACY_STALE_ASYNC_SESSION_MUTATES_REPLACEMENT_RESOURCES"
+        ],
+        "result": "STABLE"
+      },
+      {
+        "id": "PASS_B",
+        "focus": "privacy-permissions-sender-topology-lifecycle-cleanup",
+        "mode": "INDEPENDENT_READ_ONLY_COMPLETE_MODEL_REVIEW",
+        "reviewedSources": [
+          "_lib/communicationCallMediaPolicy.mjs",
+          "hooks/use-communication-room-session.ts",
+          "hooks/use-livekit-chat-call-session.ts",
+          "tests/assurance/android-chat-call-mic-control.test.mjs",
+          "tests/assurance/android-chat-call-mic-exact-hook.test.mjs",
+          "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs"
+        ],
+        "baseline": [
+          "LiveKit mounted exact hook 56/56 PASS",
+          "LiveKit exact source contract 5/5 PASS",
+          "legacy mounted hook 43/43 PASS"
+        ],
+        "newDimensions": [],
+        "defectIds": [
+          "ANDROID_MIC_LEGACY_DUPLICATE_USABLE_TRACKS_REMAIN_ENABLED_AFTER_FAIL_CLOSED_MUTE",
+          "ANDROID_MIC_LEGACY_DISABLE_SUCCESS_WITH_UNPROVEN_SENDER_OR_DURABLE_STATE",
+          "ANDROID_MIC_LEGACY_RECOVERY_CAN_REPORT_ENABLED_WITHOUT_STABLE_OUTBOUND_TOPOLOGY",
+          "ANDROID_MIC_LEGACY_STALE_ASYNC_SESSION_MUTATES_REPLACEMENT_RESOURCES"
+        ],
+        "result": "STABLE"
+      },
+      {
+        "id": "PASS_A_RERUN_AFTER_COVERAGE_FAILURE",
+        "focus": "background-state-transition-concurrency-and-durable-camera-convergence",
+        "mode": "INDEPENDENT_READ_ONLY_COMPLETE_MODEL_REREVIEW",
+        "reviewedSources": [
+          "hooks/use-communication-room-session.ts",
+          "scripts/proof-ios-media-readiness.mjs",
+          "scripts/assurance/android-chat-call-mic-control.mjs"
+        ],
+        "baseline": [
+          "iOS media readiness initially rejected missing pauseLocalMediaCapture",
+          "finite task lease retained with zero lease findings"
+        ],
+        "newDimensions": [],
+        "defectIds": [
+          "ANDROID_LEGACY_BACKGROUND_VIDEO_STOP_LEAVES_CAMERA_DURABLE_TRUE"
+        ],
+        "result": "RESTABILIZED"
+      },
+      {
+        "id": "PASS_B_RERUN_AFTER_COVERAGE_FAILURE",
+        "focus": "privacy-permissions-sender-topology-lifecycle-camera-and-cleanup",
+        "mode": "INDEPENDENT_READ_ONLY_COMPLETE_MODEL_REREVIEW",
+        "reviewedSources": [
+          "hooks/use-communication-room-session.ts",
+          "tests/assurance/android-chat-call-mic-control.test.mjs",
+          "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs"
+        ],
+        "baseline": [
+          "legacy and LiveKit exact call matrix 114/114 PASS",
+          "background camera durable mismatch mutant killed"
+        ],
+        "newDimensions": [],
+        "defectIds": [
+          "ANDROID_LEGACY_BACKGROUND_VIDEO_STOP_LEAVES_CAMERA_DURABLE_TRUE"
+        ],
+        "result": "RESTABILIZED"
+      }
+    ],
+    "preImplementationCoverageFailure": {
+      "classification": "PRE_IMPLEMENTATION_COVERAGE_FAILURE",
+      "trigger": "Phase 1 iOS media readiness proved that the original 17-dimension model omitted background camera capture versus durable camera state",
+      "addedStateDimensions": ["cameraLifecycle"],
+      "addedTransitions": [
+        "foreground-video-active->background-camera-paused-durable-off",
+        "background-camera-paused->foreground-camera-restored"
+      ],
+      "addedInvariants": ["I13"],
+      "defectLedgerStableAcrossIndependentReruns": true
+    },
+    "defectLedger": [
+      {
+        "id": "ANDROID_MIC_LEGACY_DUPLICATE_USABLE_TRACKS_REMAIN_ENABLED_AFTER_FAIL_CLOSED_MUTE",
+        "severity": "P1",
+        "status": "RESOLVED_EXACT_MOUNTED_WITNESS",
+        "invariants": ["I1", "I3", "I5", "I10"],
+        "summary": "More than one usable local or sender-bound audio track causes early preparation failure without disabling and quarantining every outbound path."
+      },
+      {
+        "id": "ANDROID_MIC_LEGACY_DISABLE_SUCCESS_WITH_UNPROVEN_SENDER_OR_DURABLE_STATE",
+        "severity": "P1",
+        "status": "RESOLVED_EXACT_MOUNTED_WITNESS",
+        "invariants": ["I1", "I3", "I10", "I11"],
+        "summary": "Mute and background pause inspect only tracked streams, swallow durable or broadcast failure, and can return success while a sender-only track remains enabled."
+      },
+      {
+        "id": "ANDROID_MIC_LEGACY_RECOVERY_CAN_REPORT_ENABLED_WITHOUT_STABLE_OUTBOUND_TOPOLOGY",
+        "severity": "P1",
+        "status": "RESOLVED_EXACT_MOUNTED_WITNESS",
+        "invariants": ["I2", "I3", "I5", "I7"],
+        "summary": "Foreground or native-answer recovery can reuse an ended stream and the generic offer helper skips connected peers, leaving UI and durable mic true without one answered usable sender per peer."
+      },
+      {
+        "id": "ANDROID_MIC_LEGACY_STALE_ASYNC_SESSION_MUTATES_REPLACEMENT_RESOURCES",
+        "severity": "LAUNCH_IMPACTING_P2",
+        "status": "RESOLVED_EXACT_MOUNTED_WITNESS",
+        "invariants": ["I4", "I9", "I12"],
+        "summary": "An old leave, cleanup, snapshot or lifecycle continuation can resume after shared refs identify a replacement session and mutate or destroy replacement media resources."
+      },
+      {
+        "id": "ANDROID_LEGACY_BACKGROUND_VIDEO_STOP_LEAVES_CAMERA_DURABLE_TRUE",
+        "severity": "LAUNCH_IMPACTING_P2",
+        "status": "RESOLVED_EXACT_SOURCE_AND_PHASE1_WITNESS",
+        "invariants": ["I3", "I11", "I13"],
+        "summary": "Background lifecycle stopped local video while strict microphone synchronization reused the desired camera flag, allowing durable membership, presence and broadcast to continue claiming camera=true."
+      }
+    ],
+    "coverageBeforeImplementation": {
+      "declaredLaunchCriticalTransitions": 36,
+      "mappedTransitions": 36,
+      "declaredInvariants": 12,
+      "invariantsWithPositiveWitnessPlanned": 12,
+      "invariantsWithNegativeWitnessPlanned": 12,
+      "currentlyPassingInvariantBaselines": 5,
+      "currentlyFailingOrUncoveredInvariants": 7,
+      "targetedMutations": 12,
+      "mutantsKilledByExistingEvidence": 5,
+      "mutantsSurvivingOrNotYetExecuted": 7,
+      "defectLedgerStableAcrossPasses": true,
+      "implementationEligible": true
+    },
+    "implementationResult": {
+      "status": "BOUNDED_DEFECT_SET_RESOLVED_PRE_D2A",
+      "corrections": {
+        "p0": 0,
+        "p1": 3,
+        "launchImpactingP2": 2,
+        "total": 5
+      },
+      "properties": [
+        "all non-ended stream and sender-bound audio tracks are collected by object identity",
+        "duplicate tracks are disabled, removed from streams, stopped, and reduced to at most one sender per peer",
+        "mute success requires privacy readback plus durable membership, presence, and broadcast convergence",
+        "enable success requires exactly one usable track, one sender per eligible peer, correlated answer application, stable signaling, durable membership, presence, broadcast, and UI convergence",
+        "foreground and native-answer recovery route through the strict legacy microphone transaction",
+        "an unexpected registered background-stopper controller rejection executes the local privacy fallback and reports the bounded runtime error instead of escaping as an unhandled rejection",
+        "background video pause commits camera=false through durable membership, presence and broadcast without erasing the desired foreground camera state",
+        "session generation and captured-resource identity prevent stale continuation and cleanup mutation of replacements"
+      ],
+      "preMergeD2aStatus": "PENDING_EXACT_PR214_MERGE_REF"
+    },
+    "coverageAfterImplementation": {
+      "declaredLaunchCriticalTransitions": 38,
+      "coveredTransitions": 38,
+      "uncoveredTransitions": 0,
+      "declaredInvariants": 13,
+      "invariantsWithPositiveWitness": 13,
+      "invariantsWithNegativeWitness": 13,
+      "targetedMutations": 13,
+      "mutantsKilled": 13,
+      "mutantsSurviving": 0,
+      "legacyMountedExactHook": {
+        "passed": 53,
+        "total": 53
+      },
+      "liveKitMountedAndExactSource": {
+        "passed": 61,
+        "total": 61
+      },
+      "callSemantics": "PASS",
+      "nativeActionNegativeControls": {
+        "passed": 23,
+        "total": 23
+      },
+      "nativeActionExecutableMutants": {
+        "passed": 6,
+        "total": 6
+      },
+      "modelClassification": "MODEL_CLEAR_MOUNTED_EXACT_HOOK_EXECUTION",
+      "nativeD2aClassification": "PENDING"
+    }
+  },
   "nonInterference": {
-    "productChanged": false,
+    "productChanged": true,
     "nativeProductChanged": false,
     "databaseOrProviderMutation": false,
     "d2aMerge": false,

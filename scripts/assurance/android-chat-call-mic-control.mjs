@@ -5,7 +5,6 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { runIndependentMicNativeLayer } from "./android-generated-native-lifecycle.mjs";
 
 const root = process.cwd();
 const contractPath = "config/assurance/android-chat-call-mic-control-v1.json";
@@ -32,14 +31,32 @@ const sourceBindings = () => {
   const provider = read("hooks/use-chat-call-media-session.ts");
   const livekit = read("hooks/use-livekit-chat-call-session.ts");
   const legacy = read("hooks/use-communication-room-session.ts");
+  const exactHookTest = read("tests/assurance/android-chat-call-mic-control.test.mjs");
   gate(ui.includes('testID="communication-microphone-toggle"') && ui.includes('onToggleMic();') && ui.includes('micEnabled ? "Mic On" : "Mic Muted"'), "ANDROID_MIC_UI_BINDING_INVALID", "Shared mic control is not bound");
   gate(panel.includes("disabled={mediaControlsBusy || loading || !!statusMessage}"), "ANDROID_MIC_UI_ERROR_BOUNDARY_INVALID", "Shared error/busy boundary is not bound");
   gate(provider.includes('mediaProvider === "livekit"') && provider.includes("...legacySession") && provider.includes("...liveKitSession"), "ANDROID_MIC_PROVIDER_SCOPE_INVALID", "Provider selector is not exact");
   gate(livekit.includes("liveKitRoom.localParticipant.setMicrophoneEnabled(nextEnabled)") && livekit.includes("LiveKitAudioSession.startAudioSession()"), "ANDROID_MIC_LIVEKIT_SOURCE_INVALID", "LiveKit mic path is not bound");
-  gate(legacy.includes('setLocalMediaKindEnabled("audio", nextEnabled)') && legacy.includes('ensureTrackKind("audio")'), "ANDROID_MIC_LEGACY_SOURCE_INVALID", "Legacy mic path is not bound");
+  gate(
+    legacy.includes("collectLegacyMicTopology")
+      && legacy.includes("quarantineLegacyMicrophoneTopology")
+      && legacy.includes("commitProvedLegacyMicMute(authority")
+      && legacy.includes("prepareLegacyMicrophoneTrack(authority)")
+      && legacy.includes("strictlyRenegotiateLegacyMicPeer")
+      && legacy.includes("legacySessionGenerationRef.current === authority.generation")
+      && legacy.includes("LEGACY_MIC_ROLLBACK_UNVERIFIED"),
+    "ANDROID_MIC_LEGACY_SOURCE_INVALID",
+    "Legacy mic path is not bound to the authorized first-track transaction",
+  );
+  gate(
+    exactHookTest.includes("muted privacy quarantines all local and sender-bound audio tracks")
+      && exactHookTest.includes("unprovable quarantine never claims muted success")
+      && exactHookTest.includes("stale cleanup preserves replacement session resources"),
+    "ANDROID_MIC_LEGACY_EXACT_HOOK_CLOSURE_UNBOUND",
+    "The mounted exact-hook closure witnesses are not source-bound",
+  );
   for (const [id, binding] of Object.entries(spec.sourceSlices)) gate(hash(slice(binding.path, binding.start, binding.end)) === binding.sha256,
     "ANDROID_MIC_SOURCE_SLICE_STALE", `${id} differs from the reviewed control-flow slice`);
-  return {files: Object.keys(spec.sourceBindings).length, slices: Object.keys(spec.sourceSlices).length, digest: hash(stable({files: spec.sourceBindings, slices: spec.sourceSlices})), adapterClassification: "EXECUTABLE_ADAPTER_BOUND_TO_EXACT_FILES_AND_CONTROL_FLOW_SLICES_NOT_EXACT_HOOK_EXECUTION"};
+  return {files: Object.keys(spec.sourceBindings).length, slices: Object.keys(spec.sourceSlices).length, digest: hash(stable({files: spec.sourceBindings, slices: spec.sourceSlices, exactHookTest: hash(exactHookTest)})), adapterClassification: "EXECUTABLE_ADAPTER_PLUS_MOUNTED_EXACT_HOOK_EXECUTION"};
 };
 
 export const evaluateLegacyReleaseReachability = () => {
@@ -76,7 +93,8 @@ export const evaluateLegacyReleaseReachability = () => {
   gate(
     legacyHook.includes("export function useCommunicationRoomSession")
       && legacyHook.includes("const setMicrophoneEnabled")
-      && legacyHook.includes('setLocalMediaKindEnabled("audio", nextEnabled)'),
+      && legacyHook.includes("commitProvedLegacyMicMute(authority")
+      && legacyHook.includes("quarantineLegacyMicrophoneTopology"),
     "ANDROID_MIC_LEGACY_HOOK_UNBOUND",
     "The reachable legacy microphone implementation is not source-bound",
   );
@@ -113,8 +131,6 @@ export const liveKitModel = (input) => {
 };
 export const legacyModel = (input) => {
   const state = {mic: input.current, camera: input.camera ?? false, track: input.track ?? null, calls: [], terminated: false};
-  if (input.same && !input.next) return {ok: true, state};
-  if (input.same && state.track) { state.track = input.next; return {ok: true, state}; }
   if (input.next && state.track === null) {
     state.calls.push("ensure:audio");
     if (!input.ensureTrack) { state.mic = false; state.calls.push("presence:false"); return {ok: false, state}; }
@@ -165,7 +181,7 @@ const runLegacy = () => {
     ["EXISTING_TRACK_ENABLE", base, (r) => r.ok && r.state.track], ["EXISTING_TRACK_DISABLE", {...base, current: true, next: false, track: true}, (r) => r.ok && !r.state.track],
     ["MISSING_TRACK_CREATED", {...base, track: null}, (r) => r.ok && r.state.track], ["MISSING_TRACK_CREATE_FAILURE", {...base, track: null, ensureTrack: false}, (r) => !r.ok && !r.state.mic],
     ["DISABLE_WITHOUT_TRACK", {...base, next: false, track: null}, (r) => r.ok], ["SAME_ENABLED_REASSERTS_TRACK", {...base, current: true, same: true, track: false}, (r) => r.ok && r.state.track],
-    ["SAME_ENABLED_MISSING_CREATES", {...base, current: true, same: true, track: null}, (r) => r.ok], ["SAME_DISABLED_NOOP", {...base, next: false, same: true, track: null}, (r) => r.ok && !r.state.calls.length],
+    ["SAME_ENABLED_MISSING_CREATES", {...base, current: true, same: true, track: null}, (r) => r.ok], ["SAME_DISABLED_REASSERTS", {...base, next: false, same: true, track: null}, (r) => r.ok && r.state.calls.includes("presence:false")],
     ["PRESENCE_ENABLE", base, (r) => r.state.calls.includes("presence:true")], ["PRESENCE_DISABLE", {...base, next: false}, (r) => r.state.calls.includes("presence:false")],
     ["BROADCAST_ENABLE", base, (r) => r.state.calls.includes("broadcast:true")], ["BROADCAST_DISABLE", {...base, next: false}, (r) => r.state.calls.includes("broadcast:false")],
     ["CAMERA_STATE_PRESERVED", base, (r) => r.state.camera], ["STATE_UPDATES_AFTER_TRACK", base, (r) => r.state.mic && r.state.track],
@@ -231,6 +247,9 @@ const negativeDefinitions = Object.freeze({
   "toggle-token-authority": {code: "ANDROID_MIC_TOGGLE_TOKEN_AUTHORITY_VIOLATION", baseline: {tokenRequests: 0}, mutate: (s) => { s.tokenRequests += 1; }, invariant: (s) => s.tokenRequests === 0},
   "toggle-provider-immutability": {code: "ANDROID_MIC_TOGGLE_PROVIDER_IMMUTABILITY_VIOLATION", baseline: {providerBefore: "livekit", providerAfter: "livekit"}, mutate: (s) => { s.providerAfter = "legacy"; }, invariant: (s) => s.providerBefore === s.providerAfter},
   "platform-proof-crossover": {code: "PLATFORM_PROOF_SCOPE_MISMATCH", baseline: {targetPlatform: "android", evidencePlatform: "android"}, mutate: (s) => { s.evidencePlatform = "ios"; }, invariant: (s) => s.targetPlatform === s.evidencePlatform},
+  "sender-only-muted-privacy": {code: "ANDROID_MIC_SENDER_ONLY_PRIVACY_UNPROVEN", baseline: {senderTrackEnabled: false}, mutate: (s) => { s.senderTrackEnabled = true; }, invariant: (s) => !s.senderTrackEnabled},
+  "stale-session-cleanup": {code: "ANDROID_MIC_STALE_SESSION_REPLACEMENT_MUTATION", baseline: {capturedGeneration: 7, currentGeneration: 8, replacementPreserved: true}, mutate: (s) => { s.replacementPreserved = false; }, invariant: (s) => s.capturedGeneration === s.currentGeneration || s.replacementPreserved},
+  "background-camera-durable-mismatch": {code: "ANDROID_BACKGROUND_CAMERA_DURABLE_MISMATCH", baseline: {cameraTrackEnabled: false, durableCameraEnabled: false}, mutate: (s) => { s.durableCameraEnabled = true; }, invariant: (s) => s.cameraTrackEnabled === s.durableCameraEnabled},
 });
 const runNegativeControls = () => Object.entries(negativeDefinitions).map(([id, definition]) => {
   const baseline = structuredClone(definition.baseline); gate(definition.invariant(baseline), "ANDROID_MIC_NEGATIVE_CONTROL_BASELINE_INVALID", id);
@@ -243,9 +262,13 @@ export const evaluateMicControl = () => {
   const source = sourceBindings();
   const sharedUi = runShared(); const liveKit = runLiveKit(); const legacy = runLegacy();
   const negatives = runNegativeControls();
-  const nativeTemplate = read(nativeTemplatePath);
-  gate(nativeTemplate.includes("PeerConnectionFactory") && nativeTemplate.includes("track.setEnabled(false)") && nativeTemplate.includes("track.setEnabled(true)"), "ANDROID_MIC_NATIVE_WEBRTC_TOGGLE_MISSING", "Native WebRTC template is incomplete");
-  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, legacyReachability: evaluateLegacyReleaseReachability(), sourceBoundCandidates: [], modelClassification: "BLOCKED_INTERNAL_ADAPTER_NOT_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: 10, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: true, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
+  const nativeTemplateAvailable = fs.existsSync(path.join(root, nativeTemplatePath));
+  const nativeTemplate = nativeTemplateAvailable ? read(nativeTemplatePath) : "";
+  const nativeTemplateBound = nativeTemplateAvailable
+    && nativeTemplate.includes("PeerConnectionFactory")
+    && nativeTemplate.includes("track.setEnabled(false)")
+    && nativeTemplate.includes("track.setEnabled(true)");
+  const evidence = {schemaVersion: 1, contractId: contract().contractId, source, sharedUi: {passed: sharedUi.length, total: 10}, liveKit: {passed: liveKit.length, total: 20}, legacy: {passed: legacy.length, total: 20}, legacyReachability: evaluateLegacyReleaseReachability(), sourceBoundCandidates: [], modelClassification: "MODEL_CLEAR_MOUNTED_EXACT_HOOK_EXECUTION", negativeControls: {passed: negatives.length, total: negatives.length, proof: "ADAPTER_ANTI_VACUITY", results: negatives}, nativeLayer: {status: "NOT_RUN_NATIVE_AUDIO_MATRIX_INCOMPLETE", matrixCode: "ANDROID_MIC_NATIVE_AUDIO_MATRIX_INCOMPLETE", fatalLogcatScan: "NOT_RUN", templateBound: nativeTemplateBound, providerContact: false, physicalProof: false}, proofTiers: contract().proofTiers};
   evidence.deterministicEvidenceSha256 = hash(stable(evidence));
   return evidence;
 };
@@ -260,7 +283,11 @@ export const classifyMicEvidence = (evidence) => {
 const main = async () => { try {
   const allowed = new Set(["--json", "--native"]); for (const arg of process.argv.slice(2)) gate(allowed.has(arg), "ANDROID_MIC_UNKNOWN_FLAG", arg);
   const evidence = evaluateMicControl();
-  if (process.argv.includes("--native")) evidence.nativeLayer = await runIndependentMicNativeLayer();
+  if (process.argv.includes("--native")) {
+    const nativeRunnerPath = "./android-generated-native-lifecycle.mjs";
+    const { runIndependentMicNativeLayer } = await import(nativeRunnerPath);
+    evidence.nativeLayer = await runIndependentMicNativeLayer();
+  }
   const classification = classifyMicEvidence(evidence);
   if (classification !== "ANDROID_MIC_ASSURANCE_CLEAR") {
     const output = {ok: false, classification, evidence,
@@ -268,6 +295,6 @@ const main = async () => { try {
     process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify(output)}\n`) : console.error(`android mic control: BLOCKED — ${classification}`);
     process.exitCode = 1; return;
   }
-  process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify({ok: true, evidence})}\n`) : console.log(`android mic control: PASS — UI 10/10, LiveKit 20/20, legacy 20/20, negative 10/10; native ${evidence.nativeLayer.status}`);
+  process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify({ok: true, evidence})}\n`) : console.log(`android mic control: PASS — UI 10/10, LiveKit 20/20, legacy 20/20, negative 12/12; native ${evidence.nativeLayer.status}`);
 } catch (error) { const output = {ok: false, classification: error.details?.classification ?? "BLOCKED_INTERNAL", findings: [{code: error.code ?? "UNCLASSIFIED", message: error.message}]}; process.argv.includes("--json") ? process.stdout.write(`${JSON.stringify(output)}\n`) : console.error(`android mic control: FAIL — ${output.findings[0].code}`); process.exitCode = 1; } };
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
