@@ -58,44 +58,58 @@
     "productOrNativeSourceModified": false
   },
   "dependencySet": {
-    "classification": "D2A_DEPENDENCY_SET_MISMATCH_AFTER_CLEAN_INSTALL",
+    "classification": "EXACT_VERSION_LINE_COMPATIBLE_LOCK_GRAPH",
     "inputs": ["package.json", "package-lock.json", "installed direct package metadata"],
     "identityAndVersionComparison": true,
     "declaredDirect": 67,
     "production": 60,
     "development": 7,
     "validated": 67,
-    "packagePathsRecorded": false,
-    "dependencyIdentitySha256": "2ec157fe2491680afcc0f428016f2ee7eac5af83e99834de79f5ade113767341",
-    "packageJsonSha256": "677a541ff54a81aa885a90f5bc99eaec48df44d42d7ccb930011424c2f8857ed",
-    "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c",
-    "cleanInstallRequired": false,
+    "packagePathsRecorded": true,
+    "dependencyIdentitySha256": "577185512d0536a8897dac500b89d59bc22a418eb5f21eaca11e4cb5d5d75f68",
+    "packageJsonSha256": "bbcbda9b79c702eb0d7d387a24fd731eda3d9cc176bc06557c8258d57e2ee7f5",
+    "packageLockSha256": "07f5c8d340c814240ac258a513fc0934eac0d0bd17fa350702c4d3e69af29237",
+    "prerequisite": {
+      "pr": 220,
+      "branch": "codex/brace-expansion-version-line-compatibility-correction",
+      "head": "0d68b3cda9c0cbc49e7a57b7b82a0c91de14a58d",
+      "tree": "18c61a3d94de63e3d57cc777a34247c31f7263af",
+      "merge": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
+      "classification": "OWNER_AUTHORIZED_SHARED_DEPENDENCY_PREREQUISITE"
+    },
+    "mapping": [
+      {"minimatch": "3.1.5", "braceExpansion": "1.1.18", "interface": "CALLABLE_COMMONJS"},
+      {"minimatch": "9.0.9", "braceExpansion": "2.1.4", "interface": "CALLABLE_COMMONJS_AND_ESM_INTEROP"},
+      {"minimatch": "10.2.4", "braceExpansion": "5.0.9", "interface": "NAMED_COMMONJS_AND_ESM_EXPORT"},
+      {"minimatch": "10.2.5", "braceExpansion": "5.0.9", "interface": "NAMED_COMMONJS_AND_ESM_EXPORT"}
+    ],
+    "cleanInstallRequired": true,
     "cleanInstallRetryAuthorized": false,
-    "cleanInstallOutputSha256": "NOT_RETAINED_PRIOR_SESSION",
+    "cleanInstallProof": {
+      "ignoreScriptsOutputSha256": "6062c9da8d8dd96c5a7f7de6b9dc8db27b7494be448252d16b05c212fedded6c",
+      "normalOutputSha256": "842bdf067763dfe0a5822566dc2bbf783702c1d3d941bce7cc2ac0546757b8f6",
+      "apiAndSourceEquivalenceSha256": "41b60012c1ce8ef53e6f236bc2f26d6de1acda15a963e71369e3ff62bb459c28",
+      "postinstallMutationRemoved": true,
+      "installedSourceMutation": false
+    },
     "directIdentityResult": "PASS_67_OF_67",
     "runtimeCompatibility": {
-      "failureCode": "ANDROID_GRADLE_COMPILE_FAILED",
-      "failedTask": ":app:compileDebugKotlin",
-      "minimatch": {
-        "lockVersion": "3.1.5",
-        "observedVersion": "3.1.5",
-        "requiredBraceExpansion": "^1.1.7"
-      },
-      "braceExpansion": {
-        "lockVersion": "5.0.9",
-        "observedVersion": "5.0.9",
-        "commonJsRequireType": "object",
-        "expandMemberType": "function"
-      },
-      "requiredContract": "CALLABLE_COMMONJS_EXPORT",
-      "contractSatisfied": false,
+      "priorFailureCode": "ANDROID_GRADLE_COMPILE_FAILED",
+      "priorFailedTask": ":app:compileDebugKotlin",
+      "rootCause": "DEPENDENCY_VERSION_LINE_COLLAPSE_HIDDEN_BY_POSTINSTALL_MUTATION",
+      "requiredContract": "VERSION_LINE_COMPATIBLE_COMMONJS_AND_ESM_EXPORTS",
+      "contractSatisfied": true,
       "executableWitnessSha256": "f6c5894d31e8ad6a785307d4b71206b85573a6ffce7202a0093bd43dd0bbc802",
-      "packageOrLockChangeRequired": true
+      "compatibilityTestSha256": "f9d17f78398464d55dfa1cf55cc442eabbbb83740d3cbf3975de5568a4666ee3",
+      "negativeControls": "16/16 KILLED",
+      "syntheticCompileDebugKotlin": "PASS",
+      "syntheticCompileOutputSha256": "a871b9af506dbcea5d43d25cbcd01b08cc0b157f49f6a53a2b71dd9251421c48",
+      "currentD2ANativeRerunRequired": true
     },
-    "result": "BLOCKED_LOCKED_TRANSITIVE_API_INCOMPATIBILITY"
+    "result": "PREREQUISITE_MERGED_CURRENT_D2A_NATIVE_RERUN_PENDING"
   },
   "currentD2AClosure": {
-    "classification": "D2A_DEPENDENCY_SET_MISMATCH_AFTER_CLEAN_INSTALL",
+    "classification": "D2A_NATIVE_RERUN_REQUIRED_AFTER_DEPENDENCY_PREREQUISITE",
     "terminalClassificationAfterRequiredFinalGates": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
     "startingMain": "416f9e162501940f34da55a084a3fc3d0680d59c",
     "synchronizedExecutionHead": "aa5337a9a7eeb36b9c6ce1856292a02b0a0984af",
