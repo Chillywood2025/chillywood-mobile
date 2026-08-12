@@ -23,7 +23,7 @@
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
     "checkpointMustBeAncestor": true,
     "observedMainSource": "EXACT_ORIGIN_MAIN_OR_PROTECTED_CI_EVENT",
-    "ordinaryAdvancement": {"parentCount": 2, "firstParentContinuous": true, "pullRequestMergeRequired": true, "octopusAllowed": false, "forceRewriteAllowed": false},
+    "ordinaryAdvancement": {"parentCount": 2, "firstParentContinuous": true, "pullRequestMergeRequired": true, "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"], "octopusAllowed": false, "forceRewriteAllowed": false},
     "authorityControlPaths": [
       "config/assurance/current-truth-contract-v1.json",
       "config/assurance/schemas-v1.json",

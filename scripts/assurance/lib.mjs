@@ -1208,6 +1208,18 @@ function embeddedRollingAuthorityBound(commit, checkpoint, gitCommand) {
   }
 }
 
+function parseProtectedPullRequestMergeSubject(subject) {
+  const patterns = [
+    ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge pull request #([1-9][0-9]*) from [^/\s]+\/.+$/u],
+    ["GITHUB_TITLE_WITH_PR_SUFFIX", /^\S(?:.*\S)? \(#([1-9][0-9]*)\)$/u]
+  ];
+  for (const [format, pattern] of patterns) {
+    const match = pattern.exec(subject ?? "");
+    if (match) return { ok: true, format, prNumber: Number(match[1]) };
+  }
+  return { ok: false, format: null, prNumber: null };
+}
+
 export function evaluateProtectedMainAdvancement({
   record,
   contract,
@@ -1231,6 +1243,7 @@ export function evaluateProtectedMainAdvancement({
     && authority.schemaVersion === 1
     && authority.policyId === policy.policyId
     && authority.allowProtectedAdvancement === true
+    && stableJson(authority.acceptedMergeSubjectFormats) === stableJson(policy.ordinaryAdvancement?.acceptedMergeSubjectFormats)
     && authority.checkpointSha === record?.mainSha
     && gitShaPattern.test(checkpointSha ?? "")
     && gitShaPattern.test(authority.checkpointTree ?? "")
@@ -1284,9 +1297,12 @@ export function evaluateProtectedMainAdvancement({
   for (const observation of observations) {
     const pathClassifications = classifyProtectedMainPaths(observation.changedPaths ?? [], policy, activeLeasePaths);
     const classifications = [...new Set(pathClassifications.map(({ classification }) => classification))].sort();
+    const parsedMergeSubject = parseProtectedPullRequestMergeSubject(observation.subject);
+    const subjectFormatAllowed = policy.ordinaryAdvancement?.acceptedMergeSubjectFormats?.includes(parsedMergeSubject.format);
     const normalPrMerge = observation.parents?.length === policy.ordinaryAdvancement?.parentCount
       && observation.parents[0] === prior
-      && /^Merge pull request #[1-9][0-9]* from [^/\s]+\/.+/u.test(observation.subject ?? "")
+      && parsedMergeSubject.ok
+      && subjectFormatAllowed
       && gitShaPattern.test(observation.commit ?? "")
       && gitShaPattern.test(observation.tree ?? "");
     if (!normalPrMerge) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
@@ -1305,6 +1321,8 @@ export function evaluateProtectedMainAdvancement({
       firstParent: observation.parents?.[0] ?? null,
       secondParent: observation.parents?.[1] ?? null,
       subject: observation.subject,
+      pullRequestNumber: parsedMergeSubject.prNumber,
+      mergeSubjectFormat: parsedMergeSubject.format,
       changedPaths: [...(observation.changedPaths ?? [])].sort(),
       changedPathHash: sha256([...(observation.changedPaths ?? [])].sort()),
       pathClassifications,

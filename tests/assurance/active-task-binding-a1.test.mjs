@@ -1543,6 +1543,7 @@ function historicalRollingRecord() {
 function syntheticRollingEvaluation(count, {
   changedPath = "docs/unrelated.md",
   changedPaths,
+  subject,
   candidateCurrent = true,
   authorityUpdateBound,
   parentCount = 2,
@@ -1563,7 +1564,7 @@ function syntheticRollingEvaluation(count, {
       commit,
       parents,
       tree: digest(`rolling-tree-${count}-${index}`).slice(0, 40),
-      subject: `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
+      subject: subject ?? `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
       changedPaths: changedPaths ?? [changedPath]
     };
     if (authorityUpdateBound !== undefined) observation.authorityUpdateBound = authorityUpdateBound;
@@ -1759,4 +1760,33 @@ test("rolling main matrix 25: protected checks and advisory provider review rema
   assert.equal(canonicalTruth.reviewPolicy.requiredPhase1Checks, 13);
   assert.equal(canonicalTruth.reviewPolicy.classification, "OPTIONAL_ADVISORY");
   assert.equal(canonicalTruth.reviewPolicy.requiredStatusCheck, false);
+});
+
+test("rolling main matrix 26: actual PR 221 title-suffix merge subject is accepted", () => {
+  const result = evaluateProtectedMainAdvancement({
+    record: canonicalTruth,
+    contract: currentTruthContract,
+    observedProtectedMainSha: "d3871b008ddb16898c114037c26605bf35b433f9",
+    candidateHead: afterDependencyCandidate,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }
+  });
+  const architectureMerge = result.advancementClassifications.find(({ mergeSha }) => mergeSha === "d3871b008ddb16898c114037c26605bf35b433f9");
+  assert.equal(result.findings.length, 0, result.findings.join(","));
+  assert.equal(architectureMerge.subject, "Allow canonical truth to follow protected-main advancement (#221)");
+  assert.equal(architectureMerge.pullRequestNumber, 221);
+  assert.equal(architectureMerge.mergeSubjectFormat, "GITHUB_TITLE_WITH_PR_SUFFIX");
+});
+
+test("rolling main matrix 27: classic GitHub merge subject remains accepted", () => {
+  const result = syntheticRollingEvaluation(1);
+  assert.equal(result.findings.length, 0, result.findings.join(","));
+  assert.equal(result.advancementClassifications[0].pullRequestNumber, 300);
+  assert.equal(result.advancementClassifications[0].mergeSubjectFormat, "GITHUB_CLASSIC_MERGE_PULL_REQUEST");
+});
+
+test("rolling main matrix 28: malformed or unregistered merge subjects fail closed", () => {
+  for (const subject of ["direct push", "Title (#0)", "Title #221", " (#221)", "Title (#221) trailing"]) {
+    const result = syntheticRollingEvaluation(1, { subject });
+    assert.equal(result.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true, subject);
+  }
 });
