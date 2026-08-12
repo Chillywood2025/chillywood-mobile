@@ -922,6 +922,48 @@ function readGithubEvent(environment = process.env) {
   try { return JSON.parse(fs.readFileSync(eventPath, "utf8")); } catch { return null; }
 }
 
+export function resolveCurrentProtectedBase({
+  currentProtectedBase,
+  githubEvent,
+  gitCommand = git,
+  environment = process.env
+} = {}) {
+  const resolved = (protectedBase, source) => ({ ok: true, protectedBase, source, findings: [] });
+  const unavailable = (findings = []) => ({
+    ok: false,
+    protectedBase: null,
+    source: null,
+    findings: [...new Set(["FINITE_TASK_CURRENT_PROTECTED_BASE_UNAVAILABLE", ...findings])].sort()
+  });
+  if (currentProtectedBase !== undefined && currentProtectedBase !== null) {
+    return gitShaPattern.test(currentProtectedBase)
+      ? resolved(currentProtectedBase, "EXPLICIT_ARGUMENT")
+      : unavailable(["FINITE_TASK_CURRENT_PROTECTED_BASE_INVALID_EXPLICIT"]);
+  }
+  const event = githubEvent === undefined ? readGithubEvent(environment) : githubEvent;
+  if (event?.pull_request) {
+    const pullRequestBase = event.pull_request?.base?.sha;
+    return gitShaPattern.test(pullRequestBase ?? "")
+      ? resolved(pullRequestBase, "GITHUB_PULL_REQUEST_EVENT")
+      : unavailable(["FINITE_TASK_CURRENT_PROTECTED_BASE_INVALID_PULL_REQUEST_EVENT"]);
+  }
+  const eventName = environment?.GITHUB_EVENT_NAME;
+  const eventRef = event?.ref ?? environment?.GITHUB_REF;
+  if ((eventName === "push" || (!eventName && event?.after)) && eventRef === "refs/heads/main") {
+    return gitShaPattern.test(event?.after ?? "")
+      ? resolved(event.after, "GITHUB_PUSH_TO_PROTECTED_MAIN")
+      : unavailable(["FINITE_TASK_CURRENT_PROTECTED_BASE_INVALID_MAIN_PUSH_EVENT"]);
+  }
+  const remoteMain = safeRuntimeGit(gitCommand, ["rev-parse", "origin/main"]);
+  if (gitShaPattern.test(remoteMain ?? "")) return resolved(remoteMain, "EXACT_LOCAL_REMOTE");
+  const branch = safeRuntimeGit(gitCommand, ["branch", "--show-current"]);
+  if (branch === "main" || eventRef === "refs/heads/main") {
+    const head = safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]);
+    if (gitShaPattern.test(head ?? "")) return resolved(head, "MAIN_CHECKOUT_FALLBACK");
+  }
+  return unavailable();
+}
+
 function runtimeChangedLines(gitCommand, range) {
   const output = gitCommand(["diff", "--numstat", range]);
   return output.split(/\r?\n/gu).filter(Boolean).reduce((total, line) => total + line.split("\t").slice(0, 2)
@@ -1045,6 +1087,13 @@ export function evaluateFiniteTaskLeaseRuntime({
     implementationBranch: binding?.implementationBranch,
     featureId: binding?.featureId
   });
+  const event = githubEvent === undefined ? readGithubEvent(environment) : githubEvent;
+  const currentProtectedBaseResolution = resolveCurrentProtectedBase({
+    currentProtectedBase,
+    githubEvent: event,
+    gitCommand,
+    environment
+  });
   const claimFreshness = evaluateFreshnessClaims({
     claims: record?.freshnessClaims,
     evidenceSources: record?.evidenceSources,
@@ -1074,6 +1123,37 @@ export function evaluateFiniteTaskLeaseRuntime({
   const leaseFreshness = scopedFreshness(binding?.requiredFreshnessClaims ?? []);
   const providerFreshness = scopedFreshness(providerCriticalRuntimeRequirement);
   const terminalTask = binding?.phase === "TERMINAL" || finiteTaskTerminalStates.has(lease?.taskState);
+  if (!currentProtectedBaseResolution.ok) {
+    const findings = [...new Set([
+      ...leaseFreshness.blockers.map(({ id }) => id),
+      ...currentProtectedBaseResolution.findings
+    ])].sort();
+    return {
+      leaseAuthorityEligible: leaseFreshness.eligible,
+      candidateEligible: false,
+      candidateHead: null,
+      candidateTree: null,
+      scopeResult: "FAIL",
+      findings,
+      providerDependentEligible: false,
+      sourceOnlyEligible: false,
+      claimFreshness,
+      leaseFreshness,
+      providerFreshness,
+      candidate: null,
+      candidateEvaluation: {
+        ok: false,
+        leaseRetained: true,
+        taskState: lease?.taskState ?? null,
+        invalidated: null,
+        findings
+      },
+      currentProtectedBaseResolution,
+      taskState: lease?.taskState ?? null,
+      terminal: terminalTask
+    };
+  }
+  const resolvedProtectedBase = currentProtectedBaseResolution.protectedBase;
   if (terminalTask) {
     const observation = record?.finiteTaskRuntime?.candidateObservation;
     const latest = record?.latestMergedImplementationPr;
@@ -1094,8 +1174,18 @@ export function evaluateFiniteTaskLeaseRuntime({
       if (gitCommand(["rev-parse", `${binding.currentImplementationHead}^{tree}`]) !== binding.currentImplementationTree) {
         terminalFindings.push("FINITE_TASK_TERMINAL_SOURCE_TREE_MISMATCH");
       }
+    } catch {
+      terminalFindings.push("FINITE_TASK_TERMINAL_SOURCE_TREE_MISMATCH");
+    }
+    try {
       gitCommand(["merge-base", "--is-ancestor", binding.currentImplementationHead, latest.mergeSha]);
-      gitCommand(["merge-base", "--is-ancestor", latest.mergeSha, currentProtectedBase]);
+    } catch {
+      terminalFindings.push("FINITE_TASK_TERMINAL_SOURCE_ANCESTRY_INVALID");
+    }
+    try {
+      gitCommand(["merge-base", "--is-ancestor", latest.mergeSha, resolvedProtectedBase]);
+      const firstParentHistory = gitCommand(["rev-list", "--first-parent", resolvedProtectedBase]).split(/\r?\n/gu).filter(Boolean);
+      if (!firstParentHistory.includes(latest.mergeSha)) terminalFindings.push("FINITE_TASK_TERMINAL_MERGE_NOT_ON_FIRST_PARENT");
     } catch {
       terminalFindings.push("FINITE_TASK_TERMINAL_MERGE_ANCESTRY_INVALID");
     }
@@ -1116,6 +1206,7 @@ export function evaluateFiniteTaskLeaseRuntime({
       claimFreshness,
       leaseFreshness,
       providerFreshness,
+      currentProtectedBaseResolution,
       candidate: terminalEligible ? {
         pr: lease.implementationPr,
         branch: lease.implementationBranch,
@@ -1140,9 +1231,9 @@ export function evaluateFiniteTaskLeaseRuntime({
     record,
     lease,
     suppliedObservation,
-    githubEvent,
+    githubEvent: event,
     checkoutHead,
-    currentProtectedBase,
+    currentProtectedBase: resolvedProtectedBase,
     gitCommand,
     environment
   });
@@ -1169,6 +1260,7 @@ export function evaluateFiniteTaskLeaseRuntime({
     claimFreshness,
     leaseFreshness,
     providerFreshness,
+    currentProtectedBaseResolution,
     candidate: derived.candidate,
     candidateEvaluation,
     taskState: lease?.taskState ?? null,
