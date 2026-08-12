@@ -24,6 +24,7 @@ import {
   finiteTaskLeaseFor,
   renderCurrentState,
   renderNextTask,
+  resolveCurrentProtectedBase,
   stableJson,
   taskLeaseAmendmentCommentBody,
   taskLeaseAmendmentSubject,
@@ -1980,4 +1981,217 @@ test("terminal contract is finite and preserves the thirteen protected checks", 
   assert.equal(policy.otaAuthorized, false);
   assert.equal(policy.phase1PassCount, 13);
   assert.equal(currentTruthContract.reviewPolicy.requiredPhase1Checks, 13);
+});
+
+const terminalProtectedBase = "f4718f3e4ace89bd469468e30325789b5d43ef17";
+const terminalMerge = "fe775c12b0857aa50d986d24179ae9588049b6a1";
+const exactGit = (gitArgs) => {
+  const result = spawnSync("git", gitArgs, { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(result.stderr);
+  return result.stdout.trim();
+};
+const evaluateTerminalD2a = (overrides = {}) => evaluateFiniteTaskLeaseRuntime({
+  record: terminalD2aTruth(),
+  contract: currentTruthContract,
+  now: new Date("2026-08-12T18:30:00Z"),
+  environment: {},
+  ...overrides
+});
+const callerUsesCentralResolution = (file) => {
+  const source = fs.readFileSync(file, "utf8");
+  assert.match(source, /evaluateFiniteTaskLeaseRuntime\(\{ record: currentTruth, contract: currentTruthContract \}\)/u);
+  return evaluateTerminalD2a();
+};
+
+test("terminal protected-base resolution 1: explicit valid SHA wins", () => {
+  assert.deepEqual(resolveCurrentProtectedBase({ currentProtectedBase: terminalProtectedBase }), {
+    ok: true, protectedBase: terminalProtectedBase, source: "EXPLICIT_ARGUMENT", findings: []
+  });
+});
+
+test("terminal protected-base resolution 2: malformed explicit SHA fails closed", () => {
+  const result = resolveCurrentProtectedBase({ currentProtectedBase: "not-a-sha", gitCommand: () => terminalProtectedBase });
+  assert.equal(result.ok, false);
+  assert.equal(result.findings.includes("FINITE_TASK_CURRENT_PROTECTED_BASE_INVALID_EXPLICIT"), true);
+  assert.equal(result.findings.includes("FINITE_TASK_CURRENT_PROTECTED_BASE_UNAVAILABLE"), true);
+});
+
+test("terminal protected-base resolution 3: GitHub pull-request base is exact", () => {
+  const result = resolveCurrentProtectedBase({
+    githubEvent: { pull_request: { base: { sha: terminalProtectedBase } } },
+    gitCommand: () => { throw new Error("event must win"); },
+    environment: {}
+  });
+  assert.equal(result.protectedBase, terminalProtectedBase);
+  assert.equal(result.source, "GITHUB_PULL_REQUEST_EVENT");
+});
+
+test("terminal protected-base resolution 4: GitHub push to main uses after SHA", () => {
+  const result = resolveCurrentProtectedBase({
+    githubEvent: { ref: "refs/heads/main", after: terminalProtectedBase },
+    gitCommand: () => { throw new Error("event must win"); },
+    environment: { GITHUB_EVENT_NAME: "push", GITHUB_REF: "refs/heads/main" }
+  });
+  assert.equal(result.protectedBase, terminalProtectedBase);
+  assert.equal(result.source, "GITHUB_PUSH_TO_PROTECTED_MAIN");
+});
+
+test("terminal protected-base resolution 5: origin/main is the exact local remote", () => {
+  const result = resolveCurrentProtectedBase({ githubEvent: null, environment: {}, gitCommand: (args) => {
+    if (args.join(" ") === "rev-parse origin/main") return terminalProtectedBase;
+    throw new Error("unexpected Git call");
+  } });
+  assert.equal(result.protectedBase, terminalProtectedBase);
+  assert.equal(result.source, "EXACT_LOCAL_REMOTE");
+});
+
+test("terminal protected-base resolution 6: exact main checkout is the final fallback", () => {
+  const result = resolveCurrentProtectedBase({ githubEvent: null, environment: {}, gitCommand: (args) => {
+    if (args.join(" ") === "rev-parse origin/main") throw new Error("no remote");
+    if (args.join(" ") === "branch --show-current") return "main";
+    if (args.join(" ") === "rev-parse HEAD") return terminalProtectedBase;
+    throw new Error("unexpected Git call");
+  } });
+  assert.equal(result.protectedBase, terminalProtectedBase);
+  assert.equal(result.source, "MAIN_CHECKOUT_FALLBACK");
+});
+
+test("terminal protected-base resolution 7: no resolvable base emits the exact finding", () => {
+  const result = resolveCurrentProtectedBase({ githubEvent: null, environment: {}, gitCommand: () => { throw new Error("unavailable"); } });
+  assert.deepEqual(result.findings, ["FINITE_TASK_CURRENT_PROTECTED_BASE_UNAVAILABLE"]);
+});
+
+test("terminal protected-base resolution 8: canonical checkpoint is never a runtime-base fallback", () => {
+  const value = terminalD2aTruth();
+  value.protectedMainAuthority.checkpointSha = "a".repeat(40);
+  const result = resolveCurrentProtectedBase({ githubEvent: null, environment: {}, gitCommand: () => { throw new Error("unavailable"); } });
+  assert.equal(result.protectedBase, null);
+  assert.notEqual(result.protectedBase, value.protectedMainAuthority.checkpointSha);
+});
+
+test("terminal protected-base resolution 9: terminal source is an ancestor of its merge", () => {
+  const result = evaluateTerminalD2a({ currentProtectedBase: terminalProtectedBase });
+  assert.equal(result.findings.includes("FINITE_TASK_TERMINAL_SOURCE_ANCESTRY_INVALID"), false);
+  assert.equal(result.candidateEligible, true, result.findings.join(","));
+});
+
+test("terminal protected-base resolution 10: terminal merge is on protected first-parent history", () => {
+  const result = evaluateTerminalD2a({ currentProtectedBase: terminalProtectedBase });
+  assert.equal(result.findings.includes("FINITE_TASK_TERMINAL_MERGE_ANCESTRY_INVALID"), false);
+  assert.equal(result.findings.includes("FINITE_TASK_TERMINAL_MERGE_NOT_ON_FIRST_PARENT"), false);
+});
+
+test("terminal protected-base resolution 11: source outside merge ancestry fails", () => {
+  const value = terminalD2aTruth();
+  const unrelatedHead = terminalProtectedBase;
+  const unrelatedTree = exactGit(["rev-parse", `${unrelatedHead}^{tree}`]);
+  value.activeTaskBinding.currentImplementationHead = unrelatedHead;
+  value.activeTaskBinding.currentImplementationTree = unrelatedTree;
+  value.finiteTaskRuntime.candidateObservation.head = unrelatedHead;
+  value.finiteTaskRuntime.candidateObservation.tree = unrelatedTree;
+  value.latestMergedImplementationPr.head = unrelatedHead;
+  const result = evaluateTerminalD2a({ record: value, currentProtectedBase: terminalProtectedBase });
+  assert.equal(result.findings.includes("FINITE_TASK_TERMINAL_SOURCE_ANCESTRY_INVALID"), true);
+});
+
+test("terminal protected-base resolution 12: merge outside protected-base ancestry fails", () => {
+  const result = evaluateTerminalD2a({ currentProtectedBase: "50b5f0498a59961278bb5afbca443c6e35cd5bb6" });
+  assert.equal(result.findings.includes("FINITE_TASK_TERMINAL_MERGE_ANCESTRY_INVALID"), true);
+});
+
+test("terminal protected-base resolution 13: wrong terminal source tree fails", () => {
+  const value = terminalD2aTruth();
+  value.activeTaskBinding.currentImplementationTree = "a".repeat(40);
+  value.finiteTaskRuntime.candidateObservation.tree = "a".repeat(40);
+  const result = evaluateTerminalD2a({ record: value, currentProtectedBase: terminalProtectedBase });
+  assert.equal(result.findings.includes("FINITE_TASK_TERMINAL_SOURCE_TREE_MISMATCH"), true);
+});
+
+test("terminal protected-base resolution 14: wrong merged PR fails", () => {
+  const value = terminalD2aTruth();
+  value.latestMergedImplementationPr.number = 999;
+  const result = evaluateTerminalD2a({ record: value, currentProtectedBase: terminalProtectedBase });
+  assert.equal(result.findings.includes("FINITE_TASK_TERMINAL_MERGE_IDENTITY_MISMATCH"), true);
+});
+
+test("terminal protected-base resolution 15: current-truth explicit-base caller passes", () => {
+  const source = fs.readFileSync("scripts/assurance/current-truth.mjs", "utf8");
+  assert.match(source, /currentProtectedBase: remoteMain/u);
+  const result = evaluateTerminalD2a({ currentProtectedBase: terminalProtectedBase });
+  assert.equal(result.currentProtectedBaseResolution.source, "EXPLICIT_ARGUMENT");
+  assert.equal(result.candidateEligible, true);
+});
+
+test("terminal protected-base resolution 16: autonomous guard omitted-base caller resolves centrally", () => {
+  const result = callerUsesCentralResolution("scripts/guard-autonomous-systems-contract.mjs");
+  assert.equal(result.currentProtectedBaseResolution.source, "EXACT_LOCAL_REMOTE");
+  assert.equal(result.candidateEligible, true, result.findings.join(","));
+});
+
+test("terminal protected-base resolution 17: autonomous proof omitted-base caller resolves centrally", () => {
+  const result = callerUsesCentralResolution("scripts/proof-autonomous-systems-contract.mjs");
+  assert.equal(result.currentProtectedBaseResolution.source, "EXACT_LOCAL_REMOTE");
+  assert.equal(result.candidateEligible, true, result.findings.join(","));
+});
+
+test("terminal protected-base resolution 18: assurance report omitted-base caller resolves centrally", () => {
+  const result = callerUsesCentralResolution("scripts/assurance/report.mjs");
+  assert.equal(result.currentProtectedBaseResolution.source, "EXACT_LOCAL_REMOTE");
+  assert.equal(result.candidateEligible, true, result.findings.join(","));
+});
+
+test("terminal protected-base resolution 19: nonterminal finite-task behavior is retained", () => {
+  const result = evaluateFiniteTaskLeaseRuntime({ record: canonicalTruth, contract: currentTruthContract, currentProtectedBase: terminalProtectedBase });
+  assert.equal(result.terminal, false);
+  assert.equal(result.currentProtectedBaseResolution.source, "EXPLICIT_ARGUMENT");
+  assert.equal(result.leaseAuthorityEligible, true);
+});
+
+test("terminal protected-base resolution 20: provider-dependent authority remains closed", () => {
+  assert.equal(evaluateTerminalD2a().providerDependentEligible, false);
+});
+
+test("terminal protected-base resolution 21: document freshness remains claim scoped", () => {
+  const result = evaluateTerminalD2a({ now: new Date("2030-01-01T00:00:00Z") });
+  assert.equal(result.sourceOnlyEligible, true, result.findings.join(","));
+  assert.equal(result.providerDependentEligible, false);
+});
+
+test("terminal protected-base resolution 22: exact PR 224 terminal state passes against origin/main f471", () => {
+  const result = evaluateTerminalD2a();
+  assert.equal(result.currentProtectedBaseResolution.protectedBase, terminalProtectedBase);
+  assert.equal(result.candidate.mergeSha, terminalMerge);
+  assert.equal(result.candidateEligible, true, result.findings.join(","));
+});
+
+test("terminal protected-base resolution 23: undefined base never reaches a Git argument", () => {
+  const result = evaluateTerminalD2a({ gitCommand: (args) => {
+    assert.equal(args.some((entry) => entry === undefined || entry === null), false, args.join(" "));
+    return exactGit(args);
+  } });
+  assert.equal(result.candidateEligible, true, result.findings.join(","));
+  const source = fs.readFileSync("scripts/assurance/lib.mjs", "utf8");
+  const terminalSource = source.slice(source.indexOf("if (terminalTask)"), source.indexOf("const derived = deriveFiniteTaskCandidateObservation"));
+  assert.doesNotMatch(terminalSource, /latest\.mergeSha, currentProtectedBase/u);
+  assert.match(terminalSource, /latest\.mergeSha, resolvedProtectedBase/u);
+});
+
+test("terminal protected-base resolution 24: resolution is deterministic three of three", () => {
+  const results = Array.from({ length: 3 }, () => stableJson(resolveCurrentProtectedBase({ currentProtectedBase: terminalProtectedBase })));
+  assert.equal(new Set(results).size, 1);
+});
+
+test("terminal protected-base resolution 25: all thirteen Phase 1 checks remain required", () => {
+  assert.equal(currentTruthContract.reviewPolicy.requiredPhase1Checks, 13);
+  assert.equal(canonicalTruth.reviewPolicy.requiredPhase1Checks, 13);
+});
+
+test("terminal protected-base resolution 26: provider Codex Review remains optional advisory", () => {
+  assert.equal(canonicalTruth.reviewPolicy.classification, "OPTIONAL_ADVISORY");
+  assert.equal(canonicalTruth.reviewPolicy.requiredStatusCheck, false);
+});
+
+test("terminal protected-base resolution 27: no second control or truth PR is required", () => {
+  assert.equal(currentTruthContract.terminalTaskTransitionPolicy.additionalControlPrRequired, false);
+  assert.equal(detectAssuranceRecursion({ requestedDependency: "TRUTH_ONLY_PR" }).code, ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE);
 });
