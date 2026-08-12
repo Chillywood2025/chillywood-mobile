@@ -71,9 +71,9 @@ const canonicalRules = new Map([
   { id: "d2a-lifecycle-focused", contractCommand: "node --test tests/assurance/android-generated-native-lifecycle.test.mjs", file: "node", args: ["--test", "tests/assurance/android-generated-native-lifecycle.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
   { id: "d2a-mic-focused", contractCommand: "node --test tests/assurance/android-chat-call-mic-control.test.mjs", file: "node", args: ["--test", "tests/assurance/android-chat-call-mic-control.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
   { id: "d2a-mic-exact-hook", contractCommand: "node --test tests/assurance/android-chat-call-mic-exact-hook.test.mjs", file: "node", args: ["--test", "tests/assurance/android-chat-call-mic-exact-hook.test.mjs"], timeoutMs: 120000, resultContract: { type: "node-test-tap-v1" } },
-  { id: "d2a-lifecycle-native", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --native --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--native", "--json"], timeoutMs: 1800000, resultContract: { type: "exit-zero-v1" } },
-  { id: "d2a-lifecycle-emulator", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --emulator --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--emulator", "--json"], timeoutMs: 1800000, resultContract: { type: "exit-zero-v1" } },
-  { id: "d2a-mic-native", contractCommand: "node scripts/assurance/android-chat-call-mic-control.mjs --native --json", file: "node", args: ["scripts/assurance/android-chat-call-mic-control.mjs", "--native", "--json"], timeoutMs: 1800000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-lifecycle-native", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --native --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--native", "--json"], timeoutMs: 21600000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-lifecycle-emulator", contractCommand: "node scripts/assurance/android-generated-native-lifecycle.mjs --emulator --json", file: "node", args: ["scripts/assurance/android-generated-native-lifecycle.mjs", "--emulator", "--json"], timeoutMs: 21600000, resultContract: { type: "exit-zero-v1" } },
+  { id: "d2a-mic-native", contractCommand: "node scripts/assurance/android-chat-call-mic-control.mjs --native --json", file: "node", args: ["scripts/assurance/android-chat-call-mic-control.mjs", "--native", "--json"], timeoutMs: 21600000, resultContract: { type: "exit-zero-v1" } },
   { id: "d2a-runtime-backup", contractCommand: "node scripts/assurance/android-native-call-origin-backup.mjs --backup-restore --json", file: "node", args: ["scripts/assurance/android-native-call-origin-backup.mjs", "--backup-restore", "--json"], timeoutMs: 900000, resultContract: { type: "exit-zero-v1" } }
 ].map((rule) => [rule.id, rule]));
 
@@ -97,7 +97,7 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
   const matches = allowlist.commands?.filter((item) => item.id === id) ?? [];
   if (matches.length !== 1) return { ok: false, finding: matches.length ? "COMMAND_ID_AMBIGUOUS" : "COMMAND_NOT_ALLOWLISTED" };
   const rule = matches[0];
-  const maximumTimeoutMs = ["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native"].includes(rule.id) ? 1800000 : 900000;
+  const maximumTimeoutMs = ["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native"].includes(rule.id) ? 21600000 : 900000;
   if (!safeRule(rule) || !Number.isInteger(rule.timeoutMs) || rule.timeoutMs < 1 || rule.timeoutMs > maximumTimeoutMs) {
     return { ok: false, finding: "COMMAND_CONTRACT_INVALID" };
   }

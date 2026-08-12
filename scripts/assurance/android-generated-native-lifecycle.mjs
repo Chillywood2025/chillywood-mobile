@@ -392,7 +392,7 @@ const gradleEvidence = (generated) => {
   const results = [];
   for (const task of tasks) {
     const started = Date.now();
-    const result = run(wrapper, [task, "--no-daemon", "--console=plain", "--stacktrace"], { cwd: path.join(generated.temp, "android"), env });
+    const result = run(wrapper, [task, "--no-daemon", "--console=plain", "--stacktrace"], { cwd: path.join(generated.temp, "android"), env, timeout: 2 * 60 * 60 * 1000 });
     results.push({ task, passed: result.status === 0, durationMs: Date.now() - started, category: result.status === 0 ? "PASS" : "GRADLE_TASK_FAILED" });
     const diagnosticLines = `${result.stderr ?? ""}\n${result.stdout ?? ""}`
       .replaceAll(generated.temp, "<DISPOSABLE>")
@@ -406,6 +406,7 @@ const gradleEvidence = (generated) => {
     const diagnostic = errorLines.slice(-48)
       .join(" | ")
       .slice(0, 2400);
+    gate(result.error?.code !== "ETIMEDOUT", "ANDROID_GRADLE_TASK_TIMEOUT", `${task} exceeded the two-hour native task ceiling`, { task });
     gate(result.status === 0, "ANDROID_GRADLE_COMPILE_FAILED", `${task} failed${diagnostic ? `: ${diagnostic}` : ""}`, { task });
   }
   return { results, sdk, env };
@@ -557,7 +558,8 @@ dependencies {
     const wrapper = path.join(generated.temp, "android/gradlew");
     const tasks = [":app:compileDebugKotlin", ":app:compileDebugAndroidTestKotlin", ":app:assembleDebug", ":app:assembleDebugAndroidTest"];
     const taskResults = tasks.map((task) => {
-      const result = run(wrapper, [task, "--no-daemon", "--console=plain"], {cwd: path.join(generated.temp, "android"), env});
+      const result = run(wrapper, [task, "--no-daemon", "--console=plain"], {cwd: path.join(generated.temp, "android"), env, timeout: 2 * 60 * 60 * 1000});
+      gate(result.error?.code !== "ETIMEDOUT", "ANDROID_MIC_NATIVE_TASK_TIMEOUT", `${task} exceeded the two-hour native task ceiling`);
       gate(result.status === 0, "ANDROID_MIC_NATIVE_COMPILE_FAILED", `${task} failed`);
       return {task, result: "PASS"};
     });

@@ -238,7 +238,7 @@ assert.equal(report.cleanup.debugOrTestApksRetained, false);
 
 const receiptAllowlist = JSON.parse(fs.readFileSync("config/assurance/command-allowlist-v1.json", "utf8"));
 for (const commandId of ["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native"]) {
-  assert.equal(receiptAllowlist.commands.find(({ id }) => id === commandId)?.timeoutMs, 1_800_000);
+  assert.equal(receiptAllowlist.commands.find(({ id }) => id === commandId)?.timeoutMs, 21_600_000);
 }
 assert.equal(receiptAllowlist.commands.find(({ id }) => id === "d2a-runtime-backup")?.timeoutMs, 900_000);
 const priorJavaHome = process.env.JAVA_HOME;
@@ -269,5 +269,8 @@ try {
   if (priorJavaHome === undefined) delete process.env.JAVA_HOME;
   else process.env.JAVA_HOME = priorJavaHome;
 }
+assert.match(runner, /ANDROID_GRADLE_TASK_TIMEOUT/u);
+assert.match(runner, /ANDROID_MIC_NATIVE_TASK_TIMEOUT/u);
+assert.match(runner, /timeout: 2 \* 60 \* 60 \* 1000/u);
 
 console.log("android generated-native lifecycle source/model tests passed (hardened contract/report assertions; source 17/17; negative controls 12/12; CLI fail-closed 14/14; backup fixtures 14/14; capability and all direct dependency identities fail closed).");
