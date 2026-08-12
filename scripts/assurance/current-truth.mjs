@@ -6,6 +6,7 @@ import {
   baseSynchronizationReviewReceiptHash,
   emit,
   evaluateFiniteTaskLeaseRuntime,
+  evaluateProtectedMainAdvancement,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
@@ -20,7 +21,6 @@ import {
   verifyCurrentTruthHeadBindings,
   verifyCompletedImplementationMergeIdentity,
   verifyProviderImplementationSnapshot,
-  verifyCurrentTruthSynchronization,
   validateFiniteTaskLeaseRegistry,
   validateProofTierStatuses
 } from "./lib.mjs";
@@ -126,7 +126,7 @@ if (options.dogfood) {
   const findings = [];
   for (const subject of subjects) {
     const facts = subject.facts;
-    if (facts.recordedMainSha !== undefined && facts.recordedMainSha !== facts.actualMainSha) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL" });
+    if (facts.recordedMainSha !== undefined && facts.recordedMainSha !== facts.actualMainSha && facts.recordedMainIsAncestor === false) findings.push({ subject: subject.id, id: "CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_NOT_ANCESTOR", status: "BLOCKED_INTERNAL" });
     if (facts.recordedAndroidBuild !== undefined && facts.recordedAndroidBuild !== facts.actualAndroidBuild) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE", status: "BLOCKED_INTERNAL", platform: "android" });
     if (facts.recordedIosUpdate !== undefined && facts.recordedIosUpdate !== facts.actualIosUpdate) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE", status: "BLOCKED_INTERNAL", platform: "ios" });
     if (facts.resolvedProviderBlockerStillActive) findings.push({ subject: subject.id, id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_STALE", status: "BLOCKED_INTERNAL" });
@@ -151,7 +151,6 @@ if (mode) {
   const branch = git(["branch", "--show-current"]);
   const remoteMain = git(["rev-parse", "origin/main"]);
   const head = git(["rev-parse", "HEAD"]);
-  const mergeBase = git(["merge-base", "HEAD", "origin/main"]);
   const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
   const now = options.now ? new Date(options.now) : new Date();
   const observedImplementationRefs = {};
@@ -195,30 +194,19 @@ if (mode) {
     baseSynchronizationReviewFreshnessHours: currentTruthContract.implementationHeadBinding.baseSynchronization.reviewFreshnessHours,
     evaluationTime: now
   });
-  const mainParents = git(["show", "-s", "--format=%P", remoteMain]).split(/\s+/u).filter(Boolean);
-  const mainChangedPaths = mainParents.length
-    ? git(["diff", "--name-only", mainParents[0], remoteMain]).split(/\r?\n/gu).filter(Boolean)
-    : [];
-  const synchronization = verifyCurrentTruthSynchronization({
-    recordedMain: record.mainSha,
-    remoteMain,
-    parents: mainParents,
-    changedPaths: mainChangedPaths,
-    requiredChangedPaths: currentTruthContract.synchronizationMerge.requiredChangedPaths,
-    allowedChangedPaths: currentTruthContract.synchronizationMerge.allowedChangedPaths,
-    bootstrapMerge: currentTruthContract.synchronizationMerge.bootstrapMerge,
-    terminalControlMaintenance: currentTruthContract.synchronizationMerge.terminalControlMaintenance
-  });
-  const claimsMain = (branch || explicitImplementationBranch) === "main";
-  const explicitMainMatches = explicitImplementationBranch !== "main" || explicitImplementationHead === remoteMain;
-  const mainMatches = synchronization.ok && (claimsMain ? head === remoteMain && explicitMainMatches : mergeBase === remoteMain);
-  const documentFreshnessOk = Number.isFinite(now.valueOf()) && now <= new Date(record.freshnessDeadline) && new Date(record.timestamp) <= new Date(record.freshnessDeadline);
   const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({
     record,
     contract: currentTruthContract,
     now,
     checkoutHead: head,
     currentProtectedBase: remoteMain
+  });
+  const protectedMainRuntime = evaluateProtectedMainAdvancement({
+    record,
+    contract: currentTruthContract,
+    observedProtectedMainSha: remoteMain,
+    candidateHead: finiteTaskRuntime.candidateHead,
+    finiteTaskRuntime
   });
   const claimFreshness = finiteTaskRuntime.claimFreshness;
   const taskFreshness = finiteTaskRuntime.leaseFreshness;
@@ -245,10 +233,9 @@ if (mode) {
   const finiteLeaseFindings = validateFiniteTaskLeaseRegistry(record.finiteTaskLeases)
     .map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const runtimeFindings = finiteTaskRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
-  const findings = [...headBindings.findings, ...runtimeFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
+  const protectedMainFindings = protectedMainRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
-  if (!mainMatches) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_MAIN_STALE", status: "BLOCKED_INTERNAL", expected: remoteMain, recorded: record.mainSha });
-  if (!documentFreshnessOk) findings.push({ id: "ASSURANCE_CURRENT_TRUTH_STALE", status: "BLOCKED_INTERNAL", deadline: record.freshnessDeadline });
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({
       id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_FRESHNESS_DERIVATION_MISMATCH",
@@ -290,6 +277,7 @@ if (mode) {
   }
   emit("assurance:current-truth", findings.length === 0, {
     mode, branch, head, remoteMain, recordedMain: record.mainSha, timestamp: record.timestamp, freshnessDeadline: record.freshnessDeadline,
+    protectedMainRuntime,
     liveProviderReadback: claimFreshness.liveProviderReadback,
     finiteTaskRuntime: {
       leaseAuthorityEligible: finiteTaskRuntime.leaseAuthorityEligible,
@@ -314,6 +302,6 @@ if (mode) {
       blocked: claimFreshness.blockedClaims.map(({ id, freshnessClass, platform, expiresAt }) => ({ id, freshnessClass, platform, expiresAt }))
     },
     taskFreshness,
-    generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization, findings
-  }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — main ${record.mainSha.slice(0, 8)}, remote migration ${record.remoteMigrationHead}, deadline ${record.freshnessDeadline}`]);
+    generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization: protectedMainRuntime, findings
+  }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — authority checkpoint ${record.protectedMainAuthority.checkpointSha.slice(0, 8)}, observed main ${remoteMain.slice(0, 8)}, remote migration ${record.remoteMigrationHead}`]);
 }

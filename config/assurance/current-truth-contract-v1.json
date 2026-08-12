@@ -4,7 +4,7 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/currentTruthContract",
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
-  "requiredFields": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "finiteTaskRuntime", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "requiredFields": ["reviewPolicy", "protectedMainAuthority", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "finiteTaskRuntime", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,
@@ -18,6 +18,47 @@
     "repositoryOwnedExactHeadReviewRequired": true,
     "requiredPhase1Checks": 13,
     "historicalIncidentsRetained": true
+  },
+  "rollingProtectedMain": {
+    "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
+    "checkpointMustBeAncestor": true,
+    "observedMainSource": "EXACT_ORIGIN_MAIN_OR_PROTECTED_CI_EVENT",
+    "ordinaryAdvancement": {"parentCount": 2, "firstParentContinuous": true, "pullRequestMergeRequired": true, "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"], "octopusAllowed": false, "forceRewriteAllowed": false},
+    "authorityControlPaths": [
+      "config/assurance/current-truth-contract-v1.json",
+      "config/assurance/schemas-v1.json",
+      "config/assurance/gate-catalog-v1.json",
+      "config/assurance/github-required-checks-v1.json",
+      "scripts/assurance/current-truth.mjs",
+      "scripts/assurance/active-task.mjs",
+      "scripts/assurance/lib.mjs",
+      "scripts/guard-autonomous-systems-contract.mjs",
+      "scripts/proof-autonomous-systems-contract.mjs"
+    ],
+    "activeTaskModelPaths": [
+      "config/assurance/feature-registry-v1.json",
+      "config/assurance/domain-graph-v1.json",
+      "config/assurance/android-generated-native-lifecycle-v1.json",
+      "config/assurance/android-chat-call-mic-control-v1.json"
+    ],
+    "activeTaskAuthoritativeInputs": [
+      "package.json",
+      "package-lock.json",
+      "app.json",
+      "app.config.ts",
+      "eas.json",
+      "config/assurance/release-target-parity-v1.json",
+      "config/assurance/native-capability-registry-v1.json",
+      "plugins/withChillyChatNativeCallNotifications.js",
+      "hooks/use-communication-room-session.ts",
+      "docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json",
+      "scripts/assurance/android-chat-call-mic-control.mjs",
+      "tests/assurance/android-chat-call-mic-control.test.mjs"
+    ],
+    "terminalTruthPaths": ["config/assurance/current-truth-v1.json", "CURRENT_STATE.md", "NEXT_TASK.md"],
+    "authorityRequiredCompanionPaths": ["config/assurance/current-truth-v1.json"],
+    "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"],
+    "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE"
   },
   "synchronizationMerge": {
     "required": true,
@@ -321,14 +362,16 @@
     ]
   },
   "staleFindingIds": {
-    "mainSha": "ASSURANCE_CURRENT_TRUTH_MAIN_STALE",
+    "protectedMainCheckpoint": "CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_NOT_ANCESTOR",
+    "protectedMainChain": "CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID",
+    "authorityControl": "CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT",
     "mergedPrState": "ASSURANCE_CURRENT_TRUTH_PR_STATE_STALE",
     "providerBlocker": "ASSURANCE_CURRENT_TRUTH_PROVIDER_STALE",
     "buildRuntime": "ASSURANCE_CURRENT_TRUTH_ARTIFACT_STALE",
     "remoteMigrationHead": "ASSURANCE_CURRENT_TRUTH_MIGRATION_STALE",
     "switches": "ASSURANCE_CURRENT_TRUTH_SWITCH_STALE",
     "implementationHead": "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE",
-    "age": "ASSURANCE_CURRENT_TRUTH_STALE"
+    "documentAgeDiagnostic": "ASSURANCE_CURRENT_TRUTH_DOCUMENT_DIAGNOSTIC_STALE"
   },
   "providerMode": {"default": "offline", "allowedExplicitMode": "read-only", "mutationAllowed": false, "secretOutputAllowed": false}
 }

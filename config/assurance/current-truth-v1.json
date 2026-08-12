@@ -16,7 +16,16 @@
     "requiredPhase1Checks": 13,
     "historicalIncidentsRetained": true
   },
-  "mainSha": "40f57256500b05f083c71acc77c8b020609692cf",
+  "protectedMainAuthority": {
+    "schemaVersion": 1,
+    "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
+    "checkpointSha": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
+    "checkpointTree": "18c61a3d94de63e3d57cc777a34247c31f7263af",
+    "allowProtectedAdvancement": true,
+    "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
+    "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
+  },
+  "mainSha": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
   "latestMergedImplementationPr": {"number": 214, "state": "merged", "head": "532243450bccd3d373cc17804da98bd01490c2ae", "mergeSha": "40f57256500b05f083c71acc77c8b020609692cf", "title": "Correct legacy WebRTC microphone convergence"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
