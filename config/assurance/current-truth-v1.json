@@ -19,13 +19,13 @@
   "protectedMainAuthority": {
     "schemaVersion": 1,
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
-    "checkpointSha": "fe775c12b0857aa50d986d24179ae9588049b6a1",
-    "checkpointTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+    "checkpointSha": "f4718f3e4ace89bd469468e30325789b5d43ef17",
+    "checkpointTree": "6fdcb9a50d88da2872587c1b3bb19bb61ef862ed",
     "allowProtectedAdvancement": true,
     "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
-  "mainSha": "fe775c12b0857aa50d986d24179ae9588049b6a1",
+  "mainSha": "f4718f3e4ace89bd469468e30325789b5d43ef17",
   "latestMergedImplementationPr": {"number": 214, "state": "merged", "head": "532243450bccd3d373cc17804da98bd01490c2ae", "mergeSha": "40f57256500b05f083c71acc77c8b020609692cf", "title": "Correct legacy WebRTC microphone convergence"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
@@ -984,12 +984,12 @@
   ],
   "assuranceProgram": {
     "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210", "FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218", "PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214"],
-    "active": "D2A_PR212_NATIVE_LIFECYCLE_EXECUTION_EXISTING_PR213_FINITE_LEASE",
+    "active": "TERMINAL_PROTECTED_BASE_RESOLUTION_CORRECTION_RESUME_PR224",
     "nextActions": [
-      "RESUME_PR_212_D2A_NATIVE_LIFECYCLE_EXECUTION",
-      "Merge current main normally into PR #212 without rebasing, retain its existing PR #213 finite lease, and complete the remaining native/lifecycle matrix before final exact-head review and Phase 1.",
-      "Do not start either internal signed candidate until D2A merges and the post-D2A three-file current-truth authorization merges; do not release publicly.",
-      "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
+      "RESUME_EXISTING_POST_D2A_TRUTH_PR_224",
+      "After the terminal protected-base resolver correction merges, merge current protected main normally into existing PR #224 without rebasing.",
+      "Keep PR #224 limited to its exact three terminal-truth files, validate D2A as MERGED_VERIFIED, and merge it after repository-owned review and 13/13 Phase 1.",
+      "Keep build, submission, provider, OTA, and public-release authority closed; do not create signed candidates in this task.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
       "Keep runtime backup restore BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT with restored values null and D2A as its proof owner; T3 remains partial and T4 remains compile/emulator partial.",
       "Keep B1 20260730230022, B2 20260730170000, and B3 20260730230031 represented in Git and undeployed.",
@@ -998,12 +998,12 @@
     ],
     "prohibitions": [
       "Do not resume Cognitive LiveKit activation.",
-      "Do not create a release or distribution build before D2A and its post-merge truth authorization, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, or release publicly."
+      "Do not create a release or distribution build, submit an artifact, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, or release publicly."
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-12T00:04:54Z",
-  "freshnessDeadline": "2026-08-13T00:04:54Z",
+  "timestamp": "2026-08-12T18:17:06Z",
+  "freshnessDeadline": "2026-08-13T18:17:06Z",
   "evidenceSources": [
     {
       "id": "d2a-release-critical-finite-task-lease-authority-40f57256",
