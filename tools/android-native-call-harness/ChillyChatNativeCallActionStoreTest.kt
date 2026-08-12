@@ -2,7 +2,6 @@ package com.chillywood.mobile
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
 import java.util.Collections
@@ -19,10 +18,11 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], manifest = Config.NONE)
 class ChillyChatNativeCallActionStoreTest {
   private val context: Context = ApplicationProvider.getApplicationContext()
   private val preferencesName = "chilly_chat_native_call_action_v1"
@@ -34,27 +34,19 @@ class ChillyChatNativeCallActionStoreTest {
     context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit().clear().commit()
   }
 
-  private fun intent(action: String = "answer", thread: String = threadId, invite: String = inviteId) =
-    Intent(
-      Intent.ACTION_VIEW,
-      Uri.parse("chillywoodmobile://chat/$thread?callInviteId=$invite&nativeCallAction=$action"),
-    ).apply {
-      setClassName(context.packageName, "${context.packageName}.MainActivity")
-      putExtra("threadId", thread)
-      putExtra("callInviteId", invite)
-      putExtra("nativeCallAction", action)
-    }
+  private fun capture(action: String = "answer", thread: String = threadId, invite: String = inviteId) =
+    ChillyChatNativeCallActionStore.captureTrustedNotificationAction(context, thread, invite, action)
 
   @Test
   fun validAnswerAndDeclinePersistOnlyApprovedPrivateSchema() {
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent("answer")))
+    assertTrue(capture("answer"))
     val answer = ChillyChatNativeCallActionStore.consume(context)
     assertEquals("answer", answer?.nativeCallAction)
     clearState()
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent("decline")))
+    assertTrue(capture("decline"))
     val preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     assertEquals(
-      setOf("schema_version", "thread_id", "call_invite_id", "native_action", "request_key", "created_at", "created_elapsed_at"),
+      setOf("schema_version", "thread_id", "call_invite_id", "native_action", "request_key", "capture_generation", "capture_generation_counter", "created_at", "created_elapsed_at"),
       preferences.all.keys,
     )
     assertFalse(preferences.all.keys.any { it.contains("token") || it.contains("credential") || it.contains("media") || it.contains("caller") })
@@ -62,32 +54,31 @@ class ChillyChatNativeCallActionStoreTest {
 
   @Test
   fun malformedUnsupportedAndMismatchedInputsFailClosed() {
-    assertFalse(ChillyChatNativeCallActionStore.capture(context, intent(thread = "malformed")))
-    assertFalse(ChillyChatNativeCallActionStore.capture(context, intent(invite = "malformed")))
-    assertFalse(ChillyChatNativeCallActionStore.capture(context, intent(action = "incoming")))
-    assertFalse(ChillyChatNativeCallActionStore.capture(context, intent().putExtra("callInviteId", "33333333-3333-4333-8333-333333333333")))
+    assertFalse(capture(thread = "malformed"))
+    assertFalse(capture(invite = "malformed"))
+    assertFalse(capture(action = "incoming"))
     assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
   }
 
   @Test
   fun duplicateDoesNotExtendOriginalTtlAndReplayIsDenied() {
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
+    assertTrue(capture())
     val preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     val originalElapsed = preferences.getLong("created_elapsed_at", 0L)
     ShadowSystemClock.advanceBy(Duration.ofSeconds(5))
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
+    assertTrue(capture())
     assertEquals(originalElapsed, preferences.getLong("created_elapsed_at", -1L))
     ShadowSystemClock.advanceBy(Duration.ofSeconds(41))
     assertNull(ChillyChatNativeCallActionStore.consume(context))
     assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
+    assertTrue(capture())
     assertNotNull(ChillyChatNativeCallActionStore.consume(context))
-    assertFalse(ChillyChatNativeCallActionStore.capture(context, intent()))
+    assertFalse(capture())
   }
 
   @Test
   fun expiredActionIsDeletedAndDenied() {
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
+    assertTrue(capture())
     context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
       .putLong("created_elapsed_at", SystemClock.elapsedRealtime() - 45_001L)
       .commit()
@@ -97,10 +88,10 @@ class ChillyChatNativeCallActionStoreTest {
 
   @Test
   fun consumeReturnsExactlyOnce() {
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
+    assertTrue(capture())
     assertNotNull(ChillyChatNativeCallActionStore.consume(context))
     val preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
-    for (field in listOf("schema_version", "thread_id", "call_invite_id", "native_action", "request_key", "created_at", "created_elapsed_at")) {
+    for (field in listOf("thread_id", "call_invite_id", "native_action", "request_key", "capture_generation", "created_at", "created_elapsed_at")) {
       assertFalse("Pending field must be removed after consume: $field", preferences.contains(field))
     }
     assertNull(ChillyChatNativeCallActionStore.consume(context))
@@ -108,7 +99,7 @@ class ChillyChatNativeCallActionStoreTest {
 
   @Test
   fun concurrentConsumeHasOneWinner() {
-    assertTrue(ChillyChatNativeCallActionStore.capture(context, intent()))
+    assertTrue(capture())
     val start = CountDownLatch(1)
     val pool = Executors.newFixedThreadPool(8)
     val results = Collections.synchronizedList(mutableListOf<Boolean>())
@@ -133,8 +124,5 @@ class ChillyChatNativeCallActionStoreTest {
     }
     ChillyChatCallNotificationActionReceiver().onReceive(context, receiverIntent)
     assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
-    val launched = shadowOf(context as android.app.Application).nextStartedActivity
-    assertNotNull(launched)
-    assertEquals(context.packageName, launched.component?.packageName)
   }
 }

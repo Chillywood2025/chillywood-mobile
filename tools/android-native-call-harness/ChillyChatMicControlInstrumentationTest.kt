@@ -63,10 +63,10 @@ class ChillyChatMicControlInstrumentationTest {
   @Test
   fun duplicateMuteAndUnmuteAreIdempotent() {
     assertTrue(track.setEnabled(false))
-    assertTrue(track.setEnabled(false))
+    assertFalse(track.setEnabled(false))
     assertFalse(track.enabled())
     assertTrue(track.setEnabled(true))
-    assertTrue(track.setEnabled(true))
+    assertFalse(track.setEnabled(true))
     assertTrue(track.enabled())
   }
 

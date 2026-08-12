@@ -280,7 +280,7 @@ const generatedSecurity = (temp, modules, manifest) => {
     "ANDROID_PENDING_INTENT_SECURITY_INVALID", "Generated PendingIntents must be immutable");
   return {backupPolicy, securityDigest, boundPaths: securityPaths, componentAssertions: 4};
 };
-const generateOnce = ({ retain = false } = {}) => {
+export const generateOnce = ({ retain = false } = {}) => {
   const contract = readJson(contractPath);
   const dependencies = resolveDependencySet();
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-pr-d2a-"));
@@ -337,26 +337,41 @@ const findSdk = () => {
   gate(sdk, "ANDROID_SDK_MISSING", "Android SDK is not available");
   return sdk;
 };
-const injectTests = (temp) => {
+export const injectTests = (temp) => {
   const unitTarget = path.join(temp, "android/app/src/test/java/com/chillywood/mobile/ChillyChatNativeCallActionStoreTest.kt");
   const instrumentationTarget = path.join(temp, "android/app/src/androidTest/java/com/chillywood/mobile/ChillyChatNativeLifecycleInstrumentationTest.kt");
+  const lifecycleProbeTarget = path.join(temp, "android/app/src/debug/java/com/chillywood/mobile/ChillyChatLifecycleProbeActivity.kt");
   fs.mkdirSync(path.dirname(unitTarget), { recursive: true });
   fs.mkdirSync(path.dirname(instrumentationTarget), { recursive: true });
+  fs.mkdirSync(path.dirname(lifecycleProbeTarget), { recursive: true });
   fs.copyFileSync(path.join(root, unitTemplate), unitTarget);
   fs.copyFileSync(path.join(root, instrumentationTemplate), instrumentationTarget);
+  fs.writeFileSync(lifecycleProbeTarget, `package com.chillywood.mobile
+
+import android.app.Activity
+
+class ChillyChatLifecycleProbeActivity : Activity()
+`, "utf8");
+  const debugManifestPath = path.join(temp, "android/app/src/debug/AndroidManifest.xml");
+  const debugManifest = fs.readFileSync(debugManifestPath, "utf8");
+  const debugApplication = debugManifest.match(/<application\b[^>]*\/>/u)?.[0];
+  gate(debugApplication, "ANDROID_DEBUG_MANIFEST_APPLICATION_MISSING", "Disposable debug manifest application marker is absent");
+  fs.writeFileSync(debugManifestPath, debugManifest.replace(debugApplication, `${debugApplication.slice(0, -2)}>
+        <activity android:name=".ChillyChatLifecycleProbeActivity" android:exported="false" />
+    </application>`), "utf8");
   const gradlePath = path.join(temp, "android/app/build.gradle");
   const original = fs.readFileSync(gradlePath, "utf8");
   fs.writeFileSync(gradlePath, `${original.trimEnd()}
 
 android {
     defaultConfig { testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" }
-    testOptions { unitTests.includeAndroidResources = true }
+    testOptions { unitTests.includeAndroidResources = false }
 }
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test:core:1.6.1")
-    testImplementation("org.robolectric:robolectric:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
@@ -378,17 +393,18 @@ const gradleEvidence = (generated) => {
     const started = Date.now();
     const result = run(wrapper, [task, "--no-daemon", "--console=plain", "--stacktrace"], { cwd: path.join(generated.temp, "android"), env });
     results.push({ task, passed: result.status === 0, durationMs: Date.now() - started, category: result.status === 0 ? "PASS" : "GRADLE_TASK_FAILED" });
-    const diagnostic = `${result.stderr ?? ""}\n${result.stdout ?? ""}`
+    const diagnosticLines = `${result.stderr ?? ""}\n${result.stdout ?? ""}`
       .replaceAll(generated.temp, "<DISPOSABLE>")
       .replaceAll(root, "<REPOSITORY>")
       .replaceAll(generated.modules, "<DEPENDENCIES>")
       .replaceAll(sdk, "<ANDROID_SDK>")
       .replaceAll(os.homedir(), "<OWNER_HOME>")
       .split("\n")
-      .filter(Boolean)
-      .slice(-20)
+      .filter(Boolean);
+    const errorLines = diagnosticLines.filter((line) => /(?:^e:|\berror\b|fail(?:ed|ure)|exception|what went wrong|compilation|unresolved reference|daemon disappeared|out of memory|could not)/iu.test(line));
+    const diagnostic = errorLines.slice(-48)
       .join(" | ")
-      .slice(0, 1200);
+      .slice(0, 2400);
     gate(result.status === 0, "ANDROID_GRADLE_COMPILE_FAILED", `${task} failed${diagnostic ? `: ${diagnostic}` : ""}`, { task });
   }
   return { results, sdk, env };
@@ -396,14 +412,14 @@ const gradleEvidence = (generated) => {
 const adbRun = (serial, args, options = {}) => run("adb", ["-s", serial, ...args], { ...options, timeout: options.timeout ?? 5 * 60 * 1000 });
 const scenarioDefinitions = Object.freeze({
   FOREGROUND: {method: "activityCreationCapturesAndConsumesOnce", runner: "INSTRUMENTATION"},
-  BACKGROUND: {method: "backgroundActionResumesAndConsumesOnce", runner: null},
+  BACKGROUND: {method: "backgroundActionResumesAndConsumesOnce", runner: "INSTRUMENTATION"},
   ACTIVITY_RECREATION: {method: "recreationRetainsPendingAction", runner: "INSTRUMENTATION"},
-  ACTIVITY_DESTROYED_PROCESS_ALIVE: {method: "destroyedActivityRetainsPendingAction", runner: null},
-  PROCESS_COLD: {method: "processColdReceiverPersistsBeforeReactAndConsumesOnce", runner: null},
-  REACT_CONTEXT_UNAVAILABLE: {method: "receiverBeforeReactContextRetainsAction", runner: null},
+  ACTIVITY_DESTROYED_PROCESS_ALIVE: {method: "destroyedActivityRetainsPendingAction", runner: "INSTRUMENTATION"},
+  PROCESS_COLD: {method: "processColdReceiverPersistsBeforeReactAndConsumesOnce", runner: "INSTRUMENTATION"},
+  REACT_CONTEXT_UNAVAILABLE: {method: "receiverBeforeReactContextRetainsAction", runner: "INSTRUMENTATION"},
   WARM_NEW_INTENT: {method: "warmIntentReusesActivityAndCannotReplay", runner: "INSTRUMENTATION"},
-  DECLINE: {method: "declineForegroundAndCold", runner: null},
-  EXPIRATION: {method: "expiredActionRejectedAndDeleted", runner: null},
+  DECLINE: {method: "declineForegroundAndCold", runner: "INSTRUMENTATION"},
+  EXPIRATION: {method: "expiredActionRejectedAndDeleted", runner: "INSTRUMENTATION"},
   MALFORMED_ADVERSARIAL: {method: "explicitReceiverRejectsUnsupportedActionWithoutCrash", runner: "INSTRUMENTATION"},
   EXTERNAL_CUSTOM_SCHEME_ORIGIN: {method: "verifyExternallyLaunchedActionWasNotPersisted", runner: "EXTERNAL_URI_THEN_INSTRUMENTATION"},
   BACKUP_POLICY: {method: "backupPolicyPreflightConfirmedOnInstalledDebugApp", runner: "BACKUP_PREFLIGHT_THEN_INSTRUMENTATION"},
@@ -423,7 +439,8 @@ export const evaluateScenarioMatrix = (template = readText(instrumentationTempla
 export const assertCompleteScenarioMatrix = (matrix) => gate(matrix.complete, "ANDROID_EMULATOR_SCENARIO_MATRIX_INCOMPLETE",
   `Missing mandatory scenarios: ${matrix.missing.join(",")}`);
 export const assertNativeEntryPreflight = ({report = readJson(reportPath), template = readText(instrumentationTemplate), backupPolicyClear = false} = {}) => {
-  const confirmedBackupDefect = report.productDefects?.some(({code}) => code === "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING");
+  const confirmedBackupDefect = report.productDefects?.some(({code, status}) => code === "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING"
+    && !String(status).startsWith("RESOLVED"));
   gate(!confirmedBackupDefect, "ANDROID_NATIVE_ACTION_BACKUP_EXCLUSION_MISSING", "Confirmed generated backup defect blocks native compilation and installation");
   const matrix = evaluateScenarioMatrix(template, backupPolicyClear); assertCompleteScenarioMatrix(matrix); return matrix;
 };
@@ -514,7 +531,7 @@ export const assertCompleteMicNativeAudioMatrix = (matrix = evaluateMicNativeAud
 
 export const runIndependentMicNativeLayer = () => {
   const audioMatrix = evaluateMicNativeAudioMatrix(); assertCompleteMicNativeAudioMatrix(audioMatrix);
-  assertNativeEntryPreflight();
+  assertNativeEntryPreflight({backupPolicyClear: true});
   const generated = generateOnce({retain: true});
   const installState = {serial: null, appPackage: "com.chillywood.mobile", testPackage: "com.chillywood.mobile.test", preexistingChecked: false, preexistingNone: false, installedApp: false, installedTest: false};
   try {

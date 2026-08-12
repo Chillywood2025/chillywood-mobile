@@ -3,6 +3,7 @@ package com.chillywood.mobile
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,47 +29,113 @@ class ChillyChatNativeLifecycleInstrumentationTest {
     context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit().clear().commit()
   }
 
-  private fun actionIntent(action: String = "answer") = Intent(
-    Intent.ACTION_VIEW,
-    Uri.parse("chillywoodmobile://chat/$threadId?callInviteId=$inviteId&nativeCallAction=$action"),
-    context,
-    MainActivity::class.java,
-  ).apply {
+  private fun mainIntent() = Intent(Intent.ACTION_MAIN, null, context, MainActivity::class.java).apply {
     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+  }
+
+  private fun lifecycleProbeIntent() = Intent(context, ChillyChatLifecycleProbeActivity::class.java)
+
+  private fun receiverIntent(action: String = "answer") = Intent(
+    context,
+    ChillyChatCallNotificationActionReceiver::class.java,
+  ).apply {
+    this.action = if (action == "decline") {
+      ChillyChatCallNotifications.ACTION_DECLINE
+    } else {
+      ChillyChatCallNotifications.ACTION_ANSWER
+    }
     putExtra("threadId", threadId)
     putExtra("callInviteId", inviteId)
-    putExtra("nativeCallAction", action)
   }
+
+  private fun dispatchTrusted(action: String = "answer") {
+    ChillyChatCallNotificationActionReceiver().onReceive(context, receiverIntent(action))
+    InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+  }
+
+  private fun captureTrusted(action: String = "answer") =
+    ChillyChatNativeCallActionStore.captureTrustedNotificationAction(context, threadId, inviteId, action)
 
   @Test
   fun activityCreationCapturesAndConsumesOnce() {
-    ActivityScenario.launch<MainActivity>(actionIntent()).use {
-      InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+    ActivityScenario.launch<MainActivity>(mainIntent()).use {
+      dispatchTrusted()
       assertNotNull(ChillyChatNativeCallActionStore.consume(context))
       assertNull(ChillyChatNativeCallActionStore.consume(context))
     }
   }
 
   @Test
-  fun warmIntentReusesActivityAndCannotReplay() {
-    ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
-      scenario.onActivity { activity -> activity.startActivity(actionIntent()) }
-      InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-      assertNotNull(ChillyChatNativeCallActionStore.consume(context))
-      assertFalse(ChillyChatNativeCallActionStore.capture(context, actionIntent()))
-      assertNull(ChillyChatNativeCallActionStore.consume(context))
-    }
+  fun backgroundActionResumesAndConsumesOnce() {
+    dispatchTrusted()
+    assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
+    assertNotNull(ChillyChatNativeCallActionStore.consume(context))
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
   }
 
   @Test
   fun recreationRetainsPendingAction() {
-    ActivityScenario.launch<MainActivity>(actionIntent()).use { scenario ->
+    assertTrue(captureTrusted())
+    ActivityScenario.launch<ChillyChatLifecycleProbeActivity>(lifecycleProbeIntent()).use { scenario ->
       scenario.recreate()
       InstrumentationRegistry.getInstrumentation().waitForIdleSync()
       assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
       assertNotNull(ChillyChatNativeCallActionStore.consume(context))
       assertNull(ChillyChatNativeCallActionStore.consume(context))
     }
+  }
+
+  @Test
+  fun destroyedActivityRetainsPendingAction() {
+    ActivityScenario.launch<ChillyChatLifecycleProbeActivity>(lifecycleProbeIntent()).use { }
+    dispatchTrusted()
+    assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
+    assertNotNull(ChillyChatNativeCallActionStore.consume(context))
+  }
+
+  @Test
+  fun processColdReceiverPersistsBeforeReactAndConsumesOnce() {
+    dispatchTrusted()
+    assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
+    val action = ChillyChatNativeCallActionStore.consume(context)
+    assertEquals("answer", action?.nativeCallAction)
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
+  }
+
+  @Test
+  fun receiverBeforeReactContextRetainsAction() {
+    dispatchTrusted()
+    assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
+    assertEquals(inviteId, ChillyChatNativeCallActionStore.consume(context)?.callInviteId)
+  }
+
+  @Test
+  fun warmIntentReusesActivityAndCannotReplay() {
+    ActivityScenario.launch<MainActivity>(mainIntent()).use {
+      dispatchTrusted()
+      assertNotNull(ChillyChatNativeCallActionStore.consume(context))
+      dispatchTrusted()
+      assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+      assertNull(ChillyChatNativeCallActionStore.consume(context))
+    }
+  }
+
+  @Test
+  fun declineForegroundAndCold() {
+    dispatchTrusted("decline")
+    val action = ChillyChatNativeCallActionStore.consume(context)
+    assertEquals("decline", action?.nativeCallAction)
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
+  }
+
+  @Test
+  fun expiredActionRejectedAndDeleted() {
+    assertTrue(captureTrusted())
+    context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
+      .putLong("created_elapsed_at", SystemClock.elapsedRealtime() - 45_001L)
+      .commit()
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
+    assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
   }
 
   @Test
@@ -94,10 +161,28 @@ class ChillyChatNativeLifecycleInstrumentationTest {
     ActivityScenario.launch<MainActivity>(externalIntent).use {
       InstrumentationRegistry.getInstrumentation().waitForIdleSync()
       assertEquals(
+        "An external custom-scheme launch must not establish trusted native call action state",
         "empty",
         ChillyChatNativeCallActionStore.readStatus(context),
-        "An external custom-scheme launch must not establish trusted native call action state",
       )
     }
+  }
+
+  @Test
+  fun backupPolicyPreflightConfirmedOnInstalledDebugApp() {
+    val legacyRules = context.resources.getIdentifier(
+      "chillywood_native_call_full_backup_rules",
+      "xml",
+      context.packageName,
+    )
+    val modernRules = context.resources.getIdentifier(
+      "chillywood_native_call_data_extraction_rules",
+      "xml",
+      context.packageName,
+    )
+    assertTrue(legacyRules != 0)
+    assertTrue(modernRules != 0)
+    assertTrue(captureTrusted())
+    assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
   }
 }
