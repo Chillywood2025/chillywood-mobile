@@ -21,8 +21,8 @@
     "leaseId": "d2a-release-critical-pr-212-v1",
     "maximumFiles": 15,
     "maximumChangedLines": 3000,
-    "observedFiles": 15,
-    "observedChangedLines": 2901,
+    "observedFiles": 12,
+    "observedChangedLines": 2126,
     "result": "PASS"
   },
   "target": {
@@ -65,7 +65,145 @@
     "production": 60,
     "development": 7,
     "validated": 67,
-    "packagePathsRecorded": false
+    "packagePathsRecorded": false,
+    "dependencyIdentitySha256": "2ec157fe2491680afcc0f428016f2ee7eac5af83e99834de79f5ade113767341",
+    "packageJsonSha256": "677a541ff54a81aa885a90f5bc99eaec48df44d42d7ccb930011424c2f8857ed",
+    "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c",
+    "cleanInstallRequired": false,
+    "result": "PASS_67_OF_67"
+  },
+  "currentD2AClosure": {
+    "classification": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+    "startingMain": "416f9e162501940f34da55a084a3fc3d0680d59c",
+    "synchronizedExecutionHead": "aa5337a9a7eeb36b9c6ce1856292a02b0a0984af",
+    "synchronizedExecutionTree": "050216ab7e5faa4c02211100b225654b5a1a876a",
+    "synchronization": {
+      "method": "NORMAL_NO_FF_MERGE",
+      "currentMainAncestor": true,
+      "pr214MergeAncestor": true,
+      "pr219TruthAncestor": true,
+      "admittedSeedAncestor": true,
+      "answerHarnessCorrectionPresent": true
+    },
+    "finiteLease": {
+      "leaseId": "d2a-release-critical-pr-212-v1",
+      "protectedAdmissionPr": 213,
+      "leaseAuthorityEligible": true,
+      "candidateEligible": true,
+      "activeTaskPacketSha256": "bce6b81fceab079bea6ea50ccc22b042f09f7e5a161ffd045f603a80526b12de",
+      "packetDeterminism": "3/3",
+      "recursionDetected": false,
+      "amendmentUsed": false
+    },
+    "evidenceReuse": {
+      "fullKeySha256": "cef9f9854b4d84917066ab4403438f9f6a9e336ca9dd2c8282cbaa364d69a9f6",
+      "canonicalIndexDecision": "EVIDENCE_EXACT_HIT_MISSING",
+      "priorNativeBundle": "STALE_NOT_REUSABLE",
+      "currentNativeLayers": "AFFECTED_RERUN_REQUIRED_THEN_PASS",
+      "truthOnlyDelta": "EXACT_REUSABLE",
+      "pr214ActualMerge": "40f57256500b05f083c71acc77c8b020609692cf",
+      "pr214ActualAndSyntheticTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
+      "pr219TruthOnlyDeltaSha256": "c50083530c90b47ad579a9e190bb840c973505a24ed7bedc70bfaca2f20252a4",
+      "inputs": {
+        "appJsonSha256": "2880ed32a73d7a89742219721da128223527876a0df2da23dffc578b51b8f3ec",
+        "appConfigSha256": "9104ed5f76581875be6075166830a07ca9473d913b07177ddd78700170675070",
+        "easJsonSha256": "81590c6609f50023aa46d9246c6bd7842cff9158a2865e60dabcd7fdb57e476c",
+        "releaseTargetParitySha256": "be042630c00addc1bb1de4689694c77b6612f2a29c3342b1b2d211f31b4e54d6",
+        "nativeCapabilityRegistrySha256": "43ff7e65122f4b5866e9f430c5c1462d53f2420702f3afe2280848f5c8b3b99b",
+        "pluginSha256": "4696b53375cbf857483d407d51f3d19a00efc4628e501fcd312ff83aa4929ad3",
+        "packageJsonSha256": "677a541ff54a81aa885a90f5bc99eaec48df44d42d7ccb930011424c2f8857ed",
+        "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c",
+        "contractSha256": "a94b2763a06eaf62a0cb06caec4c0e89bcae55941310e08d65ce4a912d86faa2",
+        "runnerSha256": "b9cd060828c1e9fffa2ea75b2959e95ae9b0b8ab54282673015fd099cabd7ec6",
+        "testSha256": "b48a54b1b25710188525ad62f43e1fe5754d184edfae2f6561e630d26f4401d0",
+        "micHarnessSha256": "f93b3e337d353e042b916fc644ce0c0d566d7a98dacadcefee5f8f6d2685fc85",
+        "storeHarnessSha256": "56c4c0b1301cb8cbc53b5de4d19c01853973de0ad49fe782e720d99be4a70b77",
+        "lifecycleHarnessSha256": "a8164ea97b728362721a6a07e265a03d132b67fd8fbcfb45baf93dcc441e7496",
+        "generatedSourceDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+        "securitySupplementDigest": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634",
+        "jdkClassification": "OPENJDK_21_0_9",
+        "androidSdkClassification": "PLATFORMS_34_36_36_1",
+        "gradleWrapperClassification": "GRADLE_8_14_3",
+        "emulatorClassification": "API_34_GOOGLE_APIS_X86_64"
+      }
+    },
+    "generatedNative": {
+      "determinism": "3/3 PASS",
+      "authoritativePaths": "22/22",
+      "sourceDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
+      "securitySupplementDigest": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634",
+      "schemaV2PendingActionStore": "PASS",
+      "schemaV1Invalidation": "PASS",
+      "privateReceiver": "PASS_NON_EXPORTED",
+      "trustedPersistenceBeforeLaunch": "PASS",
+      "externalActivityAuthorityManufacture": "DENIED",
+      "cloudBackupExclusion": "PASS",
+      "deviceTransferExclusion": "PASS",
+      "generatedSecrets": 0
+    },
+    "gradle": {
+      "contractDeclaredTasks": 6,
+      "passed": 6,
+      "execution": "CURRENT_EXACT_GENERATED_PROJECT",
+      "tasks": [
+        ":app:compileDebugKotlin",
+        ":app:compileDebugUnitTestKotlin",
+        ":app:testDebugUnitTest",
+        ":app:assembleDebug",
+        ":app:compileDebugAndroidTestKotlin",
+        ":app:assembleDebugAndroidTest"
+      ]
+    },
+    "jvm": "7/7 PASS",
+    "lifecycle": {
+      "result": "12/12 PASS",
+      "resultSha256": "bdc492f042286be9034ca22c864f05a2e7bcd7258b0d271a151032aae459789c",
+      "externalOriginRejected": true,
+      "governedTimeoutReceiptSha256": "31a412105f3d7567fb3d6230549505161143f6c907cb34cefc784b382266556b",
+      "extendedBoundedExecution": "PASS_AFTER_UNFINISHED_LAYER_RECOVERY"
+    },
+    "microphone": {
+      "nativeInstrumentation": "4/4 PASS",
+      "callDomainPasses": [
+        "114/114",
+        "114/114"
+      ],
+      "nativeOriginControls": "23/23 PASS",
+      "nativeOriginMutants": "6/6 KILLED",
+      "providerContact": false
+    },
+    "backupRestore": {
+      "classification": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+      "subreason": "BOUNDED_SETUP_TIMEOUT_BEFORE_TRANSPORT",
+      "sourceExclusion": "CLEAR",
+      "compiledPolicy": "CLEAR",
+      "restoredValues": null,
+      "transportResultFabricated": false,
+      "retryLoop": false,
+      "receiptSha256": "41156485a7eb350ad6efbbb36d08d1a11f0e0d336ade089fe777251af3a32514",
+      "outputSha256": "28e04d703cfa67864ad57da2c796e67b1992c5e059a83f0e15d5b19f85b73991"
+    },
+    "fatalAndCleanup": {
+      "lifecycleLogSha256": "2905930356adec66c66f1660fd0115c5d3c54ca4e871d04f97ed0ed93ebb942f",
+      "microphoneLogSha256": "ff44d8bac25208a968f16af6bbb99a640d288de3bbe272f10467695fe81af3e7",
+      "androidRuntimeFatal": 0,
+      "reactNativeFatal": 0,
+      "anr": 0,
+      "unhandledRejection": 0,
+      "stalePendingAction": 0,
+      "disposableProjectRemoved": true,
+      "emulatorStopped": true,
+      "emulatorPackagesRemaining": 0,
+      "trackedApkOrAab": 0,
+      "deviceIdentifierRecorded": false,
+      "secretOrPrivateLogRetained": false
+    },
+    "finalExternalEvidence": {
+      "repositoryReview": "PENDING_FINAL_EXACT_HEAD",
+      "phase1": "PENDING_FINAL_EXACT_HEAD",
+      "ownerReceipt": "PENDING_FINAL_EXACT_HEAD",
+      "mergeProvenance": "PENDING_FINAL_EXACT_HEAD"
+    }
   },
   "productDefects": [
     {
@@ -210,8 +348,8 @@
     "T2_MODEL": "CLEAR_JVM_7_OF_7",
     "T3_INTEGRATION": "CLEAR_LOCAL_EMULATOR_LIFECYCLE_12_OF_12_AND_MIC_4_OF_4",
     "T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED",
-    "T5_SIGNED_ARTIFACT": "HISTORICAL_INPUT_NOT_REPROVED",
-    "T6_INSTALLED_PHYSICAL": "HISTORICAL_INPUT_NOT_REPROVED",
+    "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
+    "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
     "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
   },
   "historicalD2BCorrectionAuthorizationSatisfied": {
