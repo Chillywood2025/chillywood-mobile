@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "reportId": "rolling-protected-main-current-truth-v1",
+  "classification": "OWNER_AUTHORIZED_ASSURANCE_ARCHITECTURE_CORRECTION",
+  "startingMain": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
+  "policy": {
+    "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
+    "authorityCheckpoint": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd",
+    "authorityCheckpointTree": "18c61a3d94de63e3d57cc777a34247c31f7263af",
+    "observedProtectedMain": "DERIVED_READ_ONLY_AT_RUNTIME",
+    "ordinaryProtectedAdvancementRequiresTruthPr": false,
+    "terminalSynchronizationRequiredFor": [
+      "active-task-identity-change",
+      "finite-lease-authority-change",
+      "proof-tier-promotion",
+      "provider-authority-change",
+      "task-terminal-state",
+      "public-release-authority"
+    ]
+  },
+  "sharedEvaluator": {
+    "consumerPaths": [
+      "scripts/assurance/current-truth.mjs",
+      "scripts/assurance/active-task.mjs",
+      "scripts/assurance/report.mjs",
+      "scripts/guard-autonomous-systems-contract.mjs",
+      "scripts/proof-autonomous-systems-contract.mjs"
+    ],
+    "claimScopedFreshness": true,
+    "sourceOnlyWithStaleProvider": true,
+    "providerDependentWithoutFreshProvider": false,
+    "documentDeadlineUniversalBlocker": false
+  },
+  "historicalFixtures": {
+    "exactCheckpoint": {"checkpoint": "40f57256500b05f083c71acc77c8b020609692cf", "result": "EXACT_CHECKPOINT"},
+    "dependencyAdvancement": {"observedMain": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd", "merge": "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd", "classification": "PROTECTED_MAIN_ADVANCED_ACTIVE_TASK_INPUTS", "authorityEligible": true},
+    "candidateBeforeBaseSync": {"head": "28b1a7b9dd26e7e0a1cf2bb1bb07247fe721e7d9", "candidateBaseStatus": "BASE_SYNC_REQUIRED", "sourceOnlyEligible": true, "mergeEligible": false},
+    "candidateAfterBaseSync": {"head": "eafd5697cc05b68e193d9e00c268b993ba5f376d", "candidateBaseStatus": "CURRENT_WITH_PROTECTED_MAIN", "sourceOnlyEligible": true},
+    "authorityDrift": "CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT",
+    "historyRewrite": "CURRENT_TRUTH_PROTECTED_MAIN_CHECKPOINT_NOT_ANCESTOR",
+    "expiredDocument": {"sourceOnlyEligible": true, "providerDependentEligible": false}
+  },
+  "regressionMatrix": {
+    "tests": 25,
+    "passed": 25,
+    "failed": 0,
+    "scale": {"zeroAdvancements": "PASS", "oneAdvancement": "PASS", "tenAdvancements": "PASS", "oneHundredAdvancements": "PASS"},
+    "protectedPhase1ChecksRequired": 13,
+    "providerCodexReview": "OPTIONAL_ADVISORY",
+    "recursiveDependencyResult": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE"
+  },
+  "evidenceInvalidation": {
+    "pr220ChangedInputs": ["package.json", "package-lock.json"],
+    "invalidated": ["DEPENDENCY_IDENTITY", "GENERATED_NATIVE", "GRADLE_COMPILE", "JVM_NATIVE_MODEL", "LOCAL_EMULATOR_LIFECYCLE"],
+    "leaseRetained": true,
+    "truthPrRequired": false
+  },
+  "externalClosure": {
+    "implementationPr": 221,
+    "finalHead": "FROZEN_AFTER_REPORT_COMMIT",
+    "finalTree": "FROZEN_AFTER_REPORT_COMMIT",
+    "syntheticPostMerge": "REQUIRED",
+    "repositoryReview": "REQUIRED",
+    "phase1": "13_OF_13_REQUIRED",
+    "postArchitectureTruthPr": false
+  }
+}

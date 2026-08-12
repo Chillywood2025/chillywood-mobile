@@ -12,6 +12,8 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 8. Keep PR E blocked until every required PR D successor merges; keep PR F blocked until PR E merges.
 9. Keep all review-only branches retained and never merge them.
 
+Ordinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.
+
 Do not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.
 
 Do not resume Cognitive LiveKit activation.

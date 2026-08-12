@@ -83,9 +83,27 @@
     },
     "currentTruthContract": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["recordPath", "generatedDocuments", "requiredFields", "reviewPolicy", "synchronizationMerge", "implementationHeadBinding", "finiteTaskLeasePolicy", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "lateReviewExactSuccessorAdmission", "freshness", "staleFindingIds"],
+      "required": ["recordPath", "generatedDocuments", "requiredFields", "reviewPolicy", "rollingProtectedMain", "synchronizationMerge", "implementationHeadBinding", "finiteTaskLeasePolicy", "lateReviewOwnerRegistry", "lateReviewTombstoneAdmission", "lateReviewExactSuccessorAdmission", "freshness", "staleFindingIds"],
       "properties": {
         "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
+        "rollingProtectedMain": {
+          "type": "object",
+          "required": ["policyId", "checkpointMustBeAncestor", "observedMainSource", "ordinaryAdvancement", "authorityControlPaths", "activeTaskModelPaths", "activeTaskAuthoritativeInputs", "terminalTruthPaths", "authorityRequiredCompanionPaths", "terminalSynchronizationRequiredFor", "recursiveFailureCode"],
+          "additionalProperties": false,
+          "properties": {
+            "policyId": {"const": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1"},
+            "checkpointMustBeAncestor": {"const": true},
+            "observedMainSource": {"const": "EXACT_ORIGIN_MAIN_OR_PROTECTED_CI_EVENT"},
+            "ordinaryAdvancement": {"const": {"parentCount": 2, "firstParentContinuous": true, "pullRequestMergeRequired": true, "octopusAllowed": false, "forceRewriteAllowed": false}},
+            "authorityControlPaths": {"type": "array", "minItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "activeTaskModelPaths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "activeTaskAuthoritativeInputs": {"type": "array", "minItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "terminalTruthPaths": {"const": ["config/assurance/current-truth-v1.json", "CURRENT_STATE.md", "NEXT_TASK.md"]},
+            "authorityRequiredCompanionPaths": {"const": ["config/assurance/current-truth-v1.json"]},
+            "terminalSynchronizationRequiredFor": {"const": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]},
+            "recursiveFailureCode": {"const": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE"}
+          }
+        },
         "synchronizationMerge": {
           "type": "object",
           "required": ["required", "parentCount", "recordedMainMustBeFirstParent", "requiredChangedPaths", "allowedChangedPaths", "terminalControlMaintenance", "bootstrapMerge"],
@@ -277,9 +295,22 @@
     },
     "currentTruthRecord": {
       "allOf": [{"$ref": "#/$defs/baseContract"}],
-      "required": ["reviewPolicy", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "finiteTaskRuntime", "activeTaskBinding", "freshnessClaims", "lateReviewSentinels", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+      "required": ["reviewPolicy", "protectedMainAuthority", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "finiteTaskRuntime", "activeTaskBinding", "freshnessClaims", "lateReviewSentinels", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
       "properties": {
         "reviewPolicy": {"const": {"classification": "OPTIONAL_ADVISORY", "requiredStatusCheck": false, "blocksProgress": false, "blocksMerge": false, "ownerTriggeredOnly": true, "automaticReviewRequests": false, "quotaRetryAllowed": false, "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true, "repositoryOwnedExactHeadReviewRequired": true, "requiredPhase1Checks": 13, "historicalIncidentsRetained": true}},
+        "protectedMainAuthority": {
+          "type": "object",
+          "required": ["schemaVersion", "policyId", "checkpointSha", "checkpointTree", "allowProtectedAdvancement", "terminalSynchronizationRequiredFor"],
+          "additionalProperties": false,
+          "properties": {
+            "schemaVersion": {"const": 1},
+            "policyId": {"const": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1"},
+            "checkpointSha": {"$ref": "#/$defs/gitSha"},
+            "checkpointTree": {"$ref": "#/$defs/gitSha"},
+            "allowProtectedAdvancement": {"const": true},
+            "terminalSynchronizationRequiredFor": {"const": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]}
+          }
+        },
         "mainSha": {"$ref": "#/$defs/gitSha"},
         "remoteMigrationHead": {"type": "string", "pattern": "^[0-9]{14}$"},
         "liveProviderReadback": {"type": "boolean"},
