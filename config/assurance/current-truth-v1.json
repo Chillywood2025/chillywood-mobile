@@ -16,8 +16,8 @@
     "requiredPhase1Checks": 13,
     "historicalIncidentsRetained": true
   },
-  "mainSha": "68d2f2b745425296fae2753e8a0cba9cc1137067",
-  "latestMergedImplementationPr": {"number": 210, "state": "merged", "head": "19c0b5eed34a03f33f48a955dbefc483e3d2d71d", "mergeSha": "31087f37290f521d956e125e518f92c3c65a736e", "title": "Resolve LiveKit microphone post-merge review findings"},
+  "mainSha": "40f57256500b05f083c71acc77c8b020609692cf",
+  "latestMergedImplementationPr": {"number": 214, "state": "merged", "head": "532243450bccd3d373cc17804da98bd01490c2ae", "mergeSha": "40f57256500b05f083c71acc77c8b020609692cf", "title": "Correct legacy WebRTC microphone convergence"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "PR #50 and read-only deployed identity contract"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "PR #50 and read-only deployed identity contract"},
   "remoteMigrationHead": "20260730161737",
@@ -486,9 +486,11 @@
       "d2a": "EXACT_SUCCESSOR_CLOSED_D2A_ADMITTED",
       "state": "MERGED_SOURCE_MODEL_CLEAR_D2A_ADMITTED_RELEASE_CRITICAL_EXECUTION"
     },
-    "preservedD2A": {"implementationPr": 212, "head": "4f5fa3937ac506bcd3626d15a2815839df620789", "tree": "96795e544dc9d41f06086f248576d38f92d3be9a", "state": "OPEN_DRAFT_BLOCKED_PRODUCT_P1", "finding": "ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS"},
-    "mayProceed": {"formalReviews": true, "phase1Ci": true, "merge": false, "postMergeProductSuccessorRequired": true, "d2aResume": false, "buildOrOta": false, "providerOrProductionMutation": false},
-    "state": "D2A_FROZEN_PR_214_FINITE_LEASE_DYNAMIC_CANDIDATE_ANSWER_CLASSIFICATION_PENDING"
+    "preservedD2A": {"implementationPr": 212, "head": "6fa8c3c0477078aabf35b2fb37e44586391abc5b", "tree": "6c01f2dbb3846ef1e2415e0ec769db7355ef1d6a", "state": "OPEN_DRAFT_ACTIVE_NATIVE_LIFECYCLE_EXECUTION", "finding": "HARNESS_PATH_BYPASS_CORRECTED"},
+    "finiteLeaseRuntimeCorrection": {"implementationPr": 218, "head": "d6afdf1d2df65f341355e98e91cf2300296a80ad", "tree": "802acaab0a87e3ec5be389271d1b6c2399f6ac53", "mergeSha": "46e4e26365eb5abc4ba2becbf1606dbe86ca5032", "phase1RunId": 31541166458, "phase1": "13/13 PASS", "result": "FINITE_TASK_RUNTIME_DYNAMIC_CANDIDATE_CLEAR"},
+    "legacyWebrtcCorrection": {"implementationPr": 214, "finalHead": "532243450bccd3d373cc17804da98bd01490c2ae", "finalTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b", "mergeSha": "40f57256500b05f083c71acc77c8b020609692cf", "mergeTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b", "callDomainClosureLedgerSha256": "bd7f84ff767afd74e5b3d7ed1786259f1ef4af5bb7a9ed8e89206d02315130b8", "dependencies": 20, "stateDimensions": 18, "transitions": "38/38", "invariants": "13/13 POSITIVE_AND_NEGATIVE", "targetedMutants": "13/13 KILLED", "resolvedDefects": {"P1": 3, "launchImpactingP2": 2, "remaining": 0}, "answerActionClassification": "HARNESS_PATH_BYPASS", "leaseAmendment": false, "reviewCommentId": 5260299116, "reviewSha256": "5569db51b3b53597578106b86b1898d50c0418623fd417ad927912835c3a269c", "receiptCommentId": 5260301674, "receiptBodySha256": "1700d7eb97a9a8ea315f917b6d590481014f009f8d36f3331bdd970f842679f6", "phase1RunId": 31542362294, "phase1": "13/13 PASS", "preMergeD2A": "CLEAR"},
+    "mayProceed": {"formalReviews": false, "phase1Ci": false, "merge": false, "postMergeProductSuccessorRequired": false, "d2aResume": true, "buildOrOta": false, "providerOrProductionMutation": false},
+    "state": "PR214_MERGED_D2A_REACTIVATED_EXISTING_PR213_FINITE_LEASE"
   },
   "finiteTaskLeases": {
     "schemaVersion": 1,
@@ -527,8 +529,8 @@
         "protectedAdmissionPr": 215,
         "ownerAuthorizationCommentId": 5255348786,
         "domain": "chilly-chat-call-media",
-        "domainOwnership": "ACTIVE",
-        "taskState": "BLOCKED_PRODUCT_FINDING",
+        "domainOwnership": "PRESERVED_DEPENDENT",
+        "taskState": "MERGED_VERIFIED",
         "allowedPaths": [
           "docs/assurance/chilly-chat-call-domain-closure-v1.json",
           "docs/assurance/pr-d2a-legacy-mic-permission-recovery-p1-v1.json",
@@ -550,8 +552,8 @@
         "protectedAdmissionPr": 213,
         "ownerAuthorizationCommentId": 5251285787,
         "domain": "chilly-chat-call-media",
-        "domainOwnership": "PRESERVED_DEPENDENT",
-        "taskState": "BLOCKED_PRODUCT_FINDING",
+        "domainOwnership": "ACTIVE",
+        "taskState": "ACTIVE_IMPLEMENTATION",
         "allowedPaths": [
           "config/assurance/android-generated-native-lifecycle-v1.json",
           "config/assurance/command-allowlist-v1.json",
@@ -579,55 +581,67 @@
     "authority": "PROTECTED_FINITE_TASK_LEASE",
     "candidatePolicy": "DYNAMIC_READ_ONLY_NOT_PROTECTED_TRUTH_AUTHORITY",
     "candidateObservation": {
-      "pr": 214,
-      "branch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
+      "pr": 212,
+      "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
       "prState": "open",
-      "head": "f2525c0e6dd695c638533bc9c4544729a57280e6",
-      "tree": "7174d34d2a8552874a74e5094dc172a5b5bec756",
+      "head": "6fa8c3c0477078aabf35b2fb37e44586391abc5b",
+      "tree": "6c01f2dbb3846ef1e2415e0ec769db7355ef1d6a",
       "classification": "NON_AUTHORITATIVE_READ_ONLY_OBSERVATION",
-      "observedAt": "2026-08-11T21:00:00Z"
+      "observedAt": "2026-08-12T00:04:54Z"
     },
     "finalEvidence": {"ownerReceipt": false, "repositoryReview": false, "phase1": false, "mergeEligible": false},
-    "historicalCandidates": [{
-      "head": "e76831f2edb2c17e9b827587594573bfef7c6fef",
-      "tree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3",
-      "classification": "HISTORICAL_SUPERSEDED_CANDIDATE",
-      "phase1RunId": 31535089216,
-      "phase1Result": "FAILED_3_OF_13_STALE_PROVENANCE"
-    }],
+    "historicalCandidates": [
+      {
+        "pr": 214,
+        "head": "532243450bccd3d373cc17804da98bd01490c2ae",
+        "tree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
+        "classification": "MERGED_VERIFIED",
+        "mergeSha": "40f57256500b05f083c71acc77c8b020609692cf",
+        "phase1RunId": 31542362294,
+        "phase1Result": "PASS_13_OF_13"
+      },
+      {
+        "pr": 214,
+        "head": "e76831f2edb2c17e9b827587594573bfef7c6fef",
+        "tree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3",
+        "classification": "HISTORICAL_SUPERSEDED_CANDIDATE",
+        "phase1RunId": 31535089216,
+        "phase1Result": "FAILED_3_OF_13_STALE_PROVENANCE"
+      }
+    ],
     "authorityClosed": {"build": true, "provider": true, "database": true, "publicRelease": true}
   },
   "activeTaskBinding": {
     "schemaVersion": 1,
     "featureId": "chilly-chat-call-lifecycle",
-    "implementationPr": 214,
-    "implementationBranch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction",
-    "implementationBindingId": "d2a-legacy-webrtc-first-track-correction-pr-214-v1",
-    "immutableSourceHead": "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
-    "immutableSourceTree": "d009ba762182e58fc054e395a790f29eacba4b55",
-    "currentImplementationHead": "a5f0ff45131041e5d0a554c26311a64e7b72c5bc",
-    "currentImplementationTree": "d009ba762182e58fc054e395a790f29eacba4b55",
+    "implementationPr": 212,
+    "implementationBranch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+    "implementationBindingId": "d2a-release-critical-pr-212-v1",
+    "immutableSourceHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+    "immutableSourceTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
+    "currentImplementationHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
+    "currentImplementationTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
     "phase": "IMPLEMENTATION",
-    "executionState": "D2A_LEGACY_WEBRTC_FINITE_LEASE_RUNTIME_CANDIDATE",
+    "executionState": "D2A_NATIVE_LIFECYCLE_EXECUTION",
     "requiredFreshnessClasses": ["REPOSITORY_TASK_LEASE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_TASK_LEASE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "d2a-legacy-webrtc-finite-task-lease-authority-68d2f2b7", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-task.finite-lease-authority"], "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1", "leaseHash": "bbb2503315fe0da1dc0a91e9986d0d945e14bf30f7a53b96508470614ebf2eab"}],
+    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_TASK_LEASE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "d2a-release-critical-finite-task-lease-authority-40f57256", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-task.finite-lease-authority"], "leaseId": "d2a-release-critical-pr-212-v1", "leaseHash": "9fad8fdfa32f3cfcc5fed9d5b063a6e1f2f2531586094185e6168734903f0ab4"}],
     "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"]
   },
   "freshnessClaims": [
     {
-      "id": "repository-task-lease-d2a-legacy-webrtc-correction",
+      "id": "repository-task-lease-d2a-release-critical",
       "status": "CURRENT",
-      "observedAt": "2026-08-11T21:00:00Z",
-      "expiresAt": "2036-08-08T21:00:00.000Z",
-      "evidenceSourceId": "d2a-legacy-webrtc-finite-task-lease-authority-68d2f2b7",
+      "observedAt": "2026-08-12T00:04:54Z",
+      "expiresAt": "2036-08-09T00:04:54.000Z",
+      "evidenceSourceId": "d2a-release-critical-finite-task-lease-authority-40f57256",
       "evidenceMode": "protected-finite-task-lease",
       "factsCovered": ["repository.active-task.finite-lease-authority"],
       "freshnessClass": "REPOSITORY_TASK_LEASE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1",
-      "leaseHash": "bbb2503315fe0da1dc0a91e9986d0d945e14bf30f7a53b96508470614ebf2eab"
+      "leaseId": "d2a-release-critical-pr-212-v1",
+      "leaseHash": "9fad8fdfa32f3cfcc5fed9d5b063a6e1f2f2531586094185e6168734903f0ab4"
     },
     {
       "id": "repository-source-s0-exact-closure-reuse-final",
@@ -875,7 +889,7 @@
     }
   ],
   "openImplementationPrs": [
-    {"number": 214, "branch": "codex/d2a-legacy-webrtc-first-track-renegotiation-correction", "head": "f2525c0e6dd695c638533bc9c4544729a57280e6", "state": "open-draft-current", "disposition": "finite-lease-dynamic-implementation-candidate", "featureId": "chilly-chat-call-lifecycle"}
+    {"number": 212, "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation", "head": "6fa8c3c0477078aabf35b2fb37e44586391abc5b", "state": "open-draft-current", "disposition": "resume-d2a-native-lifecycle-under-existing-pr213-finite-lease", "featureId": "chilly-chat-call-lifecycle"}
   ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
@@ -960,13 +974,11 @@
     {"number": 138, "branch": "codex/assurance-reconcile-revenuecat-transfer-review-concurrency-atomicity", "head": "ca69c38368be9bb1d65b717b94c039ebc8829e5a", "reviewedImplementationHead": "81892f3dae544713d8e35512da895cd99c610966", "evidenceVersions": ["v1", "v2"], "currentEvidenceVersion": "v2", "state": "closed-unmerged", "disposition": "review-complete-branch-retained-never-merge"}
   ],
   "assuranceProgram": {
-    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210"],
-    "active": "D2A_LEGACY_WEBRTC_FINITE_TASK_LEASE_RUNTIME_PR214_DYNAMIC_CANDIDATE_D2A_PR212_FROZEN",
+    "completed": ["PR-A", "CURRENT-TRUTH-SYNCHRONIZATION-PR-56", "CURRENT-TRUTH-GUARD-CORRECTION-PR-58", "CURRENT-TRUTH-SYNCHRONIZATION-PR-60", "FEATURE-DOMAIN-SCOPE-GUARD-PR-62", "CURRENT-TRUTH-SYNCHRONIZATION-PR-67", "CURRENT-TRUTH-SYNCHRONIZATION-PR-86", "CURRENT-TRUTH-HEAD-BINDING-PR-90", "CURRENT-TRUTH-SYNCHRONIZATION-PR-97", "CURRENT-TRUTH-SYNCHRONIZATION-PR-103", "CURRENT-TRUTH-SYNCHRONIZATION-PR-109", "PR-C-MODELS-PR-64", "MIGRATION-READBACK-METADATA-PR-113", "CURRENT-TRUTH-SYNCHRONIZATION-PR-123", "BASE-SYNC-HEAD-BINDING-PR-125", "BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127", "DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129", "PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116", "CURRENT-TRUTH-SYNCHRONIZATION-PR-131", "CURRENT-TRUTH-SYNCHRONIZATION-PR-132", "CURRENT-TRUTH-SYNCHRONIZATION-PR-135", "PR-B1-LIVEKIT-SOURCE-BINDING-PR-70", "CURRENT-TRUTH-SYNCHRONIZATION-PR-137", "PR-B2-REVENUECAT-TRANSFER-PR-69", "CURRENT-TRUTH-SYNCHRONIZATION-PR-139", "CURRENT-TRUTH-SYNCHRONIZATION-PR-140", "PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75", "CURRENT-TRUTH-SYNCHRONIZATION-PR-142", "PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION", "PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143", "CURRENT-TRUTH-SYNCHRONIZATION-PR-151", "CURRENT-TRUTH-SYNCHRONIZATION-PR-156", "CURRENT-TRUTH-SYNCHRONIZATION-PR-161", "CURRENT-TRUTH-SYNCHRONIZATION-PR-162", "PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152", "BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170", "D2B-CURRENT-TRUTH-BINDING-PR-169", "D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181", "PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164", "E0-CURRENT-TRUTH-BINDING-PR-190", "PR-E0-ASSURANCE-EFFICIENCY-PR-185", "D2A-MICROPHONE-CORRECTION-PR-194", "ASSURANCE-CONTROL-A1-PR-201", "ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205", "ASSURANCE-CONTROL-RULESET-READBACK-PR-207", "ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208", "CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206", "LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210", "FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218", "PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214"],
+    "active": "D2A_PR212_NATIVE_LIFECYCLE_EXECUTION_EXISTING_PR213_FINITE_LEASE",
     "nextActions": [
-      "D2A PR #212 is preserved open and frozen at blocked-evidence head 4f5fa3937ac506bcd3626d15a2815839df620789 tree 96795e544dc9d41f06086f248576d38f92d3be9a after reproducing ANDROID_MIC_LEGACY_NEW_STREAM_NOT_ATTACHED_TO_EXISTING_PEERS.",
-      "Validate the current PR #214 candidate dynamically under finite lease d2a-legacy-webrtc-correction-pr-214-v1; do not write descendant candidate heads into protected current truth after each push.",
-      "Classify ANDROID_ANSWER_ACTION_PATH_BYPASSED with the exact production Answer path before PR #214 merge; keep product/native scope closed unless an immutable same-domain lease amendment succeeds.",
-      "Do not resume D2A until correction PR #214 merges and a protected three-file return-to-D2A truth transition merges.",
+      "RESUME_PR_212_D2A_NATIVE_LIFECYCLE_EXECUTION",
+      "Merge current main normally into PR #212 without rebasing, retain its existing PR #213 finite lease, and complete the remaining native/lifecycle matrix before final exact-head review and Phase 1.",
       "Do not start either internal signed candidate until D2A merges and the post-D2A three-file current-truth authorization merges; do not release publicly.",
       "After D2A or its bounded separately authorized repair completes, execute the locked W1-W3 sequence before full iOS D3.",
       "D2B source is represented in Git at merge 18cbf8156c1b2a12e7cb7a8c178fd9cd1d33a8a7, but NEW_ANDROID_BINARY_REQUIRED remains true and Android build 86 does not contain D2B; do not claim OTA, signed, installed, physical, provider, or public delivery.",
@@ -981,28 +993,28 @@
     ]
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-11T21:00:00Z",
-  "freshnessDeadline": "2026-08-12T21:00:00Z",
+  "timestamp": "2026-08-12T00:04:54Z",
+  "freshnessDeadline": "2026-08-13T00:04:54Z",
   "evidenceSources": [
     {
-      "id": "d2a-legacy-webrtc-finite-task-lease-authority-68d2f2b7",
+      "id": "d2a-release-critical-finite-task-lease-authority-40f57256",
       "mode": "protected-finite-task-lease",
       "covers": [
         "repository.active-task.finite-lease-authority",
-        "protected main 68d2f2b745425296fae2753e8a0cba9cc1137067 contains ASSURANCE_FINITE_TASK_LEASE_V1 for PR #214 admitted through PR #215",
+        "protected main 40f57256500b05f083c71acc77c8b020609692cf contains PR #214 as MERGED_VERIFIED and reactivates PR #212 under its existing PR #213 ASSURANCE_FINITE_TASK_LEASE_V1 admission",
         "candidate identity is derived read-only; final receipt, repository review, Phase 1 and merge provenance remain exact-head evidence",
         "build, provider, database, release, money, auth/RLS and credential authority remain closed"
       ],
-      "observedAt": "2026-08-11T21:00:00Z",
+      "observedAt": "2026-08-12T00:04:54Z",
       "freshnessClass": "REPOSITORY_TASK_LEASE",
       "authorityAllowed": "REPOSITORY_ONLY",
       "platform": "NONE",
       "provider": "NONE",
-      "sourceCommit": "68d2f2b745425296fae2753e8a0cba9cc1137067",
-      "subjectHead": "68d2f2b745425296fae2753e8a0cba9cc1137067",
-      "subjectTree": "7dcb71b9182f34254686ba864510b106674bf708",
-      "leaseId": "d2a-legacy-webrtc-correction-pr-214-v1",
-      "leaseHash": "bbb2503315fe0da1dc0a91e9986d0d945e14bf30f7a53b96508470614ebf2eab"
+      "sourceCommit": "40f57256500b05f083c71acc77c8b020609692cf",
+      "subjectHead": "40f57256500b05f083c71acc77c8b020609692cf",
+      "subjectTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
+      "leaseId": "d2a-release-critical-pr-212-v1",
+      "leaseHash": "9fad8fdfa32f3cfcc5fed9d5b063a6e1f2f2531586094185e6168734903f0ab4"
     },
     {
       "id": "d2a-legacy-webrtc-correction-final-source-e76831f2edb2",
