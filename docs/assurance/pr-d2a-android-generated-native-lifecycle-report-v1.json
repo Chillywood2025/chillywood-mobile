@@ -22,7 +22,7 @@
     "maximumFiles": 15,
     "maximumChangedLines": 3000,
     "observedFiles": 12,
-    "observedChangedLines": 2126,
+    "observedChangedLines": 2127,
     "result": "PASS"
   },
   "target": {
@@ -73,7 +73,8 @@
     "result": "PASS_67_OF_67"
   },
   "currentD2AClosure": {
-    "classification": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+    "classification": "D2A_BOUND_NATIVE_EVIDENCE_CLEAR_PENDING_FINAL_REVIEW_CI_MERGE",
+    "terminalClassificationAfterRequiredFinalGates": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
     "startingMain": "416f9e162501940f34da55a084a3fc3d0680d59c",
     "synchronizedExecutionHead": "aa5337a9a7eeb36b9c6ce1856292a02b0a0984af",
     "synchronizedExecutionTree": "050216ab7e5faa4c02211100b225654b5a1a876a",
