@@ -22,7 +22,7 @@
     "maximumFiles": 15,
     "maximumChangedLines": 3000,
     "observedFiles": 12,
-    "observedChangedLines": 2127,
+    "observedChangedLines": 2331,
     "result": "PASS"
   },
   "target": {
@@ -104,16 +104,16 @@
       "negativeControls": "16/16 KILLED",
       "syntheticCompileDebugKotlin": "PASS",
       "syntheticCompileOutputSha256": "a871b9af506dbcea5d43d25cbcd01b08cc0b157f49f6a53a2b71dd9251421c48",
-      "currentD2ANativeRerunRequired": true
+      "currentD2ANativeRerunRequired": false
     },
-    "result": "PREREQUISITE_MERGED_CURRENT_D2A_NATIVE_RERUN_PENDING"
+    "result": "PREREQUISITE_MERGED_CURRENT_D2A_NATIVE_RERUN_PASS"
   },
   "currentD2AClosure": {
-    "classification": "D2A_NATIVE_RERUN_REQUIRED_AFTER_DEPENDENCY_PREREQUISITE",
+    "classification": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
     "terminalClassificationAfterRequiredFinalGates": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
     "startingMain": "416f9e162501940f34da55a084a3fc3d0680d59c",
-    "synchronizedExecutionHead": "aa5337a9a7eeb36b9c6ce1856292a02b0a0984af",
-    "synchronizedExecutionTree": "050216ab7e5faa4c02211100b225654b5a1a876a",
+    "synchronizedExecutionHead": "d1bfa02973066408c7fb5ae39479f03aa5a16b67",
+    "synchronizedExecutionTree": "428b9910e1a9984ef216a83483de8e05bf6da78e",
     "synchronization": {
       "method": "NORMAL_NO_FF_MERGE",
       "currentMainAncestor": true,
@@ -127,16 +127,19 @@
       "protectedAdmissionPr": 213,
       "leaseAuthorityEligible": true,
       "candidateEligible": true,
-      "activeTaskPacketSha256": "bce6b81fceab079bea6ea50ccc22b042f09f7e5a161ffd045f603a80526b12de",
+      "activeTaskPacketSha256": "bc8c150ad7335c7fa431c5c88f6c088b43f93800932a254495ee7bfcba7954d9",
       "packetDeterminism": "3/3",
       "recursionDetected": false,
       "amendmentUsed": false
     },
     "evidenceReuse": {
-      "fullKeySha256": "cef9f9854b4d84917066ab4403438f9f6a9e336ca9dd2c8282cbaa364d69a9f6",
-      "canonicalIndexDecision": "EVIDENCE_EXACT_HIT_MISSING",
+      "fullKeySha256": "d36052e124bc19d81321b9eebc78e59d69c8a3d19c754a1831b23426ae9b48e6",
+      "canonicalIndexDecision": "CURRENT_EXACT_EXECUTION_PLUS_LAYER_SCOPED_EXACT_REUSE",
       "priorNativeBundle": "STALE_NOT_REUSABLE",
-      "currentNativeLayers": "STALE_NOT_REUSABLE_BLOCKED_LOCKED_DEPENDENCY_API_INCOMPATIBILITY",
+      "currentNativeLayers": "AFFECTED_RERUN_COMPLETE",
+      "lifecycleLayer": "CURRENT_EXACT_EXECUTION",
+      "microphoneLayer": "EXACT_REUSABLE_UNCHANGED_NATIVE_MIC_INPUT_KEY",
+      "callDomainLayer": "EXACT_REUSABLE_UNCHANGED_PR214_PRODUCT_INPUT_KEY",
       "truthOnlyDelta": "EXACT_REUSABLE",
       "pr214ActualMerge": "40f57256500b05f083c71acc77c8b020609692cf",
       "pr214ActualAndSyntheticTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
@@ -148,14 +151,14 @@
         "releaseTargetParitySha256": "be042630c00addc1bb1de4689694c77b6612f2a29c3342b1b2d211f31b4e54d6",
         "nativeCapabilityRegistrySha256": "43ff7e65122f4b5866e9f430c5c1462d53f2420702f3afe2280848f5c8b3b99b",
         "pluginSha256": "4696b53375cbf857483d407d51f3d19a00efc4628e501fcd312ff83aa4929ad3",
-        "packageJsonSha256": "677a541ff54a81aa885a90f5bc99eaec48df44d42d7ccb930011424c2f8857ed",
-        "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c",
-        "contractSha256": "a94b2763a06eaf62a0cb06caec4c0e89bcae55941310e08d65ce4a912d86faa2",
-        "runnerSha256": "b9cd060828c1e9fffa2ea75b2959e95ae9b0b8ab54282673015fd099cabd7ec6",
-        "testSha256": "b48a54b1b25710188525ad62f43e1fe5754d184edfae2f6561e630d26f4401d0",
+        "packageJsonSha256": "bbcbda9b79c702eb0d7d387a24fd731eda3d9cc176bc06557c8258d57e2ee7f5",
+        "packageLockSha256": "07f5c8d340c814240ac258a513fc0934eac0d0bd17fa350702c4d3e69af29237",
+        "contractSha256": "329ee5853f830d19b48a0b064da1b632797bade42d8e31bba29932c3156eb659",
+        "runnerSha256": "40e23832c2f4520ec8b8e4fa8db75c89b6697d2df9a16436e41d4c4dd0600f4a",
+        "testSha256": "843164da46fcac73733b03bbf54c5fe78bb342fa8b8fbdf25cdb1e3cfb680a78",
         "micHarnessSha256": "f93b3e337d353e042b916fc644ce0c0d566d7a98dacadcefee5f8f6d2685fc85",
         "storeHarnessSha256": "56c4c0b1301cb8cbc53b5de4d19c01853973de0ad49fe782e720d99be4a70b77",
-        "lifecycleHarnessSha256": "a8164ea97b728362721a6a07e265a03d132b67fd8fbcfb45baf93dcc441e7496",
+        "lifecycleHarnessSha256": "00cc8d995091eaa5b50ede8e843ce49d5dbe2e1fa205c61b1be0d01b6e5d2a95",
         "generatedSourceDigest": "d6fd0855600666a6d15de762204b6ced853128704acc7a0b41846b5b537e0de0",
         "securitySupplementDigest": "18e24e64cf4ab8255db8fcf9752f6117ea64c3da6f4a92e10d0587312c5de634",
         "jdkClassification": "OPENJDK_21_0_9",
@@ -180,9 +183,9 @@
     },
     "gradle": {
       "contractDeclaredTasks": 6,
-      "passed": 0,
-      "execution": "BLOCKED_CURRENT_WORKTREE_LOCKED_DEPENDENCY_API_INCOMPATIBILITY",
-      "firstFailure": ":app:compileDebugKotlin",
+      "passed": 6,
+      "execution": "PASS_CURRENT_EXACT_EXECUTION",
+      "historicalFirstFailure": ":app:compileDebugKotlin",
       "tasks": [
         ":app:compileDebugKotlin",
         ":app:compileDebugUnitTestKotlin",
@@ -192,16 +195,22 @@
         ":app:assembleDebugAndroidTest"
       ]
     },
-    "jvm": "STALE_NOT_REUSABLE_BLOCKED_BEFORE_CURRENT_EXACT_EXECUTION",
+    "jvm": "PASS_CURRENT_EXACT_7_OF_7",
     "lifecycle": {
-      "result": "STALE_NOT_REUSABLE_BLOCKED_BEFORE_CURRENT_EXACT_EXECUTION",
+      "result": "PASS_CURRENT_EXACT_12_OF_12",
       "historicalSupersededResultSha256": "bdc492f042286be9034ca22c864f05a2e7bcd7258b0d271a151032aae459789c",
-      "externalOriginRejected": "NOT_CURRENT",
-      "governedTimeoutReceiptSha256": "31a412105f3d7567fb3d6230549505161143f6c907cb34cefc784b382266556b",
-      "extendedBoundedExecution": "FAILED_CURRENT_WORKTREE_DEPENDENCY_CODEGEN"
+      "externalOriginRejected": "PASS_EXACT_PRODUCTION_PATH",
+      "receiptSha256": "2ef197a28b3e16f5ed197632663d0c732be4c5eed1b9e2f11c37af15266a1236",
+      "outputSha256": "ef38479832885c4b4a763b46b40d8674cfa133667845ecd518f89108d8cac29a",
+      "deterministicEvidenceSha256": "07499c7ab8df71a2cfb5d96aeab7b7f7a572dc378b1712893c76558ccb178e04",
+      "durationMs": 2810410
     },
     "microphone": {
-      "nativeInstrumentation": "STALE_NOT_REUSABLE_BLOCKED_BEFORE_CURRENT_EXACT_EXECUTION",
+      "nativeInstrumentation": "PASS_EXACT_REUSABLE_4_OF_4",
+      "receiptSha256": "bb67feda0c68bedb77848e2b787d548c5a9e106ccd5dda86751274b324d6ec4b",
+      "receiptSourceHead": "5f339ec1fbf5d2bd1449ef6f223365f79b8e50be",
+      "receiptSourceTree": "b13fb9e1f89310acc74d03a70fe07e931a1ddf7b",
+      "outputSha256": "b55358e79375f679b9359df279b73a470de5e56bb21748fbb13bd32b5c42553f",
       "callDomainPasses": [
         "114/114",
         "114/114"
@@ -212,18 +221,20 @@
     },
     "backupRestore": {
       "classification": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
-      "subreason": "BOUNDED_SETUP_TIMEOUT_BEFORE_TRANSPORT",
+      "subreason": "ANDROID_GRADLE_GATE_TIMEOUT_BEFORE_TRANSPORT",
       "sourceExclusion": "CLEAR",
       "compiledPolicy": "CLEAR",
       "restoredValues": null,
       "transportResultFabricated": false,
       "retryLoop": false,
-      "receiptSha256": "41156485a7eb350ad6efbbb36d08d1a11f0e0d336ade089fe777251af3a32514",
-      "outputSha256": "28e04d703cfa67864ad57da2c796e67b1992c5e059a83f0e15d5b19f85b73991"
+      "receiptSha256": "dadc0ef2c3cff31cc14c3cb9aaaa77c86f897f731b4e5ab23cec567caecef2da",
+      "outputSha256": "8bbb5850832d0906d61551ed4efe91419de5ebb86352c7b5b39b45ed06a8a5f1",
+      "attempts": 1,
+      "maximumTransportAttemptMinutes": 20
     },
     "fatalAndCleanup": {
-      "lifecycleLogSha256": "NOT_CURRENT",
-      "microphoneLogSha256": "NOT_CURRENT",
+      "lifecycleLogSha256": "ef38479832885c4b4a763b46b40d8674cfa133667845ecd518f89108d8cac29a",
+      "microphoneLogSha256": "b55358e79375f679b9359df279b73a470de5e56bb21748fbb13bd32b5c42553f",
       "androidRuntimeFatal": 0,
       "reactNativeFatal": 0,
       "anr": 0,
@@ -239,8 +250,8 @@
     "currentProofTiers": {
       "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
       "T1_SOURCE": "SOURCE_CLEAR",
-      "T2_MODEL": "BLOCKED_DEPENDENCY_SET_API_INCOMPATIBILITY",
-      "T3_INTEGRATION": "BLOCKED_DEPENDENCY_SET_API_INCOMPATIBILITY",
+      "T2_MODEL": "CLEAR_JVM_7_OF_7",
+      "T3_INTEGRATION": "CLEAR_LOCAL_EMULATOR_LIFECYCLE_12_OF_12_AND_MIC_4_OF_4",
       "T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED",
       "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
       "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
@@ -337,14 +348,14 @@
       "sharedUi": "10/10",
       "liveKit": "20/20",
       "legacy": "20/20",
-      "negativeControls": "MANDATED_10/10_ADAPTER_ANTI_VACUITY",
+      "negativeControls": "13/13_ADAPTER_ANTI_VACUITY",
       "deterministic": "3/3",
       "classification": "PASS_EXACT_PR214_CALL_DOMAIN_TWO_COMPLETE_PASSES"
     },
     "layerB": {
       "test": "tools/android-native-call-harness/ChillyChatMicControlInstrumentationTest.kt",
       "classification": "PASS_BOUNDED_NATIVE_MIC_INSTRUMENTATION",
-      "nativeAudioMatrix": {"required": 14, "complete": true, "status": "CALL_DOMAIN_114_OF_114_PLUS_NATIVE_EXECUTABLE_4_OF_4"},
+      "nativeAudioMatrix": {"required": 4, "executed": 4, "complete": true, "status": "CALL_DOMAIN_114_OF_114_PLUS_NATIVE_EXECUTABLE_4_OF_4"},
       "gradleTasks": "COMPILE_ASSEMBLE_ANDROID_TEST_PASS",
       "compileObservation": "Exact PR #214 merge-ref generated Android project compiled; JVM and androidTest sources compiled and both debug APKs assembled.",
       "instrumentation": "4/4 PASS",
