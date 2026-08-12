@@ -58,7 +58,7 @@
     "productOrNativeSourceModified": false
   },
   "dependencySet": {
-    "classification": "EXACT_LOCKED_ALL_DECLARED_DIRECT_PACKAGE_IDENTITIES",
+    "classification": "D2A_DEPENDENCY_SET_MISMATCH_AFTER_CLEAN_INSTALL",
     "inputs": ["package.json", "package-lock.json", "installed direct package metadata"],
     "identityAndVersionComparison": true,
     "declaredDirect": 67,
@@ -70,10 +70,32 @@
     "packageJsonSha256": "677a541ff54a81aa885a90f5bc99eaec48df44d42d7ccb930011424c2f8857ed",
     "packageLockSha256": "a0beb48df28cc917cc3ae8fc98ef23b5e0992a1f4b91f74f1e194a588bdf7f0c",
     "cleanInstallRequired": false,
-    "result": "PASS_67_OF_67"
+    "cleanInstallRetryAuthorized": false,
+    "cleanInstallOutputSha256": "NOT_RETAINED_PRIOR_SESSION",
+    "directIdentityResult": "PASS_67_OF_67",
+    "runtimeCompatibility": {
+      "failureCode": "ANDROID_GRADLE_COMPILE_FAILED",
+      "failedTask": ":app:compileDebugKotlin",
+      "minimatch": {
+        "lockVersion": "3.1.5",
+        "observedVersion": "3.1.5",
+        "requiredBraceExpansion": "^1.1.7"
+      },
+      "braceExpansion": {
+        "lockVersion": "5.0.9",
+        "observedVersion": "5.0.9",
+        "commonJsRequireType": "object",
+        "expandMemberType": "function"
+      },
+      "requiredContract": "CALLABLE_COMMONJS_EXPORT",
+      "contractSatisfied": false,
+      "executableWitnessSha256": "f6c5894d31e8ad6a785307d4b71206b85573a6ffce7202a0093bd43dd0bbc802",
+      "packageOrLockChangeRequired": true
+    },
+    "result": "BLOCKED_LOCKED_TRANSITIVE_API_INCOMPATIBILITY"
   },
   "currentD2AClosure": {
-    "classification": "D2A_BOUND_NATIVE_EVIDENCE_CLEAR_PENDING_FINAL_REVIEW_CI_MERGE",
+    "classification": "D2A_DEPENDENCY_SET_MISMATCH_AFTER_CLEAN_INSTALL",
     "terminalClassificationAfterRequiredFinalGates": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
     "startingMain": "416f9e162501940f34da55a084a3fc3d0680d59c",
     "synchronizedExecutionHead": "aa5337a9a7eeb36b9c6ce1856292a02b0a0984af",
@@ -100,7 +122,7 @@
       "fullKeySha256": "cef9f9854b4d84917066ab4403438f9f6a9e336ca9dd2c8282cbaa364d69a9f6",
       "canonicalIndexDecision": "EVIDENCE_EXACT_HIT_MISSING",
       "priorNativeBundle": "STALE_NOT_REUSABLE",
-      "currentNativeLayers": "AFFECTED_RERUN_REQUIRED_THEN_PASS",
+      "currentNativeLayers": "STALE_NOT_REUSABLE_BLOCKED_LOCKED_DEPENDENCY_API_INCOMPATIBILITY",
       "truthOnlyDelta": "EXACT_REUSABLE",
       "pr214ActualMerge": "40f57256500b05f083c71acc77c8b020609692cf",
       "pr214ActualAndSyntheticTree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
@@ -144,8 +166,9 @@
     },
     "gradle": {
       "contractDeclaredTasks": 6,
-      "passed": 6,
-      "execution": "CURRENT_EXACT_GENERATED_PROJECT",
+      "passed": 0,
+      "execution": "BLOCKED_CURRENT_WORKTREE_LOCKED_DEPENDENCY_API_INCOMPATIBILITY",
+      "firstFailure": ":app:compileDebugKotlin",
       "tasks": [
         ":app:compileDebugKotlin",
         ":app:compileDebugUnitTestKotlin",
@@ -155,16 +178,16 @@
         ":app:assembleDebugAndroidTest"
       ]
     },
-    "jvm": "7/7 PASS",
+    "jvm": "STALE_NOT_REUSABLE_BLOCKED_BEFORE_CURRENT_EXACT_EXECUTION",
     "lifecycle": {
-      "result": "12/12 PASS",
-      "resultSha256": "bdc492f042286be9034ca22c864f05a2e7bcd7258b0d271a151032aae459789c",
-      "externalOriginRejected": true,
+      "result": "STALE_NOT_REUSABLE_BLOCKED_BEFORE_CURRENT_EXACT_EXECUTION",
+      "historicalSupersededResultSha256": "bdc492f042286be9034ca22c864f05a2e7bcd7258b0d271a151032aae459789c",
+      "externalOriginRejected": "NOT_CURRENT",
       "governedTimeoutReceiptSha256": "31a412105f3d7567fb3d6230549505161143f6c907cb34cefc784b382266556b",
-      "extendedBoundedExecution": "PASS_AFTER_UNFINISHED_LAYER_RECOVERY"
+      "extendedBoundedExecution": "FAILED_CURRENT_WORKTREE_DEPENDENCY_CODEGEN"
     },
     "microphone": {
-      "nativeInstrumentation": "4/4 PASS",
+      "nativeInstrumentation": "STALE_NOT_REUSABLE_BLOCKED_BEFORE_CURRENT_EXACT_EXECUTION",
       "callDomainPasses": [
         "114/114",
         "114/114"
@@ -185,8 +208,8 @@
       "outputSha256": "28e04d703cfa67864ad57da2c796e67b1992c5e059a83f0e15d5b19f85b73991"
     },
     "fatalAndCleanup": {
-      "lifecycleLogSha256": "2905930356adec66c66f1660fd0115c5d3c54ca4e871d04f97ed0ed93ebb942f",
-      "microphoneLogSha256": "ff44d8bac25208a968f16af6bbb99a640d288de3bbe272f10467695fe81af3e7",
+      "lifecycleLogSha256": "NOT_CURRENT",
+      "microphoneLogSha256": "NOT_CURRENT",
       "androidRuntimeFatal": 0,
       "reactNativeFatal": 0,
       "anr": 0,
@@ -198,6 +221,16 @@
       "trackedApkOrAab": 0,
       "deviceIdentifierRecorded": false,
       "secretOrPrivateLogRetained": false
+    },
+    "currentProofTiers": {
+      "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+      "T1_SOURCE": "SOURCE_CLEAR",
+      "T2_MODEL": "BLOCKED_DEPENDENCY_SET_API_INCOMPATIBILITY",
+      "T3_INTEGRATION": "BLOCKED_DEPENDENCY_SET_API_INCOMPATIBILITY",
+      "T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED",
+      "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
+      "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
+      "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
     },
     "finalExternalEvidence": {
       "repositoryReview": "PENDING_FINAL_EXACT_HEAD",
