@@ -125,6 +125,9 @@ export function runReceipt(allowlist, id, suppliedArgs = [], dependencies = {}) 
     maxBuffer: rule.maxBuffer ?? 16 * 1024 * 1024,
     env: {
       PATH: process.env.PATH,
+      ...(["d2a-lifecycle-native", "d2a-lifecycle-emulator", "d2a-mic-native"].includes(rule.id) && process.env.JAVA_HOME
+        ? { JAVA_HOME: process.env.JAVA_HOME }
+        : {}),
       CI: "1",
       NO_COLOR: "1",
       GH_TELEMETRY: "0",

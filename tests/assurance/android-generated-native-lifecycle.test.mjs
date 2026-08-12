@@ -17,6 +17,7 @@ import {
   validateInstalledDirectPackageSet,
   validateSourceModel,
 } from "../../scripts/assurance/android-generated-native-lifecycle.mjs";
+import { runReceipt } from "../../scripts/assurance/receipt.mjs";
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/android-generated-native-lifecycle-v1.json", "utf8"));
 const scopeWaiver = JSON.parse(fs.readFileSync("config/assurance/pr-d2a-scope-waiver-v1.json", "utf8"));
@@ -234,5 +235,35 @@ assert.equal(report.nonInterference.productNativeSourceModified, false);
 assert.equal(report.nonInterference.providerContact, false);
 assert.equal(report.cleanup.disposableProjectsRemoved, true);
 assert.equal(report.cleanup.debugOrTestApksRetained, false);
+
+const receiptAllowlist = JSON.parse(fs.readFileSync("config/assurance/command-allowlist-v1.json", "utf8"));
+const priorJavaHome = process.env.JAVA_HOME;
+const expectedJavaHome = "/Applications/Android Studio.app/Contents/jbr/Contents/Home";
+let observedNativeReceiptEnvironment;
+process.env.JAVA_HOME = expectedJavaHome;
+try {
+  const nativeReceipt = runReceipt(
+    receiptAllowlist,
+    "d2a-lifecycle-emulator",
+    ["scripts/assurance/android-generated-native-lifecycle.mjs", "--emulator", "--json"],
+    {
+      sourceHead: "a".repeat(40),
+      sourceTree: "b".repeat(40),
+      clock: () => 1,
+      spawn: (_file, _args, options) => {
+        observedNativeReceiptEnvironment = options.env;
+        return { status: 0, signal: null, stdout: "{}\n", stderr: "" };
+      },
+      artifactWriter: () => "/tmp/chillywood-assurance-d2a/java-toolchain-receipt"
+    }
+  );
+  assert.equal(nativeReceipt.ok, true);
+  assert.equal(observedNativeReceiptEnvironment.JAVA_HOME, expectedJavaHome);
+  assert.equal(Object.hasOwn(observedNativeReceiptEnvironment, "ANDROID_HOME"), false);
+  assert.equal(Object.hasOwn(observedNativeReceiptEnvironment, "HOME"), false);
+} finally {
+  if (priorJavaHome === undefined) delete process.env.JAVA_HOME;
+  else process.env.JAVA_HOME = priorJavaHome;
+}
 
 console.log("android generated-native lifecycle source/model tests passed (hardened contract/report assertions; source 17/17; negative controls 12/12; CLI fail-closed 14/14; backup fixtures 14/14; capability and all direct dependency identities fail closed).");
