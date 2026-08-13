@@ -35,7 +35,7 @@ const readPull = (repository, pr) => {
   }
 };
 
-if (typeof options["github-event"] !== "string") {
+if (typeof options.githubEvent !== "string") {
   const branch = git(["branch", "--show-current"]);
   const exactS0 = branch === "codex/assurance-codex-security-scan-reliability-s0"
     && options.feature === "codex-security-scan-reliability-s0"
@@ -50,7 +50,7 @@ if (typeof options["github-event"] !== "string") {
 
 let event;
 try {
-  event = JSON.parse(fs.readFileSync(options["github-event"], "utf8"));
+  event = JSON.parse(fs.readFileSync(options.githubEvent, "utf8"));
 } catch {
   emit("assurance:pr-scope", false, { findings: [{ id: "ASSURANCE_GITHUB_EVENT_UNREADABLE", status: "BLOCKED_INTERNAL" }] });
   process.exit(1);

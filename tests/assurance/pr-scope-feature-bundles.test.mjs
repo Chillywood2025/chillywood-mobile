@@ -4,6 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles } from "../../scripts/assurance/pr-scope-lib.mjs";
+import { args } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
@@ -208,6 +209,16 @@ test("workflow uses generic event context and contains no hardcoded S0 scope inv
   assert.match(workflow, /node scripts\/assurance\/pr-scope\.mjs --github-event="\$GITHUB_EVENT_PATH"/u);
   assert.doesNotMatch(workflow, /pr-scope\.mjs --feature=codex-security-scan-reliability-s0/u);
   assert.doesNotMatch(workflow, /pr-scope\.mjs[^\n]*codex-security-reliability-s0-scope-waiver/u);
+});
+
+test("generic event CLI binds the canonical parser key used by the scope entrypoint", () => {
+  assert.deepEqual(args(["--github-event=/tmp/exact-pull-request-event.json"]), {
+    githubEvent: "/tmp/exact-pull-request-event.json"
+  });
+  const entrypoint = fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8");
+  assert.match(entrypoint, /typeof options\.githubEvent !== "string"/u);
+  assert.match(entrypoint, /readFileSync\(options\.githubEvent, "utf8"\)/u);
+  assert.doesNotMatch(entrypoint, /options\["github-event"\]/u);
 });
 
 test("all 13 required Phase 1 job names remain unchanged", () => {
