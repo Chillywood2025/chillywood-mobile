@@ -32,6 +32,7 @@ import {
   renderNextTask,
   resolveCurrentProtectedBase,
   stableJson,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
   taskLeaseAmendmentCommentBody,
   taskLeaseAmendmentSubject,
   transitionFiniteTaskState,
@@ -117,6 +118,8 @@ const latestMergedFor = (candidate) => ({
 });
 const truth = {
   ...canonicalTruth,
+  engineeringDoctrine: undefined,
+  taskContextArchitecture: undefined,
   lateReviewSentinels: [],
   activeTaskBinding: binding,
   assuranceProgram: { ...canonicalTruth.assuranceProgram, active: binding.featureId },
@@ -1832,7 +1835,7 @@ const recoveryMerge = digest("typed-context-recovery-merge").slice(0, 40);
 const recoverySource = digest("typed-context-recovery-source").slice(0, 40);
 const recoveryTree = digest("typed-context-recovery-tree").slice(0, 40);
 
-function pendingTransitionEvaluation({ recovery = false, terminal = false, mutateHistorical, mutateRecovery, mutateTerminal, append = [] } = {}) {
+function pendingTransitionEvaluation({ recovery = false, terminal = false, repair = false, mutateHistorical, mutateRecovery, mutateTerminal, append = [] } = {}) {
   const record = structuredClone(canonicalTruth);
   record.mainSha = HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.firstParent;
   record.protectedMainAuthority.checkpointSha = record.mainSha;
@@ -1863,14 +1866,15 @@ function pendingTransitionEvaluation({ recovery = false, terminal = false, mutat
     mutateRecovery?.(value);
     observations.push(value);
   }
-  if (terminal) {
+  if (terminal || repair) {
     const value = {
       commit: digest("terminal-successor-merge").slice(0, 40),
       parents: [observations.at(-1).commit, digest("terminal-successor-source").slice(0, 40)],
       tree: digest("terminal-successor-tree").slice(0, 40),
-      subject: "Activate whole-app engineering doctrine (#902)",
-      changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
-      terminalSuccessor: true
+      subject: repair ? "Activate whole-app engineering doctrine (#228)" : "Activate whole-app engineering doctrine (#902)",
+      changedPaths: repair ? [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS] : ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
+      terminalSuccessor: true,
+      terminalRepair: repair
     };
     mutateTerminal?.(value);
     observations.push(value);
@@ -1901,12 +1905,23 @@ function pendingTransitionEvaluation({ recovery = false, terminal = false, mutat
         if (!matching?.terminalSuccessor) return "";
         const transitionMerges = observations.slice(0, observations.indexOf(matching)).filter(({ commit: candidate }) => candidate === HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha || candidate === recoveryMerge);
         return JSON.stringify({
-          engineeringDoctrine: { nextPermittedAction: matching.terminalExpectedNextTask ?? "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" },
+          protectedMainAuthority: { schemaVersion: 1, policyId: "ROLLING_PROTECTED_MAIN_AUTHORITY_V1", allowProtectedAdvancement: true, checkpointSha: record.mainSha, checkpointTree: record.protectedMainAuthority.checkpointTree },
+          engineeringDoctrine: { status: "ACTIVE", nextPermittedAction: matching.terminalExpectedNextTask ?? "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" },
           taskContextArchitecture: {
             pendingTransitionPolicyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
             pendingTransitionCountAfterSynchronization: 0,
             terminalTransitionConsumed: true,
-            pendingTransitions: transitionMerges.map(({ commit: mergeSha }) => ({ mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" })),
+            pendingTransitions: transitionMerges.map(({ commit: mergeSha }, index) => ({ ...(matching.terminalRepair ? { pr: index === 0 ? 226 : 227 } : {}), mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" })),
+            ...(matching.terminalRepair ? { terminalVerifierRepair: {
+              classification: "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+              historicalTerminalReceipt: 5280368893,
+              rejectedPredecessorReceipt: 5277679438,
+              canonicalPredecessorReceipt: 5280109323,
+              rawPredecessorDiffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
+              canonicalPredecessorDiffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+              singleUse: true,
+              authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
+            } } : {}),
             authority: matching.terminalAuthority ?? { providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
           }
         });
@@ -1959,6 +1974,31 @@ test("pending transition 18: exact three-file successor consumes PR 226 and PR 2
   assert.equal(result.pendingTransitionCount, 0, result.findings.join(","));
   assert.equal(result.pendingTransitionConsumptionCount, 1);
   assert.equal(result.findings.length, 0);
+});
+test("combined terminal verifier repair consumes both pending transitions without creating a third", () => {
+  const result = pendingTransitionEvaluation({ recovery: true, repair: true });
+  assert.equal(result.pendingTransitionCount, 0, result.findings.join(","));
+  assert.equal(result.pendingTransitionConsumptionCount, 1);
+  assert.equal(result.findings.length, 0);
+  assert.equal(result.advancementClassifications.at(-1).terminalVerifierRepair, true);
+  assert.equal(result.providerDependentEligible, false);
+  assert.equal(result.buildEligible, false);
+  assert.equal(result.submissionEligible, false);
+  assert.equal(result.otaEligible, false);
+  assert.equal(result.publicReleaseEligible, false);
+});
+test("combined terminal verifier repair is exact, single-use, and authority-closed", () => {
+  const mutations = [
+    (value) => { value.changedPaths.push("README.md"); },
+    (value) => { value.changedPaths = [...value.changedPaths.slice(0, -1), "app/index.tsx"]; },
+    (value) => { value.subject = "Activate whole-app engineering doctrine (#229)"; },
+    (value) => { value.terminalAuthority = { build: true }; },
+  ];
+  for (const mutateTerminal of mutations) assert.ok(pendingTransitionEvaluation({ recovery: true, repair: true, mutateTerminal }).findings.length > 0);
+  const duplicate = { commit: digest("duplicate-repair").slice(0, 40), parents: [digest("terminal-successor-merge").slice(0, 40), digest("duplicate-repair-source").slice(0, 40)], tree: digest("duplicate-repair-tree").slice(0, 40), subject: "Activate whole-app engineering doctrine (#228)", changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], terminalSuccessor: true, terminalRepair: true };
+  const duplicateResult = pendingTransitionEvaluation({ recovery: true, repair: true, append: [duplicate] });
+  assert.ok(duplicateResult.findings.length > 0, stableJson(duplicateResult));
+  assert.equal(new Set(Array.from({ length: 3 }, () => stableJson(pendingTransitionEvaluation({ recovery: true, repair: true })))).size, 1);
 });
 test("pending transitions 19-23: successor rejects fourth path, wrong predecessor/next task, build, and provider authority", () => {
   const mutations = [

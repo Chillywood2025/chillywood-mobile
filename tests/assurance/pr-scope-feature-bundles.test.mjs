@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffHash, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
-import { args, renderCurrentState, renderNextTask, stableJson } from "../../scripts/assurance/lib.mjs";
+import { args, canonicalGitText, renderCurrentState, renderNextTask, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
@@ -293,6 +294,22 @@ test("architecture final source: edited, duplicate, stale, over-budget, ninth-pa
     assert.equal(verifyArchitectureMaintenanceAuthority(value.args).ok, false, label);
   }
 });
+test("canonical predecessor receipt selection is content-derived and order-independent", () => {
+  const value = architectureSuccessorFixture();
+  const canonical = rawOwnerComment({ id: 5280109323, pr: 227, body: value.final.body });
+  const rejectedSubject = architectureFinalSourceSubject({ ...value, scope: { ...value.scope, diffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b" }, originalRaw: value.original.raw, historicalRaw: value.successor });
+  const rejected = rawOwnerComment({ id: 5277679438, pr: 227, body: architectureFinalSourceOwnerCommentBody(rejectedSubject) });
+  const comments = [value.original.raw, value.successor, rejected, canonical];
+  for (const ordered of [comments, [...comments].reverse()]) {
+    const authority = verifyArchitectureMaintenanceAuthority({ ...value.args, allComments: ordered });
+    assert.equal(authority.ok, true, authority.findings.join(","));
+    assert.equal(authority.currentFinalSourceReceiptId, 5280109323);
+    assert.deepEqual(authority.rejectedFinalSourceReceiptIds, [5277679438]);
+    assert.ok(authority.historicalFinalSourceReceiptIds.includes(5277054532));
+  }
+  const duplicate = { ...canonical, id: 5280109324, node_id: "IC_5280109324" };
+  assert.equal(verifyArchitectureMaintenanceAuthority({ ...value.args, allComments: [...comments, duplicate] }).ok, false);
+});
 test("architecture successor: exact PR 227 is the only bootstrap recovery context while doctrine truth is pending", () => {
   const value = architectureSuccessorFixture();
   const runtime = { pendingTerminalTruth: true, terminalSuccessorRequired: true, pendingTransitionCount: 1 };
@@ -372,6 +389,95 @@ test("terminal successor remains eligible for the exact two-transition pending c
   const value = terminalFixture();
   const result = derive({ fixture: value.fixture, terminalTruthAuthority: value.authority, protectedMainRuntime: { pendingTerminalTruth: true, terminalSuccessorRequired: true, pendingTransitionCount: 2 } });
   assert.equal(result.ok, true, result.findings.join(","));
+});
+
+const terminalRepairFixture = () => {
+  const base = terminalFixture();
+  const predecessorAuthority = {
+    ...base.predecessorAuthority,
+    ok: true,
+    commentId: 5280109323,
+    commentBodyHash: "08aa4e3239ca36cd07e5d2535b351e97f894b5021b1f20a9b20c7335229b92e9",
+    subjectHash: "866da37ef99aea7452e77e0071225dfbea143d3e170f66e401210ca7085098f5",
+    subject: { ...base.predecessorAuthority.subject, currentHead: "cb4be9ff1e4a956d73cffc1de6902538b79a918c", currentTree: "b8e7f4b47cd838496adcd398744426dc80ff9461", terminalTruthRequired: true },
+  };
+  const predecessor = { valid: true, pr: 227, mergeSha: "5506f1c2c227c0d3383131db7f818fef1aae2541", firstParent: "c1f9ec1f71cc8bc4448afd2327c4341cac309573", sourceHead: predecessorAuthority.subject.currentHead, sourceTree: predecessorAuthority.subject.currentTree };
+  const priorTruthHash = "035c23f3a5508e9e047cbed60a1826b00ebbe508c2b43b17c074f5de2adf85bc";
+  const oldIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 228, branch: "codex/post-whole-app-engineering-doctrine-truth", baseSha: predecessor.mergeSha, headSha: "abe9d599b79459ac067901ac3baf4db16b1cc5d0" };
+  const oldTree = "bc13b7c24fdca4525dff3a4aa677762bd7cfd0ea";
+  const oldScope = { files: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], netChangedLines: 110 };
+  const oldSubject = terminalTruthSuccessorSubject({ identity: oldIdentity, tree: oldTree, scope: oldScope, predecessor, predecessorAuthority, priorTruthHash });
+  const oldRaw = rawOwnerComment({ id: 5280368893, pr: 228, body: terminalTruthSuccessorOwnerCommentBody(oldSubject) });
+  const identity = { ...oldIdentity, headSha: "c".repeat(40) };
+  const tree = "d".repeat(40);
+  const scope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 1500, diffHash: "e".repeat(64) };
+  const truthRecord = structuredClone(base.truthRecord);
+  truthRecord.taskContextArchitecture.architecturePr = 227;
+  truthRecord.taskContextArchitecture.sourceHead = predecessor.sourceHead;
+  truthRecord.taskContextArchitecture.sourceTree = predecessor.sourceTree;
+  truthRecord.taskContextArchitecture.mergeSha = predecessor.mergeSha;
+  truthRecord.taskContextArchitecture.pendingTransitions[1].pr = 227;
+  truthRecord.taskContextArchitecture.pendingTransitions[1].mergeSha = predecessor.mergeSha;
+  truthRecord.taskContextArchitecture.terminalVerifierRepair = {
+    classification: "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+    historicalTerminalReceipt: 5280368893,
+    rejectedPredecessorReceipt: 5277679438,
+    canonicalPredecessorReceipt: 5280109323,
+    rawPredecessorDiffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
+    canonicalPredecessorDiffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+    changedVerifierPaths: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.filter((file) => !oldScope.files.includes(file)),
+    singleUse: true,
+    authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false },
+  };
+  const currentStateText = renderCurrentState(truthRecord);
+  const nextTaskText = renderNextTask(truthRecord);
+  const subject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: oldRaw });
+  const currentRaw = rawOwnerComment({ id: 6000000228, pr: 228, body: terminalTruthSuccessorVerifierRepairOwnerCommentBody(subject) });
+  const args = { raw: oldRaw, allComments: [oldRaw, currentRaw], paginationComplete: true, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false };
+  return { args, oldRaw, currentRaw, authority: verifyTerminalTruthSuccessorAuthority(args) };
+};
+
+test("terminal verifier repair revisions retain one stale receipt and one canonical current receipt", () => {
+  const value = terminalRepairFixture();
+  assert.equal(value.authority.ok, true, value.authority.findings.join(","));
+  assert.equal(value.authority.authoritySource, "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1");
+  assert.deepEqual(value.authority.historicalTerminalReceiptIds, [5280368893]);
+  assert.equal(value.authority.currentTerminalReceiptId, 6000000228);
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [...value.args.allComments, { ...value.currentRaw, id: 6000000229, node_id: "IC_6000000229" }] }).ok, false);
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [value.currentRaw] }).ok, false);
+});
+test("terminal verifier repair scope rejects expansion, product, dependency, workflow, provider, release, and budget mutations", () => {
+  const mutations = [
+    (args) => { args.scope.files.push("README.md"); },
+    (args) => { args.scope.files = [...args.scope.files.slice(0, -1), "app/index.tsx"]; },
+    (args) => { args.scope.files = [...args.scope.files.slice(0, -1), "package-lock.json"]; },
+    (args) => { args.scope.files = [...args.scope.files.slice(0, -1), ".github/workflows/phase1-ci.yml"]; },
+    (args) => { args.scope.files = [...args.scope.files.slice(0, -1), "supabase/functions/provider/index.ts"]; },
+    (args) => { args.scope.files = [...args.scope.files.slice(0, -1), "eas.json"]; },
+    (args) => { args.scope.netChangedLines = 1801; },
+  ];
+  for (const mutate of mutations) {
+    const value = terminalRepairFixture();
+    mutate(value.args);
+    assert.equal(verifyTerminalTruthSuccessorAuthority(value.args).ok, false);
+  }
+  assert.equal(terminalFixture().authority.ok, true);
+});
+
+test("canonical Git diff identity is newline-independent and shared by both authority callers", () => {
+  const raw = execFileSync("git", ["diff", "--full-index", "--no-ext-diff", "c1f9ec1f71cc8bc4448afd2327c4341cac309573...cb4be9ff1e4a956d73cffc1de6902538b79a918c"], { cwd: root, encoding: "utf8" });
+  const expected = "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea";
+  assert.equal(canonicalGitDiffHash(raw), expected);
+  assert.equal(canonicalGitDiffHash(canonicalGitText(raw)), expected);
+  assert.equal(canonicalGitDiffHash(raw.replace(/\n$/u, "")), expected);
+  assert.equal(canonicalGitDiffHash(raw.replace(/\n/gu, "\r\n")), expected);
+  assert.notEqual(canonicalGitDiffHash(raw.replace("diff --git", "diff  --git")), expected);
+  assert.throws(() => canonicalGitText(Buffer.from(raw)), /ASSURANCE_CANONICAL_GIT_TEXT_REQUIRES_STRING/u);
+  const closureSource = fs.readFileSync(`${root}/scripts/assurance/engineering-closure.mjs`, "utf8");
+  const scopeSource = fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8");
+  assert.doesNotMatch(closureSource, /hashValue\(diffRun\.stdout\)/u);
+  assert.match(closureSource, /canonicalGitDiffHash\(diffRun\.stdout\)/u);
+  assert.match(scopeSource, /canonicalGitDiffHash\(diff\)/u);
 });
 
 test("general 36-40: arbitrary and spoofed PRs plus injected feature or waiver remain blocked", () => {

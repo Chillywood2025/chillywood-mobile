@@ -18,6 +18,21 @@ export const stableValue = (value) => Array.isArray(value)
     : value;
 export const stableJson = (value, space = 0) => JSON.stringify(stableValue(value), null, space);
 export const normalizeSql = (value) => value.replace(/\r\n/gu, "\n").replace(/[ \t]+\n/gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
+export function canonicalGitText(value) {
+  if (typeof value !== "string") throw new TypeError("ASSURANCE_CANONICAL_GIT_TEXT_REQUIRES_STRING");
+  return value.replace(/\r\n?|\n/gu, "\n").trim();
+}
+
+export const TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS = Object.freeze([
+  "CURRENT_STATE.md",
+  "NEXT_TASK.md",
+  "config/assurance/current-truth-v1.json",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
+  "scripts/assurance/pr-scope.mjs",
+  "tests/assurance/active-task-binding-a1.test.mjs",
+  "tests/assurance/pr-scope-feature-bundles.test.mjs",
+]);
 
 export function args(argv = process.argv.slice(2)) {
   const result = {};
@@ -34,7 +49,7 @@ export function args(argv = process.argv.slice(2)) {
 }
 
 export function git(gitArgs, options = {}) {
-  return execFileSync("git", gitArgs, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }).trim();
+  return canonicalGitText(execFileSync("git", gitArgs, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }));
 }
 
 export function baseSynchronizationFirstParentDistance(sourceHead, observedHead, runGit = git) {
@@ -1514,6 +1529,40 @@ function embeddedTerminalTransitionConsumption(observation, pending, gitCommand)
   }
 }
 
+function embeddedTerminalVerifierRepairConsumption(observation, pending, gitCommand) {
+  try {
+    const embedded = JSON.parse(gitCommand(["show", `${observation.commit}:config/assurance/current-truth-v1.json`]));
+    const architecture = embedded?.taskContextArchitecture;
+    const repair = architecture?.terminalVerifierRepair;
+    const consumed = architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }));
+    const expectedConsumed = pending.length
+      ? pending.map(({ mergeSha }, index) => ({ pr: index === 0 ? 226 : 227, mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }))
+      : [
+          { pr: 226, mergeSha: "c1f9ec1f71cc8bc4448afd2327c4341cac309573", status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+          { pr: 227, mergeSha: "5506f1c2c227c0d3383131db7f818fef1aae2541", status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+        ];
+    return parseProtectedPullRequestMergeSubject(observation.subject).prNumber === 228
+      && stableJson([...(observation.changedPaths ?? [])].sort()) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS)
+      && repair?.classification === "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1"
+      && repair?.historicalTerminalReceipt === 5280368893
+      && repair?.rejectedPredecessorReceipt === 5277679438
+      && repair?.canonicalPredecessorReceipt === 5280109323
+      && repair?.rawPredecessorDiffHash === "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b"
+      && repair?.canonicalPredecessorDiffHash === "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea"
+      && repair?.singleUse === true
+      && closedPendingAuthority(repair?.authority)
+      && architecture?.pendingTransitionPolicyId === "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1"
+      && architecture?.pendingTransitionCountAfterSynchronization === 0
+      && architecture?.terminalTransitionConsumed === true
+      && stableJson(consumed) === stableJson(expectedConsumed)
+      && embedded?.engineeringDoctrine?.status === "ACTIVE"
+      && embedded?.engineeringDoctrine?.nextPermittedAction === "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
+      && stableJson(architecture?.authority) === stableJson({ providerMutation: false, build: false, submission: false, ota: false, publicRelease: false });
+  } catch {
+    return false;
+  }
+}
+
 export function evaluateProtectedMainAdvancement({
   record,
   contract,
@@ -1612,6 +1661,8 @@ export function evaluateProtectedMainAdvancement({
     if (!normalPrMerge) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
     const authorityChanged = classifications.includes(protectedMainClasses.authority);
     const terminalChanged = classifications.includes(protectedMainClasses.terminal) && !authorityChanged;
+    const terminalRepairScope = stableJson([...(observation.changedPaths ?? [])].sort()) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
+    const terminalRepairChanged = normalPrMerge && authorityChanged && embeddedTerminalVerifierRepairConsumption(observation, pendingTransitions, gitCommand);
     const companionPresent = (policy.authorityRequiredCompanionPaths ?? []).every((file) => (observation.changedPaths ?? []).includes(file));
     const authorityBound = observation.authorityUpdateBound === true
       || (observation.authorityUpdateBound !== false && authorityChanged && embeddedRollingAuthorityBound(observation.commit, checkpointSha, gitCommand));
@@ -1640,14 +1691,19 @@ export function evaluateProtectedMainAdvancement({
       findings.push("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE");
     }
     const exactTerminalSuccessorPaths = stableJson([...(observation.changedPaths ?? [])].sort()) === stableJson(pendingTransitionPolicy?.state?.terminalSuccessorPaths);
-    if (terminalChanged && pendingTransitions.length) {
-      if (exactTerminalSuccessorPaths && embeddedTerminalTransitionConsumption(observation, pendingTransitions, gitCommand)) {
+    const exactTerminalRepairPaths = terminalRepairScope;
+    const terminalSynchronization = terminalChanged || terminalRepairChanged;
+    if (terminalSynchronization && pendingTransitions.length) {
+      if ((exactTerminalSuccessorPaths && embeddedTerminalTransitionConsumption(observation, pendingTransitions, gitCommand))
+        || (exactTerminalRepairPaths && terminalRepairChanged)) {
         pendingTransitions.splice(0);
         pendingConsumptionCount += 1;
       }
       else findings.push("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID");
-    } else if (terminalChanged && pendingConsumptionCount > 0) {
+    } else if ((terminalSynchronization || terminalRepairScope) && pendingConsumptionCount > 0) {
       findings.push("CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID");
+    } else if (terminalRepairChanged && pendingTransitions.length === 0) {
+      pendingConsumptionCount += 1;
     } else if (pendingTransitions.length && !pendingCandidate) {
       findings.push("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED");
     }
@@ -1665,6 +1721,7 @@ export function evaluateProtectedMainAdvancement({
       classifications,
       authorityBound: authorityChanged ? authorityBound : null,
       pendingTerminalTruth: Boolean(pendingCandidate),
+      terminalVerifierRepair: terminalRepairChanged,
       pendingTransitionId: pendingCandidate?.transitionId ?? null
     });
     prior = observation.commit;
@@ -1706,6 +1763,7 @@ export function evaluateProtectedMainAdvancement({
     && (finiteTaskRuntime?.sourceOnlyEligible ?? true);
   const providerDependentEligible = sourceOnlyEligible
     && pendingTransitions.length === 0
+    && pendingConsumptionCount === 0
     && (finiteTaskRuntime?.providerDependentEligible ?? false);
   const finalEvidence = record?.finiteTaskRuntime?.finalEvidence ?? {};
   const finalEvidenceCurrent = ["ownerReceipt", "repositoryReview", "phase1", "mergeEligible"].every((key) => finalEvidence[key] === true);

@@ -1157,6 +1157,17 @@
       "historicalRejectedFinalSourceReceipt": {"commentId":5277679438,"disposition":"HISTORICAL_REJECTED_DIFF_CANONICALIZATION_MISMATCH"},
       "baselineGaps": {"routeOrphans":50,"ambiguousSharedRoutes":4,"edgeFunctionOrphans":52,"edgeFunctionAmbiguousOwners":2,"edgeFunctionsMissingExplicitConfig":3,"edgeFunctionsConfiguredWithoutDirectory":0,"edgeFunctionsConfiguredWithoutEntry":0,"edgeFunctionsDirectoryWithoutEntry":0,"nativePathOrphans":321,"nativePathAmbiguousOwners":15,"nativeCapabilityOrphans":47,"pluginAndLocalNativeModuleOrphans":4,"externalEvidence":"BLOCKED_EXTERNAL_NO_PREEXISTING_TRUST_ROOT"}
     },
+    "terminalVerifierRepair": {
+      "classification": "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+      "historicalTerminalReceipt": 5280368893,
+      "rejectedPredecessorReceipt": 5277679438,
+      "canonicalPredecessorReceipt": 5280109323,
+      "rawPredecessorDiffHash": "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
+      "canonicalPredecessorDiffHash": "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+      "changedVerifierPaths": ["scripts/assurance/engineering-closure.mjs","scripts/assurance/lib.mjs","scripts/assurance/pr-scope.mjs","tests/assurance/active-task-binding-a1.test.mjs","tests/assurance/pr-scope-feature-bundles.test.mjs"],
+      "singleUse": true,
+      "authority": {"product":false,"nativeProduct":false,"database":false,"providerMutation":false,"build":false,"submission":false,"ota":false,"publicRelease":false}
+    },
     "authority": {"providerMutation":false,"build":false,"submission":false,"ota":false,"publicRelease":false}
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
