@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
-import { DOCTRINE_BASE, DOCTRINE_BRANCH, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, observeCandidateScopeFromGit, observeGitHubTaskIdentity } from "./engineering-closure.mjs";
+import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity } from "./engineering-closure.mjs";
 
 const laneIds = [
   "architecture-state",
@@ -88,6 +88,142 @@ const bootstrapActiveTaskRegistry = [{
 const ownerBootstrapRepository = "Chillywood2025/chillywood-mobile";
 const ownerBootstrapAuthor = "Chillywood2025";
 const ownerBootstrapMarker = "<!-- chillywood-assurance-owner-task-binding-v1 -->";
+export const PRE_ADMISSION_OWNER_MARKER = "<!-- chillywood-pre-release-plan-wave1-owner-approval-v1 -->";
+export const OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1 = "OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1";
+const preAdmissionForbiddenPath = (file) => file !== "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json";
+
+const parseOwnerPayload = (comment) => {
+  if (!comment?.body?.startsWith(`${PRE_ADMISSION_OWNER_MARKER}\n`)) return null;
+  try { return JSON.parse(comment.body.slice(PRE_ADMISSION_OWNER_MARKER.length + 1)); } catch { return null; }
+};
+
+export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
+  const findings = [];
+  const truth = facts.currentTruth;
+  const artifact = facts.taskArtifact;
+  const pr = facts.pullRequest;
+  const comment = facts.ownerComment;
+  const payload = parseOwnerPayload(comment);
+  const subject = payload?.subject;
+  const featureMatches = (facts.registry?.features ?? []).filter(({ featureId }) => featureId === subject?.primaryFeature);
+  const changedPaths = [...new Set(facts.changedPaths ?? [])].sort();
+  const activeLeases = (truth?.finiteTaskLeases?.tasks ?? []).filter(({ taskState }) => !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
+  const payloadWithoutHash = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+  if (facts.callerFeature !== undefined) findings.push("PRE_ADMISSION_CALLER_FEATURE_FORBIDDEN");
+  if (truth?.engineeringDoctrine?.status !== "ACTIVE") findings.push("PRE_ADMISSION_DOCTRINE_NOT_ACTIVE");
+  if (truth?.engineeringDoctrine?.taskLeaseState !== "NO_ACTIVE_TASK" || activeLeases.length) findings.push("PRE_ADMISSION_ACTIVE_FINITE_TASK");
+  if (truth?.taskContextArchitecture?.pendingTransitionCountAfterSynchronization !== 0) findings.push("PRE_ADMISSION_PENDING_TERMINAL_TRANSITION");
+  if (pr?.number !== facts.requestedPr || pr?.state !== "open" || pr?.draft !== true || pr?.repository !== subject?.repository || pr?.branch !== subject?.implementationBranch) findings.push("PRE_ADMISSION_PR_IDENTITY_MISMATCH");
+  if (pr?.baseRef !== "main" || pr?.baseSha !== facts.currentProtectedMain || facts.baseIsAncestor !== true) findings.push("PRE_ADMISSION_PROTECTED_BASE_MISMATCH");
+  if (!comment || comment.id !== facts.requestedOwnerComment || comment.author !== "Chillywood2025" || comment.authorAssociation !== "OWNER" || comment.createdAt !== comment.updatedAt) findings.push("PRE_ADMISSION_OWNER_COMMENT_IDENTITY_INVALID");
+  if (!payload || payload.subjectHash !== hashValue(subject) || payload.bodyHash !== hashValue(payloadWithoutHash) || comment.bodyHash !== hashValue(comment.body)) findings.push("PRE_ADMISSION_OWNER_COMMENT_HASH_INVALID");
+  if (payload?.pr !== String(facts.requestedPr) || payload?.repository !== pr?.repository || subject?.implementationPr !== facts.requestedPr || subject?.taskArtifact !== facts.taskArtifactPath) findings.push("PRE_ADMISSION_OWNER_COMMENT_BINDING_INVALID");
+  if (subject?.admittedSeed?.head !== facts.seedHead || subject?.admittedSeed?.tree !== facts.seedTree || facts.observedSeedTree !== facts.seedTree || facts.seedIsAncestor !== true) findings.push("PRE_ADMISSION_SEED_REWRITTEN");
+  if (artifact?.taskId !== subject?.leaseId || artifact?.repository !== subject?.repository || artifact?.implementation?.branch !== subject?.implementationBranch || artifact?.primaryDomain !== subject?.primaryFeature || artifact?.authorizationStatus !== "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED") findings.push("PRE_ADMISSION_TASK_ARTIFACT_BINDING_INVALID");
+  if (artifact?.implementation?.pullRequest !== facts.requestedPr || artifact?.implementation?.seedHead !== facts.seedHead || artifact?.implementation?.seedTree !== facts.seedTree) findings.push("PRE_ADMISSION_TASK_ARTIFACT_IDENTITY_STALE");
+  if (stableJson(artifact?.rootDefects) !== stableJson(subject?.defectIds) || artifact?.provisionalPathBudget?.maximumFiles !== subject?.scopeBudget?.initial?.maximumFiles || artifact?.provisionalPathBudget?.maximumHandAuthoredNetLines !== subject?.scopeBudget?.initial?.maximumHandAuthoredNetLines) findings.push("PRE_ADMISSION_OWNER_SCOPE_MISMATCH");
+  if (featureMatches.length !== 1) findings.push("PRE_ADMISSION_FEATURE_UNRESOLVED");
+  if (changedPaths.length !== 1 || changedPaths[0] !== facts.taskArtifactPath || changedPaths.some(preAdmissionForbiddenPath) || facts.productChangedFiles !== 0) findings.push("PRE_ADMISSION_PRODUCT_SOURCE_PRESENT");
+  if ((facts.openPreAdmissionSeeds ?? []).filter((number) => number !== facts.requestedPr).length) findings.push("PRE_ADMISSION_COMPETING_SEED");
+  if (!sha40(facts.currentPlanningHead) || !sha40(facts.currentPlanningTree) || facts.currentPlanningHead !== pr?.headSha || facts.currentPlanningTree !== facts.observedPlanningTree) findings.push("PRE_ADMISSION_PLANNING_IDENTITY_MISMATCH");
+  const unique = [...new Set(findings)].sort();
+  if (unique.length) return { ok: false, findings: unique, productSourceMutationAllowed: false };
+  const graph = facts.graph ?? generateDomainGraph();
+  const closure = affectedDomainClosure(graph, subject.primaryFeature);
+  const domains = closure.domains ?? [];
+  const graphSlice = {
+    nodes: graph.nodes.filter(({ domain }) => domains.includes(domain)).map(({ domain }) => domain).sort(),
+    edges: graph.edges.filter(({ sourceDomain, destinationDomain }) => domains.includes(sourceDomain) && domains.includes(destinationDomain)).map(({ edgeId }) => edgeId).sort()
+  };
+  const packetBody = {
+    classification: OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1,
+    status: "ENGINEERING_PLAN_DRAFTED",
+    featureId: subject.primaryFeature,
+    implementationPr: pr.number,
+    implementationBranch: pr.branch,
+    seedHead: facts.seedHead,
+    seedTree: facts.seedTree,
+    currentPlanningHead: facts.currentPlanningHead,
+    currentPlanningTree: facts.currentPlanningTree,
+    currentProtectedMain: facts.currentProtectedMain,
+    ownerCommentId: comment.id,
+    ownerCommentBodyHash: comment.bodyHash,
+    ownerCommentSubjectHash: payload.subjectHash,
+    taskArtifactPath: facts.taskArtifactPath,
+    taskArtifactHash: facts.taskArtifactHash,
+    affectedGraphSlice: graphSlice,
+    provisionalDomainClosure: { status: closure.status, domains, findings: closure.findings ?? [] },
+    currentScope: { changedPaths, changedFiles: changedPaths.length, productSourceChangedFiles: 0 },
+    productSourceMutationAllowed: false,
+    finiteLeasePresent: false,
+    admissionRequired: true,
+    highestPermittedState: "ENGINEERING_PLAN_DRAFTED",
+    findings: []
+  };
+  return { ok: true, packet: { ...packetBody, packetHash: hashValue(packetBody) }, findings: [], productSourceMutationAllowed: false };
+}
+
+const ghJson = (endpoint) => {
+  const run = spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  if (run.status !== 0) return null;
+  try { return JSON.parse(run.stdout); } catch { return null; }
+};
+const ghPages = (endpoint) => {
+  const run = spawnSync("gh", ["api", "--paginate", "--slurp", endpoint], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  if (run.status !== 0) return null;
+  try { const pages = JSON.parse(run.stdout); return Array.isArray(pages) && pages.every(Array.isArray) ? pages.flat() : null; } catch { return null; }
+};
+
+export function observePreAdmissionEngineeringSeed({ preAdmissionPr, taskArtifactPath, ownerCommentId, callerFeature } = {}) {
+  const repository = "Chillywood2025/chillywood-mobile";
+  const rawPull = ghJson(`repos/${repository}/pulls/${preAdmissionPr}`);
+  const rawComment = ghJson(`repos/${repository}/issues/comments/${ownerCommentId}`);
+  const normalizedComment = normalizeGitHubCommentIdentity(rawComment, { repository, pr: preAdmissionPr, commentId: ownerCommentId });
+  const artifactAbsolute = typeof taskArtifactPath === "string" ? path.resolve(ROOT, taskArtifactPath) : "";
+  if (!rawPull || !normalizedComment || !artifactAbsolute.startsWith(`${ROOT}${path.sep}`) || !fs.existsSync(artifactAbsolute)) return { ok: false, findings: ["PRE_ADMISSION_READBACK_UNAVAILABLE"], productSourceMutationAllowed: false };
+  let artifact;
+  try { artifact = JSON.parse(fs.readFileSync(artifactAbsolute, "utf8")); } catch { return { ok: false, findings: ["PRE_ADMISSION_TASK_ARTIFACT_UNREADABLE"], productSourceMutationAllowed: false }; }
+  const currentProtectedMain = git(["rev-parse", "origin/main"]);
+  const currentPlanningHead = git(["rev-parse", `refs/remotes/origin/${rawPull.head.ref}`]);
+  const currentPlanningTree = git(["rev-parse", `${currentPlanningHead}^{tree}`]);
+  const payload = parseOwnerPayload(normalizedComment);
+  const seedHead = payload?.subject?.admittedSeed?.head;
+  const seedTree = payload?.subject?.admittedSeed?.tree;
+  const changedPaths = git(["diff", "--name-only", `${currentProtectedMain}...${currentPlanningHead}`]).split(/\r?\n/gu).filter(Boolean).sort();
+  const openPulls = ghPages(`repos/${repository}/pulls?state=open&base=main&per_page=100`) ?? [];
+  const openPreAdmissionSeeds = [];
+  for (const pull of openPulls) {
+    const files = ghPages(`repos/${repository}/pulls/${pull.number}/files?per_page=100`);
+    if (files?.some(({ filename }) => /^docs\/assurance\/tasks\/[^/]+\.json$/u.test(filename))) openPreAdmissionSeeds.push(pull.number);
+  }
+  const baseIsAncestor = spawnSync("git", ["merge-base", "--is-ancestor", rawPull.base.sha, currentPlanningHead], { cwd: ROOT, shell: false }).status === 0;
+  const seedIsAncestor = spawnSync("git", ["merge-base", "--is-ancestor", seedHead, currentPlanningHead], { cwd: ROOT, shell: false }).status === 0;
+  return evaluatePreAdmissionEngineeringSeed({
+    callerFeature,
+    requestedPr: preAdmissionPr,
+    requestedOwnerComment: ownerCommentId,
+    taskArtifactPath,
+    taskArtifact: artifact,
+    taskArtifactHash: sha256(fs.readFileSync(artifactAbsolute, "utf8")),
+    currentTruth: readJson("config/assurance/current-truth-v1.json"),
+    registry: readJson("config/assurance/feature-registry-v1.json"),
+    pullRequest: { number: rawPull.number, repository: rawPull.base?.repo?.full_name, branch: rawPull.head?.ref, headSha: rawPull.head?.sha, baseRef: rawPull.base?.ref, baseSha: rawPull.base?.sha, state: rawPull.state, draft: rawPull.draft },
+    ownerComment: normalizedComment,
+    seedHead,
+    seedTree,
+    observedSeedTree: sha40(seedHead) ? git(["rev-parse", `${seedHead}^{tree}`]) : null,
+    seedIsAncestor,
+    baseIsAncestor,
+    currentProtectedMain,
+    currentPlanningHead,
+    currentPlanningTree,
+    observedPlanningTree: currentPlanningTree,
+    changedPaths,
+    productChangedFiles: changedPaths.filter(preAdmissionForbiddenPath).length,
+    openPreAdmissionSeeds,
+    graph: generateDomainGraph()
+  });
+}
 
 const trustedEngineeringScopeObservations = new WeakSet();
 function observeEngineeringScope(lease, currentHead) {
@@ -856,8 +992,19 @@ export function activeTask(facts = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const parsed = strictOptions(process.argv.slice(2), { "--feature": "featureId" });
-  const result = parsed.ok ? activeTask(parsed.values) : { ok: false, findings: parsed.findings };
+  const parsed = strictOptions(process.argv.slice(2), { "--feature": "featureId", "--pre-admission-pr": "preAdmissionPr", "--task-artifact": "taskArtifactPath", "--owner-comment": "ownerCommentId" });
+  const preAdmissionRequested = parsed.ok && parsed.values.preAdmissionPr !== undefined;
+  const preAdmissionArgumentsValid = preAdmissionRequested
+    && /^\d+$/u.test(String(parsed.values.preAdmissionPr))
+    && /^\d+$/u.test(String(parsed.values.ownerCommentId))
+    && typeof parsed.values.taskArtifactPath === "string";
+  const result = !parsed.ok
+    ? { ok: false, findings: parsed.findings }
+    : preAdmissionRequested
+      ? preAdmissionArgumentsValid
+        ? observePreAdmissionEngineeringSeed({ preAdmissionPr: Number(parsed.values.preAdmissionPr), taskArtifactPath: parsed.values.taskArtifactPath, ownerCommentId: Number(parsed.values.ownerCommentId), callerFeature: parsed.values.featureId })
+        : { ok: false, findings: ["PRE_ADMISSION_ARGUMENTS_INVALID"], productSourceMutationAllowed: false }
+      : activeTask(parsed.values);
   if (result.ok) {
     const text = stableJson(result.packet);
     const packetSha256 = sha256(text);

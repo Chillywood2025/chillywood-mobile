@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   activeTask,
+  evaluatePreAdmissionEngineeringSeed,
+  OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1,
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject,
   validateEngineeringTaskAuthority,
@@ -74,6 +76,47 @@ const completedProofTierStatuses = {
   T6_INSTALLED_PHYSICAL: "NOT_APPLICABLE",
   T7_PUBLIC_CANARY: "NOT_APPLICABLE"
 };
+
+const preAdmissionFixture = () => {
+  const seedHead = "1".repeat(40); const seedTree = "2".repeat(40); const planningHead = "3".repeat(40); const planningTree = "4".repeat(40);
+  const taskArtifactPath = "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json";
+  const defectIds = ["WAPR-P1-AUTH-REDIRECT-001", "WAPR-P1-LEGAL-ACCEPTANCE-002", "WAPR-P1-PREMIUM-UNKNOWN-004", "WAPR-P1-PREMIUM-ACCOUNT-RACE-007", "WAPR-P1-PUSH-REVOCATION-008", "WAPR-CM-P1-CREATOR-ELIGIBILITY-014"];
+  const subject = { repository: "Chillywood2025/chillywood-mobile", implementationPr: 229, implementationBranch: "codex/pre-release-identity-entitlement-authority-v1", admittedSeed: { head: seedHead, tree: seedTree }, taskArtifact: taskArtifactPath, primaryFeature: "auth-session-password-recovery", leaseId: "pre-release-identity-entitlement-authority-v1", defectIds, scopeBudget: { initial: { maximumFiles: 30, maximumHandAuthoredNetLines: 3600 } } };
+  const payloadBase = { repository: subject.repository, pr: "229", subject, subjectHash: hashValue(subject) };
+  const payload = { ...payloadBase, bodyHash: hashValue(payloadBase) };
+  const body = `<!-- chillywood-pre-release-plan-wave1-owner-approval-v1 -->\n${stableJson(payload)}`;
+  const facts = {
+    requestedPr: 229, requestedOwnerComment: 5285464582, taskArtifactPath,
+    currentTruth: { ...structuredClone(canonicalTruth), engineeringDoctrine: { ...canonicalTruth.engineeringDoctrine, status: "ACTIVE", taskLeaseState: "NO_ACTIVE_TASK" }, finiteTaskLeases: { ...canonicalTruth.finiteTaskLeases, tasks: canonicalTruth.finiteTaskLeases.tasks.map((task) => ({ ...task, taskState: "MERGED_VERIFIED" })) }, taskContextArchitecture: { ...canonicalTruth.taskContextArchitecture, pendingTransitionCountAfterSynchronization: 0 } },
+    registry, pullRequest: { number: 229, repository: subject.repository, branch: subject.implementationBranch, headSha: planningHead, baseRef: "main", baseSha: "5".repeat(40), state: "open", draft: true },
+    ownerComment: { id: 5285464582, author: "Chillywood2025", authorAssociation: "OWNER", createdAt: "2026-08-13T19:32:32Z", updatedAt: "2026-08-13T19:32:32Z", body, bodyHash: hashValue(body) },
+    taskArtifact: { taskId: subject.leaseId, repository: subject.repository, implementation: { branch: subject.implementationBranch, pullRequest: 229, seedHead, seedTree }, primaryDomain: subject.primaryFeature, authorizationStatus: "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED", rootDefects: defectIds, provisionalPathBudget: { maximumFiles: 30, maximumHandAuthoredNetLines: 3600 } },
+    taskArtifactHash: "6".repeat(64), seedHead, seedTree, observedSeedTree: seedTree, seedIsAncestor: true, baseIsAncestor: true, currentProtectedMain: "5".repeat(40), currentPlanningHead: planningHead, currentPlanningTree: planningTree, observedPlanningTree: planningTree, changedPaths: [taskArtifactPath], productChangedFiles: 0, openPreAdmissionSeeds: [229], graph: generateDomainGraph()
+  };
+  return facts;
+};
+
+const preAdmissionMutation = (mutate) => { const facts = preAdmissionFixture(); mutate(facts); return evaluatePreAdmissionEngineeringSeed(facts); };
+test("pre-admission 01: exact governed seed passes without product authority", () => { const result = evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()); assert.equal(result.ok, true); assert.equal(result.packet.classification, OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1); assert.equal(result.packet.productSourceMutationAllowed, false); });
+test("pre-admission 02: terminal history does not block explicit seed mode", () => { const facts = preAdmissionFixture(); facts.currentTruth.activeTaskBinding = canonicalTruth.activeTaskBinding; assert.equal(evaluatePreAdmissionEngineeringSeed(facts).ok, true); });
+test("pre-admission 03: normal active-task terminal history remains unchanged", () => { assert.equal(canonicalTruth.activeTaskBinding.implementationPr, 212); assert.deepEqual(validateStructuredBinding(canonicalTruth.activeTaskBinding, gateCatalog, registry, canonicalTruth.openImplementationPrs, canonicalTruth.latestMergedImplementationPr), []); });
+test("pre-admission 04: normal feature conflict stays denied", () => assert.deepEqual(activeTask({ currentTruth: canonicalTruth, truthCheck: { ok: true }, registry, featureId: "auth-session-password-recovery" }).findings, ["FEATURE_OVERRIDE_CONFLICT"]));
+test("pre-admission 05: feature derives from Owner and artifact", () => assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet.featureId, "auth-session-password-recovery"));
+test("pre-admission 06: caller feature is rejected", () => assert.equal(preAdmissionMutation((facts) => { facts.callerFeature = "auth-session-password-recovery"; }).ok, false));
+test("pre-admission 07: wrong PR fails", () => assert.equal(preAdmissionMutation((facts) => { facts.requestedPr = 230; }).ok, false));
+test("pre-admission 08: wrong branch fails", () => assert.equal(preAdmissionMutation((facts) => { facts.pullRequest.branch = "codex/wrong"; }).ok, false));
+test("pre-admission 09: wrong seed head fails", () => assert.equal(preAdmissionMutation((facts) => { facts.seedHead = "7".repeat(40); }).ok, false));
+test("pre-admission 10: wrong seed tree fails", () => assert.equal(preAdmissionMutation((facts) => { facts.seedTree = "7".repeat(40); }).ok, false));
+test("pre-admission 11: rewritten seed fails", () => assert.equal(preAdmissionMutation((facts) => { facts.seedIsAncestor = false; }).ok, false));
+test("pre-admission 12: edited Owner comment fails", () => assert.equal(preAdmissionMutation((facts) => { facts.ownerComment.body += " "; }).ok, false));
+test("pre-admission 13: wrong Owner association fails", () => assert.equal(preAdmissionMutation((facts) => { facts.ownerComment.authorAssociation = "MEMBER"; }).ok, false));
+test("pre-admission 14: product source in diff fails", () => assert.equal(preAdmissionMutation((facts) => { facts.changedPaths.push("app/index.tsx"); facts.productChangedFiles = 1; }).ok, false));
+test("pre-admission 15: task-artifact-only descendant succeeds", () => { const facts = preAdmissionFixture(); facts.currentPlanningHead = "8".repeat(40); facts.pullRequest.headSha = facts.currentPlanningHead; assert.equal(evaluatePreAdmissionEngineeringSeed(facts).ok, true); });
+test("pre-admission 16: second changed path fails", () => assert.equal(preAdmissionMutation((facts) => { facts.changedPaths.push("tests/x.mjs"); }).ok, false));
+test("pre-admission 17: competing seed fails", () => assert.equal(preAdmissionMutation((facts) => { facts.openPreAdmissionSeeds.push(230); }).ok, false));
+test("pre-admission 18: mutation authority is false on failure", () => assert.equal(preAdmissionMutation((facts) => { facts.seedIsAncestor = false; }).productSourceMutationAllowed, false));
+test("pre-admission 19: clearance cannot issue before admission", () => { const packet = evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet; assert.equal(packet.highestPermittedState, "ENGINEERING_PLAN_DRAFTED"); assert.equal(packet.finiteLeasePresent, false); });
+test("pre-admission 20: packet is deterministic 3 of 3", () => assert.equal(new Set([1, 2, 3].map(() => stableJson(evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet))).size, 1));
 const e0CompletionFacts = [
   "repository.assurance-control.a1.requirements",
   "repository.assurance-control.a1.source",

@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE
+1. RESUME_PR_229_PRE_ADMISSION_ENGINEERING_CLOSURE
 
 Ordinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.
 

@@ -38,6 +38,11 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Pending terminal transitions: PR #226=`CONSUMED_BY_THIS_TERMINAL_TRUTH`, PR #227=`CONSUMED_BY_THIS_TERMINAL_TRUTH`; count after synchronization `0`.
 - Product, provider, build, submission, OTA, and public-release authority remain closed.
 
+## Pre-admission engineering seed capability
+
+- Contract `OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1` is `ACTIVE`; product mutation is `false` until finite lease admission through `FINITE_TASK_ADMISSION_SUCCESSOR_V1`.
+- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: `RESUME_PR_229_PRE_ADMISSION_ENGINEERING_CLOSURE`.
+
 ## Open implementation PRs
 
 - None.

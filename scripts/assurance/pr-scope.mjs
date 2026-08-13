@@ -88,7 +88,7 @@ if (!event.pull_request) {
   } catch {}
   const typedAuthorities = validatedIdentity.ok && tree
     ? observeTypedTaskAuthorities({ identity: validatedIdentity.identity, tree, scope, currentTruth })
-    : { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null };
+    : { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null };
   const context = deriveTaskScopeContext({
     event,
     readback,
