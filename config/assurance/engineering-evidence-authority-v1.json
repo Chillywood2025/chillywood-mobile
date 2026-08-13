@@ -1,1 +1,454 @@
-{"schemaVersion":1,"contractId":"engineering-evidence-authority-v1","schemaRef":"config/assurance/schemas-v1.json#/$defs/engineeringEvidenceAuthority","integration":"WHOLE_APP_ENGINEERING_DOCTRINE_INTEGRATED_REGISTRY","doctrineId":"WHOLE_APP_ENGINEERING_BEFORE_IMPLEMENTATION_DOCTRINE_V1","principle":"DECLARED_OBSERVED_VERIFIED_SEPARATION","receiptSchema":{"required":["schemaVersion","evidenceClass","issuer","verifier","subject","repository","sourceHead","sourceTree","generationProcedure","generatorSourceHash","resultHash","observedAt","expiresAt","factsCovered","authorityAllowed","replayResult"]},"evidenceClasses":{"OWNER_INTENT":{"mayEstablish":["requested outcome","non-goals","risk tolerance","platform and market scope","explicit Owner approval"],"mayNotEstablish":["source presence","transition behavior","test result","provider state","novelty","external contract drift","signed proof","installed proof","physical proof"],"subjectRequirements":["exact task","exact authorization subject hash"],"identityRequirements":["immutable GitHub Owner comment","exact repository and PR"],"freshnessRequirements":["created_at equals updated_at","current task head binding"],"replayRequirements":["GitHub API comment readback","body and subject hash replay"],"allowedIssuer":["Chillywood2025 repository Owner"],"allowedVerifier":["repository-owned GitHub comment normalizer"],"canClearGate":true},"GIT_GITHUB_IDENTITY":{"mayEstablish":["repository","PR","branch","head","tree","ancestry","changed paths","changed lines","merge identity","immutable Owner comment identity"],"mayNotEstablish":["transition behavior","provider state","signed proof","installed proof","physical proof"],"subjectRequirements":["exact repository","actual PR number","actual branch","base and candidate heads"],"identityRequirements":["GitHub PR API readback","origin ref readback","local Git object verification"],"freshnessRequirements":["PR open","remote head exact","protected base current"],"replayRequirements":["repeat GitHub and Git reads","recompute tree, ancestry, paths, lines, and diff hash"],"allowedIssuer":["GitHub API","Git object database"],"allowedVerifier":["repository-owned task identity verifier"],"canClearGate":true},"REPOSITORY_DERIVED":{"mayEstablish":["source presence","exact inventory","source bindings","graph","states and transitions represented by exact selectors","repository-owned contracts"],"mayNotEstablish":["current provider state","signed proof","installed proof","physical proof","future behavior"],"subjectRequirements":["exact source head and tree","finite exact selector"],"identityRequirements":["repository","head","tree","source path and normalized source hash"],"freshnessRequirements":["source tree exact"],"replayRequirements":["deterministic command re-executes from exact tree","byte-identical result"],"allowedIssuer":["repository-owned deterministic scanner"],"allowedVerifier":["separate repository-owned deterministic verifier"],"canClearGate":true},"EXECUTABLE_WITNESS":{"mayEstablish":["behavior actually executed by the exact bound test or runtime subject","positive witness","negative witness","targeted mutant detection"],"mayNotEstablish":["unexecuted platform behavior","provider state","signed proof","installed proof","physical proof"],"subjectRequirements":["exact executable subject","exact source head and tree","expected behavior"],"identityRequirements":["command","test identity","source hash","result hash"],"freshnessRequirements":["source and test hashes current"],"replayRequirements":["command re-executes with the same deterministic result"],"allowedIssuer":["repository-owned test runner"],"allowedVerifier":["repository-owned receipt verifier"],"canClearGate":true},"OFFICIAL_PUBLIC_CONTRACT":{"mayEstablish":["published platform or provider contract at an approved official source","supported version or publication date"],"mayNotEstablish":["authenticated dashboard state","deployment state","signed proof","installed proof","physical proof"],"subjectRequirements":["provider identity","exact contract fact","approved official HTTPS URL","final resolved URL"],"identityRequirements":["content hash","verified date","version or publication date"],"freshnessRequirements":["contract freshness policy"],"replayRequirements":["refetch with redirect-domain enforcement","content hash comparison"],"allowedIssuer":["approved official platform or provider domain"],"allowedVerifier":["repository-owned public contract verifier"],"canClearGate":true},"AUTHENTICATED_READ_ONLY_PROVIDER":{"mayEstablish":["current provider fact named by an approved expiring read-only receipt"],"mayNotEstablish":["facts outside receipt scope","signed proof","installed proof","physical proof"],"subjectRequirements":["provider","account/environment","exact fact"],"identityRequirements":["approved read-only receipt","redacted issuer identity"],"freshnessRequirements":["unexpired receipt"],"replayRequirements":["authorized read-only recheck"],"allowedIssuer":["approved provider read-only API"],"allowedVerifier":["repository-owned provider receipt verifier"],"canClearGate":true},"SIGNED_ARTIFACT":{"mayEstablish":["T5 exact signed artifact identity"],"mayNotEstablish":["installed behavior","physical behavior","public behavior"],"subjectRequirements":["platform","artifact hash","signing identity","source head"],"identityRequirements":["signed artifact receipt"],"freshnessRequirements":["exact source and signing scope"],"replayRequirements":["signature and artifact hash verification"],"allowedIssuer":["authorized signing system"],"allowedVerifier":["repository-owned artifact verifier"],"canClearGate":true},"INSTALLED_RUNTIME":{"mayEstablish":["T6 installed runtime identity and observed installed behavior"],"mayNotEstablish":["unobserved physical behavior","public behavior"],"subjectRequirements":["device class","installed artifact","runtime case"],"identityRequirements":["installer and runtime readback"],"freshnessRequirements":["exact installed session"],"replayRequirements":["repeat installed runtime case"],"allowedIssuer":["authorized installed runtime harness"],"allowedVerifier":["repository-owned runtime receipt verifier"],"canClearGate":true},"PHYSICAL_RUNTIME":{"mayEstablish":["T6 physical-device behavior actually observed"],"mayNotEstablish":["unobserved devices","public-canary behavior"],"subjectRequirements":["physical device class","signed installed artifact","interaction case"],"identityRequirements":["redacted physical receipt","artifact and case binding"],"freshnessRequirements":["exact physical session"],"replayRequirements":["repeat physical case when freshness expires"],"allowedIssuer":["authorized physical test operator"],"allowedVerifier":["repository-owned physical receipt verifier"],"canClearGate":true},"DECLARATION_ONLY":{"mayEstablish":["proposed intent","proposed model","candidate finding"],"mayNotEstablish":["gate clearance","source presence","transition behavior","test result","provider state","novelty","external contract drift","signed proof","installed proof","physical proof"],"subjectRequirements":["explicit declaration subject"],"identityRequirements":["declaring artifact identity"],"freshnessRequirements":["none; declaration is not proof"],"replayRequirements":["must be paired with an independently verified evidence class"],"allowedIssuer":["task","agent","Owner"],"allowedVerifier":["none independently"],"canClearGate":false}},"rejections":["ARBITRARY_LOCAL_JSON","MISSING_SUBJECT","MISSING_SOURCE_HASH","STALE_TEMPORAL_EVIDENCE","UNSUPPORTED_FACT_CLASS","SELF_SIGNED_PASS_FLAG","LOCAL_FILE_URL_EXTERNAL_AUTHORITY","LOCALHOST_EXTERNAL_AUTHORITY","DATA_URL_EXTERNAL_AUTHORITY","TASK_AUTHORED_TIMESTAMP_FRESHNESS"]}
+{
+  "schemaVersion": 1,
+  "contractId": "engineering-evidence-authority-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/engineeringEvidenceAuthority",
+  "integration": "WHOLE_APP_ENGINEERING_DOCTRINE_INTEGRATED_REGISTRY",
+  "doctrineId": "WHOLE_APP_ENGINEERING_BEFORE_IMPLEMENTATION_DOCTRINE_V1",
+  "principle": "DECLARED_OBSERVED_VERIFIED_SEPARATION",
+  "receiptSchema": {
+    "required": [
+      "schemaVersion",
+      "evidenceClass",
+      "issuer",
+      "verifier",
+      "subject",
+      "repository",
+      "sourceHead",
+      "sourceTree",
+      "generationProcedure",
+      "generatorSourceHash",
+      "resultHash",
+      "observedAt",
+      "expiresAt",
+      "factsCovered",
+      "authorityAllowed",
+      "replayResult"
+    ]
+  },
+  "evidenceClasses": {
+    "OWNER_INTENT": {
+      "mayEstablish": [
+        "requested outcome",
+        "non-goals",
+        "risk tolerance",
+        "platform and market scope",
+        "explicit Owner approval"
+      ],
+      "mayNotEstablish": [
+        "source presence",
+        "transition behavior",
+        "test result",
+        "provider state",
+        "novelty",
+        "external contract drift",
+        "signed proof",
+        "installed proof",
+        "physical proof"
+      ],
+      "subjectRequirements": [
+        "exact task",
+        "exact authorization subject hash"
+      ],
+      "identityRequirements": [
+        "immutable GitHub Owner comment",
+        "exact repository and PR"
+      ],
+      "freshnessRequirements": [
+        "created_at equals updated_at",
+        "current task head binding"
+      ],
+      "replayRequirements": [
+        "GitHub API comment readback",
+        "body and subject hash replay"
+      ],
+      "allowedIssuer": [
+        "Chillywood2025 repository Owner"
+      ],
+      "allowedVerifier": [
+        "repository-owned GitHub comment normalizer"
+      ],
+      "canClearGate": true
+    },
+    "GIT_GITHUB_IDENTITY": {
+      "mayEstablish": [
+        "repository",
+        "PR",
+        "branch",
+        "head",
+        "tree",
+        "ancestry",
+        "changed paths",
+        "changed lines",
+        "merge identity",
+        "immutable Owner comment identity"
+      ],
+      "mayNotEstablish": [
+        "transition behavior",
+        "provider state",
+        "signed proof",
+        "installed proof",
+        "physical proof"
+      ],
+      "subjectRequirements": [
+        "exact repository",
+        "actual PR number",
+        "actual branch",
+        "base and candidate heads"
+      ],
+      "identityRequirements": [
+        "GitHub PR API readback",
+        "origin ref readback",
+        "local Git object verification"
+      ],
+      "freshnessRequirements": [
+        "PR open",
+        "remote head exact",
+        "protected base current"
+      ],
+      "replayRequirements": [
+        "repeat GitHub and Git reads",
+        "recompute tree, ancestry, paths, lines, and diff hash"
+      ],
+      "allowedIssuer": [
+        "GitHub API",
+        "Git object database"
+      ],
+      "allowedVerifier": [
+        "repository-owned task identity verifier"
+      ],
+      "canClearGate": true
+    },
+    "REPOSITORY_DERIVED": {
+      "mayEstablish": [
+        "source presence",
+        "exact inventory",
+        "source bindings",
+        "graph",
+        "states and transitions represented by exact selectors",
+        "repository-owned contracts"
+      ],
+      "mayNotEstablish": [
+        "current provider state",
+        "signed proof",
+        "installed proof",
+        "physical proof",
+        "future behavior"
+      ],
+      "subjectRequirements": [
+        "exact source head and tree",
+        "finite exact selector"
+      ],
+      "identityRequirements": [
+        "repository",
+        "head",
+        "tree",
+        "source path and normalized source hash"
+      ],
+      "freshnessRequirements": [
+        "source tree exact"
+      ],
+      "replayRequirements": [
+        "deterministic command re-executes from exact tree",
+        "byte-identical result"
+      ],
+      "allowedIssuer": [
+        "repository-owned deterministic scanner"
+      ],
+      "allowedVerifier": [
+        "separate repository-owned deterministic verifier"
+      ],
+      "canClearGate": true
+    },
+    "EXECUTABLE_WITNESS": {
+      "mayEstablish": [
+        "behavior actually executed by the exact bound test or runtime subject",
+        "positive witness",
+        "negative witness",
+        "targeted mutant detection"
+      ],
+      "mayNotEstablish": [
+        "unexecuted platform behavior",
+        "provider state",
+        "signed proof",
+        "installed proof",
+        "physical proof"
+      ],
+      "subjectRequirements": [
+        "exact executable subject",
+        "exact source head and tree",
+        "expected behavior"
+      ],
+      "identityRequirements": [
+        "command",
+        "test identity",
+        "source hash",
+        "result hash"
+      ],
+      "freshnessRequirements": [
+        "source and test hashes current"
+      ],
+      "replayRequirements": [
+        "command re-executes with the same deterministic result"
+      ],
+      "allowedIssuer": [
+        "repository-owned test runner"
+      ],
+      "allowedVerifier": [
+        "repository-owned receipt verifier"
+      ],
+      "canClearGate": true
+    },
+    "OFFICIAL_PUBLIC_CONTRACT": {
+      "mayEstablish": [
+        "published platform or provider contract at an approved official source",
+        "supported version or publication date"
+      ],
+      "mayNotEstablish": [
+        "authenticated dashboard state",
+        "deployment state",
+        "signed proof",
+        "installed proof",
+        "physical proof"
+      ],
+      "subjectRequirements": [
+        "provider identity",
+        "exact contract fact",
+        "approved official HTTPS URL",
+        "final resolved URL"
+      ],
+      "identityRequirements": [
+        "content hash",
+        "verified date",
+        "version or publication date"
+      ],
+      "freshnessRequirements": [
+        "contract freshness policy"
+      ],
+      "replayRequirements": [
+        "refetch with redirect-domain enforcement",
+        "content hash comparison"
+      ],
+      "allowedIssuer": [
+        "approved official platform or provider domain"
+      ],
+      "allowedVerifier": [
+        "repository-owned public contract verifier"
+      ],
+      "canClearGate": true
+    },
+    "AUTHENTICATED_READ_ONLY_PROVIDER": {
+      "mayEstablish": [
+        "current provider fact named by an approved expiring read-only receipt"
+      ],
+      "mayNotEstablish": [
+        "facts outside receipt scope",
+        "signed proof",
+        "installed proof",
+        "physical proof"
+      ],
+      "subjectRequirements": [
+        "provider",
+        "account/environment",
+        "exact fact"
+      ],
+      "identityRequirements": [
+        "approved read-only receipt",
+        "redacted issuer identity"
+      ],
+      "freshnessRequirements": [
+        "unexpired receipt"
+      ],
+      "replayRequirements": [
+        "authorized read-only recheck"
+      ],
+      "allowedIssuer": [
+        "approved provider read-only API"
+      ],
+      "allowedVerifier": [
+        "repository-owned provider receipt verifier"
+      ],
+      "canClearGate": true
+    },
+    "SIGNED_ARTIFACT": {
+      "mayEstablish": [
+        "T5 exact signed artifact identity"
+      ],
+      "mayNotEstablish": [
+        "installed behavior",
+        "physical behavior",
+        "public behavior"
+      ],
+      "subjectRequirements": [
+        "platform",
+        "artifact hash",
+        "signing identity",
+        "source head"
+      ],
+      "identityRequirements": [
+        "signed artifact receipt"
+      ],
+      "freshnessRequirements": [
+        "exact source and signing scope"
+      ],
+      "replayRequirements": [
+        "signature and artifact hash verification"
+      ],
+      "allowedIssuer": [
+        "authorized signing system"
+      ],
+      "allowedVerifier": [
+        "repository-owned artifact verifier"
+      ],
+      "canClearGate": true
+    },
+    "INSTALLED_RUNTIME": {
+      "mayEstablish": [
+        "T6 installed runtime identity and observed installed behavior"
+      ],
+      "mayNotEstablish": [
+        "unobserved physical behavior",
+        "public behavior"
+      ],
+      "subjectRequirements": [
+        "device class",
+        "installed artifact",
+        "runtime case"
+      ],
+      "identityRequirements": [
+        "installer and runtime readback"
+      ],
+      "freshnessRequirements": [
+        "exact installed session"
+      ],
+      "replayRequirements": [
+        "repeat installed runtime case"
+      ],
+      "allowedIssuer": [
+        "authorized installed runtime harness"
+      ],
+      "allowedVerifier": [
+        "repository-owned runtime receipt verifier"
+      ],
+      "canClearGate": true
+    },
+    "PHYSICAL_RUNTIME": {
+      "mayEstablish": [
+        "T6 physical-device behavior actually observed"
+      ],
+      "mayNotEstablish": [
+        "unobserved devices",
+        "public-canary behavior"
+      ],
+      "subjectRequirements": [
+        "physical device class",
+        "signed installed artifact",
+        "interaction case"
+      ],
+      "identityRequirements": [
+        "redacted physical receipt",
+        "artifact and case binding"
+      ],
+      "freshnessRequirements": [
+        "exact physical session"
+      ],
+      "replayRequirements": [
+        "repeat physical case when freshness expires"
+      ],
+      "allowedIssuer": [
+        "authorized physical test operator"
+      ],
+      "allowedVerifier": [
+        "repository-owned physical receipt verifier"
+      ],
+      "canClearGate": true
+    },
+    "DECLARATION_ONLY": {
+      "mayEstablish": [
+        "proposed intent",
+        "proposed model",
+        "candidate finding"
+      ],
+      "mayNotEstablish": [
+        "gate clearance",
+        "source presence",
+        "transition behavior",
+        "test result",
+        "provider state",
+        "novelty",
+        "external contract drift",
+        "signed proof",
+        "installed proof",
+        "physical proof"
+      ],
+      "subjectRequirements": [
+        "explicit declaration subject"
+      ],
+      "identityRequirements": [
+        "declaring artifact identity"
+      ],
+      "freshnessRequirements": [
+        "none; declaration is not proof"
+      ],
+      "replayRequirements": [
+        "must be paired with an independently verified evidence class"
+      ],
+      "allowedIssuer": [
+        "task",
+        "agent",
+        "Owner"
+      ],
+      "allowedVerifier": [
+        "none independently"
+      ],
+      "canClearGate": false
+    }
+  },
+  "externalTrustModel": {
+    "candidateProducer": {
+      "repositoryAuthoredAllowed": true,
+      "maximumAuthority": "CANDIDATE_UNVERIFIED"
+    },
+    "trustedIssuer": {
+      "repositoryAuthoredAllowed": false,
+      "requiresPreRegisteredExternalTrustRoot": true
+    },
+    "independentVerifier": {
+      "mustDifferFromCandidateProducer": true,
+      "mustDifferFromTrustedIssuer": true,
+      "samePullRequestTrustBootstrapAllowed": false
+    },
+    "candidateClassifications": [
+      "OFFICIAL_PUBLIC_CONTRACT_CANDIDATE_UNVERIFIED",
+      "AUTHENTICATED_PROVIDER_CANDIDATE_UNVERIFIED",
+      "SIGNED_ARTIFACT_CANDIDATE_UNVERIFIED",
+      "INSTALLED_RUNTIME_CANDIDATE_UNVERIFIED",
+      "PHYSICAL_RUNTIME_CANDIDATE_UNVERIFIED",
+      "NOVELTY_CANDIDATE_UNVERIFIED",
+      "EXTERNAL_CONTRACT_DRIFT_CANDIDATE_UNVERIFIED"
+    ],
+    "gateClearingClasses": [
+      "OFFICIAL_PUBLIC_CONTRACT",
+      "AUTHENTICATED_READ_ONLY_PROVIDER",
+      "SIGNED_ARTIFACT",
+      "INSTALLED_RUNTIME",
+      "PHYSICAL_RUNTIME",
+      "GENUINELY_NOVEL_DIMENSION",
+      "EXTERNAL_CONTRACT_DRIFT"
+    ],
+    "preRegisteredTrustRoots": [],
+    "doctrineActivationStatus": "BLOCKED_EXTERNAL_NO_PREEXISTING_TRUST_ROOT",
+    "providerDependentImplementation": "DENIED"
+  },
+  "rejections": [
+    "ARBITRARY_LOCAL_JSON",
+    "MISSING_SUBJECT",
+    "MISSING_SOURCE_HASH",
+    "STALE_TEMPORAL_EVIDENCE",
+    "UNSUPPORTED_FACT_CLASS",
+    "SELF_SIGNED_PASS_FLAG",
+    "LOCAL_FILE_URL_EXTERNAL_AUTHORITY",
+    "LOCALHOST_EXTERNAL_AUTHORITY",
+    "DATA_URL_EXTERNAL_AUTHORITY",
+    "TASK_AUTHORED_TIMESTAMP_FRESHNESS"
+  ]
+}

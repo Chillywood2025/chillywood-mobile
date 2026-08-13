@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   autonomous-systems-all-platform-contract:
@@ -37,6 +38,7 @@ jobs:
 
       - name: Validate exact GitHub review and ruleset controls
         env:
+          GH_TOKEN: ${{ github.token }}
           S0_EVENT_NAME: ${{ github.event_name }}
           S0_EVENT_BEFORE: ${{ github.event.before }}
         run: |
@@ -60,7 +62,7 @@ jobs:
             test "$(git rev-parse "$S0_BASE_REF^{commit}")" != "$(git rev-parse "$S0_TARGET_REF^{commit}")"
             node scripts/assurance/codex-security-target.mjs --base="$S0_BASE_REF" --target="$S0_TARGET_REF"
           fi
-          node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json
+          node scripts/assurance/pr-scope.mjs --github-event="$GITHUB_EVENT_PATH"
           node scripts/assurance/codex-security-reliability.mjs --benchmark=all
           node --test tests/assurance/codex-security-reliability-s0.test.mjs
 

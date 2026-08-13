@@ -1,43 +1,141 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import { spawnSync } from "node:child_process";
+
 import { args, emit, git, readJson } from "./lib.mjs";
-import { evaluateHighRiskScope } from "./pr-scope-lib.mjs";
+import { observeDoctrineOwnerAuthority } from "./engineering-closure.mjs";
+import { deriveTaskScopeContext, evaluateHighRiskScope } from "./pr-scope-lib.mjs";
 
 const options = args();
-const base = options.base ?? "origin/main";
 const policy = readJson("config/assurance/pr-scope-policy-v1.json");
 const registry = readJson("config/assurance/feature-registry-v1.json");
-const branch = git(["branch", "--show-current"]);
-const waiverPath = options.waiver || (branch === "codex/first-pass-assurance-foundation" ? "config/assurance/pr-a-scope-waiver-v1.json" : null);
-const waiver = waiverPath ? readJson(waiverPath) : null;
-const files = git(["diff", "--name-only", base]).split(/\r?\n/gu).filter(Boolean);
-const numstat = git(["diff", "--numstat", base]).split(/\r?\n/gu).filter(Boolean);
-const additions = numstat.reduce((sum, line) => sum + (Number(line.split(/\s+/u)[0]) || 0), 0);
-const deletions = numstat.reduce((sum, line) => sum + (Number(line.split(/\s+/u)[1]) || 0), 0);
+const currentTruth = readJson("config/assurance/current-truth-v1.json");
+
 const instruction = (file) => /(^|\/)AGENTS\.md$/u.test(file) || ["CURRENT_STATE.md", "NEXT_TASK.md"].includes(file);
-const classified = files.map((file) => ({
+const classify = (files) => files.map((file) => ({
   file,
   domains: instruction(file) ? ["documentation-metadata"] : policy.domains.filter(({ paths }) => paths.some((prefix) => file === prefix || file.startsWith(prefix))).map(({ id }) => id)
 }));
-const domains = [...new Set(classified.flatMap(({ domains: values }) => values))].sort();
-const highRisk = policy.domains.filter(({ id, risk }) => risk === "high" && domains.includes(id)).map(({ id }) => id);
-const objectiveDomains = String(options.objectiveDomains ?? "").split(",").map((entry) => entry.trim()).filter(Boolean);
-const featureId = typeof options.feature === "string" ? options.feature : null;
-const budget = waiver ? { files: waiver.fileBudget.waivedMaximum, lines: waiver.lineBudget.waivedMaximum } : { files: policy.defaultBudget.changedFiles, lines: policy.defaultBudget.netChangedLines };
-const findings = [];
-if (files.length > budget.files) findings.push({ id: "ASSURANCE_PR_FILE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: files.length, maximum: budget.files });
-if (Math.max(0, additions - deletions) > budget.lines) findings.push({ id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: additions - deletions, maximum: budget.lines });
-const scopeEvaluation = evaluateHighRiskScope({
-  highRiskDomains: highRisk,
-  objectiveDomains,
-  featureId,
-  featureDomainBundles: policy.featureDomainBundles ?? [],
-  registeredFeatureIds: registry.features.map(({ featureId: id }) => id),
-  policyHighRiskDomains: policy.domains.filter(({ risk }) => risk === "high").map(({ id }) => id),
-  waiver
-});
-findings.push(...scopeEvaluation.findings);
-if (waiver && (waiver.secondHighRiskDomain || !waiver.reviewer || waiver.newTimeboxHours > 8)) findings.push({ id: "ASSURANCE_SCOPE_WAIVER_INVALID", status: "BLOCKED_INTERNAL" });
-emit("assurance:pr-scope", findings.length === 0, {
-  base, objective: options.objective ?? waiver?.objective ?? null, changedFiles: files.length, additions, deletions, netChangedLines: additions - deletions,
-  domains, highRiskDomains: highRisk, objectiveDomains, featureId, featureDomainDecision: scopeEvaluation, budget, waiver: waiver ? waiver.contractId : null, classified, findings
-}, [`PR scope: ${findings.length ? "FAIL" : "PASS"} — ${files.length}/${budget.files} files, ${additions - deletions}/${budget.lines} net lines, domains ${domains.join(", ") || "none"}`]);
+const readGitScope = (base, head) => {
+  const range = `${base}...${head}`;
+  const files = git(["diff", "--name-only", range]).split(/\r?\n/gu).filter(Boolean).sort();
+  const numstat = git(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean);
+  const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
+  const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
+  return { files, additions, deletions };
+};
+const readPull = (repository, pr) => {
+  const result = spawnSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], { encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  if (result.status !== 0) return null;
+  try {
+    const pull = JSON.parse(result.stdout);
+    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRef: pull.head?.ref, headSha: pull.head?.sha, htmlUrl: pull.html_url, state: pull.state };
+  } catch {
+    return null;
+  }
+};
+
+if (typeof options["github-event"] !== "string") {
+  const branch = git(["branch", "--show-current"]);
+  const exactS0 = branch === "codex/assurance-codex-security-scan-reliability-s0"
+    && options.feature === "codex-security-scan-reliability-s0"
+    && options.waiver === "config/assurance/codex-security-reliability-s0-scope-waiver-v1.json";
+  emit("assurance:pr-scope", false, {
+    mode: "TASK_CONTEXT_REQUIRED",
+    branch,
+    findings: [{ id: exactS0 ? "ASSURANCE_HISTORICAL_S0_EVENT_IDENTITY_REQUIRED" : "ASSURANCE_CALLER_SCOPE_CONTEXT_REJECTED", status: "BLOCKED_INTERNAL" }]
+  }, ["PR scope: FAIL — exact GitHub event task context required"]);
+  process.exit(1);
+}
+
+let event;
+try {
+  event = JSON.parse(fs.readFileSync(options["github-event"], "utf8"));
+} catch {
+  emit("assurance:pr-scope", false, { findings: [{ id: "ASSURANCE_GITHUB_EVENT_UNREADABLE", status: "BLOCKED_INTERNAL" }] });
+  process.exit(1);
+}
+
+if (!event.pull_request) {
+  const exactProtectedPush = event?.repository?.full_name === "Chillywood2025/chillywood-mobile"
+    && event?.ref === "refs/heads/main"
+    && /^[0-9a-f]{40}$/u.test(event?.before ?? "")
+    && /^[0-9a-f]{40}$/u.test(event?.after ?? "");
+  emit("assurance:pr-scope", exactProtectedPush, {
+    mode: "PROTECTED_MAIN_PUSH_NO_PULL_REQUEST_SCOPE",
+    repository: event?.repository?.full_name ?? null,
+    before: event?.before ?? null,
+    after: event?.after ?? null,
+    findings: exactProtectedPush ? [] : [{ id: "ASSURANCE_GITHUB_EVENT_IDENTITY_INVALID", status: "BLOCKED_INTERNAL" }]
+  }, [`PR scope: ${exactProtectedPush ? "PASS" : "FAIL"} — protected-main push context`]);
+  if (!exactProtectedPush) process.exitCode = 1;
+} else {
+  const repository = event.repository?.full_name;
+  const pr = event.number;
+  const readback = readPull(repository, pr);
+  const matchingBinding = (policy.taskContextBindings ?? []).find((binding) => binding.repository === repository && binding.pr === pr && binding.branch === event.pull_request?.head?.ref);
+  const ownerAuthority = matchingBinding?.authoritySource === "OWNER_DOCTRINE_BOOTSTRAP"
+    ? observeDoctrineOwnerAuthority({ currentHead: event.pull_request.head.sha, currentBranch: event.pull_request.head.ref, currentPr: pr })
+    : null;
+  const context = deriveTaskScopeContext({
+    event,
+    readback,
+    policy,
+    registry,
+    currentTruth,
+    ownerAuthority,
+    requestedFeature: options.feature ?? null,
+    requestedWaiver: options.waiver ?? null
+  });
+  const base = context.identity?.baseSha ?? event.pull_request?.base?.sha;
+  const head = context.identity?.headSha ?? event.pull_request?.head?.sha;
+  let scope = { files: [], additions: 0, deletions: 0 };
+  const findings = context.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  try {
+    scope = readGitScope(base, head);
+  } catch {
+    findings.push({ id: "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE", status: "BLOCKED_INTERNAL" });
+  }
+  const classified = classify(scope.files);
+  const domains = [...new Set(classified.flatMap(({ domains: values }) => values))].sort();
+  const highRisk = policy.domains.filter(({ id, risk }) => risk === "high" && domains.includes(id)).map(({ id }) => id);
+  const waiver = context.ok && context.historicalWaiverPath ? readJson(context.historicalWaiverPath) : null;
+  const budget = context.budget
+    ? { files: context.budget.maximumFiles, lines: context.budget.maximumHandAuthoredNetLines, generatedGraphLines: context.budget.maximumGeneratedGraphLines, source: "OWNER_DOCTRINE_SCOPE_AMENDMENT_V1" }
+    : waiver
+      ? { files: waiver.fileBudget.waivedMaximum, lines: waiver.lineBudget.waivedMaximum, source: waiver.contractId }
+      : { files: policy.defaultBudget.changedFiles, lines: policy.defaultBudget.netChangedLines, source: "pr-scope-policy-v1" };
+  if (scope.files.length > budget.files) findings.push({ id: "ASSURANCE_PR_FILE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.files.length, maximum: budget.files });
+  if (Math.max(0, scope.additions - scope.deletions) > budget.lines) findings.push({ id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.additions - scope.deletions, maximum: budget.lines });
+  const scopeEvaluation = evaluateHighRiskScope({
+    highRiskDomains: highRisk,
+    objectiveDomains: context.objectiveDomains ?? [],
+    featureId: context.featureId,
+    featureDomainBundles: policy.featureDomainBundles ?? [],
+    registeredFeatureIds: registry.features.map(({ featureId }) => featureId),
+    policyHighRiskDomains: policy.domains.filter(({ risk }) => risk === "high").map(({ id }) => id),
+    waiver
+  });
+  findings.push(...scopeEvaluation.findings);
+  if (waiver && (waiver.secondHighRiskDomain || !waiver.reviewer || waiver.newTimeboxHours > 8)) findings.push({ id: "ASSURANCE_SCOPE_WAIVER_INVALID", status: "BLOCKED_INTERNAL" });
+  emit("assurance:pr-scope", findings.length === 0, {
+    mode: "GITHUB_EVENT_TASK_CONTEXT",
+    base,
+    head,
+    taskContext: context,
+    changedFiles: scope.files.length,
+    additions: scope.additions,
+    deletions: scope.deletions,
+    netChangedLines: scope.additions - scope.deletions,
+    domains,
+    highRiskDomains: highRisk,
+    objectiveDomains: context.objectiveDomains ?? [],
+    supportingDomains: context.supportingDomains ?? [],
+    featureId: context.featureId,
+    featureDomainDecision: scopeEvaluation,
+    budget,
+    waiver: waiver ? waiver.contractId : null,
+    classified,
+    findings
+  }, [`PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
+}

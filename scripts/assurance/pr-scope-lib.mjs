@@ -1,5 +1,99 @@
 const uniqueSorted = (values) => [...new Set(values)].sort();
 
+const sha40 = (value) => /^[0-9a-f]{40}$/u.test(value ?? "");
+const exactPullUrl = (value, repository, pr) => value === `https://github.com/${repository}/pull/${pr}`;
+
+export function validatePullRequestEventIdentity(event, readback = {}) {
+  const pull = event?.pull_request;
+  const repository = event?.repository?.full_name;
+  const pr = event?.number;
+  const findings = [];
+  if (!pull || repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) findings.push("ASSURANCE_PR_EVENT_IDENTITY_INVALID");
+  if (pull?.number !== pr || pull?.base?.ref !== "main" || !sha40(pull?.base?.sha) || !sha40(pull?.head?.sha) || typeof pull?.head?.ref !== "string" || !exactPullUrl(pull?.html_url, repository, pr)) findings.push("ASSURANCE_PR_EVENT_IDENTITY_INVALID");
+  if (readback?.number !== pr || readback?.repository !== repository || readback?.baseRef !== pull?.base?.ref || readback?.baseSha !== pull?.base?.sha || readback?.headRef !== pull?.head?.ref || readback?.headSha !== pull?.head?.sha || readback?.htmlUrl !== pull?.html_url || readback?.state !== "open") findings.push("ASSURANCE_PR_EVENT_READBACK_MISMATCH");
+  return {
+    ok: findings.length === 0,
+    findings: uniqueSorted(findings),
+    identity: findings.length ? null : {
+      repository,
+      pr,
+      baseRef: pull.base.ref,
+      baseSha: pull.base.sha,
+      branch: pull.head.ref,
+      headSha: pull.head.sha,
+      htmlUrl: pull.html_url
+    }
+  };
+}
+
+const exactBinding = (binding, identity) => binding?.repository === identity.repository
+  && binding?.pr === identity.pr
+  && binding?.branch === identity.branch
+  && binding?.baseRef === identity.baseRef;
+
+const matchingFiniteLease = (truth, identity) => (truth?.finiteTaskLeases?.tasks ?? []).filter((lease) => lease?.implementationPr === identity.pr && lease?.implementationBranch === identity.branch);
+
+export function deriveTaskScopeContext({
+  event,
+  readback,
+  policy,
+  registry,
+  currentTruth,
+  ownerAuthority = null,
+  requestedFeature = null,
+  requestedWaiver = null
+} = {}) {
+  const eventIdentity = validatePullRequestEventIdentity(event, readback);
+  const findings = [...eventIdentity.findings];
+  if (requestedFeature !== null) findings.push("ASSURANCE_CALLER_FEATURE_INJECTION_REJECTED");
+  if (requestedWaiver !== null) findings.push("ASSURANCE_CALLER_WAIVER_INJECTION_REJECTED");
+  if (!eventIdentity.ok) return { ok: false, findings: uniqueSorted(findings), source: "UNBOUND_PR_CONTEXT" };
+  const identity = eventIdentity.identity;
+  const bindings = (policy?.taskContextBindings ?? []).filter((binding) => exactBinding(binding, identity));
+  if (bindings.length !== 1) findings.push("ASSURANCE_TASK_CONTEXT_UNBOUND");
+  const binding = bindings[0] ?? null;
+  const registryFeatures = new Set((registry?.features ?? []).map(({ featureId }) => featureId));
+  if (binding && !registryFeatures.has(binding.featureId)) findings.push("ASSURANCE_TASK_FEATURE_UNREGISTERED");
+
+  let source = "UNBOUND_PR_CONTEXT";
+  let finiteLease = null;
+  const finiteLeases = matchingFiniteLease(currentTruth, identity);
+  if (finiteLeases.length > 1) findings.push("ASSURANCE_TASK_CONTEXT_AMBIGUOUS_LEASE");
+  else if (finiteLeases.length === 1) {
+    finiteLease = finiteLeases[0];
+    source = "ACTIVE_FINITE_TASK_LEASE";
+    if (finiteLease.featureId !== binding?.featureId || binding?.authoritySource !== "ACTIVE_FINITE_TASK_LEASE") findings.push("ASSURANCE_TASK_FEATURE_MISMATCH");
+  } else if (binding?.authoritySource === "OWNER_DOCTRINE_BOOTSTRAP") {
+    source = "IMMUTABLE_DOCTRINE_OWNER_AUTHORIZATION";
+    if (ownerAuthority?.ok !== true || ownerAuthority?.repository !== identity.repository || ownerAuthority?.pr !== identity.pr || ownerAuthority?.branch !== identity.branch || ownerAuthority?.currentHead !== identity.headSha) findings.push("ASSURANCE_DOCTRINE_OWNER_AUTHORITY_INVALID");
+  } else if (binding?.authoritySource === "PROTECTED_TASK_REGISTRY") {
+    source = "PROTECTED_TASK_REGISTRY";
+  } else if (binding) {
+    findings.push("ASSURANCE_TASK_AUTHORITY_SOURCE_INVALID");
+  }
+
+  const objectiveDomains = uniqueSorted(binding?.objectiveDomains ?? []);
+  const supportingDomains = uniqueSorted(binding?.supportingDomains ?? []);
+  const knownDomains = new Set((policy?.domains ?? []).map(({ id }) => id));
+  if ([...objectiveDomains, ...supportingDomains].some((domain) => !knownDomains.has(domain))) findings.push("ASSURANCE_TASK_CONTEXT_DOMAIN_UNKNOWN");
+  const waiverPath = binding?.historicalWaiverPath ?? null;
+  if (waiverPath && binding?.authoritySource !== "PROTECTED_TASK_REGISTRY") findings.push("ASSURANCE_TASK_WAIVER_CONTEXT_INVALID");
+
+  return {
+    ok: findings.length === 0,
+    findings: uniqueSorted(findings),
+    source,
+    identity,
+    featureId: binding?.featureId ?? null,
+    objectiveDomains,
+    supportingDomains,
+    historicalWaiverPath: waiverPath,
+    bindingId: binding?.bindingId ?? null,
+    finiteLeaseId: finiteLease?.leaseId ?? null,
+    budget: ownerAuthority?.ok === true && binding?.authoritySource === "OWNER_DOCTRINE_BOOTSTRAP" ? ownerAuthority.budget : null
+  };
+}
+
 export function validateFeatureDomainBundles({
   featureDomainBundles,
   registeredFeatureIds,

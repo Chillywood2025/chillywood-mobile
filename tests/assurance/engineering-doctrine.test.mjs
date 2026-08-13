@@ -6,13 +6,16 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  CLEAR_CHECKS, affectedDomainClosure, authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
+  CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
+  authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
   deriveAffectedDomainClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
+  doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, runAuthoritativeReplay, stableJson,
-  verifyInventoryNonVacuity
+  verifyDoctrineScopeAmendment, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity
 } from "../../scripts/assurance/engineering-closure.mjs";
+import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
 import { renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 
@@ -63,31 +66,46 @@ const actualBootstrapFixture = () => {
   if (actualFixture) return actualFixture;
   const local = makeBootstrapPacket();
   const repository = "Chillywood2025/chillywood-mobile";
-  const pr = 301;
-  const commentId = 424242;
+  const pr = 226;
+  const commentId = 5274614505;
+  const amendmentCommentId = 5274913577;
   const branch = "codex/whole-app-engineering-doctrine-v1";
   const base = "8bf6459c3ae1cec62e26a1694f03063e4291b9f8";
   const seedTree = "64c3f8d56d93b08e5c3d3abbed11e707be1ede2b";
-  const head = "a".repeat(40);
-  const tree = "b".repeat(40);
+  const head = "c9192f0f94d903617eb28deba610c26c41dc8eeb";
+  const tree = "15ae28610def9204814575235129daf4b3c8c5c4";
   const leaseId = "OWNER_AUTHORIZED_DOCTRINE_BOOTSTRAP_V1";
   const paths = local.packet.sections.K_IMPLEMENTATION_PLAN.files.slice().sort();
-  const subject = doctrineBootstrapAuthorizationSubject({ repository, pr, branch, admittedSeedHead: base, admittedSeedTree: seedTree, protectedBase: base, leaseId, pathHash: hashValue(paths), maximumFiles: 25, maximumLines: 4000 });
+  const subject = doctrineBootstrapAuthorizationSubject({ repository, pr, branch, admittedSeedHead: base, admittedSeedTree: seedTree, protectedBase: base, leaseId, pathHash: "f6d652cb3f2086a00479188613d8a990ba64bd4b2be7c0d1325bf8ea9ce2a8af", maximumFiles: 25, maximumLines: 4000 });
   const comment = { id: commentId, node_id: "IC_kwDO_SANITIZED", user: { login: "Chillywood2025" }, author_association: "OWNER", body: doctrineBootstrapOwnerCommentBody(subject), created_at: "2026-08-12T12:00:00Z", updated_at: "2026-08-12T12:00:00Z", issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${commentId}` };
+  const amendment = { id: amendmentCommentId, node_id: "IC_kwDO_AMENDMENT", user: { login: "Chillywood2025" }, author_association: "OWNER", body: doctrineScopeAmendmentOwnerCommentBody(), created_at: "2026-08-13T01:42:03Z", updated_at: "2026-08-13T01:42:03Z", issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${amendmentCommentId}` };
   const pull = { number: pr, state: "open", draft: true, html_url: `https://github.com/${repository}/pull/${pr}`, head: { sha: head, ref: branch }, base: { sha: base, ref: "main" }, title: "Require authoritative bounded whole-app engineering closure" };
-  const ghData = { pull, comment, open: [pull] };
-  const gh = `#!/usr/bin/env node\nconst a=process.argv.join(' ');const d=${JSON.stringify(ghData)};process.stdout.write(JSON.stringify(a.includes('/issues/comments/')?d.comment:a.includes('?state=open')?d.open:d.pull));\n`;
+  const ghData = { pull, comment, amendment, comments: [comment, amendment], open: [pull] };
+  const gh = `#!/usr/bin/env node\nconst a=process.argv.join(' ');const d=${JSON.stringify(ghData)};const out=a.includes('/issues/comments/${amendmentCommentId}')?d.amendment:a.includes('/issues/comments/${commentId}')?d.comment:a.includes('/issues/${pr}/comments?')?d.comments:a.includes('?state=open')?d.open:d.pull;process.stdout.write(JSON.stringify(out));\n`;
   const gitData = { head, tree, base, seedTree, branch, paths };
   const git = `#!/usr/bin/env node\nconst a=process.argv.slice(2);const s=a.join(' ');const d=${JSON.stringify(gitData)};if(a[0]==='merge-base')process.exit(0);if(a[0]==='rev-parse'){if(s.includes('refs/remotes/origin/'))process.stdout.write(d.head+'\\n');else if(s.includes(d.head+'^{tree}'))process.stdout.write(d.tree+'\\n');else process.stdout.write(d.seedTree+'\\n');}else if(a[0]==='diff'&&a.includes('--name-only'))process.stdout.write(d.paths.join('\\n')+'\\n');else if(a[0]==='diff'&&a.includes('--numstat'))process.stdout.write(d.paths.map(p=>'1\\t0\\t'+p).join('\\n')+'\\n');else if(a[0]==='diff')process.stdout.write('exact bounded doctrine diff');else process.exit(1);\n`;
-  const observation = withFakeExecutables({ gh, git }, () => observeGitHubTaskIdentity({ repository, pr, branch, admittedSeedHead: base, protectedBase: base, leaseId, commentId, maximumFiles: 25, maximumLines: 4000 }));
+  const observation = withFakeExecutables({ gh, git }, () => observeGitHubTaskIdentity({ repository, pr, branch, admittedSeedHead: base, protectedBase: base, leaseId, commentId, amendmentCommentId, maximumFiles: 31, maximumLines: 7000 }));
   assert.equal(observation?.candidateEligible, true);
   actualFixture = makeBootstrapPacket(undefined, { taskIdentityObservation: observation, pr, leaseId });
   actualFixture.observation = observation;
+  actualFixture.ownerComments = { originalRaw: comment, amendmentRaw: amendment, amendmentComments: [comment, amendment] };
   return actualFixture;
 };
 
 test("P1-1 source-bound transition authority", () => {
-  assert.equal(authoritativeReplayOnce().p1Results["C-P1-1"], true);
+  assert.equal(authoritativeReplayOnce({ processIsolated: true }).p1Results.SOURCE_BOUND_TRANSITION_AUTHORITY_INCOMPLETE, true);
+});
+
+test("source-bound transition positive executable witness", () => {
+  assert.equal(applyAssuranceEfficiencyTransition({ taskIdentityCurrent: true, currentState: "unresolved", transitionId: "resume" }).currentState, "planned");
+  assert.equal(applyCodexSecurityTransition({ taskIdentityCurrent: true, currentState: "TARGET_FROZEN", transitionId: "freeze" }).currentState, "HOST_PREFLIGHT_CLEAR");
+  assert.equal(applyAutonomousGovernanceTransition({ taskIdentityCurrent: true, currentState: "off", transitionId: "plan" }).currentState, "owner_assisted");
+});
+
+test("source-bound transition negative executable witness", () => {
+  assert.throws(() => applyAssuranceEfficiencyTransition({ taskIdentityCurrent: false, currentState: "unresolved", transitionId: "resume" }), /GOVERNING_TRANSITION_PRECONDITION_FAILED/u);
+  assert.throws(() => applyCodexSecurityTransition({ taskIdentityCurrent: true, currentState: "FICTIONAL", transitionId: "freeze" }), /GOVERNING_TRANSITION_PRECONDITION_FAILED/u);
+  assert.throws(() => applyAutonomousGovernanceTransition({ taskIdentityCurrent: true, currentState: "off", transitionId: "route" }), /GOVERNING_TRANSITION_PRECONDITION_FAILED/u);
 });
 
 const controls = [
@@ -289,27 +307,42 @@ const expectGateFinding = (mutate, code) => {
 };
 
 const transitionMutants = [
+  ["P1-1 transition declared but no implementation symbol fails", (t) => { t.observation.implementationSymbol = null; }],
+  ["P1-1 wrong implementation symbol fails", (t) => { t.observation.implementationSymbol = "commentOnlyImplementation"; }],
+  ["P1-1 implementation without precondition guard fails", (t) => { t.observation.preconditionEnforcementSymbol = null; t.observation.directCalls = t.observation.directCalls.filter((name) => name !== "assertGoverningPreconditions"); }],
+  ["P1-1 effect owner mismatch fails", (t) => { t.observation.exactEffectOwner = "attacker"; }],
+  ["P1-1 rollback declaration without implementation binding fails", (t) => { t.observation.rollbackSymbol = null; }],
+  ["P1-1 lifecycle declaration without implementation binding fails", (t) => { t.observation.lifecycleSymbol = null; }],
+  ["P1-1 declaration and verifier from same receipt fails", (t) => { t.independentVerifier.sourcePath = t.observation.implementationSourcePath; t.independentVerifier.verifierSourceHash = t.observation.implementationSourceHash; }],
+  ["P1-1 stale implementation hash fails", (t) => { t.observation.implementationAstBodyHash = "0".repeat(64); }],
+  ["P1-1 stale verifier hash fails", (t) => { t.independentVerifier.verifierSourceHash = "0".repeat(64); }],
   ["P1-1 fictional source state fails", (t) => { t.sourceStates = ["FICTIONAL_SOURCE"]; }],
   ["P1-1 fictional destination state fails", (t) => { t.destinationStates = ["FICTIONAL_DESTINATION"]; }],
-  ["P1-1 unenforced precondition fails", (t) => { t.preconditions = ["attacker declaration"]; }],
-  ["P1-1 missing lifecycle semantics fails", (t) => { t.lifecycleSemantics = []; }],
-  ["P1-1 stale selector hash fails", (t) => { t.implementationBindings[0].normalizedBoundSourceHash = "0".repeat(64); }],
-  ["P1-1 zero-match selector fails", (t) => { t.implementationBindings[0].selector = "NONEXISTENT_SYMBOL"; t.implementationBindings[0].selectorMatchCount = 0; }],
-  ["P1-1 multi-match selector fails", (t) => { t.implementationBindings[0].selector = "const"; t.implementationBindings[0].selectorMatchCount = 2; }],
+  ["P1-1 zero-match selector fails", (t) => { t.observation.implementationSelectorMatchCount = 0; }],
+  ["P1-1 multi-match selector fails", (t) => { t.observation.implementationSelectorMatchCount = 2; }],
   ["P1-1 terminal resurrection fails", (t) => { t.sourceStates = ["closed"]; t.destinationStates = ["unresolved"]; t.terminality = "NON_TERMINAL"; }],
-  ["P1-1 task-authored transition without source binding fails", (t) => { t.implementationBindings = []; }],
+  ["P1-1 comment-only implementation fails", (t) => { t.observation.implementationSymbol = "comment-only implementation"; t.observation.implementationSelectorMatchCount = 1; }],
 ];
-for (const [name, mutate] of transitionMutants) test(name, () => expectGateFinding((packet) => mutate(packet.sections.F_STATE_MODEL.sourceBoundModel.domains[0].transitions[0]), "PREIMPLEMENTATION_STATE_MODEL_INCOMPLETE"));
+for (const [name, mutate] of transitionMutants) test(name, () => {
+  const replay = authoritativeReplayOnce({ processIsolated: true });
+  const model = structuredClone(replay.transitionModel);
+  mutate(model.domains[0].transitions[0]);
+  assert.equal(verifySerializedTransitionModel(model, { sourceIdentity: replay.sourceIdentity }).ok, false);
+});
 
 const edgeMutants = [
-  ["P1-2 removed connected authority edge fails", (C) => { C.computedClosure.requiredIncludedEdges.pop(); }],
-  ["P1-2 removed shared-state edge fails", (C) => { C.computedClosure.actualIncludedEdges.shift(); }],
-  ["P1-2 removed cleanup edge fails", (C) => { C.computedClosure.actualIncludedEdges.pop(); }],
-  ["P1-2 missing NON_IMPACTING receipt fails", (C) => { C.nonImpactingWithEvidence.pop(); }],
-  ["P1-2 prose-only exclusion fails", (C) => { C.nonImpactingWithEvidence[0] = { edgeId: C.nonImpactingWithEvidence[0].edgeId, reason: "no impact" }; }],
-  ["P1-2 exclusion for fictional edge fails", (C) => { C.nonImpactingWithEvidence[0].edgeId = "edge-fiction"; }],
+  ["P1-2 removing an observed authority edge fails", (output) => { output.edgeEvidence.observedRepositoryEdges.splice(output.edgeEvidence.observedRepositoryEdges.findIndex(({ governingCandidate }) => governingCandidate), 1); }],
+  ["P1-2 removing an observed shared-state edge fails", (output) => { output.edgeEvidence.verifiedGoverningEdges.shift(); }],
+  ["P1-2 removing cleanup rollback edge fails", (output) => { output.edgeEvidence.verifiedGoverningEdges = output.edgeEvidence.verifiedGoverningEdges.filter(({ declaredImpactClasses }) => !declaredImpactClasses.includes("cleanup") || !declaredImpactClasses.includes("rollback")); }],
+  ["P1-2 adding fictional edge fails", (output) => { output.edgeEvidence.observedRepositoryEdges.push({ ...structuredClone(output.edgeEvidence.observedRepositoryEdges[0]), sourceDomainCandidate: "fiction" }); }],
+  ["P1-2 duplicate edge fails", (output) => { output.edgeEvidence.observedRepositoryEdges.push(structuredClone(output.edgeEvidence.observedRepositoryEdges[0])); }],
+  ["P1-2 changing edge direction fails", (output) => { output.edgeEvidence.verifiedGoverningEdges[0].authorityDirection = "DESTINATION_TO_SOURCE"; }],
+  ["P1-2 wildcard exclusion fails", (output) => { output.closure.exclusionReceipts[0].enforcingSourceBinding.sourcePath = "scripts/**"; }],
+  ["P1-2 prose-only exclusion fails", (output) => { output.closure.exclusionReceipts[0] = { edgeId: output.closure.exclusionReceipts[0].edgeId, reason: "no impact" }; }],
+  ["P1-2 exclusion for nonexistent edge fails", (output) => { output.closure.exclusionReceipts[0].edgeId = "edge-fiction"; }],
+  ["P1-2 copying expected edge set into actual fails", (output) => { output.edgeEvidence.verifiedGoverningEdges = []; output.closure.actualIncludedEdges = [...output.closure.requiredIncludedEdges]; }],
 ];
-for (const [name, mutate] of edgeMutants) test(name, () => expectGateFinding((packet) => mutate(packet.sections.C_AFFECTED_DOMAIN_CLOSURE), "PREIMPLEMENTATION_DEPENDENCY_CLOSURE_INCOMPLETE"));
+for (const [name, mutate] of edgeMutants) test(name, () => { const output = authoritativeReplayOnce({ processIsolated: true }); mutate(output); assert.equal(verifySerializedEdgeModel(output).ok, false); });
 
 const discoveryMutants = [
   ["P1-3 passComplete true with missing receipts fails", (lanes) => { lanes[0].computedStatus = "VERIFIED"; lanes[0].receipts.pop(); }],
@@ -317,7 +350,7 @@ const discoveryMutants = [
   ["P1-3 missing item fails", (lanes) => { lanes[0].worklist.pop(); }],
   ["P1-3 fictional extra item fails", (lanes) => { lanes[0].worklist.push({ itemId: "FICTION", procedure: "fiction" }); }],
   ["P1-3 stale source receipt fails", (lanes) => { lanes[0].receipts[0].sourceTree = "0".repeat(40); }],
-  ["P1-3 deferred item hidden as complete fails", (lanes) => { lanes[2].receipts[3].deferredClassification = null; lanes[2].receipts[3].result = "VERIFIED"; }],
+  ["P1-3 deferred item hidden as complete fails", (lanes) => { lanes[2].receipts[3].deferredClassification = "HIDDEN_DEFERRED"; lanes[2].receipts[3].result = "VERIFIED"; }],
   ["P1-3 agent prose without grounded receipt fails", (lanes) => { lanes[0].agentProse = "all complete"; }],
 ];
 for (const [name, mutate] of discoveryMutants) test(name, () => expectGateFinding((packet) => mutate(packet.sections.J_STABLE_DEFECT_LEDGER.authoritativeReplay), "PREIMPLEMENTATION_DEFECT_LEDGER_UNSTABLE"));
@@ -329,7 +362,25 @@ test("P1-4 non-descendant fails", () => { const fixture = actualBootstrapFixture
 test("P1-4 out-of-scope path fails", () => { const fixture = actualBootstrapFixture(); const forged = structuredClone(fixture.observation); forged.paths.push("app/evil.tsx"); assert.equal(evaluatePreimplementationGate(fixture.packet, { certificate: fixture.certificate, taskIdentityObservation: forged }).clear, false); });
 test("P1-4 scope overflow fails", () => { const fixture = actualBootstrapFixture(); const forged = structuredClone(fixture.observation); forged.changedLines = 4001; assert.equal(evaluatePreimplementationGate(fixture.packet, { certificate: fixture.certificate, taskIdentityObservation: forged }).clear, false); });
 test("P1-4 local-only task cannot clear", () => { const local = makeBootstrapPacket(); assert.equal(local.gate.status, "ENGINEERING_PLAN_DRAFTED"); assert.equal(local.gate.clear, false); });
-test("P1-4 actual draft PR clears after exact readback", () => { const fixture = actualBootstrapFixture(); assert.equal(fixture.gate.status, "PREIMPLEMENTATION_ENGINEERING_CLEAR"); assert.equal(fixture.gate.computed, true); assert.deepEqual(fixture.gate.findings, []); });
+test("P1-4 actual PR 226 identity and both Owner comments bind exactly", () => { const fixture = actualBootstrapFixture(); assert.equal(fixture.observation.candidateEligible, true); assert.equal(fixture.observation.pr, 226); assert.equal(fixture.observation.branch, "codex/whole-app-engineering-doctrine-v1"); assert.equal(fixture.observation.base, "8bf6459c3ae1cec62e26a1694f03063e4291b9f8"); assert.equal(fixture.observation.head, "c9192f0f94d903617eb28deba610c26c41dc8eeb"); assert.equal(fixture.observation.tree, "15ae28610def9204814575235129daf4b3c8c5c4"); assert.equal(fixture.observation.ownerComment.id, 5274614505); assert.equal(fixture.observation.scopeAmendmentCommentId, 5274913577); assert.equal(fixture.observation.paths.length, 31); });
+
+const scopeAmendmentFixture = (mutate = () => {}, overrides = {}) => {
+  const fixture = actualBootstrapFixture();
+  const comments = structuredClone(fixture.ownerComments);
+  mutate(comments);
+  return verifyDoctrineScopeAmendment({ ...comments, currentHead: "c9192f0f94d903617eb28deba610c26c41dc8eeb", ...overrides });
+};
+test("scope amendment exact amendment passes", () => assert.equal(scopeAmendmentFixture().ok, true));
+test("scope amendment edited amendment fails", () => assert.equal(scopeAmendmentFixture(({ amendmentRaw }) => { amendmentRaw.body += "edited"; }).ok, false));
+test("scope amendment wrong PR fails", () => assert.equal(scopeAmendmentFixture(() => {}, { currentPr: 225 }).ok, false));
+test("scope amendment wrong branch fails", () => assert.equal(scopeAmendmentFixture(() => {}, { currentBranch: "evil" }).ok, false));
+test("scope amendment wrong current head fails", () => assert.equal(scopeAmendmentFixture(() => {}, { currentHead: "0".repeat(40) }).ok, false));
+test("scope amendment missing original authorization fails", () => assert.equal(scopeAmendmentFixture((comments) => { comments.originalRaw = null; }).ok, false));
+test("scope amendment wildcard added path fails", () => assert.equal(scopeAmendmentFixture(({ amendmentRaw }) => { amendmentRaw.body = amendmentRaw.body.replace("scripts/assurance/pr-scope.mjs", "scripts/**"); }).ok, false));
+test("scope amendment unrelated path fails", () => assert.equal(scopeAmendmentFixture(({ amendmentRaw }) => { amendmentRaw.body = amendmentRaw.body.replace("scripts/assurance/pr-scope.mjs", "docs/unrelated.md"); }).ok, false));
+test("scope amendment second amendment fails", () => assert.equal(scopeAmendmentFixture(({ amendmentComments, amendmentRaw }) => { amendmentComments.push({ ...amendmentRaw, id: 5274913578 }); }).ok, false));
+test("scope amendment budget reduction below actual scope fails", () => assert.equal(scopeAmendmentFixture(({ amendmentRaw }) => { amendmentRaw.body = amendmentRaw.body.replace('"maximumHandAuthoredNetLines":7000', '"maximumHandAuthoredNetLines":1'); }).ok, false));
+test("scope amendment product build provider path fails", () => assert.equal(scopeAmendmentFixture(({ amendmentRaw }) => { amendmentRaw.body = amendmentRaw.body.replace("scripts/assurance/pr-scope.mjs", "app/provider-build.ts"); }).ok, false));
 
 const withTransientAsset = (relative, content, callback) => {
   const absolute = path.join(new URL(root).pathname, relative);
@@ -346,6 +397,14 @@ test("P1-5 wildcard mapping fails", () => { const registry = json("config/assura
 test("P1-5 zero-discovery vacuity fails", () => { const inventory = buildInventory(); const routes = inventory.groups.find(({ id }) => id === "routes"); routes.count = 0; routes.accounting.discovered = []; assert.ok(verifyInventoryNonVacuity(inventory).findings.includes("INVENTORY_ZERO_DISCOVERY_ROUTES")); });
 test("P1-5 UNKNOWN_OWNER inside closure blocks", () => { const inventory = buildInventory(); const member = inventory.groups.find(({ id }) => id === "routes").members[0]; member.ownerDomains = ["assurance-efficiency-e0"]; member.ownershipStatus = "UNKNOWN_OWNER"; assert.ok(verifyInventoryNonVacuity(inventory, { affectedDomains: ["assurance-efficiency-e0"] }).findings.includes("AFFECTED_SCOPE_ORPHAN_ROUTES")); });
 test("P1-5 unrelated UNKNOWN_OWNER remains tracked without global freeze", () => { const inventory = buildInventory(); assert.equal(verifyInventoryNonVacuity(inventory, { affectedDomains: ["assurance-efficiency-e0", "autonomous-cognitive-governance", "codex-security-scan-reliability-s0"] }).ok, true); assert.ok(inventory.ownershipGaps.orphanRoutes > 0); });
+test("P1-5 config-only Edge Function remains an exact gap", () => { const target = new URL("config.toml", new URL("supabase/", root)); const original = fs.readFileSync(target, "utf8"); try { fs.writeFileSync(target, `${original}\n[functions.__assurance_config_only__]\nverify_jwt = true\n`); const inventory = buildInventory(undefined, { refreshInventory: true }); assert.ok(inventory.groups.find(({ id }) => id === "edgeFunctions").metadata.configuredWithoutDirectory.includes("__assurance_config_only__")); } finally { fs.writeFileSync(target, original); buildInventory(undefined, { refreshInventory: true }); } });
+test("P1-5 entry-only Edge Function remains an exact gap", () => withTransientAsset("supabase/functions/__assurance_entry_only__/index.ts", "Deno.serve(()=>new Response('blocked'))\n", () => { const inventory = buildInventory(undefined, { refreshInventory: true }); assert.ok(inventory.groups.find(({ id }) => id === "edgeFunctions").metadata.directoryWithoutConfiguration.includes("__assurance_entry_only__")); }));
+test("P1-5 unregistered Expo plugin remains orphaned", () => { const target = new URL("app.json", root); const original = fs.readFileSync(target, "utf8"); try { const config = JSON.parse(original); config.expo.plugins = [...(config.expo.plugins ?? []), "expo-unregistered-assurance-fixture"]; fs.writeFileSync(target, `${JSON.stringify(config)}\n`); const inventory = buildInventory(undefined, { refreshInventory: true }); assert.ok(inventory.groups.find(({ id }) => id === "nativePaths").accounting.orphan.includes("expo-plugin:expo-unregistered-assurance-fixture")); } finally { fs.writeFileSync(target, original); buildInventory(undefined, { refreshInventory: true }); } });
+test("P1-5 native package import remains orphaned", () => withTransientAsset("app/__assurance_native_import__.tsx", "import NativeThing from 'react-native-unregistered-fixture'; export default NativeThing;\n", () => { const inventory = buildInventory(undefined, { refreshInventory: true }); assert.ok(inventory.groups.find(({ id }) => id === "nativePaths").accounting.orphan.some((id) => id.includes("react-native-unregistered-fixture"))); }));
+test("P1-5 local native module remains orphaned", () => withTransientAsset("modules/__assurance_local_native__/index.ts", "export const nativeFixture = true;\n", () => { const inventory = buildInventory(undefined, { refreshInventory: true }); assert.ok(inventory.groups.find(({ id }) => id === "pluginsAndLocalNativeModules").accounting.orphan.includes("modules/__assurance_local_native__")); }));
+test("P1-5 removing one exact mapping fails", () => { const inventory = buildInventory(); const group = inventory.groups.find(({ accounting }) => accounting.mapped.length); group.accounting.mapped.pop(); assert.equal(verifyInventoryNonVacuity(inventory).ok, false); });
+test("P1-5 duplicate owner fails", () => { const inventory = buildInventory(); const group = inventory.groups.find(({ id }) => id === "routes"); const member = group.members[0]; member.ownerDomains = ["assurance-efficiency-e0", "autonomous-cognitive-governance"]; member.ownershipStatus = "LEGACY_UNMODELED"; assert.equal(verifyInventoryNonVacuity(inventory, { affectedDomains: ["assurance-efficiency-e0"] }).ok, false); });
+test("P1-5 marking UNKNOWN_OWNER resolved without mapping fails", () => { const inventory = buildInventory(); const group = inventory.groups.find(({ accounting }) => accounting.orphan.length); const member = group.members.find(({ ownershipStatus }) => ownershipStatus === "ORPHAN"); member.ownershipStatus = "REGISTERED_DOMAIN_OWNER"; assert.equal(verifyInventoryNonVacuity(inventory).ok, false); });
 
 const realComment = (overrides = {}) => ({ id: 424242, node_id: "IC_kwDO_SANITIZED", user: { login: "Chillywood2025" }, author_association: "OWNER", body: "immutable owner comment", created_at: "2026-08-12T12:00:00Z", updated_at: "2026-08-12T12:00:00Z", issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/301", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/301#issuecomment-424242", ...overrides });
 test("P1-6 real API issue URL passes", () => assert.equal(normalizeGitHubCommentIdentity(realComment(), { pr: 301, commentId: 424242 })?.pr, 301));
@@ -360,11 +419,33 @@ test("P1-7 local novelty JSON remains unverified", () => assert.equal(classifyLa
 test("P1-7 fictional external drift remains unverified", () => assert.equal(classifyLaterFinding("EXTERNAL_CONTRACT_DRIFT", {}, exactFindingEvidence().drift).classification, "EXTERNAL_CONTRACT_DRIFT_CANDIDATE_UNVERIFIED"));
 test("P1-7 file URL fails", () => assert.equal(observeOfficialPublicContract({ contractId: "supabase", url: "file:///tmp/x", priorContractHash: "a", currentContractFact: "b" }), null));
 test("P1-7 localhost fails", () => assert.equal(observeOfficialPublicContract({ contractId: "supabase", url: "https://localhost/x", priorContractHash: "a", currentContractFact: "b" }), null));
+test("P1-7 data URL fails", () => assert.equal(observeOfficialPublicContract({ contractId: "supabase", url: "data:text/plain,provider", priorContractHash: "a", currentContractFact: "b" }), null));
 test("P1-7 unapproved domain fails", () => assert.equal(observeOfficialPublicContract({ contractId: "supabase", url: "https://example.com/x", priorContractHash: "a", currentContractFact: "b" }), null));
 test("P1-7 missing prior contract fails", () => assert.equal(observeOfficialPublicContract({ contractId: "supabase", url: "https://example.com/x", currentContractFact: "b" }), null));
 test("P1-7 missing current contract fails", () => assert.equal(observeOfficialPublicContract({ contractId: "supabase", url: "https://example.com/x", priorContractHash: "a" }), null));
-test("P1-7 official grounded contract drift passes", () => { const contract = canonicalContext.contracts.contracts.find(({ id }) => id === "supabase"); const fact = "RLS published contract changed"; const curl = `#!/usr/bin/env node\nprocess.stdout.write('date: Wed, 12 Aug 2026 12:00:00 GMT\\n\\nofficial contract bytes ${fact}\\nCHILLYWOOD_FINAL_URL:${contract.source}')\n`; const receipt = withFakeExecutables({ curl }, () => observeOfficialPublicContract({ contractId: "supabase", url: contract.source, priorContractHash: hashValue(contract), currentContractFact: fact })); const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); const review = trustedReview(head); assert.ok(receipt && review); assert.equal(classifyLaterFinding("EXTERNAL_CONTRACT_DRIFT", {}, { authoritativeReceipt: receipt, independentRepositoryReview: review }).classification, "EXTERNAL_CONTRACT_DRIFT"); });
-test("P1-7 physical runtime grounded novelty can pass", () => { const relative = "tests/assurance/__runtime_grounding_fixture__.sh"; const absolute = path.join(new URL(root).pathname, relative); const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); const tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).trim(); const subject = { domain: "chilly-chat-call-lifecycle", observation: "new physical state" }; const observed = { schemaVersion: 1, evidenceClass: "PHYSICAL_RUNTIME", subject, sourceHead: head, sourceTree: tree, runtimeIssuer: "sanitized-physical-runtime-fixture", result: "PASS" }; fs.writeFileSync(absolute, `#!/bin/sh\nprintf '%s' '${JSON.stringify(observed)}'\n`); fs.chmodSync(absolute, 0o755); try { const receipt = observeGroundedRuntimeEvidence({ evidenceClass: "PHYSICAL_RUNTIME", subject, command: relative }); const review = trustedReview(head); assert.ok(receipt && review); assert.equal(classifyLaterFinding("GENUINELY_NOVEL_DIMENSION", {}, { authoritativeReceipt: receipt, independentRepositoryReview: review, priorModelAbsenceHash: "a".repeat(64), derivationAuditHash: "b".repeat(64) }).classification, "GENUINELY_NOVEL_DIMENSION"); } finally { fs.rmSync(absolute, { force: true }); } });
+test("P1-7 curl to approved-looking domain cannot clear", () => { const contract = canonicalContext.contracts.contracts.find(({ id }) => id === "supabase"); const receipt = observeOfficialPublicContract({ contractId: "supabase", url: contract.source, priorContractHash: hashValue(contract), currentContractFact: "repository curl claim" }); assert.equal(receipt.evidenceClass, "OFFICIAL_PUBLIC_CONTRACT_CANDIDATE_UNVERIFIED"); assert.equal(classifyLaterFinding("EXTERNAL_CONTRACT_DRIFT", {}, { authoritativeReceipt: receipt }).classification, "EXTERNAL_CONTRACT_DRIFT_CANDIDATE_UNVERIFIED"); });
+test("P1-7 redirected local server cannot clear", () => { const contract = canonicalContext.contracts.contracts.find(({ id }) => id === "supabase"); const curl = "#!/bin/sh\nprintf 'CHILLYWOOD_FINAL_URL:http://127.0.0.1/provider'\n"; const receipt = withFakeExecutables({ curl }, () => observeOfficialPublicContract({ contractId: "supabase", url: contract.source, priorContractHash: hashValue(contract), currentContractFact: "redirected fixture" })); assert.equal(receipt.authorityAllowed, false); });
+test("P1-7 repository fixture pretending to be provider cannot clear", () => { const contract = canonicalContext.contracts.contracts.find(({ id }) => id === "supabase"); const receipt = observeOfficialPublicContract({ contractId: "supabase", url: contract.source, priorContractHash: hashValue(contract), currentContractFact: "fixture" }); assert.equal(verifyExternalTrustRootReceipt(receipt), false); });
+test("P1-7 repository script pretending to be physical harness cannot clear", () => { const relative = "tests/assurance/__runtime_grounding_fixture__.sh"; const absolute = path.join(new URL(root).pathname, relative); fs.writeFileSync(absolute, "#!/bin/sh\nprintf physical\n"); try { const receipt = observeGroundedRuntimeEvidence({ evidenceClass: "PHYSICAL_RUNTIME", subject: { domain: "chilly-chat-call-lifecycle" }, command: relative }); assert.equal(receipt.evidenceClass, "PHYSICAL_RUNTIME_CANDIDATE_UNVERIFIED"); assert.equal(verifyExternalTrustRootReceipt(receipt), false); } finally { fs.rmSync(absolute, { force: true }); } });
+test("P1-7 self-generated signature cannot clear", () => assert.equal(verifyExternalTrustRootReceipt({ trustRootId: "self", evidenceClass: "SIGNED_ARTIFACT", candidateProducer: "self", trustedIssuer: "self", independentVerifier: "self", signature: "self", signedPayload: "self" }), false));
+test("P1-7 same-PR workflow cannot clear its own external evidence", () => assert.equal(verifyExternalTrustRootReceipt({ trustRootId: "pr-226-workflow", evidenceClass: "OFFICIAL_PUBLIC_CONTRACT", introducedByPr: 226 }), false));
+test("P1-7 task timestamp cannot create freshness", () => { const contract = canonicalContext.contracts.contracts.find(({ id }) => id === "supabase"); const receipt = observeOfficialPublicContract({ contractId: "supabase", url: contract.source, priorContractHash: hashValue(contract), currentContractFact: "2026-08-12T00:00:00Z" }); assert.equal(receipt.observedAt, "SOURCE_DETERMINISTIC_NO_FRESHNESS_AUTHORITY"); });
+test("P1-7 external candidate cannot reopen unrelated domains", () => { const result = classifyLaterFinding("GENUINELY_NOVEL_DIMENSION", {}, { authoritativeReceipt: { evidenceClass: "PHYSICAL_RUNTIME_CANDIDATE_UNVERIFIED" } }); assert.equal(result.action, "NO_DOMAIN_REOPEN"); });
 test("P1-7 Owner scope change is not novelty", () => assert.equal(classifyLaterFinding("OWNER_SCOPE_CHANGE").classification, "OWNER_SCOPE_CHANGE"));
 
-test("authoritative replay A B C is byte-identical two of two", () => { const replay = runAuthoritativeReplay({ runs: 2 }); assert.equal(replay.deterministic, true); assert.equal(replay.runs, "2/2"); assert.deepEqual(replay.differences, []); });
+let isolatedReplay;
+const replayFixture = () => isolatedReplay ??= runAuthoritativeReplay({ runs: 2 });
+test("authoritative replay two fresh processes produce identical output", () => { const replay = replayFixture(); assert.equal(replay.deterministic, true); assert.equal(replay.runs, "2/2"); assert.equal(replay.resultEquality, "2/2"); assert.deepEqual(replay.differences, []); });
+test("authoritative replay 2 does not read replay 1 result", () => assert.equal(replayFixture().replayTwoReadsReplayOne, false));
+test("authoritative source mutation between runs changes output hash", () => { const before = replayFixture().outputHash; withTransientAsset("app/__assurance_replay_source_mutation__.tsx", "export default function Mutation(){return null}\n", () => { const changed = runAuthoritativeReplay({ runs: 1 }); assert.notEqual(changed.outputHash, before); }); });
+test("authoritative clearing interactive caches cannot change output", () => { buildInventory(undefined, { refreshInventory: true }); generateDomainGraph(undefined, { refreshInventory: true }); const fresh = runAuthoritativeReplay({ runs: 1 }); assert.equal(fresh.outputHash, replayFixture().outputHash); });
+test("authoritative reversed filesystem enumeration cannot change output", () => assert.equal(replayFixture().resultEquality, "2/2"));
+test("authoritative locale change cannot change output", () => assert.equal(replayFixture().output.execution.localeIndependentComparator, "RAW_UTF8_BYTE_ORDER"));
+test("authoritative working-directory change cannot change output", () => assert.equal(replayFixture().processIsolated, true));
+test("authoritative temporary-directory path cannot enter output", () => assert.doesNotMatch(stableJson(replayFixture().output), /(?:\/tmp\/|\/private\/var\/)/u));
+test("authoritative timestamp cannot enter output", () => assert.doesNotMatch(stableJson(replayFixture().output), /20\d\d-\d\d-\d\dT\d\d:/u));
+test("authoritative one missing receipt changes completeness", () => { const output = structuredClone(replayFixture().output); output.laneResults[0].receipts.pop(); assert.equal(verifyAuthoritativeOutput(output).ok, false); });
+test("authoritative one duplicate receipt fails", () => { const output = structuredClone(replayFixture().output); output.laneResults[0].receipts.push(structuredClone(output.laneResults[0].receipts[0])); assert.equal(verifyAuthoritativeOutput(output).ok, false); });
+test("authoritative one stale source hash fails", () => { const output = structuredClone(replayFixture().output); output.laneResults[0].receipts[0].generatorSourceHash = "0".repeat(64); assert.equal(verifyAuthoritativeOutput(output).ok, false); });
+test("authoritative contradictory outputs expose exact deterministic diff", () => { const left = replayFixture().output; const right = structuredClone(left); right.externalEvidenceStatus = "CONTRADICTION"; const comparison = compareReplayOutputs(left, right); assert.equal(comparison.equal, false); assert.equal(comparison.difference.pointer, "/externalEvidenceStatus"); });
+test("authoritative cache-hit marker fails", () => { const output = structuredClone(replayFixture().output); output.execution.cacheHit = true; assert.equal(verifyAuthoritativeOutput(output).ok, false); });
