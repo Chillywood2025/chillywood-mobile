@@ -47,6 +47,38 @@
       "reason": "Native call provenance must bind the generated notification receiver and private native store to the authenticated Chat transition in one fail-closed lifecycle domain."
     }
   ],
+  "ownerArchitectureMaintenance": {
+    "pendingTerminalTruthTransition": {
+      "schemaVersion": 1,
+      "contractId": "PENDING_TERMINAL_TRUTH_TRANSITION_V1",
+      "authoritySource": "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
+      "objective": "shared rolling-main evaluator must support the already-required bounded terminal-truth interval",
+      "allowedChangedPaths": [
+        "config/assurance/pr-scope-policy-v1.json",
+        "scripts/assurance/current-truth.mjs",
+        "scripts/assurance/engineering-closure.mjs",
+        "scripts/assurance/lib.mjs",
+        "scripts/assurance/pr-scope-lib.mjs",
+        "scripts/assurance/pr-scope.mjs",
+        "tests/assurance/active-task-binding-a1.test.mjs",
+        "tests/assurance/pr-scope-feature-bundles.test.mjs"
+      ],
+      "maximumFiles": 8,
+      "maximumNetLines": 1800,
+      "terminalTruthRequired": true,
+      "expectedTerminalNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
+      "authority": {
+        "product": false,
+        "nativeProduct": false,
+        "database": false,
+        "providerMutation": false,
+        "build": false,
+        "submission": false,
+        "ota": false,
+        "publicRelease": false
+      }
+    }
+  },
   "historicalExactTaskBindings": [
     {
       "bindingId": "doctrine-pr-226-v1",

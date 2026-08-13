@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
 import { args, renderCurrentState, renderNextTask, stableJson } from "../../scripts/assurance/lib.mjs";
 
@@ -37,7 +37,7 @@ const pullFixture = ({ pr, branch, head = "a".repeat(40), base = "b".repeat(40),
   },
   readback: { number: pr, repository: "Chillywood2025/chillywood-mobile", baseRef: "main", baseSha: base, headRef: branch, headSha: head, htmlUrl: `https://github.com/Chillywood2025/chillywood-mobile/pull/${pr}`, state: "open" }
 });
-const derive = ({ fixture, truth = { finiteTaskLeases: { tasks: [] } }, ownerAuthority = null, finiteTaskAuthority = null, architectureAuthority = null, terminalTruthAuthority = null, taskPolicy = policy, requestedFeature = null, requestedWaiver = null }) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: taskPolicy, registry, currentTruth: truth, ownerAuthority, finiteTaskAuthority, architectureAuthority, terminalTruthAuthority, requestedFeature, requestedWaiver });
+const derive = ({ fixture, truth = { finiteTaskLeases: { tasks: [] } }, ownerAuthority = null, finiteTaskAuthority = null, architectureAuthority = null, terminalTruthAuthority = null, protectedMainRuntime = null, taskPolicy = policy, requestedFeature = null, requestedWaiver = null }) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: taskPolicy, registry, currentTruth: truth, ownerAuthority, finiteTaskAuthority, architectureAuthority, terminalTruthAuthority, protectedMainRuntime, requestedFeature, requestedWaiver });
 
 test("policy bundles reference registered features and known high-risk domains", () => {
   assert.deepEqual(validateFeatureDomainBundles({
@@ -255,6 +255,49 @@ test("architecture 13: no static policy entry is required", () => {
   assert.equal(policy.historicalExactTaskBindings.some(({ pr }) => pr === value.identity.pr), false);
 });
 
+const architectureSuccessorFixture = () => {
+  const originalScope = { files: [
+    "config/assurance/pr-scope-policy-v1.json", "scripts/assurance/current-truth.mjs", "scripts/assurance/engineering-closure.mjs",
+    "scripts/assurance/pr-scope-lib.mjs", "scripts/assurance/pr-scope.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"
+  ].sort(), netChangedLines: 431 };
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 227, branch: "codex/typed-task-context-terminal-successor-v1", baseSha: "c1f9ec1f71cc8bc4448afd2327c4341cac309573", headSha: "16c2421ec41786979c4fce9741efed8c66632c09" };
+  const original = { identity: originalIdentity, tree: "80ae1d92b735e6554a93e4df16a9746027b680c3", scope: originalScope };
+  original.subject = architectureMaintenanceSubject(original);
+  original.raw = rawOwnerComment({ id: 5276216820, pr: original.identity.pr, body: architectureMaintenanceOwnerCommentBody(original.subject) });
+  const identity = { ...original.identity, headSha: "c".repeat(40) };
+  const tree = "d".repeat(40);
+  const scope = { files: [
+    ...original.scope.files, "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs"
+  ].sort(), netChangedLines: 1200 };
+  const subject = architectureMaintenanceSuccessorSubject({ identity, tree, scope, originalRaw: original.raw });
+  const successor = rawOwnerComment({ id: 6000000003, pr: identity.pr, body: architectureMaintenanceSuccessorOwnerCommentBody(subject) });
+  const args = { raw: original.raw, allComments: [original.raw, successor], paginationComplete: true, identity, tree, scope };
+  return { original, identity, tree, scope, subject, successor, args, authority: verifyArchitectureMaintenanceAuthority(args) };
+};
+test("architecture successor: one exact immutable descendant authority passes", () => assert.equal(architectureSuccessorFixture().authority.ok, true));
+test("architecture successor: edited, duplicate, stale, over-budget, ninth-path, and wildcard receipts fail", () => {
+  const mutations = [
+    (v) => { v.args.successor = undefined; v.args.allComments[1].body += " "; },
+    (v) => { v.args.allComments.push({ ...v.successor, id: v.successor.id + 1, node_id: `IC_${v.successor.id + 1}` }); },
+    (v) => { v.args.identity.headSha = "e".repeat(40); },
+    (v) => { v.args.scope.netChangedLines = 1801; },
+    (v) => { v.args.scope.files.push("README.md"); },
+    (v) => { v.args.scope.files = [...v.args.scope.files.slice(0, -1), "tests/assurance/*"]; }
+  ];
+  for (const mutate of mutations) {
+    const value = architectureSuccessorFixture();
+    mutate(value);
+    assert.equal(verifyArchitectureMaintenanceAuthority(value.args).ok, false);
+  }
+});
+test("architecture successor: exact PR 227 is the only bootstrap recovery context while doctrine truth is pending", () => {
+  const value = architectureSuccessorFixture();
+  const runtime = { pendingTerminalTruth: true, terminalSuccessorRequired: true, pendingTransitionCount: 1 };
+  assert.equal(derive({ fixture: value.original.fixture ?? pullFixture({ pr: 227, branch: value.identity.branch, head: value.identity.headSha, base: value.identity.baseSha }), architectureAuthority: value.authority, protectedMainRuntime: runtime }).ok, true);
+  const unrelated = architectureFixture();
+  assert.ok(derive({ fixture: unrelated.fixture, architectureAuthority: unrelated.authority, protectedMainRuntime: runtime }).findings.includes("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED"));
+});
+
 const terminalFixture = () => {
   const architecture = architectureFixture();
   const fixture = pullFixture({ pr: 902, branch: "codex/post-doctrine-truth", head: "c".repeat(40), base: "d".repeat(40) });
@@ -267,7 +310,15 @@ const terminalFixture = () => {
   const truthRecord = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
   truthRecord.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" };
   truthRecord.openImplementationPrs = [];
-  truthRecord.taskContextArchitecture = { architecturePr: predecessor.pr, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, mergeSha: predecessor.mergeSha, terminalTransitionConsumed: true, authority: { build: false, submission: false, ota: false, publicRelease: false } };
+  truthRecord.taskContextArchitecture = {
+    architecturePr: predecessor.pr, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, mergeSha: predecessor.mergeSha,
+    terminalTransitionConsumed: true, pendingTransitionPolicyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1", pendingTransitionCountAfterSynchronization: 0,
+    pendingTransitions: [
+      { pr: 226, mergeSha: "c1f9ec1f71cc8bc4448afd2327c4341cac309573", status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor.pr, mergeSha: predecessor.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }
+    ],
+    authority: { providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
+  };
   const currentStateText = renderCurrentState(truthRecord);
   const nextTaskText = renderNextTask(truthRecord);
   const subject = terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash });
@@ -313,6 +364,11 @@ test("terminal 35: no taskContextBindings entry is required", () => {
   assert.equal(result.ok, true);
   assert.equal(result.source, "TERMINAL_TRUTH_SUCCESSOR_V1");
   assert.equal(Object.hasOwn(policy, "taskContextBindings"), false);
+});
+test("terminal successor remains eligible for the exact two-transition pending chain", () => {
+  const value = terminalFixture();
+  const result = derive({ fixture: value.fixture, terminalTruthAuthority: value.authority, protectedMainRuntime: { pendingTerminalTruth: true, terminalSuccessorRequired: true, pendingTransitionCount: 2 } });
+  assert.equal(result.ok, true, result.findings.join(","));
 });
 
 test("general 36-40: arbitrary and spoofed PRs plus injected feature or waiver remain blocked", () => {

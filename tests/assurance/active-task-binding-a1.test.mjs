@@ -25,6 +25,9 @@ import {
   finiteTaskFinalReceiptBody,
   finiteTaskFinalReceiptSubject,
   finiteTaskLeaseFor,
+  HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1,
+  PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1,
+  PENDING_TERMINAL_TRUTH_TRANSITION_V1,
   renderCurrentState,
   renderNextTask,
   resolveCurrentProtectedBase,
@@ -33,6 +36,7 @@ import {
   taskLeaseAmendmentSubject,
   transitionFiniteTaskState,
   validateFiniteTaskLeaseRegistry,
+  validateEngineeringDoctrineTruth,
   validateProofTierStatuses,
   validateTerminalTaskEvidence,
   verifyCommittedClaimEvidence,
@@ -43,7 +47,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { DOCTRINE_BASE, affectedDomainClosure, generateDomainGraph, makeTaskPacket } from "../../scripts/assurance/engineering-closure.mjs";
+import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, generateDomainGraph, makeTaskPacket } from "../../scripts/assurance/engineering-closure.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -1820,6 +1824,184 @@ test("rolling main matrix 28: malformed or unregistered merge subjects fail clos
     const result = syntheticRollingEvaluation(1, { subject });
     assert.equal(result.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true, subject);
   }
+});
+
+const recoveryPaths = [...TYPED_CONTEXT_ARCHITECTURE_PATHS].sort();
+const recoveryContract = JSON.parse(fs.readFileSync(["config", "assurance", "pr-scope-policy-v1.json"].join("/"), "utf8")).ownerArchitectureMaintenance.pendingTerminalTruthTransition;
+const recoveryMerge = digest("typed-context-recovery-merge").slice(0, 40);
+const recoverySource = digest("typed-context-recovery-source").slice(0, 40);
+const recoveryTree = digest("typed-context-recovery-tree").slice(0, 40);
+
+function pendingTransitionEvaluation({ recovery = false, terminal = false, mutateHistorical, mutateRecovery, mutateTerminal, append = [] } = {}) {
+  const record = structuredClone(canonicalTruth);
+  record.mainSha = HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.firstParent;
+  record.protectedMainAuthority.checkpointSha = record.mainSha;
+  record.protectedMainAuthority.checkpointTree = "64c3f8d56d93b08e5c3d3abbed11e707be1ede2b";
+  const pendingTransitionPolicy = {
+    state: structuredClone(PENDING_TERMINAL_TRUTH_TRANSITION_V1),
+    historical: structuredClone(HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1),
+    chain: structuredClone(PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1)
+  };
+  mutateHistorical?.(pendingTransitionPolicy.historical);
+  const observations = [{
+    commit: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha,
+    parents: [HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.firstParent, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead],
+    tree: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceTree,
+    subject: "Merge pull request #226 from Chillywood2025/codex/whole-app-engineering-doctrine-v1",
+    changedPaths: ["scripts/assurance/lib.mjs"]
+  }];
+  if (recovery) {
+    const value = {
+      commit: recoveryMerge,
+      parents: [observations.at(-1).commit, recoverySource],
+      tree: recoveryTree,
+      sourceTree: recoveryTree,
+      subject: "Derive terminal truth scope from protected predecessor authority (#227)",
+      changedPaths: [...recoveryPaths],
+      pendingMaintenanceContract: structuredClone(recoveryContract)
+    };
+    mutateRecovery?.(value);
+    observations.push(value);
+  }
+  if (terminal) {
+    const value = {
+      commit: digest("terminal-successor-merge").slice(0, 40),
+      parents: [observations.at(-1).commit, digest("terminal-successor-source").slice(0, 40)],
+      tree: digest("terminal-successor-tree").slice(0, 40),
+      subject: "Activate whole-app engineering doctrine (#902)",
+      changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
+      terminalSuccessor: true
+    };
+    mutateTerminal?.(value);
+    observations.push(value);
+  }
+  observations.push(...append);
+  const observed = observations.at(-1).commit;
+  return evaluateProtectedMainAdvancement({
+    record,
+    contract: currentTruthContract,
+    observedProtectedMainSha: observed,
+    candidateHead: "d".repeat(40),
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: true },
+    advancementObservations: observations,
+    pendingTransitionPolicy,
+    checkpointTreeObservation: record.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: true,
+    candidateContainsObservedMain: true,
+    gitCommand: (argv) => {
+      if (argv[0] === "rev-parse") return recoveryTree;
+      if (argv[0] === "show" && String(argv[1]).endsWith(`:${["config", "assurance", "pr-scope-policy-v1.json"].join("/")}`)) {
+        const source = String(argv[1]).split(":", 1)[0];
+        const matching = observations.find(({ parents }) => parents?.[1] === source);
+        return matching?.pendingMaintenanceContract ? JSON.stringify({ ownerArchitectureMaintenance: { pendingTerminalTruthTransition: matching.pendingMaintenanceContract } }) : "";
+      }
+      if (argv[0] === "show" && String(argv[1]).endsWith(":config/assurance/current-truth-v1.json")) {
+        const commit = String(argv[1]).split(":", 1)[0];
+        const matching = observations.find(({ commit: candidate }) => candidate === commit);
+        if (!matching?.terminalSuccessor) return "";
+        const transitionMerges = observations.slice(0, observations.indexOf(matching)).filter(({ commit: candidate }) => candidate === HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha || candidate === recoveryMerge);
+        return JSON.stringify({
+          engineeringDoctrine: { nextPermittedAction: matching.terminalExpectedNextTask ?? "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" },
+          taskContextArchitecture: {
+            pendingTransitionPolicyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+            pendingTransitionCountAfterSynchronization: 0,
+            terminalTransitionConsumed: true,
+            pendingTransitions: transitionMerges.map(({ commit: mergeSha }) => ({ mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" })),
+            authority: matching.terminalAuthority ?? { providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
+          }
+        });
+      }
+      return "";
+    }
+  });
+}
+
+test("pending transition 1: exact historical PR 226 is pending without authority drift or chain invalid", () => {
+  const result = pendingTransitionEvaluation();
+  assert.equal(result.pendingTransitionCount, 1);
+  assert.equal(result.pendingTransitions[0].transitionId, "HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1");
+  assert.equal(result.findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT"), false);
+  assert.equal(result.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), false);
+});
+test("pending transitions 2-10: every historical identity and closed-authority mutation fails", () => {
+  const mutations = [
+    (v) => { v.sourceHead = "1".repeat(40); }, (v) => { v.sourceTree = "1".repeat(40); },
+    (v) => { v.mergeSha = "1".repeat(40); }, (v) => { v.firstParent = "1".repeat(40); },
+    (v) => { v.ownerCommentIds = [5274614505]; }, (v) => { v.repositoryReviewCommentId += 1; },
+    (v) => { v.phase1RunId += 1; }, (v) => { v.authority.build = true; }, (v) => { v.pullRequest = 999; }
+  ];
+  for (const mutateHistorical of mutations) assert.ok(pendingTransitionEvaluation({ mutateHistorical }).findings.length > 0);
+});
+test("pending transition 11: exact PR 227 recovery forms the sole two-transition bootstrap chain", () => {
+  const result = pendingTransitionEvaluation({ recovery: true });
+  assert.equal(result.pendingTransitionCount, 2, result.findings.join(","));
+  assert.equal(result.findings.length, 0);
+});
+test("pending transitions 12-15: recovery requires exact Owner contract, objective, eight paths, and no product path", () => {
+  const mutations = [
+    (v) => { v.pendingMaintenanceContract.authoritySource = "LOCAL"; },
+    (v) => { v.pendingMaintenanceContract.objective = "wrong"; },
+    (v) => { v.changedPaths.push("README.md"); },
+    (v) => { v.changedPaths = [...v.changedPaths.slice(0, -1), "app/index.tsx"]; }
+  ];
+  for (const mutateRecovery of mutations) assert.ok(pendingTransitionEvaluation({ recovery: true, mutateRecovery }).findings.length > 0);
+});
+test("pending transitions 16-17: a second recovery or third pending transition overflows", () => {
+  const third = {
+    commit: digest("third-recovery").slice(0, 40), parents: [recoveryMerge, digest("third-source").slice(0, 40)], tree: digest("third-tree").slice(0, 40), sourceTree: digest("third-tree").slice(0, 40),
+    subject: "Third recovery (#903)", changedPaths: [...recoveryPaths], pendingMaintenanceContract: structuredClone(recoveryContract)
+  };
+  const result = pendingTransitionEvaluation({ recovery: true, append: [third] });
+  assert.ok(result.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_CHAIN_OVERFLOW"));
+});
+test("pending transition 18: exact three-file successor consumes PR 226 and PR 227 together", () => {
+  const result = pendingTransitionEvaluation({ recovery: true, terminal: true });
+  assert.equal(result.pendingTransitionCount, 0, result.findings.join(","));
+  assert.equal(result.pendingTransitionConsumptionCount, 1);
+  assert.equal(result.findings.length, 0);
+});
+test("pending transitions 19-23: successor rejects fourth path, wrong predecessor/next task, build, and provider authority", () => {
+  const mutations = [
+    (v) => { v.changedPaths.push("README.md"); },
+    (v) => { v.parents[0] = "1".repeat(40); },
+    (v) => { v.terminalExpectedNextTask = "WRONG"; },
+    (v) => { v.terminalAuthority = { build: true }; },
+    (v) => { v.terminalAuthority = { providerMutation: true }; }
+  ];
+  for (const mutateTerminal of mutations) assert.ok(pendingTransitionEvaluation({ recovery: true, terminal: true, mutateTerminal }).findings.length > 0);
+});
+test("pending transitions 24-25: duplicate or post-consumption successor fails", () => {
+  const duplicate = { commit: digest("duplicate-terminal").slice(0, 40), parents: [digest("terminal-successor-merge").slice(0, 40), digest("duplicate-source").slice(0, 40)], tree: digest("duplicate-tree").slice(0, 40), subject: "Duplicate truth (#904)", changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], terminalSuccessor: true };
+  assert.ok(pendingTransitionEvaluation({ recovery: true, terminal: true, append: [duplicate] }).findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID"));
+});
+test("pending transitions 26-34: shared result is fail-closed, source-only, authority-closed, and deterministic", () => {
+  const pending = pendingTransitionEvaluation();
+  assert.equal(pending.authorityCheckpointEligible, true);
+  assert.equal(pending.authorityControlEligible, true);
+  assert.equal(pending.sourceOnlyEligible, true);
+  assert.equal(pending.providerDependentEligible, false);
+  assert.equal(pending.buildEligible, false);
+  assert.equal(pending.submissionEligible, false);
+  assert.equal(pending.otaEligible, false);
+  assert.equal(pending.publicReleaseEligible, false);
+  assert.equal(new Set(Array.from({ length: 3 }, () => stableJson(pendingTransitionEvaluation({ recovery: true, terminal: true })))).size, 1);
+  const product = { commit: digest("product-after-pending").slice(0, 40), parents: [HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, digest("product-source").slice(0, 40)], tree: digest("product-tree").slice(0, 40), subject: "Product work (#905)", changedPaths: ["app/index.tsx"] };
+  const blockedProduct = pendingTransitionEvaluation({ append: [product] });
+  assert.ok(blockedProduct.findings.includes("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED"));
+  assert.equal(blockedProduct.sourceOnlyEligible, false);
+});
+test("pending transitions 35-37: consumption is deterministic and protected/advisory policy is unchanged", () => {
+  const outputs = Array.from({ length: 3 }, () => stableJson(pendingTransitionEvaluation({ recovery: true, terminal: true })));
+  assert.equal(new Set(outputs).size, 1);
+  assert.equal(canonicalTruth.reviewPolicy.requiredPhase1Checks, 13);
+  assert.equal(canonicalTruth.reviewPolicy.classification, "OPTIONAL_ADVISORY");
+  assert.equal(canonicalTruth.reviewPolicy.requiredStatusCheck, false);
+});
+test("pending transition source-only interval defers only the missing doctrine truth assertion", () => {
+  const pending = pendingTransitionEvaluation();
+  assert.deepEqual(validateEngineeringDoctrineTruth({}, currentTruthContract, { currentMain: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, implementationMerged: true, protectedMainRuntime: pending }), []);
+  const invalid = { ...pending, buildEligible: true };
+  assert.ok(validateEngineeringDoctrineTruth({}, currentTruthContract, { currentMain: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, implementationMerged: true, protectedMainRuntime: invalid }).some(({ id }) => id === "ASSURANCE_ENGINEERING_DOCTRINE_MISSING"));
 });
 
 const d2aTerminalStatuses = {

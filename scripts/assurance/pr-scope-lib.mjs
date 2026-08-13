@@ -65,6 +65,7 @@ export function deriveTaskScopeContext({
   finiteTaskAuthority = null,
   architectureAuthority = null,
   terminalTruthAuthority = null,
+  protectedMainRuntime = null,
   requestedFeature = null,
   requestedWaiver = null
 } = {}) {
@@ -93,6 +94,19 @@ export function deriveTaskScopeContext({
   if (candidates.length === 0) findings.push("ASSURANCE_TASK_CONTEXT_UNBOUND");
   if (candidates.length > 1 || historical.length > 1) findings.push("ASSURANCE_TASK_CONTEXT_AMBIGUOUS");
   const selected = candidates.length === 1 ? candidates[0] : null;
+  if (protectedMainRuntime?.pendingTerminalTruth === true && selected) {
+    const terminalAllowed = selected.type === "TERMINAL_TRUTH_SUCCESSOR"
+      && protectedMainRuntime.terminalSuccessorRequired === true
+      && [1, 2].includes(protectedMainRuntime.pendingTransitionCount);
+    const exactBootstrapRecovery = selected.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE"
+      && protectedMainRuntime.pendingTransitionCount === 1
+      && identity.pr === 227
+      && identity.baseSha === "c1f9ec1f71cc8bc4448afd2327c4341cac309573"
+      && architectureAuthority?.originalCommentId === 5276216820
+      && architectureAuthority?.subject?.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_V1"
+      && architectureAuthority?.subject?.reason === "shared rolling-main evaluator must support the already-required bounded terminal-truth interval";
+    if (!terminalAllowed && !exactBootstrapRecovery) findings.push("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED");
+  }
   const registryFeatures = new Set((registry?.features ?? []).map(({ featureId }) => featureId));
   if (selected && !registryFeatures.has(selected.featureId)) findings.push("ASSURANCE_TASK_FEATURE_UNREGISTERED");
   if (selected?.historicalWaiverPath && selected.type !== "PROTECTED_HISTORICAL_TASK") findings.push("ASSURANCE_TASK_WAIVER_CONTEXT_INVALID");

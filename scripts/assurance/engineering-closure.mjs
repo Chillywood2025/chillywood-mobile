@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { renderCurrentState, renderNextTask } from "./lib.mjs";
+import { HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, renderCurrentState, renderNextTask } from "./lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -1278,15 +1278,16 @@ export function normalizeGitHubCommentIdentity(raw, { repository = "Chillywood20
 }
 
 export const ARCHITECTURE_MAINTENANCE_MARKER = "<!-- chillywood-assurance-architecture-maintenance-v1 -->";
+export const ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER = "<!-- chillywood-assurance-architecture-maintenance-successor-v1 -->";
 export const TERMINAL_TRUTH_SUCCESSOR_MARKER = "<!-- chillywood-terminal-truth-successor-v1 -->";
 export const TYPED_CONTEXT_ARCHITECTURE_PATHS = Object.freeze([
   "config/assurance/pr-scope-policy-v1.json",
-  "config/assurance/schemas-v1.json",
   "scripts/assurance/current-truth.mjs",
   "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
   "scripts/assurance/pr-scope-lib.mjs",
   "scripts/assurance/pr-scope.mjs",
-  "tests/assurance/current-truth-sync.test.mjs",
+  "tests/assurance/active-task-binding-a1.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
@@ -1338,23 +1339,85 @@ export function architectureMaintenanceSubject({ identity, tree, scope } = {}) {
 }
 export const architectureMaintenanceOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_MARKER, subject.type, subject);
 
-export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true } = {}) {
-  const subject = architectureMaintenanceSubject({ identity, tree, scope });
-  const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
-  const payload = parseExactOwnerBody(normalized, ARCHITECTURE_MAINTENANCE_MARKER);
-  const matches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
+export function architectureMaintenanceSuccessorSubject({ identity, tree, scope, originalRaw } = {}) {
+  const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
+  const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
+  const originalSubject = originalPayload?.subject ?? {};
   const observed = exactScope(scope);
+  const addedPaths = observed.changedPaths.filter((file) => !(originalSubject.changedPaths ?? []).includes(file));
+  return {
+    type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_V1",
+    repository: identity?.repository,
+    pr: identity?.pr,
+    branch: identity?.branch,
+    originalCommentId: original?.id,
+    originalSubjectHash: originalPayload?.subjectHash,
+    originalBodyHash: original?.bodyHash,
+    originalHead: originalSubject.currentHead,
+    originalTree: originalSubject.currentTree,
+    currentHead: identity?.headSha,
+    currentTree: tree,
+    finalHead: identity?.headSha,
+    finalTree: tree,
+    originalChangedPaths: originalSubject.changedPaths,
+    addedPaths,
+    changedPaths: observed.changedPaths,
+    changedPathHash: observed.changedPathHash,
+    budget: { maximumFiles: 8, maximumNetLines: 1800 },
+    reason: "shared rolling-main evaluator must support the already-required bounded terminal-truth interval",
+    terminalTruthRequired: true,
+    expectedTerminalNextTask: TYPED_CONTEXT_NEXT_TASK,
+    authority: { product: false, nativeProduct: false, database: false, provider: false, build: false, submission: false, ota: false, release: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+    immutableCommentRequired: true,
+    createdAtEqualsUpdatedAtRequired: true,
+    expiresOn: `PR_${identity?.pr}_MERGE`,
+    reusableByAnotherPr: false,
+  };
+}
+export const architectureMaintenanceSuccessorOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER, subject.type, subject);
+
+export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true } = {}) {
+  const normalizedOriginal = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
+  const originalPayload = parseExactOwnerBody(normalizedOriginal, ARCHITECTURE_MAINTENANCE_MARKER);
+  const originalSubject = originalPayload?.subject;
+  const originalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
+  const successorMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER}\n`));
+  const observed = exactScope(scope);
+  const descendant = originalSubject?.currentHead !== identity?.headSha
+    || originalSubject?.currentTree !== tree
+    || stableJson(originalSubject?.changedPaths) !== stableJson(observed.changedPaths);
+  const successorRaw = successorMatches[0];
+  const normalizedSuccessor = successorRaw ? normalizeGitHubCommentIdentity(successorRaw, { repository: identity?.repository, pr: identity?.pr, commentId: successorRaw.id }) : null;
+  const expectedSuccessor = descendant ? architectureMaintenanceSuccessorSubject({ identity, tree, scope, originalRaw: raw }) : null;
+  const successorPayload = parseExactOwnerBody(normalizedSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
+  const subject = descendant ? successorPayload?.subject : architectureMaintenanceSubject({ identity, tree, scope });
+  const originalPayloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
+  const successorPayloadWithoutHash = Object.fromEntries(Object.entries(successorPayload ?? {}).filter(([key]) => key !== "bodyHash"));
   const checks = {
-    identity: Boolean(normalized),
-    body: normalized?.body === architectureMaintenanceOwnerCommentBody(subject),
-    hashes: payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"))),
-    singleComment: paginationComplete && matches.length === 1 && matches[0]?.id === raw?.id,
+    identity: Boolean(normalizedOriginal) && (!descendant || Boolean(normalizedSuccessor)),
+    originalBody: Boolean(originalSubject) && normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
+    originalHashes: Boolean(originalSubject) && originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(originalPayloadWithoutHash),
+    originalBinding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === TYPED_CONTEXT_DOCTRINE_MERGE && originalSubject?.budget?.maximumFiles === 8 && originalSubject?.budget?.maximumNetLines === 1800,
+    commentCardinality: paginationComplete && originalMatches.length === 1 && originalMatches[0]?.id === raw?.id && successorMatches.length === (descendant ? 1 : 0),
+    successorBody: !descendant || normalizedSuccessor?.body === architectureMaintenanceSuccessorOwnerCommentBody(expectedSuccessor),
+    successorHashes: !descendant || (successorPayload?.subjectHash === hashValue(expectedSuccessor) && successorPayload?.bodyHash === hashValue(successorPayloadWithoutHash)),
+    successorSeed: !descendant || (identity?.pr === 227
+      && identity?.branch === "codex/typed-task-context-terminal-successor-v1"
+      && normalizedOriginal?.id === 5276216820
+      && originalPayload?.subjectHash === "2bec002a4dc7ecec3cec2a5afec477cd325bb4bf7131d3def60fddf6b943642c"
+      && normalizedOriginal?.bodyHash === "bfa2ad32ed776b6291135899009e823677fb668b27a89bb6a50baa965f3c1bab"
+      && originalSubject?.currentHead === "16c2421ec41786979c4fce9741efed8c66632c09"
+      && originalSubject?.currentTree === "80ae1d92b735e6554a93e4df16a9746027b680c3"
+      && originalSubject?.changedPathHash === "02b80940320b4047c0abf2473afaf00c98f2f01238ae3878b14528a5cef1bf9b"),
+    successorScope: !descendant || (stableJson(expectedSuccessor.addedPaths) === stableJson(["scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs"]) && stableJson(expectedSuccessor.changedPaths) === stableJson(TYPED_CONTEXT_ARCHITECTURE_PATHS)),
     exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= 8 && observed.changedPaths.every((file) => TYPED_CONTEXT_ARCHITECTURE_PATHS.includes(file)) && !observed.changedPaths.some((file) => file.includes("*")),
     budget: observed.netChangedLines <= 1800,
-    authority: subject.authority && Object.values(subject.authority).every((value) => value === false) && noCompetingDomainOwner,
+    authority: subject?.authority && Object.values(subject.authority).every((value) => value === false) && noCompetingDomainOwner,
   };
   const ok = Object.values(checks).every(Boolean);
-  return { ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: subject.featureId, objectiveDomains: [], supportingDomains: [...subject.supportingDomains], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: 8, maximumHandAuthoredNetLines: 1800 }, commentId: normalized?.id ?? null, commentBodyHash: normalized?.bodyHash ?? null, subjectHash: hashValue(subject), subject, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
+  const effectiveSubject = descendant ? subject : originalSubject;
+  return { ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: 8, maximumHandAuthoredNetLines: 1800 }, commentId: descendant ? normalizedSuccessor?.id ?? null : normalizedOriginal?.id ?? null, commentBodyHash: descendant ? normalizedSuccessor?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null, subjectHash: effectiveSubject ? hashValue(effectiveSubject) : null, subject: effectiveSubject, originalCommentId: normalizedOriginal?.id ?? null, originalBodyHash: normalizedOriginal?.bodyHash ?? null, originalSubjectHash: originalPayload?.subjectHash ?? null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
 }
 
 export function terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash } = {}) {
@@ -1373,13 +1436,22 @@ export function terminalTruthSuccessorSubject({ identity, tree, scope, predecess
     predecessorAuthorityComment: { commentId: predecessorAuthority?.commentId, bodyHash: predecessorAuthority?.commentBodyHash, subjectHash: predecessorAuthority?.subjectHash },
     doctrinePr: 226,
     doctrineMerge: TYPED_CONTEXT_DOCTRINE_MERGE,
+    doctrineSourceHead: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead,
+    doctrineSourceTree: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceTree,
+    doctrineOwnerAuthorityCommentIds: [...HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.ownerCommentIds],
+    pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId,
+    pendingTransitions: [
+      { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, sourceHead: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead, sourceTree: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceTree, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, sourceHead: predecessor?.sourceHead, sourceTree: predecessor?.sourceTree, authorityCommentId: predecessorAuthority?.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    ],
+    pendingTransitionCountAfterSynchronization: 0,
     priorCurrentTruthHash: priorTruthHash,
     changedPaths: observed.changedPaths,
     changedPathHash: observed.changedPathHash,
     budget: { maximumFiles: 3, maximumNetLines: 1200 },
     expectedDoctrineStatus: "ACTIVE",
     expectedNextTask: TYPED_CONTEXT_NEXT_TASK,
-    authority: { build: false, submission: false, ota: false, publicRelease: false },
+    authority: { providerMutation: false, build: false, submission: false, ota: false, publicRelease: false },
     ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
     immutableCommentRequired: true,
     createdAtEqualsUpdatedAtRequired: true,
@@ -1405,7 +1477,7 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
     singleComment: paginationComplete && matches.length === 1 && matches[0]?.id === raw?.id,
     exactPaths: stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_PATHS) && observed.netChangedLines <= 1200,
     predecessor: predecessor?.valid === true && predecessor?.mergeSha === identity?.baseSha && predecessor?.firstParent === TYPED_CONTEXT_DOCTRINE_MERGE && predecessor?.sourceHead === predecessorAuthority?.subject?.currentHead && predecessor?.sourceTree === predecessorAuthority?.subject?.currentTree && predecessorAuthority?.ok === true && predecessorAuthority?.subject?.terminalTruthRequired === true,
-    generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext,
+    generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && architecture?.pendingTransitionPolicyId === PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId && architecture?.pendingTransitionCountAfterSynchronization === 0 && stableJson(architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) === stableJson(subject.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext,
     authorityClosed: architecture?.authority?.build === false && architecture?.authority?.submission === false && architecture?.authority?.ota === false && architecture?.authority?.publicRelease === false,
     singleUse: openTerminalSuccessorCount === 1 && transitionPreviouslyConsumed === false,
   };

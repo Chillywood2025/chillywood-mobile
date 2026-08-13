@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
-import { args, emit, git, readJson } from "./lib.mjs";
+import { args, emit, evaluateProtectedMainAdvancement, git, readJson } from "./lib.mjs";
 import { observeTypedTaskAuthorities } from "./engineering-closure.mjs";
 import { deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
@@ -10,6 +10,8 @@ const options = args();
 const policy = readJson("config/assurance/pr-scope-policy-v1.json");
 const registry = readJson("config/assurance/feature-registry-v1.json");
 const currentTruth = readJson("config/assurance/current-truth-v1.json");
+const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
+const protectedMainRuntime = evaluateProtectedMainAdvancement({ record: currentTruth, contract: currentTruthContract });
 
 const instruction = (file) => /(^|\/)AGENTS\.md$/u.test(file) || ["CURRENT_STATE.md", "NEXT_TASK.md"].includes(file);
 const classify = (files) => files.map((file) => ({
@@ -92,6 +94,7 @@ if (!event.pull_request) {
     policy,
     registry,
     currentTruth,
+    protectedMainRuntime,
     ...typedAuthorities,
     requestedFeature: options.feature ?? null,
     requestedWaiver: options.waiver ?? null
