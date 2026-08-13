@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "artifactId": "PRE_RELEASE_IDENTITY_ENTITLEMENT_AUTHORITY_V1",
+  "taskId": "pre-release-identity-entitlement-authority-v1",
+  "waveId": "WAVE_1",
+  "status": "INTENT_CAPTURED",
+  "authorizationStatus": "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "implementation": {
+    "branch": "codex/pre-release-identity-entitlement-authority-v1",
+    "pullRequest": null,
+    "seedHead": null,
+    "seedTree": null,
+    "protectedBase": {
+      "head": "35ba9d852f0136141ee863ed44d58ed450192033",
+      "tree": "f4d581596f146190d3799e3efe76aa10c7fda9c5"
+    }
+  },
+  "planningIdentities": {
+    "validatedMasterLedger": "ff0e472dba7f0d931de052e7c0a220aaf07c6d8cd4da5e158142c2666858d345",
+    "acceptanceManifest": "6f24db9f78ba3e81ab032b01fde070ff686a3b39b65ee51a69015f82d61dade0",
+    "monetizationCardSupplementManifest": "d7beff8c9d81b036f04c7635c245ad53aa4c996908bb38a0402a61dd0123b355",
+    "combinedValidatedLedgerSupplement": "56fba5d2c2e28013f526f2594fd5186e1039d503ae351fe0f411bcd0ccf86741",
+    "creatorMoneyOwnerDirection": "a9f0e0ec8399409c91ed0496b3d44bf2496319722d85e4224054ace6145ff90c",
+    "creatorMoneyScopeCorrectionManifest": "622eaa994bd9769cf879833a779e08bffb0d924abc3e118a182a38c373531faa",
+    "updatedCombinedPlanningIdentity": "354e36f82ba96c96b859ba4d2a35648b726e2435a3420c3c99af8a86aeeaa08a",
+    "priorPrivateArtifactAvailability": "AVAILABLE_AND_HASH_VERIFIED"
+  },
+  "ownerIntent": {
+    "plan": {
+      "selection": "B",
+      "disposition": "FULL_APPROVED_PRELAUNCH_IMPROVEMENT",
+      "direction": "Complete all six approved source waves before final source freeze; this lease executes Wave 1 only."
+    },
+    "decisions": [
+      {
+        "id": "OC-LIVE-SCOPE-001",
+        "selection": "B",
+        "disposition": "PRODUCTION_COMPLETE_BACKED_DISCOVERY_AVAILABILITY_GATED",
+        "direction": "Engineer real backend-backed Live discovery before final source freeze; availability may remain gated, but unavailable cannot mean unfinished."
+      },
+      {
+        "id": "OC-REPLAY-ORIENTATION-002",
+        "selection": "B",
+        "disposition": "FULLSCREEN_LANDSCAPE_PARITY_PRE_RELEASE",
+        "direction": "Replay and applicable player surfaces receive complete fullscreen landscape parity before final source freeze."
+      },
+      {
+        "id": "OC-PROFILE-NAV-003",
+        "selection": "A",
+        "disposition": "AVATAR_ENTRY_WITH_COMPLETE_RETURN_AND_BACK_NAVIGATION",
+        "direction": "Keep avatar-based Profile entry and complete return, back-navigation, accessibility, and deep-link behavior without adding a Profile tab solely for entry."
+      },
+      {
+        "id": "OC-PREMIUM-LAUNCH-004",
+        "selection": "C",
+        "disposition": "MONTHLY_AND_ANNUAL_PRODUCTION_COMPLETE_PRE_RELEASE_AVAILABILITY_GATED",
+        "direction": "Engineer monthly and annual Premium acquisition completely before final source freeze; exposure remains availability-gated pending external proof."
+      },
+      {
+        "id": "OC-CREATOR-MONEY-005",
+        "selection": "OWNER_APPROVED",
+        "disposition": "OWNER_APPROVED_PRODUCTION_COMPLETE_PRE_RELEASE_AVAILABILITY_GATED",
+        "direction": "Engineer the complete creator-money surface, entitlement lifecycle, payable authority, payout architecture, reversals, cleanup, availability, and both platforms before final source freeze; Wave 1 creates only shared authority contracts."
+      },
+      {
+        "id": "OC-IOS-CALLS-006",
+        "selection": "B",
+        "disposition": "FULL_NATIVE_INCOMING_CALLS_PRODUCTION_COMPLETE_PRE_RELEASE_AVAILABILITY_GATED",
+        "direction": "Engineer complete PushKit and CallKit incoming-call behavior before final source freeze; exposure remains gated pending external proof."
+      },
+      {
+        "id": "OC-OTA-POSTURE-007",
+        "selection": "B",
+        "disposition": "EMERGENCY_ONLY_AFTER_NATIVE_RUNTIME_PARITY_AND_ROLLBACK_PROOF",
+        "direction": "OTA may be available only for emergency use after exact native/runtime parity, signed-artifact identity, rollback, and installed proof; routine OTA remains disabled initially."
+      }
+    ],
+    "globalRule": "Disabled, unavailable, or not exposed may only mean server-authoritative, provider-authoritative, or release-authoritative policy prevents access to a production-complete implementation; it may not mean unfinished frontend, backend, native wiring, database authority, provider integration, lifecycle, reversal, cleanup, observability, rollback, security, RLS, Android, iOS, or operations.",
+    "productionCompleteDefault": true,
+    "provisionalIntent": "Close trusted redirect, session-generation ownership, versioned legal acceptance, shared entitlement authority, ordinary push revocation, and creator eligibility as one reusable Wave 1 authority foundation."
+  },
+  "nonGoals": [
+    "Wave 2 through Wave 6 implementation",
+    "Premium purchase screens or monthly and annual acquisition",
+    "creator charging, payable ledger posting, payout execution, or Stripe Connect operations",
+    "Live discovery",
+    "room RLS or native call corrections",
+    "broad UI and accessibility changes",
+    "PushKit or CallKit implementation",
+    "provider or production database mutation",
+    "builds, submissions, OTA, signed artifacts, or public release",
+    "package or dependency changes"
+  ],
+  "primaryDomain": "auth-session-password-recovery",
+  "provisionalConnectedDomains": [
+    "revenuecat-premium",
+    "storekit-google-play-billing",
+    "creator-money-ledger",
+    "notifications-fcm",
+    "supabase-migrations-rls",
+    "moderation-reporting",
+    "protected-media-playback"
+  ],
+  "rootDefects": [
+    "WAPR-P1-AUTH-REDIRECT-001",
+    "WAPR-P1-LEGAL-ACCEPTANCE-002",
+    "WAPR-P1-PREMIUM-UNKNOWN-004",
+    "WAPR-P1-PREMIUM-ACCOUNT-RACE-007",
+    "WAPR-P1-PUSH-REVOCATION-008",
+    "WAPR-CM-P1-CREATOR-ELIGIBILITY-014"
+  ],
+  "provisionalSourceInventory": [
+    "app/auth-callback.tsx",
+    "app/auth/callback.tsx",
+    "app/(auth)/forgot-password.tsx",
+    "_lib/session.tsx",
+    "_lib/accountLegalAcceptance.ts",
+    "_lib/legalPolicies.ts",
+    "_lib/accountAccess.ts",
+    "_lib/accountDeletionRequests.ts",
+    "_lib/revenuecat.ts",
+    "_lib/premiumEntitlements.ts",
+    "_lib/premiumWatchPartyAccess.ts",
+    "_lib/notifications.ts",
+    "_lib/notificationDeliveryOperator.ts",
+    "_lib/creatorMonetizationSetup.ts",
+    "_lib/moderation.ts",
+    "supabase/functions/notification-device-tokens/index.ts",
+    "supabase/functions/revenuecat-webhook/index.ts",
+    "supabase/functions/moderation-safety-operator/index.ts",
+    "supabase/migrations/202604260001_billing_entitlement_foundation.sql",
+    "supabase/migrations/202605070001_user_account_legal_acceptances.sql",
+    "supabase/migrations/202605070002_harden_user_account_legal_acceptance_grants.sql",
+    "supabase/migrations/202606010001_premium_creator_tool_guards.sql",
+    "supabase/migrations/20260718110000_revenuecat_atomic_event_transactions.sql",
+    "supabase/tests/premium_purchase_control_test.sql",
+    "tests/wave1/identity-entitlement-authority.test.mjs",
+    "tests/wave1/identity-entitlement-authority-mutants.test.mjs",
+    "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json"
+  ],
+  "provisionalPathBudget": {
+    "maximumFiles": 30,
+    "maximumHandAuthoredNetLines": 3600,
+    "maximumAmendedFiles": 36,
+    "maximumAmendedHandAuthoredNetLines": 4500,
+    "amendmentsPermitted": 1,
+    "packageDependencyChangePermitted": false
+  },
+  "provisionalProofPlan": {
+    "discovery": ["PASS_A", "PASS_B", "OPTIONAL_RECONCILIATION_PASS_C"],
+    "verificationPasses": 2,
+    "requiredInvariantMinimum": 30,
+    "targetedMutantCoverage": "ONE_PER_APPLICABLE_INVARIANT_WITH_100_PERCENT_KILLS",
+    "database": "FORWARD_ONLY_MIGRATION_AND_LOCAL_PGTAP_WHEN_SCHEMA_WORK_IS_REQUIRED",
+    "regressions": ["auth", "entitlement-premium", "notifications", "moderation"],
+    "repositoryReview": ["LANE_A", "LANE_B"],
+    "finalPhase1": "EXACTLY_ONE_RUN_REQUIRING_13_OF_13_PASS",
+    "externalTiers": "REMAIN_BLOCKED_OR_NOT_CURRENT_WITHOUT_PROVIDER_BUILD_SIGNED_INSTALLED_PHYSICAL_OR_PUBLIC_ACTION"
+  },
+  "closure": null,
+  "certificate": null,
+  "lease": null,
+  "proofTiers": {
+    "T0_REQUIREMENT": "BLOCKED_INTERNAL",
+    "T1_SOURCE": "BLOCKED_INTERNAL",
+    "T2_MODEL": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
+    "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  }
+}
