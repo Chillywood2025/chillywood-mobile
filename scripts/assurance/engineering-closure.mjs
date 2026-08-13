@@ -1474,9 +1474,9 @@ const parseExactOwnerBody = (normalized, marker) => {
   try { return JSON.parse(normalized.body.slice(marker.length + 1)); } catch { return null; }
 };
 const exactScope = (scope) => ({
-  changedPaths: [...new Set(scope?.files ?? scope?.changedPaths ?? [])].sort(),
-  changedPathHash: hashValue([...new Set(scope?.files ?? scope?.changedPaths ?? [])].sort()),
-  netChangedLines: Math.max(0, Number(scope?.netChangedLines ?? 0)),
+  changedPaths: [...new Set(scope?.files ?? scope?.changedPaths ?? scope?.paths ?? [])].sort(),
+  changedPathHash: hashValue([...new Set(scope?.files ?? scope?.changedPaths ?? scope?.paths ?? [])].sort()),
+  netChangedLines: Math.max(0, Number(scope?.netChangedLines ?? scope?.handAuthoredLines ?? scope?.changedLines ?? 0)),
 });
 
 export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1" } = {}) {
@@ -1583,6 +1583,11 @@ const HISTORICAL_ARCHITECTURE_RECEIPT = Object.freeze({ commentId: 5277054532, h
 export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, root = REPOSITORY_ROOT } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
+  const originalSubject = originalPayload?.subject ?? {};
+  if (originalSubject.objective === "install governed pre-admission seed packets and generic finite-task admission successors") {
+    const observed = exactScope(scope);
+    return { type: "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, protectedBase: identity?.baseSha, originalCommentId: original?.id, originalSubjectHash: originalPayload?.subjectHash, originalBodyHash: original?.bodyHash, originalHead: originalSubject.currentHead, originalTree: originalSubject.currentTree, currentHead: identity?.headSha, currentTree: tree, finalHead: identity?.headSha, finalTree: tree, changedPaths: observed.changedPaths, changedPathHash: observed.changedPathHash, diffHash: scope?.diffHash ?? null, netChangedLines: observed.netChangedLines, budget: { maximumFiles: 13, maximumNetLines: 3000 }, objective: originalSubject.objective, capabilities: originalSubject.capabilities, currentTruthCompanionIncluded: true, terminalTruthRequired: false, authority: originalSubject.authority, ownerIdentity: { login: "Chillywood2025", association: "OWNER" }, immutableCommentRequired: true, createdAtEqualsUpdatedAtRequired: true, expiresOn: `PR_${identity?.pr}_MERGE` };
+  }
   const historical = normalizeGitHubCommentIdentity(historicalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: historicalRaw?.id });
   const historicalPayload = parseExactOwnerBody(historical, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
   const observed = exactScope(scope);
@@ -1676,20 +1681,27 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const observed = exactScope(scope);
   if (originalSubject?.objective === "install governed pre-admission seed packets and generic finite-task admission successors") {
     const body = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
-    const expected = architectureMaintenanceSubject({ identity, tree, scope, profile: "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1" });
+    const descendant = originalSubject?.currentHead !== identity?.headSha || originalSubject?.currentTree !== tree;
+    const expected = descendant
+      ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, root })
+      : architectureMaintenanceSubject({ identity, tree, scope, profile: "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1" });
+    const finalRaw = finalMatches[0];
+    const normalizedFinal = finalRaw ? normalizeGitHubCommentIdentity(finalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: finalRaw.id }) : null;
+    const finalPayload = parseExactOwnerBody(normalizedFinal, ARCHITECTURE_FINAL_SOURCE_MARKER);
     const checks = {
       identity: Boolean(normalizedOriginal),
-      body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(expected),
+      body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(body),
-      binding: stableJson(originalSubject) === stableJson(expected),
-      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && finalMatches.length === 0,
-      exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= 13 && observed.changedPaths.every((file) => PRE_ADMISSION_ARCHITECTURE_PATHS.includes(file)) && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths),
+      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === identity?.baseSha && originalSubject?.budget?.maximumFiles === 13 && originalSubject?.budget?.maximumNetLines === 3000,
+      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && finalMatches.length === (descendant ? 1 : 0),
+      receipt: !descendant || (normalizedFinal?.body === architectureFinalSourceOwnerCommentBody(expected) && finalPayload?.subjectHash === hashValue(finalPayload?.subject) && stableJson(finalPayload?.subject) === stableJson(expected)),
+      exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= 13 && observed.changedPaths.every((file) => PRE_ADMISSION_ARCHITECTURE_PATHS.includes(file)) && stableJson(expected?.changedPaths) === stableJson(observed.changedPaths),
       budget: observed.netChangedLines <= 3000,
       authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && noCompetingDomainOwner,
       capability: stableJson(originalSubject?.capabilities) === stableJson(["OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1", "FINITE_TASK_ADMISSION_SUCCESSOR_V1"]) && originalSubject?.terminalTruthRequired === false && originalSubject?.reusableByAnotherPr === true,
     };
     const ok = Object.values(checks).every(Boolean);
-    return { ok, authorizationOk: ok, mergeEligible: ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: 13, maximumHandAuthoredNetLines: 3000 }, commentId: normalizedOriginal?.id ?? null, commentBodyHash: normalizedOriginal?.bodyHash ?? null, subjectHash: originalPayload?.subjectHash ?? null, subject: originalSubject, originalCommentId: normalizedOriginal?.id ?? null, originalBodyHash: normalizedOriginal?.bodyHash ?? null, originalSubjectHash: originalPayload?.subjectHash ?? null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
+    return { ok, authorizationOk: ok, mergeEligible: ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: 13, maximumHandAuthoredNetLines: 3000 }, commentId: descendant ? normalizedFinal?.id ?? null : normalizedOriginal?.id ?? null, commentBodyHash: descendant ? normalizedFinal?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null, subjectHash: descendant ? finalPayload?.subjectHash ?? null : originalPayload?.subjectHash ?? null, subject: expected, originalCommentId: normalizedOriginal?.id ?? null, originalBodyHash: normalizedOriginal?.bodyHash ?? null, originalSubjectHash: originalPayload?.subjectHash ?? null, currentFinalSourceReceiptId: normalizedFinal?.id ?? null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
   }
   const descendant = originalSubject?.currentHead !== identity?.headSha
     || originalSubject?.currentTree !== tree

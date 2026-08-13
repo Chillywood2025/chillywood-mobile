@@ -52,6 +52,21 @@ test("admission 39: source push invalidates admission evidence without losing le
 test("admission 40: all 13 Phase 1 checks remain required", () => assert.equal(JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8")).reviewPolicy.requiredPhase1Checks, 13));
 test("admission 41: provider review remains optional advisory", () => assert.equal(JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8")).reviewPolicy.classification, "OPTIONAL_ADVISORY"));
 
+test("generic architecture descendant uses one exact-head final-source receipt", () => {
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/generic-pre-admission-engineering-seed-v1", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
+  const original = architectureMaintenanceSubject({ identity: originalIdentity, tree: "c".repeat(40), scope: { files: [] }, profile: "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1" });
+  const rawOriginal = githubComment({ id: 901, pr: 230, body: architectureMaintenanceOwnerCommentBody(original) });
+  const identity = { ...originalIdentity, headSha: "d".repeat(40) };
+  const scope = { paths: ["scripts/assurance/engineering-closure.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"], handAuthoredLines: 22, diffHash: "e".repeat(64) };
+  const tree = "f".repeat(40);
+  const receipt = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: rawOriginal });
+  const rawReceipt = githubComment({ id: 902, pr: 230, body: architectureFinalSourceOwnerCommentBody(receipt) });
+  const result = verifyArchitectureMaintenanceAuthority({ raw: rawOriginal, allComments: [rawOriginal, rawReceipt], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.currentFinalSourceReceiptId, 902);
+  assert.deepEqual(result.subject.changedPaths, scope.paths);
+});
+
 const evaluate = ({
   highRiskDomains,
   objectiveDomains = highRiskDomains,
