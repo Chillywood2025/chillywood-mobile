@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { args, classifyMigration, emit, evaluateFiniteTaskLeaseRuntime, evaluateProtectedMainAdvancement, git, readJson, tierIds } from "./lib.mjs";
+import { evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate } from "./engineering-closure.mjs";
 
 const options = args();
 if (options.dogfood) {
@@ -74,6 +75,12 @@ if (options.dogfood) {
     const evidenceFindings = [];
     const currentTruth = readJson("config/assurance/current-truth-v1.json");
     const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
+    const engineeringGate = evaluatePreimplementationGate(supplied.engineeringClosurePacket, { certificate: supplied.engineeringCertificate, productTask: true });
+    evidenceFindings.push(...engineeringGate.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" })));
+    if (feature.featureId === "autonomous-cognitive-governance") {
+      const autonomous = evaluateAutonomousEngineeringRequest({ implementation: true, packet: supplied.engineeringClosurePacket, certificate: supplied.engineeringCertificate });
+      if (!autonomous.allowed) evidenceFindings.push({ id: autonomous.code, status: "BLOCKED_INTERNAL" });
+    }
     const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract });
     const protectedMainRuntime = evaluateProtectedMainAdvancement({
       record: currentTruth,
@@ -105,6 +112,7 @@ if (options.dogfood) {
       gateApplicability: feature.proofTierApplicability,
       statuses,
       architectureStatus: "ARCHITECTURE_CLEAR",
+      preimplementationEngineeringGate: engineeringGate,
       protectedMainRuntime,
       knownDefectClassesChecked: supplied.knownDefectClassesChecked ?? [],
       invariantsChecked: supplied.invariantsChecked ?? [],

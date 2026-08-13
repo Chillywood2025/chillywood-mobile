@@ -6,6 +6,7 @@ import {
   evaluateProtectedMainAdvancement,
   HISTORICAL_PROVIDER_FACT
 } from "./assurance/lib.mjs";
+import { evaluateAutonomousEngineeringRequest } from "./assurance/engineering-closure.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -13,6 +14,9 @@ const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md");
+const autonomousComponents = JSON.parse(read("config/autonomy/autonomous-components.json"));
+const engineeringDoctrine = JSON.parse(read("config/assurance/engineering-doctrine-v1.json"));
+const engineeringEvidenceAuthority = JSON.parse(read("config/assurance/engineering-evidence-authority-v1.json"));
 const currentState = read("CURRENT_STATE.md");
 const nextTask = read("NEXT_TASK.md");
 const currentTruth = JSON.parse(read("config/assurance/current-truth-v1.json"));
@@ -52,6 +56,21 @@ const protectedMainRuntime = evaluateProtectedMainAdvancement({
 const claimFreshness = finiteTaskRuntime.claimFreshness;
 const sourceOnlyFreshness = { eligible: protectedMainRuntime.sourceOnlyEligible };
 const providerDependentFreshness = { eligible: protectedMainRuntime.providerDependentEligible };
+const autonomyDoctrine = autonomousComponents.engineeringDoctrine;
+const autonomousMissingPacket = evaluateAutonomousEngineeringRequest({ implementation: true });
+const cognitiveSelfClear = evaluateAutonomousEngineeringRequest({ implementation: true, cognitiveRecommendationSelfClear: true });
+if (autonomousMissingPacket.allowed || autonomousMissingPacket.code !== "AUTONOMOUS_IMPLEMENTATION_WITHOUT_PACKET" || cognitiveSelfClear.allowed || cognitiveSelfClear.code !== "COGNITIVE_RECOMMENDATION_CANNOT_SELF_CLEAR") fail("autonomous engineering enforcement-path negative controls failed");
+if (autonomyDoctrine?.id !== engineeringDoctrine.doctrineId
+  || autonomyDoctrine.packet !== "ENGINEERING_CLOSURE_PACKET_V1"
+  || autonomyDoctrine.gate !== "PREIMPLEMENTATION_ENGINEERING_CLEAR"
+  || autonomyDoctrine.evidenceAuthority !== engineeringEvidenceAuthority.contractId
+  || !["DECLARED", "OBSERVED", "VERIFIED"].every((layer) => autonomyDoctrine.requiredAuthorityLayers?.includes(layer))
+  || autonomyDoctrine.consumeRelevantGraphSliceOnly !== true
+  || autonomyDoctrine.refuseImplementationWithoutClearance !== true
+  || !["cross-system", "rollback", "cleanup", "quarantine", "observability"].every((item) => autonomyDoctrine.requiredEffects?.includes(item))
+  || ![3, 4].every((level) => autonomyDoctrine.preserveOwnerApprovalLevels?.includes(level))) fail("autonomous engineering-doctrine integration malformed");
+for (const required of ["AUTONOMOUS_ENGINEERING_DOCTRINE", "ENGINEERING_CLOSURE_PACKET_V1", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "engineering-evidence-authority-v1", "DECLARED", "OBSERVED", "VERIFIED", "consumeRelevantGraphSliceOnly", "refuseImplementationWithoutClearance", "self-approve authority expansion", "test count as architecture completeness"]) includes(registry, required, "autonomous TypeScript doctrine contract");
+for (const required of ["ENGINEERING_CLOSURE_PACKET_V1", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "relevant graph slice", "Level 3", "Level 4"]) includes(operatingModel, required, "autonomous operating model doctrine");
 if (!finiteTaskRuntime.candidateEligible) fail(`finite task runtime candidate failed: ${finiteTaskRuntime.findings.join(",")}`);
 if (protectedMainRuntime.findings.length) fail(`rolling protected-main evaluation failed: ${protectedMainRuntime.findings.join(",")}`);
 if (currentTruth.liveProviderReadback !== claimFreshness.liveProviderReadback) fail("live provider readback must derive from the shared freshness evaluator");

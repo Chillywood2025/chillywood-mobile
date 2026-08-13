@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "contractId": "adversarial-taxonomy-v1",
+  "finite": true,
+  "taskClassifications": ["APPLICABLE", "NOT_APPLICABLE_WITH_CONSTRAINT", "BLOCKED_EXTERNAL", "POST_LAUNCH"],
+  "classes": [
+    "duplicate", "replay", "reorder", "delay", "timeout", "partial success", "partial backend failure", "concurrent write", "stale completion", "replacement session", "retry", "idempotency", "network loss/recovery", "provider outage/recovery", "permission denial/change/recovery", "foreground/background", "recreation/process death", "account switch", "token expiry/revocation", "malicious input", "authorization bypass", "privacy leak", "rollback failure", "cleanup overlap", "duplicate media path", "overflow/long content", "accessibility scaling", "platform divergence", "backup/device transfer", "OTA/native mismatch", "signing/artifact mismatch", "market/jurisdiction divergence", "session/room resurrection", "native-action provenance", "trust-boundary proof substitution"
+  ],
+  "extensionPolicy": "A task classifies this finite registry; it does not generate an unlimited taxonomy. Additions require a versioned contract update.",
+  "coverage": {"ordinary": "pairwise", "highRisk": "three-way", "registeredSecurityMoneyPrivacyRights": "exhaustive-within-boundary"}
+}

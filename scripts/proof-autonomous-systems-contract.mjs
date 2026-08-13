@@ -6,12 +6,16 @@ import {
   evaluateProtectedMainAdvancement,
   HISTORICAL_PROVIDER_FACT
 } from "./assurance/lib.mjs";
+import { evaluateAutonomousEngineeringRequest } from "./assurance/engineering-closure.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
+const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md");
+const autonomousComponents = JSON.parse(read("config/autonomy/autonomous-components.json"));
+const engineeringEvidenceAuthority = JSON.parse(read("config/assurance/engineering-evidence-authority-v1.json"));
 const currentState = read("CURRENT_STATE.md");
 const nextTask = read("NEXT_TASK.md");
 const currentTruth = JSON.parse(read("config/assurance/current-truth-v1.json"));
@@ -54,6 +58,7 @@ const protectedSystems = [
   ...foundationOnlySystems,
   "owner_command_operator",
 ];
+if (autonomousComponents.engineeringDoctrine?.evidenceAuthority !== engineeringEvidenceAuthority.contractId || engineeringEvidenceAuthority.evidenceClasses?.DECLARATION_ONLY?.canClearGate !== false) throw new Error("autonomous evidence-authority proof failed");
 
 const ownerRoutedSystems = [
   ...activeSystems,
@@ -157,6 +162,16 @@ const moneyScheduler = {
 };
 
 const checks = [
+  {
+    name: "bounded engineering doctrine gates every autonomous build or repair",
+    passes: () => autonomousComponents.engineeringDoctrine?.id === "WHOLE_APP_ENGINEERING_BEFORE_IMPLEMENTATION_DOCTRINE_V1"
+      && autonomousComponents.engineeringDoctrine?.refuseImplementationWithoutClearance === true
+      && registry.includes("AUTONOMOUS_ENGINEERING_DOCTRINE")
+      && registry.includes("consumeRelevantGraphSliceOnly")
+      && operatingModel.includes("ENGINEERING_CLOSURE_PACKET_V1")
+      && operatingModel.includes("PREIMPLEMENTATION_ENGINEERING_CLEAR"),
+    negative: () => evaluateAutonomousEngineeringRequest({ implementation: true }).code === "AUTONOMOUS_IMPLEMENTATION_WITHOUT_PACKET" && evaluateAutonomousEngineeringRequest({ implementation: true, selfClear: true }).code === "COGNITIVE_RECOMMENDATION_CANNOT_SELF_CLEAR",
+  },
   {
     name: "all active systems present",
     passes: () => protectedSystems.every((systemId) => registry.includes(`id: "${systemId}"`) && registryDoc.includes(`\`${systemId}\``)),

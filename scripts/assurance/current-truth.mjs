@@ -22,6 +22,7 @@ import {
   verifyCompletedImplementationMergeIdentity,
   verifyProviderImplementationSnapshot,
   validateFiniteTaskLeaseRegistry,
+  validateEngineeringDoctrineTruth,
   validateProofTierStatuses,
   validateTerminalTaskEvidence
 } from "./lib.mjs";
@@ -239,7 +240,8 @@ if (mode) {
     .map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const runtimeFindings = finiteTaskRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const protectedMainFindings = protectedMainRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
-  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...validateLateReviewSentinelState(record)];
+  const engineeringDoctrineFindings = validateEngineeringDoctrineTruth(record, currentTruthContract, { currentMain: remoteMain, implementationMerged: remoteMain !== "8bf6459c3ae1cec62e26a1694f03063e4291b9f8" });
+  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({

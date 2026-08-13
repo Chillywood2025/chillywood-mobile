@@ -50,6 +50,16 @@ Platform-aware `watch_once` is compositional: shared, Android, and iOS probes ru
 
 Future scope can be added only through registry entries that define system id, action/surface id, activation mode, allowed read scope, allowed write scope, forbidden scope, approval level, proof script, guard script, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval requirement for Level 3/4.
 
+## 1B. Bounded engineering before autonomous implementation
+
+Every autonomous or Cognitive build, fix, repair, migration, refactor, or integration is governed by `WHOLE_APP_ENGINEERING_BEFORE_IMPLEMENTATION_DOCTRINE_V1`. Before product source changes, the finite task lease must reserve an `ENGINEERING_CLOSURE_PACKET_V1`, its allowed domain graph slice and derived path globs, test/evidence paths, file/line budgets, and excluded high-risk paths. Implementation is refused until that packet contains a `BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1` and returns `PREIMPLEMENTATION_ENGINEERING_CLEAR`.
+
+That clearance is an exact computed GitHub/Git result, not a packet Boolean. Autonomous systems may consume only a clearance produced from the actual PR, finite lease, immutable Owner comment, exact diff, authoritative replay receipts, and integrated evidence-authority registry. A Cognitive proposal remains `DECLARATION_ONLY` until a separate deterministic verifier grounds it.
+
+The packet contains only the relevant graph slice: affected domains, authority/data edges, reachable states and transitions, invariants, stable defect ledger, coordinated plan, rollback, cleanup, quarantine, observability, and proof obligations. It does not load the whole graph merely because systems share the repository. S0 consumes the slice's trust boundaries, protected data, authority edges, adversarial classes, failure behavior, and rollback. An orphan within the affected closure blocks; unrelated legacy gaps remain backlog.
+
+Cognitive systems may propose dependencies, states, invariants, adversarial classes, mutants, and architecture/source mismatches. They cannot self-clear a design, use test count as architecture completeness, bypass independent discovery or current truth, widen their authority, enable Level 2 or user-derived memory, or mutate a provider or production system. Model revisions remain in the same PR and lease. Level 3 and Level 4 Owner boundaries remain unchanged.
+
 Level 3/4 actions create owner/admin approval requests before execution. The approval backing status is live through `platform_role_memberships` owner/super-admin authority, `/admin` review, `autonomous-approval-request`, approval/denial RPCs, audited request events, emergency-state checks, and trusted-operator preflight/execution markers. Trusted operator request/preflight/execution markers use `AUTONOMOUS_APPROVAL_REQUEST_TOKEN_SHA256` when configured or the existing server-side `OPS_APPROVAL_TOKEN` fallback; neither token is client-bundled. Rachi can recommend/request but cannot approve itself, autonomous operators cannot self-approve, and owner authority remains above Rachi/operator. Approval never executes by itself: the operator must re-run fresh preflight, match the approved system/action/write scope exactly, verify the request is unexpired, and verify no emergency stop is active.
 
 ## 2. Operator Pattern

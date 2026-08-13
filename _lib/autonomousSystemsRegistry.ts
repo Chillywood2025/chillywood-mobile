@@ -29,6 +29,19 @@ export type AutonomousActivationMode =
 
 export type AutonomousApprovalLevel = 0 | 1 | 2 | 3 | 4;
 
+export const AUTONOMOUS_ENGINEERING_DOCTRINE = {
+  id: "WHOLE_APP_ENGINEERING_BEFORE_IMPLEMENTATION_DOCTRINE_V1",
+  packet: "ENGINEERING_CLOSURE_PACKET_V1",
+  gate: "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+  evidenceAuthority: "engineering-evidence-authority-v1",
+  requiredAuthorityLayers: ["DECLARED", "OBSERVED", "VERIFIED"],
+  consumeRelevantGraphSliceOnly: true,
+  refuseImplementationWithoutClearance: true,
+  requiredEffects: ["cross-system", "rollback", "cleanup", "quarantine", "observability"],
+  preserveOwnerApprovalLevels: [3, 4],
+  forbidden: ["self-clear design", "bypass independent discovery", "bypass current truth", "enable Level 2", "enable user-derived memory", "provider mutation", "production mutation", "self-approve authority expansion", "test count as architecture completeness"],
+} as const;
+
 export type AutonomousPlatform =
   | "shared"
   | "ios"
