@@ -2854,6 +2854,7 @@ export function authoritativeReplayOnce({ root = REPOSITORY_ROOT, taskIdentity =
   const scopePolicy = readJson(root, "config/assurance/pr-scope-policy-v1.json");
   const scopeContextVerified = workflow.includes('node scripts/assurance/pr-scope.mjs --github-event="$GITHUB_EVENT_PATH"')
     && !workflow.includes("pr-scope.mjs --feature=codex-security-scan-reliability-s0")
+    && /^permissions:\n(?:(?:  [^\n]+\n)+)/mu.exec(workflow)?.[0].includes("  actions: read") === true
     && scopePolicy.featureDomainBundles?.some(({ featureId, allowedHighRiskDomains }) => featureId === "assurance-efficiency-e0" && stableJson(allowedHighRiskDomains) === stableJson(["autonomous-operators"]))
     && verificationDependencyVerification.ok
     && verificationDependencyClosure.includedPaths.includes("tests/assurance/codex-security-reliability-s0.test.mjs")

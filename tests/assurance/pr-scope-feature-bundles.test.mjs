@@ -209,6 +209,9 @@ test("workflow uses generic event context and contains no hardcoded S0 scope inv
   assert.match(workflow, /node scripts\/assurance\/pr-scope\.mjs --github-event="\$GITHUB_EVENT_PATH"/u);
   assert.doesNotMatch(workflow, /pr-scope\.mjs --feature=codex-security-scan-reliability-s0/u);
   assert.doesNotMatch(workflow, /pr-scope\.mjs[^\n]*codex-security-reliability-s0-scope-waiver/u);
+  const permissionsBlock = /^permissions:\n(?:(?:  [^\n]+\n)+)/mu.exec(workflow)?.[0] ?? "";
+  assert.match(permissionsBlock, /^  actions: read$/mu);
+  assert.doesNotMatch(permissionsBlock, /^  actions: write$/mu);
 });
 
 test("generic event CLI binds the canonical parser key used by the scope entrypoint", () => {

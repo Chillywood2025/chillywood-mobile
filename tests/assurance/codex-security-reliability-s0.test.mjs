@@ -919,6 +919,9 @@ test("S0 contract, incident ledger, skill, and task-aware Phase 1 integration ag
   const genericLine = workflow.split("\n").find((line) => line.includes("node scripts/assurance/pr-scope.mjs"));
   assert.equal(genericLine?.includes("--feature=codex-security-scan-reliability-s0"), false);
   assert.equal(genericLine?.includes("--waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json"), false);
+  const permissionsBlock = /^permissions:\n(?:(?:  [^\n]+\n)+)/mu.exec(workflow)?.[0] ?? "";
+  assert.equal(permissionsBlock.includes("  actions: read"), true, "task-aware scope may read the exact failed-run verification dependency");
+  assert.equal(permissionsBlock.includes("  actions: write"), false, "task-aware scope never gains Actions mutation authority");
 
   const s0 = pullFixture({ pr: 206, branch: "codex/assurance-codex-security-scan-reliability-s0" });
   const s0Context = resolveScope(s0);
