@@ -1169,8 +1169,8 @@ const verifyDoctrineBootstrapOwnerComment = (raw, subject) => {
 
 export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillywood-mobile", pr, branch, admittedSeedHead, protectedBase = DOCTRINE_BASE, leaseId, commentId, maximumFiles = 25, maximumLines = 4000, root = REPOSITORY_ROOT } = {}) {
   if (!Number.isInteger(pr) || pr < 1 || !textValue(branch) || !/^[0-9a-f]{40}$/u.test(admittedSeedHead ?? "") || !/^[0-9a-f]{40}$/u.test(protectedBase ?? "") || !textValue(leaseId) || !Number.isInteger(commentId) || commentId < 1) return null;
-  const gh = (endpoint) => spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: root, encoding: "utf8", shell: false });
-  const gitRun = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false });
+  const gh = (endpoint) => spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  const gitRun = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
   const pullResponse = gh(`repos/${repository}/pulls/${pr}`);
   const commentResponse = gh(`repos/${repository}/issues/comments/${commentId}`);
   const openResponse = gh(`repos/${repository}/pulls?state=open&base=main&per_page=100`);
