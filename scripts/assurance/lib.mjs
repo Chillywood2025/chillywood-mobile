@@ -1276,6 +1276,51 @@ const protectedMainClasses = Object.freeze({
   terminal: "TERMINAL_TRUTH_CHANGE"
 });
 
+export const HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1 = Object.freeze({
+  schemaVersion: 1,
+  transitionId: "HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1",
+  repository: "Chillywood2025/chillywood-mobile",
+  pullRequest: 226,
+  branch: "codex/whole-app-engineering-doctrine-v1",
+  sourceHead: "eae8ed8b6ebced31e0ddc4013fb420a8c4be1bcc",
+  sourceTree: "122c391496e0db2be61ac40078d460f1ecba1342",
+  mergeSha: "c1f9ec1f71cc8bc4448afd2327c4341cac309573",
+  firstParent: "8bf6459c3ae1cec62e26a1694f03063e4291b9f8",
+  ownerCommentIds: Object.freeze([5274614505, 5274913577, 5275618260]),
+  repositoryReviewCommentId: 5275455730,
+  phase1RunId: 31666180747,
+  phase1RequiredChecks: 13,
+  successorPaths: Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]),
+  expectedTerminalNextTask: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
+  authority: Object.freeze({ product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }),
+  singleUse: true
+});
+
+export const PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1 = Object.freeze({
+  schemaVersion: 1,
+  policyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+  historicalTransitionId: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.transitionId,
+  bootstrapMaximumPendingDepth: 2,
+  normalMaximumPendingDepth: 1,
+  expectedTerminalNextTask: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.expectedTerminalNextTask
+});
+
+export const PENDING_TERMINAL_TRUTH_TRANSITION_V1 = Object.freeze({
+  schemaVersion: 1,
+  policyId: "PENDING_TERMINAL_TRUTH_TRANSITION_V1",
+  maintenanceContractPath: "config/assurance/pr-scope-policy-v1.json",
+  maintenanceContractKey: "ownerArchitectureMaintenance.pendingTerminalTruthTransition",
+  authorityControlPathsRequired: true,
+  terminalSuccessorPaths: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.successorPaths,
+  expectedTerminalNextTask: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.expectedTerminalNextTask,
+  sourceOnlyEligible: true,
+  providerDependentEligible: false,
+  buildEligible: false,
+  submissionEligible: false,
+  otaEligible: false,
+  publicReleaseEligible: false
+});
+
 function protectedMainEvidenceInvalidation(paths) {
   const changed = new Set(paths);
   const packageChanged = changed.has("package.json") || changed.has("package-lock.json");
@@ -1377,6 +1422,98 @@ function parseProtectedPullRequestMergeSubject(subject) {
   return { ok: false, format: null, prNumber: null };
 }
 
+const closedPendingAuthority = (authority) => stableJson(authority) === stableJson({
+  product: false,
+  nativeProduct: false,
+  database: false,
+  providerMutation: false,
+  build: false,
+  submission: false,
+  ota: false,
+  publicRelease: false
+});
+
+function historicalPendingDoctrineTransition(observation, parsedMergeSubject, migration) {
+  return migration?.schemaVersion === 1
+    && migration?.transitionId === "HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1"
+    && migration?.repository === "Chillywood2025/chillywood-mobile"
+    && parsedMergeSubject?.prNumber === migration.pullRequest
+    && migration.branch === "codex/whole-app-engineering-doctrine-v1"
+    && observation?.commit === migration.mergeSha
+    && observation?.parents?.length === 2
+    && observation.parents[0] === migration.firstParent
+    && observation.parents[1] === migration.sourceHead
+    && observation.tree === migration.sourceTree
+    && stableJson(migration.ownerCommentIds) === stableJson([5274614505, 5274913577, 5275618260])
+    && migration.repositoryReviewCommentId === 5275455730
+    && migration.phase1RunId === 31666180747
+    && migration.phase1RequiredChecks === 13
+    && stableJson(migration.successorPaths) === stableJson(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"])
+    && migration.expectedTerminalNextTask === "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
+    && migration.singleUse === true
+    && closedPendingAuthority(migration.authority);
+}
+
+function readPendingMaintenanceContract(observation, gitCommand) {
+  try {
+    const policy = JSON.parse(gitCommand(["show", `${observation.parents[1]}:config/assurance/pr-scope-policy-v1.json`]));
+    return policy?.ownerArchitectureMaintenance?.pendingTerminalTruthTransition ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function genericPendingMaintenanceTransition(observation, authorityChanged, gitCommand) {
+  const value = readPendingMaintenanceContract(observation, gitCommand);
+  const paths = [...new Set(observation?.changedPaths ?? [])].sort();
+  const allowed = [...new Set(value?.allowedChangedPaths ?? [])].sort();
+  let sourceTree = observation?.sourceTree ?? null;
+  if (!sourceTree) {
+    try { sourceTree = gitCommand(["rev-parse", `${observation.parents[1]}^{tree}`]); } catch { sourceTree = null; }
+  }
+  const valid = authorityChanged
+    && observation?.parents?.length === 2
+    && gitShaPattern.test(observation.parents[1] ?? "")
+    && gitShaPattern.test(sourceTree ?? "")
+    && value?.schemaVersion === 1
+    && value?.contractId === "PENDING_TERMINAL_TRUTH_TRANSITION_V1"
+    && value?.authoritySource === "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE"
+    && value?.objective === "shared rolling-main evaluator must support the already-required bounded terminal-truth interval"
+    && stableJson(paths) === stableJson(allowed)
+    && paths.length === 8
+    && value?.maximumFiles === 8
+    && value?.maximumNetLines === 1800
+    && value?.terminalTruthRequired === true
+    && value?.expectedTerminalNextTask === "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
+    && closedPendingAuthority(value?.authority);
+  return valid ? {
+    transitionId: "PENDING_TERMINAL_TRUTH_TRANSITION_V1",
+    mergeSha: observation.commit,
+    sourceHead: observation.parents[1],
+    sourceTree,
+    expectedTerminalNextTask: value.expectedTerminalNextTask,
+    authoritySource: value.authoritySource,
+    historical: false
+  } : null;
+}
+
+function embeddedTerminalTransitionConsumption(observation, pending, gitCommand) {
+  try {
+    const embedded = JSON.parse(gitCommand(["show", `${observation.commit}:config/assurance/current-truth-v1.json`]));
+    const architecture = embedded?.taskContextArchitecture;
+    const consumed = architecture?.pendingTransitions;
+    return architecture?.pendingTransitionPolicyId === "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1"
+      && architecture?.pendingTransitionCountAfterSynchronization === 0
+      && architecture?.terminalTransitionConsumed === true
+      && embedded?.engineeringDoctrine?.nextPermittedAction === "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
+      && stableJson(architecture?.authority) === stableJson({ providerMutation: false, build: false, submission: false, ota: false, publicRelease: false })
+      && Array.isArray(consumed)
+      && stableJson(consumed.map(({ mergeSha, status }) => ({ mergeSha, status }))) === stableJson(pending.map(({ mergeSha }) => ({ mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" })));
+  } catch {
+    return false;
+  }
+}
+
 export function evaluateProtectedMainAdvancement({
   record,
   contract,
@@ -1385,6 +1522,11 @@ export function evaluateProtectedMainAdvancement({
   finiteTaskRuntime,
   gitCommand = git,
   advancementObservations,
+  pendingTransitionPolicy = {
+    state: PENDING_TERMINAL_TRUTH_TRANSITION_V1,
+    historical: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1,
+    chain: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1
+  },
   checkpointTreeObservation,
   checkpointIsAncestor,
   candidateContainsObservedMain
@@ -1396,6 +1538,9 @@ export function evaluateProtectedMainAdvancement({
     try { return gitCommand(["rev-parse", "origin/main"]); } catch { return null; }
   })();
   const findings = [];
+  const pendingPolicyValid = stableJson(pendingTransitionPolicy?.state) === stableJson(PENDING_TERMINAL_TRUTH_TRANSITION_V1)
+    && stableJson(pendingTransitionPolicy?.chain) === stableJson(PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1);
+  if (!pendingPolicyValid) findings.push("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID");
   const identityValid = policy.policyId === "ROLLING_PROTECTED_MAIN_AUTHORITY_V1"
     && authority.schemaVersion === 1
     && authority.policyId === policy.policyId
@@ -1451,6 +1596,8 @@ export function evaluateProtectedMainAdvancement({
   const activeLeasePaths = new Set(activeLease?.allowedPaths ?? []);
   let prior = checkpointSha;
   const advancements = [];
+  const pendingTransitions = [];
+  let pendingConsumptionCount = 0;
   for (const observation of observations) {
     const pathClassifications = classifyProtectedMainPaths(observation.changedPaths ?? [], policy, activeLeasePaths);
     const classifications = [...new Set(pathClassifications.map(({ classification }) => classification))].sort();
@@ -1468,9 +1615,41 @@ export function evaluateProtectedMainAdvancement({
     const companionPresent = (policy.authorityRequiredCompanionPaths ?? []).every((file) => (observation.changedPaths ?? []).includes(file));
     const authorityBound = observation.authorityUpdateBound === true
       || (observation.authorityUpdateBound !== false && authorityChanged && embeddedRollingAuthorityBound(observation.commit, checkpointSha, gitCommand));
-    if (authorityChanged && (!companionPresent || !authorityBound)) findings.push("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT");
+    const historicalPending = normalPrMerge && authorityChanged && historicalPendingDoctrineTransition(observation, parsedMergeSubject, pendingTransitionPolicy?.historical)
+      ? { transitionId: pendingTransitionPolicy.historical.transitionId, mergeSha: observation.commit, sourceHead: observation.parents[1], sourceTree: observation.tree, expectedTerminalNextTask: pendingTransitionPolicy.historical.expectedTerminalNextTask, authoritySource: "HISTORICAL_EXACT_OWNER_DOCTRINE_AUTHORITY", historical: true }
+      : null;
+    const genericPending = normalPrMerge && !historicalPending
+      ? genericPendingMaintenanceTransition(observation, authorityChanged, gitCommand)
+      : null;
+    const pendingCandidate = historicalPending ?? genericPending;
+    if (pendingCandidate) {
+      const bootstrapSecond = pendingTransitions.length === 1
+        && pendingTransitions[0].transitionId === pendingTransitionPolicy?.chain?.historicalTransitionId
+        && genericPending !== null;
+      const maximumDepth = bootstrapSecond ? pendingTransitionPolicy?.chain?.bootstrapMaximumPendingDepth : pendingTransitionPolicy?.chain?.normalMaximumPendingDepth;
+      if (pendingTransitions.length >= maximumDepth) {
+        findings.push("CURRENT_TRUTH_PENDING_TRANSITION_CHAIN_OVERFLOW");
+      } else if (pendingTransitions.some(({ expectedTerminalNextTask }) => expectedTerminalNextTask !== pendingCandidate.expectedTerminalNextTask)) {
+        findings.push("CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID");
+      } else {
+        pendingTransitions.push(pendingCandidate);
+      }
+    }
+    if (authorityChanged && (!companionPresent || !authorityBound) && !pendingCandidate) findings.push("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT");
     if (terminalChanged && !(policy.terminalTruthPaths ?? []).every((file) => (observation.changedPaths ?? []).includes(file))) {
       findings.push("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE");
+    }
+    const exactTerminalSuccessorPaths = stableJson([...(observation.changedPaths ?? [])].sort()) === stableJson(pendingTransitionPolicy?.state?.terminalSuccessorPaths);
+    if (terminalChanged && pendingTransitions.length) {
+      if (exactTerminalSuccessorPaths && embeddedTerminalTransitionConsumption(observation, pendingTransitions, gitCommand)) {
+        pendingTransitions.splice(0);
+        pendingConsumptionCount += 1;
+      }
+      else findings.push("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID");
+    } else if (terminalChanged && pendingConsumptionCount > 0) {
+      findings.push("CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID");
+    } else if (pendingTransitions.length && !pendingCandidate) {
+      findings.push("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED");
     }
     advancements.push({
       mergeSha: observation.commit,
@@ -1484,7 +1663,9 @@ export function evaluateProtectedMainAdvancement({
       changedPathHash: sha256([...(observation.changedPaths ?? [])].sort()),
       pathClassifications,
       classifications,
-      authorityBound: authorityChanged ? authorityBound : null
+      authorityBound: authorityChanged ? authorityBound : null,
+      pendingTerminalTruth: Boolean(pendingCandidate),
+      pendingTransitionId: pendingCandidate?.transitionId ?? null
     });
     prior = observation.commit;
   }
@@ -1506,23 +1687,29 @@ export function evaluateProtectedMainAdvancement({
   const candidateBaseStatus = terminalTask
     ? "TERMINAL_MERGED_VERIFIED"
     : candidateCurrent === true ? "CURRENT_WITH_PROTECTED_MAIN" : "BASE_SYNC_REQUIRED";
+  const aggregateChangedPaths = [...new Set(advancements.flatMap(({ changedPaths }) => changedPaths))].sort();
+  let aggregateDiffHash = sha256("");
+  if (identityValid && ancestor === true && checkpointSha !== observedSha) {
+    try { aggregateDiffHash = sha256(gitCommand(["diff", "--binary", checkpointSha, observedSha], { maxBuffer: 128 * 1024 * 1024 })); } catch { findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"); }
+  }
   const authorityControlEligible = !findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT")
-    && !findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
+    && !findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID")
+    && !findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_CHAIN_OVERFLOW")
+    && !findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID")
+    && !findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID")
+    && !findings.includes("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED")
+    && !findings.includes("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE");
   const authorityCheckpointEligible = identityValid && ancestor === true
     && actualCheckpointTree === authority.checkpointTree
     && authorityControlEligible;
   const sourceOnlyEligible = authorityCheckpointEligible
     && (finiteTaskRuntime?.sourceOnlyEligible ?? true);
   const providerDependentEligible = sourceOnlyEligible
+    && pendingTransitions.length === 0
     && (finiteTaskRuntime?.providerDependentEligible ?? false);
   const finalEvidence = record?.finiteTaskRuntime?.finalEvidence ?? {};
   const finalEvidenceCurrent = ["ownerReceipt", "repositoryReview", "phase1", "mergeEligible"].every((key) => finalEvidence[key] === true);
   const mergeEligible = !terminalTask && sourceOnlyEligible && candidateCurrent === true && finalEvidenceCurrent;
-  const aggregateChangedPaths = [...new Set(advancements.flatMap(({ changedPaths }) => changedPaths))].sort();
-  let aggregateDiffHash = sha256("");
-  if (identityValid && ancestor === true && checkpointSha !== observedSha) {
-    try { aggregateDiffHash = sha256(gitCommand(["diff", "--binary", checkpointSha, observedSha])); } catch { findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"); }
-  }
   const evidenceInvalidation = protectedMainEvidenceInvalidation(activeTaskInputsInvalidated);
   return {
     authorityCheckpointEligible,
@@ -1541,11 +1728,23 @@ export function evaluateProtectedMainAdvancement({
     activeTaskInputsInvalidated,
     evidenceInvalidation,
     candidateBaseStatus,
-    nextRequiredAction: terminalTask
+    nextRequiredAction: pendingTransitions.length
+      ? "CREATE_EXACT_TERMINAL_TRUTH_SUCCESSOR"
+      : terminalTask
       ? "CONTINUE_TERMINAL_HANDOFF"
       : candidateBaseStatus === "BASE_SYNC_REQUIRED" ? "MERGE_CURRENT_PROTECTED_MAIN_NORMALLY" : "CONTINUE_ACTIVE_TASK",
     sourceOnlyEligible,
     providerDependentEligible,
+    buildEligible: false,
+    submissionEligible: false,
+    otaEligible: false,
+    publicReleaseEligible: false,
+    pendingTerminalTruth: pendingTransitions.length > 0,
+    pendingTransitionCount: pendingTransitions.length,
+    pendingTransitionConsumptionCount: pendingConsumptionCount,
+    pendingTransitions,
+    terminalSuccessorRequired: pendingTransitions.length > 0,
+    currentTruthStatus: pendingTransitions.length ? "PENDING_TERMINAL_TRUTH_SUCCESSOR" : "CURRENT",
     mergeEligible,
     findings: [...new Set(findings)].sort()
   };
@@ -3111,7 +3310,23 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
 
 export function validateEngineeringDoctrineTruth(record, contract, sources = {}) {
   const doctrine = record?.engineeringDoctrine;
-  if (doctrine === undefined) return contract?.engineeringDoctrinePolicy?.optionalBeforeImplementationMerge === true && sources.currentMain === "8bf6459c3ae1cec62e26a1694f03063e4291b9f8" && sources.implementationMerged === false ? [] : [{ id: "ASSURANCE_ENGINEERING_DOCTRINE_MISSING", status: "BLOCKED_INTERNAL" }];
+  if (doctrine === undefined) {
+    const pending = sources.protectedMainRuntime;
+    const boundedPending = pending?.pendingTerminalTruth === true
+      && [1, 2].includes(pending?.pendingTransitionCount)
+      && pending?.terminalSuccessorRequired === true
+      && pending?.authorityCheckpointEligible === true
+      && pending?.authorityControlEligible === true
+      && pending?.sourceOnlyEligible === true
+      && pending?.providerDependentEligible === false
+      && pending?.buildEligible === false
+      && pending?.submissionEligible === false
+      && pending?.otaEligible === false
+      && pending?.publicReleaseEligible === false
+      && pending?.nextRequiredAction === "CREATE_EXACT_TERMINAL_TRUTH_SUCCESSOR"
+      && (pending?.findings ?? []).length === 0;
+    return (contract?.engineeringDoctrinePolicy?.optionalBeforeImplementationMerge === true && sources.currentMain === "8bf6459c3ae1cec62e26a1694f03063e4291b9f8" && sources.implementationMerged === false) || boundedPending ? [] : [{ id: "ASSURANCE_ENGINEERING_DOCTRINE_MISSING", status: "BLOCKED_INTERNAL" }];
+  }
   const finding = (id, detail = {}) => ({ id, status: "BLOCKED_INTERNAL", ...detail });
   const validText = (value) => typeof value === "string" && value.length > 0;
   const validPath = (value) => typeof value === "string" && !value.startsWith("/") && !value.includes("..") && value.endsWith(".json");
@@ -3198,7 +3413,8 @@ export function renderCurrentState(record) {
     .map(({ prNumber, reviewedSha, findings, successorCorrectionOwner }) => `PR #${prNumber} reviewed \`${reviewedSha}\` after merge with ${(findings ?? []).filter(({ disposition }) => disposition !== "RESOLVED").length} unresolved findings; successor \`${successorCorrectionOwner}\``)
     .join("; ") || "none";
   const engineering = record.engineeringDoctrine ? `\n## Engineering doctrine\n\n- \`${record.engineeringDoctrine.doctrineId}\` is \`${record.engineeringDoctrine.status}\`; bounded definition \`${record.engineeringDoctrine.boundedDefinition}\`.\n- Graph \`${record.engineeringDoctrine.graphHash}\`; active packet \`${record.engineeringDoctrine.activePacketHash}\`; task lease \`${record.engineeringDoctrine.taskLeaseState}\`.\n- Next permitted action: \`${record.engineeringDoctrine.nextPermittedAction}\`. No domain readiness entry is a universal app-completion claim.\n` : "";
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Protected authority checkpoint: \`${protectedMainAuthority.checkpointSha}\` / tree \`${protectedMainAuthority.checkpointTree}\`.\n- Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.\n- Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n${implementationBindingLine}${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: ${record.liveProviderReadback}.\n${engineering}\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  const taskContextArchitecture = record.taskContextArchitecture ? `\n## Typed task-context architecture\n\n- Contract \`${record.taskContextArchitecture.contractId}\`; architecture PR #${record.taskContextArchitecture.architecturePr}, source \`${record.taskContextArchitecture.sourceHead}\` / \`${record.taskContextArchitecture.sourceTree}\`, merge \`${record.taskContextArchitecture.mergeSha}\`.\n- Pending terminal transitions: ${record.taskContextArchitecture.pendingTransitions?.map(({ pr, status }) => `PR #${pr}=\`${status}\``).join(", ") || "none"}; count after synchronization \`${record.taskContextArchitecture.pendingTransitionCountAfterSynchronization}\`.\n- Product, provider, build, submission, OTA, and public-release authority remain closed.\n` : "";
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Protected authority checkpoint: \`${protectedMainAuthority.checkpointSha}\` / tree \`${protectedMainAuthority.checkpointTree}\`.\n- Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.\n- Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n${implementationBindingLine}${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: ${record.liveProviderReadback}.\n${engineering}${taskContextArchitecture}\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {

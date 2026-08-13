@@ -2,14 +2,16 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
-import { args, emit, git, readJson } from "./lib.mjs";
-import { observeDoctrineOwnerAuthority } from "./engineering-closure.mjs";
-import { deriveTaskScopeContext, evaluateHighRiskScope } from "./pr-scope-lib.mjs";
+import { args, emit, evaluateProtectedMainAdvancement, git, readJson } from "./lib.mjs";
+import { hashValue, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
+import { deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
 const options = args();
 const policy = readJson("config/assurance/pr-scope-policy-v1.json");
 const registry = readJson("config/assurance/feature-registry-v1.json");
 const currentTruth = readJson("config/assurance/current-truth-v1.json");
+const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
+const protectedMainRuntime = evaluateProtectedMainAdvancement({ record: currentTruth, contract: currentTruthContract });
 
 const instruction = (file) => /(^|\/)AGENTS\.md$/u.test(file) || ["CURRENT_STATE.md", "NEXT_TASK.md"].includes(file);
 const classify = (files) => files.map((file) => ({
@@ -22,7 +24,8 @@ const readGitScope = (base, head) => {
   const numstat = git(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean);
   const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
   const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
-  return { files, additions, deletions };
+  const diff = git(["diff", "--full-index", "--no-ext-diff", `${base}...${head}`]);
+  return { files, additions, deletions, diffHash: hashValue(diff) };
 };
 const readPull = (repository, pr) => {
   const result = spawnSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], { encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
@@ -73,27 +76,32 @@ if (!event.pull_request) {
   const repository = event.repository?.full_name;
   const pr = event.number;
   const readback = readPull(repository, pr);
-  const matchingBinding = (policy.taskContextBindings ?? []).find((binding) => binding.repository === repository && binding.pr === pr && binding.branch === event.pull_request?.head?.ref);
-  const ownerAuthority = matchingBinding?.authoritySource === "OWNER_DOCTRINE_BOOTSTRAP"
-    ? observeDoctrineOwnerAuthority({ currentHead: event.pull_request.head.sha, currentBranch: event.pull_request.head.ref, currentPr: pr })
-    : null;
+  const validatedIdentity = validatePullRequestEventIdentity(event, readback);
+  const base = validatedIdentity.identity?.baseSha ?? event.pull_request?.base?.sha;
+  const head = validatedIdentity.identity?.headSha ?? event.pull_request?.head?.sha;
+  let scope = { files: [], additions: 0, deletions: 0, netChangedLines: 0 };
+  let tree = null;
+  try {
+    scope = readGitScope(base, head);
+    scope.netChangedLines = Math.max(0, scope.additions - scope.deletions);
+    tree = git(["rev-parse", `${head}^{tree}`]);
+  } catch {}
+  const typedAuthorities = validatedIdentity.ok && tree
+    ? observeTypedTaskAuthorities({ identity: validatedIdentity.identity, tree, scope, currentTruth })
+    : { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null };
   const context = deriveTaskScopeContext({
     event,
     readback,
     policy,
     registry,
     currentTruth,
-    ownerAuthority,
+    protectedMainRuntime,
+    ...typedAuthorities,
     requestedFeature: options.feature ?? null,
     requestedWaiver: options.waiver ?? null
   });
-  const base = context.identity?.baseSha ?? event.pull_request?.base?.sha;
-  const head = context.identity?.headSha ?? event.pull_request?.head?.sha;
-  let scope = { files: [], additions: 0, deletions: 0 };
   const findings = context.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
-  try {
-    scope = readGitScope(base, head);
-  } catch {
+  if (!tree) {
     findings.push({ id: "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE", status: "BLOCKED_INTERNAL" });
   }
   const classified = classify(scope.files);
@@ -101,7 +109,7 @@ if (!event.pull_request) {
   const highRisk = policy.domains.filter(({ id, risk }) => risk === "high" && domains.includes(id)).map(({ id }) => id);
   const waiver = context.ok && context.historicalWaiverPath ? readJson(context.historicalWaiverPath) : null;
   const budget = context.budget
-    ? { files: context.budget.maximumFiles, lines: context.budget.maximumHandAuthoredNetLines, generatedGraphLines: context.budget.maximumGeneratedGraphLines, source: "OWNER_DOCTRINE_SCOPE_AMENDMENT_V1" }
+    ? { files: context.budget.maximumFiles, lines: context.budget.maximumHandAuthoredNetLines, generatedGraphLines: context.budget.maximumGeneratedGraphLines, source: context.authoritySource ?? context.contextType }
     : waiver
       ? { files: waiver.fileBudget.waivedMaximum, lines: waiver.lineBudget.waivedMaximum, source: waiver.contractId }
       : { files: policy.defaultBudget.changedFiles, lines: policy.defaultBudget.netChangedLines, source: "pr-scope-policy-v1" };
@@ -126,7 +134,7 @@ if (!event.pull_request) {
     changedFiles: scope.files.length,
     additions: scope.additions,
     deletions: scope.deletions,
-    netChangedLines: scope.additions - scope.deletions,
+    netChangedLines: scope.netChangedLines,
     domains,
     highRiskDomains: highRisk,
     objectiveDomains: context.objectiveDomains ?? [],

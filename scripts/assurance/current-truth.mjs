@@ -240,8 +240,42 @@ if (mode) {
     .map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const runtimeFindings = finiteTaskRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const protectedMainFindings = protectedMainRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
-  const engineeringDoctrineFindings = validateEngineeringDoctrineTruth(record, currentTruthContract, { currentMain: remoteMain, implementationMerged: remoteMain !== "8bf6459c3ae1cec62e26a1694f03063e4291b9f8" });
-  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...validateLateReviewSentinelState(record)];
+  const engineeringDoctrineFindings = validateEngineeringDoctrineTruth(record, currentTruthContract, { currentMain: remoteMain, implementationMerged: remoteMain !== "8bf6459c3ae1cec62e26a1694f03063e4291b9f8", protectedMainRuntime });
+  const taskContextArchitectureFindings = [];
+  if (record.engineeringDoctrine?.status === "ACTIVE") {
+    const architecture = record.taskContextArchitecture;
+    const sha = (value) => /^[0-9a-f]{40}$/u.test(value ?? "");
+    const hash = (value) => /^[0-9a-f]{64}$/u.test(value ?? "");
+    let mergeAncestor = false;
+    try { mergeAncestor = sha(architecture?.mergeSha) && git(["merge-base", "--is-ancestor", architecture.mergeSha, remoteMain]) === ""; } catch {}
+    if (architecture?.contractId !== "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1"
+      || !Number.isInteger(architecture?.architecturePr)
+      || !sha(architecture?.sourceHead)
+      || !sha(architecture?.sourceTree)
+      || !sha(architecture?.mergeSha)
+      || !sha(architecture?.mergeTree)
+      || !Number.isInteger(architecture?.authorityCommentId)
+      || !hash(architecture?.authorityBodyHash)
+      || !hash(architecture?.authoritySubjectHash)
+      || architecture?.doctrinePr !== 226
+      || architecture?.doctrineMerge !== "c1f9ec1f71cc8bc4448afd2327c4341cac309573"
+      || architecture?.terminalTransitionConsumed !== true
+      || architecture?.pendingTransitionPolicyId !== "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1"
+      || architecture?.pendingTransitionCountAfterSynchronization !== 0
+      || architecture?.pendingTransitions?.length !== 2
+      || architecture.pendingTransitions[0]?.pr !== 226
+      || architecture.pendingTransitions[0]?.mergeSha !== "c1f9ec1f71cc8bc4448afd2327c4341cac309573"
+      || architecture.pendingTransitions[0]?.status !== "CONSUMED_BY_THIS_TERMINAL_TRUTH"
+      || architecture.pendingTransitions[1]?.pr !== architecture.architecturePr
+      || architecture.pendingTransitions[1]?.mergeSha !== architecture.mergeSha
+      || architecture.pendingTransitions[1]?.status !== "CONSUMED_BY_THIS_TERMINAL_TRUTH"
+      || architecture?.expectedNextTask !== "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
+      || !hash(architecture?.verificationDependencyClosureHash)
+      || !architecture?.authority
+      || Object.values(architecture.authority).some((value) => value !== false)
+      || !mergeAncestor) taskContextArchitectureFindings.push({ id: "ASSURANCE_TYPED_TASK_CONTEXT_TERMINAL_TRUTH_INVALID", status: "BLOCKED_INTERNAL" });
+  }
+  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({
