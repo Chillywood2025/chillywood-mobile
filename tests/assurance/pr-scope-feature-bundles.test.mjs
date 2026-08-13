@@ -3,8 +3,9 @@ import fs from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles } from "../../scripts/assurance/pr-scope-lib.mjs";
-import { args } from "../../scripts/assurance/lib.mjs";
+import { architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
+import { args, renderCurrentState, renderNextTask, stableJson } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
@@ -36,7 +37,7 @@ const pullFixture = ({ pr, branch, head = "a".repeat(40), base = "b".repeat(40),
   },
   readback: { number: pr, repository: "Chillywood2025/chillywood-mobile", baseRef: "main", baseSha: base, headRef: branch, headSha: head, htmlUrl: `https://github.com/Chillywood2025/chillywood-mobile/pull/${pr}`, state: "open" }
 });
-const derive = ({ fixture, truth = { finiteTaskLeases: { tasks: [] } }, ownerAuthority = null, taskPolicy = policy, requestedFeature = null, requestedWaiver = null }) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: taskPolicy, registry, currentTruth: truth, ownerAuthority, requestedFeature, requestedWaiver });
+const derive = ({ fixture, truth = { finiteTaskLeases: { tasks: [] } }, ownerAuthority = null, finiteTaskAuthority = null, architectureAuthority = null, terminalTruthAuthority = null, taskPolicy = policy, requestedFeature = null, requestedWaiver = null }) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: taskPolicy, registry, currentTruth: truth, ownerAuthority, finiteTaskAuthority, architectureAuthority, terminalTruthAuthority, requestedFeature, requestedWaiver });
 
 test("policy bundles reference registered features and known high-risk domains", () => {
   assert.deepEqual(validateFeatureDomainBundles({
@@ -138,14 +139,14 @@ test("a scope waiver cannot suppress unrelated mixed high-risk scope", () => {
   assert.ok(finding(result, "ASSURANCE_MIXED_HIGH_RISK_SCOPE"));
 });
 
-test("doctrine PR #226 context resolves from exact event and immutable Owner authority", () => {
+test("doctrine PR #226 remains a protected historical exact context", () => {
   const fixture = pullFixture({ pr: 226, branch: "codex/whole-app-engineering-doctrine-v1", head: "c".repeat(40) });
   const result = derive({ fixture, ownerAuthority: { ok: true, repository: "Chillywood2025/chillywood-mobile", pr: 226, branch: fixture.event.pull_request.head.ref, currentHead: fixture.event.pull_request.head.sha, budget: { maximumFiles: 32, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 } } });
   assert.equal(result.ok, true);
   assert.equal(result.featureId, "assurance-efficiency-e0");
   assert.deepEqual(result.objectiveDomains, ["autonomous-operators"]);
   assert.deepEqual(result.supportingDomains, ["CI-test-infrastructure"]);
-  assert.equal(result.source, "IMMUTABLE_DOCTRINE_OWNER_AUTHORIZATION");
+  assert.equal(result.source, "PROTECTED_HISTORICAL_TASK");
 });
 
 test("actual S0 context resolves only its historical exact waiver", () => {
@@ -157,19 +158,19 @@ test("actual S0 context resolves only its historical exact waiver", () => {
   assert.equal(result.source, "PROTECTED_TASK_REGISTRY");
 });
 
-test("D2A context resolves from the exact finite lease", () => {
+test("D2A historical fixture remains an exact protected context", () => {
   const fixture = pullFixture({ pr: 212, branch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation" });
   const truth = { finiteTaskLeases: { tasks: [{ implementationPr: 212, implementationBranch: fixture.event.pull_request.head.ref, featureId: "chilly-chat-call-lifecycle", leaseId: "d2a-release-critical-pr-212-v1" }] } };
   const result = derive({ fixture, truth });
   assert.equal(result.ok, true);
-  assert.equal(result.source, "ACTIVE_FINITE_TASK_LEASE");
+  assert.equal(result.source, "PROTECTED_HISTORICAL_TASK");
   assert.deepEqual(result.objectiveDomains, ["Chat", "notifications-native-calls"]);
 });
 
-test("wrong task feature fails closed", () => {
-  const fixture = pullFixture({ pr: 212, branch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation" });
-  const truth = { finiteTaskLeases: { tasks: [{ implementationPr: 212, implementationBranch: fixture.event.pull_request.head.ref, featureId: "revenuecat-premium", leaseId: "wrong" }] } };
-  assert.ok(derive({ fixture, truth }).findings.includes("ASSURANCE_TASK_FEATURE_MISMATCH"));
+test("an unregistered finite-task feature fails closed", () => {
+  const fixture = pullFixture({ pr: 901, branch: "codex/finite-task" });
+  const finiteTaskAuthority = { ok: true, repository: "Chillywood2025/chillywood-mobile", pr: 901, branch: fixture.event.pull_request.head.ref, currentHead: fixture.event.pull_request.head.sha, type: "ACTIVE_FINITE_TASK_LEASE", source: "ACTIVE_FINITE_TASK_LEASE", authoritySource: "ACTIVE_FINITE_TASK_LEASE", featureId: "wrong", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], bindingId: "finite-test" };
+  assert.ok(derive({ fixture, finiteTaskAuthority }).findings.includes("ASSURANCE_TASK_FEATURE_UNREGISTERED"));
 });
 
 test("unbound PR context fails closed", () => {
@@ -202,6 +203,145 @@ test("autonomous high-risk paths require affected-domain authority", () => {
 test("CI-test-infrastructure cannot hide an unrelated high-risk domain", () => {
   const result = evaluate({ highRiskDomains: ["money-payouts"], objectiveDomains: ["CI-test-infrastructure"], featureId: "assurance-efficiency-e0" });
   assert.deepEqual(finding(result, "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN").domains, ["money-payouts"]);
+});
+
+const rawOwnerComment = ({ id, pr, body }) => ({
+  id,
+  node_id: `IC_${id}`,
+  user: { login: "Chillywood2025" },
+  author_association: "OWNER",
+  body,
+  created_at: "2026-08-13T05:00:00Z",
+  updated_at: "2026-08-13T05:00:00Z",
+  issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${pr}`,
+  html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${pr}#issuecomment-${id}`
+});
+const architectureFixture = () => {
+  const fixture = pullFixture({ pr: 901, branch: "codex/typed-context", head: "a".repeat(40), base: "c1f9ec1f71cc8bc4448afd2327c4341cac309573" });
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 901, branch: fixture.event.pull_request.head.ref, baseSha: fixture.event.pull_request.base.sha, headSha: fixture.event.pull_request.head.sha };
+  const tree = "b".repeat(40);
+  const scope = { files: ["scripts/assurance/pr-scope-lib.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"], netChangedLines: 700 };
+  const subject = architectureMaintenanceSubject({ identity, tree, scope });
+  const raw = rawOwnerComment({ id: 6000000001, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+  const authority = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope });
+  return { fixture, identity, tree, scope, subject, raw, authority };
+};
+const verifyArchitectureMutation = (mutate = () => {}) => {
+  const value = architectureFixture();
+  const args = { raw: value.raw, allComments: [value.raw], paginationComplete: true, identity: value.identity, tree: value.tree, scope: value.scope, noCompetingDomainOwner: true };
+  mutate(args, value);
+  return verifyArchitectureMaintenanceAuthority(args);
+};
+
+test("architecture 1: exact immutable Owner architecture comment passes", () => assert.equal(architectureFixture().authority.ok, true));
+test("architecture 2: arbitrary unbound architecture PR fails", () => assert.ok(derive({ fixture: architectureFixture().fixture }).findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND")));
+test("architecture 3: edited comment fails", () => assert.equal(verifyArchitectureMutation((args) => { args.raw = { ...args.raw, body: `${args.raw.body} ` }; args.allComments = [args.raw]; }).ok, false));
+test("architecture 4: stale comment after source push fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, headSha: "c".repeat(40) }; }).ok, false));
+test("architecture 5: wrong PR fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, pr: 902 }; }).ok, false));
+test("architecture 6: wrong branch fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, branch: "codex/wrong" }; }).ok, false));
+test("architecture 7: wrong tree fails", () => assert.equal(verifyArchitectureMutation((args) => { args.tree = "d".repeat(40); }).ok, false));
+test("architecture 8: extra path fails", () => assert.equal(verifyArchitectureMutation((args) => { args.scope = { ...args.scope, files: [...args.scope.files, "README.md"] }; }).ok, false));
+test("architecture 9: product path fails", () => assert.equal(verifyArchitectureMutation((args) => { args.scope = { ...args.scope, files: ["app/index.tsx"] }; }).ok, false));
+test("architecture 10: package-lock fails", () => assert.equal(verifyArchitectureMutation((args) => { args.scope = { ...args.scope, files: ["package-lock.json"] }; }).ok, false));
+test("architecture 11: provider, build, release, and workflow paths fail", () => {
+  for (const file of ["supabase/functions/provider/index.ts", "eas.json", "config/release/prod.json", ".github/workflows/phase1-ci.yml"]) assert.equal(verifyArchitectureMutation((args) => { args.scope = { ...args.scope, files: [file] }; }).ok, false);
+});
+test("architecture 12: unread comment pagination fails", () => assert.equal(verifyArchitectureMutation((args) => { args.paginationComplete = false; }).ok, false));
+test("architecture 13: no static policy entry is required", () => {
+  const value = architectureFixture();
+  const result = derive({ fixture: value.fixture, architectureAuthority: value.authority });
+  assert.equal(result.ok, true);
+  assert.equal(result.source, "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE");
+  assert.equal(policy.historicalExactTaskBindings.some(({ pr }) => pr === value.identity.pr), false);
+});
+
+const terminalFixture = () => {
+  const architecture = architectureFixture();
+  const fixture = pullFixture({ pr: 902, branch: "codex/post-doctrine-truth", head: "c".repeat(40), base: "d".repeat(40) });
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 902, branch: fixture.event.pull_request.head.ref, baseSha: fixture.event.pull_request.base.sha, headSha: fixture.event.pull_request.head.sha };
+  const tree = "e".repeat(40);
+  const scope = { files: ["config/assurance/current-truth-v1.json", "CURRENT_STATE.md", "NEXT_TASK.md"], netChangedLines: 900 };
+  const predecessor = { valid: true, pr: architecture.identity.pr, mergeSha: identity.baseSha, firstParent: "c1f9ec1f71cc8bc4448afd2327c4341cac309573", sourceHead: architecture.identity.headSha, sourceTree: architecture.tree };
+  const predecessorAuthority = architecture.authority;
+  const priorTruthHash = "f".repeat(64);
+  const truthRecord = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
+  truthRecord.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" };
+  truthRecord.openImplementationPrs = [];
+  truthRecord.taskContextArchitecture = { architecturePr: predecessor.pr, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, mergeSha: predecessor.mergeSha, terminalTransitionConsumed: true, authority: { build: false, submission: false, ota: false, publicRelease: false } };
+  const currentStateText = renderCurrentState(truthRecord);
+  const nextTaskText = renderNextTask(truthRecord);
+  const subject = terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash });
+  const raw = rawOwnerComment({ id: 6000000002, pr: identity.pr, body: terminalTruthSuccessorOwnerCommentBody(subject) });
+  const args = { raw, allComments: [raw], paginationComplete: true, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false };
+  const authority = verifyTerminalTruthSuccessorAuthority(args);
+  return { fixture, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, subject, raw, args, authority };
+};
+const verifyTerminalMutation = (mutate = () => {}) => {
+  const value = terminalFixture();
+  const args = structuredClone(value.args);
+  mutate(args, value);
+  return verifyTerminalTruthSuccessorAuthority(args);
+};
+
+test("terminal 14: exact three-file successor passes", () => assert.equal(terminalFixture().authority.ok, true));
+test("terminal 15: fourth file fails", () => assert.equal(verifyTerminalMutation((args) => { args.scope.files.push("README.md"); }).ok, false));
+test("terminal 16: missing current-truth file fails", () => assert.equal(verifyTerminalMutation((args) => { args.scope.files = args.scope.files.filter((file) => file !== "config/assurance/current-truth-v1.json"); }).ok, false));
+test("terminal 17: wrong base fails", () => assert.equal(verifyTerminalMutation((args) => { args.identity.baseSha = "1".repeat(40); }).ok, false));
+test("terminal 18: non-current base fails", () => assert.equal(verifyTerminalMutation((args) => { args.currentMain = "1".repeat(40); }).ok, false));
+test("terminal 19: one-parent predecessor fails", () => assert.equal(verifyTerminalMutation((args) => { args.predecessor.valid = false; args.predecessor.parentCount = 1; }).ok, false));
+test("terminal 20: octopus predecessor fails", () => assert.equal(verifyTerminalMutation((args) => { args.predecessor.valid = false; args.predecessor.parentCount = 3; }).ok, false));
+test("terminal 21: wrong predecessor PR fails", () => assert.equal(verifyTerminalMutation((args) => { args.predecessor.pr += 1; }).ok, false));
+test("terminal 22: wrong predecessor head or tree fails", () => {
+  assert.equal(verifyTerminalMutation((args) => { args.predecessor.sourceHead = "1".repeat(40); }).ok, false);
+  assert.equal(verifyTerminalMutation((args) => { args.predecessor.sourceTree = "1".repeat(40); }).ok, false);
+});
+test("terminal 23: predecessor without terminalTruthRequired fails", () => assert.equal(verifyTerminalMutation((args) => { args.predecessorAuthority.subject.terminalTruthRequired = false; }).ok, false));
+test("terminal 24: edited successor comment fails", () => assert.equal(verifyTerminalMutation((args) => { args.raw.body += " "; args.allComments = [args.raw]; }).ok, false));
+test("terminal 25: stale successor comment fails", () => assert.equal(verifyTerminalMutation((args) => { args.identity.headSha = "1".repeat(40); }).ok, false));
+test("terminal 26: expected next-task mismatch fails", () => assert.equal(verifyTerminalMutation((args) => { args.truthRecord.engineeringDoctrine.nextPermittedAction = "WRONG"; }).ok, false));
+test("terminal 27: doctrine ACTIVE missing fails", () => assert.equal(verifyTerminalMutation((args) => { delete args.truthRecord.engineeringDoctrine; }).ok, false));
+test("terminal 28: build authority true fails", () => assert.equal(verifyTerminalMutation((args) => { args.truthRecord.taskContextArchitecture.authority.build = true; }).ok, false));
+test("terminal 29: OTA authority true fails", () => assert.equal(verifyTerminalMutation((args) => { args.truthRecord.taskContextArchitecture.authority.ota = true; }).ok, false));
+test("terminal 30: public-release authority true fails", () => assert.equal(verifyTerminalMutation((args) => { args.truthRecord.taskContextArchitecture.authority.publicRelease = true; }).ok, false));
+test("terminal 31: generated CURRENT_STATE mismatch fails", () => assert.equal(verifyTerminalMutation((args) => { args.currentStateText += "stale"; }).ok, false));
+test("terminal 32: generated NEXT_TASK mismatch fails", () => assert.equal(verifyTerminalMutation((args) => { args.nextTaskText += "stale"; }).ok, false));
+test("terminal 33: duplicate successor fails", () => assert.equal(verifyTerminalMutation((args) => { args.openTerminalSuccessorCount = 2; }).ok, false));
+test("terminal 34: second successor after merge fails", () => assert.equal(verifyTerminalMutation((args) => { args.transitionPreviouslyConsumed = true; }).ok, false));
+test("terminal 35: no taskContextBindings entry is required", () => {
+  const value = terminalFixture();
+  const result = derive({ fixture: value.fixture, terminalTruthAuthority: value.authority });
+  assert.equal(result.ok, true);
+  assert.equal(result.source, "TERMINAL_TRUTH_SUCCESSOR_V1");
+  assert.equal(Object.hasOwn(policy, "taskContextBindings"), false);
+});
+
+test("general 36-40: arbitrary and spoofed PRs plus injected feature or waiver remain blocked", () => {
+  const arbitrary = pullFixture({ pr: 999, branch: "codex/unbound", title: "S0 terminal truth architecture" });
+  assert.ok(derive({ fixture: arbitrary }).findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND"));
+  assert.ok(derive({ fixture: pullFixture({ pr: 999, branch: "codex/assurance-codex-security-scan-reliability-s0" }) }).findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND"));
+  assert.ok(derive({ fixture: arbitrary, requestedFeature: "assurance-efficiency-e0" }).findings.includes("ASSURANCE_CALLER_FEATURE_INJECTION_REJECTED"));
+  assert.ok(derive({ fixture: arbitrary, requestedWaiver: "config/assurance/codex-security-reliability-s0-scope-waiver-v1.json" }).findings.includes("ASSURANCE_CALLER_WAIVER_INJECTION_REJECTED"));
+});
+test("general 43: a new finite task resolves without a static PR entry", () => {
+  const fixture = pullFixture({ pr: 903, branch: "codex/finite-descendant" });
+  const finiteTaskAuthority = { ok: true, repository: "Chillywood2025/chillywood-mobile", pr: 903, branch: fixture.event.pull_request.head.ref, currentHead: fixture.event.pull_request.head.sha, type: "ACTIVE_FINITE_TASK_LEASE", authoritySource: "ACTIVE_FINITE_TASK_LEASE", featureId: "chilly-chat-call-lifecycle", objectiveDomains: ["Chat", "notifications-native-calls"], supportingDomains: ["CI-test-infrastructure"], bindingId: "finite-903", finiteLeaseId: "lease-903" };
+  assert.equal(derive({ fixture, finiteTaskAuthority }).source, "ACTIVE_FINITE_TASK_LEASE");
+});
+test("general 44: typed-context ambiguity fails", () => {
+  const value = architectureFixture();
+  const finiteTaskAuthority = { ...value.authority, type: "ACTIVE_FINITE_TASK_LEASE", authoritySource: "ACTIVE_FINITE_TASK_LEASE", bindingId: "ambiguous-finite" };
+  assert.ok(derive({ fixture: value.fixture, architectureAuthority: value.authority, finiteTaskAuthority }).findings.includes("ASSURANCE_TASK_CONTEXT_AMBIGUOUS"));
+});
+test("general 45: typed context generation is deterministic 3/3", () => {
+  const value = terminalFixture();
+  const outputs = Array.from({ length: 3 }, () => stableJson(derive({ fixture: value.fixture, terminalTruthAuthority: value.authority })));
+  assert.equal(new Set(outputs).size, 1);
+});
+test("static-binding recursion guard rejects new active PR bindings", () => {
+  assert.deepEqual(validateStaticBindingRecursion(policy), []);
+  assert.deepEqual(validateStaticBindingRecursion({ ...policy, taskContextBindings: [] }), ["ASSURANCE_STATIC_TASK_BINDING_RECURSION"]);
+  assert.deepEqual(validateStaticBindingRecursion({ ...policy, taskContextBindings: [{ pr: 999 }] }), ["ASSURANCE_STATIC_TASK_BINDING_RECURSION"]);
+  assert.deepEqual(validateStaticBindingRecursion({ ...policy, historicalExactTaskBindings: [...policy.historicalExactTaskBindings, { bindingId: "new", pr: 999, authoritySource: "PROTECTED_HISTORICAL_TASK" }] }), ["ASSURANCE_STATIC_TASK_BINDING_RECURSION"]);
 });
 
 test("workflow uses generic event context and contains no hardcoded S0 scope invocation", () => {

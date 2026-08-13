@@ -31,7 +31,29 @@ const exactBinding = (binding, identity) => binding?.repository === identity.rep
   && binding?.branch === identity.branch
   && binding?.baseRef === identity.baseRef;
 
-const matchingFiniteLease = (truth, identity) => (truth?.finiteTaskLeases?.tasks ?? []).filter((lease) => lease?.implementationPr === identity.pr && lease?.implementationBranch === identity.branch);
+const historicalBindingFacts = new Map([
+  ["doctrine-pr-226-v1", { pr: 226, branch: "codex/whole-app-engineering-doctrine-v1", featureId: "assurance-efficiency-e0", waiver: null }],
+  ["codex-security-s0-pr-206-v1", { pr: 206, branch: "codex/assurance-codex-security-scan-reliability-s0", featureId: "codex-security-scan-reliability-s0", waiver: "config/assurance/codex-security-reliability-s0-scope-waiver-v1.json" }],
+  ["d2a-pr-212-v1", { pr: 212, branch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation", featureId: "chilly-chat-call-lifecycle", waiver: null }],
+]);
+
+export function validateStaticBindingRecursion(policy = {}) {
+  const historical = policy.historicalExactTaskBindings ?? [];
+  const findings = [];
+  if (Object.hasOwn(policy, "taskContextBindings")) findings.push("ASSURANCE_STATIC_TASK_BINDING_RECURSION");
+  if (historical.length !== historicalBindingFacts.size
+    || historical.some((binding) => {
+      const expected = historicalBindingFacts.get(binding?.bindingId);
+      return !expected || binding?.repository !== "Chillywood2025/chillywood-mobile" || binding?.baseRef !== "main" || binding?.authoritySource !== "PROTECTED_HISTORICAL_TASK" || binding?.pr !== expected.pr || binding?.branch !== expected.branch || binding?.featureId !== expected.featureId || (binding?.historicalWaiverPath ?? null) !== expected.waiver;
+    })) findings.push("ASSURANCE_STATIC_TASK_BINDING_RECURSION");
+  return uniqueSorted(findings);
+}
+
+const boundAuthority = (authority, identity) => authority?.ok === true
+  && authority.repository === identity.repository
+  && authority.pr === identity.pr
+  && authority.branch === identity.branch
+  && authority.currentHead === identity.headSha;
 
 export function deriveTaskScopeContext({
   event,
@@ -40,6 +62,9 @@ export function deriveTaskScopeContext({
   registry,
   currentTruth,
   ownerAuthority = null,
+  finiteTaskAuthority = null,
+  architectureAuthority = null,
+  terminalTruthAuthority = null,
   requestedFeature = null,
   requestedWaiver = null
 } = {}) {
@@ -49,48 +74,50 @@ export function deriveTaskScopeContext({
   if (requestedWaiver !== null) findings.push("ASSURANCE_CALLER_WAIVER_INJECTION_REJECTED");
   if (!eventIdentity.ok) return { ok: false, findings: uniqueSorted(findings), source: "UNBOUND_PR_CONTEXT" };
   const identity = eventIdentity.identity;
-  const bindings = (policy?.taskContextBindings ?? []).filter((binding) => exactBinding(binding, identity));
-  if (bindings.length !== 1) findings.push("ASSURANCE_TASK_CONTEXT_UNBOUND");
-  const binding = bindings[0] ?? null;
-  const registryFeatures = new Set((registry?.features ?? []).map(({ featureId }) => featureId));
-  if (binding && !registryFeatures.has(binding.featureId)) findings.push("ASSURANCE_TASK_FEATURE_UNREGISTERED");
-
-  let source = "UNBOUND_PR_CONTEXT";
-  let finiteLease = null;
-  const finiteLeases = matchingFiniteLease(currentTruth, identity);
-  if (finiteLeases.length > 1) findings.push("ASSURANCE_TASK_CONTEXT_AMBIGUOUS_LEASE");
-  else if (finiteLeases.length === 1) {
-    finiteLease = finiteLeases[0];
-    source = "ACTIVE_FINITE_TASK_LEASE";
-    if (finiteLease.featureId !== binding?.featureId || binding?.authoritySource !== "ACTIVE_FINITE_TASK_LEASE") findings.push("ASSURANCE_TASK_FEATURE_MISMATCH");
-  } else if (binding?.authoritySource === "OWNER_DOCTRINE_BOOTSTRAP") {
-    source = "IMMUTABLE_DOCTRINE_OWNER_AUTHORIZATION";
-    if (ownerAuthority?.ok !== true || ownerAuthority?.repository !== identity.repository || ownerAuthority?.pr !== identity.pr || ownerAuthority?.branch !== identity.branch || ownerAuthority?.currentHead !== identity.headSha) findings.push("ASSURANCE_DOCTRINE_OWNER_AUTHORITY_INVALID");
-  } else if (binding?.authoritySource === "PROTECTED_TASK_REGISTRY") {
-    source = "PROTECTED_TASK_REGISTRY";
-  } else if (binding) {
-    findings.push("ASSURANCE_TASK_AUTHORITY_SOURCE_INVALID");
+  findings.push(...validateStaticBindingRecursion(policy));
+  const historical = (policy?.historicalExactTaskBindings ?? []).filter((binding) => exactBinding(binding, identity));
+  const candidates = [];
+  if (historical.length === 1) {
+    const binding = historical[0];
+    candidates.push({
+      ...binding,
+      source: binding.bindingId === "codex-security-s0-pr-206-v1" ? "PROTECTED_TASK_REGISTRY" : "PROTECTED_HISTORICAL_TASK",
+      type: "PROTECTED_HISTORICAL_TASK",
+      budget: binding.bindingId === "doctrine-pr-226-v1" && ownerAuthority?.ok === true ? ownerAuthority.budget : null,
+    });
   }
+  if (boundAuthority(finiteTaskAuthority, identity)) candidates.push({ ...finiteTaskAuthority, source: "ACTIVE_FINITE_TASK_LEASE" });
+  if (boundAuthority(architectureAuthority, identity)) candidates.push({ ...architectureAuthority, source: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" });
+  if (boundAuthority(terminalTruthAuthority, identity)) candidates.push({ ...terminalTruthAuthority, source: "TERMINAL_TRUTH_SUCCESSOR_V1" });
+  for (const attempted of [finiteTaskAuthority, architectureAuthority, terminalTruthAuthority]) if (attempted && attempted.ok !== true) findings.push(...(attempted.findings ?? []));
+  if (candidates.length === 0) findings.push("ASSURANCE_TASK_CONTEXT_UNBOUND");
+  if (candidates.length > 1 || historical.length > 1) findings.push("ASSURANCE_TASK_CONTEXT_AMBIGUOUS");
+  const selected = candidates.length === 1 ? candidates[0] : null;
+  const registryFeatures = new Set((registry?.features ?? []).map(({ featureId }) => featureId));
+  if (selected && !registryFeatures.has(selected.featureId)) findings.push("ASSURANCE_TASK_FEATURE_UNREGISTERED");
+  if (selected?.historicalWaiverPath && selected.type !== "PROTECTED_HISTORICAL_TASK") findings.push("ASSURANCE_TASK_WAIVER_CONTEXT_INVALID");
+  if (selected?.historicalWaiverPath && selected.bindingId !== "codex-security-s0-pr-206-v1") findings.push("ASSURANCE_TASK_WAIVER_CONTEXT_INVALID");
 
-  const objectiveDomains = uniqueSorted(binding?.objectiveDomains ?? []);
-  const supportingDomains = uniqueSorted(binding?.supportingDomains ?? []);
+  const objectiveDomains = uniqueSorted(selected?.objectiveDomains ?? []);
+  const supportingDomains = uniqueSorted(selected?.supportingDomains ?? []);
   const knownDomains = new Set((policy?.domains ?? []).map(({ id }) => id));
   if ([...objectiveDomains, ...supportingDomains].some((domain) => !knownDomains.has(domain))) findings.push("ASSURANCE_TASK_CONTEXT_DOMAIN_UNKNOWN");
-  const waiverPath = binding?.historicalWaiverPath ?? null;
-  if (waiverPath && binding?.authoritySource !== "PROTECTED_TASK_REGISTRY") findings.push("ASSURANCE_TASK_WAIVER_CONTEXT_INVALID");
+  const waiverPath = selected?.historicalWaiverPath ?? null;
 
   return {
     ok: findings.length === 0,
     findings: uniqueSorted(findings),
-    source,
+    source: selected?.source ?? "UNBOUND_PR_CONTEXT",
+    contextType: selected?.type ?? null,
     identity,
-    featureId: binding?.featureId ?? null,
+    featureId: selected?.featureId ?? null,
     objectiveDomains,
     supportingDomains,
     historicalWaiverPath: waiverPath,
-    bindingId: binding?.bindingId ?? null,
-    finiteLeaseId: finiteLease?.leaseId ?? null,
-    budget: ownerAuthority?.ok === true && binding?.authoritySource === "OWNER_DOCTRINE_BOOTSTRAP" ? ownerAuthority.budget : null
+    bindingId: selected?.bindingId ?? null,
+    finiteLeaseId: selected?.finiteLeaseId ?? null,
+    budget: selected?.budget ?? null,
+    authoritySource: selected?.authoritySource ?? null,
   };
 }
 

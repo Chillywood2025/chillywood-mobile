@@ -47,7 +47,7 @@
       "reason": "Native call provenance must bind the generated notification receiver and private native store to the authenticated Chat transition in one fail-closed lifecycle domain."
     }
   ],
-  "taskContextBindings": [
+  "historicalExactTaskBindings": [
     {
       "bindingId": "doctrine-pr-226-v1",
       "repository": "Chillywood2025/chillywood-mobile",
@@ -61,7 +61,7 @@
       "supportingDomains": [
         "CI-test-infrastructure"
       ],
-      "authoritySource": "OWNER_DOCTRINE_BOOTSTRAP"
+      "authoritySource": "PROTECTED_HISTORICAL_TASK"
     },
     {
       "bindingId": "codex-security-s0-pr-206-v1",
@@ -74,7 +74,7 @@
       "supportingDomains": [
         "CI-test-infrastructure"
       ],
-      "authoritySource": "PROTECTED_TASK_REGISTRY",
+      "authoritySource": "PROTECTED_HISTORICAL_TASK",
       "historicalWaiverPath": "config/assurance/codex-security-reliability-s0-scope-waiver-v1.json"
     },
     {
@@ -91,7 +91,7 @@
       "supportingDomains": [
         "CI-test-infrastructure"
       ],
-      "authoritySource": "ACTIVE_FINITE_TASK_LEASE"
+      "authoritySource": "PROTECTED_HISTORICAL_TASK"
     }
   ],
   "violations": [

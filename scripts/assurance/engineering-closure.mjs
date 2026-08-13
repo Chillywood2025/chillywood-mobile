@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { renderCurrentState, renderNextTask } from "./lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -1274,6 +1275,238 @@ export function normalizeGitHubCommentIdentity(raw, { repository = "Chillywood20
     issueUrl: issue.href,
     htmlUrl: html?.href ?? null,
   });
+}
+
+export const ARCHITECTURE_MAINTENANCE_MARKER = "<!-- chillywood-assurance-architecture-maintenance-v1 -->";
+export const TERMINAL_TRUTH_SUCCESSOR_MARKER = "<!-- chillywood-terminal-truth-successor-v1 -->";
+export const TYPED_CONTEXT_ARCHITECTURE_PATHS = Object.freeze([
+  "config/assurance/pr-scope-policy-v1.json",
+  "config/assurance/schemas-v1.json",
+  "scripts/assurance/current-truth.mjs",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/pr-scope-lib.mjs",
+  "scripts/assurance/pr-scope.mjs",
+  "tests/assurance/current-truth-sync.test.mjs",
+  "tests/assurance/pr-scope-feature-bundles.test.mjs",
+]);
+export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
+const TYPED_CONTEXT_DOCTRINE_MERGE = "c1f9ec1f71cc8bc4448afd2327c4341cac309573";
+const TYPED_CONTEXT_NEXT_TASK = "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE";
+const ownerCommentBody = (marker, type, subject) => {
+  const payload = { schemaVersion: 1, evidenceClass: "OWNER_INTENT", authorizationId: type.toLowerCase(), type, repository: subject.repository, pr: subject.pr, subject, subjectHash: hashValue(subject) };
+  return `${marker}\n${stableJson({ ...payload, bodyHash: hashValue(payload) })}`;
+};
+const parseExactOwnerBody = (normalized, marker) => {
+  if (!normalized?.body.startsWith(`${marker}\n`)) return null;
+  try { return JSON.parse(normalized.body.slice(marker.length + 1)); } catch { return null; }
+};
+const exactScope = (scope) => ({
+  changedPaths: [...new Set(scope?.files ?? scope?.changedPaths ?? [])].sort(),
+  changedPathHash: hashValue([...new Set(scope?.files ?? scope?.changedPaths ?? [])].sort()),
+  netChangedLines: Math.max(0, Number(scope?.netChangedLines ?? 0)),
+});
+
+export function architectureMaintenanceSubject({ identity, tree, scope } = {}) {
+  const observed = exactScope(scope);
+  return {
+    type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
+    classification: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
+    repository: identity?.repository,
+    pr: identity?.pr,
+    branch: identity?.branch,
+    protectedBase: identity?.baseSha,
+    currentHead: identity?.headSha,
+    currentTree: tree,
+    changedPaths: observed.changedPaths,
+    changedPathHash: observed.changedPathHash,
+    budget: { maximumFiles: 8, maximumNetLines: 1800 },
+    featureId: "assurance-efficiency-e0",
+    objectiveDomains: [],
+    supportingDomains: ["CI-test-infrastructure"],
+    objective: "remove static per-PR context recursion and create typed terminal truth successors",
+    relatedDoctrineMerge: TYPED_CONTEXT_DOCTRINE_MERGE,
+    terminalTruthRequired: true,
+    expectedTerminalNextTask: TYPED_CONTEXT_NEXT_TASK,
+    authorityLevel: "LEVEL_0_1_REPOSITORY_ARCHITECTURE_MAINTENANCE",
+    authority: { product: false, nativeProduct: false, database: false, provider: false, build: false, release: false, submission: false, ota: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+    immutableCommentRequired: true,
+    createdAtEqualsUpdatedAtRequired: true,
+    expiresOn: `PR_${identity?.pr}_MERGE`,
+    reusableByAnotherPr: false,
+  };
+}
+export const architectureMaintenanceOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_MARKER, subject.type, subject);
+
+export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true } = {}) {
+  const subject = architectureMaintenanceSubject({ identity, tree, scope });
+  const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
+  const payload = parseExactOwnerBody(normalized, ARCHITECTURE_MAINTENANCE_MARKER);
+  const matches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
+  const observed = exactScope(scope);
+  const checks = {
+    identity: Boolean(normalized),
+    body: normalized?.body === architectureMaintenanceOwnerCommentBody(subject),
+    hashes: payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"))),
+    singleComment: paginationComplete && matches.length === 1 && matches[0]?.id === raw?.id,
+    exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= 8 && observed.changedPaths.every((file) => TYPED_CONTEXT_ARCHITECTURE_PATHS.includes(file)) && !observed.changedPaths.some((file) => file.includes("*")),
+    budget: observed.netChangedLines <= 1800,
+    authority: subject.authority && Object.values(subject.authority).every((value) => value === false) && noCompetingDomainOwner,
+  };
+  const ok = Object.values(checks).every(Boolean);
+  return { ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: subject.featureId, objectiveDomains: [], supportingDomains: [...subject.supportingDomains], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: 8, maximumHandAuthoredNetLines: 1800 }, commentId: normalized?.id ?? null, commentBodyHash: normalized?.bodyHash ?? null, subjectHash: hashValue(subject), subject, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
+}
+
+export function terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash } = {}) {
+  const observed = exactScope(scope);
+  return {
+    type: "TERMINAL_TRUTH_SUCCESSOR_V1",
+    repository: identity?.repository,
+    pr: identity?.pr,
+    branch: identity?.branch,
+    head: identity?.headSha,
+    tree,
+    baseMerge: identity?.baseSha,
+    predecessorPr: predecessor?.pr,
+    predecessorSourceHead: predecessor?.sourceHead,
+    predecessorSourceTree: predecessor?.sourceTree,
+    predecessorAuthorityComment: { commentId: predecessorAuthority?.commentId, bodyHash: predecessorAuthority?.commentBodyHash, subjectHash: predecessorAuthority?.subjectHash },
+    doctrinePr: 226,
+    doctrineMerge: TYPED_CONTEXT_DOCTRINE_MERGE,
+    priorCurrentTruthHash: priorTruthHash,
+    changedPaths: observed.changedPaths,
+    changedPathHash: observed.changedPathHash,
+    budget: { maximumFiles: 3, maximumNetLines: 1200 },
+    expectedDoctrineStatus: "ACTIVE",
+    expectedNextTask: TYPED_CONTEXT_NEXT_TASK,
+    authority: { build: false, submission: false, ota: false, publicRelease: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+    immutableCommentRequired: true,
+    createdAtEqualsUpdatedAtRequired: true,
+    singleUse: true,
+  };
+}
+export const terminalTruthSuccessorOwnerCommentBody = (subject) => ownerCommentBody(TERMINAL_TRUTH_SUCCESSOR_MARKER, subject.type, subject);
+
+export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, currentMain, openTerminalSuccessorCount = 1, transitionPreviouslyConsumed = false } = {}) {
+  const subject = terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash });
+  const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
+  const payload = parseExactOwnerBody(normalized, TERMINAL_TRUTH_SUCCESSOR_MARKER);
+  const matches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
+  const observed = exactScope(scope);
+  const architecture = truthRecord?.taskContextArchitecture;
+  const doctrine = truthRecord?.engineeringDoctrine;
+  const canonicalCurrent = truthRecord ? renderCurrentState(truthRecord) : null;
+  const canonicalNext = truthRecord ? renderNextTask(truthRecord) : null;
+  const checks = {
+    identity: Boolean(normalized) && identity?.baseSha === currentMain,
+    body: normalized?.body === terminalTruthSuccessorOwnerCommentBody(subject),
+    hashes: payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"))),
+    singleComment: paginationComplete && matches.length === 1 && matches[0]?.id === raw?.id,
+    exactPaths: stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_PATHS) && observed.netChangedLines <= 1200,
+    predecessor: predecessor?.valid === true && predecessor?.mergeSha === identity?.baseSha && predecessor?.firstParent === TYPED_CONTEXT_DOCTRINE_MERGE && predecessor?.sourceHead === predecessorAuthority?.subject?.currentHead && predecessor?.sourceTree === predecessorAuthority?.subject?.currentTree && predecessorAuthority?.ok === true && predecessorAuthority?.subject?.terminalTruthRequired === true,
+    generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext,
+    authorityClosed: architecture?.authority?.build === false && architecture?.authority?.submission === false && architecture?.authority?.ota === false && architecture?.authority?.publicRelease === false,
+    singleUse: openTerminalSuccessorCount === 1 && transitionPreviouslyConsumed === false,
+  };
+  const ok = Object.values(checks).every(Boolean);
+  return { ok, type: "TERMINAL_TRUTH_SUCCESSOR", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "TERMINAL_TRUTH_SUCCESSOR_V1", bindingId: `terminal-truth-successor-pr-${identity?.pr}`, budget: { maximumFiles: 3, maximumHandAuthoredNetLines: 1200 }, commentId: normalized?.id ?? null, commentBodyHash: normalized?.bodyHash ?? null, subjectHash: hashValue(subject), subject, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `TERMINAL_TRUTH_SUCCESSOR_INVALID:${key}`) };
+}
+
+const typedGh = (root, args) => spawnSync("gh", ["api", "--method=GET", ...args], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+const typedGit = (root, args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+const parsedResponse = (response, fallback = null) => { try { return response.status === 0 ? JSON.parse(response.stdout) : fallback; } catch { return fallback; } };
+const paginatedArray = (root, endpoint) => {
+  const response = typedGh(root, ["--paginate", "--slurp", endpoint]);
+  const pages = parsedResponse(response, null);
+  return { complete: response.status === 0 && Array.isArray(pages) && pages.every(Array.isArray), values: Array.isArray(pages) ? pages.flat() : [] };
+};
+const paginatedIssueComments = (root, repository, pr) => { const result = paginatedArray(root, `repos/${repository}/issues/${pr}/comments?per_page=100`); return { complete: result.complete, comments: result.values }; };
+const gitScope = (root, base, head) => {
+  const pathsRun = typedGit(root, ["diff", "--name-only", `${base}...${head}`]);
+  const linesRun = typedGit(root, ["diff", "--numstat", `${base}...${head}`]);
+  if (pathsRun.status !== 0 || linesRun.status !== 0) return null;
+  const files = pathsRun.stdout.split(/\r?\n/gu).filter(Boolean).sort();
+  const rows = linesRun.stdout.split(/\r?\n/gu).filter(Boolean).map((line) => line.split("\t"));
+  const additions = rows.reduce((sum, [value]) => sum + (Number(value) || 0), 0);
+  const deletions = rows.reduce((sum, [, value]) => sum + (Number(value) || 0), 0);
+  return { files, additions, deletions, netChangedLines: Math.max(0, additions - deletions) };
+};
+const leasePathAllowed = (file, globs = []) => globs.some((glob) => {
+  const prefix = String(glob).split("*")[0];
+  return prefix && (file === prefix.replace(/\/$/u, "") || file.startsWith(prefix));
+});
+
+export function observeTypedTaskAuthorities({ identity, tree, scope, currentTruth, root = REPOSITORY_ROOT } = {}) {
+  if (!identity || !/^[0-9a-f]{40}$/u.test(tree ?? "")) return { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null };
+  const commentsRead = paginatedIssueComments(root, identity.repository, identity.pr);
+  const architectureComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
+  const noCompetingDomainOwner = Array.isArray(currentTruth?.openImplementationPrs) && currentTruth.openImplementationPrs.length === 0;
+  const architectureAuthority = verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, identity, tree, scope, noCompetingDomainOwner });
+
+  const activeLeaseStates = new Set(["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "IMPLEMENTATION", "VERIFY", "NATIVE_PROVIDER_PROOF", "MERGE_ELIGIBLE", "ACTIVE_IMPLEMENTATION"]);
+  const leases = (currentTruth?.finiteTaskLeases?.tasks ?? []).filter((lease) => lease?.implementationPr === identity.pr && lease?.implementationBranch === identity.branch && activeLeaseStates.has(lease?.taskState));
+  let finiteTaskAuthority = null;
+  if (leases.length === 1) {
+    const lease = leases[0];
+    const seed = lease.admittedSeedHead ?? lease.admittedBase;
+    const allowed = lease.artifactReservation?.pathGlobs ?? [];
+    const maximumFiles = lease.artifactReservation?.maximumFiles;
+    const maximumLines = lease.artifactReservation?.maximumLines;
+    const competingOwners = (currentTruth?.openImplementationPrs ?? []).filter((entry) => entry?.number !== identity.pr);
+    const valid = /^[0-9a-f]{40}$/u.test(seed ?? "")
+      && identity.baseSha === typedGit(root, ["rev-parse", "origin/main"]).stdout.trim()
+      && typedGit(root, ["merge-base", "--is-ancestor", seed, identity.headSha]).status === 0
+      && typedGit(root, ["merge-base", "--is-ancestor", identity.baseSha, identity.headSha]).status === 0
+      && scope.files.length <= maximumFiles
+      && scope.netChangedLines <= maximumLines
+      && scope.files.every((file) => leasePathAllowed(file, allowed))
+      && competingOwners.length === 0;
+    finiteTaskAuthority = { ok: valid, type: "ACTIVE_FINITE_TASK_LEASE", repository: identity.repository, pr: identity.pr, branch: identity.branch, currentHead: identity.headSha, currentTree: tree, featureId: lease.featureId, objectiveDomains: lease.artifactReservation?.allowedDomains ?? [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "ACTIVE_FINITE_TASK_LEASE", bindingId: `finite-lease-${lease.leaseId}`, finiteLeaseId: lease.leaseId, budget: { maximumFiles, maximumHandAuthoredNetLines: maximumLines }, findings: valid ? [] : ["ASSURANCE_FINITE_TASK_CONTEXT_INVALID"] };
+  }
+
+  let terminalTruthAuthority = null;
+  if (stableJson(exactScope(scope).changedPaths) === stableJson(TERMINAL_TRUTH_PATHS)) {
+    const currentMainRun = typedGit(root, ["rev-parse", "origin/main"]);
+    const currentMain = currentMainRun.status === 0 ? currentMainRun.stdout.trim() : null;
+    const parentRun = typedGit(root, ["rev-list", "--parents", "-n", "1", identity.baseSha]);
+    const parentParts = parentRun.stdout.trim().split(/\s+/u);
+    const associatedRead = paginatedArray(root, `repos/${identity.repository}/commits/${identity.baseSha}/pulls?per_page=100`);
+    const associated = associatedRead.values;
+    const predecessorPull = associatedRead.complete && associated.length === 1 ? associated[0] : null;
+    const predecessorPr = predecessorPull?.number;
+    const firstParent = parentParts.length === 3 ? parentParts[1] : null;
+    const sourceHead = parentParts.length === 3 ? parentParts[2] : null;
+    const sourceTreeRun = sourceHead ? typedGit(root, ["rev-parse", `${sourceHead}^{tree}`]) : { status: 1, stdout: "" };
+    const predecessorScope = firstParent && sourceHead ? gitScope(root, firstParent, sourceHead) : null;
+    const predecessorIdentity = predecessorPull ? { repository: identity.repository, pr: predecessorPr, branch: predecessorPull.head?.ref, baseSha: predecessorPull.base?.sha, headSha: predecessorPull.head?.sha } : null;
+    const predecessorComments = predecessorPr ? paginatedIssueComments(root, identity.repository, predecessorPr) : { complete: false, comments: [] };
+    const predecessorRaw = predecessorComments.comments.find((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
+    const predecessorAuthority = predecessorIdentity && predecessorScope ? verifyArchitectureMaintenanceAuthority({ raw: predecessorRaw, allComments: predecessorComments.comments, paginationComplete: predecessorComments.complete, identity: predecessorIdentity, tree: sourceTreeRun.stdout.trim(), scope: predecessorScope, noCompetingDomainOwner: true }) : { ok: false };
+    const predecessor = {
+      valid: parentParts.length === 3 && associatedRead.complete && associated.length === 1 && predecessorPull?.merged_at && predecessorPull?.merge_commit_sha === identity.baseSha && predecessorPull?.base?.ref === "main" && predecessorPull?.head?.sha === sourceHead && predecessorPull?.base?.sha === firstParent && sourceTreeRun.status === 0,
+      pr: predecessorPr,
+      mergeSha: identity.baseSha,
+      firstParent,
+      sourceHead,
+      sourceTree: sourceTreeRun.stdout.trim(),
+    };
+    const priorTruthRun = typedGit(root, ["show", `${identity.baseSha}:config/assurance/current-truth-v1.json`]);
+    const priorTruthHash = priorTruthRun.status === 0 ? hashValue(priorTruthRun.stdout) : null;
+    const truthRecord = readJson(root, "config/assurance/current-truth-v1.json");
+    const openPullsRead = paginatedArray(root, `repos/${identity.repository}/pulls?state=open&base=main&per_page=100`);
+    const openPulls = openPullsRead.values;
+    let openTerminalSuccessorCount = 0;
+    for (const pull of openPulls) {
+      if (pull?.base?.sha !== identity.baseSha) continue;
+      const filesRead = paginatedArray(root, `repos/${identity.repository}/pulls/${pull.number}/files?per_page=100`);
+      const names = filesRead.complete ? filesRead.values.map(({ filename }) => filename).sort() : [];
+      if (stableJson(names) === stableJson(TERMINAL_TRUTH_PATHS)) openTerminalSuccessorCount += 1;
+    }
+    const truthComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
+    terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruthRun.status === 0 && JSON.parse(priorTruthRun.stdout)?.taskContextArchitecture?.mergeSha === identity.baseSha });
+  }
+  return { architectureAuthority, terminalTruthAuthority, finiteTaskAuthority };
 }
 function readOwnerAuthorizations(authoritativeLease, context = {}, root = REPOSITORY_ROOT) {
   const result = [];
