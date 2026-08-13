@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { SOURCE_BOUND_TRANSITION_SPECS, compareUtf8, hashValue, stableJson } from "./engineering-closure.mjs";
+import { SOURCE_BOUND_TRANSITION_SPECS, compareUtf8, hashValue, stableJson, verifyVerificationDependencyClosure } from "./engineering-closure.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -189,11 +189,13 @@ export function verifyAuthoritativeOutput(output, { root = DEFAULT_ROOT } = {}) 
   const inventory = verifyInventory(output?.inventory, root);
   const edges = verifySerializedEdgeModel(output, { root });
   const receipts = verifyReceipts(output, root);
-  findings.push(...transition.findings, ...inventory.findings, ...edges.findings, ...receipts.findings);
+  const verificationDependencies = verifyVerificationDependencyClosure(output?.verificationDependencyClosure);
+  if (output?.verificationDependencyClosureHash !== output?.verificationDependencyClosure?.closureHash) findings.push("VERIFICATION_DEPENDENCY_CLOSURE_HASH_MISMATCH");
+  findings.push(...transition.findings, ...inventory.findings, ...edges.findings, ...receipts.findings, ...verificationDependencies.findings);
   const body = { ...output }; delete body.authoritativeReplayHash; delete body.result;
   if (output?.authoritativeReplayHash !== hashValue(body)) findings.push("AUTHORITATIVE_REPLAY_HASH_INVALID");
   if (!Object.values(output?.p1Results ?? {}).every(Boolean)) findings.push("FROZEN_CORRECTION_LEDGER_INCOMPLETE");
-  return { ok: findings.length === 0, findings: [...new Set(findings)].sort(compareUtf8), transition, inventory, edges, receipts };
+  return { ok: findings.length === 0, findings: [...new Set(findings)].sort(compareUtf8), transition, inventory, edges, receipts, verificationDependencies };
 }
 
 const firstDifference = (left, right, pointer = "") => {
@@ -209,7 +211,7 @@ export function compareReplayOutputs(left, right) {
   return { equal: difference === null, difference };
 }
 
-const taskArgs = (options) => ["pr", "branch", "admitted-seed-head", "protected-base", "lease-id", "comment-id", "amendment-comment-id"].filter((key) => options[key] !== undefined).map((key) => `--${key}=${options[key]}`);
+const taskArgs = (options) => ["pr", "branch", "admitted-seed-head", "protected-base", "lease-id", "comment-id", "amendment-comment-id", "verification-correction-comment-id"].filter((key) => options[key] !== undefined).map((key) => `--${key}=${options[key]}`);
 
 export function runIsolatedAuthoritativeReplay({ root = DEFAULT_ROOT, runs = 2, taskOptions = {} } = {}) {
   const outputs = [];

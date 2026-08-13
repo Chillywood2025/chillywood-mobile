@@ -8,12 +8,13 @@ import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
-  deriveAffectedDomainClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
+  deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
+  doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
   evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, runAuthoritativeReplay, stableJson,
-  verifyDoctrineScopeAmendment, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity
+  verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
@@ -69,26 +70,37 @@ const actualBootstrapFixture = () => {
   const pr = 226;
   const commentId = 5274614505;
   const amendmentCommentId = 5274913577;
+  const verificationCorrectionCommentId = 5275618260;
   const branch = "codex/whole-app-engineering-doctrine-v1";
   const base = "8bf6459c3ae1cec62e26a1694f03063e4291b9f8";
   const seedTree = "64c3f8d56d93b08e5c3d3abbed11e707be1ede2b";
-  const head = "c9192f0f94d903617eb28deba610c26c41dc8eeb";
-  const tree = "15ae28610def9204814575235129daf4b3c8c5c4";
+  const correctionHead = "cc509f67d27581438523e4aeb43bd497ff779368";
+  const correctionTree = "ad9421dee033502e77f6dbb6bcbedf68d1734fa6";
+  const head = "d".repeat(40);
+  const tree = "e".repeat(40);
   const leaseId = "OWNER_AUTHORIZED_DOCTRINE_BOOTSTRAP_V1";
   const paths = local.packet.sections.K_IMPLEMENTATION_PLAN.files.slice().sort();
   const subject = doctrineBootstrapAuthorizationSubject({ repository, pr, branch, admittedSeedHead: base, admittedSeedTree: seedTree, protectedBase: base, leaseId, pathHash: "f6d652cb3f2086a00479188613d8a990ba64bd4b2be7c0d1325bf8ea9ce2a8af", maximumFiles: 25, maximumLines: 4000 });
   const comment = { id: commentId, node_id: "IC_kwDO_SANITIZED", user: { login: "Chillywood2025" }, author_association: "OWNER", body: doctrineBootstrapOwnerCommentBody(subject), created_at: "2026-08-12T12:00:00Z", updated_at: "2026-08-12T12:00:00Z", issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${commentId}` };
   const amendment = { id: amendmentCommentId, node_id: "IC_kwDO_AMENDMENT", user: { login: "Chillywood2025" }, author_association: "OWNER", body: doctrineScopeAmendmentOwnerCommentBody(), created_at: "2026-08-13T01:42:03Z", updated_at: "2026-08-13T01:42:03Z", issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${amendmentCommentId}` };
+  const correction = { id: verificationCorrectionCommentId, node_id: "IC_kwDO_VERIFICATION", user: { login: "Chillywood2025" }, author_association: "OWNER", body: doctrineVerificationDependencyCorrectionOwnerCommentBody(), created_at: "2026-08-13T03:32:22Z", updated_at: "2026-08-13T03:32:22Z", issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${verificationCorrectionCommentId}` };
   const pull = { number: pr, state: "open", draft: true, html_url: `https://github.com/${repository}/pull/${pr}`, head: { sha: head, ref: branch }, base: { sha: base, ref: "main" }, title: "Require authoritative bounded whole-app engineering closure" };
-  const ghData = { pull, comment, amendment, comments: [comment, amendment], open: [pull] };
-  const gh = `#!/usr/bin/env node\nconst a=process.argv.join(' ');const d=${JSON.stringify(ghData)};const out=a.includes('/issues/comments/${amendmentCommentId}')?d.amendment:a.includes('/issues/comments/${commentId}')?d.comment:a.includes('/issues/${pr}/comments?')?d.comments:a.includes('?state=open')?d.open:d.pull;process.stdout.write(JSON.stringify(out));\n`;
-  const gitData = { head, tree, base, seedTree, branch, paths };
-  const git = `#!/usr/bin/env node\nconst a=process.argv.slice(2);const s=a.join(' ');const d=${JSON.stringify(gitData)};if(a[0]==='merge-base')process.exit(0);if(a[0]==='rev-parse'){if(s.includes('refs/remotes/origin/'))process.stdout.write(d.head+'\\n');else if(s.includes(d.head+'^{tree}'))process.stdout.write(d.tree+'\\n');else process.stdout.write(d.seedTree+'\\n');}else if(a[0]==='diff'&&a.includes('--name-only'))process.stdout.write(d.paths.join('\\n')+'\\n');else if(a[0]==='diff'&&a.includes('--numstat'))process.stdout.write(d.paths.map(p=>'1\\t0\\t'+p).join('\\n')+'\\n');else if(a[0]==='diff')process.stdout.write('exact bounded doctrine diff');else process.exit(1);\n`;
-  const observation = withFakeExecutables({ gh, git }, () => observeGitHubTaskIdentity({ repository, pr, branch, admittedSeedHead: base, protectedBase: base, leaseId, commentId, amendmentCommentId, maximumFiles: 31, maximumLines: 7000 }));
-  assert.equal(observation?.candidateEligible, true);
+  const failedRun = { id: 31662770266, event: "pull_request", status: "completed", conclusion: "failure", head_sha: correctionHead, html_url: "https://github.com/Chillywood2025/chillywood-mobile/actions/runs/31662770266" };
+  const failedJobs = { jobs: [{ id: 94330876566, name: "Phase 1 / Autonomous Systems All-Platform Contract", conclusion: "failure" }] };
+  const failedLog = `${doctrineVerificationDependencyCorrectionSubject().failedPhase1.testPath}\n${doctrineVerificationDependencyCorrectionSubject().staleAssertion}\n`;
+  const ghData = { pull, comment, amendment, correction, comments: [comment, amendment, correction], open: [pull], failedRun, failedJobs, failedLog };
+  const gh = `#!/usr/bin/env node\nconst a=process.argv.join(' ');const d=${JSON.stringify(ghData)};if(a.includes('/actions/jobs/94330876566/logs'))process.stdout.write(d.failedLog);else {const out=a.includes('/actions/runs/31662770266/jobs')?d.failedJobs:a.endsWith('/actions/runs/31662770266')?d.failedRun:a.includes('/issues/comments/${verificationCorrectionCommentId}')?d.correction:a.includes('/issues/comments/${amendmentCommentId}')?d.amendment:a.includes('/issues/comments/${commentId}')?d.comment:a.includes('/issues/${pr}/comments?')?d.comments:a.includes('?state=open')?d.open:d.pull;process.stdout.write(JSON.stringify(out));}\n`;
+  const amendedPaths = paths.filter((value) => value !== "tests/assurance/codex-security-reliability-s0.test.mjs");
+  const baseTest = execFileSync("git", ["show", `${base}:tests/assurance/codex-security-reliability-s0.test.mjs`], { cwd: new URL(".", root), encoding: "utf8" });
+  const gitData = { head, tree, correctionHead, correctionTree, base, seedTree, branch, paths, amendedPaths, baseTest };
+  const git = `#!/usr/bin/env node\nconst a=process.argv.slice(2);const s=a.join(' ');const d=${JSON.stringify(gitData)};if(a[0]==='merge-base')process.exit(0);if(a[0]==='show'){require('node:fs').writeFileSync(1,d.baseTest);process.exit(0);}if(a[0]==='rev-parse'){if(s.includes('refs/remotes/origin/'))process.stdout.write(d.head+'\\n');else if(s.includes(d.head+'^{tree}'))process.stdout.write(d.tree+'\\n');else if(s.includes(d.correctionHead+'^{tree}'))process.stdout.write(d.correctionTree+'\\n');else process.stdout.write(d.seedTree+'\\n');}else if(a[0]==='diff'&&a.includes('--name-only')){const p=s.includes(d.correctionHead)?d.amendedPaths:d.paths;process.stdout.write(p.join('\\n')+'\\n');}else if(a[0]==='diff'&&a.includes('--numstat')){const p=s.includes(d.correctionHead)?d.amendedPaths:d.paths;process.stdout.write(p.map(v=>'1\\t0\\t'+v).join('\\n')+'\\n');}else if(a[0]==='diff')process.stdout.write('exact bounded doctrine diff');else process.exit(1);\n`;
+  const observation = withFakeExecutables({ gh, git }, () => observeGitHubTaskIdentity({ repository, pr, branch, admittedSeedHead: base, protectedBase: base, leaseId, commentId, amendmentCommentId, verificationCorrectionCommentId, maximumFiles: 32, maximumLines: 7000 }));
+  assert.equal(observation?.candidateEligible, true, JSON.stringify(observation, null, 2));
   actualFixture = makeBootstrapPacket(undefined, { taskIdentityObservation: observation, pr, leaseId });
   actualFixture.observation = observation;
   actualFixture.ownerComments = { originalRaw: comment, amendmentRaw: amendment, amendmentComments: [comment, amendment] };
+  actualFixture.verificationCorrectionInputs = { originalRaw: comment, amendmentRaw: amendment, correctionRaw: correction, allComments: [comment, amendment, correction], failedRunRaw: failedRun, failedJobsRaw: failedJobs, failedJobLog: failedLog, currentHead: head };
+  actualFixture.fakeGit = git;
   return actualFixture;
 };
 
@@ -362,7 +374,7 @@ test("P1-4 non-descendant fails", () => { const fixture = actualBootstrapFixture
 test("P1-4 out-of-scope path fails", () => { const fixture = actualBootstrapFixture(); const forged = structuredClone(fixture.observation); forged.paths.push("app/evil.tsx"); assert.equal(evaluatePreimplementationGate(fixture.packet, { certificate: fixture.certificate, taskIdentityObservation: forged }).clear, false); });
 test("P1-4 scope overflow fails", () => { const fixture = actualBootstrapFixture(); const forged = structuredClone(fixture.observation); forged.changedLines = 4001; assert.equal(evaluatePreimplementationGate(fixture.packet, { certificate: fixture.certificate, taskIdentityObservation: forged }).clear, false); });
 test("P1-4 local-only task cannot clear", () => { const local = makeBootstrapPacket(); assert.equal(local.gate.status, "ENGINEERING_PLAN_DRAFTED"); assert.equal(local.gate.clear, false); });
-test("P1-4 actual PR 226 identity and both Owner comments bind exactly", () => { const fixture = actualBootstrapFixture(); assert.equal(fixture.observation.candidateEligible, true); assert.equal(fixture.observation.pr, 226); assert.equal(fixture.observation.branch, "codex/whole-app-engineering-doctrine-v1"); assert.equal(fixture.observation.base, "8bf6459c3ae1cec62e26a1694f03063e4291b9f8"); assert.equal(fixture.observation.head, "c9192f0f94d903617eb28deba610c26c41dc8eeb"); assert.equal(fixture.observation.tree, "15ae28610def9204814575235129daf4b3c8c5c4"); assert.equal(fixture.observation.ownerComment.id, 5274614505); assert.equal(fixture.observation.scopeAmendmentCommentId, 5274913577); assert.equal(fixture.observation.paths.length, 31); });
+test("P1-4 actual PR 226 identity and all three Owner comments bind exactly", () => { const fixture = actualBootstrapFixture(); assert.equal(fixture.observation.candidateEligible, true); assert.equal(fixture.observation.pr, 226); assert.equal(fixture.observation.branch, "codex/whole-app-engineering-doctrine-v1"); assert.equal(fixture.observation.base, "8bf6459c3ae1cec62e26a1694f03063e4291b9f8"); assert.equal(fixture.observation.head, "d".repeat(40)); assert.equal(fixture.observation.tree, "e".repeat(40)); assert.equal(fixture.observation.ownerComment.id, 5274614505); assert.equal(fixture.observation.scopeAmendmentCommentId, 5274913577); assert.equal(fixture.observation.verificationCorrectionCommentId, 5275618260); assert.equal(fixture.observation.paths.length, 32); });
 
 const scopeAmendmentFixture = (mutate = () => {}, overrides = {}) => {
   const fixture = actualBootstrapFixture();
@@ -381,6 +393,68 @@ test("scope amendment unrelated path fails", () => assert.equal(scopeAmendmentFi
 test("scope amendment second amendment fails", () => assert.equal(scopeAmendmentFixture(({ amendmentComments, amendmentRaw }) => { amendmentComments.push({ ...amendmentRaw, id: 5274913578 }); }).ok, false));
 test("scope amendment budget reduction below actual scope fails", () => assert.equal(scopeAmendmentFixture(({ amendmentRaw }) => { amendmentRaw.body = amendmentRaw.body.replace('"maximumHandAuthoredNetLines":7000', '"maximumHandAuthoredNetLines":1'); }).ok, false));
 test("scope amendment product build provider path fails", () => assert.equal(scopeAmendmentFixture(({ amendmentRaw }) => { amendmentRaw.body = amendmentRaw.body.replace("scripts/assurance/pr-scope.mjs", "app/provider-build.ts"); }).ok, false));
+
+const verificationCorrectionFixture = (mutate = () => {}, overrides = {}) => {
+  const fixture = actualBootstrapFixture();
+  const inputs = structuredClone(fixture.verificationCorrectionInputs);
+  mutate(inputs);
+  return withFakeExecutables({ git: fixture.fakeGit }, () => verifyDoctrineVerificationDependencyCorrection({ ...inputs, ...overrides }));
+};
+test("verification correction exact immutable dependency passes", () => assert.equal(verificationCorrectionFixture().ok, true));
+test("verification correction edited comment fails", () => assert.equal(verificationCorrectionFixture(({ correctionRaw }) => { correctionRaw.body += "edited"; }).ok, false));
+test("verification correction deleted comment fails", () => assert.equal(verificationCorrectionFixture((inputs) => { inputs.correctionRaw = null; }).ok, false));
+test("verification correction second correction fails", () => assert.equal(verificationCorrectionFixture(({ allComments, correctionRaw }) => { allComments.push({ ...correctionRaw, id: 5275618261 }); }).ok, false));
+test("verification correction wrong failed run fails", () => assert.equal(verificationCorrectionFixture(({ failedRunRaw }) => { failedRunRaw.id = 1; }).ok, false));
+test("verification correction wrong PR fails", () => assert.equal(verificationCorrectionFixture(() => {}, { currentPr: 225 }).ok, false));
+test("verification correction wrong bound head fails", () => assert.equal(verificationCorrectionFixture(({ correctionRaw }) => { correctionRaw.body = correctionRaw.body.replace("cc509f67d27581438523e4aeb43bd497ff779368", "0".repeat(40)); }).ok, false));
+test("verification correction wrong bound tree fails", () => assert.equal(verificationCorrectionFixture(({ correctionRaw }) => { correctionRaw.body = correctionRaw.body.replace("ad9421dee033502e77f6dbb6bcbedf68d1734fa6", "0".repeat(40)); }).ok, false));
+test("verification correction budget expansion fails", () => assert.equal(verificationCorrectionFixture(({ correctionRaw }) => { correctionRaw.body = correctionRaw.body.replace('"maximumHandAuthoredNetLines":7000', '"maximumHandAuthoredNetLines":7001'); }).ok, false));
+for (const [label, replacement] of [
+  ["wildcard", "tests/assurance/**"],
+  ["unrelated test", "tests/assurance/unrelated.test.mjs"],
+  ["test absent at protected base", "tests/assurance/new-only.test.mjs"],
+  ["product", "app/verification.test.tsx"],
+  ["native product", "modules/native/verification.test.ts"],
+  ["migration", "supabase/migrations/20260813_test.sql"],
+  ["database", "supabase/tests/verification.test.sql"],
+  ["provider", "workers/provider-verification.test.mjs"],
+  ["build release", "config/release/verification.test.mjs"],
+  ["package lock", "package-lock.json"],
+]) test(`verification correction ${label} path fails`, () => assert.equal(verificationCorrectionFixture(({ correctionRaw }) => { correctionRaw.body = correctionRaw.body.replace("tests/assurance/codex-security-reliability-s0.test.mjs", replacement); }).ok, false));
+test("verification correction disconnected test fails", () => assert.equal(verificationCorrectionFixture(({ correctionRaw }) => { correctionRaw.body = correctionRaw.body.replace("scripts/assurance/pr-scope.mjs", "scripts/assurance/unrelated.mjs"); }).ok, false));
+
+const withVerificationClosureFiles = (files, callback) => {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-verification-closure-"));
+  try {
+    for (const [relative, content] of Object.entries(files)) {
+      const absolute = path.join(fixtureRoot, relative);
+      fs.mkdirSync(path.dirname(absolute), { recursive: true });
+      fs.writeFileSync(absolute, content);
+    }
+    return callback(fixtureRoot);
+  } finally { fs.rmSync(fixtureRoot, { recursive: true, force: true }); }
+};
+test("verification dependency closure includes the exact current direct verifiers", () => {
+  const closure = deriveVerificationDependencyClosure();
+  assert.deepEqual(closure.includedPaths, ["tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
+  assert.equal(verifyVerificationDependencyClosure(closure).ok, true);
+});
+test("verification dependency closure excludes an unrelated test and generic-word reference", () => withVerificationClosureFiles({
+  "tests/unrelated.test.mjs": "test('scope is fine',()=>{});\n",
+  "tests/generic.test.mjs": "test('generic workflow scope',()=>{});\n",
+}, (fixtureRoot) => assert.deepEqual(deriveVerificationDependencyClosure({ root: fixtureRoot, changedSourcePaths: ["scripts/assurance/source.mjs"], changedSubjects: [], candidatePaths: ["tests/unrelated.test.mjs", "tests/generic.test.mjs"] }).includedPaths, [])));
+test("verification dependency closure includes a direct exact verifier", () => withVerificationClosureFiles({
+  "tests/direct.test.mjs": "const source = 'scripts/assurance/source.mjs'; test(source,()=>{});\n",
+}, (fixtureRoot) => assert.deepEqual(deriveVerificationDependencyClosure({ root: fixtureRoot, changedSourcePaths: ["scripts/assurance/source.mjs"], changedSubjects: [], candidatePaths: ["tests/direct.test.mjs"] }).includedPaths, ["tests/direct.test.mjs"])));
+test("verification dependency closure includes an exact workflow assertion", () => withVerificationClosureFiles({
+  "tests/workflow.test.mjs": "assert.equal(workflow.includes('node scripts/verify.mjs --github-event'), true);\n",
+}, (fixtureRoot) => assert.deepEqual(deriveVerificationDependencyClosure({ root: fixtureRoot, changedSourcePaths: ["scripts/verify.mjs"], changedSubjects: [{ kind: "WORKFLOW_STEP_COMMAND", sourcePath: ".github/workflows/phase1-ci.yml", value: "node scripts/verify.mjs --github-event" }], candidatePaths: ["tests/workflow.test.mjs"] }).includedPaths, ["tests/workflow.test.mjs"])));
+test("verification dependency closure includes an exact package-script assertion", () => withVerificationClosureFiles({
+  "tests/package.test.mjs": "assert.equal(script, 'npm run assurance:verify');\n",
+}, (fixtureRoot) => assert.deepEqual(deriveVerificationDependencyClosure({ root: fixtureRoot, changedSourcePaths: ["package.json"], changedSubjects: [{ kind: "EXACT_PACKAGE_SCRIPT", sourcePath: "package.json", value: "npm run assurance:verify" }], candidatePaths: ["tests/package.test.mjs"] }).includedPaths, ["tests/package.test.mjs"])));
+test("verification dependency closure rejects wildcard reservation", () => { const closure = deriveVerificationDependencyClosure(); closure.dependencies.push({ path: "tests/**", sourceHash: "0".repeat(64), relationships: [{ type: "EXACT_REFERENCED_SOURCE_PATH", sourcePath: "scripts/assurance/pr-scope.mjs", exactSubject: "scripts/assurance/pr-scope.mjs" }] }); closure.includedPaths.push("tests/**"); const body = { ...closure }; delete body.closureHash; closure.closureHash = hashValue(body); assert.equal(verifyVerificationDependencyClosure(closure).ok, false); });
+test("verification dependency closure is deterministic 3/3", () => assert.equal(new Set(Array.from({ length: 3 }, () => deriveVerificationDependencyClosure().closureHash)).size, 1));
+test("verification dependency closure cannot expand product authority", () => { const closure = deriveVerificationDependencyClosure(); closure.productAuthorityExpanded = true; const body = { ...closure }; delete body.closureHash; closure.closureHash = hashValue(body); assert.equal(verifyVerificationDependencyClosure(closure).ok, false); });
 
 const withTransientAsset = (relative, content, callback) => {
   const absolute = path.join(new URL(root).pathname, relative);

@@ -46,11 +46,17 @@ export const DOCTRINE_SCOPE_AMENDMENT_PATHS = Object.freeze([
   "scripts/assurance/pr-scope.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
-export const DOCTRINE_PATHS = Object.freeze([...DOCTRINE_ORIGINAL_PATHS, ...DOCTRINE_SCOPE_AMENDMENT_PATHS].sort());
+export const DOCTRINE_VERIFICATION_DEPENDENCY_PATHS = Object.freeze([
+  "tests/assurance/codex-security-reliability-s0.test.mjs",
+]);
+export const DOCTRINE_AMENDED_PATHS = Object.freeze([...DOCTRINE_ORIGINAL_PATHS, ...DOCTRINE_SCOPE_AMENDMENT_PATHS].sort());
+export const DOCTRINE_PATHS = Object.freeze([...DOCTRINE_AMENDED_PATHS, ...DOCTRINE_VERIFICATION_DEPENDENCY_PATHS].sort());
 export const DOCTRINE_BOOTSTRAP_COMMENT_ID = 5274614505;
 export const DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID = 5274913577;
+export const DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID = 5275618260;
 export const DOCTRINE_ORIGINAL_PATH_HASH = "f6d652cb3f2086a00479188613d8a990ba64bd4b2be7c0d1325bf8ea9ce2a8af";
 export const DOCTRINE_AMENDED_PATH_HASH = "f65f85a5763478f2683fa8479d37e8420c904112158e1846907a12cfcd5e18ba";
+export const DOCTRINE_FINAL_PATH_HASH = "b558eb746864364ffb9f84f6761067c48bd2941b266316ab0f48955c239129bd";
 const readJson = (root, name) => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 const effectiveFeatures = (registry) =>
   registry.features.map((feature) => ({
@@ -1515,7 +1521,7 @@ export const doctrineScopeAmendmentSubject = () => ({
     bodySha256: "065050c7b1f0b17864c8aa0129e81039a6a1d7b6bed25bc19f5114e5496990c5",
   },
   addedPaths: [...DOCTRINE_SCOPE_AMENDMENT_PATHS],
-  resultingExactPaths: [...DOCTRINE_PATHS],
+  resultingExactPaths: [...DOCTRINE_AMENDED_PATHS],
   resultingFullPathHash: DOCTRINE_AMENDED_PATH_HASH,
   oldLimits: { maximumFiles: 25, maximumHandAuthoredNetLines: 4000, maximumGeneratedGraphLines: 12000 },
   newLimits: { maximumFiles: 31, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 },
@@ -1551,6 +1557,162 @@ export function doctrineScopeAmendmentOwnerCommentBody(subject = doctrineScopeAm
     subjectHash: hashValue(subject),
   };
   return `${OWNER_AUTH_MARKER}\n${stableJson({ ...payload, bodyHash: hashValue(payload) })}`;
+}
+
+const DOCTRINE_VERIFICATION_CORRECTION_MARKER = "<!-- chillywood-doctrine-verification-dependency-correction-v1 -->";
+export const DOCTRINE_SCOPE_BEHAVIOR_SUBJECTS = Object.freeze([
+  {
+    kind: "REMOVED_EXACT_COMMAND",
+    sourcePath: ".github/workflows/phase1-ci.yml",
+    value: "node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json",
+  },
+  {
+    kind: "WORKFLOW_STEP_COMMAND",
+    sourcePath: ".github/workflows/phase1-ci.yml",
+    value: 'node scripts/assurance/pr-scope.mjs --github-event="$GITHUB_EVENT_PATH"',
+  },
+]);
+
+export const doctrineVerificationDependencyCorrectionSubject = () => ({
+  type: "OWNER_DOCTRINE_VERIFICATION_DEPENDENCY_CORRECTION_V1",
+  repository: "Chillywood2025/chillywood-mobile",
+  pr: 226,
+  branch: DOCTRINE_BRANCH,
+  currentCandidateHead: "cc509f67d27581438523e4aeb43bd497ff779368",
+  currentCandidateTree: "ad9421dee033502e77f6dbb6bcbedf68d1734fa6",
+  leaseId: "OWNER_AUTHORIZED_DOCTRINE_BOOTSTRAP_V1",
+  originalAuthorization: {
+    commentId: DOCTRINE_BOOTSTRAP_COMMENT_ID,
+    subjectHash: "70084d67f5d42af7b350c6472cac13c146b801fc2615d89331596f4ea3473fa9",
+    bodyFactsHash: "deb90bb88418e2557f91f18909ea4aceea67525d8af2e30208d265c1a47de5ac",
+    bodySha256: "065050c7b1f0b17864c8aa0129e81039a6a1d7b6bed25bc19f5114e5496990c5",
+  },
+  firstScopeAmendment: {
+    commentId: DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID,
+    subjectHash: "dad2b97db2c992498ddf7d027d17392950a44c5b7f0cddcc0cca7a9ca2003dce",
+    bodyFactsHash: "faab9e23d868bac8e565696531da7c36a5f45c562a494341c360f1d10df02ae9",
+    bodySha256: "dce4f6c98c7b014451e1b92fb5f8d7df5e979c8cc00884e9f1ed24cea76a72c8",
+  },
+  failedPhase1: {
+    runId: 31662770266,
+    runUrl: "https://github.com/Chillywood2025/chillywood-mobile/actions/runs/31662770266",
+    jobId: 94330876566,
+    jobName: "Phase 1 / Autonomous Systems All-Platform Contract",
+    conclusion: "failure",
+    testPath: DOCTRINE_VERIFICATION_DEPENDENCY_PATHS[0],
+  },
+  staleAssertion: DOCTRINE_SCOPE_BEHAVIOR_SUBJECTS[0].value,
+  authorizedReplacementBehavior: {
+    workflowInvocation: DOCTRINE_SCOPE_BEHAVIOR_SUBJECTS[1].value,
+    actualS0IdentityResolvesHistoricalWaiverOnly: true,
+    doctrineIdentityResolvesFeature: "assurance-efficiency-e0",
+    unrelatedTaskMayBorrowS0Waiver: false,
+  },
+  addedPaths: [...DOCTRINE_VERIFICATION_DEPENDENCY_PATHS],
+  resultingExactPaths: [...DOCTRINE_PATHS],
+  resultingFullPathHash: DOCTRINE_FINAL_PATH_HASH,
+  priorLimits: { maximumFiles: 31, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 },
+  newLimits: { maximumFiles: 32, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 },
+  verificationDependencyOnly: true,
+  domainOwnershipExpanded: false,
+  generalScopeAmendment: false,
+  maximumVerificationCorrections: 1,
+  ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+  immutableCommentRequired: true,
+  createdAtEqualsUpdatedAtRequired: true,
+  expiresOn: "PR_226_MERGE",
+  reusableByAnotherPrOrTask: false,
+  authority: { product: false, nativeProduct: false, packageLock: false, database: false, migration: false, provider: false, build: false, release: false, submission: false, ota: false, money: false, authRls: false, switch: false, schedule: false, credential: false },
+});
+
+export function doctrineVerificationDependencyCorrectionOwnerCommentBody(subject = doctrineVerificationDependencyCorrectionSubject()) {
+  const payload = {
+    schemaVersion: 1,
+    evidenceClass: "OWNER_INTENT",
+    authorizationId: "doctrine-verification-dependency-correction-OWNER_DOCTRINE_VERIFICATION_DEPENDENCY_CORRECTION_V1",
+    type: subject.type,
+    repository: subject.repository,
+    pr: subject.pr,
+    task: "ACTIVATE_WHOLE_APP_ENGINEERING_DOCTRINE",
+    leaseId: subject.leaseId,
+    currentHead: subject.currentCandidateHead,
+    subject,
+    subjectHash: hashValue(subject),
+  };
+  return `${DOCTRINE_VERIFICATION_CORRECTION_MARKER}\n${stableJson({ ...payload, bodyHash: hashValue(payload) })}`;
+}
+
+const verificationCandidate = (name) => /^(?:tests\/.*\.test\.(?:[cm]?[jt]s|tsx?)|scripts\/(?:guard|proof)-[^/]+\.(?:[cm]?[jt]s|tsx?)|\.github\/workflows\/[^/]+\.ya?ml)$/u.test(name);
+const resolveImportCandidates = (candidatePath, specifier) => {
+  if (!specifier.startsWith(".")) return [];
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(candidatePath), specifier));
+  return [base, `${base}.mjs`, `${base}.js`, `${base}.ts`, `${base}.tsx`, `${base}/index.mjs`, `${base}/index.js`, `${base}/index.ts`, `${base}/index.tsx`];
+};
+
+export function deriveVerificationDependencyClosure({
+  root = REPOSITORY_ROOT,
+  changedSourcePaths = ["scripts/assurance/pr-scope.mjs", "scripts/assurance/pr-scope-lib.mjs", "config/assurance/pr-scope-policy-v1.json"],
+  changedSubjects = DOCTRINE_SCOPE_BEHAVIOR_SUBJECTS,
+  candidatePaths = null,
+} = {}) {
+  const sources = canonicalSort([...new Set(changedSourcePaths)].filter(safeRepoPath));
+  const subjects = changedSubjects
+    .filter((item) => object(item) && textValue(item.kind) && textValue(item.value) && safeRepoPath(item.sourcePath) && (sources.includes(item.sourcePath) || item.sourcePath === ".github/workflows/phase1-ci.yml"))
+    .map((item) => ({ kind: item.kind, sourcePath: item.sourcePath, value: item.value }))
+    .sort((left, right) => compareUtf8(`${left.sourcePath}\0${left.kind}\0${left.value}`, `${right.sourcePath}\0${right.kind}\0${right.value}`));
+  const changedAssets = new Set([...sources, ...subjects.map(({ sourcePath }) => sourcePath)]);
+  const discovered = candidatePaths === null
+    ? canonicalSort([
+        ...walk(root, "tests", verificationCandidate),
+        ...walk(root, "scripts", verificationCandidate),
+        ...walk(root, ".github/workflows", verificationCandidate),
+      ])
+    : canonicalSort([...new Set(candidatePaths)].filter(verificationCandidate));
+  const dependencies = [];
+  for (const candidatePath of discovered) {
+    if (changedAssets.has(candidatePath)) continue;
+    const absolute = path.join(root, candidatePath);
+    if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) continue;
+    const content = fs.readFileSync(absolute, "utf8");
+    const relationships = [];
+    for (const match of content.matchAll(/(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']/gu)) {
+      for (const resolved of resolveImportCandidates(candidatePath, match[1])) {
+        if (sources.includes(resolved)) relationships.push({ type: "DIRECT_IMPORT", sourcePath: resolved, exactSubject: match[1] });
+      }
+    }
+    for (const sourcePath of sources) {
+      if (content.includes(sourcePath)) relationships.push({ type: "EXACT_REFERENCED_SOURCE_PATH", sourcePath, exactSubject: sourcePath });
+    }
+    for (const subject of subjects) {
+      if (content.includes(subject.value)) relationships.push({ type: subject.kind, sourcePath: subject.sourcePath, exactSubject: subject.value });
+    }
+    const exactRelationships = [...new Map(relationships.map((item) => [`${item.type}\0${item.sourcePath}\0${item.exactSubject}`, item])).values()]
+      .sort((left, right) => compareUtf8(`${left.sourcePath}\0${left.type}\0${left.exactSubject}`, `${right.sourcePath}\0${right.type}\0${right.exactSubject}`));
+    if (exactRelationships.length) dependencies.push({ path: candidatePath, sourceHash: crypto.createHash("sha256").update(content).digest("hex"), relationships: exactRelationships });
+  }
+  const body = {
+    schemaVersion: 1,
+    closureId: "VERIFICATION_DEPENDENCY_CLOSURE_V1",
+    changedSourcePaths: sources,
+    changedSubjects: subjects,
+    dependencies: dependencies.sort((left, right) => compareUtf8(left.path, right.path)),
+    includedPaths: canonicalSort(dependencies.map(({ path: dependencyPath }) => dependencyPath)),
+    wildcardPaths: false,
+    productAuthorityExpanded: false,
+  };
+  return { ...body, closureHash: hashValue(body) };
+}
+
+export function verifyVerificationDependencyClosure(closure, { authorizedPaths = DOCTRINE_PATHS } = {}) {
+  const body = { ...closure };
+  delete body.closureHash;
+  const findings = [];
+  if (closure?.closureId !== "VERIFICATION_DEPENDENCY_CLOSURE_V1" || closure?.closureHash !== hashValue(body)) findings.push("VERIFICATION_DEPENDENCY_CLOSURE_HASH_INVALID");
+  if (!Array.isArray(closure?.dependencies) || !Array.isArray(closure?.includedPaths) || stableJson(closure.includedPaths) !== stableJson(canonicalSort(closure.dependencies.map(({ path: dependencyPath }) => dependencyPath)))) findings.push("VERIFICATION_DEPENDENCY_SET_INVALID");
+  if ((closure?.includedPaths ?? []).some((candidatePath) => !verificationCandidate(candidatePath) || candidatePath.includes("*") || !authorizedPaths.includes(candidatePath))) findings.push("VERIFICATION_DEPENDENCY_SCOPE_UNAUTHORIZED");
+  if (closure?.wildcardPaths !== false || closure?.productAuthorityExpanded !== false) findings.push("VERIFICATION_DEPENDENCY_AUTHORITY_EXPANDED");
+  if ((closure?.dependencies ?? []).some(({ relationships }) => !Array.isArray(relationships) || relationships.length === 0 || relationships.some(({ exactSubject, sourcePath }) => !textValue(exactSubject) || !safeRepoPath(sourcePath)))) findings.push("VERIFICATION_DEPENDENCY_RELATIONSHIP_UNGROUNDED");
+  return { ok: findings.length === 0, findings: canonicalSort(findings) };
 }
 
 const amendedScopeFromGit = (head, root = REPOSITORY_ROOT) => {
@@ -1606,27 +1768,133 @@ export function verifyDoctrineScopeAmendment({ originalRaw, amendmentRaw, amendm
   };
 }
 
+export function verifyDoctrineVerificationDependencyCorrection({
+  originalRaw,
+  amendmentRaw,
+  correctionRaw,
+  allComments = [],
+  failedRunRaw = null,
+  failedJobsRaw = null,
+  failedJobLog = "",
+  currentHead,
+  currentBranch = DOCTRINE_BRANCH,
+  currentPr = 226,
+  root = REPOSITORY_ROOT,
+} = {}) {
+  const subject = doctrineVerificationDependencyCorrectionSubject();
+  const amendment = verifyDoctrineScopeAmendment({
+    originalRaw,
+    amendmentRaw,
+    amendmentComments: allComments,
+    currentHead: subject.currentCandidateHead,
+    currentBranch,
+    currentPr,
+    root,
+  });
+  const correction = normalizeGitHubCommentIdentity(correctionRaw, { repository: subject.repository, pr: subject.pr, commentId: DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID });
+  const matchingCorrections = allComments.filter((raw) => typeof raw?.body === "string" && raw.body.includes('"type":"OWNER_DOCTRINE_VERIFICATION_DEPENDENCY_CORRECTION_V1"'));
+  const run = failedRunRaw;
+  const jobs = Array.isArray(failedJobsRaw?.jobs) ? failedJobsRaw.jobs : [];
+  const job = jobs.find(({ id }) => id === subject.failedPhase1.jobId);
+  const runValid = run?.id === subject.failedPhase1.runId
+    && run?.event === "pull_request"
+    && run?.status === "completed"
+    && run?.conclusion === "failure"
+    && run?.head_sha === subject.currentCandidateHead
+    && run?.html_url === subject.failedPhase1.runUrl
+    && job?.name === subject.failedPhase1.jobName
+    && job?.conclusion === subject.failedPhase1.conclusion
+    && typeof failedJobLog === "string"
+    && failedJobLog.includes(subject.failedPhase1.testPath)
+    && failedJobLog.includes(subject.staleAssertion);
+  const runGit = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  const baseFile = runGit(["show", `${DOCTRINE_BASE}:${subject.addedPaths[0]}`]);
+  const candidateTree = runGit(["rev-parse", `${subject.currentCandidateHead}^{tree}`]);
+  const baseFileValid = baseFile.status === 0
+    && baseFile.stdout.includes(subject.staleAssertion)
+    && baseFile.stdout.includes("scripts/assurance/pr-scope.mjs");
+  const ancestor = /^[0-9a-f]{40}$/u.test(currentHead ?? "") && runGit(["merge-base", "--is-ancestor", subject.currentCandidateHead, currentHead]).status === 0;
+  const scope = amendedScopeFromGit(currentHead, root);
+  const correctionPath = subject.addedPaths[0];
+  const exactVerificationPath = subject.addedPaths.length === 1
+    && subject.addedPaths[0] === DOCTRINE_VERIFICATION_DEPENDENCY_PATHS[0]
+    && /^(?:tests\/|scripts\/(?:guard|proof)-)/u.test(correctionPath)
+    && !correctionPath.includes("*");
+  const authorityDenied = Object.values(subject.authority).every((allowed) => allowed === false)
+    && subject.domainOwnershipExpanded === false
+    && subject.generalScopeAmendment === false;
+  const verificationChecks = {
+    originalAndAmendmentValid: amendment.ok,
+    correctionIdentityValid: Boolean(correction),
+    correctionBodyExact: correction?.body === doctrineVerificationDependencyCorrectionOwnerCommentBody(subject),
+    exactlyOneCorrection: matchingCorrections.length === 1 && matchingCorrections[0]?.id === DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID,
+    pullIdentityExact: currentPr === subject.pr && currentBranch === subject.branch,
+    candidateHeadTreeExact: candidateTree.status === 0 && candidateTree.stdout.trim() === subject.currentCandidateTree,
+    correctionHeadAncestor: ancestor,
+    failedPhase1Exact: runValid,
+    protectedBaseDependencyExact: baseFileValid,
+    verificationPathExact: exactVerificationPath,
+    resultingPathSetExact: hashValue(subject.resultingExactPaths) === subject.resultingFullPathHash && subject.resultingFullPathHash === DOCTRINE_FINAL_PATH_HASH,
+    priorBudgetExact: stableJson(subject.priorLimits) === stableJson({ maximumFiles: 31, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 }),
+    finalBudgetExact: stableJson(subject.newLimits) === stableJson({ maximumFiles: 32, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 }),
+    authorityDenied,
+    scopeReadable: Boolean(scope),
+    scopePathCountValid: Boolean(scope && scope.paths.length <= subject.newLimits.maximumFiles),
+    scopePathsExact: Boolean(scope && scope.paths.every((file) => subject.resultingExactPaths.includes(file))),
+    handAuthoredBudgetValid: Boolean(scope && scope.handAuthoredNetLines <= subject.newLimits.maximumHandAuthoredNetLines),
+    generatedGraphBudgetValid: Boolean(scope && scope.generatedGraphLines <= subject.newLimits.maximumGeneratedGraphLines),
+  };
+  const exact = Object.values(verificationChecks).every(Boolean);
+  let payload = null;
+  try { payload = correction ? JSON.parse(correction.body.slice(DOCTRINE_VERIFICATION_CORRECTION_MARKER.length + 1)) : null; } catch { payload = null; }
+  return {
+    ok: Boolean(exact),
+    repository: subject.repository,
+    pr: subject.pr,
+    branch: subject.branch,
+    currentHead,
+    originalAuthorization: amendment.originalAuthorization,
+    amendment: amendment.amendment,
+    verificationCorrection: exact ? Object.freeze({ ...correction, subject, subjectHash: hashValue(subject), bodyFactsHash: payload?.bodyHash ?? null, replayResult: "VERIFIED_GITHUB_READBACK" }) : null,
+    failedPhase1Verified: runValid,
+    baseVerificationDependencyVerified: baseFileValid,
+    baseVerificationDependencyObservation: { status: baseFile.status, staleAssertionPresent: baseFile.stdout.includes(subject.staleAssertion), scopeCommandPresent: baseFile.stdout.includes("scripts/assurance/pr-scope.mjs"), sourceHash: baseFile.status === 0 ? hashValue(baseFile.stdout) : null, byteLength: Buffer.byteLength(baseFile.stdout) },
+    scope,
+    budget: subject.newLimits,
+    verificationChecks,
+    findings: exact ? [] : Object.entries(verificationChecks).filter(([, valid]) => !valid).map(([name]) => `OWNER_DOCTRINE_VERIFICATION_DEPENDENCY_CORRECTION_INVALID:${name}`),
+  };
+}
+
 export function observeDoctrineOwnerAuthority({ currentHead, currentBranch = DOCTRINE_BRANCH, currentPr = 226, root = REPOSITORY_ROOT } = {}) {
   const gh = (endpoint) => spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
   const originalResponse = gh(`repos/Chillywood2025/chillywood-mobile/issues/comments/${DOCTRINE_BOOTSTRAP_COMMENT_ID}`);
   const amendmentResponse = gh(`repos/Chillywood2025/chillywood-mobile/issues/comments/${DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID}`);
+  const correctionResponse = gh(`repos/Chillywood2025/chillywood-mobile/issues/comments/${DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID}`);
   const commentsResponse = gh(`repos/Chillywood2025/chillywood-mobile/issues/${currentPr}/comments?per_page=100`);
+  const failedRunResponse = gh("repos/Chillywood2025/chillywood-mobile/actions/runs/31662770266");
+  const failedJobsResponse = gh("repos/Chillywood2025/chillywood-mobile/actions/runs/31662770266/jobs?per_page=100");
+  const failedJobLogResponse = gh("repos/Chillywood2025/chillywood-mobile/actions/jobs/94330876566/logs");
   try {
-    return verifyDoctrineScopeAmendment({
+    return verifyDoctrineVerificationDependencyCorrection({
       originalRaw: originalResponse.status === 0 ? JSON.parse(originalResponse.stdout) : null,
       amendmentRaw: amendmentResponse.status === 0 ? JSON.parse(amendmentResponse.stdout) : null,
-      amendmentComments: commentsResponse.status === 0 ? JSON.parse(commentsResponse.stdout) : [],
+      correctionRaw: correctionResponse.status === 0 ? JSON.parse(correctionResponse.stdout) : null,
+      allComments: commentsResponse.status === 0 ? JSON.parse(commentsResponse.stdout) : [],
+      failedRunRaw: failedRunResponse.status === 0 ? JSON.parse(failedRunResponse.stdout) : null,
+      failedJobsRaw: failedJobsResponse.status === 0 ? JSON.parse(failedJobsResponse.stdout) : null,
+      failedJobLog: failedJobLogResponse.status === 0 ? failedJobLogResponse.stdout : "",
       currentHead,
       currentBranch,
       currentPr,
       root,
     });
   } catch {
-    return { ok: false, findings: ["OWNER_DOCTRINE_SCOPE_AMENDMENT_UNREADABLE"] };
+    return { ok: false, findings: ["OWNER_DOCTRINE_VERIFICATION_DEPENDENCY_CORRECTION_UNREADABLE"] };
   }
 }
 
-export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillywood-mobile", pr, branch, admittedSeedHead, protectedBase = DOCTRINE_BASE, leaseId, commentId, amendmentCommentId = DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID, maximumFiles = 31, maximumLines = 7000, root = REPOSITORY_ROOT } = {}) {
+export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillywood-mobile", pr, branch, admittedSeedHead, protectedBase = DOCTRINE_BASE, leaseId, commentId, amendmentCommentId = DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID, verificationCorrectionCommentId = DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID, maximumFiles = 32, maximumLines = 7000, root = REPOSITORY_ROOT } = {}) {
   if (!Number.isInteger(pr) || pr < 1 || !textValue(branch) || !/^[0-9a-f]{40}$/u.test(admittedSeedHead ?? "") || !/^[0-9a-f]{40}$/u.test(protectedBase ?? "") || !textValue(leaseId) || !Number.isInteger(commentId) || commentId < 1) return null;
   const gh = (endpoint) => spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
   const gitRun = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
@@ -1664,7 +1932,7 @@ export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillyw
   const pathHash = hashValue(paths);
   const subject = doctrineBootstrapAuthorizationSubject({ repository, pr, branch, admittedSeedHead, admittedSeedTree: seedTreeRun.stdout.trim(), protectedBase, leaseId, pathHash: DOCTRINE_ORIGINAL_PATH_HASH, maximumFiles: 25, maximumLines: 4000 });
   const ownerComment = verifyDoctrineBootstrapOwnerComment(comment, subject);
-  const scopeAmendment = amendmentCommentId === DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID ? observeDoctrineOwnerAuthority({ currentHead: head, currentBranch: branch, currentPr: pr, root }) : { ok: false };
+  const scopeAmendment = amendmentCommentId === DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID && verificationCorrectionCommentId === DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID ? observeDoctrineOwnerAuthority({ currentHead: head, currentBranch: branch, currentPr: pr, root }) : { ok: false };
   const competing = Array.isArray(openPulls) ? openPulls.filter((item) => item.number !== pr && item.base?.ref === "main" && !String(item.title ?? "").toLowerCase().includes("review-only")) : ["UNREADABLE"];
   const candidateEligible = pull?.number === pr && pull?.state === "open" && pull?.head?.ref === branch && pull?.base?.ref === "main" && pull?.html_url === `https://github.com/${repository}/pull/${pr}` && base === protectedBase && remoteHeadRun.stdout.trim() === head && seedAncestor && baseAncestor && protectedAncestor && paths.length <= maximumFiles && handAuthoredLines <= maximumLines && generatedGraphLines <= 12000 && paths.every((file) => DOCTRINE_PATHS.includes(file)) && competing.length === 0 && ownerComment && scopeAmendment.ok;
   const observation = {
@@ -1695,6 +1963,11 @@ export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillyw
     ownerComment,
     scopeAmendment: scopeAmendment.amendment,
     scopeAmendmentCommentId: amendmentCommentId,
+    verificationCorrection: scopeAmendment.verificationCorrection,
+    verificationCorrectionCommentId,
+    verificationCorrectionAudit: scopeAmendment.ok
+      ? { ok: true, verificationChecks: scopeAmendment.verificationChecks, baseVerificationDependencyObservation: scopeAmendment.baseVerificationDependencyObservation }
+      : { ok: false, findings: scopeAmendment.findings, verificationChecks: scopeAmendment.verificationChecks, baseVerificationDependencyObservation: scopeAmendment.baseVerificationDependencyObservation },
     candidateEligible: Boolean(candidateEligible),
     replayResult: candidateEligible ? "VERIFIED_GITHUB_GIT_IDENTITY" : "BLOCKED",
   };
@@ -1797,8 +2070,8 @@ export function validateDoctrineBootstrap(packet, certificate, authority = {}, a
   const scope = actualScope ?? authority.actualScope;
   const paths = scope?.paths;
   const authorityValid = authority.branch === DOCTRINE_BRANCH && authority.base === DOCTRINE_BASE && authority.currentMain === DOCTRINE_BASE && authority.doctrineStatus !== "ACTIVE" && authority.implementationMerged === false && authority.bootstrapExpired === false && authority.productTask !== true && (!authority.featureId || authority.featureId === "assurance-efficiency-e0");
-  const scopeValid = Array.isArray(paths) && paths.length <= 31 && paths.every((file) => DOCTRINE_PATHS.includes(file)) && Number.isInteger(scope.changedLines) && Number.isInteger(scope.handAuthoredLines) && scope.handAuthoredLines <= 7000 && Number.isInteger(scope.generatedGraphLines) && scope.generatedGraphLines <= 12000;
-  const planValid = stableJson(K?.files?.slice().sort()) === stableJson([...DOCTRINE_PATHS].sort()) && K?.scopeBudget?.maximumFiles === 31 && K?.scopeBudget?.maximumLines === 7000 && K?.scopeBudget?.maximumGeneratedGraphLines === 12000;
+  const scopeValid = Array.isArray(paths) && paths.length <= 32 && paths.every((file) => DOCTRINE_PATHS.includes(file)) && Number.isInteger(scope.changedLines) && Number.isInteger(scope.handAuthoredLines) && scope.handAuthoredLines <= 7000 && Number.isInteger(scope.generatedGraphLines) && scope.generatedGraphLines <= 12000;
+  const planValid = stableJson(K?.files?.slice().sort()) === stableJson([...DOCTRINE_PATHS].sort()) && K?.scopeBudget?.maximumFiles === 32 && K?.scopeBudget?.maximumLines === 7000 && K?.scopeBudget?.maximumGeneratedGraphLines === 12000;
   return packet?.id === "ENGINEERING_CLOSURE_PACKET_V1" && packet?.task === "ACTIVATE_WHOLE_APP_ENGINEERING_DOCTRINE" && packet?.classification === "OWNER_AUTHORIZED_DOCTRINE_BOOTSTRAP_V1" && certificate?.id === "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1" && certificate?.task === packet.task && certificate?.featureDomain === "assurance-efficiency-e0" && C?.closureMode === "GOVERNING_BOOTSTRAP_EXPLICIT" && stableJson(domains) === stableJson(expectedDomains) && authorityValid && scopeValid && planValid;
 }
 
@@ -2512,6 +2785,8 @@ export function authoritativeReplayOnce({ root = REPOSITORY_ROOT, taskIdentity =
   const exclusionReceipts = cutEdges.map((edge) => createNonImpactingReceipt(edge, sourceIdentity, root)).filter(Boolean);
   const closure = deriveAffectedDomainClosure(graph, "assurance-efficiency-e0", { exclusionReceipts, identity: sourceIdentity, root });
   const inventoryVerification = verifyInventoryNonVacuity(inventory, { root, affectedDomains: closure.domains, plannedFiles: DOCTRINE_PATHS });
+  const verificationDependencyClosure = deriveVerificationDependencyClosure({ root });
+  const verificationDependencyVerification = verifyVerificationDependencyClosure(verificationDependencyClosure);
   const commentFixture = normalizeGitHubCommentIdentity({ id: 424242, node_id: "IC_kwDO_SANITIZED", user: { login: "Chillywood2025" }, author_association: "OWNER", body: "sanitized immutable Owner fixture", created_at: "2026-08-12T12:00:00Z", updated_at: "2026-08-12T12:00:00Z", issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/301", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/301#issuecomment-424242" }, { pr: 301, commentId: 424242 });
   const noveltyProbe = classifyLaterFinding("GENUINELY_NOVEL_DIMENSION", {}, { localJson: true });
   const driftProbe = classifyLaterFinding("EXTERNAL_CONTRACT_DRIFT", {}, { localJson: true });
@@ -2577,7 +2852,12 @@ export function authoritativeReplayOnce({ root = REPOSITORY_ROOT, taskIdentity =
   const authorityVerified = !detectGraphFindings(graph, closure.domains).some((code) => ["CIRCULAR_AUTHORITY", "DUPLICATE_AUTHORITY_OWNER", "UNOWNED_MUTABLE_STATE", "UNREGISTERED_PROVIDER_MUTATION", "UNREGISTERED_AUTONOMOUS_WRITER", "UNBOUNDED_CROSS_DOMAIN_SIDE_EFFECT"].includes(code));
   const workflow = fs.readFileSync(path.join(root, ".github/workflows/phase1-ci.yml"), "utf8");
   const scopePolicy = readJson(root, "config/assurance/pr-scope-policy-v1.json");
-  const scopeContextVerified = workflow.includes('node scripts/assurance/pr-scope.mjs --github-event="$GITHUB_EVENT_PATH"') && !workflow.includes("pr-scope.mjs --feature=codex-security-scan-reliability-s0") && scopePolicy.featureDomainBundles?.some(({ featureId, allowedHighRiskDomains }) => featureId === "assurance-efficiency-e0" && stableJson(allowedHighRiskDomains) === stableJson(["autonomous-operators"]));
+  const scopeContextVerified = workflow.includes('node scripts/assurance/pr-scope.mjs --github-event="$GITHUB_EVENT_PATH"')
+    && !workflow.includes("pr-scope.mjs --feature=codex-security-scan-reliability-s0")
+    && scopePolicy.featureDomainBundles?.some(({ featureId, allowedHighRiskDomains }) => featureId === "assurance-efficiency-e0" && stableJson(allowedHighRiskDomains) === stableJson(["autonomous-operators"]))
+    && verificationDependencyVerification.ok
+    && verificationDependencyClosure.includedPaths.includes("tests/assurance/codex-security-reliability-s0.test.mjs")
+    && verificationDependencyClosure.includedPaths.includes("tests/assurance/pr-scope-feature-bundles.test.mjs");
   const groundingChecks = { "A-INVENTORY": inventoryVerification.ok, "A-CLOSURE": closure.findings.length === 0, "A-TRANSITIONS": transitionObserved, "A-AUTHORITY": authorityVerified, "B-EVIDENCE-AUTHORITY": evidenceVerified, "B-CONTRACTS": contractsVerified, "B-TAXONOMY": taxonomyVerified, "B-RECOVERY": recoveryVerified };
   const forbiddenLocaleComparator = ["locale", "Compare"].join("");
   const p1Results = {
@@ -2600,7 +2880,7 @@ export function authoritativeReplayOnce({ root = REPOSITORY_ROOT, taskIdentity =
     const complete = exactReceiptSet(items, receipts) && receipts.every(({ findings, result }) => findings.length === 0 && result === "VERIFIED");
     return { laneId, purpose, worklist: items, worklistHash: hashValue(items), queryPlanHash: hashValue(items.map(({ procedure }) => procedure)), expectedItemCount: items.length, receiptCount: receipts.length, receipts, unresolvedItems: receipts.filter(({ result }) => result !== "VERIFIED").map(({ subject }) => subject.itemId), candidateFindings: receipts.flatMap(({ findings }) => findings), computedStatus: complete ? "VERIFIED" : "BLOCKED" };
   });
-  const body = { schemaVersion: 1, replayId: "AUTHORITATIVE_REPLAY_A_B_C_V2", sourceIdentity, execution: { noCache: true, processIsolated, generatorProcessIdClassification: processIsolated ? "FRESH_NODE_PROCESS" : "IN_PROCESS_NONAUTHORITATIVE", canonicalFileOrder: true, localeIndependentComparator: "RAW_UTF8_BYTE_ORDER", inputEnumerationNormalized: true }, inventoryHash: inventory.sourceInventoryHash, inventory, declaredGraphHash: hashValue(graph.declaredEdgeRecords), observedEdgeHash: hashValue(graph.observedRepositoryEdges), verifiedEdgeHash: hashValue(graph.verifiedGoverningEdges), edgeEvidence: { declaredGraphEdges: graph.declaredGraphEdges, declaredEdgeRecords: graph.declaredEdgeRecords, observedRepositoryEdges: graph.observedRepositoryEdges, verifiedGoverningEdges: graph.verifiedGoverningEdges, declarationOnlyEdges: graph.declarationOnlyEdges, nonGoverningRelationships: graph.nonGoverningRelationships, edgeSetAccounting: graph.edgeSetAccounting }, graphHash: graph.contentHash, stateHash: hashValue(transitionModel.domains.map(({ domain, states }) => ({ domain, states }))), transitionModelHash: transitionModel.transitionModelHash, transitionModel, closureHash: closure.closureHash, inputWorklistHash: hashValue(lanes.map(({ laneId, items }) => ({ laneId, items }))), receiptSetHash: hashValue(laneResults.flatMap(({ receipts }) => receipts.map(({ receiptHash }) => receiptHash)).sort()), laneResults, inventoryVerification, closure, p1Results, externalEvidenceStatus: "BLOCKED_EXTERNAL_NO_PREEXISTING_TRUST_ROOT" };
+  const body = { schemaVersion: 1, replayId: "AUTHORITATIVE_REPLAY_A_B_C_V2", sourceIdentity, execution: { noCache: true, processIsolated, generatorProcessIdClassification: processIsolated ? "FRESH_NODE_PROCESS" : "IN_PROCESS_NONAUTHORITATIVE", canonicalFileOrder: true, localeIndependentComparator: "RAW_UTF8_BYTE_ORDER", inputEnumerationNormalized: true }, inventoryHash: inventory.sourceInventoryHash, inventory, declaredGraphHash: hashValue(graph.declaredEdgeRecords), observedEdgeHash: hashValue(graph.observedRepositoryEdges), verifiedEdgeHash: hashValue(graph.verifiedGoverningEdges), edgeEvidence: { declaredGraphEdges: graph.declaredGraphEdges, declaredEdgeRecords: graph.declaredEdgeRecords, observedRepositoryEdges: graph.observedRepositoryEdges, verifiedGoverningEdges: graph.verifiedGoverningEdges, declarationOnlyEdges: graph.declarationOnlyEdges, nonGoverningRelationships: graph.nonGoverningRelationships, edgeSetAccounting: graph.edgeSetAccounting }, graphHash: graph.contentHash, stateHash: hashValue(transitionModel.domains.map(({ domain, states }) => ({ domain, states }))), transitionModelHash: transitionModel.transitionModelHash, transitionModel, closureHash: closure.closureHash, verificationDependencyClosureHash: verificationDependencyClosure.closureHash, verificationDependencyClosure, inputWorklistHash: hashValue(lanes.map(({ laneId, items }) => ({ laneId, items }))), receiptSetHash: hashValue(laneResults.flatMap(({ receipts }) => receipts.map(({ receiptHash }) => receiptHash)).sort()), laneResults, inventoryVerification, closure, p1Results, externalEvidenceStatus: "BLOCKED_EXTERNAL_NO_PREEXISTING_TRUST_ROOT" };
   const output = { ...body, authoritativeReplayHash: hashValue(body), result: trustedGitHubTaskIdentity(observedTaskIdentity) && laneResults.every(({ computedStatus }) => computedStatus === "VERIFIED") ? "AUTHORITATIVE_CANDIDATE_GENERATED" : laneResults.every(({ candidateFindings }) => candidateFindings.length === 0) ? "ENGINEERING_PLAN_DRAFTED" : "BLOCKED" };
   if (!processIsolated) provisionalInteractiveReplayCache.set(provisionalCacheKey, output);
   return structuredClone(output);
@@ -2609,7 +2889,7 @@ export function authoritativeReplayOnce({ root = REPOSITORY_ROOT, taskIdentity =
 export function runAuthoritativeReplay({ root = REPOSITORY_ROOT, taskIdentity = null, runs = 2 } = {}) {
   const verifier = path.join(root, "scripts/assurance/engineering-evidence-verifier.mjs");
   const args = [verifier, "--replay", `--root=${root}`, `--runs=${runs}`];
-  if (trustedGitHubTaskIdentity(taskIdentity)) args.push(`--pr=${taskIdentity.pr}`, `--branch=${taskIdentity.branch}`, `--admitted-seed-head=${taskIdentity.admittedSeedHead}`, `--protected-base=${taskIdentity.base}`, `--lease-id=${taskIdentity.leaseId}`, `--comment-id=${taskIdentity.ownerComment.id}`, `--amendment-comment-id=${taskIdentity.scopeAmendmentCommentId}`);
+  if (trustedGitHubTaskIdentity(taskIdentity)) args.push(`--pr=${taskIdentity.pr}`, `--branch=${taskIdentity.branch}`, `--admitted-seed-head=${taskIdentity.admittedSeedHead}`, `--protected-base=${taskIdentity.base}`, `--lease-id=${taskIdentity.leaseId}`, `--comment-id=${taskIdentity.ownerComment.id}`, `--amendment-comment-id=${taskIdentity.scopeAmendmentCommentId}`, `--verification-correction-comment-id=${taskIdentity.verificationCorrectionCommentId}`);
   const result = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8", shell: false, env: { ...process.env, LC_ALL: "C" }, maxBuffer: 128 * 1024 * 1024 });
   try { return JSON.parse(result.stdout); } catch { return { deterministic: false, runs: `0/${runs}`, output: null, outputHash: null, differences: [{ code: "AUTHORITATIVE_VERIFIER_PROCESS_FAILED", status: result.status, stderrHash: hashValue(result.stderr ?? "") }] }; }
 }
@@ -2996,7 +3276,7 @@ export function makeBootstrapPacket(root = REPOSITORY_ROOT, options = {}) {
       proofSequence: "derived gate then source integration review and Phase 1",
       scopeBudget: bootstrap
         ? {
-            maximumFiles: 31,
+            maximumFiles: 32,
             maximumLines: 7000,
             maximumGeneratedGraphLines: 12000,
           }
@@ -3211,6 +3491,7 @@ export function buildDoctrineReport(root = REPOSITORY_ROOT) {
       exactHeadTreeAuthority: "RUNTIME_GITHUB_READBACK_REQUIRED_FOR_FINAL_GATE",
       originalOwnerAuthorization: { commentId: DOCTRINE_BOOTSTRAP_COMMENT_ID, result: "VERIFIED_IMMUTABLE_OWNER_COMMENT", subjectHash: "70084d67f5d42af7b350c6472cac13c146b801fc2615d89331596f4ea3473fa9" },
       scopeAmendment: { commentId: DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID, result: "VERIFIED_IMMUTABLE_FINITE_SET_AMENDMENT", subjectHash: hashValue(doctrineScopeAmendmentSubject()), resultingFullPathHash: DOCTRINE_AMENDED_PATH_HASH },
+      verificationDependencyCorrection: { commentId: DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID, result: "VERIFIED_IMMUTABLE_EXACT_VERIFICATION_DEPENDENCY_CORRECTION", subjectHash: hashValue(doctrineVerificationDependencyCorrectionSubject()), resultingFullPathHash: DOCTRINE_FINAL_PATH_HASH },
       scope,
     },
     authoritativeReplay: {
@@ -3227,6 +3508,7 @@ export function buildDoctrineReport(root = REPOSITORY_ROOT) {
     },
     sourceBoundGoverningModel: { stateTotal: transitionCounts.states, transitionTotal: transitionCounts.transitions, stateHash: output.stateHash, transitionHash: output.transitionModelHash },
     governingEdges: { declaredTotal: output.edgeEvidence.declaredEdgeRecords.length, observedTotal: output.edgeEvidence.observedRepositoryEdges.length, observedGoverningTotal: output.edgeEvidence.edgeSetAccounting.observedGoverningCount, verifiedTotal: output.edgeEvidence.edgeSetAccounting.verifiedGoverningCount, declaredHash: output.declaredGraphHash, observedHash: output.observedEdgeHash, verifiedHash: output.verifiedEdgeHash },
+    verificationDependencyClosure: output.verificationDependencyClosure,
     computedGate: { result: "PREIMPLEMENTATION_ENGINEERING_CLEAR_REQUIRES_ACTUAL_PR_READBACK", sourceOnlyModelClear: replay.deterministic && Object.values(output.p1Results).every(Boolean), unresolvedP0P1: 0, launchImpactingP2: 0 },
     externalEvidenceAuthority: { status: output.externalEvidenceStatus, sourceOnlyDoctrineImplementationAllowed: true, providerDependentImplementationAllowed: false, currentExternalReceipts: 0 },
     coverage: {
@@ -3281,6 +3563,7 @@ export function buildDoctrineReport(root = REPOSITORY_ROOT) {
       declaredEdges: output.declaredGraphHash,
       observedEdges: output.observedEdgeHash,
       verifiedEdges: output.verifiedEdgeHash,
+      verificationDependencyClosure: output.verificationDependencyClosureHash,
       authoritativeReplay: output.authoritativeReplayHash,
     },
     bootstrap: {
@@ -3294,8 +3577,9 @@ export function buildDoctrineReport(root = REPOSITORY_ROOT) {
       requiredNamed: 40,
       derivedStructuralAdditional: 30,
       frozenLedgerAuthoritativeGrounding: 100,
-      negativeControlTotal: 170,
-      doctrineTestTotal: 170,
+      verificationDependencyCorrectionAndClosure: 28,
+      negativeControlTotal: 198,
+      doctrineTestTotal: 198,
       status: "SOURCE_TESTED",
     },
     currentTruthTransition: {
@@ -3332,6 +3616,7 @@ async function main() {
       leaseId: options["lease-id"],
       commentId: Number(options["comment-id"]),
       amendmentCommentId: Number(options["amendment-comment-id"] ?? DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID),
+      verificationCorrectionCommentId: Number(options["verification-correction-comment-id"] ?? DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID),
     } : null;
     const output = authoritativeReplayOnce({ root: runtimeRoot, taskIdentityParameters, processIsolated: true });
     process.stdout.write(`${stableJson(output)}\n`);

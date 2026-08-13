@@ -140,7 +140,7 @@ test("a scope waiver cannot suppress unrelated mixed high-risk scope", () => {
 
 test("doctrine PR #226 context resolves from exact event and immutable Owner authority", () => {
   const fixture = pullFixture({ pr: 226, branch: "codex/whole-app-engineering-doctrine-v1", head: "c".repeat(40) });
-  const result = derive({ fixture, ownerAuthority: { ok: true, repository: "Chillywood2025/chillywood-mobile", pr: 226, branch: fixture.event.pull_request.head.ref, currentHead: fixture.event.pull_request.head.sha, budget: { maximumFiles: 31, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 } } });
+  const result = derive({ fixture, ownerAuthority: { ok: true, repository: "Chillywood2025/chillywood-mobile", pr: 226, branch: fixture.event.pull_request.head.ref, currentHead: fixture.event.pull_request.head.sha, budget: { maximumFiles: 32, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 } } });
   assert.equal(result.ok, true);
   assert.equal(result.featureId, "assurance-efficiency-e0");
   assert.deepEqual(result.objectiveDomains, ["autonomous-operators"]);
