@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { canonicalGitText, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, renderCurrentState, renderNextTask, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS } from "./lib.mjs";
+import { validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -1129,6 +1130,53 @@ export function deriveEngineeringClosureExecutionMode({ identity = {}, changedPa
   const boundedArchitecture = changedPaths.length > 0 && changedPaths.every((name) => TYPED_CONTEXT_ARCHITECTURE_PATHS.includes(name)) && identity.base === TYPED_CONTEXT_DOCTRINE_MERGE && pendingTerminalTruth;
   const mode = identity.head === HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead ? "DOCTRINE_BOOTSTRAP_SELF_HOST" : taskContext?.type === "TERMINAL_TRUTH_SUCCESSOR" || exactTruth ? "TERMINAL_TRUTH_SUCCESSOR" : taskContext?.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" || boundedArchitecture ? "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE" : taskContext?.type === "ACTIVE_FINITE_TASK_LEASE" ? "PRODUCT_DOMAIN_TASK" : null;
   return { ok: Boolean(mode), mode, findings: mode ? [] : ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
+}
+
+export function resolveEngineeringClosureTaskContext({
+  root = REPOSITORY_ROOT,
+  event = null,
+  eventPath = process.env.GITHUB_EVENT_PATH,
+  localIdentity = {},
+  scope = null,
+  currentTruth = null,
+  readPull = null,
+  observeAuthorities = observeTypedTaskAuthorities,
+  sourceAncestryVerified = null,
+} = {}) {
+  let trustedEvent = event;
+  try {
+    if (!trustedEvent && typeof eventPath === "string") trustedEvent = JSON.parse(fs.readFileSync(eventPath, "utf8"));
+  } catch {
+    return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_UNREADABLE"] };
+  }
+  if (!trustedEvent?.pull_request) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
+  const repository = trustedEvent.repository?.full_name;
+  const pr = trustedEvent.number;
+  const pullReadback = readPull ? readPull(repository, pr) : parsedResponse(typedGh(root, [`repos/${repository}/pulls/${pr}`]), null);
+  const readback = pullReadback?.base?.repo ? {
+    number: pullReadback.number,
+    repository: pullReadback.base.repo.full_name,
+    baseRef: pullReadback.base.ref,
+    baseSha: pullReadback.base.sha,
+    headRef: pullReadback.head?.ref,
+    headSha: pullReadback.head?.sha,
+    htmlUrl: pullReadback.html_url,
+    state: pullReadback.state,
+  } : pullReadback;
+  const validated = validatePullRequestEventIdentity(trustedEvent, readback);
+  if (!validated.ok) return { ok: false, taskContext: null, findings: validated.findings.map((finding) => `ENGINEERING_CLOSURE_${finding}`) };
+  const identity = validated.identity;
+  const sourceTree = gitText(root, ["rev-parse", `${identity.headSha}^{tree}`]);
+  const ancestry = sourceAncestryVerified ?? typedGit(root, ["merge-base", "--is-ancestor", identity.headSha, localIdentity.head]).status === 0;
+  const localMatches = localIdentity.base === identity.baseSha
+    && sourceTree === localIdentity.tree
+    && ancestry
+    && (!localIdentity.branch || localIdentity.branch === identity.branch);
+  if (!localMatches || !scope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
+  const authorities = observeAuthorities({ identity, tree: sourceTree, scope, currentTruth, root });
+  const eligible = [authorities.architectureAuthority, authorities.terminalTruthAuthority, authorities.finiteTaskAuthority].filter((authority) => authority?.ok === true);
+  if (eligible.length !== 1) return { ok: false, taskContext: null, findings: [eligible.length > 1 ? "ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS" : "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
+  return { ok: true, taskContext: eligible[0], findings: [] };
 }
 
 const resolveJsonPointer = (document, pointer) => {
@@ -4226,7 +4274,8 @@ async function main() {
   const scope = base && head ? gitScope(REPOSITORY_ROOT, base, head) : null;
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: null, branch, head, tree, base };
   const currentTruth = readJson(REPOSITORY_ROOT, "config/assurance/current-truth-v1.json");
-  const modeResult = deriveEngineeringClosureExecutionMode({ identity, changedPaths: scope?.files ?? [], callerMode: options.mode ?? null, pendingTerminalTruth: currentTruth.engineeringDoctrine?.status !== "ACTIVE" && base === TYPED_CONTEXT_DOCTRINE_MERGE });
+  const taskContextResolution = resolveEngineeringClosureTaskContext({ localIdentity: identity, scope, currentTruth });
+  const modeResult = deriveEngineeringClosureExecutionMode({ identity, changedPaths: scope?.files ?? [], taskContext: taskContextResolution.taskContext, callerMode: options.mode ?? null, pendingTerminalTruth: currentTruth.engineeringDoctrine?.status !== "ACTIVE" && base === TYPED_CONTEXT_DOCTRINE_MERGE });
   const bootstrapMode = modeResult.mode === "DOCTRINE_BOOTSTRAP_SELF_HOST";
   const report = bootstrapMode || options.write ? buildDoctrineReport() : null;
   const currentTaskReport = bootstrapMode ? null : generateCurrentEngineeringTaskReport({ identity, taskContext: { type: modeResult.mode }, changedPaths: scope?.files ?? [] });
