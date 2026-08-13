@@ -1024,6 +1024,112 @@ export function generateDomainGraph(root = REPOSITORY_ROOT, options = {}) {
   return structuredClone(graphCache.get(key));
 }
 
+export const DOCTRINE_BASELINE_ARTIFACT_V1 = Object.freeze({
+  classification: "DOCTRINE_BASELINE_ARTIFACT_V1",
+  repository: "Chillywood2025/chillywood-mobile",
+  doctrinePr: 226,
+  sourceHead: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead,
+  sourceTree: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceTree,
+  mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha,
+  mergeTree: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceTree,
+  firstParent: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.firstParent,
+  ownerCommentIds: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.ownerCommentIds,
+  reviewCommentId: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.repositoryReviewCommentId,
+  phase1RunId: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.phase1RunId,
+  phase1Checks: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.phase1RequiredChecks,
+  paths: Object.freeze(["config/assurance/whole-app-domain-graph-v1.json", "docs/assurance/whole-app-engineering-doctrine-v1-report.json"]),
+});
+const gitRead = (root, args) => spawnSync("git", args, { cwd: root, encoding: null, shell: false, maxBuffer: 64 * 1024 * 1024 });
+const gitText = (root, args) => { const result = gitRead(root, args); return result.status === 0 ? result.stdout.toString("utf8").trim() : null; };
+const blobAt = (root, ref, name) => { const result = gitRead(root, ["show", `${ref}:${name}`]); return result.status === 0 ? result.stdout : null; };
+const shaBytes = (value) => crypto.createHash("sha256").update(value).digest("hex");
+const memberStructure = ({ id, path: sourcePath, ownerDomains, ownershipStatus, sharedContract }) => ({ id, path: sourcePath, ownerDomains, ownershipStatus, sharedContract: sharedContract ? { path: sharedContract.path, owners: sharedContract.owners, contract: sharedContract.contract } : null });
+const edgeStructure = ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, rollbackBehavior, platformDifferences, negativeContracts = [] }) => ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, rollbackBehavior, platformDifferences, negativeContracts: negativeContracts.map(({ reasonCode, statement, sourcePath, bindingType, selector }) => ({ reasonCode, statement, sourcePath, bindingType, selector })) });
+export const structuralGraphSubject = (graph) => ({
+  contractId: graph?.contractId,
+  nodes: (graph?.nodes ?? []).map(({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts, cleanup }) => ({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts: transitionContracts?.map(({ sourceContentSha256, sourceLine, ...contract }) => contract), cleanup })),
+  edges: (graph?.edges ?? []).map(edgeStructure),
+  inventoryClasses: (graph?.inventory?.groups ?? []).map(({ id, classification }) => ({ id, classification })),
+  affectedClosurePolicy: graph?.affectedClosurePolicy,
+});
+export const contentSnapshotSubject = (graph) => (graph?.inventory?.groups ?? []).map(({ id, pathHash, contentHash, members }) => ({ id, pathHash, contentHash, members: members.map(({ id: memberId, path: sourcePath, contentSha256, recordSha256 }) => ({ id: memberId, path: sourcePath, contentSha256: contentSha256 ?? null, recordSha256: recordSha256 ?? null })) }));
+
+function functionBodyHash(source, symbol) {
+  let ts;
+  try { ts = require("typescript"); } catch { return null; }
+  const unit = ts.createSourceFile("engineering-closure.mjs", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const statement = unit.statements.find((item) => ts.isFunctionDeclaration(item) && item.name?.text === symbol && item.body);
+  return statement?.body ? hashValue(statement.body.getText(unit).replace(/\r\n?/gu, "\n")) : null;
+}
+
+export function validateDoctrineBaselineArtifacts(root = REPOSITORY_ROOT, overrides = {}) {
+  const identity = { ...DOCTRINE_BASELINE_ARTIFACT_V1, ...(overrides.identity ?? {}) };
+  const parents = (gitText(root, ["show", "-s", "--format=%P", identity.mergeSha]) ?? "").split(/\s+/u).filter(Boolean);
+  const sourceTree = gitText(root, ["rev-parse", `${identity.sourceHead}^{tree}`]);
+  const mergeTree = gitText(root, ["rev-parse", `${identity.mergeSha}^{tree}`]);
+  const artifacts = {};
+  for (const name of identity.paths) {
+    const source = overrides.sourceBlobs?.[name] ?? blobAt(root, identity.sourceHead, name);
+    const merged = overrides.mergeBlobs?.[name] ?? blobAt(root, identity.mergeSha, name);
+    const current = overrides.currentBlobs?.[name] ?? (fs.existsSync(path.join(root, name)) ? fs.readFileSync(path.join(root, name)) : null);
+    const laterChanges = gitText(root, ["rev-list", `${identity.mergeSha}..HEAD`, "--", name]);
+    artifacts[name] = { blobSha256: source ? shaBytes(source) : null, sourceMatchesMerge: Boolean(source && merged && Buffer.compare(source, merged) === 0), currentMatchesBaseline: Boolean(source && current && Buffer.compare(source, current) === 0), laterHistoryUnmodified: laterChanges === "" };
+  }
+  const graphBytes = overrides.sourceBlobs?.[identity.paths[0]] ?? blobAt(root, identity.sourceHead, identity.paths[0]);
+  const reportBytes = overrides.sourceBlobs?.[identity.paths[1]] ?? blobAt(root, identity.sourceHead, identity.paths[1]);
+  let graph = null; let report = null;
+  try { graph = JSON.parse(graphBytes); report = JSON.parse(reportBytes); } catch {}
+  const sourceGenerator = blobAt(root, identity.sourceHead, "scripts/assurance/engineering-closure.mjs");
+  const sourceVerifier = blobAt(root, identity.sourceHead, "scripts/assurance/engineering-evidence-verifier.mjs");
+  const identityValid = identity.repository === "Chillywood2025/chillywood-mobile" && identity.doctrinePr === 226 && sourceTree === identity.sourceTree && mergeTree === identity.mergeTree && parents.length === 2 && parents[0] === identity.firstParent && parents[1] === identity.sourceHead && stableJson(identity.ownerCommentIds) === stableJson([5274614505, 5274913577, 5275618260]) && identity.reviewCommentId === 5275455730 && identity.phase1RunId === 31666180747 && identity.phase1Checks === 13;
+  const graphValid = identityValid && artifacts[identity.paths[0]]?.sourceMatchesMerge && artifacts[identity.paths[0]]?.currentMatchesBaseline && artifacts[identity.paths[0]]?.laterHistoryUnmodified && graph?.contentHash === report?.hashes?.graph && graph?.inventory?.sourceInventoryHash === report?.hashes?.inventory;
+  const reportValid = identityValid && artifacts[identity.paths[1]]?.sourceMatchesMerge && artifacts[identity.paths[1]]?.currentMatchesBaseline && artifacts[identity.paths[1]]?.laterHistoryUnmodified && report?.taskIdentity?.pr === 226 && report?.authoritativeReplay?.resultEquality === "2/2" && report?.computedGate?.unresolvedP0P1 === 0 && report?.computedGate?.launchImpactingP2 === 0;
+  return { classification: "DOCTRINE_BASELINE_ARTIFACT_V1", identity, artifacts, graph, report, graphStatus: graphValid ? "DOCTRINE_DOMAIN_GRAPH_BASELINE_VALID" : "WHOLE_APP_DOMAIN_GRAPH_BASELINE_INVALID", reportStatus: reportValid ? "DOCTRINE_IMPLEMENTATION_REPORT_BASELINE_VALID" : "WHOLE_APP_DOCTRINE_REPORT_BASELINE_INVALID", baselineStructuralGraphHash: graph ? hashValue(structuralGraphSubject(graph)) : null, baselineContentSnapshotHash: graph ? hashValue(contentSnapshotSubject(graph)) : null, generatorSourceVersion: sourceGenerator ? { fileSha256: shaBytes(sourceGenerator), semanticSymbol: "computeDomainGraph", semanticBodyHash: functionBodyHash(sourceGenerator.toString("utf8"), "computeDomainGraph") } : null, verificationSourceVersion: sourceVerifier ? shaBytes(sourceVerifier) : null, ok: graphValid && reportValid, findings: [graphValid ? null : "WHOLE_APP_DOMAIN_GRAPH_BASELINE_INVALID", reportValid ? null : "WHOLE_APP_DOCTRINE_REPORT_BASELINE_INVALID"].filter(Boolean) };
+}
+
+const inventoryMembers = (graph) => new Map((graph?.inventory?.groups ?? []).flatMap(({ id: group, members }) => members.map((member) => [`${group}:${member.path ?? member.id}`, member])));
+export function deriveDoctrineArtifactDependencyClosure({ root = REPOSITORY_ROOT, changedPaths = [], baseline = validateDoctrineBaselineArtifacts(root), currentGraph = generateDomainGraph(root, { authoritative: true }), generatorSemanticHash = null } = {}) {
+  const structuralPaths = new Set(["config/assurance/feature-registry-v1.json", "config/autonomy/autonomous-components.json", "config/assurance/platform-provider-contracts-v1.json", "config/assurance/engineering-doctrine-v1.json"]);
+  const currentSource = fs.readFileSync(path.join(root, "scripts/assurance/engineering-closure.mjs"), "utf8");
+  const generatorSemanticChanged = (generatorSemanticHash ?? functionBodyHash(currentSource, "computeDomainGraph")) !== baseline.generatorSourceVersion?.semanticBodyHash;
+  const structuralGraphInputs = changedPaths.filter((name) => structuralPaths.has(name));
+  if (changedPaths.includes("scripts/assurance/engineering-closure.mjs") && generatorSemanticChanged) structuralGraphInputs.push("scripts/assurance/engineering-closure.mjs#computeDomainGraph");
+  const currentStructuralGraphHash = hashValue(structuralGraphSubject(currentGraph));
+  const verificationOnlyInputs = changedPaths.filter((name) => !structuralPaths.has(name) && /^(?:tests\/assurance\/|scripts\/assurance\/|config\/assurance\/pr-scope-policy-v1\.json$)/u.test(name));
+  const body = { classification: "DOCTRINE_ARTIFACT_DEPENDENCY_CLOSURE_V1", structuralGraphInputs: canonicalSort(structuralGraphInputs), currentObservationInputs: canonicalSort([...changedPaths]), contentOnlyInputs: canonicalSort(changedPaths.filter((name) => !structuralPaths.has(name) && !verificationOnlyInputs.includes(name))), doctrineImplementationReportInputs: [], taskReportInputs: canonicalSort([...changedPaths]), verificationOnlyInputs: canonicalSort(verificationOnlyInputs), generatorSemanticChanged, structuralModelChanged: currentStructuralGraphHash !== baseline.baselineStructuralGraphHash };
+  return { ...body, closureHash: hashValue(body), modelRevisionRequired: body.generatorSemanticChanged || body.structuralGraphInputs.length > 0 || body.structuralModelChanged };
+}
+
+export function deriveCurrentTreeObservation({ root = REPOSITORY_ROOT, identity = {}, changedPaths = [], baseline = validateDoctrineBaselineArtifacts(root), currentGraph = generateDomainGraph(root, { authoritative: true }) } = {}) {
+  const baselineMembers = inventoryMembers(baseline.graph); const currentMembers = inventoryMembers(currentGraph);
+  const addedAssets = [...currentMembers.keys()].filter((key) => !baselineMembers.has(key));
+  const removedAssets = [...baselineMembers.keys()].filter((key) => !currentMembers.has(key));
+  const modifiedAssets = [...currentMembers.keys()].filter((key) => baselineMembers.has(key) && hashValue(currentMembers.get(key)) !== hashValue(baselineMembers.get(key)));
+  const changedOwnership = [...currentMembers.keys()].filter((key) => baselineMembers.has(key) && stableJson(memberStructure(currentMembers.get(key))) !== stableJson(memberStructure(baselineMembers.get(key))));
+  const currentStructuralGraphHash = hashValue(structuralGraphSubject(currentGraph));
+  const currentContentSnapshotHash = hashValue(contentSnapshotSubject(currentGraph));
+  const dependencyClosure = deriveDoctrineArtifactDependencyClosure({ root, changedPaths, baseline, currentGraph });
+  const deltaBody = { classification: "ENGINEERING_TASK_DELTA_V1", changedPaths: canonicalSort([...changedPaths]), addedAssets: canonicalSort(addedAssets), removedAssets: canonicalSort(removedAssets), modifiedAssets: canonicalSort(modifiedAssets), changedOwnership: canonicalSort(changedOwnership), changedDependencies: dependencyClosure.structuralGraphInputs, changedAuthorityEdges: currentStructuralGraphHash === baseline.baselineStructuralGraphHash ? [] : ["STRUCTURAL_GRAPH_DIFF"], changedStateTransitionBindings: dependencyClosure.generatorSemanticChanged ? ["computeDomainGraph"] : [], changedProviderPlatformContracts: changedPaths.filter((name) => name === "config/assurance/platform-provider-contracts-v1.json"), affectedDomains: canonicalSort([...new Set([...addedAssets, ...removedAssets, ...modifiedAssets].flatMap((key) => [...(currentMembers.get(key)?.ownerDomains ?? []), ...(baselineMembers.get(key)?.ownerDomains ?? [])]))]), evidenceInvalidation: ["CURRENT_TASK_REPORT", "EXACT_HEAD_REVIEW", "PHASE_1"], canonicalModelRevisionRequired: dependencyClosure.modelRevisionRequired };
+  const taskDelta = { ...deltaBody, taskDeltaHash: hashValue(deltaBody) };
+  const body = { classification: "CURRENT_TREE_INVENTORY_OBSERVATION_V1", repository: identity.repository ?? "Chillywood2025/chillywood-mobile", pr: identity.pr ?? null, branch: identity.branch ?? null, head: identity.head ?? null, tree: identity.tree ?? null, protectedBase: identity.base ?? null, baselineStructuralGraphHash: baseline.baselineStructuralGraphHash, baselineContentSnapshotHash: baseline.baselineContentSnapshotHash, currentStructuralGraphHash, currentContentSnapshotHash, currentInventoryHash: currentGraph.inventory.sourceInventoryHash, currentOwnershipGaps: currentGraph.inventory.ownershipGaps, taskDelta, dependencyClosure };
+  return { ...body, observationHash: hashValue(body) };
+}
+
+export function generateCurrentEngineeringTaskReport({ root = REPOSITORY_ROOT, identity = {}, taskContext = {}, changedPaths = [], gateResult = "ARCHITECTURE_MAINTENANCE_ENGINEERING_CLEAR", blockers = [] } = {}) {
+  const baseline = validateDoctrineBaselineArtifacts(root); const observation = deriveCurrentTreeObservation({ root, identity, changedPaths, baseline });
+  const evaluatorPaths = ["scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "scripts/assurance/pr-scope-lib.mjs", "scripts/assurance/pr-scope.mjs"];
+  const body = { classification: "CURRENT_ENGINEERING_TASK_REPORT_V1", identity, taskContext, baselineDoctrineReportHash: baseline.artifacts[DOCTRINE_BASELINE_ARTIFACT_V1.paths[1]].blobSha256, evaluatorSourceHashes: Object.fromEntries(evaluatorPaths.map((name) => [name, shaBytes(fs.readFileSync(path.join(root, name)))])), observationHash: observation.observationHash, taskDeltaHash: observation.taskDelta.taskDeltaHash, dependencyClosureHash: observation.dependencyClosure.closureHash, gateResult, blockers: canonicalSort([...blockers]), authority: { provider: false, build: false, physical: false, submission: false, ota: false, publicRelease: false } };
+  return { ...body, currentTaskReportHash: hashValue(body), baseline, observation };
+}
+
+export function deriveEngineeringClosureExecutionMode({ identity = {}, changedPaths = [], taskContext = null, callerMode = null, pendingTerminalTruth = false } = {}) {
+  if (callerMode !== null) return { ok: false, mode: null, findings: ["ENGINEERING_CLOSURE_CALLER_MODE_INJECTION_REJECTED"] };
+  const exactTruth = stableJson(canonicalSort([...changedPaths])) === stableJson(TERMINAL_TRUTH_PATHS);
+  const boundedArchitecture = changedPaths.length > 0 && changedPaths.every((name) => TYPED_CONTEXT_ARCHITECTURE_PATHS.includes(name)) && identity.base === TYPED_CONTEXT_DOCTRINE_MERGE && pendingTerminalTruth;
+  const mode = identity.head === HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead ? "DOCTRINE_BOOTSTRAP_SELF_HOST" : taskContext?.type === "TERMINAL_TRUTH_SUCCESSOR" || exactTruth ? "TERMINAL_TRUTH_SUCCESSOR" : taskContext?.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" || boundedArchitecture ? "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE" : taskContext?.type === "ACTIVE_FINITE_TASK_LEASE" ? "PRODUCT_DOMAIN_TASK" : null;
+  return { ok: Boolean(mode), mode, findings: mode ? [] : ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
+}
+
 const resolveJsonPointer = (document, pointer) => {
   if (pointer === "") return document;
   if (typeof pointer !== "string" || !pointer.startsWith("/")) return undefined;
@@ -1279,6 +1385,7 @@ export function normalizeGitHubCommentIdentity(raw, { repository = "Chillywood20
 
 export const ARCHITECTURE_MAINTENANCE_MARKER = "<!-- chillywood-assurance-architecture-maintenance-v1 -->";
 export const ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER = "<!-- chillywood-assurance-architecture-maintenance-successor-v1 -->";
+export const ARCHITECTURE_FINAL_SOURCE_MARKER = "<!-- chillywood-assurance-architecture-final-source-v1 -->";
 export const TERMINAL_TRUTH_SUCCESSOR_MARKER = "<!-- chillywood-terminal-truth-successor-v1 -->";
 export const TYPED_CONTEXT_ARCHITECTURE_PATHS = Object.freeze([
   "config/assurance/pr-scope-policy-v1.json",
@@ -1377,32 +1484,59 @@ export function architectureMaintenanceSuccessorSubject({ identity, tree, scope,
 }
 export const architectureMaintenanceSuccessorOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER, subject.type, subject);
 
-export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true } = {}) {
+const HISTORICAL_ARCHITECTURE_RECEIPT = Object.freeze({ commentId: 5277054532, head: "63cadbe5ac97c9d4358bf9bdf9069384f1f2b8f9", tree: "42818b41c363d3b528d125c1612f283bf8caf483", subjectHash: "7f39f0ab62c9cad3a8077f2dc16c98ead1767c45c7cebcda945afeb44b4a985e", bodyHash: "fd569184ab4150b0d2b112e053d29a4d974ea10a096b1638fe09c2b580752e0d" });
+export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, root = REPOSITORY_ROOT } = {}) {
+  const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
+  const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
+  const historical = normalizeGitHubCommentIdentity(historicalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: historicalRaw?.id });
+  const historicalPayload = parseExactOwnerBody(historical, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
+  const observed = exactScope(scope);
+  const identityRecord = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, head: identity?.headSha, tree, base: identity?.baseSha };
+  const taskReport = generateCurrentEngineeringTaskReport({ root, identity: identityRecord, taskContext: { type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE" }, changedPaths: observed.changedPaths });
+  const focused = ["tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"].map((name) => ({ path: name, sourceHash: shaBytes(fs.readFileSync(path.join(root, name))) }));
+  return { type: "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, originalCommentId: original?.id, originalSubjectHash: originalPayload?.subjectHash, originalBodyHash: original?.bodyHash, historicalReceipt: { commentId: historical?.id, subjectHash: historicalPayload?.subjectHash, bodyHash: historical?.bodyHash, disposition: "HISTORICAL_STALE_FINAL_SOURCE_RECEIPT" }, currentHead: identity?.headSha, currentTree: tree, finalHead: identity?.headSha, finalTree: tree, changedPaths: observed.changedPaths, changedPathHash: observed.changedPathHash, diffHash: scope?.diffHash ?? null, netChangedLines: observed.netChangedLines, budget: { maximumFiles: 8, maximumNetLines: 1800 }, objective: originalPayload?.subject?.objective, authority: originalPayload?.subject?.authority, terminalTruthRequired: true, expectedTerminalNextTask: TYPED_CONTEXT_NEXT_TASK, graphBaselineStatus: taskReport.baseline.graphStatus, doctrineReportBaselineStatus: taskReport.baseline.reportStatus, currentTaskReportHash: taskReport.currentTaskReportHash, taskDeltaHash: taskReport.observation.taskDelta.taskDeltaHash, focusedTestHashes: focused, ownerIdentity: { login: "Chillywood2025", association: "OWNER" }, immutableCommentRequired: true, createdAtEqualsUpdatedAtRequired: true, expiresOn: `PR_${identity?.pr}_MERGE`, reusableByAnotherPr: false };
+}
+export const architectureFinalSourceOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_FINAL_SOURCE_MARKER, subject.type, subject);
+
+export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, root = REPOSITORY_ROOT } = {}) {
   const normalizedOriginal = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
   const originalPayload = parseExactOwnerBody(normalizedOriginal, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject;
   const originalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
   const successorMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER}\n`));
+  const finalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
   const observed = exactScope(scope);
   const descendant = originalSubject?.currentHead !== identity?.headSha
     || originalSubject?.currentTree !== tree
     || stableJson(originalSubject?.changedPaths) !== stableJson(observed.changedPaths);
   const successorRaw = successorMatches[0];
   const normalizedSuccessor = successorRaw ? normalizeGitHubCommentIdentity(successorRaw, { repository: identity?.repository, pr: identity?.pr, commentId: successorRaw.id }) : null;
-  const expectedSuccessor = descendant ? architectureMaintenanceSuccessorSubject({ identity, tree, scope, originalRaw: raw }) : null;
   const successorPayload = parseExactOwnerBody(normalizedSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
-  const subject = descendant ? successorPayload?.subject : architectureMaintenanceSubject({ identity, tree, scope });
+  const historicalReceiptValid = identity?.pr !== 227 || (successorMatches.length === 1 && normalizedSuccessor?.id === HISTORICAL_ARCHITECTURE_RECEIPT.commentId && normalizedSuccessor?.bodyHash === HISTORICAL_ARCHITECTURE_RECEIPT.bodyHash && successorPayload?.subjectHash === HISTORICAL_ARCHITECTURE_RECEIPT.subjectHash && successorPayload?.subject?.currentHead === HISTORICAL_ARCHITECTURE_RECEIPT.head && successorPayload?.subject?.currentTree === HISTORICAL_ARCHITECTURE_RECEIPT.tree && normalizedSuccessor?.body === architectureMaintenanceSuccessorOwnerCommentBody(successorPayload.subject));
+  const validFinals = finalMatches.map((item) => {
+    const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item.id });
+    const payload = parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
+    const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+    const valid = Boolean(normalized && payload?.subject?.type === "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1" && payload.subjectHash === hashValue(payload.subject) && payload.bodyHash === hashValue(body) && normalized.body === architectureFinalSourceOwnerCommentBody(payload.subject) && stableJson(payload.subject.changedPaths) === stableJson(TYPED_CONTEXT_ARCHITECTURE_PATHS) && payload.subject.changedPathHash === hashValue(TYPED_CONTEXT_ARCHITECTURE_PATHS) && /^[0-9a-f]{64}$/u.test(payload.subject.diffHash ?? "") && payload.subject.budget?.maximumFiles === 8 && payload.subject.budget?.maximumNetLines === 1800 && payload.subject.originalCommentId === normalizedOriginal?.id && payload.subject.originalSubjectHash === originalPayload?.subjectHash && stableJson(payload.subject.authority) === stableJson(originalSubject?.authority));
+    return { normalized, payload, valid, current: valid && payload.subject.currentHead === identity?.headSha && payload.subject.currentTree === tree && payload.subject.diffHash === scope?.diffHash && payload.subject.netChangedLines === observed.netChangedLines };
+  });
+  const currentFinals = validFinals.filter(({ current }) => current);
+  const expectedFinal = descendant && currentFinals.length === 1 ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, historicalRaw: successorRaw }) : null;
+  const currentReceiptValid = !descendant || (currentFinals.length === 1 && currentFinals[0].normalized?.body === architectureFinalSourceOwnerCommentBody(expectedFinal));
+  const subject = descendant ? currentFinals[0]?.payload?.subject : architectureMaintenanceSubject({ identity, tree, scope });
+  const ancestry = ancestryVerified ?? (originalSubject?.currentHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.currentHead, identity?.headSha]).status === 0);
   const originalPayloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
-  const successorPayloadWithoutHash = Object.fromEntries(Object.entries(successorPayload ?? {}).filter(([key]) => key !== "bodyHash"));
   const checks = {
-    identity: Boolean(normalizedOriginal) && (!descendant || Boolean(normalizedSuccessor)),
+    identity: Boolean(normalizedOriginal),
     originalBody: Boolean(originalSubject) && normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
     originalHashes: Boolean(originalSubject) && originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(originalPayloadWithoutHash),
     originalBinding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === TYPED_CONTEXT_DOCTRINE_MERGE && originalSubject?.budget?.maximumFiles === 8 && originalSubject?.budget?.maximumNetLines === 1800,
-    commentCardinality: paginationComplete && originalMatches.length === 1 && originalMatches[0]?.id === raw?.id && successorMatches.length === (descendant ? 1 : 0),
-    successorBody: !descendant || normalizedSuccessor?.body === architectureMaintenanceSuccessorOwnerCommentBody(expectedSuccessor),
-    successorHashes: !descendant || (successorPayload?.subjectHash === hashValue(expectedSuccessor) && successorPayload?.bodyHash === hashValue(successorPayloadWithoutHash)),
-    successorSeed: !descendant || (identity?.pr === 227
+    originalAuthority: originalSubject?.featureId === "assurance-efficiency-e0" && originalSubject?.objective === "remove static per-PR context recursion and create typed terminal truth successors" && originalSubject?.terminalTruthRequired === true && originalSubject?.expectedTerminalNextTask === TYPED_CONTEXT_NEXT_TASK && Object.values(originalSubject?.authority ?? {}).every((value) => value === false),
+    ancestry,
+    commentCardinality: paginationComplete && originalMatches.length === 1 && originalMatches[0]?.id === raw?.id && validFinals.every(({ valid }) => valid) && currentFinals.length <= 1,
+    successorBody: historicalReceiptValid,
+    successorHashes: historicalReceiptValid,
+    successorSeed: identity?.pr !== 227 || (normalizedSuccessor?.id === 5277054532
       && identity?.branch === "codex/typed-task-context-terminal-successor-v1"
       && normalizedOriginal?.id === 5276216820
       && originalPayload?.subjectHash === "2bec002a4dc7ecec3cec2a5afec477cd325bb4bf7131d3def60fddf6b943642c"
@@ -1410,14 +1544,16 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       && originalSubject?.currentHead === "16c2421ec41786979c4fce9741efed8c66632c09"
       && originalSubject?.currentTree === "80ae1d92b735e6554a93e4df16a9746027b680c3"
       && originalSubject?.changedPathHash === "02b80940320b4047c0abf2473afaf00c98f2f01238ae3878b14528a5cef1bf9b"),
-    successorScope: !descendant || (stableJson(expectedSuccessor.addedPaths) === stableJson(["scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs"]) && stableJson(expectedSuccessor.changedPaths) === stableJson(TYPED_CONTEXT_ARCHITECTURE_PATHS)),
+    successorScope: identity?.pr !== 227 || (stableJson(successorPayload?.subject?.addedPaths) === stableJson(["scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs"]) && stableJson(successorPayload?.subject?.changedPaths) === stableJson(TYPED_CONTEXT_ARCHITECTURE_PATHS)),
+    currentFinalReceipt: currentReceiptValid,
     exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= 8 && observed.changedPaths.every((file) => TYPED_CONTEXT_ARCHITECTURE_PATHS.includes(file)) && !observed.changedPaths.some((file) => file.includes("*")),
     budget: observed.netChangedLines <= 1800,
-    authority: subject?.authority && Object.values(subject.authority).every((value) => value === false) && noCompetingDomainOwner,
+    authority: (subject?.authority ?? originalSubject?.authority) && Object.values(subject?.authority ?? originalSubject?.authority).every((value) => value === false) && noCompetingDomainOwner,
   };
-  const ok = Object.values(checks).every(Boolean);
+  const authorizationOk = Object.entries(checks).filter(([key]) => key !== "currentFinalReceipt").every(([, value]) => Boolean(value));
+  const ok = authorizationOk && currentReceiptValid;
   const effectiveSubject = descendant ? subject : originalSubject;
-  return { ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: 8, maximumHandAuthoredNetLines: 1800 }, commentId: descendant ? normalizedSuccessor?.id ?? null : normalizedOriginal?.id ?? null, commentBodyHash: descendant ? normalizedSuccessor?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null, subjectHash: effectiveSubject ? hashValue(effectiveSubject) : null, subject: effectiveSubject, originalCommentId: normalizedOriginal?.id ?? null, originalBodyHash: normalizedOriginal?.bodyHash ?? null, originalSubjectHash: originalPayload?.subjectHash ?? null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
+  return { ok, authorizationOk, mergeEligible: ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: 8, maximumHandAuthoredNetLines: 1800 }, commentId: descendant ? currentFinals[0]?.normalized?.id ?? null : normalizedOriginal?.id ?? null, commentBodyHash: descendant ? currentFinals[0]?.normalized?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null, subjectHash: effectiveSubject ? hashValue(effectiveSubject) : null, subject: effectiveSubject, originalCommentId: normalizedOriginal?.id ?? null, originalBodyHash: normalizedOriginal?.bodyHash ?? null, originalSubjectHash: originalPayload?.subjectHash ?? null, historicalFinalSourceReceipts: validFinals.filter(({ valid, current }) => valid && !current).map(({ normalized }) => normalized.id), staleLegacyReceiptId: historicalReceiptValid && identity?.pr === 227 ? HISTORICAL_ARCHITECTURE_RECEIPT.commentId : null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
 }
 
 export function terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash } = {}) {
@@ -1502,7 +1638,8 @@ const gitScope = (root, base, head) => {
   const rows = linesRun.stdout.split(/\r?\n/gu).filter(Boolean).map((line) => line.split("\t"));
   const additions = rows.reduce((sum, [value]) => sum + (Number(value) || 0), 0);
   const deletions = rows.reduce((sum, [, value]) => sum + (Number(value) || 0), 0);
-  return { files, additions, deletions, netChangedLines: Math.max(0, additions - deletions) };
+  const diffRun = typedGit(root, ["diff", "--full-index", "--no-ext-diff", `${base}...${head}`]);
+  return { files, additions, deletions, netChangedLines: Math.max(0, additions - deletions), diffHash: diffRun.status === 0 ? hashValue(diffRun.stdout) : null };
 };
 const leasePathAllowed = (file, globs = []) => globs.some((glob) => {
   const prefix = String(glob).split("*")[0];
@@ -3930,31 +4067,58 @@ async function main() {
     process.stdout.write(`${stableJson(output)}\n`);
     return;
   }
-  const graph = generateDomainGraph();
-  const report = buildDoctrineReport();
+  const graph = generateDomainGraph(REPOSITORY_ROOT, { authoritative: true });
   const taskIdentityObservation = options.pr && options["lease-id"] && options["comment-id"] && options["admitted-seed-head"] ? observeGitHubTaskIdentity({ pr: Number(options.pr), branch: options.branch ?? DOCTRINE_BRANCH, admittedSeedHead: options["admitted-seed-head"], protectedBase: options.base ?? DOCTRINE_BASE, leaseId: options["lease-id"], commentId: Number(options["comment-id"]) }) : null;
   const runtimeBootstrap = taskIdentityObservation ? makeBootstrapPacket(REPOSITORY_ROOT, { taskIdentityObservation, leaseId: options["lease-id"], pr: options.pr }) : null;
   const graphPath = path.join(REPOSITORY_ROOT, "config/assurance/whole-app-domain-graph-v1.json");
   const reportPath = path.join(REPOSITORY_ROOT, "docs/assurance/whole-app-engineering-doctrine-v1-report.json");
+  const head = gitText(REPOSITORY_ROOT, ["rev-parse", "HEAD"]); const tree = gitText(REPOSITORY_ROOT, ["rev-parse", "HEAD^{tree}"]); const base = gitText(REPOSITORY_ROOT, ["rev-parse", "origin/main"]); const branch = gitText(REPOSITORY_ROOT, ["branch", "--show-current"]);
+  const scope = base && head ? gitScope(REPOSITORY_ROOT, base, head) : null;
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: null, branch, head, tree, base };
+  const currentTruth = readJson(REPOSITORY_ROOT, "config/assurance/current-truth-v1.json");
+  const modeResult = deriveEngineeringClosureExecutionMode({ identity, changedPaths: scope?.files ?? [], callerMode: options.mode ?? null, pendingTerminalTruth: currentTruth.engineeringDoctrine?.status !== "ACTIVE" && base === TYPED_CONTEXT_DOCTRINE_MERGE });
+  const bootstrapMode = modeResult.mode === "DOCTRINE_BOOTSTRAP_SELF_HOST";
+  const report = bootstrapMode || options.write ? buildDoctrineReport() : null;
+  const currentTaskReport = bootstrapMode ? null : generateCurrentEngineeringTaskReport({ identity, taskContext: { type: modeResult.mode }, changedPaths: scope?.files ?? [] });
   if (options.write) {
-    fs.writeFileSync(graphPath, `${JSON.stringify(graph)}\n`);
-    fs.writeFileSync(reportPath, `${JSON.stringify(report)}\n`);
+    if (!bootstrapMode) throw new Error("DOCTRINE_BASELINE_ARTIFACT_WRITE_FORBIDDEN_OUTSIDE_BOOTSTRAP");
+    fs.writeFileSync(graphPath, `${JSON.stringify(graph)}\n`); fs.writeFileSync(reportPath, `${JSON.stringify(report)}\n`);
   }
   const findings = [];
   if (options.verify || options["self-host"] || options.determinism) {
-    if (!fs.existsSync(graphPath) || stableJson(readJson(REPOSITORY_ROOT, "config/assurance/whole-app-domain-graph-v1.json")) !== stableJson(graph)) findings.push("WHOLE_APP_DOMAIN_GRAPH_STALE");
-    if (!fs.existsSync(reportPath) || stableJson(readJson(REPOSITORY_ROOT, "docs/assurance/whole-app-engineering-doctrine-v1-report.json")) !== stableJson(report)) findings.push("WHOLE_APP_DOCTRINE_REPORT_STALE");
-    const selfHostDomains = [report.bootstrap.packet.sections.C_AFFECTED_DOMAIN_CLOSURE.primaryDomain, ...report.bootstrap.packet.sections.C_AFFECTED_DOMAIN_CLOSURE.includedDependencies];
+    if (!modeResult.ok) findings.push(...modeResult.findings);
+    if (bootstrapMode) {
+      if (!fs.existsSync(graphPath) || stableJson(readJson(REPOSITORY_ROOT, "config/assurance/whole-app-domain-graph-v1.json")) !== stableJson(graph)) findings.push("WHOLE_APP_DOMAIN_GRAPH_BASELINE_INVALID");
+      if (!fs.existsSync(reportPath) || stableJson(readJson(REPOSITORY_ROOT, "docs/assurance/whole-app-engineering-doctrine-v1-report.json")) !== stableJson(report)) findings.push("WHOLE_APP_DOCTRINE_REPORT_BASELINE_INVALID");
+    } else {
+      findings.push(...(currentTaskReport?.baseline.findings ?? []));
+      if (currentTaskReport?.observation.dependencyClosure.modelRevisionRequired) findings.push("WHOLE_APP_DOMAIN_MODEL_REVISION_REQUIRED");
+    }
+    const baselinePacket = currentTaskReport?.baseline.report?.bootstrap?.packet;
+    const boundedClosure = bootstrapMode ? report.bootstrap.packet.sections.C_AFFECTED_DOMAIN_CLOSURE : baselinePacket?.sections?.C_AFFECTED_DOMAIN_CLOSURE;
+    const selfHostDomains = boundedClosure ? [boundedClosure.primaryDomain, ...boundedClosure.includedDependencies] : [];
     findings.push(...detectGraphFindings(graph, selfHostDomains));
   }
   const runs = Number(options.determinism ?? 1);
   const hashes = Array.from({ length: runs }, () => hashValue(generateDomainGraph(REPOSITORY_ROOT, { refreshInventory: true })));
   if (new Set(hashes).size !== 1) findings.push("WHOLE_APP_GRAPH_NONDETERMINISTIC");
-  const selfHostGate = runtimeBootstrap?.gate ?? report.bootstrap.gate;
-  if (options["self-host"] && !["ENGINEERING_PLAN_DRAFTED", "PREIMPLEMENTATION_ENGINEERING_CLEAR"].includes(selfHostGate.status)) findings.push(...selfHostGate.findings);
+  const selfHostGate = bootstrapMode ? runtimeBootstrap?.gate ?? report.bootstrap.gate : { status: findings.length ? "BLOCKED_INTERNAL" : modeResult.mode === "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE" ? "ARCHITECTURE_MAINTENANCE_ENGINEERING_CLEAR" : "PREIMPLEMENTATION_ENGINEERING_CLEAR", findings: [...new Set(findings)] };
+  if (options["self-host"] && !["ENGINEERING_PLAN_DRAFTED", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "ARCHITECTURE_MAINTENANCE_ENGINEERING_CLEAR"].includes(selfHostGate.status)) findings.push(...selfHostGate.findings);
+  const baseline = currentTaskReport?.baseline ?? validateDoctrineBaselineArtifacts();
   const result = {
     command: "assurance:engineering-closure",
     ok: findings.length === 0,
+    executionMode: modeResult.mode,
+    graphBaselineStatus: baseline.graphStatus,
+    doctrineReportBaselineStatus: baseline.reportStatus,
+    baselineStructuralGraphHash: baseline.baselineStructuralGraphHash,
+    baselineContentSnapshotHash: baseline.baselineContentSnapshotHash,
+    currentStructuralGraphHash: currentTaskReport?.observation.currentStructuralGraphHash ?? hashValue(structuralGraphSubject(graph)),
+    currentContentSnapshotHash: currentTaskReport?.observation.currentContentSnapshotHash ?? hashValue(contentSnapshotSubject(graph)),
+    currentTreeObservationHash: currentTaskReport?.observation.observationHash ?? null,
+    taskDeltaHash: currentTaskReport?.observation.taskDelta.taskDeltaHash ?? null,
+    currentTaskReportHash: currentTaskReport?.currentTaskReportHash ?? null,
+    artifactDependencyClosure: currentTaskReport?.observation.dependencyClosure ?? null,
     graphHash: graph.contentHash,
     inventoryHash: graph.inventory.sourceInventoryHash,
     domainCount: graph.nodes.length,
@@ -3963,7 +4127,7 @@ async function main() {
     determinism: `${runs}/${runs}`,
     selfHosting: selfHostGate.status,
     computedGate: selfHostGate,
-    findings,
+    findings: [...new Set(findings)],
   };
   console.log(JSON.stringify(result));
   if (findings.length) process.exitCode = 1;

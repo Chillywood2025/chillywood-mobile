@@ -47,7 +47,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, generateDomainGraph, makeTaskPacket } from "../../scripts/assurance/engineering-closure.mjs";
+import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, contentSnapshotSubject, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, structuralGraphSubject, validateDoctrineBaselineArtifacts } from "../../scripts/assurance/engineering-closure.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -2002,6 +2002,53 @@ test("pending transition source-only interval defers only the missing doctrine t
   assert.deepEqual(validateEngineeringDoctrineTruth({}, currentTruthContract, { currentMain: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, implementationMerged: true, protectedMainRuntime: pending }), []);
   const invalid = { ...pending, buildEligible: true };
   assert.ok(validateEngineeringDoctrineTruth({}, currentTruthContract, { currentMain: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, implementationMerged: true, protectedMainRuntime: invalid }).some(({ id }) => id === "ASSURANCE_ENGINEERING_DOCTRINE_MISSING"));
+});
+
+test("doctrine baseline/current delta controls 1-19: historical artifacts and structural/content identity are separated", () => {
+  const baseline = validateDoctrineBaselineArtifacts();
+  const graphPath = "config/assurance/whole-app-domain-graph-v1.json";
+  const reportPath = "docs/assurance/whole-app-engineering-doctrine-v1-report.json";
+  const tamperedGraph = validateDoctrineBaselineArtifacts(undefined, { currentBlobs: { [graphPath]: Buffer.from("{}") } });
+  const wrongHead = validateDoctrineBaselineArtifacts(undefined, { identity: { sourceHead: "a".repeat(40) } });
+  const wrongMerge = validateDoctrineBaselineArtifacts(undefined, { identity: { mergeSha: "a".repeat(40) } });
+  const wrongReview = validateDoctrineBaselineArtifacts(undefined, { identity: { reviewCommentId: 1 } });
+  const wrongPhase1 = validateDoctrineBaselineArtifacts(undefined, { identity: { phase1RunId: 1 } });
+  const contentGraph = structuredClone(baseline.graph); const contentMember = contentGraph.inventory.groups.find(({ id }) => id === "governingControlSources").members.find(({ path: name }) => name === "scripts/assurance/engineering-closure.mjs"); contentMember.contentSha256 = "a".repeat(64);
+  const contentObservation = deriveCurrentTreeObservation({ baseline, currentGraph: contentGraph, changedPaths: [contentMember.path] });
+  const ownershipGraph = structuredClone(baseline.graph); ownershipGraph.nodes[0].owner = "changed-owner";
+  const ownershipClosure = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: ownershipGraph, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+  const edgeGraph = structuredClone(baseline.graph); edgeGraph.edges[0].authorityDirection = "DESTINATION_TO_SOURCE";
+  const edgeClosure = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: edgeGraph, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+  const controls = [baseline.ok, baseline.graphStatus === "DOCTRINE_DOMAIN_GRAPH_BASELINE_VALID", baseline.reportStatus === "DOCTRINE_IMPLEMENTATION_REPORT_BASELINE_VALID", baseline.artifacts[graphPath].sourceMatchesMerge, baseline.artifacts[graphPath].laterHistoryUnmodified, baseline.artifacts[reportPath].sourceMatchesMerge, baseline.artifacts[reportPath].laterHistoryUnmodified, /^[0-9a-f]{64}$/u.test(baseline.artifacts[graphPath].blobSha256), /^[0-9a-f]{64}$/u.test(baseline.artifacts[reportPath].blobSha256), !tamperedGraph.ok, tamperedGraph.graphStatus === "WHOLE_APP_DOMAIN_GRAPH_BASELINE_INVALID", !wrongHead.ok, !wrongMerge.ok, !wrongReview.ok, !wrongPhase1.ok, contentObservation.currentStructuralGraphHash === baseline.baselineStructuralGraphHash, contentObservation.currentContentSnapshotHash !== baseline.baselineContentSnapshotHash, ownershipClosure.modelRevisionRequired, edgeClosure.modelRevisionRequired];
+  assert.equal(controls.length, 19); assert.equal(controls.every(Boolean), true);
+});
+
+test("doctrine baseline/current delta controls 20-38: inventory deltas and dependency closure are exact", () => {
+  const baseline = validateDoctrineBaselineArtifacts();
+  const graph = structuredClone(baseline.graph); const routes = graph.inventory.groups.find(({ id }) => id === "routes");
+  routes.members.push({ id: "app/new-unmapped.tsx", path: "app/new-unmapped.tsx", contentSha256: "b".repeat(64), ownerDomains: [], ownershipStatus: "ORPHAN", sharedContract: null });
+  const added = deriveCurrentTreeObservation({ baseline, currentGraph: graph, changedPaths: ["app/new-unmapped.tsx"] });
+  const deletedGraph = structuredClone(baseline.graph); const deleted = deletedGraph.inventory.groups.find(({ id }) => id === "routes").members.pop();
+  const removed = deriveCurrentTreeObservation({ baseline, currentGraph: deletedGraph, changedPaths: [deleted.path] });
+  const current = deriveCurrentTreeObservation({ baseline, changedPaths: TYPED_CONTEXT_ARCHITECTURE_PATHS });
+  const semantic = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: baseline.graph, changedPaths: ["scripts/assurance/engineering-closure.mjs"], generatorSemanticHash: "c".repeat(64) });
+  const product = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: baseline.graph, changedPaths: ["app/index.tsx"] });
+  const deterministic = Array.from({ length: 3 }, () => stableJson(deriveCurrentTreeObservation({ baseline, changedPaths: TYPED_CONTEXT_ARCHITECTURE_PATHS })));
+  const controls = [added.taskDelta.addedAssets.includes("routes:app/new-unmapped.tsx"), added.taskDelta.canonicalModelRevisionRequired === false, added.currentStructuralGraphHash === baseline.baselineStructuralGraphHash, removed.taskDelta.removedAssets.includes(`routes:${deleted.path ?? deleted.id}`), current.dependencyClosure.classification === "DOCTRINE_ARTIFACT_DEPENDENCY_CLOSURE_V1", current.dependencyClosure.structuralGraphInputs.length === 0, current.dependencyClosure.verificationOnlyInputs.length === 8, current.dependencyClosure.doctrineImplementationReportInputs.length === 0, current.dependencyClosure.modelRevisionRequired === false, current.taskDelta.changedPaths.length === 8, current.taskDelta.changedAuthorityEdges.length === 0, current.taskDelta.changedStateTransitionBindings.length === 0, semantic.generatorSemanticChanged, semantic.modelRevisionRequired, product.contentOnlyInputs.includes("app/index.tsx"), !product.verificationOnlyInputs.includes("app/index.tsx"), new Set(deterministic).size === 1, hashValue(structuralGraphSubject(baseline.graph)) === baseline.baselineStructuralGraphHash, hashValue(contentSnapshotSubject(baseline.graph)) === baseline.baselineContentSnapshotHash];
+  assert.equal(controls.length, 19); assert.equal(controls.every(Boolean), true);
+});
+
+test("doctrine baseline/current delta controls 39-48: modes, reports, callers, and closed authority remain deterministic", () => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 227, branch: "codex/typed-task-context-terminal-successor-v1", head: "d".repeat(40), tree: "e".repeat(40), base: "c1f9ec1f71cc8bc4448afd2327c4341cac309573" };
+  const architecture = deriveEngineeringClosureExecutionMode({ identity, changedPaths: TYPED_CONTEXT_ARCHITECTURE_PATHS, pendingTerminalTruth: true });
+  const bootstrap = deriveEngineeringClosureExecutionMode({ identity: { head: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead }, changedPaths: [] });
+  const product = deriveEngineeringClosureExecutionMode({ taskContext: { type: "ACTIVE_FINITE_TASK_LEASE" }, changedPaths: ["app/index.tsx"] });
+  const terminal = deriveEngineeringClosureExecutionMode({ taskContext: { type: "TERMINAL_TRUTH_SUCCESSOR" }, changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"] });
+  const injected = deriveEngineeringClosureExecutionMode({ callerMode: "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE" });
+  const reports = Array.from({ length: 3 }, () => generateCurrentEngineeringTaskReport({ identity, taskContext: { type: architecture.mode }, changedPaths: TYPED_CONTEXT_ARCHITECTURE_PATHS }));
+  const source = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
+  const controls = [architecture.mode === "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE", bootstrap.mode === "DOCTRINE_BOOTSTRAP_SELF_HOST", product.mode === "PRODUCT_DOMAIN_TASK", terminal.mode === "TERMINAL_TRUTH_SUCCESSOR", !injected.ok, new Set(reports.map(({ currentTaskReportHash }) => currentTaskReportHash)).size === 1, reports[0].classification === "CURRENT_ENGINEERING_TASK_REPORT_V1", Object.values(reports[0].authority).every((value) => value === false), !source.includes("WHOLE_APP_DOMAIN_GRAPH_STALE"), !source.includes("WHOLE_APP_DOCTRINE_REPORT_STALE")];
+  assert.equal(controls.length, 10); assert.equal(controls.every(Boolean), true);
 });
 
 const d2aTerminalStatuses = {

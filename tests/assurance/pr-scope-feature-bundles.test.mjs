@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
 import { args, renderCurrentState, renderNextTask, stableJson } from "../../scripts/assurance/lib.mjs";
 
@@ -228,7 +228,7 @@ const architectureFixture = () => {
 };
 const verifyArchitectureMutation = (mutate = () => {}) => {
   const value = architectureFixture();
-  const args = { raw: value.raw, allComments: [value.raw], paginationComplete: true, identity: value.identity, tree: value.tree, scope: value.scope, noCompetingDomainOwner: true };
+  const args = { raw: value.raw, allComments: [value.raw], paginationComplete: true, identity: value.identity, tree: value.tree, scope: value.scope, noCompetingDomainOwner: true, ancestryVerified: true };
   mutate(args, value);
   return verifyArchitectureMaintenanceAuthority(args);
 };
@@ -236,7 +236,7 @@ const verifyArchitectureMutation = (mutate = () => {}) => {
 test("architecture 1: exact immutable Owner architecture comment passes", () => assert.equal(architectureFixture().authority.ok, true));
 test("architecture 2: arbitrary unbound architecture PR fails", () => assert.ok(derive({ fixture: architectureFixture().fixture }).findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND")));
 test("architecture 3: edited comment fails", () => assert.equal(verifyArchitectureMutation((args) => { args.raw = { ...args.raw, body: `${args.raw.body} ` }; args.allComments = [args.raw]; }).ok, false));
-test("architecture 4: stale comment after source push fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, headSha: "c".repeat(40) }; }).ok, false));
+test("architecture 4: source push preserves original authority but invalidates merge eligibility", () => { const result = verifyArchitectureMutation((args) => { args.identity = { ...args.identity, headSha: "c".repeat(40) }; }); assert.equal(result.authorizationOk, true); assert.equal(result.mergeEligible, false); });
 test("architecture 5: wrong PR fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, pr: 902 }; }).ok, false));
 test("architecture 6: wrong branch fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, branch: "codex/wrong" }; }).ok, false));
 test("architecture 7: wrong tree fails", () => assert.equal(verifyArchitectureMutation((args) => { args.tree = "d".repeat(40); }).ok, false));
@@ -264,30 +264,33 @@ const architectureSuccessorFixture = () => {
   const original = { identity: originalIdentity, tree: "80ae1d92b735e6554a93e4df16a9746027b680c3", scope: originalScope };
   original.subject = architectureMaintenanceSubject(original);
   original.raw = rawOwnerComment({ id: 5276216820, pr: original.identity.pr, body: architectureMaintenanceOwnerCommentBody(original.subject) });
-  const identity = { ...original.identity, headSha: "c".repeat(40) };
-  const tree = "d".repeat(40);
+  const historicalIdentity = { ...original.identity, headSha: "63cadbe5ac97c9d4358bf9bdf9069384f1f2b8f9" };
+  const historicalTree = "42818b41c363d3b528d125c1612f283bf8caf483";
   const scope = { files: [
     ...original.scope.files, "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs"
-  ].sort(), netChangedLines: 1200 };
-  const subject = architectureMaintenanceSuccessorSubject({ identity, tree, scope, originalRaw: original.raw });
-  const successor = rawOwnerComment({ id: 6000000003, pr: identity.pr, body: architectureMaintenanceSuccessorOwnerCommentBody(subject) });
-  const args = { raw: original.raw, allComments: [original.raw, successor], paginationComplete: true, identity, tree, scope };
-  return { original, identity, tree, scope, subject, successor, args, authority: verifyArchitectureMaintenanceAuthority(args) };
+  ].sort(), netChangedLines: 1200, diffHash: "e".repeat(64) };
+  const historicalSubject = architectureMaintenanceSuccessorSubject({ identity: historicalIdentity, tree: historicalTree, scope: { ...scope, netChangedLines: 1015 }, originalRaw: original.raw });
+  const successor = rawOwnerComment({ id: 5277054532, pr: historicalIdentity.pr, body: architectureMaintenanceSuccessorOwnerCommentBody(historicalSubject) });
+  const identity = { ...original.identity, headSha: "c".repeat(40) }; const tree = "d".repeat(40);
+  const subject = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: original.raw, historicalRaw: successor });
+  const final = rawOwnerComment({ id: 6000000003, pr: identity.pr, body: architectureFinalSourceOwnerCommentBody(subject) });
+  const args = { raw: original.raw, allComments: [original.raw, successor, final], paginationComplete: true, identity, tree, scope, ancestryVerified: true };
+  return { original, identity, tree, scope, subject, successor, final, args, authority: verifyArchitectureMaintenanceAuthority(args) };
 };
-test("architecture successor: one exact immutable descendant authority passes", () => assert.equal(architectureSuccessorFixture().authority.ok, true));
-test("architecture successor: edited, duplicate, stale, over-budget, ninth-path, and wildcard receipts fail", () => {
+test("architecture final source: one current receipt and one historical stale receipt pass", () => { const value = architectureSuccessorFixture(); assert.equal(value.authority.ok, true, value.authority.findings.join(",")); assert.equal(value.authority.staleLegacyReceiptId, 5277054532); });
+test("architecture final source: edited, duplicate, stale, over-budget, ninth-path, and wildcard receipts fail", () => {
   const mutations = [
-    (v) => { v.args.successor = undefined; v.args.allComments[1].body += " "; },
-    (v) => { v.args.allComments.push({ ...v.successor, id: v.successor.id + 1, node_id: `IC_${v.successor.id + 1}` }); },
-    (v) => { v.args.identity.headSha = "e".repeat(40); },
-    (v) => { v.args.scope.netChangedLines = 1801; },
-    (v) => { v.args.scope.files.push("README.md"); },
-    (v) => { v.args.scope.files = [...v.args.scope.files.slice(0, -1), "tests/assurance/*"]; }
+    ["edited", (v) => { v.args.allComments[2].body += " "; }],
+    ["duplicate", (v) => { v.args.allComments.push({ ...v.final, id: v.final.id + 1, node_id: `IC_${v.final.id + 1}` }); }],
+    ["stale", (v) => { v.args.identity.headSha = "e".repeat(40); }],
+    ["over-budget", (v) => { v.args.scope.netChangedLines = 1801; }],
+    ["ninth-path", (v) => { v.args.scope.files.push("README.md"); }],
+    ["wildcard", (v) => { v.args.scope.files = [...v.args.scope.files.slice(0, -1), "tests/assurance/*"]; }]
   ];
-  for (const mutate of mutations) {
+  for (const [label, mutate] of mutations) {
     const value = architectureSuccessorFixture();
     mutate(value);
-    assert.equal(verifyArchitectureMaintenanceAuthority(value.args).ok, false);
+    assert.equal(verifyArchitectureMaintenanceAuthority(value.args).ok, false, label);
   }
 });
 test("architecture successor: exact PR 227 is the only bootstrap recovery context while doctrine truth is pending", () => {

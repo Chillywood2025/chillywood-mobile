@@ -103,8 +103,8 @@ export function deriveTaskScopeContext({
       && identity.pr === 227
       && identity.baseSha === "c1f9ec1f71cc8bc4448afd2327c4341cac309573"
       && architectureAuthority?.originalCommentId === 5276216820
-      && architectureAuthority?.subject?.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_V1"
-      && architectureAuthority?.subject?.reason === "shared rolling-main evaluator must support the already-required bounded terminal-truth interval";
+      && architectureAuthority?.subject?.type === "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1"
+      && architectureAuthority?.subject?.objective === "remove static per-PR context recursion and create typed terminal truth successors";
     if (!terminalAllowed && !exactBootstrapRecovery) findings.push("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED");
   }
   const registryFeatures = new Set((registry?.features ?? []).map(({ featureId }) => featureId));
