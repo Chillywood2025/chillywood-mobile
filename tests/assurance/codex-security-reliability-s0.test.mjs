@@ -5,6 +5,7 @@ import test from "node:test";
 import { sha256, stableJson, validateProofTierStatuses } from "../../scripts/assurance/lib.mjs";
 import { governedReceiptIdentityHash, governedReceiptRule } from "../../scripts/assurance/receipt.mjs";
 import { repositorySnapshotDigest, targetDescriptor } from "../../scripts/assurance/codex-security-target.mjs";
+import { deriveTaskScopeContext } from "../../scripts/assurance/pr-scope-lib.mjs";
 import {
   beginDiscovery,
   benchmark,
@@ -841,12 +842,19 @@ test("S0 completion tiers require four distinct feature-scoped repository facts"
     .some(({ id }) => id === "ASSURANCE_PROOF_TIER_APPLICABILITY_HASH_MISMATCH"), true);
 });
 
-test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () => {
+test("S0 contract, incident ledger, skill, and task-aware Phase 1 integration agree", () => {
   const contract = JSON.parse(fs.readFileSync("config/assurance/codex-security-reliability-s0-v1.json", "utf8"));
   const incidents = JSON.parse(fs.readFileSync("config/assurance/codex-security-scan-incidents-v1.json", "utf8"));
   const scopeWaiver = JSON.parse(fs.readFileSync("config/assurance/codex-security-reliability-s0-scope-waiver-v1.json", "utf8"));
+  const scopePolicy = JSON.parse(fs.readFileSync("config/assurance/pr-scope-policy-v1.json", "utf8"));
+  const featureRegistry = JSON.parse(fs.readFileSync("config/assurance/feature-registry-v1.json", "utf8"));
   const workflow = fs.readFileSync(".github/workflows/phase1-ci.yml", "utf8");
   const skill = fs.readFileSync(".agents/skills/chillywood-assurance/SKILL.md", "utf8");
+  const pullFixture = ({ pr, branch, head = "a".repeat(40), base = "b".repeat(40), repository = "Chillywood2025/chillywood-mobile", title = "fixture" }) => ({
+    event: { number: pr, repository: { full_name: repository }, pull_request: { number: pr, title, html_url: `https://github.com/${repository}/pull/${pr}`, base: { ref: "main", sha: base }, head: { ref: branch, sha: head } } },
+    readback: { number: pr, repository, baseRef: "main", baseSha: base, headRef: branch, headSha: head, htmlUrl: `https://github.com/${repository}/pull/${pr}`, state: "open" },
+  });
+  const resolveScope = (fixture, extra = {}) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: scopePolicy, registry: featureRegistry, currentTruth: { finiteTaskLeases: { tasks: [] } }, ...extra });
   assert.deepEqual(contract.states, states);
   assert.equal(contract.repository, "Chillywood2025/chillywood-mobile");
   assert.equal(contract.hostPreflight.snapshotDigestField, "scan.target.snapshotDigest");
@@ -906,8 +914,49 @@ test("S0 contract, incident ledger, skill, and Phase 1 integration agree", () =>
     assert.equal(sanitized.ok, true);
     assert.deepEqual(sanitized.record, record);
   }
+  const genericInvocation = 'node scripts/assurance/pr-scope.mjs --github-event="$GITHUB_EVENT_PATH"';
+  assert.equal(workflow.includes(genericInvocation), true, genericInvocation);
+  const genericLine = workflow.split("\n").find((line) => line.includes("node scripts/assurance/pr-scope.mjs"));
+  assert.equal(genericLine?.includes("--feature=codex-security-scan-reliability-s0"), false);
+  assert.equal(genericLine?.includes("--waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json"), false);
+  const permissionsBlock = /^permissions:\n(?:(?:  [^\n]+\n)+)/mu.exec(workflow)?.[0] ?? "";
+  assert.equal(permissionsBlock.includes("  actions: read"), true, "task-aware scope may read the exact failed-run verification dependency");
+  assert.equal(permissionsBlock.includes("  actions: write"), false, "task-aware scope never gains Actions mutation authority");
+
+  const s0 = pullFixture({ pr: 206, branch: "codex/assurance-codex-security-scan-reliability-s0" });
+  const s0Context = resolveScope(s0);
+  assert.equal(s0Context.ok, true);
+  assert.equal(s0Context.featureId, "codex-security-scan-reliability-s0");
+  assert.equal(s0Context.historicalWaiverPath, "config/assurance/codex-security-reliability-s0-scope-waiver-v1.json");
+  assert.equal(s0Context.source, "PROTECTED_TASK_REGISTRY");
+
+  const doctrine = pullFixture({ pr: 226, branch: "codex/whole-app-engineering-doctrine-v1", head: "c".repeat(40) });
+  const doctrineContext = resolveScope(doctrine, { ownerAuthority: { ok: true, repository: doctrine.readback.repository, pr: 226, branch: doctrine.readback.headRef, currentHead: doctrine.readback.headSha, budget: { maximumFiles: 32, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 } } });
+  assert.equal(doctrineContext.ok, true);
+  assert.equal(doctrineContext.featureId, "assurance-efficiency-e0");
+  assert.deepEqual(doctrineContext.objectiveDomains, ["autonomous-operators"]);
+  assert.deepEqual(doctrineContext.supportingDomains, ["CI-test-infrastructure"]);
+  assert.equal(doctrineContext.historicalWaiverPath, null);
+  assert.deepEqual(doctrineContext.budget, { maximumFiles: 32, maximumHandAuthoredNetLines: 7000, maximumGeneratedGraphLines: 12000 });
+
+  const branchSpoof = resolveScope(pullFixture({ pr: 999, branch: s0.event.pull_request.head.ref }));
+  assert.ok(branchSpoof.findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND"));
+  const titleSpoof = resolveScope(pullFixture({ pr: 999, branch: "codex/unbound", title: "Codex Security reliability S0" }));
+  assert.ok(titleSpoof.findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND"));
+  const injected = resolveScope(s0, { requestedFeature: "codex-security-scan-reliability-s0", requestedWaiver: "config/assurance/codex-security-reliability-s0-scope-waiver-v1.json" });
+  assert.ok(injected.findings.includes("ASSURANCE_CALLER_FEATURE_INJECTION_REJECTED"));
+  assert.ok(injected.findings.includes("ASSURANCE_CALLER_WAIVER_INJECTION_REJECTED"));
+  const wrongRepository = pullFixture({ pr: 206, branch: s0.event.pull_request.head.ref, repository: "Evil/chillywood-mobile" });
+  assert.ok(resolveScope(wrongRepository).findings.includes("ASSURANCE_PR_EVENT_IDENTITY_INVALID"));
+  const wrongPr = structuredClone(s0); wrongPr.event.number = 207;
+  assert.ok(resolveScope(wrongPr).findings.includes("ASSURANCE_PR_EVENT_IDENTITY_INVALID"));
+  const wrongHead = structuredClone(s0); wrongHead.event.pull_request.head.sha = "d".repeat(40);
+  assert.ok(resolveScope(wrongHead).findings.includes("ASSURANCE_PR_EVENT_READBACK_MISMATCH"));
+  const unrelated = resolveScope(pullFixture({ pr: 999, branch: "codex/unrelated" }));
+  assert.equal(unrelated.historicalWaiverPath, null);
+  assert.ok(unrelated.findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND"));
+
   for (const command of [
-    "node scripts/assurance/pr-scope.mjs --feature=codex-security-scan-reliability-s0 --waiver=config/assurance/codex-security-reliability-s0-scope-waiver-v1.json",
     "node scripts/assurance/codex-security-reliability.mjs --benchmark=all",
     "node --test tests/assurance/codex-security-reliability-s0.test.mjs",
   ]) {

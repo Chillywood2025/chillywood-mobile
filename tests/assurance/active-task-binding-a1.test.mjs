@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   activeTask,
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject,
+  validateEngineeringTaskAuthority,
   validateStructuredBinding,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
@@ -40,6 +43,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
+import { DOCTRINE_BASE, affectedDomainClosure, generateDomainGraph, makeTaskPacket } from "../../scripts/assurance/engineering-closure.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -123,9 +127,9 @@ const identity = {
   branch: binding.implementationBranch,
   head: binding.currentImplementationHead,
   tree: binding.currentImplementationTree,
-  originMainHead: "3".repeat(40),
+  originMainHead: DOCTRINE_BASE,
   originMainTree: "4".repeat(40),
-  baseHead: "3".repeat(40),
+  baseHead: DOCTRINE_BASE,
   baseTree: "4".repeat(40),
   diffHash: "5".repeat(64),
   pathHash: "6".repeat(64),
@@ -146,6 +150,8 @@ const facts = {
   truthCheck: { ok: true },
   identity,
   implementationObservations,
+  sourceChanging: false,
+  readOnlyDiagnostic: true,
   directlyAffectedSymbols: ["scripts/assurance/active-task.mjs#activeTask"]
 };
 const withTruth = (change) => ({ ...facts, currentTruth: change(truth) });
@@ -2141,7 +2147,7 @@ test("terminal protected-base resolution 18: assurance report omitted-base calle
 });
 
 test("terminal protected-base resolution 19: nonterminal finite-task behavior is retained", () => {
-  const result = evaluateFiniteTaskLeaseRuntime({ record: canonicalTruth, contract: currentTruthContract, currentProtectedBase: terminalProtectedBase });
+  const result = evaluateFiniteTaskLeaseRuntime({ record: historicalPr214Truth, contract: currentTruthContract, currentProtectedBase: terminalProtectedBase });
   assert.equal(result.terminal, false);
   assert.equal(result.currentProtectedBaseResolution.source, "EXPLICIT_ARGUMENT");
   assert.equal(result.leaseAuthorityEligible, true);
@@ -2197,4 +2203,34 @@ test("terminal protected-base resolution 26: provider Codex Review remains optio
 test("terminal protected-base resolution 27: no second control or truth PR is required", () => {
   assert.equal(currentTruthContract.terminalTaskTransitionPolicy.additionalControlPrRequired, false);
   assert.equal(detectAssuranceRecursion({ requestedDependency: "TRUTH_ONLY_PR" }).code, ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE);
+});
+
+test("whole-app doctrine phase admission reserves discovery artifacts and blocks product mutation before derived clear", () => {
+  const packet = { id: "ENGINEERING_CLOSURE_PACKET_V1", checks: Object.fromEntries(["boundaryExplicit", "affectedDomainClosureComplete"].map((key) => [key, true])) };
+  const reservation = { closureArtifactPath: "docs/assurance/task.json", allowedDomains: ["chilly-chat-inbox-thread"], pathGlobs: ["app/chat/**"], testEvidencePaths: ["tests/assurance/chat.test.mjs"], maximumFiles: 4, maximumLines: 200, excludedHighRiskPaths: [] };
+  const lease = { artifactReservation: reservation, allowedPaths: ["app/chat/index.tsx"] };
+  const discovery = validateEngineeringTaskAuthority({ doctrineTruth: { status: "ACTIVE" }, featureId: "chilly-chat-inbox-thread", phase: "DOMAIN_DISCOVERY", lease, changedPaths: [reservation.closureArtifactPath], sourcePushed: true });
+  assert.equal(discovery.ok, false); assert.ok(discovery.findings.includes("FINITE_TASK_SCOPE_MEASUREMENT_MISSING"));
+  assert.equal(validateEngineeringTaskAuthority({ doctrineTruth: { status: "ACTIVE" }, featureId: "chilly-chat-inbox-thread", phase: "DOMAIN_DISCOVERY", lease, changedPaths: ["app/chat/index.tsx"] }).ok, false);
+  assert.equal(validateEngineeringTaskAuthority({ doctrineTruth: { status: "ACTIVE" }, featureId: "chilly-chat-inbox-thread", phase: "IMPLEMENTATION", lease, closurePacket: packet, certificate: { id: "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1" }, changedPaths: ["app/chat/index.tsx"] }).ok, false);
+  assert.equal(validateEngineeringTaskAuthority({ doctrineTruth: { status: "ACTIVE" }, featureId: "chilly-chat-inbox-thread", lease: {} }).ok, false);
+});
+
+test("activeTask forwards the binding phase so reserved discovery can start without recursive admission", () => {
+  const closureArtifactPath = "docs/assurance/chilly-chat-call-discovery.json";
+  const discoveryBinding = { ...binding, phase: "DOMAIN_DISCOVERY" };
+  const reservation = { closureArtifactPath, allowedDomains: [binding.featureId], pathGlobs: ["app/+native-intent.tsx"], testEvidencePaths: ["tests/assurance/chilly-chat-call-discovery.test.mjs"], maximumFiles: 4, maximumLines: 400, excludedHighRiskPaths: ["supabase/migrations/**"] };
+  const lease = { leaseId: "discovery-test-v1", featureId: binding.featureId, implementationPr: binding.implementationPr, implementationBranch: binding.implementationBranch, admittedSeedHead: binding.immutableSourceHead, admittedSeedTree: binding.immutableSourceTree, admittedBase: "3".repeat(40), protectedAdmissionPr: 1, ownerAuthorizationCommentId: 1, domain: "chilly-chat-call-media", domainOwnership: "ACTIVE", taskState: "ACTIVE_IMPLEMENTATION", allowedPaths: [closureArtifactPath], scopeBudget: { maximumFiles: 4, maximumChangedLines: 400 }, recursionBudget: { maximumAdmissionPrs: 1, maximumFinalSourceBindingPrs: 0, maximumMergeProvenancePrs: 0, maximumPostMergeTruthPrs: 1 }, artifactReservation: reservation };
+  const discoveryTruth = { ...truth, engineeringDoctrine: { status: "ACTIVE" }, activeTaskBinding: discoveryBinding, finiteTaskLeases: { ...truth.finiteTaskLeases, tasks: [...truth.finiteTaskLeases.tasks, lease] } };
+  const candidate = { pr: binding.implementationPr, branch: binding.implementationBranch, prState: "open", head: binding.currentImplementationHead, tree: binding.currentImplementationTree, seedTree: binding.immutableSourceTree, seedIsAncestor: true, baseIsAncestor: true, changedPaths: [closureArtifactPath], changedLines: 1, diffHash: "1".repeat(64), changedPathHash: "2".repeat(64), finalReceiptHead: null, repositoryReviewHead: null, phase1Head: null, findings: { P0: 0, P1: 0, launchImpactingP2: 0 } };
+  const result = activeTask({ ...facts, currentTruth: discoveryTruth, protectedMainTruth: discoveryTruth, finiteTaskCandidateObservation: candidate, identity: { ...identity, changedFiles: [closureArtifactPath] } });
+  assert.equal(result.ok, true, result.findings?.join(","));
+});
+
+test("activeTask rejects generic product auto-clear and ignores caller-supplied Owner observations", () => {
+  const implementationBinding = { ...binding, phase: "IMPLEMENTATION" }; const task = "FUTURE_BOUNDED_TASK"; const leaseId = "future-active-task-v1"; const graph = generateDomainGraph(); const domains = affectedDomainClosure(graph, binding.featureId).domains; const nodes = graph.nodes.filter(({ domain }) => domains.includes(domain)); const duplicateStates = [...new Set(nodes.flatMap((node) => node.sharedMutableState.map(({ stateId }) => stateId)).filter((stateId) => new Set(nodes.flatMap((node) => node.sharedMutableState.filter((state) => state.stateId === stateId).map(({ owner }) => owner))).size > 1))].sort(); const references = {}; const comments = duplicateStates.map((stateId, index) => { const canonicalOwners = [...new Set(nodes.flatMap((node) => node.sharedMutableState.filter((state) => state.stateId === stateId).map(({ owner }) => owner)))].sort(); const resolvedOwner = canonicalOwners[0]; const subject = { type: "REGISTERED_OWNER_DECISION", task, leaseId, currentHead: binding.currentImplementationHead, stateId, canonicalOwners, chosenOwner: resolvedOwner }; const id = 9300 + index; references[stateId] = { resolvedOwner, ownerAuthorization: { authorizationId: `github-comment-${id}`, subjectHash: digest(stableJson(subject)) } }; const payload = { authorizationId: `github-comment-${id}`, repository: "Chillywood2025/chillywood-mobile", pr: String(binding.implementationPr), task, leaseId, currentHead: binding.currentImplementationHead, type: "REGISTERED_OWNER_DECISION", subject, subjectHash: digest(stableJson(subject)) }; payload.bodyHash = digest(stableJson(payload)); return { id, url: `https://github.com/Chillywood2025/chillywood-mobile/issues/comments/${id}`, author: { login: "Chillywood2025" }, authorAssociation: "OWNER", createdAt: "2026-08-12T12:00:00Z", updatedAt: "2026-08-12T12:00:00Z", body: `<!-- chillywood-engineering-owner-authorization-v1 -->\n${JSON.stringify(payload)}` }; }); const future = makeTaskPacket({ primaryDomain: binding.featureId, evidencePath: "tests/assurance/engineering-doctrine.test.mjs", technicalResolutionSource: "tests/assurance/engineering-doctrine.test.mjs", ownerDecisionReferences: references, task, pr: binding.implementationPr, leaseId });
+  const lease = { leaseId: future.certificate.leaseId, featureId: binding.featureId, implementationPr: binding.implementationPr, implementationBranch: binding.implementationBranch, admittedSeedHead: binding.immutableSourceHead, admittedSeedTree: binding.immutableSourceTree, admittedBase: "3".repeat(40), protectedAdmissionPr: 1, ownerAuthorizationCommentId: 1, engineeringOwnerAuthorizationCommentIds: [comments[0].id], domain: "chilly-chat-call-media", domainOwnership: "ACTIVE", taskState: "ACTIVE_IMPLEMENTATION", allowedPaths: future.actualScope.paths, scopeBudget: { maximumFiles: future.reservation.maximumFiles, maximumChangedLines: future.reservation.maximumLines }, recursionBudget: { maximumAdmissionPrs: 1, maximumFinalSourceBindingPrs: 0, maximumMergeProvenancePrs: 0, maximumPostMergeTruthPrs: 1 }, artifactReservation: future.reservation };
+  const activeTruth = { ...truth, engineeringDoctrine: { status: "ACTIVE" }, activeTaskBinding: implementationBinding, finiteTaskLeases: { ...truth.finiteTaskLeases, tasks: [...truth.finiteTaskLeases.tasks, lease] } }; const candidate = { pr: binding.implementationPr, branch: binding.implementationBranch, prState: "open", head: binding.currentImplementationHead, tree: binding.currentImplementationTree, seedTree: binding.immutableSourceTree, seedIsAncestor: true, baseIsAncestor: true, changedPaths: future.actualScope.paths, changedLines: future.actualScope.changedLines, diffHash: "1".repeat(64), changedPathHash: "2".repeat(64), finalReceiptHead: null, repositoryReviewHead: null, phase1Head: null, findings: { P0: 0, P1: 0, launchImpactingP2: 0 } };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-gh-")); const log = path.join(dir, "readback.log"); const raw = { id: comments[0].id, html_url: comments[0].url, user: comments[0].author, author_association: comments[0].authorAssociation, created_at: comments[0].createdAt, updated_at: comments[0].updatedAt, body: comments[0].body }; const fakeGh = path.join(dir, "gh"); fs.writeFileSync(fakeGh, `#!/usr/bin/env node\nrequire("fs").appendFileSync(${JSON.stringify(log)}, process.argv.slice(2).join(" ")+"\\n");process.stdout.write(${JSON.stringify(JSON.stringify(raw))});\n`); fs.chmodSync(fakeGh, 0o755); const originalPath = process.env.PATH; process.env.PATH = `${dir}:${originalPath}`;
+  try { const result = activeTask({ ...facts, currentTruth: activeTruth, protectedMainTruth: activeTruth, finiteTaskCandidateObservation: candidate, engineeringClosurePacket: future.packet, engineeringCertificate: future.certificate, engineeringOwnerAuthorizationComments: comments, autonomousEngineeringRequest: {}, identity: { ...identity, changedFiles: future.actualScope.paths }, changedLines: future.actualScope.changedLines }); assert.equal(result.ok, false); assert.ok(result.findings.includes("PREIMPLEMENTATION_DEPENDENCY_CLOSURE_INCOMPLETE")); assert.ok(result.findings.includes("PREIMPLEMENTATION_STATE_MODEL_INCOMPLETE")); assert.match(fs.readFileSync(log, "utf8"), new RegExp(`issues/comments/${comments[0].id}$`, "mu")); } finally { process.env.PATH = originalPath; fs.rmSync(dir, { recursive: true, force: true }); }
 });

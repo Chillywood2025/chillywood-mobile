@@ -5,6 +5,15 @@
   "recordPath": "config/assurance/current-truth-v1.json",
   "generatedDocuments": ["CURRENT_STATE.md", "NEXT_TASK.md"],
   "requiredFields": ["reviewPolicy", "protectedMainAuthority", "mainSha", "latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "operationalClosures", "operatingPolicy", "blockedProviders", "openImplementationPrs", "openReviewOnlyPrs", "finiteTaskLeases", "finiteTaskRuntime", "activeTaskBinding", "freshnessClaims", "assuranceProgram", "timestamp", "freshnessDeadline", "evidenceSources", "liveProviderReadback"],
+  "engineeringDoctrinePolicy": {
+    "doctrineId": "WHOLE_APP_ENGINEERING_BEFORE_IMPLEMENTATION_DOCTRINE_V1",
+    "optionalBeforeImplementationMerge": true,
+    "requiredWhenStatus": "ACTIVE",
+    "requiredActiveFields": ["doctrineId", "version", "status", "boundedDefinition", "doctrineHash", "doctrineReportPath", "doctrineReportHash", "evidenceAuthorityHash", "inventoryHash", "graphHash", "transitionModelHash", "authoritativeReplayHash", "taxonomyHash", "platformProviderContractHash", "featureRegistryHash", "activePacketPath", "activePacketHash", "activeTaskSentinel", "affectedDomains", "certificateHash", "defectLedgerHash", "discoveryPasses", "reconciliationPasses", "invariantCoverage", "transitionCoverage", "authorityCoverage", "mutationCoverage", "pairwiseCoverage", "highRiskThreeWayCoverage", "predictableOmissionCount", "novelDimensionCount", "contractDriftCount", "modelRevisionCount", "verificationCycles", "taskLeaseState", "blockers", "nextPermittedAction", "domainReadiness"],
+    "completionLanguage": "bounded-only",
+    "postMergeTruthPaths": ["config/assurance/current-truth-v1.json", "CURRENT_STATE.md", "NEXT_TASK.md"],
+    "postMergeNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
+  },
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,
@@ -34,12 +43,18 @@
       "scripts/assurance/lib.mjs",
       "scripts/guard-autonomous-systems-contract.mjs",
       "scripts/proof-autonomous-systems-contract.mjs"
+      ,"config/assurance/engineering-doctrine-v1.json"
+      ,"config/assurance/adversarial-taxonomy-v1.json"
+      ,"config/assurance/platform-provider-contracts-v1.json"
+      ,"config/assurance/engineering-evidence-authority-v1.json"
+      ,"scripts/assurance/engineering-closure.mjs"
     ],
     "activeTaskModelPaths": [
       "config/assurance/feature-registry-v1.json",
       "config/assurance/domain-graph-v1.json",
       "config/assurance/android-generated-native-lifecycle-v1.json",
       "config/assurance/android-chat-call-mic-control-v1.json"
+      ,"config/assurance/whole-app-domain-graph-v1.json"
     ],
     "activeTaskAuthoritativeInputs": [
       "package.json",

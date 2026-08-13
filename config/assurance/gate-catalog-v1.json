@@ -4,6 +4,13 @@
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/gateCatalog",
   "statuses": ["REQUIREMENTS_CLEAR", "ARCHITECTURE_CLEAR", "SOURCE_CLEAR", "MODEL_CLEAR", "INTEGRATION_CLEAR", "NATIVE_CLEAR", "PROVIDER_CLEAR", "ARTIFACT_CLEAR", "INSTALLED_CLEAR", "PHYSICAL_CLEAR", "RELEASE_CLEAR", "BLOCKED_INTERNAL", "BLOCKED_EXTERNAL", "NOT_APPLICABLE", "SUPERSEDED"],
   "advisoryInputs": {"codexReview": "OPTIONAL_ADVISORY", "providerReceiptRequired": false, "independentRepositoryValidationRequiredBeforeBlocking": true},
+  "boundedCompletionStatuses": ["BOUND_COMPLETE_FOR_REGISTERED_SCOPE", "BOUND_COMPLETE_SOURCE_ONLY", "BOUND_COMPLETE_WITH_EXTERNAL_PROOF_BLOCKED", "BOUND_INCOMPLETE", "BOUND_BLOCKED_NOVEL_DIMENSION", "BOUND_BLOCKED_EXTERNAL_CONTRACT_DRIFT"],
+  "preimplementationGate": {
+    "id": "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    "requiredBefore": ["product-source-mutation", "frontend-implementation", "backend-implementation", "native-implementation", "data-migration", "provider-integration", "security-fix", "autonomous-repair"],
+    "requires": ["ENGINEERING_CLOSURE_PACKET_V1", "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1", "engineering-evidence-authority-v1", "actual GitHub PR and immutable Owner comment readback", "authoritative replay A/B/C 2/2", "finite-task artifact reservation"],
+    "failureCodes": ["PREIMPLEMENTATION_BOUNDARY_UNDEFINED", "PREIMPLEMENTATION_AFFECTED_DOMAIN_INCOMPLETE", "PREIMPLEMENTATION_DEPENDENCY_CLOSURE_INCOMPLETE", "PREIMPLEMENTATION_AUTHORITY_UNOWNED", "PREIMPLEMENTATION_STATE_MODEL_INCOMPLETE", "PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE", "PREIMPLEMENTATION_ADVERSARIAL_MATRIX_INCOMPLETE", "PREIMPLEMENTATION_PLATFORM_CONTRACT_STALE", "PREIMPLEMENTATION_PROVIDER_CONTRACT_STALE", "PREIMPLEMENTATION_MARKET_SCOPE_UNBOUND", "PREIMPLEMENTATION_DEFECT_LEDGER_UNSTABLE", "PREIMPLEMENTATION_SCOPE_UNBOUNDED", "PREIMPLEMENTATION_ROLLBACK_UNDEFINED", "PREIMPLEMENTATION_CLEANUP_UNDEFINED", "PREIMPLEMENTATION_OBSERVABILITY_UNDEFINED", "PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_REQUIRED", "PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_MISMATCH"]
+  },
   "gates": [
     {"id": "T0_REQUIREMENT", "passStatus": "REQUIREMENTS_CLEAR", "requiredBefore": ["implementation"], "missingStatus": "BLOCKED_INTERNAL", "completionFreshnessClasses": ["REPOSITORY_SOURCE"]},
     {"id": "T1_SOURCE", "passStatus": "SOURCE_CLEAR", "requiredBefore": ["pre-artifact"], "missingStatus": "BLOCKED_INTERNAL", "completionFreshnessClasses": ["REPOSITORY_SOURCE"]},
@@ -33,7 +40,7 @@
     {"featureId": "codex-security-scan-reliability-s0", "factId": "repository.assurance-control.s0.integration", "proofTiers": ["T3_INTEGRATION"], "freshnessClass": "REPOSITORY_SOURCE", "authorityAllowed": "REPOSITORY_ONLY", "platform": "NONE", "provider": "NONE"}
   ],
   "phaseBlockers": {
-    "implementation": ["T0_REQUIREMENT"],
+    "implementation": ["PREIMPLEMENTATION_ENGINEERING_CLEAR", "T0_REQUIREMENT"],
     "buildOrOta": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER"],
     "merge": ["applicable-gates", "repository-owned-independent-exact-head-review", "current-truth", "scope", "migration-parity"],
     "publicRelease": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY", "LEVEL_D_OWNER_APPROVAL"]

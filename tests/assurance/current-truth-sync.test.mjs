@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { validateEngineeringDoctrineTruth, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 
 const recordedMain = "a".repeat(40);
 const remoteMain = "b".repeat(40);
@@ -39,4 +39,12 @@ assert.equal(verify({ parents: ["d".repeat(40), "c".repeat(40)] }).ok, false);
 assert.equal(verify({ changedPaths: requiredChangedPaths.slice(1) }).ok, false);
 assert.equal(verify({ changedPaths: [...requiredChangedPaths, "app/index.tsx"] }).ok, false);
 
-process.stdout.write("current-truth synchronization contract: PASS (9 cases)\n");
+const truthContract = JSON.parse((await import("node:fs")).readFileSync("config/assurance/current-truth-contract-v1.json", "utf8"));
+assert.equal(validateEngineeringDoctrineTruth({}, truthContract, { currentMain: "8bf6459c3ae1cec62e26a1694f03063e4291b9f8", implementationMerged: false }).length, 0);
+assert.equal(validateEngineeringDoctrineTruth({}, truthContract).some(({ id }) => id === "ASSURANCE_ENGINEERING_DOCTRINE_MISSING"), true);
+assert.equal(validateEngineeringDoctrineTruth({}, truthContract, { currentMain: "f".repeat(40), implementationMerged: true }).some(({ id }) => id === "ASSURANCE_ENGINEERING_DOCTRINE_MISSING"), true);
+assert.equal(validateEngineeringDoctrineTruth({ engineeringDoctrine: { status: "ACTIVE", boundedDefinition: "COMPLETE" } }, truthContract).some(({ id }) => id === "ASSURANCE_UNIVERSAL_COMPLETENESS_CLAIM_REJECTED"), true);
+assert.deepEqual(truthContract.engineeringDoctrinePolicy.postMergeTruthPaths, requiredChangedPaths);
+assert.equal(truthContract.engineeringDoctrinePolicy.postMergeNextTask, "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE");
+
+process.stdout.write("current-truth synchronization contract: PASS (15 cases)\n");

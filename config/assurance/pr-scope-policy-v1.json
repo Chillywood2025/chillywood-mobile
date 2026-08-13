@@ -22,6 +22,13 @@
   ],
   "featureDomainBundles": [
     {
+      "featureId": "assurance-efficiency-e0",
+      "allowedHighRiskDomains": [
+        "autonomous-operators"
+      ],
+      "reason": "The whole-app engineering doctrine integrates Product Intelligence, First-Pass Assurance, active-task governance, and the existing autonomous/Cognitive operating model without granting autonomous mutation authority."
+    },
+    {
       "featureId": "livekit-media-transport",
       "allowedHighRiskDomains": ["Cognitive", "LiveKit", "database-RLS"],
       "reason": "LiveKit source-identity contracts may require their governed Cognitive configuration and exact database migration source in one bounded objective."
@@ -38,6 +45,53 @@
         "notifications-native-calls"
       ],
       "reason": "Native call provenance must bind the generated notification receiver and private native store to the authenticated Chat transition in one fail-closed lifecycle domain."
+    }
+  ],
+  "taskContextBindings": [
+    {
+      "bindingId": "doctrine-pr-226-v1",
+      "repository": "Chillywood2025/chillywood-mobile",
+      "pr": 226,
+      "branch": "codex/whole-app-engineering-doctrine-v1",
+      "baseRef": "main",
+      "featureId": "assurance-efficiency-e0",
+      "objectiveDomains": [
+        "autonomous-operators"
+      ],
+      "supportingDomains": [
+        "CI-test-infrastructure"
+      ],
+      "authoritySource": "OWNER_DOCTRINE_BOOTSTRAP"
+    },
+    {
+      "bindingId": "codex-security-s0-pr-206-v1",
+      "repository": "Chillywood2025/chillywood-mobile",
+      "pr": 206,
+      "branch": "codex/assurance-codex-security-scan-reliability-s0",
+      "baseRef": "main",
+      "featureId": "codex-security-scan-reliability-s0",
+      "objectiveDomains": [],
+      "supportingDomains": [
+        "CI-test-infrastructure"
+      ],
+      "authoritySource": "PROTECTED_TASK_REGISTRY",
+      "historicalWaiverPath": "config/assurance/codex-security-reliability-s0-scope-waiver-v1.json"
+    },
+    {
+      "bindingId": "d2a-pr-212-v1",
+      "repository": "Chillywood2025/chillywood-mobile",
+      "pr": 212,
+      "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
+      "baseRef": "main",
+      "featureId": "chilly-chat-call-lifecycle",
+      "objectiveDomains": [
+        "Chat",
+        "notifications-native-calls"
+      ],
+      "supportingDomains": [
+        "CI-test-infrastructure"
+      ],
+      "authoritySource": "ACTIVE_FINITE_TASK_LEASE"
     }
   ],
   "violations": [
