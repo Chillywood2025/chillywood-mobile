@@ -2014,11 +2014,8 @@ export function evaluateAutonomousEngineeringRequest(request) {
 
 const replaySourceIdentity = (root, taskIdentity) => {
   if (trustedGitHubTaskIdentity(taskIdentity)) return { head: taskIdentity.head, tree: taskIdentity.tree, candidateSnapshotHash: taskIdentity.diffHash, authority: "ACTUAL_GITHUB_PR" };
-  const run = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false });
-  const head = run(["rev-parse", "HEAD"]).stdout.trim();
-  const tree = run(["rev-parse", "HEAD^{tree}"]).stdout.trim();
   const subjects = DOCTRINE_PATHS.filter((name) => fs.existsSync(path.join(root, name)) && !["config/assurance/whole-app-domain-graph-v1.json", "docs/assurance/whole-app-engineering-doctrine-v1-report.json"].includes(name)).map((name) => ({ path: name, sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, name))).digest("hex") }));
-  return { head, tree, candidateSnapshotHash: hashValue(subjects), authority: "PROVISIONAL_LOCAL_WORKTREE" };
+  return { head: "PROVISIONAL_LOCAL_DRAFT", tree: "PROVISIONAL_LOCAL_DRAFT", candidateSnapshotHash: hashValue(subjects), authority: "PROVISIONAL_LOCAL_WORKTREE" };
 };
 const replayReceipt = ({ laneId, item, sourceIdentity, generatorSourceHash, result, findings = [], deferredClassification = null }) => {
   const body = {
@@ -2037,7 +2034,7 @@ const replayReceipt = ({ laneId, item, sourceIdentity, generatorSourceHash, resu
     observedAt: "SOURCE_DETERMINISTIC_NO_CLOCK",
     expiresAt: null,
     factsCovered: item.factsCovered,
-    authorityAllowed: true,
+    authorityAllowed: sourceIdentity.authority === "ACTUAL_GITHUB_PR",
     replayResult: "REPLAY_MATCH",
     findings,
     deferredClassification,
