@@ -1442,7 +1442,9 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
   const commentsRead = paginatedIssueComments(root, identity.repository, identity.pr);
   const architectureComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
   const noCompetingDomainOwner = Array.isArray(currentTruth?.openImplementationPrs) && currentTruth.openImplementationPrs.length === 0;
-  const architectureAuthority = verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, identity, tree, scope, noCompetingDomainOwner });
+  const architectureAuthority = architectureComments.length
+    ? verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, identity, tree, scope, noCompetingDomainOwner })
+    : null;
 
   const activeLeaseStates = new Set(["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "IMPLEMENTATION", "VERIFY", "NATIVE_PROVIDER_PROOF", "MERGE_ELIGIBLE", "ACTIVE_IMPLEMENTATION"]);
   const leases = (currentTruth?.finiteTaskLeases?.tasks ?? []).filter((lease) => lease?.implementationPr === identity.pr && lease?.implementationBranch === identity.branch && activeLeaseStates.has(lease?.taskState));
