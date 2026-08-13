@@ -2220,7 +2220,7 @@ export function evaluatePreimplementationGate(packet, supplied = {}) {
   const root = supplied.root ?? REPOSITORY_ROOT;
   const taskIdentity = supplied.taskIdentityObservation;
   const authoritativeIdentity = trustedGitHubTaskIdentity(taskIdentity);
-  const replay = authoritativeReplayOnce({ root, taskIdentity: authoritativeIdentity ? taskIdentity : null });
+  const replay = authoritativeIdentity ? runAuthoritativeReplay({ root, taskIdentity, runs: 1 }).output : authoritativeReplayOnce({ root });
   const declared = evaluateDeclaredPacketGate(packet, {
     ...supplied,
     taskIdentity: authoritativeIdentity ? { task: packet?.task, pr: String(taskIdentity.pr), leaseId: String(taskIdentity.leaseId), closureArtifactHash: packet?.sections?.L_COMPLETENESS_CERTIFICATE?.closureArtifactHash, currentHead: taskIdentity.head } : supplied.taskIdentity,
@@ -2617,7 +2617,7 @@ export function runAuthoritativeReplay({ root = REPOSITORY_ROOT, taskIdentity = 
 export function makeBootstrapPacket(root = REPOSITORY_ROOT, options = {}) {
   const bootstrap = options.bootstrap !== false;
   const taskIdentityObservation = options.taskIdentityObservation ?? null;
-  const replay = authoritativeReplayOnce({ root, taskIdentity: taskIdentityObservation });
+  const replay = trustedGitHubTaskIdentity(taskIdentityObservation) ? runAuthoritativeReplay({ root, taskIdentity: taskIdentityObservation, runs: 1 }).output : authoritativeReplayOnce({ root });
   const graph = generateDomainGraph(root);
   const inventory = graph.inventory;
   const doctrine = readJson(root, "config/assurance/engineering-doctrine-v1.json");
