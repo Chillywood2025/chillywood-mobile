@@ -1802,7 +1802,31 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
   return { ok, type: "TERMINAL_TRUTH_SUCCESSOR", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: repairMode ? "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" : "TERMINAL_TRUTH_SUCCESSOR_V1", bindingId: `terminal-truth-successor-pr-${identity?.pr}`, budget: { maximumFiles: expectedPaths.length, maximumHandAuthoredNetLines: maximumLines }, commentId: current?.normalized?.id ?? null, commentBodyHash: current?.normalized?.bodyHash ?? null, subjectHash: hashValue(subject), subject, currentTerminalReceiptId: current?.normalized?.id ?? null, historicalTerminalReceiptIds: receipts.filter(({ status }) => status === "HISTORICAL_STALE_TERMINAL_RECEIPT").map(({ normalized }) => normalized.id).sort((left, right) => left - right), terminalReceiptClassifications: receipts.map(({ normalized, status }) => ({ commentId: normalized?.id ?? null, status })).sort((left, right) => (left.commentId ?? 0) - (right.commentId ?? 0)), checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `TERMINAL_TRUTH_SUCCESSOR_INVALID:${key}`) };
 }
 
-const typedGh = (root, args) => spawnSync("gh", ["api", "--method=GET", ...args], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSync } = {}) {
+  const options = { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 };
+  const authenticated = run("gh", ["api", "--method=GET", ...args], options);
+  if (authenticated.status === 0) return authenticated;
+  const endpoint = args.at(-1);
+  const paginated = args.includes("--paginate") && args.includes("--slurp");
+  const pathname = typeof endpoint === "string" ? endpoint.split("?", 1)[0] : "";
+  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/files)?)?|issues\/[1-9]\d*\/comments|commits\/[0-9a-f]{40}\/pulls)$/u.test(pathname);
+  if (!allowedPath || /(?:\.\.|%2e|%2f|#)/iu.test(endpoint)) return authenticated;
+  const pages = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const separator = endpoint.includes("?") ? "&" : "?";
+    const pageEndpoint = paginated ? `${endpoint}${separator}per_page=100&page=${page}` : endpoint;
+    const response = run("curl", ["--fail", "--silent", "--show-error", "--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28", "--header", "User-Agent: chillywood-assurance-readonly", `https://api.github.com/${pageEndpoint}`], options);
+    if (response.status !== 0) return response;
+    if (!paginated) return response;
+    let values;
+    try { values = JSON.parse(response.stdout); } catch { return { ...response, status: 1 }; }
+    if (!Array.isArray(values)) return { ...response, status: 1 };
+    pages.push(values);
+    if (values.length < 100) return { ...response, status: 0, stdout: JSON.stringify(pages) };
+  }
+  return { status: 1, stdout: "", stderr: "ASSURANCE_GITHUB_PAGINATION_BOUND_EXCEEDED" };
+}
+const typedGh = (root, args) => readGitHubApi({ root, args });
 const typedGit = (root, args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
 const parsedResponse = (response, fallback = null) => { try { return response.status === 0 ? JSON.parse(response.stdout) : fallback; } catch { return fallback; } };
 const paginatedArray = (root, endpoint) => {

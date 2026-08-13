@@ -48,7 +48,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, contentSnapshotSubject, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts } from "../../scripts/assurance/engineering-closure.mjs";
+import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, contentSnapshotSubject, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, readGitHubApi, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts } from "../../scripts/assurance/engineering-closure.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -2108,6 +2108,24 @@ test("engineering closure inherits one exact typed terminal context from GitHub 
   assert.deepEqual(wrongReadback.findings, ["ENGINEERING_CLOSURE_ASSURANCE_PR_EVENT_READBACK_MISMATCH"]);
   assert.deepEqual(ambiguous.findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS"]);
   assert.equal(deriveEngineeringClosureExecutionMode({ taskContext: exact.taskContext, changedPaths: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS }).mode, "TERMINAL_TRUTH_SUCCESSOR");
+});
+
+test("engineering closure uses bounded public readback when a contract job has no GH token", () => {
+  const calls = [];
+  const run = (command, commandArgs) => {
+    calls.push([command, commandArgs]);
+    if (command === "gh") return { status: 4, stdout: "", stderr: "authentication required" };
+    const page = new URL(commandArgs.at(-1)).searchParams.get("page");
+    return { status: 0, stdout: JSON.stringify(page === "1" ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1 })) : [{ id: 101 }]), stderr: "" };
+  };
+  const result = readGitHubApi({ args: ["--paginate", "--slurp", "repos/Chillywood2025/chillywood-mobile/issues/228/comments?per_page=100"], run });
+  assert.equal(result.status, 0);
+  assert.equal(JSON.parse(result.stdout).flat().length, 101);
+  assert.equal(calls.filter(([command]) => command === "curl").length, 2);
+  assert.equal(calls.every(([, commandArgs]) => !commandArgs.some((value) => /^Authorization:/u.test(value))), true);
+  assert.equal(readGitHubApi({ args: ["--paginate", "--slurp", `repos/Chillywood2025/chillywood-mobile/commits/${"a".repeat(40)}/pulls?per_page=100`], run }).status, 0);
+  assert.equal(readGitHubApi({ args: ["--paginate", "--slurp", "repos/Chillywood2025/chillywood-mobile/pulls?state=open&base=main&per_page=100"], run }).status, 0);
+  assert.notEqual(readGitHubApi({ args: ["--paginate", "--slurp", "repos/other/repository/issues/228/comments"], run }).status, 0);
 });
 
 const d2aTerminalStatuses = {
