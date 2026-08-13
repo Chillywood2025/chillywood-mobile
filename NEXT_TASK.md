@@ -2,11 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-1. ACTIVATE_WHOLE_APP_ENGINEERING_DOCTRINE
-2. Perform doctrine-governed whole-app pre-release engineering closure.
-3. Complete approved frontend, backend, native, provider, and UX changes under the doctrine.
-4. Freeze final source only after the launch defect/change ledger closes.
-5. Create signed Android/iOS candidates only after that final freeze.
+1. WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE
 
 Ordinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.
 

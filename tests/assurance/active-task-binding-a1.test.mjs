@@ -32,6 +32,7 @@ import {
   renderNextTask,
   resolveCurrentProtectedBase,
   stableJson,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
   taskLeaseAmendmentCommentBody,
   taskLeaseAmendmentSubject,
   transitionFiniteTaskState,
@@ -47,7 +48,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, contentSnapshotSubject, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, structuralGraphSubject, validateDoctrineBaselineArtifacts } from "../../scripts/assurance/engineering-closure.mjs";
+import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, contentSnapshotSubject, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, readGitHubApi, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts } from "../../scripts/assurance/engineering-closure.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -117,6 +118,8 @@ const latestMergedFor = (candidate) => ({
 });
 const truth = {
   ...canonicalTruth,
+  engineeringDoctrine: undefined,
+  taskContextArchitecture: undefined,
   lateReviewSentinels: [],
   activeTaskBinding: binding,
   assuranceProgram: { ...canonicalTruth.assuranceProgram, active: binding.featureId },
@@ -1832,7 +1835,7 @@ const recoveryMerge = digest("typed-context-recovery-merge").slice(0, 40);
 const recoverySource = digest("typed-context-recovery-source").slice(0, 40);
 const recoveryTree = digest("typed-context-recovery-tree").slice(0, 40);
 
-function pendingTransitionEvaluation({ recovery = false, terminal = false, mutateHistorical, mutateRecovery, mutateTerminal, append = [] } = {}) {
+function pendingTransitionEvaluation({ recovery = false, terminal = false, repair = false, mutateHistorical, mutateRecovery, mutateTerminal, append = [] } = {}) {
   const record = structuredClone(canonicalTruth);
   record.mainSha = HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.firstParent;
   record.protectedMainAuthority.checkpointSha = record.mainSha;
@@ -1863,14 +1866,15 @@ function pendingTransitionEvaluation({ recovery = false, terminal = false, mutat
     mutateRecovery?.(value);
     observations.push(value);
   }
-  if (terminal) {
+  if (terminal || repair) {
     const value = {
       commit: digest("terminal-successor-merge").slice(0, 40),
       parents: [observations.at(-1).commit, digest("terminal-successor-source").slice(0, 40)],
       tree: digest("terminal-successor-tree").slice(0, 40),
-      subject: "Activate whole-app engineering doctrine (#902)",
-      changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
-      terminalSuccessor: true
+      subject: repair ? "Activate whole-app engineering doctrine (#228)" : "Activate whole-app engineering doctrine (#902)",
+      changedPaths: repair ? [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS] : ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"],
+      terminalSuccessor: true,
+      terminalRepair: repair
     };
     mutateTerminal?.(value);
     observations.push(value);
@@ -1901,12 +1905,23 @@ function pendingTransitionEvaluation({ recovery = false, terminal = false, mutat
         if (!matching?.terminalSuccessor) return "";
         const transitionMerges = observations.slice(0, observations.indexOf(matching)).filter(({ commit: candidate }) => candidate === HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha || candidate === recoveryMerge);
         return JSON.stringify({
-          engineeringDoctrine: { nextPermittedAction: matching.terminalExpectedNextTask ?? "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" },
+          protectedMainAuthority: { schemaVersion: 1, policyId: "ROLLING_PROTECTED_MAIN_AUTHORITY_V1", allowProtectedAdvancement: true, checkpointSha: record.mainSha, checkpointTree: record.protectedMainAuthority.checkpointTree },
+          engineeringDoctrine: { status: "ACTIVE", nextPermittedAction: matching.terminalExpectedNextTask ?? "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" },
           taskContextArchitecture: {
             pendingTransitionPolicyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
             pendingTransitionCountAfterSynchronization: 0,
             terminalTransitionConsumed: true,
-            pendingTransitions: transitionMerges.map(({ commit: mergeSha }) => ({ mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" })),
+            pendingTransitions: transitionMerges.map(({ commit: mergeSha }, index) => ({ ...(matching.terminalRepair ? { pr: index === 0 ? 226 : 227 } : {}), mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" })),
+            ...(matching.terminalRepair ? { terminalVerifierRepair: {
+              classification: "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+              historicalTerminalReceipt: 5280368893,
+              rejectedPredecessorReceipt: 5277679438,
+              canonicalPredecessorReceipt: 5280109323,
+              rawPredecessorDiffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
+              canonicalPredecessorDiffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+              singleUse: true,
+              authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
+            } } : {}),
             authority: matching.terminalAuthority ?? { providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
           }
         });
@@ -1959,6 +1974,31 @@ test("pending transition 18: exact three-file successor consumes PR 226 and PR 2
   assert.equal(result.pendingTransitionCount, 0, result.findings.join(","));
   assert.equal(result.pendingTransitionConsumptionCount, 1);
   assert.equal(result.findings.length, 0);
+});
+test("combined terminal verifier repair consumes both pending transitions without creating a third", () => {
+  const result = pendingTransitionEvaluation({ recovery: true, repair: true });
+  assert.equal(result.pendingTransitionCount, 0, result.findings.join(","));
+  assert.equal(result.pendingTransitionConsumptionCount, 1);
+  assert.equal(result.findings.length, 0);
+  assert.equal(result.advancementClassifications.at(-1).terminalVerifierRepair, true);
+  assert.equal(result.providerDependentEligible, false);
+  assert.equal(result.buildEligible, false);
+  assert.equal(result.submissionEligible, false);
+  assert.equal(result.otaEligible, false);
+  assert.equal(result.publicReleaseEligible, false);
+});
+test("combined terminal verifier repair is exact, single-use, and authority-closed", () => {
+  const mutations = [
+    (value) => { value.changedPaths.push("README.md"); },
+    (value) => { value.changedPaths = [...value.changedPaths.slice(0, -1), "app/index.tsx"]; },
+    (value) => { value.subject = "Activate whole-app engineering doctrine (#229)"; },
+    (value) => { value.terminalAuthority = { build: true }; },
+  ];
+  for (const mutateTerminal of mutations) assert.ok(pendingTransitionEvaluation({ recovery: true, repair: true, mutateTerminal }).findings.length > 0);
+  const duplicate = { commit: digest("duplicate-repair").slice(0, 40), parents: [digest("terminal-successor-merge").slice(0, 40), digest("duplicate-repair-source").slice(0, 40)], tree: digest("duplicate-repair-tree").slice(0, 40), subject: "Activate whole-app engineering doctrine (#228)", changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], terminalSuccessor: true, terminalRepair: true };
+  const duplicateResult = pendingTransitionEvaluation({ recovery: true, repair: true, append: [duplicate] });
+  assert.ok(duplicateResult.findings.length > 0, stableJson(duplicateResult));
+  assert.equal(new Set(Array.from({ length: 3 }, () => stableJson(pendingTransitionEvaluation({ recovery: true, repair: true })))).size, 1);
 });
 test("pending transitions 19-23: successor rejects fourth path, wrong predecessor/next task, build, and provider authority", () => {
   const mutations = [
@@ -2049,6 +2089,43 @@ test("doctrine baseline/current delta controls 39-48: modes, reports, callers, a
   const source = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
   const controls = [architecture.mode === "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE", bootstrap.mode === "DOCTRINE_BOOTSTRAP_SELF_HOST", product.mode === "PRODUCT_DOMAIN_TASK", terminal.mode === "TERMINAL_TRUTH_SUCCESSOR", !injected.ok, new Set(reports.map(({ currentTaskReportHash }) => currentTaskReportHash)).size === 1, reports[0].classification === "CURRENT_ENGINEERING_TASK_REPORT_V1", Object.values(reports[0].authority).every((value) => value === false), !source.includes("WHOLE_APP_DOMAIN_GRAPH_STALE"), !source.includes("WHOLE_APP_DOCTRINE_REPORT_STALE")];
   assert.equal(controls.length, 10); assert.equal(controls.every(Boolean), true);
+});
+
+test("engineering closure inherits one exact typed terminal context from GitHub event readback", () => {
+  const sourceHead = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  const sourceTree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).stdout.trim();
+  const baseSha = spawnSync("git", ["rev-parse", "origin/main"], { encoding: "utf8" }).stdout.trim();
+  const branch = spawnSync("git", ["branch", "--show-current"], { encoding: "utf8" }).stdout.trim();
+  const event = { repository: { full_name: "Chillywood2025/chillywood-mobile" }, number: 228, pull_request: { number: 228, state: "open", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/228", base: { ref: "main", sha: baseSha }, head: { ref: branch, sha: sourceHead } } };
+  const readback = { number: 228, repository: event.repository.full_name, baseRef: "main", baseSha, headRef: branch, headSha: sourceHead, htmlUrl: event.pull_request.html_url, state: "open" };
+  const taskContext = { ok: true, type: "TERMINAL_TRUTH_SUCCESSOR", authoritySource: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" };
+  const input = { event, localIdentity: { branch, head: sourceHead, tree: sourceTree, base: baseSha }, scope: { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500 }, currentTruth: canonicalTruth, readPull: () => readback, sourceAncestryVerified: true };
+  const exact = resolveEngineeringClosureTaskContext({ ...input, observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
+  const wrongReadback = resolveEngineeringClosureTaskContext({ ...input, readPull: () => ({ ...readback, headSha: "0".repeat(40) }), observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
+  const ambiguous = resolveEngineeringClosureTaskContext({ ...input, observeAuthorities: () => ({ architectureAuthority: { ok: true }, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
+  assert.equal(exact.ok, true);
+  assert.equal(exact.taskContext.authoritySource, "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1");
+  assert.deepEqual(wrongReadback.findings, ["ENGINEERING_CLOSURE_ASSURANCE_PR_EVENT_READBACK_MISMATCH"]);
+  assert.deepEqual(ambiguous.findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS"]);
+  assert.equal(deriveEngineeringClosureExecutionMode({ taskContext: exact.taskContext, changedPaths: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS }).mode, "TERMINAL_TRUTH_SUCCESSOR");
+});
+
+test("engineering closure uses bounded public readback when a contract job has no GH token", () => {
+  const calls = [];
+  const run = (command, commandArgs) => {
+    calls.push([command, commandArgs]);
+    if (command === "gh") return { status: 4, stdout: "", stderr: "authentication required" };
+    const page = new URL(commandArgs.at(-1)).searchParams.get("page");
+    return { status: 0, stdout: JSON.stringify(page === "1" ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1 })) : [{ id: 101 }]), stderr: "" };
+  };
+  const result = readGitHubApi({ args: ["--paginate", "--slurp", "repos/Chillywood2025/chillywood-mobile/issues/228/comments?per_page=100"], run });
+  assert.equal(result.status, 0);
+  assert.equal(JSON.parse(result.stdout).flat().length, 101);
+  assert.equal(calls.filter(([command]) => command === "curl").length, 2);
+  assert.equal(calls.every(([, commandArgs]) => !commandArgs.some((value) => /^Authorization:/u.test(value))), true);
+  assert.equal(readGitHubApi({ args: ["--paginate", "--slurp", `repos/Chillywood2025/chillywood-mobile/commits/${"a".repeat(40)}/pulls?per_page=100`], run }).status, 0);
+  assert.equal(readGitHubApi({ args: ["--paginate", "--slurp", "repos/Chillywood2025/chillywood-mobile/pulls?state=open&base=main&per_page=100"], run }).status, 0);
+  assert.notEqual(readGitHubApi({ args: ["--paginate", "--slurp", "repos/other/repository/issues/228/comments"], run }).status, 0);
 });
 
 const d2aTerminalStatuses = {

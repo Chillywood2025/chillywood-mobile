@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 import { args, emit, evaluateProtectedMainAdvancement, git, readJson } from "./lib.mjs";
-import { hashValue, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
+import { canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
 import { deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
 const options = args();
@@ -25,7 +25,7 @@ const readGitScope = (base, head) => {
   const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
   const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
   const diff = git(["diff", "--full-index", "--no-ext-diff", `${base}...${head}`]);
-  return { files, additions, deletions, diffHash: hashValue(diff) };
+  return { files, additions, deletions, diffHash: canonicalGitDiffHash(diff) };
 };
 const readPull = (repository, pr) => {
   const result = spawnSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], { encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
