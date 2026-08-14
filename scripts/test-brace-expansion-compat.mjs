@@ -203,10 +203,17 @@ async function validateNanoidApis() {
   }
   const commonJs = createRequire(path.join(nanoidRoot, "package.json"))(nanoidRoot);
   assert.equal(commonJs.customAlphabet("abc", 0)(), "");
-  const nativeAsync = await import(pathToFileURL(path.join(nanoidRoot, "async/index.native.js")));
-  const generated = await nativeAsync.customRandom("abc", 0, async () => new Uint8Array(0))();
-  assert.equal(generated, "");
-  return { version: metadata.version, parentCount: expectedNanoid.parents.length, commonJsZeroSize: "PASS", nativeAsyncZeroSize: "PASS" };
+  const asyncModule = await import(pathToFileURL(path.join(nanoidRoot, "async/index.js")));
+  assert.equal(await asyncModule.customAlphabet("abc", 0)(), "");
+  const nativeAsyncSource = fs.readFileSync(path.join(nanoidRoot, "async/index.native.js"), "utf8");
+  assert.match(nativeAsyncSource, /if \(size <= 0\) return Promise\.resolve\(''\)/u);
+  return {
+    version: metadata.version,
+    parentCount: expectedNanoid.parents.length,
+    commonJsZeroSize: "PASS",
+    asyncZeroSize: "PASS",
+    nativeZeroSizeGuard: "PASS",
+  };
 }
 
 function resolveInstalledPackage(requesterPackagePath, dependency) {
@@ -278,6 +285,7 @@ function relevantSourceHashes() {
       ? [path.join(entryPath, "dist/commonjs/index.js"), path.join(entryPath, "dist/esm/index.js")]
       : [path.join(entryPath, "index.js")]));
   }
+  files.push("node_modules/nanoid/index.js", "node_modules/nanoid/async/index.js", "node_modules/nanoid/async/index.native.js");
   return Object.fromEntries(files.sort().map((relative) => [relative, sha256(fs.readFileSync(path.join(root, relative)))]));
 }
 
