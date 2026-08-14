@@ -82,6 +82,7 @@ export const hashValue = (value) =>
     .update(typeof value === "string" ? value : stableJson(value))
     .digest("hex");
 export const canonicalGitDiffHash = (value) => hashValue(canonicalGitText(value));
+export const canonicalGitDiffArgs = (range) => ["diff", "--full-index", "--binary", "--no-ext-diff", range];
 export const compareUtf8 = (left, right) => Buffer.compare(Buffer.from(String(left), "utf8"), Buffer.from(String(right), "utf8"));
 export const canonicalSort = (values) => values.sort(compareUtf8);
 const walk = (root, relative, accept = () => true) => {
@@ -1436,6 +1437,7 @@ export const ARCHITECTURE_MAINTENANCE_MARKER = "<!-- chillywood-assurance-archit
 export const ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER = "<!-- chillywood-assurance-architecture-maintenance-successor-v1 -->";
 export const ARCHITECTURE_FINAL_SOURCE_MARKER = "<!-- chillywood-assurance-architecture-final-source-v1 -->";
 export const PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER = "<!-- chillywood-pre-admission-capability-dependency-amendment-v1 -->";
+export const ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER = "<!-- chillywood-assurance-architecture-final-source-correction-v1 -->";
 export const TERMINAL_TRUTH_SUCCESSOR_MARKER = "<!-- chillywood-terminal-truth-successor-v1 -->";
 export const FINITE_TASK_ADMISSION_MARKER = "<!-- chillywood-finite-task-admission-v1 -->";
 export const TYPED_CONTEXT_ARCHITECTURE_PATHS = Object.freeze([
@@ -1581,7 +1583,7 @@ export function architectureMaintenanceSuccessorSubject({ identity, tree, scope,
 export const architectureMaintenanceSuccessorOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER, subject.type, subject);
 
 const HISTORICAL_ARCHITECTURE_RECEIPT = Object.freeze({ commentId: 5277054532, head: "63cadbe5ac97c9d4358bf9bdf9069384f1f2b8f9", tree: "42818b41c363d3b528d125c1612f283bf8caf483", subjectHash: "7f39f0ab62c9cad3a8077f2dc16c98ead1767c45c7cebcda945afeb44b4a985e", bodyHash: "fd569184ab4150b0d2b112e053d29a4d974ea10a096b1638fe09c2b580752e0d" });
-export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, dependencyAmendmentRaw, historicalRejectedRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
+export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, dependencyAmendmentRaw, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject ?? {};
@@ -1589,8 +1591,17 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
     const observed = exactScope(scope);
     const amendment = normalizeGitHubCommentIdentity(dependencyAmendmentRaw, { repository: identity?.repository, pr: identity?.pr, commentId: dependencyAmendmentRaw?.id });
     const amendmentPayload = parseExactOwnerBody(amendment, PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER);
-    const rejected = normalizeGitHubCommentIdentity(historicalRejectedRaw, { repository: identity?.repository, pr: identity?.pr, commentId: historicalRejectedRaw?.id });
-    const rejectedPayload = parseExactOwnerBody(rejected, ARCHITECTURE_FINAL_SOURCE_MARKER);
+    const rejectedInputs = historicalRejectedRaws.length > 0 ? historicalRejectedRaws : historicalRejectedRaw ? [historicalRejectedRaw] : [];
+    const rejectedReceipts = rejectedInputs.map((item) => {
+      const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
+      const payload = parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
+      const disposition = normalized?.id === 5286301806
+        ? "HISTORICAL_REJECTED_CANONICAL_LINE_COUNT_MISMATCH"
+        : "HISTORICAL_REJECTED_CANONICAL_DIFF_HASH_MISMATCH";
+      return payload?.subject ? { commentId: normalized.id, subjectHash: payload.subjectHash, bodyHash: normalized.bodyHash, disposition } : null;
+    }).filter(Boolean);
+    const correction = normalizeGitHubCommentIdentity(finalSourceCorrectionRaw, { repository: identity?.repository, pr: identity?.pr, commentId: finalSourceCorrectionRaw?.id });
+    const correctionPayload = parseExactOwnerBody(correction, ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER);
     const dependency = amendmentPayload?.subject ? {
       blockerPacketHash: dependencyEvidence?.blockerPacketHash,
       packageJsonHash: shaBytes(fs.readFileSync(path.join(root, "package.json"))),
@@ -1602,7 +1613,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       capabilityTestHashes: ["tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"].map((file) => ({ path: file, hash: shaBytes(fs.readFileSync(path.join(root, file))) })),
       currentTruthHashes: ["config/assurance/current-truth-v1.json", "CURRENT_STATE.md", "NEXT_TASK.md"].map((file) => ({ path: file, hash: shaBytes(fs.readFileSync(path.join(root, file))) })),
     } : null;
-    return { type: "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, protectedBase: identity?.baseSha, originalCommentId: original?.id, originalSubjectHash: originalPayload?.subjectHash, originalBodyHash: original?.bodyHash, originalHead: originalSubject.currentHead, originalTree: originalSubject.currentTree, dependencyAmendment: amendmentPayload?.subject ? { commentId: amendment?.id, subjectHash: amendmentPayload.subjectHash, bodyHash: amendment?.bodyHash } : null, historicalRejectedReceipt: rejectedPayload?.subject ? { commentId: rejected?.id, subjectHash: rejectedPayload.subjectHash, bodyHash: rejected?.bodyHash, disposition: "HISTORICAL_REJECTED_CANONICAL_LINE_COUNT_MISMATCH" } : null, currentHead: identity?.headSha, currentTree: tree, finalHead: identity?.headSha, finalTree: tree, changedPaths: observed.changedPaths, changedPathHash: observed.changedPathHash, diffHash: scope?.diffHash ?? null, additions: Number(scope?.additions ?? 0), deletions: Number(scope?.deletions ?? 0), netChangedLines: observed.netChangedLines, budget: amendmentPayload?.subject ? { maximumFiles: 15, maximumNetLines: 4500 } : { maximumFiles: 13, maximumNetLines: 3000 }, objective: originalSubject.objective, capabilities: originalSubject.capabilities, dependencyEvidence: dependency, currentTruthCompanionIncluded: true, terminalTruthRequired: false, authority: originalSubject.authority, ownerIdentity: { login: "Chillywood2025", association: "OWNER" }, immutableCommentRequired: true, createdAtEqualsUpdatedAtRequired: true, expiresOn: `PR_${identity?.pr}_MERGE` };
+    return { type: "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, protectedBase: identity?.baseSha, originalCommentId: original?.id, originalSubjectHash: originalPayload?.subjectHash, originalBodyHash: original?.bodyHash, originalHead: originalSubject.currentHead, originalTree: originalSubject.currentTree, dependencyAmendment: amendmentPayload?.subject ? { commentId: amendment?.id, subjectHash: amendmentPayload.subjectHash, bodyHash: amendment?.bodyHash } : null, finalSourceCorrection: correctionPayload?.subject ? { commentId: correction?.id, subjectHash: correctionPayload.subjectHash, bodyHash: correction?.bodyHash } : null, historicalRejectedReceipts: rejectedReceipts, currentHead: identity?.headSha, currentTree: tree, finalHead: identity?.headSha, finalTree: tree, changedPaths: observed.changedPaths, changedPathHash: observed.changedPathHash, diffHash: scope?.diffHash ?? null, additions: Number(scope?.additions ?? 0), deletions: Number(scope?.deletions ?? 0), netChangedLines: observed.netChangedLines, budget: amendmentPayload?.subject ? { maximumFiles: 15, maximumNetLines: 4500 } : { maximumFiles: 13, maximumNetLines: 3000 }, objective: originalSubject.objective, capabilities: originalSubject.capabilities, dependencyEvidence: dependency, currentTruthCompanionIncluded: true, terminalTruthRequired: false, authority: originalSubject.authority, ownerIdentity: { login: "Chillywood2025", association: "OWNER" }, immutableCommentRequired: true, createdAtEqualsUpdatedAtRequired: true, expiresOn: `PR_${identity?.pr}_MERGE` };
   }
   const historical = normalizeGitHubCommentIdentity(historicalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: historicalRaw?.id });
   const historicalPayload = parseExactOwnerBody(historical, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
@@ -1695,6 +1706,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const successorMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER}\n`));
   const finalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
   const dependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER}\n`));
+  const finalSourceCorrectionMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER}\n`));
   const observed = exactScope(scope);
   if (originalSubject?.objective === "install governed pre-admission seed packets and generic finite-task admission successors") {
     const body = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
@@ -1705,10 +1717,17 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const amendmentBody = Object.fromEntries(Object.entries(amendmentPayload ?? {}).filter(([key]) => key !== "bodyHash"));
     const amendmentSubject = amendmentPayload?.subject;
     const amended = Boolean(amendmentSubject);
-    const rejectedRaw = finalMatches.find(({ id }) => id === 5286301806);
-    const rejected = rejectedRaw ? normalizeGitHubCommentIdentity(rejectedRaw, { repository: identity?.repository, pr: identity?.pr, commentId: 5286301806 }) : null;
-    const rejectedPayload = parseExactOwnerBody(rejected, ARCHITECTURE_FINAL_SOURCE_MARKER);
-    const currentFinals = finalMatches.filter(({ id }) => id !== 5286301806).map((item) => {
+    const rejectedReceiptIds = [5286301806, 5288255120];
+    const rejectedRaws = rejectedReceiptIds.map((id) => finalMatches.find((item) => item.id === id)).filter(Boolean);
+    const rejectedRecords = rejectedRaws.map((item) => {
+      const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item.id });
+      return { normalized, payload: parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER) };
+    });
+    const correctionRaw = finalSourceCorrectionMatches[0];
+    const correction = correctionRaw ? normalizeGitHubCommentIdentity(correctionRaw, { repository: identity?.repository, pr: identity?.pr, commentId: correctionRaw.id }) : null;
+    const correctionPayload = parseExactOwnerBody(correction, ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER);
+    const correctionBody = Object.fromEntries(Object.entries(correctionPayload ?? {}).filter(([key]) => key !== "bodyHash"));
+    const currentFinals = finalMatches.filter(({ id }) => !rejectedReceiptIds.includes(id)).map((item) => {
       const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item.id });
       const payload = parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
       return { normalized, payload };
@@ -1716,7 +1735,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const normalizedFinal = currentFinals[0]?.normalized ?? null;
     const finalPayload = currentFinals[0]?.payload ?? null;
     const expected = descendant
-      ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, dependencyAmendmentRaw: amendmentRaw, historicalRejectedRaw: rejectedRaw, dependencyEvidence: finalPayload?.subject?.dependencyEvidence, root })
+      ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, dependencyAmendmentRaw: amendmentRaw, historicalRejectedRaws: rejectedRaws, finalSourceCorrectionRaw: correctionRaw, dependencyEvidence: finalPayload?.subject?.dependencyEvidence, root })
       : architectureMaintenanceSubject({ identity, tree, scope, profile: "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1" });
     const dependency = finalPayload?.subject?.dependencyEvidence;
     const fixedAddedPaths = ["package-lock.json", "package.json", "scripts/test-brace-expansion-compat.mjs"];
@@ -1740,10 +1759,31 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       && amendmentSubject.advisories[0]?.fixedVersion === "3.3.18"
       && amendmentSubject?.dependencyBlockerPacketHash === "6930b7e3c0cf3f6bb4634c57738ce6cbb326cc88087998a24271f696d67f804a"
       && Object.values(amendmentSubject?.authority ?? {}).every((value) => value === false));
-    const rejectedHistorical = !amended || (rejected?.id === 5286301806
-      && rejected?.bodyHash === "095b5a88b4c795566d70fdf9b16c26e72d6c6d521a08b703146373f09118c250"
-      && rejectedPayload?.subjectHash === "936129f9e4e6d21f0805d3074f3339b081391ea00248e070824893f4f27d090e"
-      && rejectedPayload?.subject?.netChangedLines === 507);
+    const expectedRejectedReceipts = [
+      { id: 5286301806, bodyHash: "095b5a88b4c795566d70fdf9b16c26e72d6c6d521a08b703146373f09118c250", subjectHash: "936129f9e4e6d21f0805d3074f3339b081391ea00248e070824893f4f27d090e", field: "netChangedLines", value: 507 },
+      { id: 5288255120, bodyHash: "143103b3f956b0add4469f65023e171f027dbdedeb476ac628d44fa2e1b9b865", subjectHash: "1416d9ca37e484e6ba98060687f21c8a6a04caed5f8980f64a4e16b0947a6e11", field: "diffHash", value: "c333c824cebc63f327ac3363c559fb202743b0f3d754367244b5cf1ff1580bdf" },
+    ];
+    const rejectedHistorical = !amended || (rejectedRecords.length === expectedRejectedReceipts.length && expectedRejectedReceipts.every((expectedReceipt) => {
+      const record = rejectedRecords.find(({ normalized }) => normalized?.id === expectedReceipt.id);
+      return record?.normalized?.bodyHash === expectedReceipt.bodyHash && record?.payload?.subjectHash === expectedReceipt.subjectHash && record?.payload?.subject?.[expectedReceipt.field] === expectedReceipt.value;
+    }));
+    const correctionSubject = correctionPayload?.subject;
+    const correctionAuthority = !amended || (finalSourceCorrectionMatches.length === 1
+      && correction?.id === 5288382574
+      && correction?.createdAt === correction?.updatedAt
+      && correction?.bodyHash === "89673503a665bdb2e86078387707c98595f1864c488851987e39b32feb17a398"
+      && correctionPayload?.subjectHash === "b3b09d83f9fa10d2c90f43dd1bed16db51e9ecb3e7b05d0b23e3c6f8ee8d191d"
+      && correctionPayload?.subjectHash === hashValue(correctionSubject)
+      && correctionPayload?.bodyHash === hashValue(correctionBody)
+      && correctionSubject?.preCorrectionHead === "4f0e1a70b8c617e0563aa0bd19ef2df1d9830894"
+      && correctionSubject?.preCorrectionTree === "cc628c10a834bf58eca233379198de21526993b6"
+      && typedGit(root, ["merge-base", "--is-ancestor", correctionSubject.preCorrectionHead, identity?.headSha]).status === 0
+      && correctionSubject?.originalOwnerComment === normalizedOriginal?.id
+      && correctionSubject?.dependencyAmendmentComment === amendment?.id
+      && stableJson(correctionSubject?.historicalReceipts?.map(({ commentId }) => commentId)) === stableJson(rejectedReceiptIds)
+      && stableJson(correctionSubject?.authorizedPaths) === stableJson(["scripts/assurance/engineering-closure.mjs", "scripts/assurance/pr-scope.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"])
+      && correctionSubject?.replacementFinalSourceReceiptMaximum === 1
+      && Object.values(correctionSubject?.authority ?? {}).every((value) => value === false));
     const dependencyEvidence = !amended || (dependency?.blockerPacketHash === amendmentSubject?.dependencyBlockerPacketHash
       && dependency?.cleanInstalls?.A?.status === "PASS"
       && dependency?.cleanInstalls?.B?.status === "PASS"
@@ -1763,7 +1803,8 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === identity?.baseSha && originalSubject?.budget?.maximumFiles === 13 && originalSubject?.budget?.maximumNetLines === 3000,
       amendment: amendmentAuthority,
       rejectedHistorical,
-      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && dependencyAmendmentMatches.length === (amended ? 1 : 0) && currentFinals.length === (descendant ? 1 : 0) && finalMatches.length === (descendant ? (amended ? 2 : 1) : 0),
+      correction: correctionAuthority,
+      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && dependencyAmendmentMatches.length === (amended ? 1 : 0) && finalSourceCorrectionMatches.length === (amended ? 1 : 0) && currentFinals.length === (descendant ? 1 : 0) && finalMatches.length === (descendant ? (amended ? 3 : 1) : 0),
       receipt: !descendant || (normalizedFinal?.body === architectureFinalSourceOwnerCommentBody(expected) && finalPayload?.subjectHash === hashValue(finalPayload?.subject) && stableJson(finalPayload?.subject) === stableJson(expected)),
       dependencyEvidence,
       exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= (amended ? 15 : 13) && observed.changedPaths.every((file) => PRE_ADMISSION_ARCHITECTURE_PATHS.includes(file) || fixedAddedPaths.includes(file)) && stableJson(expected?.changedPaths) === stableJson(observed.changedPaths),
@@ -1772,7 +1813,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       capability: stableJson(originalSubject?.capabilities) === stableJson(["OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1", "FINITE_TASK_ADMISSION_SUCCESSOR_V1"]) && originalSubject?.terminalTruthRequired === false && originalSubject?.reusableByAnotherPr === true,
     };
     const ok = Object.values(checks).every(Boolean);
-    return { ok, authorizationOk: ok, mergeEligible: ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: amended ? 15 : 13, maximumHandAuthoredNetLines: amended ? 4500 : 3000 }, commentId: descendant ? normalizedFinal?.id ?? null : normalizedOriginal?.id ?? null, commentBodyHash: descendant ? normalizedFinal?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null, subjectHash: descendant ? finalPayload?.subjectHash ?? null : originalPayload?.subjectHash ?? null, subject: expected, originalCommentId: normalizedOriginal?.id ?? null, originalBodyHash: normalizedOriginal?.bodyHash ?? null, originalSubjectHash: originalPayload?.subjectHash ?? null, dependencyAmendmentCommentId: amendment?.id ?? null, rejectedFinalSourceReceiptIds: rejectedHistorical && amended ? [5286301806] : [], currentFinalSourceReceiptId: normalizedFinal?.id ?? null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
+    return { ok, authorizationOk: ok, mergeEligible: ok, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE", bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`, budget: { maximumFiles: amended ? 15 : 13, maximumHandAuthoredNetLines: amended ? 4500 : 3000 }, commentId: descendant ? normalizedFinal?.id ?? null : normalizedOriginal?.id ?? null, commentBodyHash: descendant ? normalizedFinal?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null, subjectHash: descendant ? finalPayload?.subjectHash ?? null : originalPayload?.subjectHash ?? null, subject: expected, originalCommentId: normalizedOriginal?.id ?? null, originalBodyHash: normalizedOriginal?.bodyHash ?? null, originalSubjectHash: originalPayload?.subjectHash ?? null, dependencyAmendmentCommentId: amendment?.id ?? null, finalSourceCorrectionCommentId: correction?.id ?? null, rejectedFinalSourceReceiptIds: rejectedHistorical && amended ? rejectedReceiptIds : [], currentFinalSourceReceiptId: normalizedFinal?.id ?? null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`) };
   }
   const descendant = originalSubject?.currentHead !== identity?.headSha
     || originalSubject?.currentTree !== tree
@@ -2062,7 +2103,7 @@ const gitScope = (root, base, head) => {
   const rows = linesRun.stdout.split(/\r?\n/gu).filter(Boolean).map((line) => line.split("\t"));
   const additions = rows.reduce((sum, [value]) => sum + (Number(value) || 0), 0);
   const deletions = rows.reduce((sum, [, value]) => sum + (Number(value) || 0), 0);
-  const diffRun = typedGit(root, ["diff", "--full-index", "--no-ext-diff", `${base}...${head}`]);
+  const diffRun = typedGit(root, canonicalGitDiffArgs(`${base}...${head}`));
   return { files, additions, deletions, netChangedLines: Math.max(0, additions - deletions), diffHash: diffRun.status === 0 ? canonicalGitDiffHash(diffRun.stdout) : null };
 };
 const leasePathAllowed = (file, globs = []) => globs.some((glob) => {
@@ -2834,7 +2875,7 @@ export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillyw
   const protectedAncestor = gitRun(["merge-base", "--is-ancestor", protectedBase, head]).status === 0;
   const pathsRun = gitRun(["diff", "--name-only", `${base}...${head}`]);
   const linesRun = gitRun(["diff", "--numstat", `${base}...${head}`]);
-  const diffRun = gitRun(["diff", "--binary", "--no-ext-diff", `${base}...${head}`]);
+  const diffRun = gitRun(canonicalGitDiffArgs(`${base}...${head}`));
   if ([treeRun, seedTreeRun, remoteHeadRun, pathsRun, linesRun, diffRun].some(({ status }) => status !== 0)) return null;
   const paths = pathsRun.stdout.split(/\r?\n/gu).filter(Boolean).sort();
   const numstatRows = linesRun.stdout.split(/\r?\n/gu).filter(Boolean).map((row) => row.split("\t"));
@@ -2896,7 +2937,7 @@ export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT)
   const range = `${base}...${head}`;
   const pathsRun = run(["diff", "--name-only", range]);
   const linesRun = run(["diff", "--numstat", range]);
-  const diffRun = run(["diff", "--binary", "--no-ext-diff", range]);
+  const diffRun = run(canonicalGitDiffArgs(range));
   if ([pathsRun, linesRun, diffRun].some(({ status }) => status !== 0)) return null;
   const paths = pathsRun.stdout.split(/\r?\n/gu).filter(Boolean).sort();
   const rows = linesRun.stdout.split(/\r?\n/gu).filter(Boolean).map((row) => row.split("\t"));

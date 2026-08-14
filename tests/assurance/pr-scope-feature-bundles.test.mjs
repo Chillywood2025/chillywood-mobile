@@ -4,7 +4,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffHash, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
 import { args, canonicalGitText, renderCurrentState, renderNextTask, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS } from "../../scripts/assurance/lib.mjs";
 
@@ -518,7 +518,9 @@ test("terminal verifier repair scope rejects expansion, product, dependency, wor
 });
 
 test("canonical Git diff identity is newline-independent and shared by both authority callers", () => {
-  const raw = execFileSync("git", ["diff", "--full-index", "--no-ext-diff", "c1f9ec1f71cc8bc4448afd2327c4341cac309573...cb4be9ff1e4a956d73cffc1de6902538b79a918c"], { cwd: root, encoding: "utf8" });
+  const range = "c1f9ec1f71cc8bc4448afd2327c4341cac309573...cb4be9ff1e4a956d73cffc1de6902538b79a918c";
+  assert.deepEqual(canonicalGitDiffArgs(range), ["diff", "--full-index", "--binary", "--no-ext-diff", range]);
+  const raw = execFileSync("git", canonicalGitDiffArgs(range), { cwd: root, encoding: "utf8" });
   const expected = "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea";
   assert.equal(canonicalGitDiffHash(raw), expected);
   assert.equal(canonicalGitDiffHash(canonicalGitText(raw)), expected);
@@ -530,6 +532,10 @@ test("canonical Git diff identity is newline-independent and shared by both auth
   const scopeSource = fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8");
   assert.doesNotMatch(closureSource, /hashValue\(diffRun\.stdout\)/u);
   assert.match(closureSource, /canonicalGitDiffHash\(diffRun\.stdout\)/u);
+  assert.match(closureSource, /typedGit\(root, canonicalGitDiffArgs/u);
+  assert.match(closureSource, /gitRun\(canonicalGitDiffArgs/u);
+  assert.match(closureSource, /run\(canonicalGitDiffArgs/u);
+  assert.match(scopeSource, /git\(canonicalGitDiffArgs/u);
   assert.match(scopeSource, /canonicalGitDiffHash\(diff\)/u);
 });
 
