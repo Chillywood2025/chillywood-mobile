@@ -341,8 +341,8 @@ const rawOwnerComment = ({ id, pr, body }) => ({
   html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${pr}#issuecomment-${id}`
 });
 const architectureFixture = () => {
-  const fixture = pullFixture({ pr: 901, branch: "codex/typed-context", head: "a".repeat(40), base: "c1f9ec1f71cc8bc4448afd2327c4341cac309573" });
-  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 901, branch: fixture.event.pull_request.head.ref, baseSha: fixture.event.pull_request.base.sha, headSha: fixture.event.pull_request.head.sha };
+  const fixture = pullFixture({ pr: 231, branch: "codex/typed-context", head: "a".repeat(40), base: "c1f9ec1f71cc8bc4448afd2327c4341cac309573" });
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 231, branch: fixture.event.pull_request.head.ref, baseSha: fixture.event.pull_request.base.sha, headSha: fixture.event.pull_request.head.sha };
   const tree = "b".repeat(40);
   const scope = { files: ["scripts/assurance/pr-scope-lib.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"], netChangedLines: 700 };
   const subject = architectureMaintenanceSubject({ identity, tree, scope });
@@ -361,7 +361,7 @@ test("architecture 1: exact immutable Owner architecture comment passes", () => 
 test("architecture 2: arbitrary unbound architecture PR fails", () => assert.ok(derive({ fixture: architectureFixture().fixture }).findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND")));
 test("architecture 3: edited comment fails", () => assert.equal(verifyArchitectureMutation((args) => { args.raw = { ...args.raw, body: `${args.raw.body} ` }; args.allComments = [args.raw]; }).ok, false));
 test("architecture 4: source push preserves original authority but invalidates merge eligibility", () => { const result = verifyArchitectureMutation((args) => { args.identity = { ...args.identity, headSha: "c".repeat(40) }; }); assert.equal(result.authorizationOk, true); assert.equal(result.mergeEligible, false); });
-test("architecture 5: wrong PR fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, pr: 902 }; }).ok, false));
+test("architecture 5: wrong PR fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, pr: 232 }; }).ok, false));
 test("architecture 6: wrong branch fails", () => assert.equal(verifyArchitectureMutation((args) => { args.identity = { ...args.identity, branch: "codex/wrong" }; }).ok, false));
 test("architecture 7: wrong tree fails", () => assert.equal(verifyArchitectureMutation((args) => { args.tree = "d".repeat(40); }).ok, false));
 test("architecture 8: extra path fails", () => assert.equal(verifyArchitectureMutation((args) => { args.scope = { ...args.scope, files: [...args.scope.files, "README.md"] }; }).ok, false));
