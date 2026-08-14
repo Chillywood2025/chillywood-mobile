@@ -19,13 +19,13 @@
   "protectedMainAuthority": {
     "schemaVersion": 1,
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
-    "checkpointSha": "5506f1c2c227c0d3383131db7f818fef1aae2541",
-    "checkpointTree": "b8e7f4b47cd838496adcd398744426dc80ff9461",
+    "checkpointSha": "3b30cf3ae103109fe28b5452703866c5b2f7e479",
+    "checkpointTree": "57184cdb0bc0eef65ff532291a5acffd8de74c2c",
     "allowProtectedAdvancement": true,
     "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
-  "mainSha": "5506f1c2c227c0d3383131db7f818fef1aae2541",
+  "mainSha": "3b30cf3ae103109fe28b5452703866c5b2f7e479",
   "latestMergedImplementationPr": {"number": 212, "state": "merged", "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6", "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1", "title": "Complete Android native lifecycle and release-critical media proof"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "HISTORICAL_ONLY_PR_50_DOES_NOT_CONTAIN_FINAL_D2B_D2A"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "HISTORICAL_ONLY_PR_50_NOT_EXACT_FINAL_MAIN"},
@@ -530,24 +530,31 @@
     "terminalMetaPr": 217,
     "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE",
     "providerCodexReview": "OPTIONAL_ADVISORY",
-    "authority": {"build": false, "provider": false, "database": false, "publicRelease": false},
+    "authority": {
+      "build": false,
+      "provider": false,
+      "database": false,
+      "publicRelease": false
+    },
     "amendmentPolicy": {
       "marker": "chillywood-assurance-task-lease-amendment-v1",
       "protectedMainUpdateRequired": false,
       "ownerCommentRequired": true,
-      "domains": [{
-        "id": "chilly-chat-call-media",
-        "amendablePaths": [
-          "_lib/chillyChatNativeCallRouteBuffer.ts",
-          "_lib/nativeCallTransitionProvenance.mjs",
-          "app/+native-intent.tsx",
-          "app/_layout.tsx",
-          "app/chat/[threadId].tsx",
-          "plugins/withChillyChatNativeCallNotifications.js"
-        ],
-        "maximumFiles": 12,
-        "maximumChangedLines": 6000
-      }]
+      "domains": [
+        {
+          "id": "chilly-chat-call-media",
+          "amendablePaths": [
+            "_lib/chillyChatNativeCallRouteBuffer.ts",
+            "_lib/nativeCallTransitionProvenance.mjs",
+            "app/+native-intent.tsx",
+            "app/_layout.tsx",
+            "app/chat/[threadId].tsx",
+            "plugins/withChillyChatNativeCallNotifications.js"
+          ],
+          "maximumFiles": 12,
+          "maximumChangedLines": 6000
+        }
+      ]
     },
     "tasks": [
       {
@@ -570,8 +577,16 @@
           "scripts/assurance/android-chat-call-mic-control.mjs",
           "tests/assurance/android-chat-call-mic-control.test.mjs"
         ],
-        "scopeBudget": {"maximumFiles": 8, "maximumChangedLines": 4000},
-        "recursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1}
+        "scopeBudget": {
+          "maximumFiles": 8,
+          "maximumChangedLines": 4000
+        },
+        "recursionBudget": {
+          "maximumAdmissionPrs": 1,
+          "maximumFinalSourceBindingPrs": 0,
+          "maximumMergeProvenancePrs": 0,
+          "maximumPostMergeTruthPrs": 1
+        }
       },
       {
         "leaseId": "d2a-release-critical-pr-212-v1",
@@ -603,8 +618,159 @@
           "tools/android-native-call-harness/ChillyChatNativeCallActionStoreTest.kt",
           "tools/android-native-call-harness/ChillyChatNativeLifecycleInstrumentationTest.kt"
         ],
-        "scopeBudget": {"maximumFiles": 15, "maximumChangedLines": 3000},
-        "recursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1}
+        "scopeBudget": {
+          "maximumFiles": 15,
+          "maximumChangedLines": 3000
+        },
+        "recursionBudget": {
+          "maximumAdmissionPrs": 1,
+          "maximumFinalSourceBindingPrs": 0,
+          "maximumMergeProvenancePrs": 0,
+          "maximumPostMergeTruthPrs": 1
+        }
+      },
+      {
+        "leaseId": "pre-release-identity-entitlement-authority-v1",
+        "featureId": "auth-session-password-recovery",
+        "implementationPr": 229,
+        "implementationBranch": "codex/pre-release-identity-entitlement-authority-v1",
+        "admittedSeedHead": "6c135fa4f09b41687f5f9607d92e237b4d400ad6",
+        "admittedSeedTree": "35abbae7d5ea1429ce768f72052602a6f63af6ca",
+        "admittedBase": "8d5110d4147b6b655d8856cd33eb8f49d6f12a1d",
+        "protectedAdmissionPr": 233,
+        "ownerAuthorizationCommentId": 5285464582,
+        "domain": "pre-release-wave1-identity-entitlement-authority",
+        "domainOwnership": "ACTIVE",
+        "taskState": "ACTIVE_IMPLEMENTATION",
+        "allowedPaths": [
+          "_lib/accountAccess.ts",
+          "_lib/accountLegalAcceptance.ts",
+          "_lib/accountSessionAuthority.ts",
+          "_lib/appLinks.ts",
+          "_lib/creatorEligibility.ts",
+          "_lib/creatorMonetizationSetup.ts",
+          "_lib/entitlementAuthority.ts",
+          "_lib/legalPolicies.ts",
+          "_lib/monetization.ts",
+          "_lib/notifications.ts",
+          "_lib/premiumEntitlements.ts",
+          "_lib/premiumWatchPartyAccess.ts",
+          "_lib/revenuecat.ts",
+          "_lib/session.tsx",
+          "app/(auth)/forgot-password.tsx",
+          "app/(auth)/login.tsx",
+          "app/(auth)/signup.tsx",
+          "app/_layout.tsx",
+          "app/account-deletion.tsx",
+          "app/auth-callback.tsx",
+          "app/reset-password.tsx",
+          "app/settings.tsx",
+          "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json",
+          "supabase/database.types.ts",
+          "supabase/functions/notification-device-tokens/index.ts",
+          "supabase/functions/revenuecat-webhook/index.ts",
+          "supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql",
+          "supabase/tests/wave1_identity_entitlement_authority_test.sql",
+          "tests/wave1/identity-entitlement-authority-mutants.test.mjs",
+          "tests/wave1/identity-entitlement-authority.test.mjs"
+        ],
+        "artifactReservation": {
+          "closureArtifactPath": "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json",
+          "allowedDomains": [
+            "auth-session-password-recovery",
+            "chilly-chat-inbox-thread",
+            "creator-money-ledger",
+            "moderation-reporting",
+            "notifications-fcm",
+            "payouts-stripe-connect",
+            "revenuecat-premium",
+            "storekit-google-play-billing",
+            "supabase-migrations-rls"
+          ],
+          "pathGlobs": [
+            "_lib/accountAccess.ts",
+            "_lib/accountLegalAcceptance.ts",
+            "_lib/accountSessionAuthority.ts",
+            "_lib/appLinks.ts",
+            "_lib/creatorEligibility.ts",
+            "_lib/creatorMonetizationSetup.ts",
+            "_lib/entitlementAuthority.ts",
+            "_lib/legalPolicies.ts",
+            "_lib/monetization.ts",
+            "_lib/notifications.ts",
+            "_lib/premiumEntitlements.ts",
+            "_lib/premiumWatchPartyAccess.ts",
+            "_lib/revenuecat.ts",
+            "_lib/session.tsx",
+            "app/(auth)/forgot-password.tsx",
+            "app/(auth)/login.tsx",
+            "app/(auth)/signup.tsx",
+            "app/_layout.tsx",
+            "app/account-deletion.tsx",
+            "app/auth-callback.tsx",
+            "app/reset-password.tsx",
+            "app/settings.tsx",
+            "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json",
+            "supabase/database.types.ts",
+            "supabase/functions/notification-device-tokens/index.ts",
+            "supabase/functions/revenuecat-webhook/index.ts",
+            "supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql",
+            "supabase/tests/wave1_identity_entitlement_authority_test.sql",
+            "tests/wave1/identity-entitlement-authority-mutants.test.mjs",
+            "tests/wave1/identity-entitlement-authority.test.mjs"
+          ],
+          "testEvidencePaths": [
+            "supabase/tests/wave1_identity_entitlement_authority_test.sql",
+            "tests/wave1/identity-entitlement-authority-mutants.test.mjs",
+            "tests/wave1/identity-entitlement-authority.test.mjs"
+          ],
+          "maximumFiles": 30,
+          "maximumLines": 3600,
+          "excludedHighRiskPaths": [
+            "package.json",
+            "package-lock.json",
+            ".github/workflows/phase1-ci.yml",
+            "android",
+            "ios"
+          ]
+        },
+        "scopeBudget": {
+          "maximumFiles": 30,
+          "maximumChangedLines": 3600
+        },
+        "amendmentMaximum": {
+          "maximumFiles": 36,
+          "maximumChangedLines": 4500,
+          "maximumAmendments": 1
+        },
+        "recursionBudget": {
+          "maximumAdmissionPrs": 1,
+          "maximumFinalSourceBindingPrs": 0,
+          "maximumMergeProvenancePrs": 0,
+          "maximumPostMergeTruthPrs": 1
+        },
+        "ownerApproval": {
+          "commentId": 5285464582,
+          "subjectHash": "65123660102dc13aa1a0583b2acd497d221dfefdb9224ca2e12f08bb98224e43",
+          "rawBodyHash": "b7eca07028b1837df1bc87dad6d4b78fe91aecf4b47fcdddab833f50dc22c77f"
+        },
+        "closure": {
+          "artifactHash": "0cc09e1a908c2520e22652c8e258babb862166875bb449db2648a10f54e01361",
+          "packetHash": "0b238a3fb3b73cd5022dd5f571653d0cd4af4067569181062376d56a49c0839e",
+          "certificateHash": "4ad770781b04e2af860b2c0da0ec9cdd9ce16ecf911322c389f92429408c3845",
+          "edgeClosureHash": "8c4e81388574b1c8ae28bc5af7d6effb5b5fde9f3ff4e08115e1241677dfe6aa",
+          "edgeEvidenceHash": "693abd32e7cd5c80fd43c6358cf13470d8aa73fcc7c3e9e87515ff7ec804d61a",
+          "modelDeltaHash": "5ca0cdb63f64f9d77edfc5b5929c68e78806b1f47710c798c49b8853104217ef"
+        },
+        "authority": {
+          "productSourceMutationAfterAdmissionMerge": true,
+          "providerMutation": false,
+          "databaseDeployment": false,
+          "build": false,
+          "submission": false,
+          "ota": false,
+          "publicRelease": false
+        }
       }
     ]
   },
@@ -613,15 +779,20 @@
     "authority": "PROTECTED_FINITE_TASK_LEASE",
     "candidatePolicy": "DYNAMIC_READ_ONLY_NOT_PROTECTED_TRUTH_AUTHORITY",
     "candidateObservation": {
-      "pr": 212,
-      "branch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
-      "prState": "merged",
-      "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
-      "tree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
-      "classification": "TERMINAL_MERGED_VERIFIED_OBSERVATION",
-      "observedAt": "2026-08-12T17:04:43Z"
+      "pr": 229,
+      "branch": "codex/pre-release-identity-entitlement-authority-v1",
+      "prState": "open",
+      "head": "14e6d3a05bc4110712f88de11c76968cb610dae1",
+      "tree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
+      "classification": "PREIMPLEMENTATION_ENGINEERING_CLEAR_OBSERVATION",
+      "observedAt": "2026-08-14T18:43:16Z"
     },
-    "finalEvidence": {"ownerReceipt": false, "repositoryReview": false, "phase1": false, "mergeEligible": false},
+    "finalEvidence": {
+      "ownerReceipt": false,
+      "repositoryReview": false,
+      "phase1": false,
+      "mergeEligible": false
+    },
     "historicalCandidates": [
       {
         "pr": 214,
@@ -641,43 +812,78 @@
         "phase1Result": "FAILED_3_OF_13_STALE_PROVENANCE"
       }
     ],
-    "authorityClosed": {"build": true, "provider": true, "database": true, "publicRelease": true}
+    "authorityClosed": {
+      "build": true,
+      "provider": true,
+      "database": true,
+      "publicRelease": true
+    }
   },
   "activeTaskBinding": {
     "schemaVersion": 1,
-    "featureId": "chilly-chat-call-lifecycle",
-    "implementationPr": 212,
-    "implementationBranch": "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
-    "implementationBindingId": "d2a-release-critical-pr-212-v1",
-    "immutableSourceHead": "87833399360e99f7ad630ebbb1c5643a57f1481f",
-    "immutableSourceTree": "aadc47f810525d925b1a4a413d7ded1af581b678",
-    "currentImplementationHead": "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
-    "currentImplementationTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
-    "phase": "TERMINAL",
-    "executionState": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
-    "completionScope": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
-    "requiredFreshnessClasses": ["REPOSITORY_TASK_LEASE"],
-    "requiredFreshnessClaims": [{"freshnessClass": "REPOSITORY_TASK_LEASE", "platform": "NONE", "provider": "NONE", "evidenceSourceId": "d2a-release-critical-finite-task-lease-authority-40f57256", "authorityAllowed": "REPOSITORY_ONLY", "requiredFacts": ["repository.active-task.finite-lease-authority"], "leaseId": "d2a-release-critical-pr-212-v1", "leaseHash": "9fad8fdfa32f3cfcc5fed9d5b063a6e1f2f2531586094185e6168734903f0ab4"}],
-    "proofTiersUnderEvaluation": ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
-    "proofTierStatuses": {"T0_REQUIREMENT": "REQUIREMENTS_CLEAR", "T1_SOURCE": "SOURCE_CLEAR", "T2_MODEL": "MODEL_CLEAR", "T3_INTEGRATION": "INTEGRATION_CLEAR", "T4_NATIVE_PROVIDER": "BLOCKED_INTERNAL", "T5_SIGNED_ARTIFACT": "BLOCKED_EXTERNAL", "T6_INSTALLED_PHYSICAL": "BLOCKED_EXTERNAL", "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"},
-    "proofTierApplicabilityHash": "be22c1dab8cf5b8c59eb6d8c82d5468611688b746dea2f5be0fcdfd16262455c",
-    "terminalEvidence": {
-      "schemaVersion": 1,
-      "completionScope": "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
-      "sourceHead": "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
-      "sourceTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
-      "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1",
-      "mergeTree": "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
-      "ownerReceiptCommentId": 5268095229,
-      "repositoryReviewCommentId": 5268063533,
-      "repositoryReview": {"P0": 0, "P1": 0, "launchImpactingP2": 0},
-      "phase1": {"runId": 31605891078, "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6", "result": "PASS_13_OF_13"},
-      "proofLimitations": {"T4_NATIVE_PROVIDER": "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED", "backupClassification": "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT", "T5_SIGNED_ARTIFACT": "NOT_CURRENT", "T6_INSTALLED_PHYSICAL": "NOT_CURRENT", "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"},
-      "publicReleaseAuthorized": false,
-      "otaAuthorized": false
+    "featureId": "auth-session-password-recovery",
+    "implementationPr": 229,
+    "implementationBranch": "codex/pre-release-identity-entitlement-authority-v1",
+    "implementationBindingId": "pre-release-identity-entitlement-authority-v1",
+    "immutableSourceHead": "6c135fa4f09b41687f5f9607d92e237b4d400ad6",
+    "immutableSourceTree": "35abbae7d5ea1429ce768f72052602a6f63af6ca",
+    "currentImplementationHead": "14e6d3a05bc4110712f88de11c76968cb610dae1",
+    "currentImplementationTree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
+    "phase": "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    "executionState": "PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED",
+    "requiredFreshnessClasses": [
+      "REPOSITORY_TASK_LEASE"
+    ],
+    "requiredFreshnessClaims": [
+      {
+        "freshnessClass": "REPOSITORY_TASK_LEASE",
+        "platform": "NONE",
+        "provider": "NONE",
+        "evidenceSourceId": "pre-release-wave1-finite-task-lease-authority-4f65a617",
+        "authorityAllowed": "REPOSITORY_ONLY",
+        "requiredFacts": [
+          "repository.active-task.finite-lease-authority"
+        ],
+        "leaseId": "pre-release-identity-entitlement-authority-v1",
+        "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
+      }
+    ],
+    "proofTiersUnderEvaluation": [
+      "T0_REQUIREMENT",
+      "T1_SOURCE",
+      "T2_MODEL",
+      "T3_INTEGRATION"
+    ],
+    "productSourceMutationAllowed": true,
+    "providerMutationAllowed": false,
+    "databaseDeploymentAllowed": false,
+    "buildAllowed": false,
+    "submissionAllowed": false,
+    "otaAllowed": false,
+    "publicReleaseAllowed": false,
+    "closureArtifactPath": "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json",
+    "taskLocalGoverningEdgeClosure": {
+      "classification": "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR",
+      "closureHash": "8c4e81388574b1c8ae28bc5af7d6effb5b5fde9f3ff4e08115e1241677dfe6aa",
+      "evidenceHash": "693abd32e7cd5c80fd43c6358cf13470d8aa73fcc7c3e9e87515ff7ec804d61a"
     }
   },
   "freshnessClaims": [
+    {
+      "id": "repository-task-lease-pre-release-wave1",
+      "status": "CURRENT",
+      "observedAt": "2026-08-14T18:43:16Z",
+      "expiresAt": "2036-08-11T18:43:16.000Z",
+      "evidenceSourceId": "pre-release-wave1-finite-task-lease-authority-4f65a617",
+      "evidenceMode": "protected-finite-task-lease",
+      "factsCovered": ["repository.active-task.finite-lease-authority"],
+      "freshnessClass": "REPOSITORY_TASK_LEASE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "leaseId": "pre-release-identity-entitlement-authority-v1",
+      "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
+    },
     {
       "id": "repository-task-lease-d2a-release-critical",
       "status": "CURRENT",
@@ -938,7 +1144,16 @@
       "tombstoneHash": "842c2a2559a1d09f50320ff1d78c61cb46ad5e3f4d2af424db50d1b4bdc3b0e5"
     }
   ],
-  "openImplementationPrs": [],
+  "openImplementationPrs": [
+    {
+      "number": 229,
+      "branch": "codex/pre-release-identity-entitlement-authority-v1",
+      "head": "14e6d3a05bc4110712f88de11c76968cb610dae1",
+      "state": "open-draft-current",
+      "disposition": "implementation",
+      "featureId": "auth-session-password-recovery"
+    }
+  ],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -1125,7 +1340,7 @@
     "staticBindingRequired": false,
     "sourceBindingPrRequired": false,
     "provenancePrRequired": false,
-    "nextAction": "RESUME_PR_229_PRE_ADMISSION_EDGE_CLOSURE",
+    "nextAction": "IMPLEMENT_PRE_RELEASE_WAVE_1_IDENTITY_ENTITLEMENT_AUTHORITY",
     "authority": {
       "providerMutation": false,
       "build": false,
@@ -1258,6 +1473,76 @@
       "publicRelease": false
     }
   },
+  "ownerJurisdictionPolicyBinding": {
+    "schemaVersion": 2,
+    "contract": "OWNER_JURISDICTION_POLICY_BINDING_V2",
+    "repository": "Chillywood2025/chillywood-mobile",
+    "product": "chillywood-mobile",
+    "launchProgram": "chillywood-united-states-pre-release",
+    "policySource": {
+      "commentId": 5296932596,
+      "referenceScope": "TASK_BOUND_COMPOSITE",
+      "standingPolicyType": "OWNER_JURISDICTION_STANDING_POLICY_V2",
+      "standingPolicyVersion": 2,
+      "status": "ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION",
+      "sequence": 0,
+      "standingPolicyHash": "16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f",
+      "decisionVersion": "OWNER_JURISDICTION_DECISION_V2",
+      "subjectHash": "b3813943515ca3086583f3bb48c149977a885235aed3ba84565da2d1cac28eb2",
+      "bodyHash": "6f454d6e18babcdbf581fd41b0ae54f7aa30cef26cf1ace1d925997be61f01eb",
+      "envelopeHash": "0ddb3d068284e21ca3aae9d3d277db8bc557674123ce8c6224e02456bda3c43c"
+    },
+    "taskBinding": {
+      "taskId": "pre-release-identity-entitlement-authority-v1",
+      "prNumber": 229,
+      "planningHead": "14e6d3a05bc4110712f88de11c76968cb610dae1",
+      "planningTree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
+      "standingPolicyCommentId": 5296932596,
+      "standingPolicyHash": "16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f",
+      "bindingType": "OWNER_JURISDICTION_TASK_BINDING_V2",
+      "bindingVersion": 2,
+      "domainIds": [
+        "auth-session-password-recovery",
+        "chilly-chat-inbox-thread",
+        "creator-money-ledger",
+        "moderation-reporting",
+        "notifications-fcm",
+        "payouts-stripe-connect",
+        "revenuecat-premium",
+        "storekit-google-play-billing",
+        "supabase-migrations-rls"
+      ],
+      "bindingHash": "d636937b9d63e21e51079ce0b3171fe3e57eea6fab2fe65919fb2d0f3a87efad",
+      "conflictStatus": "NONE"
+    },
+    "coverage": {
+      "status": "EXACT_TASK_DOMAINS_BOUND",
+      "coveredDomainIds": [
+        "auth-session-password-recovery",
+        "chilly-chat-inbox-thread",
+        "creator-money-ledger",
+        "moderation-reporting",
+        "notifications-fcm",
+        "payouts-stripe-connect",
+        "revenuecat-premium",
+        "storekit-google-play-billing",
+        "supabase-migrations-rls"
+      ],
+      "coveredCount": 9,
+      "unresolvedDomainIds": []
+    },
+    "externalProofInherited": false,
+    "operationalOwnershipPreserved": true,
+    "authority": {
+      "productMutation": false,
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
   "receiptLifecyclePolicy": {
     "contract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
     "ownerAuthorizationRequiredBeforeDevelopment": true,
@@ -1280,6 +1565,163 @@
       "ota": false,
       "publicRelease": false
     }
+  },
+  "preReleaseOwnerDecisions": {
+    "plan": {
+      "direction": "Complete all six approved source waves before final source freeze; this lease executes Wave 1 only.",
+      "disposition": "FULL_APPROVED_PRELAUNCH_IMPROVEMENT",
+      "selection": "B"
+    },
+    "decisions": [
+      {
+        "direction": "Engineer real backend-backed Live discovery before final source freeze; availability may remain gated, but unavailable cannot mean unfinished.",
+        "disposition": "PRODUCTION_COMPLETE_BACKED_DISCOVERY_AVAILABILITY_GATED",
+        "id": "OC-LIVE-SCOPE-001",
+        "selection": "B"
+      },
+      {
+        "direction": "Replay and applicable player surfaces receive complete fullscreen landscape parity before final source freeze.",
+        "disposition": "FULLSCREEN_LANDSCAPE_PARITY_PRE_RELEASE",
+        "id": "OC-REPLAY-ORIENTATION-002",
+        "selection": "B"
+      },
+      {
+        "direction": "Keep avatar-based Profile entry and complete return, back-navigation, accessibility, and deep-link behavior without adding a Profile tab solely for entry.",
+        "disposition": "AVATAR_ENTRY_WITH_COMPLETE_RETURN_AND_BACK_NAVIGATION",
+        "id": "OC-PROFILE-NAV-003",
+        "selection": "A"
+      },
+      {
+        "direction": "Engineer monthly and annual Premium acquisition completely before final source freeze; exposure remains availability-gated pending external proof.",
+        "disposition": "MONTHLY_AND_ANNUAL_PRODUCTION_COMPLETE_PRE_RELEASE_AVAILABILITY_GATED",
+        "id": "OC-PREMIUM-LAUNCH-004",
+        "selection": "C"
+      },
+      {
+        "direction": "Engineer the complete creator-money surface, entitlement lifecycle, payable authority, payout architecture, reversals, cleanup, availability, and both platforms before final source freeze; Wave 1 creates only shared authority contracts.",
+        "disposition": "OWNER_APPROVED_PRODUCTION_COMPLETE_PRE_RELEASE_AVAILABILITY_GATED",
+        "id": "OC-CREATOR-MONEY-005",
+        "selection": "OWNER_APPROVED"
+      },
+      {
+        "direction": "Engineer complete PushKit and CallKit incoming-call behavior before final source freeze; exposure remains gated pending external proof.",
+        "disposition": "FULL_NATIVE_INCOMING_CALLS_PRODUCTION_COMPLETE_PRE_RELEASE_AVAILABILITY_GATED",
+        "id": "OC-IOS-CALLS-006",
+        "selection": "B"
+      },
+      {
+        "direction": "OTA may be available only for emergency use after exact native/runtime parity, signed-artifact identity, rollback, and installed proof; routine OTA remains disabled initially.",
+        "disposition": "EMERGENCY_ONLY_AFTER_NATIVE_RUNTIME_PARITY_AND_ROLLBACK_PROOF",
+        "id": "OC-OTA-POSTURE-007",
+        "selection": "B"
+      }
+    ],
+    "globalRule": "Disabled, unavailable, or not exposed may only mean server-authoritative, provider-authoritative, or release-authoritative policy prevents access to a production-complete implementation; it may not mean unfinished frontend, backend, native wiring, database authority, provider integration, lifecycle, reversal, cleanup, observability, rollback, security, RLS, Android, iOS, or operations.",
+    "planningIdentities": {
+      "acceptanceManifest": "6f24db9f78ba3e81ab032b01fde070ff686a3b39b65ee51a69015f82d61dade0",
+      "combinedValidatedLedgerSupplement": "56fba5d2c2e28013f526f2594fd5186e1039d503ae351fe0f411bcd0ccf86741",
+      "creatorMoneyOwnerDirection": "a9f0e0ec8399409c91ed0496b3d44bf2496319722d85e4224054ace6145ff90c",
+      "creatorMoneyScopeCorrectionManifest": "622eaa994bd9769cf879833a779e08bffb0d924abc3e118a182a38c373531faa",
+      "monetizationCardSupplementManifest": "d7beff8c9d81b036f04c7635c245ad53aa4c996908bb38a0402a61dd0123b355",
+      "priorPrivateArtifactAvailability": "AVAILABLE_AND_HASH_VERIFIED",
+      "updatedCombinedPlanningIdentity": "354e36f82ba96c96b859ba4d2a35648b726e2435a3420c3c99af8a86aeeaa08a",
+      "validatedMasterLedger": "ff0e472dba7f0d931de052e7c0a220aaf07c6d8cd4da5e158142c2666858d345"
+    },
+    "ownerApproval": {
+      "embeddedBodyHash": "332033558b5a5e90af22bea5efd72cbfbaf984b6b144c630b36f08504b294e6d",
+      "id": 5285464582,
+      "rawBodyHash": "b7eca07028b1837df1bc87dad6d4b78fe91aecf4b47fcdddab833f50dc22c77f",
+      "subjectHash": "65123660102dc13aa1a0583b2acd497d221dfefdb9224ca2e12f08bb98224e43"
+    }
+  },
+  "preReleaseWave1Admission": {
+    "contract": "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1",
+    "status": "PROSPECTIVE_CLEARANCE_RECORDED_PENDING_EXACT_PROTECTED_MERGE",
+    "admissionPr": 233,
+    "implementationPr": 229,
+    "implementationBranch": "codex/pre-release-identity-entitlement-authority-v1",
+    "originalSeedHead": "6c135fa4f09b41687f5f9607d92e237b4d400ad6",
+    "originalSeedTree": "35abbae7d5ea1429ce768f72052602a6f63af6ca",
+    "currentPlanningHead": "14e6d3a05bc4110712f88de11c76968cb610dae1",
+    "currentPlanningTree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
+    "taskArtifactPath": "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json",
+    "taskArtifactHash": "0cc09e1a908c2520e22652c8e258babb862166875bb449db2648a10f54e01361",
+    "closurePacketHash": "0b238a3fb3b73cd5022dd5f571653d0cd4af4067569181062376d56a49c0839e",
+    "certificateHash": "4ad770781b04e2af860b2c0da0ec9cdd9ce16ecf911322c389f92429408c3845",
+    "taskLocalEdgeClosureHash": "8c4e81388574b1c8ae28bc5af7d6effb5b5fde9f3ff4e08115e1241677dfe6aa",
+    "taskLocalEdgeEvidenceHash": "693abd32e7cd5c80fd43c6358cf13470d8aa73fcc7c3e9e87515ff7ec804d61a",
+    "taskLocalModelDeltaHash": "5ca0cdb63f64f9d77edfc5b5929c68e78806b1f47710c798c49b8853104217ef",
+    "finalDomains": [
+      "auth-session-password-recovery",
+      "chilly-chat-inbox-thread",
+      "creator-money-ledger",
+      "moderation-reporting",
+      "notifications-fcm",
+      "payouts-stripe-connect",
+      "revenuecat-premium",
+      "storekit-google-play-billing",
+      "supabase-migrations-rls"
+    ],
+    "exactAllowedPaths": [
+      "_lib/accountAccess.ts",
+      "_lib/accountLegalAcceptance.ts",
+      "_lib/accountSessionAuthority.ts",
+      "_lib/appLinks.ts",
+      "_lib/creatorEligibility.ts",
+      "_lib/creatorMonetizationSetup.ts",
+      "_lib/entitlementAuthority.ts",
+      "_lib/legalPolicies.ts",
+      "_lib/monetization.ts",
+      "_lib/notifications.ts",
+      "_lib/premiumEntitlements.ts",
+      "_lib/premiumWatchPartyAccess.ts",
+      "_lib/revenuecat.ts",
+      "_lib/session.tsx",
+      "app/(auth)/forgot-password.tsx",
+      "app/(auth)/login.tsx",
+      "app/(auth)/signup.tsx",
+      "app/_layout.tsx",
+      "app/account-deletion.tsx",
+      "app/auth-callback.tsx",
+      "app/reset-password.tsx",
+      "app/settings.tsx",
+      "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json",
+      "supabase/database.types.ts",
+      "supabase/functions/notification-device-tokens/index.ts",
+      "supabase/functions/revenuecat-webhook/index.ts",
+      "supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql",
+      "supabase/tests/wave1_identity_entitlement_authority_test.sql",
+      "tests/wave1/identity-entitlement-authority-mutants.test.mjs",
+      "tests/wave1/identity-entitlement-authority.test.mjs"
+    ],
+    "exactTests": [
+      "supabase/tests/wave1_identity_entitlement_authority_test.sql",
+      "tests/wave1/identity-entitlement-authority-mutants.test.mjs",
+      "tests/wave1/identity-entitlement-authority.test.mjs"
+    ],
+    "rootDefects": [
+      "WAPR-P1-AUTH-REDIRECT-001",
+      "WAPR-P1-LEGAL-ACCEPTANCE-002",
+      "WAPR-P1-PREMIUM-UNKNOWN-004",
+      "WAPR-P1-PREMIUM-ACCOUNT-RACE-007",
+      "WAPR-P1-PUSH-REVOCATION-008",
+      "WAPR-CM-P1-CREATOR-ELIGIBILITY-014"
+    ],
+    "prospectiveResult": {
+      "futureTaskStatus": "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+      "futureProductSourceMutationAllowed": true,
+      "productSourceMutationAllowedBeforeMerge": false,
+      "findings": []
+    },
+    "authority": {
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    },
+    "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
   },
   "taskContextArchitecture": {
     "contractId": "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1",
@@ -1336,9 +1778,29 @@
     "authority": {"providerMutation":false,"build":false,"submission":false,"ota":false,"publicRelease":false}
   },
   "safety": {"livekitSentinelRuns": 0, "livekitFindings": 0, "livekitSwitchesEnabled": 0, "publicSchemaNetUsage": "denied", "userDerivedMemory": "off", "level2Repair": "off"},
-  "timestamp": "2026-08-12T18:46:27Z",
+  "timestamp": "2026-08-14T07:14:48Z",
   "freshnessDeadline": "2026-08-13T18:46:27Z",
   "evidenceSources": [
+    {
+      "id": "pre-release-wave1-finite-task-lease-authority-4f65a617",
+      "mode": "protected-finite-task-lease",
+      "covers": [
+        "repository.active-task.finite-lease-authority",
+        "source commit 4f65a61713e44ae029e51ba06a81bf72e89a7010 records the exact Wave 1 finite lease admitted by PR #233 for implementation PR #229",
+        "candidate identity remains derived read-only and exact-head review, Phase 1, final-source, and merge evidence remain independently required",
+        "provider mutation, database deployment, build, submission, OTA, and public release authority remain closed"
+      ],
+      "observedAt": "2026-08-14T18:43:16Z",
+      "freshnessClass": "REPOSITORY_TASK_LEASE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "4f65a61713e44ae029e51ba06a81bf72e89a7010",
+      "subjectHead": "4f65a61713e44ae029e51ba06a81bf72e89a7010",
+      "subjectTree": "dd6cdf62085cf7baccab974dd45269c5d21671a4",
+      "leaseId": "pre-release-identity-entitlement-authority-v1",
+      "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
+    },
     {
       "id": "d2a-release-critical-finite-task-lease-authority-40f57256",
       "mode": "protected-finite-task-lease",
