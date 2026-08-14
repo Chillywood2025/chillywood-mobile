@@ -12,11 +12,11 @@
     "seedHead": "6c135fa4f09b41687f5f9607d92e237b4d400ad6",
     "seedTree": "35abbae7d5ea1429ce768f72052602a6f63af6ca",
     "protectedBase": {
-      "head": "b69029d575befc4d16ac842b15c096a421932391",
-      "tree": "a88a7615248a1ec6166aa2fc9002dbf0a5f8d014"
+      "head": "8d5110d4147b6b655d8856cd33eb8f49d6f12a1d",
+      "tree": "af599a5f42fc9a43a32be441ad9e130d70822f84"
     },
-    "baseSynchronizationHead": "ed72a29779729e99f39931992bacc1ad4de6bb1c",
-    "baseSynchronizationTree": "104a8feda856ca6cdbfdb0b084c22b511f30ed4e"
+    "baseSynchronizationHead": "b7ca63d8c07ae6a55f5950d0f93a74168be7a171",
+    "baseSynchronizationTree": "dbb9a89a8c8557f73976e78735301c9b57781a56"
   },
   "preAdmissionCapability": {
     "classification": "OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1",
@@ -34,6 +34,19 @@
     "finiteLeasePresent": false,
     "admissionRequired": true,
     "highestPermittedState": "ENGINEERING_PLAN_DRAFTED"
+  },
+  "taskLocalGoverningEdgeClosureCapability": {
+    "contract": "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+    "capabilityPullRequest": 232,
+    "capabilitySourceHead": "e826fa2c19747d7d51503457c5d55a7eb47e2267",
+    "capabilitySourceTree": "af599a5f42fc9a43a32be441ad9e130d70822f84",
+    "capabilityMerge": "8d5110d4147b6b655d8856cd33eb8f49d6f12a1d",
+    "receiptLifecycleContract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
+    "taskContextBindingRequired": true,
+    "independentVerificationRequired": true,
+    "productSourceMutationAllowed": false,
+    "finiteLeasePresent": false,
+    "admissionRequired": true
   },
   "planningIdentities": {
     "validatedMasterLedger": "ff0e472dba7f0d931de052e7c0a220aaf07c6d8cd4da5e158142c2666858d345",
