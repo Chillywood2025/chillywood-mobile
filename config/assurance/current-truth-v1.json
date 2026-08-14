@@ -1173,6 +1173,91 @@
       "publicRelease": false
     }
   },
+  "ownerJurisdictionPolicyCapability": {
+    "contract": "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    "status": "ACTIVE",
+    "ownerDecisionVersions": ["OWNER_JURISDICTION_DECISION_V1", "OWNER_JURISDICTION_DECISION_V2"],
+    "legacyReceiptsPreservedUnderOriginalSemantics": true,
+    "standingPolicyReusable": true,
+    "domainCoverageReusable": false,
+    "exactTaskDomainsRequired": true,
+    "policyChain": {
+      "genesisRequired": true,
+      "predecessorAndSequenceRequiredAfterGenesis": true,
+      "completeDiscoveryRequired": true,
+      "deterministicCurrentTipRequired": true,
+      "latestTimestampWins": false,
+      "forksAllowed": false,
+      "revocationSuppliesAuthority": false,
+      "pendingBindingsRequireReevaluationAfterTipChange": true
+    },
+    "taskBinding": {
+      "standingPolicyReferenceRequired": true,
+      "nonemptySortedUniqueDomainIdsRequired": true,
+      "wildcardsAllowed": false,
+      "implicitDomainsAllowed": false,
+      "taskEvidenceReusable": false
+    },
+    "admissionSupersession": {
+      "contract": "FINITE_TASK_ADMISSION_SUPERSESSION_V2",
+      "legacyV1GenesisBridge": true,
+      "immutablePredecessorsPreserved": true,
+      "exactlyOneCurrentTipRequired": true,
+      "latestTimestampWins": false,
+      "forksAllowed": false,
+      "replayAllowed": false
+    },
+    "inheritanceAllowlist": [
+      "authoritativeRestrictions",
+      "initialRollout",
+      "nonUnitedStatesAvailability",
+      "ownerComplianceAttestation",
+      "primaryMarket",
+      "unitedStatesTerritories"
+    ],
+    "inheritanceDenylist": [
+      "admission",
+      "attestation",
+      "buildAuthority",
+      "certificate",
+      "ci",
+      "creatorAgeAuthority",
+      "databaseDeploymentAuthority",
+      "dataResidencyProof",
+      "domainApplications",
+      "domainCoverage",
+      "edgeClosure",
+      "entitlementAuthority",
+      "implementationAuthority",
+      "lease",
+      "legalProviderStoreTaxKycSanctionsStateProof",
+      "model",
+      "moneyAuthority",
+      "operationalDataRollbackSecurityModerationEscalationProviderOwnership",
+      "otaAuthority",
+      "pathsAndBudget",
+      "providerMutationAuthority",
+      "publicReleaseAuthority",
+      "review",
+      "scope",
+      "submissionAuthority",
+      "taskArtifact",
+      "taskHeadTree",
+      "taskPr",
+      "wave1PayoutAuthority"
+    ],
+    "externalProofInherited": false,
+    "operationalOwnershipPreserved": true,
+    "authority": {
+      "productMutation": false,
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
   "receiptLifecyclePolicy": {
     "contract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
     "ownerAuthorizationRequiredBeforeDevelopment": true,
