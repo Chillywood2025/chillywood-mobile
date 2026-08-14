@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
-import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity } from "./engineering-closure.mjs";
+import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 
 const laneIds = [
   "architecture-state",
@@ -129,7 +129,9 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
   const unique = [...new Set(findings)].sort();
   if (unique.length) return { ok: false, findings: unique, productSourceMutationAllowed: false };
   const graph = facts.graph ?? generateDomainGraph();
-  const closure = affectedDomainClosure(graph, subject.primaryFeature);
+  const closure = artifact?.taskLocalEdgeEvidence
+    ? verifyTaskLocalGoverningEdgeClosure(artifact.taskLocalEdgeEvidence, { root: ROOT, runs: 2 })
+    : affectedDomainClosure(graph, subject.primaryFeature);
   const domains = closure.domains ?? [];
   const graphSlice = {
     nodes: graph.nodes.filter(({ domain }) => domains.includes(domain)).map(({ domain }) => domain).sort(),
@@ -152,7 +154,8 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
     taskArtifactPath: facts.taskArtifactPath,
     taskArtifactHash: facts.taskArtifactHash,
     affectedGraphSlice: graphSlice,
-    provisionalDomainClosure: { status: closure.status, domains, findings: closure.findings ?? [] },
+    provisionalDomainClosure: { status: closure.status ?? closure.classification, domains, findings: closure.findings ?? [] },
+    taskLocalGoverningEdgeClosure: artifact?.taskLocalEdgeEvidence ? { classification: closure.classification, closureHash: closure.closureHash, evidenceHash: closure.evidenceHash, unresolvedEdges: closure.accounting?.unresolvedSet ?? [], deterministic: closure.verificationRuns } : null,
     currentScope: { changedPaths, changedFiles: changedPaths.length, productSourceChangedFiles: 0 },
     productSourceMutationAllowed: false,
     finiteLeasePresent: false,

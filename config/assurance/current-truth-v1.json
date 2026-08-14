@@ -1125,7 +1125,7 @@
     "staticBindingRequired": false,
     "sourceBindingPrRequired": false,
     "provenancePrRequired": false,
-    "nextAction": "RESUME_PR_229_PRE_ADMISSION_ENGINEERING_CLOSURE",
+    "nextAction": "RESUME_PR_229_PRE_ADMISSION_EDGE_CLOSURE",
     "authority": {
       "providerMutation": false,
       "build": false,
@@ -1146,6 +1146,48 @@
     "provenancePrRequired": false,
     "sourceDescendantsRetainLease": true,
     "authority": {
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
+  "taskLocalGoverningEdgeClosureCapability": {
+    "contract": "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+    "status": "ACTIVE",
+    "baselineGraphRemainsImmutable": true,
+    "taskLocalEvidenceAllowed": true,
+    "independentVerificationRequired": true,
+    "staticEdgeAllowlistRequired": false,
+    "staticExclusionCombinationRequired": false,
+    "productMutationBeforeAdmission": false,
+    "admissionRequiresClearClosure": true,
+    "authority": {
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
+  "receiptLifecyclePolicy": {
+    "contract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
+    "ownerAuthorizationRequiredBeforeDevelopment": true,
+    "ownerAuthorizationSurvivesInScopeDescendants": true,
+    "finalSourceAttestationRequiredDuringDevelopment": false,
+    "finalSourceAttestationRequiredForSelfHost": false,
+    "finalSourceAttestationRequiredForRepositoryReview": false,
+    "finalSourceAttestationRequiredForPhase1": false,
+    "finalSourceAttestationIssuedAfterReviewAndPhase1": true,
+    "finalSourceAttestationRequiredForMerge": true,
+    "historicalInvalidAttestationsNonBlocking": true,
+    "appendOnlyEvidenceCorrectionAllowed": true,
+    "sourceChangeInvalidatesAttestationNotOwnerAuthority": true,
+    "authority": {
+      "productMutation": false,
       "providerMutation": false,
       "databaseDeployment": false,
       "build": false,
