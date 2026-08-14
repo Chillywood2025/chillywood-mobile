@@ -839,13 +839,13 @@
         "freshnessClass": "REPOSITORY_TASK_LEASE",
         "platform": "NONE",
         "provider": "NONE",
-        "evidenceSourceId": "d2a-release-critical-finite-task-lease-authority-40f57256",
+        "evidenceSourceId": "pre-release-wave1-finite-task-lease-authority-4f65a617",
         "authorityAllowed": "REPOSITORY_ONLY",
         "requiredFacts": [
           "repository.active-task.finite-lease-authority"
         ],
-        "leaseId": "d2a-release-critical-pr-212-v1",
-        "leaseHash": "9fad8fdfa32f3cfcc5fed9d5b063a6e1f2f2531586094185e6168734903f0ab4"
+        "leaseId": "pre-release-identity-entitlement-authority-v1",
+        "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
       }
     ],
     "proofTiersUnderEvaluation": [
@@ -869,6 +869,21 @@
     }
   },
   "freshnessClaims": [
+    {
+      "id": "repository-task-lease-pre-release-wave1",
+      "status": "CURRENT",
+      "observedAt": "2026-08-14T18:43:16Z",
+      "expiresAt": "2036-08-11T18:43:16.000Z",
+      "evidenceSourceId": "pre-release-wave1-finite-task-lease-authority-4f65a617",
+      "evidenceMode": "protected-finite-task-lease",
+      "factsCovered": ["repository.active-task.finite-lease-authority"],
+      "freshnessClass": "REPOSITORY_TASK_LEASE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "leaseId": "pre-release-identity-entitlement-authority-v1",
+      "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
+    },
     {
       "id": "repository-task-lease-d2a-release-critical",
       "status": "CURRENT",
@@ -1766,6 +1781,26 @@
   "timestamp": "2026-08-14T07:14:48Z",
   "freshnessDeadline": "2026-08-13T18:46:27Z",
   "evidenceSources": [
+    {
+      "id": "pre-release-wave1-finite-task-lease-authority-4f65a617",
+      "mode": "protected-finite-task-lease",
+      "covers": [
+        "repository.active-task.finite-lease-authority",
+        "source commit 4f65a61713e44ae029e51ba06a81bf72e89a7010 records the exact Wave 1 finite lease admitted by PR #233 for implementation PR #229",
+        "candidate identity remains derived read-only and exact-head review, Phase 1, final-source, and merge evidence remain independently required",
+        "provider mutation, database deployment, build, submission, OTA, and public release authority remain closed"
+      ],
+      "observedAt": "2026-08-14T18:43:16Z",
+      "freshnessClass": "REPOSITORY_TASK_LEASE",
+      "authorityAllowed": "REPOSITORY_ONLY",
+      "platform": "NONE",
+      "provider": "NONE",
+      "sourceCommit": "4f65a61713e44ae029e51ba06a81bf72e89a7010",
+      "subjectHead": "4f65a61713e44ae029e51ba06a81bf72e89a7010",
+      "subjectTree": "dd6cdf62085cf7baccab974dd45269c5d21671a4",
+      "leaseId": "pre-release-identity-entitlement-authority-v1",
+      "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
+    },
     {
       "id": "d2a-release-critical-finite-task-lease-authority-40f57256",
       "mode": "protected-finite-task-lease",
