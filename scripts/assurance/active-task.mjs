@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateOwnerJurisdictionPolicyTruth, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, sha64, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
-import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
+import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_V2_MARKER,
@@ -503,11 +503,6 @@ function observeEngineeringScope(lease, currentHead, currentProtectedMain = null
   return observation;
 }
 
-export function taskArtifactHashFromFile(file, root = ROOT) {
-  if (typeof file !== "string" || !/^(?:docs|config)\/assurance\/[A-Za-z0-9_./-]+\.json$/u.test(file) || file.includes("..")) return null;
-  try { return sha256(fs.readFileSync(path.join(root, file), "utf8")); } catch { return null; }
-}
-
 const admittedArtifactClosureKeys = ["artifactHash", "certificateHash", "edgeClosureHash", "edgeEvidenceHash", "modelDeltaHash", "packetHash"];
 const admittedFiniteTaskLeaseV2 = (lease) => {
   const closure = lease?.closure;
@@ -515,19 +510,52 @@ const admittedFiniteTaskLeaseV2 = (lease) => {
     && admittedArtifactClosureKeys.every((key) => sha64(closure[key]));
 };
 
-export function resolveEngineeringArtifactInput({ lease, suppliedPacket = null, suppliedCertificate = null, root = ROOT } = {}) {
+export function resolveEngineeringArtifactInput({ lease, suppliedPacket = null, suppliedCertificate = null, head = null, root = ROOT } = {}) {
   if (!admittedFiniteTaskLeaseV2(lease)) return { ok: true, packet: suppliedPacket, certificate: suppliedCertificate };
   const artifactPath = lease?.artifactReservation?.closureArtifactPath;
   if (typeof artifactPath !== "string" || !/^(?:docs|config)\/assurance\/[A-Za-z0-9_./-]+\.json$/u.test(artifactPath) || artifactPath.includes("..")) return { ok: false, findings: ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"] };
-  let artifact;
-  try { artifact = JSON.parse(fs.readFileSync(path.join(root, artifactPath), "utf8")); } catch { return { ok: false, findings: ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"] }; }
+  const exactArtifact = readTaskArtifactAtGitHead(artifactPath, head, root);
+  if (!exactArtifact) return { ok: false, findings: ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"] };
+  const artifact = exactArtifact.artifact;
   const suppliedMatches = suppliedPacket == null || stableJson(suppliedPacket) === stableJson(artifact) || stableJson(suppliedPacket) === stableJson(artifact?.closure);
   const certificateMatches = suppliedCertificate == null || stableJson(suppliedCertificate) === stableJson(artifact?.certificate);
   if (!suppliedMatches || !certificateMatches) return { ok: false, findings: ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"] };
-  return { ok: true, packet: artifact, certificate: artifact?.certificate ?? null };
+  return { ok: true, packet: artifact, certificate: artifact?.certificate ?? null, taskArtifactBytes: exactArtifact.bytes, taskArtifactHash: exactArtifact.artifactHash };
 }
 
-export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, phase = "IMPLEMENTATION", lease, closurePacket, certificate, sourcePushed = false, samePr = true, branch, currentMain, currentHead, implementationPr, implementationMerged = false, bootstrapExpired = false, sourceChanging = true, readOnlyDiagnostic = false, scopeObservation, taskIdentityObservation, implementationIdentity, ownerJurisdictionAuthority } = {}) {
+export function admittedFiniteTaskCommandRule({ contractCommand, featureId, engineeringAuthority, taskArtifact, taskArtifactHash, lease } = {}) {
+  const admitted = engineeringAuthority?.ok === true
+    && engineeringAuthority?.classification === "PREIMPLEMENTATION_ENGINEERING_CLEAR"
+    && engineeringAuthority?.derivedGate?.clear === true
+    && engineeringAuthority.derivedGate.verificationMode === "ADMITTED_FROZEN_FINITE_TASK_V2"
+    && taskArtifact?.primaryDomain === featureId
+    && sha64(taskArtifactHash)
+    && taskArtifactHash === lease?.closure?.artifactHash;
+  if (!admitted) return null;
+  if (contractCommand === "assurance:plan") return { id: "admitted-finite-task-plan", file: "node", args: ["scripts/assurance/plan.mjs", `--feature=${featureId}`], resultContract: { type: "assurance-json-v1", command: "assurance:plan" }, contractCommand };
+  const testPaths = taskArtifact?.implementationPlan?.tests;
+  const testsBound = Array.isArray(testPaths) && testPaths.length > 0
+    && stableJson([...testPaths].sort()) === stableJson([...(lease?.artifactReservation?.testEvidencePaths ?? [])].sort())
+    && testPaths.every((file) => /^(?:tests|supabase\/tests)\/[A-Za-z0-9_./-]+$/u.test(file));
+  if (contractCommand !== "focused auth/RLS suite" || featureId !== "auth-session-password-recovery" || !testsBound) return null;
+  return {
+    id: "deferred:admitted-focused-auth-rls-suite",
+    file: null,
+    args: [],
+    resultContract: { type: "deferred-task-contract", executable: false, reason: "IMPLEMENTATION_TEST_EVIDENCE_PENDING", task: taskArtifact.taskId, taskArtifactHash, testEvidencePaths: [...testPaths] },
+    contractCommand,
+  };
+}
+
+export function redactActiveTaskPacket(value) {
+  const safe = redact(value);
+  if (value?.ownerJurisdictionPolicy?.policySource?.referenceScope === "TASK_BOUND_COMPOSITE" && safe?.ownerJurisdictionPolicy?.policySource) {
+    safe.ownerJurisdictionPolicy.policySource.referenceScope = "TASK_BOUND_COMPOSITE";
+  }
+  return safe;
+}
+
+export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, phase = "IMPLEMENTATION", lease, closurePacket, certificate, taskArtifactBytes = null, sourcePushed = false, samePr = true, branch, currentMain, currentHead, implementationPr, implementationMerged = false, bootstrapExpired = false, sourceChanging = true, readOnlyDiagnostic = false, scopeObservation, taskIdentityObservation, implementationIdentity, ownerJurisdictionAuthority } = {}) {
   const admittedArtifactRequired = admittedFiniteTaskLeaseV2(lease);
   const wrappedFiniteTaskArtifact = Boolean(closurePacket?.closure?.sections);
   const admittedFiniteTaskArtifact = wrappedFiniteTaskArtifact
@@ -587,7 +615,7 @@ export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, pha
       } else if (wrappedFiniteTaskArtifact && !admittedFiniteTaskArtifact) {
         derivedGate = { clear: false, findings: ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"] };
       } else if (admittedFiniteTaskArtifact) {
-        derivedGate = evaluateAdmittedFiniteTaskArtifactV2(admittedFiniteTaskArtifact, { taskArtifactHash: implementationIdentity?.taskArtifactHash, implementationIdentity, authoritativeLease: lease, ownerJurisdictionAuthority, actualScope: observedScope, root: ROOT });
+        derivedGate = evaluateAdmittedFiniteTaskArtifactV2(admittedFiniteTaskArtifact, { taskArtifactBytes, taskArtifactHash: implementationIdentity?.taskArtifactHash, implementationIdentity, authoritativeLease: lease, ownerJurisdictionAuthority, actualScope: observedScope, root: ROOT });
       } else {
         const ownerCommentIds = lease?.engineeringOwnerAuthorizationCommentIds ?? [];
         const observedTaskIdentity = taskIdentityObservation ?? observeGitHubTaskIdentity({ pr: Number(implementationPr), branch, admittedSeedHead: lease?.admittedSeedHead ?? lease?.admittedBase, protectedBase: currentMain, leaseId: lease?.leaseId, commentId: ownerCommentIds.at(-1) ?? lease?.ownerAuthorizationCommentId, maximumFiles: reservation?.maximumFiles, maximumLines: reservation?.maximumLines });
@@ -1224,19 +1252,18 @@ export function activeTask(facts = {}) {
     truth,
   });
   if (!ownerJurisdictionPolicy.ok) return { ok: false, findings: ownerJurisdictionPolicy.findings };
-  const engineeringArtifactInput = resolveEngineeringArtifactInput({ lease: engineeringLease, suppliedPacket: facts.engineeringClosurePacket, suppliedCertificate: facts.engineeringCertificate });
-  if (!engineeringArtifactInput.ok) return { ok: false, findings: engineeringArtifactInput.findings };
-  let engineeringPacket = engineeringArtifactInput.packet;
-  if (!engineeringPacket && engineeringLease?.artifactReservation?.closureArtifactPath) {
-    try { engineeringPacket = readJson(engineeringLease.artifactReservation.closureArtifactPath); } catch { engineeringPacket = null; }
-  }
-  const engineeringCertificate = engineeringArtifactInput.certificate ?? facts.engineeringCertificate ?? engineeringPacket?.certificate ?? engineeringPacket?.sections?.L_COMPLETENESS_CERTIFICATE;
   const terminalHistoricalLease = implementation.value?.finiteLease?.terminal === true && implementation.value?.finiteLease?.taskState === "MERGED_VERIFIED";
   const synchronizedImplementationHead = implementation.value?.currentSynchronizedHead ?? resolution.binding?.currentImplementationHead ?? identity.head;
   const synchronizedImplementationTree = implementation.value?.currentSynchronizedTree ?? resolution.binding?.currentImplementationTree ?? identity.tree;
-  const engineeringScopeObservation = terminalHistoricalLease ? null : observeEngineeringScope(engineeringLease, synchronizedImplementationHead, identity.originMainHead);
+  const engineeringArtifactInput = resolveEngineeringArtifactInput({ lease: engineeringLease, suppliedPacket: facts.engineeringClosurePacket, suppliedCertificate: facts.engineeringCertificate, head: synchronizedImplementationHead });
+  if (!engineeringArtifactInput.ok) return { ok: false, findings: engineeringArtifactInput.findings };
   const closureArtifactPath = engineeringLease?.artifactReservation?.closureArtifactPath;
-  const closureArtifactHash = taskArtifactHashFromFile(closureArtifactPath);
+  const exactArtifact = engineeringArtifactInput.taskArtifactHash ? engineeringArtifactInput : readTaskArtifactAtGitHead(closureArtifactPath, synchronizedImplementationHead);
+  let engineeringPacket = engineeringArtifactInput.packet;
+  engineeringPacket ??= exactArtifact?.artifact ?? null;
+  const engineeringCertificate = engineeringArtifactInput.certificate ?? facts.engineeringCertificate ?? engineeringPacket?.certificate ?? engineeringPacket?.sections?.L_COMPLETENESS_CERTIFICATE;
+  const engineeringScopeObservation = terminalHistoricalLease ? null : observeEngineeringScope(engineeringLease, synchronizedImplementationHead, identity.originMainHead);
+  const closureArtifactHash = exactArtifact?.taskArtifactHash ?? exactArtifact?.artifactHash ?? null;
   const implementationIdentity = engineeringLease ? createImplementationIdentityObservation({
     repository: "Chillywood2025/chillywood-mobile",
     workflowPr: resolution.binding?.implementationPr,
@@ -1270,6 +1297,7 @@ export function activeTask(facts = {}) {
     lease: engineeringLease,
     closurePacket: engineeringPacket,
     certificate: engineeringCertificate,
+    taskArtifactBytes: exactArtifact?.taskArtifactBytes ?? exactArtifact?.bytes ?? null,
     sourcePushed: facts.sourcePushed === true,
     samePr: facts.samePr !== false,
     implementationMerged: facts.implementationMerged === true,
@@ -1289,6 +1317,8 @@ export function activeTask(facts = {}) {
   const required = feature.commands ?? [];
   const rules = allowlist.commands ?? [];
   const requiredRules = required.map((contractCommand) => {
+    const admittedRule = admittedFiniteTaskCommandRule({ contractCommand, featureId: feature.featureId, engineeringAuthority, taskArtifact: engineeringPacket, taskArtifactHash: closureArtifactHash, lease: engineeringLease });
+    if (admittedRule) return admittedRule;
     const matches = rules.filter((rule) => rule.contractCommand === contractCommand);
     if (matches.length === 1) return matches[0];
     if (matches.length > 1) return null;
@@ -1353,7 +1383,7 @@ export function activeTask(facts = {}) {
   if (ownerJurisdictionPolicy.evidence) {
     built.packet.ownerJurisdictionPolicy = ownerJurisdictionPolicy.evidence;
   }
-  const safe = redact(built.packet);
+  const safe = redactActiveTaskPacket(built.packet);
   if (stableJson(safe) !== stableJson(built.packet)) return { ok: false, findings: ["PACKET_SECRET_OR_PRIVATE_VALUE"] };
   return { ok: true, packet: safe };
 }

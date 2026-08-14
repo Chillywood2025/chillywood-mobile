@@ -7,12 +7,13 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   activeTask,
+  admittedFiniteTaskCommandRule,
   evaluatePreAdmissionEngineeringSeed,
   OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1,
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject,
+  redactActiveTaskPacket,
   resolveEngineeringArtifactInput,
-  taskArtifactHashFromFile,
   validateEngineeringTaskAuthority,
   validateStructuredBinding,
   verifyActiveTaskOwnerJurisdictionPolicy,
@@ -53,7 +54,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -2965,15 +2966,27 @@ test("active-task frozen artifact 01: malformed generic state models fail closed
   assert.doesNotThrow(() => evaluateAdmittedFiniteTaskArtifactV2({ certificate: {}, closure: { affectedDomainClosure: { domains: [] }, sections: {} }, taskLocalEdgeEvidence: { modelDeltas: [null] } }));
 });
 
-test("active-task frozen artifact 01a: the leased artifact hash is computed from exact file bytes", () => {
+test("active-task frozen artifact 01a: the leased artifact is read from the exact regular Git blob", () => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "wave1-artifact-hash-"));
   const artifactPath = "docs/assurance/tasks/hash-fixture.json";
   try {
     fs.mkdirSync(path.join(parent, path.dirname(artifactPath)), { recursive: true });
     const bytes = `${JSON.stringify({ z: 1, a: [2, 3] })}\n`;
     fs.writeFileSync(path.join(parent, artifactPath), bytes);
-    assert.equal(taskArtifactHashFromFile(artifactPath, parent), digest(bytes));
-    assert.equal(taskArtifactHashFromFile("../outside.json", parent), null);
+    for (const args of [["init", "--quiet"], ["config", "user.email", "test@example.com"], ["config", "user.name", "Test"], ["add", artifactPath], ["commit", "--quiet", "-m", "fixture"]]) assert.equal(spawnSync("git", args, { cwd: parent }).status, 0);
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: parent, encoding: "utf8" }).stdout.trim();
+    const exact = readTaskArtifactAtGitHead(artifactPath, head, parent);
+    assert.equal(exact.artifactHash, digest(bytes));
+    assert.deepEqual(exact.artifact, { z: 1, a: [2, 3] });
+    fs.writeFileSync(path.join(parent, artifactPath), `${JSON.stringify({ substituted: true })}\n`);
+    assert.equal(readTaskArtifactAtGitHead(artifactPath, head, parent).artifactHash, digest(bytes));
+    assert.equal(readTaskArtifactAtGitHead("../outside.json", head, parent), null);
+    fs.rmSync(path.join(parent, artifactPath));
+    fs.symlinkSync("outside.json", path.join(parent, artifactPath));
+    assert.equal(spawnSync("git", ["add", artifactPath], { cwd: parent }).status, 0);
+    assert.equal(spawnSync("git", ["commit", "--quiet", "-m", "symlink substitution"], { cwd: parent }).status, 0);
+    const symlinkHead = spawnSync("git", ["rev-parse", "HEAD"], { cwd: parent, encoding: "utf8" }).stdout.trim();
+    assert.equal(readTaskArtifactAtGitHead(artifactPath, symlinkHead, parent), null);
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
@@ -2986,15 +2999,17 @@ test("active-task frozen artifact 01b: the admitted lease selects and reconciles
   try {
     fs.mkdirSync(path.join(parent, path.dirname(artifactPath)), { recursive: true });
     fs.writeFileSync(path.join(parent, artifactPath), fixture.taskArtifactBytes);
-    const promoted = resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: fixture.taskArtifact.certificate, root: parent });
+    for (const args of [["init", "--quiet"], ["config", "user.email", "test@example.com"], ["config", "user.name", "Test"], ["add", artifactPath], ["commit", "--quiet", "-m", "fixture"]]) assert.equal(spawnSync("git", args, { cwd: parent }).status, 0);
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: parent, encoding: "utf8" }).stdout.trim();
+    const promoted = resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: fixture.taskArtifact.certificate, head, root: parent });
     assert.equal(promoted.ok, true);
     assert.deepEqual(promoted.packet, fixture.taskArtifact);
     assert.deepEqual(promoted.certificate, fixture.taskArtifact.certificate);
     const mutated = structuredClone(fixture.taskArtifact.closure);
     mutated.completionStatus = "BLOCKED";
-    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: mutated, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
-    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: { ...fixture.taskArtifact.certificate, status: "BLOCKED" }, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
-    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, root: path.join(parent, "missing") }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: mutated, head, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: { ...fixture.taskArtifact.certificate, status: "BLOCKED" }, head, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, head, root: path.join(parent, "missing") }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
     const legacy = structuredClone(fixture.lease);
     delete legacy.closure;
     assert.equal(resolveEngineeringArtifactInput({ lease: legacy, suppliedPacket: fixture.taskArtifact.closure, root: parent }).packet, fixture.taskArtifact.closure);
@@ -3003,11 +3018,31 @@ test("active-task frozen artifact 01b: the admitted lease selects and reconciles
   }
 });
 
+test("active-task frozen artifact 01c: only the verified task-bound policy enum bypasses the secret false positive", () => {
+  const packet = { ownerJurisdictionPolicy: { policySource: { referenceScope: "TASK_BOUND_COMPOSITE" } }, status: "CLEAR" };
+  assert.deepEqual(redactActiveTaskPacket(packet), packet);
+  for (const secret of ["sk_abcdefghijklmnop", "pk_abcdefghijklmnop", "owner@example.com"]) {
+    const unsafe = { ...packet, secret };
+    assert.notEqual(stableJson(redactActiveTaskPacket(unsafe)), stableJson(unsafe));
+  }
+  const substituted = { ownerJurisdictionPolicy: { policySource: { referenceScope: "TASK_BOUND_COMPOSITE_sk_abcdefghijklmnop" } } };
+  assert.notEqual(stableJson(redactActiveTaskPacket(substituted)), stableJson(substituted));
+});
+
 test("active-task frozen artifact 02: the exact admitted Wave 1 wrapper uses its canonical split-model verifier", () => {
   const fixture = admittedWave1ArtifactFixture();
   const result = evaluateAdmittedFiniteTaskArtifactV2(fixture.taskArtifact, { taskArtifactBytes: fixture.taskArtifactBytes, taskArtifactHash: fixture.taskArtifactHash, implementationIdentity: fixture.implementationIdentity, authoritativeLease: fixture.lease, ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority, actualScope: fixture.actualScope });
   assert.equal(result.clear, true, JSON.stringify(result));
   assert.equal(result.status, "PREIMPLEMENTATION_ENGINEERING_CLEAR");
+  const engineeringAuthority = { ok: true, classification: result.status, derivedGate: result };
+  const focused = admittedFiniteTaskCommandRule({ contractCommand: "focused auth/RLS suite", featureId: fixture.taskArtifact.primaryDomain, engineeringAuthority, taskArtifact: fixture.taskArtifact, taskArtifactHash: fixture.taskArtifactHash, lease: fixture.lease });
+  assert.equal(focused.resultContract.executable, false);
+  assert.deepEqual(focused.resultContract.testEvidencePaths, fixture.taskArtifact.implementationPlan.tests);
+  const plan = admittedFiniteTaskCommandRule({ contractCommand: "assurance:plan", featureId: fixture.taskArtifact.primaryDomain, engineeringAuthority, taskArtifact: fixture.taskArtifact, taskArtifactHash: fixture.taskArtifactHash, lease: fixture.lease });
+  assert.deepEqual(plan.args, ["scripts/assurance/plan.mjs", "--feature=auth-session-password-recovery"]);
+  const mismatchedLease = structuredClone(fixture.lease);
+  mismatchedLease.artifactReservation.testEvidencePaths = ["tests/substituted.test.mjs"];
+  assert.equal(admittedFiniteTaskCommandRule({ contractCommand: "focused auth/RLS suite", featureId: fixture.taskArtifact.primaryDomain, engineeringAuthority, taskArtifact: fixture.taskArtifact, taskArtifactHash: fixture.taskArtifactHash, lease: mismatchedLease }), null);
 });
 
 test("active-task frozen artifact 03: artifact-byte substitution fails closed", () => {

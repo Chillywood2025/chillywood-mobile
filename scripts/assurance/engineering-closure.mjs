@@ -1551,6 +1551,22 @@ const textArray = (value, empty = false) => Array.isArray(value) && (empty || va
 const packetFacts = (sections) => Object.fromEntries(PACKET_SECTIONS.filter((name) => name !== "L_COMPLETENESS_CERTIFICATE").map((name) => [name, sections?.[name]]));
 const packetFactsHash = (sections) => hashValue(packetFacts(sections));
 const safeRepoPath = (value) => typeof value === "string" && !path.isAbsolute(value) && !value.includes("..") && /^[A-Za-z0-9_.+@/\[\]-]+$/u.test(value);
+
+export function readTaskArtifactAtGitHead(file, head, root = REPOSITORY_ROOT) {
+  if (!safeRepoPath(file) || !/^[0-9a-f]{40}$/u.test(head ?? "")) return null;
+  const listing = spawnSync("git", ["ls-tree", "-z", head, "--", file], { cwd: root, encoding: null, shell: false, maxBuffer: 1024 * 1024 });
+  if (listing.status !== 0) return null;
+  const records = listing.stdout.toString("utf8").split("\0").filter(Boolean);
+  const match = records.length === 1 ? /^(100644) blob ([0-9a-f]{40})\t(.+)$/u.exec(records[0]) : null;
+  if (!match || match[3] !== file) return null;
+  const content = spawnSync("git", ["show", `${head}:${file}`], { cwd: root, encoding: null, shell: false, maxBuffer: 32 * 1024 * 1024 });
+  if (content.status !== 0) return null;
+  const blob = spawnSync("git", ["hash-object", "--stdin"], { cwd: root, input: content.stdout, encoding: "utf8", shell: false, maxBuffer: 1024 * 1024 });
+  if (blob.status !== 0 || blob.stdout.trim() !== match[2]) return null;
+  try {
+    return { artifact: JSON.parse(content.stdout.toString("utf8")), artifactHash: crypto.createHash("sha256").update(content.stdout).digest("hex"), bytes: content.stdout, blobHash: match[2], mode: match[1] };
+  } catch { return null; }
+}
 const OWNER_AUTH_MARKER = "<!-- chillywood-engineering-owner-authorization-v1 -->";
 const trustedOwnerAuthorizationSets = new WeakSet();
 const exactHttpsUrl = (value) => {
@@ -2612,13 +2628,16 @@ export function evaluateAdmittedFiniteTaskArtifactV2(taskArtifact, {
   const authoritativeJurisdiction = trustedOwnerJurisdictionAuthority(ownerJurisdictionAuthority);
   const authoritativeScope = trustedScopeObservation(actualScope);
   const artifactPath = implementationIdentity?.taskArtifactPath;
-  let rawBytes = null;
-  let parsedArtifact = null;
+  const exactArtifact = readTaskArtifactAtGitHead(artifactPath, implementationIdentity?.implementationHead, root);
+  const rawBytes = exactArtifact?.bytes ?? null;
+  const parsedArtifact = exactArtifact?.artifact ?? null;
+  let suppliedBytesMatch = true;
   try {
-    if (taskArtifactBytes !== null && taskArtifactBytes !== undefined) rawBytes = Buffer.isBuffer(taskArtifactBytes) ? taskArtifactBytes : Buffer.from(taskArtifactBytes);
-    else if (safeRepoPath(artifactPath)) rawBytes = fs.readFileSync(path.join(root, artifactPath));
-    parsedArtifact = rawBytes ? JSON.parse(rawBytes.toString("utf8")) : null;
-  } catch {}
+    if (taskArtifactBytes !== null && taskArtifactBytes !== undefined) {
+      const suppliedBytes = Buffer.isBuffer(taskArtifactBytes) ? taskArtifactBytes : Buffer.from(taskArtifactBytes);
+      suppliedBytesMatch = rawBytes !== null && suppliedBytes.equals(rawBytes);
+    }
+  } catch { suppliedBytesMatch = false; }
   const rawHash = rawBytes ? crypto.createHash("sha256").update(rawBytes).digest("hex") : null;
   let taskEvidence = null;
   try { taskEvidence = finiteTaskJurisdictionEvidenceV2(taskArtifact, taskArtifactHash); } catch {}
@@ -2665,7 +2684,7 @@ export function evaluateAdmittedFiniteTaskArtifactV2(taskArtifact, {
   check("implementationIdentity", authoritativeIdentity, "PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_REQUIRED");
   check("jurisdictionAuthority", authoritativeJurisdiction && ownerJurisdictionAuthority?.ok === true && ownerJurisdictionAuthority?.policyStatus === ACTIVE_POLICY_STATUS, "PREIMPLEMENTATION_AUTHORITY_UNOWNED");
   check("scopeObservation", authoritativeScope && actualScope?.head === implementationIdentity?.implementationHead && actualScope?.base === implementationIdentity?.currentProtectedMain && stableJson(actualScope?.paths) === stableJson(implementationIdentity?.implementationChangedPaths), "FINITE_TASK_SCOPE_MEASUREMENT_MISSING");
-  check("artifactBytes", rawHash === taskArtifactHash && rawHash === implementationIdentity?.taskArtifactHash && rawHash === authoritativeLease?.closure?.artifactHash && stableJson(parsedArtifact) === stableJson(taskArtifact), "PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE");
+  check("artifactBytes", suppliedBytesMatch && rawHash === taskArtifactHash && rawHash === implementationIdentity?.taskArtifactHash && rawHash === authoritativeLease?.closure?.artifactHash && stableJson(parsedArtifact) === stableJson(taskArtifact), "PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE");
   check("taskIdentity", taskArtifact?.repository === implementationIdentity?.repository
     && taskArtifact?.taskId === authoritativeLease?.leaseId
     && taskArtifact?.taskId === implementationIdentity?.finiteLeaseId
