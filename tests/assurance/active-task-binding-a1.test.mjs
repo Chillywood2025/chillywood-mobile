@@ -13,6 +13,7 @@ import {
   ownerBootstrapBindingSubject,
   validateEngineeringTaskAuthority,
   validateStructuredBinding,
+  verifyActiveTaskOwnerJurisdictionPolicy,
   verifyOwnerBootstrapAuthorization
 } from "../../scripts/assurance/active-task.mjs";
 import {
@@ -51,6 +52,7 @@ import {
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
 import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, contentSnapshotSubject, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, readGitHubApi, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts } from "../../scripts/assurance/engineering-closure.mjs";
+import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const canonicalTruth = read("config/assurance/current-truth-v1.json");
@@ -117,6 +119,256 @@ test("pre-admission 17: competing seed fails", () => assert.equal(preAdmissionMu
 test("pre-admission 18: mutation authority is false on failure", () => assert.equal(preAdmissionMutation((facts) => { facts.seedIsAncestor = false; }).productSourceMutationAllowed, false));
 test("pre-admission 19: clearance cannot issue before admission", () => { const packet = evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet; assert.equal(packet.highestPermittedState, "ENGINEERING_PLAN_DRAFTED"); assert.equal(packet.finiteLeasePresent, false); });
 test("pre-admission 20: packet is deterministic 3 of 3", () => assert.equal(new Set([1, 2, 3].map(() => stableJson(evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet))).size, 1));
+
+const jurisdictionActiveTaskFixture = ({
+  domainIds = ["creator-money-ledger", "payouts-stripe-connect"],
+  inherited = false,
+  taskId = "active-task-jurisdiction-fixture",
+} = {}) => {
+  const sortedDomains = [...domainIds].sort();
+  const implementationPr = 229;
+  const implementationBranch = "codex/pre-release-identity-entitlement-authority-v1";
+  const originalSeedHead = "1".repeat(40);
+  const originalSeedTree = "2".repeat(40);
+  const planningHead = "3".repeat(40);
+  const planningTree = "4".repeat(40);
+  const ownerApprovalCommentId = 5285464582;
+  const taskArtifactPath = `docs/assurance/tasks/${taskId}.json`;
+  const scope = {
+    launchProgram: "chillywood-united-states-pre-release",
+    product: "chillywood-mobile",
+    repository: "Chillywood2025/chillywood-mobile",
+  };
+  const taskEvidence = {
+    closurePacketHash: "a".repeat(64),
+    completenessCertificateHash: "b".repeat(64),
+    taskArtifactHash: "c".repeat(64),
+    taskLocalEdgeClosureHash: "d".repeat(64),
+    taskLocalEdgeEvidenceHash: "e".repeat(64),
+    taskLocalModelHash: "f".repeat(64),
+  };
+  const taskIdentity = {
+    implementationBranch,
+    implementationPr,
+    leaseId: taskId,
+    originalSeedHead,
+    originalSeedTree,
+    ownerApprovalCommentId,
+    planningHead,
+    planningTree,
+    taskArtifactPath,
+    taskId,
+  };
+  const domainApplications = sortedDomains.map((domainId) => ({
+    decision: `Exact task-specific United States application for ${domainId}.`,
+    domainId,
+    jurisdictionDecisionOwner: "Chillywood2025",
+    market: "UNITED_STATES_ONLY",
+    minimumCreatorAge: ["creator-money-ledger", "payouts-stripe-connect"].includes(domainId) ? 18 : null,
+  }));
+  const rendered = preflightOwnerJurisdictionDecisionV2({
+    domainApplications,
+    domainIds: sortedDomains,
+    owner: { association: "OWNER", login: "Chillywood2025" },
+    registry,
+    scope,
+    taskEvidence,
+    taskIdentity,
+  });
+  assert.equal(rendered.ok, true, rendered.findings?.join(","));
+  const commentId = 9901;
+  const createdAt = "2026-08-14T12:00:00Z";
+  const receipt = {
+    authorAssociation: "OWNER",
+    authorLogin: "Chillywood2025",
+    body: rendered.body,
+    createdAt,
+    id: commentId,
+    updatedAt: createdAt,
+  };
+  const policyResolution = resolveOwnerJurisdictionPolicyChainV2({ completeDiscovery: true, expectedScope: scope, receipts: [receipt], registry });
+  const inheritedTaskBinding = inherited ? deriveTaskJurisdictionBindingV2({ domainIds: sortedDomains, policyReceipt: policyResolution, registry, scope, taskEvidence, taskIdentity }) : null;
+  const closedAuthority = {
+    productMutation: false,
+    providerMutation: false,
+    databaseDeployment: false,
+    build: false,
+    submission: false,
+    ota: false,
+    publicRelease: false,
+  };
+  const projection = {
+    schemaVersion: 2,
+    contract: "OWNER_JURISDICTION_POLICY_BINDING_V2",
+    repository: scope.repository,
+    product: scope.product,
+    launchProgram: scope.launchProgram,
+    policySource: {
+      commentId,
+      ...(inherited ? { referenceScope: "STANDING_POLICY_SUBRECORD_ONLY" } : { referenceScope: "TASK_BOUND_COMPOSITE", decisionVersion: "OWNER_JURISDICTION_DECISION_V2", subjectHash: rendered.payload.subjectHash, bodyHash: rendered.payload.bodyHash, envelopeHash: rendered.envelopeHash }),
+      standingPolicyType: "OWNER_JURISDICTION_STANDING_POLICY_V2",
+      standingPolicyVersion: 2,
+      status: "ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION",
+      sequence: 0,
+      standingPolicyHash: rendered.standingPolicyHash,
+    },
+    taskBinding: {
+      taskId,
+      prNumber: implementationPr,
+      planningHead,
+      planningTree,
+      standingPolicyCommentId: commentId,
+      standingPolicyHash: rendered.standingPolicyHash,
+      bindingType: "OWNER_JURISDICTION_TASK_BINDING_V2",
+      bindingVersion: 2,
+      domainIds: sortedDomains,
+      bindingHash: inheritedTaskBinding?.bindingHash ?? rendered.taskBindingHash,
+      conflictStatus: "NONE",
+    },
+    coverage: {
+      status: "EXACT_TASK_DOMAINS_BOUND",
+      coveredDomainIds: sortedDomains,
+      coveredCount: sortedDomains.length,
+      unresolvedDomainIds: [],
+    },
+    externalProofInherited: false,
+    operationalOwnershipPreserved: true,
+    authority: closedAuthority,
+  };
+  const activeBinding = {
+    featureId: sortedDomains[0],
+    implementationBindingId: taskId,
+    implementationBranch,
+    implementationPr,
+    immutableSourceHead: originalSeedHead,
+    immutableSourceTree: originalSeedTree,
+    currentImplementationHead: planningHead,
+    currentImplementationTree: planningTree,
+    phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+  };
+  const lease = {
+    admittedSeedHead: originalSeedHead,
+    admittedSeedTree: originalSeedTree,
+    artifactReservation: { allowedDomains: sortedDomains, closureArtifactPath: taskArtifactPath },
+    closure: {
+      artifactHash: taskEvidence.taskArtifactHash,
+      packetHash: taskEvidence.closurePacketHash,
+      certificateHash: taskEvidence.completenessCertificateHash,
+      edgeClosureHash: taskEvidence.taskLocalEdgeClosureHash,
+      edgeEvidenceHash: taskEvidence.taskLocalEdgeEvidenceHash,
+      modelDeltaHash: taskEvidence.taskLocalModelHash,
+    },
+    implementationBranch,
+    implementationPr,
+    leaseId: taskId,
+    ownerAuthorizationCommentId: ownerApprovalCommentId,
+  };
+  const fixtureTruth = {
+    ...structuredClone(canonicalTruth),
+    ownerJurisdictionPolicyBinding: projection,
+  };
+  return {
+    activeBinding,
+    lease,
+    policyObservation: { complete: true, receipts: [receipt], ...(inheritedTaskBinding ? { taskBinding: inheritedTaskBinding } : {}) },
+    projection,
+    rendered,
+    taskEvidence,
+    truth: fixtureTruth,
+  };
+};
+
+const verifyJurisdictionFixture = (fixture) => verifyActiveTaskOwnerJurisdictionPolicy({
+  activeBinding: fixture.activeBinding,
+  currentTruthContract,
+  lease: fixture.lease,
+  policyObservation: fixture.policyObservation,
+  registry,
+  truth: fixture.truth,
+});
+
+test("active-task jurisdiction 01: exact V2 projection resolves immutable policy and task-specific creator age", () => {
+  const result = verifyJurisdictionFixture(jurisdictionActiveTaskFixture());
+  assert.equal(result.ok, true, result.findings?.join(","));
+  assert.equal(result.evidence.marketJurisdictionOwnerCoverage, "2/2");
+  assert.equal(result.evidence.launchMarket, "UNITED_STATES_ONLY");
+  assert.equal(result.evidence.initialRollout, "CONTROLLED_1_PERCENT_UNITED_STATES");
+  assert.equal(result.evidence.creatorMinimumAge, 18);
+  assert.deepEqual(result.evidence.domainMinimumCreatorAges, { "creator-money-ledger": 18, "payouts-stripe-connect": 18 });
+  assert.equal(result.evidence.domainBinding.domainCoverageReusable, false);
+  assert.equal(result.evidence.externalProofInherited, false);
+  assert.deepEqual(result.evidence.authority, {
+    productMutation: false,
+    providerMutation: false,
+    databaseDeployment: false,
+    build: false,
+    submission: false,
+    ota: false,
+    publicRelease: false,
+  });
+});
+
+test("active-task jurisdiction 02: creator age is absent without task-specific age evidence", () => {
+  const result = verifyJurisdictionFixture(jurisdictionActiveTaskFixture({ domainIds: ["auth-session-password-recovery"] }));
+  assert.equal(result.ok, true, result.findings?.join(","));
+  assert.equal(Object.hasOwn(result.evidence, "creatorMinimumAge"), false);
+  assert.equal(Object.hasOwn(result.evidence, "domainMinimumCreatorAges"), false);
+});
+
+test("active-task jurisdiction 03: absent optional binding preserves legacy behavior", () => {
+  const result = verifyActiveTaskOwnerJurisdictionPolicy({ truth: canonicalTruth, currentTruthContract, registry });
+  assert.deepEqual(result, { ok: true, evidence: null, findings: [] });
+});
+
+test("active-task jurisdiction 04: wildcard projection fails closed", () => {
+  const fixture = jurisdictionActiveTaskFixture();
+  fixture.truth.ownerJurisdictionPolicyBinding.taskBinding.domainIds = ["*"];
+  fixture.truth.ownerJurisdictionPolicyBinding.coverage.coveredDomainIds = ["*"];
+  fixture.truth.ownerJurisdictionPolicyBinding.coverage.coveredCount = 1;
+  assert.equal(verifyJurisdictionFixture(fixture).ok, false);
+});
+
+test("active-task jurisdiction 05: task domains cannot be borrowed from a different lease", () => {
+  const fixture = jurisdictionActiveTaskFixture();
+  fixture.lease.artifactReservation.allowedDomains = ["creator-money-ledger"];
+  assert.deepEqual(verifyJurisdictionFixture(fixture).findings, ["ACTIVE_TASK_OWNER_JURISDICTION_EXACT_DOMAIN_MISMATCH"]);
+});
+
+test("active-task jurisdiction 06: planning identity mismatch fails closed", () => {
+  const fixture = jurisdictionActiveTaskFixture();
+  fixture.activeBinding.currentImplementationHead = "9".repeat(40);
+  assert.deepEqual(verifyJurisdictionFixture(fixture).findings, ["ACTIVE_TASK_OWNER_JURISDICTION_TASK_IDENTITY_MISMATCH"]);
+});
+
+test("active-task jurisdiction 07: closure evidence mismatch fails closed", () => {
+  const fixture = jurisdictionActiveTaskFixture();
+  fixture.lease.closure.modelDeltaHash = "0".repeat(64);
+  assert.deepEqual(verifyJurisdictionFixture(fixture).findings, ["ACTIVE_TASK_OWNER_JURISDICTION_TASK_EVIDENCE_MISMATCH"]);
+});
+
+test("active-task jurisdiction 08: incomplete policy discovery is never current-tip proof", () => {
+  const fixture = jurisdictionActiveTaskFixture();
+  fixture.policyObservation.complete = false;
+  assert.deepEqual(verifyJurisdictionFixture(fixture).findings, ["ACTIVE_TASK_OWNER_JURISDICTION_COMPLETE_DISCOVERY_REQUIRED"]);
+});
+
+test("active-task jurisdiction 09: edited immutable receipt fails chain verification", () => {
+  const fixture = jurisdictionActiveTaskFixture();
+  fixture.policyObservation.receipts[0].body += " ";
+  assert.equal(verifyJurisdictionFixture(fixture).ok, false);
+});
+
+test("active-task jurisdiction 10: prohibited authority in truth fails closed", () => {
+  const fixture = jurisdictionActiveTaskFixture();
+  fixture.truth.ownerJurisdictionPolicyBinding.authority.build = true;
+  assert.equal(verifyJurisdictionFixture(fixture).ok, false);
+});
+test("active-task jurisdiction 11: active-task consumes a nonembedded inherited binding as task-specific evidence", () => {
+  const result = verifyJurisdictionFixture(jurisdictionActiveTaskFixture({ domainIds: ["auth-session-password-recovery"], inherited: true, taskId: "later-wave-exact-binding" }));
+  assert.equal(result.ok, true, result.findings?.join(","));
+  assert.equal(result.evidence.domainBinding.taskSpecific, true);
+  assert.equal(result.evidence.domainBinding.domainCoverageReusable, false);
+});
 const e0CompletionFacts = [
   "repository.assurance-control.a1.requirements",
   "repository.assurance-control.a1.source",

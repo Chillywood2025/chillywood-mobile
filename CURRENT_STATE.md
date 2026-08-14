@@ -52,6 +52,12 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Contract `TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1` is `ACTIVE`; the baseline graph remains immutable: `true`.
 - Task-local evidence requires independent verification: `true`; static edge allowlists and exclusion combinations are not required. Product mutation before admission remains `false`.
 
+## Owner jurisdiction policy capability
+
+- Contract `OWNER_JURISDICTION_CANONICAL_MODEL_V2` is `ACTIVE`; standing policy may be reused: `true`; domain coverage may be reused: `false`. Every task must enumerate exact domains: `true`.
+- Legacy receipts retain their original semantics. External proof is never inherited, operational ownership is preserved, and this capability grants no product, provider, database-deployment, build, submission, OTA, or public-release authority.
+- No immutable standing-policy receipt is bound in current truth yet.
+
 ## Assurance receipt lifecycle
 
 - Contract `ASSURANCE_RECEIPT_LIFECYCLE_V2`; Owner task authorization survives exact in-scope descendants: `true`.
