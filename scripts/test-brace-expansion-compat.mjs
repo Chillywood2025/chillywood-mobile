@@ -54,13 +54,26 @@ const expectedImageSize = Object.freeze({
   resolved: "file:vendor/image-size-safe/chillywood-image-size-safe-1.2.1-chillywood.1.tgz",
   integrity: "sha512-cGvr+Whcqj51TOAJ1/WATSs9hwNrJtTgIGcqCJhEWueF/WdRwtRcMczBFjW00MI3J+gFLNFjZnyO6oeuco1S2w==",
 });
-const expectedUnrelatedPackageGraphSha256 = "bbc595ff9f44ccb196e9cb6753e5ba872a58bbd81cf4d42a7bc7de1355983f27";
+const expectedNanoid = Object.freeze({
+  version: "3.3.18",
+  resolved: "https://registry.npmjs.org/nanoid/-/nanoid-3.3.18.tgz",
+  integrity: "sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==",
+  parents: Object.freeze([
+    "node_modules/@react-navigation/core",
+    "node_modules/@react-navigation/native",
+    "node_modules/@react-navigation/routers",
+    "node_modules/expo-router",
+    "node_modules/postcss",
+  ]),
+});
+const expectedUnrelatedPackageGraphSha256 = "b2fb388722dd1df0a9ad59f6cf8660aae05ccd852601d238a195cc1710476204";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
   "node_modules/expo/node_modules/balanced-match",
   "node_modules/expo/node_modules/brace-expansion",
   "node_modules/minimatch/node_modules/balanced-match",
   "node_modules/minimatch/node_modules/brace-expansion",
+  "node_modules/nanoid",
 ]);
 
 function valueAt(object, keys) {
@@ -114,6 +127,12 @@ function validatePolicy(model) {
   gate(JSON.stringify(model.minimatch) === JSON.stringify(expectedMinimatch)
     && JSON.stringify(model.braceExpansion) === JSON.stringify(expectedBraceExpansion), "LOCK_OVERRIDE_GRAPH_MISMATCH", "The lock graph differs from the approved version-line mapping");
   gate(JSON.stringify(model.imageSize) === JSON.stringify(expectedImageSize), "IMAGE_SIZE_SAFE_IDENTITY_CHANGED", "The vendored image-size-safe identity changed");
+  gate(model.overrides.nanoid === expectedNanoid.version
+    && model.nanoid.version === expectedNanoid.version
+    && model.nanoid.resolved === expectedNanoid.resolved
+    && model.nanoid.integrity === expectedNanoid.integrity,
+  "NANOID_VERSION_VULNERABLE", "Every production nanoid consumer must resolve the reviewed 3.3.18 zero-size fix");
+  gate(JSON.stringify(model.nanoid.parents) === JSON.stringify(expectedNanoid.parents), "NANOID_PARENT_SET_CHANGED", "The reviewed nanoid production parent set changed");
   gate(model.unrelatedPackageGraphSha256 === expectedUnrelatedPackageGraphSha256, "UNRELATED_PACKAGE_VERSION_CHANGED", "An unrelated package identity changed");
   return true;
 }
@@ -144,6 +163,7 @@ function npmProblems() {
 
 function actualModel() {
   const image = packages["node_modules/image-size"] ?? {};
+  const nanoid = packages["node_modules/nanoid"] ?? {};
   return {
     overrides: clone(packageJson.overrides ?? {}),
     postinstall: packageJson.scripts?.postinstall,
@@ -159,8 +179,34 @@ function actualModel() {
       resolved: image.resolved,
       integrity: image.integrity,
     },
+    nanoid: {
+      version: nanoid.version,
+      resolved: nanoid.resolved,
+      integrity: nanoid.integrity,
+      parents: Object.entries(packages)
+        .filter(([, metadata]) => typeof metadata?.dependencies?.nanoid === "string")
+        .map(([entryPath]) => entryPath)
+        .sort(),
+    },
     unrelatedPackageGraphSha256: unrelatedPackageGraphSha256(),
   };
+}
+
+async function validateNanoidApis() {
+  const nanoidRoot = path.join(root, "node_modules/nanoid");
+  const metadata = JSON.parse(fs.readFileSync(path.join(nanoidRoot, "package.json"), "utf8"));
+  assert.equal(metadata.version, expectedNanoid.version);
+  for (const parentPath of expectedNanoid.parents) {
+    const dependency = resolveInstalledPackage(parentPath, "nanoid");
+    assert.equal(dependency.packagePath, "node_modules/nanoid", parentPath);
+    assert.equal(dependency.metadata.version, expectedNanoid.version, parentPath);
+  }
+  const commonJs = createRequire(path.join(nanoidRoot, "package.json"))(nanoidRoot);
+  assert.equal(commonJs.customAlphabet("abc", 0)(), "");
+  const nativeAsync = await import(pathToFileURL(path.join(nanoidRoot, "async/index.native.js")));
+  const generated = await nativeAsync.customRandom("abc", 0, async () => new Uint8Array(0))();
+  assert.equal(generated, "");
+  return { version: metadata.version, parentCount: expectedNanoid.parents.length, commonJsZeroSize: "PASS", nativeAsyncZeroSize: "PASS" };
 }
 
 function resolveInstalledPackage(requesterPackagePath, dependency) {
@@ -252,6 +298,8 @@ function killNegativeControls(base) {
     ["ACCEPT_NPM_LS_PROBLEM", "NPM_LS_PROBLEMS_PRESENT", (m) => { m.npmProblems = ["invalid dependency"]; }],
     ["DIVERGE_LOCK_FROM_OVERRIDE", "LOCK_OVERRIDE_GRAPH_MISMATCH", (m) => { m.braceExpansion["node_modules/minimatch/node_modules/brace-expansion"] = "5.0.9"; }],
     ["CHANGE_IMAGE_SIZE_SAFE", "IMAGE_SIZE_SAFE_IDENTITY_CHANGED", (m) => { m.imageSize.version = "1.2.1"; }],
+    ["RESTORE_NANOID_3_3_17", "NANOID_VERSION_VULNERABLE", (m) => { m.overrides.nanoid = "3.3.17"; m.nanoid.version = "3.3.17"; }],
+    ["CHANGE_NANOID_PARENT_SET", "NANOID_PARENT_SET_CHANGED", (m) => { m.nanoid.parents = m.nanoid.parents.slice(1); }],
     ["CHANGE_UNRELATED_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => { m.unrelatedPackageGraphSha256 = "0".repeat(64); }],
   ];
   return controls.map(([id, expectedCode, mutate]) => {
@@ -267,6 +315,7 @@ function killNegativeControls(base) {
 const model = actualModel();
 validatePolicy(model);
 const apiObservations = await validateInstalledApis();
+const nanoidObservation = await validateNanoidApis();
 const negativeControls = killNegativeControls(model);
 const gitStatus = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: root, encoding: "utf8" }).trim();
 gate(gitStatus === "", "TRACKED_REPOSITORY_CHANGED_AFTER_INSTALL", "A clean install changed tracked repository files");
@@ -279,6 +328,7 @@ const output = {
   packageLockSha256: sha256(fs.readFileSync(lockPath)),
   graphSha256: sha256(JSON.stringify({ minimatch: model.minimatch, braceExpansion: model.braceExpansion })),
   apiObservations,
+  nanoidObservation,
   relevantSourceHashes: relevantSourceHashes(),
   npmLsProblems: model.npmProblems.length,
   negativeControls: { required: negativeControls.length, killed: negativeControls.length, results: negativeControls },
