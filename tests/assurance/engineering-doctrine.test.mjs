@@ -166,7 +166,7 @@ const controls = [
   ["37 Provider Codex Review remains optional advisory", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(truth.reviewPolicy.classification, "OPTIONAL_ADVISORY"); assert.equal(truth.reviewPolicy.blocksMerge, false); }],
   ["38 all 13 Phase 1 checks remain required", () => { assert.equal(json("config/assurance/current-truth-contract-v1.json").reviewPolicy.requiredPhase1Checks, 13); assert.equal(json("config/assurance/engineering-doctrine-v1.json").mergeEligibility.requiredPhase1Checks, 13); }],
   ["39 build release authority remains false", () => { const authority = json("config/assurance/engineering-doctrine-v1.json").authority; assert.deepEqual(Object.values(authority), [false, false, false, false, false, false, false, false, false, 0]); }],
-  ["40 current D2A terminal truth remains intact", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(truth.activeTaskBinding.phase, "TERMINAL"); assert.equal(truth.activeTaskBinding.completionScope, "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE"); assert.equal(truth.latestMergedImplementationPr.number, 212); }]
+  ["40 D2A terminal history remains intact when a later finite task is current", () => { const truth = json("config/assurance/current-truth-v1.json"); const latest = truth.latestMergedImplementationPr; const d2aLease = truth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 212); assert.deepEqual({ number: latest.number, state: latest.state, head: latest.head, mergeSha: latest.mergeSha }, { number: 212, state: "merged", head: "50b5f0498a59961278bb5afbca443c6e35cd5bb6", mergeSha: "fe775c12b0857aa50d986d24179ae9588049b6a1" }); assert.equal(d2aLease?.leaseId, "d2a-release-critical-pr-212-v1"); assert.equal(d2aLease?.taskState, "MERGED_VERIFIED"); if (truth.activeTaskBinding.implementationPr === 212) { assert.equal(truth.activeTaskBinding.phase, "TERMINAL"); assert.equal(truth.activeTaskBinding.completionScope, "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE"); } else { const currentLease = truth.finiteTaskLeases.tasks.filter(({ implementationPr, taskState }) => implementationPr === truth.activeTaskBinding.implementationPr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState)); assert.equal(currentLease.length, 1); } }]
 ];
 
 assert.equal(controls.length, 40);
@@ -628,6 +628,18 @@ test("task-local architecture maintenance authority accepts the exact reusable p
   const result = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
   assert.equal(result.ok, true);
 });
+test("Owner jurisdiction architecture maintenance uses the one bounded assurance-only route", () => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 302, branch: "codex/owner-jurisdiction-canonical-model-v1", headSha: "d".repeat(40), baseSha: "e".repeat(40) };
+  const tree = "f".repeat(40);
+  const scope = { files: ["scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "tests/assurance/jurisdiction-policy.test.mjs"], additions: 1200, deletions: 20, netChangedLines: 1180 };
+  const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2" });
+  const raw = taskLocalArchitectureComment({ id: 700010, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+  const result = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
+  assert.equal(result.ok, true);
+  assert.equal(result.mergeEligible, false);
+  assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]);
+  assert.deepEqual(Object.values(subject.authority), [false, false, false, false, false, false, false, false, false, false]);
+});
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];
   const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 301, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
@@ -655,6 +667,12 @@ const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, c
   const evaluate = (overrides = {}) => verifyArchitectureMaintenanceAuthority({ raw: original, allComments: comments, paginationComplete: true, identity, tree, scope, ancestryVerified: true, phase1EvidenceResolver: () => phase1, ...overrides });
   return { originalIdentity, originalTree, originalScope, originalSubject, original, identity, tree, scope, review, phase1, premature, final, comments, evaluate };
 };
+
+test("Phase 1 evidence ignores optional advisory check-runs", () => {
+  const fixture = receiptLifecycleFixture({ phase1Mutator: (_run, jobs) => jobs.push({ name: "Chi'llywood / Codex Review Exact Head", status: "completed", conclusion: "neutral" }) });
+  assert.equal(fixture.phase1.valid, true);
+  assert.equal(fixture.phase1.result, "PASS_13_OF_13");
+});
 
 test("receipt lifecycle V2 regression matrix 35/35", async (t) => {
   const cases = [

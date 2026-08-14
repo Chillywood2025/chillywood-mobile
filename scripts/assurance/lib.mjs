@@ -3371,6 +3371,123 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
   return findings;
 }
 
+const OWNER_JURISDICTION_POLICY_BINDING_V2 = "OWNER_JURISDICTION_POLICY_BINDING_V2";
+const ownerJurisdictionAuthorityClosed = Object.freeze({
+  productMutation: false,
+  providerMutation: false,
+  databaseDeployment: false,
+  build: false,
+  submission: false,
+  ota: false,
+  publicRelease: false,
+});
+
+function exactObjectFields(value, fields) {
+  return value !== null
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && stableJson(Object.keys(value).sort()) === stableJson([...fields].sort());
+}
+
+/**
+ * Validates the current-truth projection only. The immutable receipt, policy
+ * chain, and type-separated hashes are verified by jurisdiction-policy.mjs;
+ * this projection intentionally contains no standing-policy body.
+ */
+export function validateOwnerJurisdictionPolicyTruth(record, contract) {
+  const finding = (id, detail = {}) => ({ id, status: "BLOCKED_INTERNAL", ...detail });
+  const findings = [];
+  const capability = record?.ownerJurisdictionPolicyCapability;
+  if (stableJson(capability) !== stableJson(contract?.ownerJurisdictionPolicyCapability)) {
+    findings.push(finding("ASSURANCE_OWNER_JURISDICTION_CAPABILITY_INVALID"));
+  }
+  const binding = record?.ownerJurisdictionPolicyBinding;
+  if (binding === undefined) return findings;
+
+  const sha256Value = (value) => typeof value === "string" && /^[0-9a-f]{64}$/u.test(value);
+  const gitSha = (value) => typeof value === "string" && /^[0-9a-f]{40}$/u.test(value);
+  const domainId = (value) => typeof value === "string"
+    && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)
+    && value.normalize("NFC") === value
+    && !value.includes("*");
+  const bindingFields = ["schemaVersion", "contract", "repository", "product", "launchProgram", "policySource", "taskBinding", "coverage", "externalProofInherited", "operationalOwnershipPreserved", "authority"];
+  const policyCommonFields = ["commentId", "referenceScope", "standingPolicyType", "standingPolicyVersion", "status", "sequence", "standingPolicyHash"];
+  const taskFields = ["taskId", "prNumber", "planningHead", "planningTree", "standingPolicyCommentId", "standingPolicyHash", "bindingType", "bindingVersion", "domainIds", "bindingHash", "conflictStatus"];
+  const coverageFields = ["status", "coveredDomainIds", "coveredCount", "unresolvedDomainIds"];
+  const policy = binding?.policySource;
+  const task = binding?.taskBinding;
+  const coverage = binding?.coverage;
+  const domains = task?.domainIds;
+  const covered = coverage?.coveredDomainIds;
+
+  if (!exactObjectFields(binding, bindingFields)
+    || binding.schemaVersion !== 2
+    || binding.contract !== OWNER_JURISDICTION_POLICY_BINDING_V2
+    || binding.repository !== "Chillywood2025/chillywood-mobile"
+    || typeof binding.product !== "string" || binding.product.length === 0 || binding.product.trim() !== binding.product
+    || typeof binding.launchProgram !== "string" || binding.launchProgram.length === 0 || binding.launchProgram.trim() !== binding.launchProgram) {
+    findings.push(finding("ASSURANCE_OWNER_JURISDICTION_BINDING_FIELDS_INVALID"));
+  }
+  const embeddedPolicySource = policy?.referenceScope === "TASK_BOUND_COMPOSITE";
+  if (!exactObjectFields(policy, embeddedPolicySource ? [...policyCommonFields, "decisionVersion", "subjectHash", "bodyHash", "envelopeHash"] : policyCommonFields)
+    || !Number.isSafeInteger(policy?.commentId) || policy.commentId < 1
+    || !["TASK_BOUND_COMPOSITE", "STANDING_POLICY_SUBRECORD_ONLY"].includes(policy?.referenceScope)
+    || (embeddedPolicySource && (!["OWNER_JURISDICTION_DECISION_V2", "OWNER_JURISDICTION_POLICY_CHAIN_DECISION_V2"].includes(policy?.decisionVersion) || ![policy?.subjectHash, policy?.bodyHash, policy?.envelopeHash].every(sha256Value)))
+    || policy?.standingPolicyType !== "OWNER_JURISDICTION_STANDING_POLICY_V2"
+    || policy?.standingPolicyVersion !== 2
+    || !["ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION", "SUPERSEDED_REEVALUATION_REQUIRED", "REVOKED_NO_AUTHORITY"].includes(policy?.status)
+    || !Number.isSafeInteger(policy?.sequence) || policy.sequence < 0
+    || !sha256Value(policy?.standingPolicyHash)) {
+    findings.push(finding("ASSURANCE_OWNER_JURISDICTION_POLICY_SOURCE_INVALID"));
+  }
+  if (!exactObjectFields(task, taskFields)
+    || typeof task?.taskId !== "string" || !/^[a-z0-9][a-z0-9_.:-]*$/u.test(task.taskId)
+    || !Number.isSafeInteger(task?.prNumber) || task.prNumber < 1
+    || !gitSha(task?.planningHead) || !gitSha(task?.planningTree)
+    || task?.standingPolicyCommentId !== policy?.commentId
+    || task?.standingPolicyHash !== policy?.standingPolicyHash
+    || task?.bindingType !== "OWNER_JURISDICTION_TASK_BINDING_V2"
+    || task?.bindingVersion !== 2
+    || !sha256Value(task?.bindingHash)
+    || !["NONE", "REQUIRES_NEW_OWNER_DECISION"].includes(task?.conflictStatus)) {
+    findings.push(finding("ASSURANCE_OWNER_JURISDICTION_TASK_BINDING_INVALID"));
+  }
+  const exactDomains = Array.isArray(domains)
+    && domains.length > 0
+    && domains.length <= 256
+    && domains.every(domainId)
+    && new Set(domains).size === domains.length
+    && stableJson(domains) === stableJson([...domains].sort());
+  if (!exactDomains) findings.push(finding("ASSURANCE_OWNER_JURISDICTION_EXACT_DOMAINS_INVALID"));
+  const policyActive = policy?.status === "ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION";
+  const activeCoverage = coverage?.status === "EXACT_TASK_DOMAINS_BOUND"
+    && stableJson(covered) === stableJson(domains)
+    && coverage?.coveredCount === domains?.length
+    && coverage?.unresolvedDomainIds?.length === 0
+    && task?.conflictStatus === "NONE";
+  const inactiveCoverage = coverage?.status === "INELIGIBLE_REEVALUATION_REQUIRED"
+    && covered?.length === 0
+    && coverage?.coveredCount === 0
+    && stableJson(coverage?.unresolvedDomainIds) === stableJson(domains)
+    && task?.conflictStatus === "REQUIRES_NEW_OWNER_DECISION";
+  if (!exactObjectFields(coverage, coverageFields)
+    || !Array.isArray(covered)
+    || !Array.isArray(coverage?.unresolvedDomainIds)
+    || [...covered, ...coverage.unresolvedDomainIds].some((domain) => !domainId(domain))
+    || new Set(covered).size !== covered.length
+    || new Set(coverage.unresolvedDomainIds).size !== coverage.unresolvedDomainIds.length
+    || (policyActive ? !activeCoverage : !inactiveCoverage)) {
+    findings.push(finding("ASSURANCE_OWNER_JURISDICTION_COVERAGE_INVALID"));
+  }
+  if (binding?.externalProofInherited !== false
+    || binding?.operationalOwnershipPreserved !== true
+    || stableJson(binding?.authority) !== stableJson(ownerJurisdictionAuthorityClosed)) {
+    findings.push(finding("ASSURANCE_OWNER_JURISDICTION_AUTHORITY_BOUNDARY_INVALID"));
+  }
+  if (policyActive && !activeCoverage) findings.push(finding("ASSURANCE_OWNER_JURISDICTION_ACTIVE_BINDING_INELIGIBLE"));
+  return findings;
+}
+
 export function validateEngineeringDoctrineTruth(record, contract, sources = {}) {
   const doctrine = record?.engineeringDoctrine;
   if (doctrine === undefined) {
@@ -3501,7 +3618,8 @@ export function renderCurrentState(record) {
   const admissionClearanceCapability = record.finiteTaskAdmissionClearanceCapability ? `\n## Finite-task admission-to-clearance capability\n\n- Contract \`${record.finiteTaskAdmissionClearanceCapability.contract}\` is \`${record.finiteTaskAdmissionClearanceCapability.status}\`; admission and computed clearance share one protected transition: \`${record.finiteTaskAdmissionClearanceCapability.admissionAndClearanceSameProtectedTransition}\`.\n- Product mutation before admission merge is \`${record.finiteTaskAdmissionClearanceCapability.productMutationBeforeAdmissionMerge}\`; a post-admission clearance PR is required: \`${record.finiteTaskAdmissionClearanceCapability.postAdmissionClearancePrRequired}\`. Source descendants retain the finite lease: \`${record.finiteTaskAdmissionClearanceCapability.sourceDescendantsRetainLease}\`.\n` : "";
   const taskLocalEdgeCapability = record.taskLocalGoverningEdgeClosureCapability ? `\n## Task-local governing-edge closure capability\n\n- Contract \`${record.taskLocalGoverningEdgeClosureCapability.contract}\` is \`${record.taskLocalGoverningEdgeClosureCapability.status}\`; the baseline graph remains immutable: \`${record.taskLocalGoverningEdgeClosureCapability.baselineGraphRemainsImmutable}\`.\n- Task-local evidence requires independent verification: \`${record.taskLocalGoverningEdgeClosureCapability.independentVerificationRequired}\`; static edge allowlists and exclusion combinations are not required. Product mutation before admission remains \`${record.taskLocalGoverningEdgeClosureCapability.productMutationBeforeAdmission}\`.\n` : "";
   const receiptLifecycle = record.receiptLifecyclePolicy ? `\n## Assurance receipt lifecycle\n\n- Contract \`${record.receiptLifecyclePolicy.contract}\`; Owner task authorization survives exact in-scope descendants: \`${record.receiptLifecyclePolicy.ownerAuthorizationSurvivesInScopeDescendants}\`.\n- Final-source attestation is required during development/self-host/review/Phase 1: \`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredDuringDevelopment}\`/\`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredForSelfHost}\`/\`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredForRepositoryReview}\`/\`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredForPhase1}\`; it is issued after review and Phase 1 and required for merge. Historical invalid attestations are non-blocking when exactly one valid current attestation exists.\n` : "";
-  const preAdmissionCapability = `${record.preAdmissionEngineeringSeedCapability ? `\n## Pre-admission engineering seed capability\n\n- Contract \`${record.preAdmissionEngineeringSeedCapability.contract}\` is \`${record.preAdmissionEngineeringSeedCapability.status}\`; product mutation is \`${record.preAdmissionEngineeringSeedCapability.productMutationAllowed}\` until finite lease admission through \`${record.preAdmissionEngineeringSeedCapability.admissionContext}\`.\n- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: \`${record.preAdmissionEngineeringSeedCapability.nextAction}\`.\n` : ""}${admissionClearanceCapability}${taskLocalEdgeCapability}${receiptLifecycle}`;
+  const jurisdictionCapability = record.ownerJurisdictionPolicyCapability ? `\n## Owner jurisdiction policy capability\n\n- Contract \`${record.ownerJurisdictionPolicyCapability.contract}\` is \`${record.ownerJurisdictionPolicyCapability.status}\`; standing policy may be reused: \`${record.ownerJurisdictionPolicyCapability.standingPolicyReusable}\`; domain coverage may be reused: \`${record.ownerJurisdictionPolicyCapability.domainCoverageReusable}\`. Every task must enumerate exact domains: \`${record.ownerJurisdictionPolicyCapability.exactTaskDomainsRequired}\`.\n- Legacy receipts retain their original semantics. External proof is never inherited, operational ownership is preserved, and this capability grants no product, provider, database-deployment, build, submission, OTA, or public-release authority.${record.ownerJurisdictionPolicyBinding ? `\n- Current immutable policy source: comment #${record.ownerJurisdictionPolicyBinding.policySource.commentId}, standing-policy hash \`${record.ownerJurisdictionPolicyBinding.policySource.standingPolicyHash}\`, status \`${record.ownerJurisdictionPolicyBinding.policySource.status}\`; task binding \`${record.ownerJurisdictionPolicyBinding.taskBinding.bindingHash}\` covers \`${record.ownerJurisdictionPolicyBinding.coverage.coveredCount}/${record.ownerJurisdictionPolicyBinding.taskBinding.domainIds.length}\` exact domains.` : "\n- No immutable standing-policy receipt is bound in current truth yet."}\n` : "";
+  const preAdmissionCapability = `${record.preAdmissionEngineeringSeedCapability ? `\n## Pre-admission engineering seed capability\n\n- Contract \`${record.preAdmissionEngineeringSeedCapability.contract}\` is \`${record.preAdmissionEngineeringSeedCapability.status}\`; product mutation is \`${record.preAdmissionEngineeringSeedCapability.productMutationAllowed}\` until finite lease admission through \`${record.preAdmissionEngineeringSeedCapability.admissionContext}\`.\n- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: \`${record.preAdmissionEngineeringSeedCapability.nextAction}\`.\n` : ""}${admissionClearanceCapability}${taskLocalEdgeCapability}${jurisdictionCapability}${receiptLifecycle}`;
   return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Protected authority checkpoint: \`${protectedMainAuthority.checkpointSha}\` / tree \`${protectedMainAuthority.checkpointTree}\`.\n- Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.\n- Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n${implementationBindingLine}${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: ${record.liveProviderReadback}.\n${engineering}${taskContextArchitecture}${preAdmissionCapability}\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
