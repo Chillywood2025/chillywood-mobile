@@ -1176,9 +1176,8 @@ export function resolveEngineeringClosureTaskContext({
     && localParents[0] === identity.baseSha
     && localParents[1] === identity.headSha;
   const localMatches = localIdentity.base === identity.baseSha
-    && sourceTree === localIdentity.tree
     && ancestry
-    && (exactSourceCheckout || exactPullRequestMergeCheckout)
+    && ((exactSourceCheckout && sourceTree === localIdentity.tree) || exactPullRequestMergeCheckout)
     && (!localIdentity.branch || localIdentity.branch === identity.branch);
   if (!localMatches || !scope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
   const authorities = observeAuthorities({ identity, tree: sourceTree, scope, currentTruth, root });
@@ -2188,6 +2187,12 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       if (normalized?.id === 5289720389) return { normalized, payload, structurallyValid, current: false, status: "HISTORICAL_PRE_CI_FINAL_SOURCE_ATTESTATION" };
       if (!structurallyValid) return { normalized, payload, structurallyValid, current: false, status: "HISTORICAL_MALFORMED_FINAL_SOURCE_ATTESTATION" };
       if (payload.subject.finalHead !== identity?.headSha || payload.subject.finalTree !== tree) return { normalized, payload, structurallyValid, current: false, status: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION" };
+      const claimedHistoricalIds = (payload.subject.historicalAttestations ?? []).map(({ commentId }) => commentId);
+      const claimedHistoricalRaws = claimedHistoricalIds.map((commentId) => finalMatches.find((candidate) => candidate.id === commentId));
+      const historyBinding = claimedHistoricalIds.length === new Set(claimedHistoricalIds).size
+        && claimedHistoricalRaws.every(Boolean)
+        && !claimedHistoricalIds.includes(item.id)
+        && (!finalMatches.some((candidate) => candidate.id === 5289720389) || claimedHistoricalIds.includes(5289720389));
       const reviewRaw = repositoryReviewMatches.find((candidate) => candidate.id === payload.subject.repositoryReview?.commentId);
       const phase1 = phase1EvidenceResolver({ runId: payload.subject.phase1?.runId, identity, tree, root });
       const review = verifyArchitectureRepositoryReview({ raw: reviewRaw, identity, tree, scope });
@@ -2196,12 +2201,13 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         tree,
         scope,
         originalRaw: raw,
-        historicalAttestationRaws: finalMatches.filter((candidate) => candidate.id !== item.id),
+        historicalAttestationRaws: claimedHistoricalRaws,
         repositoryReviewRaw: reviewRaw,
         phase1Evidence: phase1,
         root,
       });
-      const current = review.valid
+      const current = historyBinding
+        && review.valid
         && phase1.valid
         && payload.subject.receiptLifecycleContract === ASSURANCE_RECEIPT_LIFECYCLE_V2
         && stableJson(payload.subject) === stableJson(expected)

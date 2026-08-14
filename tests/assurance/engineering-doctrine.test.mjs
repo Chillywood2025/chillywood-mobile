@@ -656,7 +656,7 @@ const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, c
   return { originalIdentity, originalTree, originalScope, originalSubject, original, identity, tree, scope, review, phase1, premature, final, comments, evaluate };
 };
 
-test("receipt lifecycle V2 regression matrix 34/34", async (t) => {
+test("receipt lifecycle V2 regression matrix 35/35", async (t) => {
   const cases = [
     ["01 Owner authorization is valid without final attestation", () => { const f = receiptLifecycleFixture(); const r = verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }); assert.equal(r.authorizationOk, true); assert.equal(r.mergeEligible, false); }],
     ["02 in-scope descendants retain Owner authorization", () => assert.equal(receiptLifecycleFixture().evaluate().authorizationOk, true)],
@@ -692,7 +692,8 @@ test("receipt lifecycle V2 regression matrix 34/34", async (t) => {
     ["32 active-task authority remains fail closed", () => assert.equal(validateEngineeringTaskAuthority({ activeTaskPacket: null }).ok, false)],
     ["33 all thirteen Phase 1 checks remain required", () => assert.equal(PHASE1_REQUIRED_JOB_NAMES.length, 13)],
     ["34 Provider Codex Review remains optional", () => assert.equal(json("config/assurance/current-truth-v1.json").reviewPolicy.classification, "OPTIONAL_ADVISORY")],
+    ["35 later malformed attestation cannot invalidate current evidence", () => { const f = receiptLifecycleFixture(); const malformed = taskLocalArchitectureComment({ id: 700008, pr: f.identity.pr, body: `${ARCHITECTURE_FINAL_SOURCE_MARKER}\n{}` }); assert.equal(f.evaluate({ allComments: [...f.comments, malformed] }).mergeEligible, true); }],
   ];
-  assert.equal(cases.length, 34);
+  assert.equal(cases.length, 35);
   for (const [name, assertion] of cases) await t.test(name, assertion);
 });
