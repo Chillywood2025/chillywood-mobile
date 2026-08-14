@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, optionalCodexReviewPolicyValid, readJson, redact, stableJson, validateOwnerJurisdictionPolicyTruth, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
-import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
+import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_V2_MARKER,
@@ -504,6 +504,15 @@ function observeEngineeringScope(lease, currentHead, currentProtectedMain = null
 }
 
 export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, phase = "IMPLEMENTATION", lease, closurePacket, certificate, sourcePushed = false, samePr = true, branch, currentMain, currentHead, implementationPr, implementationMerged = false, bootstrapExpired = false, sourceChanging = true, readOnlyDiagnostic = false, scopeObservation, taskIdentityObservation, implementationIdentity, ownerJurisdictionAuthority } = {}) {
+  const wrappedFiniteTaskArtifact = Boolean(closurePacket?.closure?.sections);
+  const admittedFiniteTaskArtifact = wrappedFiniteTaskArtifact
+    && closurePacket?.schemaVersion === 1
+    && typeof closurePacket?.artifactId === "string"
+    && closurePacket.artifactId === String(closurePacket?.taskId ?? "").toUpperCase().replaceAll("-", "_")
+    && closurePacket?.closure?.id === "ENGINEERING_CLOSURE_PACKET_V1"
+    && closurePacket?.closure?.classification === "ENGINEERING_CLOSURE_PACKET_V1"
+    && closurePacket?.certificate?.id === "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1"
+    && closurePacket?.certificate?.classification === "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1" ? closurePacket : null;
   const effectivePacket = closurePacket?.closure?.sections ? closurePacket.closure : closurePacket;
   const effectiveCertificate = certificate ?? closurePacket?.certificate ?? effectivePacket?.sections?.L_COMPLETENESS_CERTIFICATE;
   const bootstrap = effectivePacket?.classification === "OWNER_AUTHORIZED_DOCTRINE_BOOTSTRAP_V1";
@@ -519,8 +528,11 @@ export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, pha
     const reservation = lease?.artifactReservation;
     const reservationFields = ["closureArtifactPath", "allowedDomains", "pathGlobs", "testEvidencePaths", "maximumFiles", "maximumLines", "excludedHighRiskPaths"];
     const safeArtifact = typeof reservation?.closureArtifactPath === "string" && /^(?:docs|config)\/assurance\/[A-Za-z0-9_./-]+\.json$/u.test(reservation.closureArtifactPath);
-    const safeTests = Array.isArray(reservation?.testEvidencePaths) && reservation.testEvidencePaths.length > 0 && reservation.testEvidencePaths.every((file) => /^(?:tests\/assurance|docs\/assurance)\//u.test(file));
+    const admittedTestPaths = admittedFiniteTaskArtifact?.implementationPlan?.tests;
+    const safeTests = Array.isArray(reservation?.testEvidencePaths) && reservation.testEvidencePaths.length > 0 && (reservation.testEvidencePaths.every((file) => /^(?:tests\/assurance|docs\/assurance)\//u.test(file)) || (Array.isArray(admittedTestPaths) && stableJson(reservation.testEvidencePaths.slice().sort()) === stableJson(admittedTestPaths.slice().sort()) && admittedTestPaths.every((file) => /^(?:tests|supabase\/tests)\/[A-Za-z0-9_./-]+$/u.test(file))));
     const reservationValid = reservation && reservationFields.every((field) => Object.hasOwn(reservation, field)) && safeArtifact && Array.isArray(reservation.allowedDomains) && reservation.allowedDomains.includes(featureId) && Array.isArray(reservation.pathGlobs) && reservation.pathGlobs.length > 0 && safeTests && Number.isInteger(reservation.maximumFiles) && reservation.maximumFiles > 0 && Number.isInteger(reservation.maximumLines) && reservation.maximumLines > 0 && Array.isArray(reservation.excludedHighRiskPaths);
+    const admittedPlanPaths = admittedFiniteTaskArtifact?.implementationPlan?.allowedPaths;
+    const admittedReservationBound = reservationValid && Array.isArray(admittedPlanPaths) && stableJson(admittedPlanPaths.slice().sort()) === stableJson(reservation.pathGlobs.slice().sort()) && stableJson(admittedPlanPaths.slice().sort()) === stableJson((lease?.allowedPaths ?? []).slice().sort());
     if (!reservationValid) findings.push("PREIMPLEMENTATION_AFFECTED_DOMAIN_INCOMPLETE");
     const matches = (file, patterns = []) => patterns.some((glob) => glob.endsWith("/**") ? file.startsWith(glob.slice(0, -3)) : file === glob);
     const phasePlanningOnly = ["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE"].includes(phase);
@@ -535,7 +547,7 @@ export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, pha
       const amendment = record?.ownerLeaseAmendment; return record?.path === requestedPath && Number.isInteger(amendment?.ownerAuthorization?.commentId) && lease?.engineeringOwnerAuthorizationCommentIds?.includes(amendment.ownerAuthorization.commentId);
     };
     const expansionFor = (glob) => expansionRecords.filter((record) => record?.path === glob && validExpansion(record, glob));
-    if (reservationValid && reservation.pathGlobs.some((glob) => !graphGlobs.includes(glob) && expansionFor(glob).length !== 1)) findings.push("FINITE_TASK_ARTIFACT_RESERVATION_SCOPE_VIOLATION");
+    if (reservationValid && !admittedReservationBound && reservation.pathGlobs.some((glob) => !graphGlobs.includes(glob) && expansionFor(glob).length !== 1)) findings.push("FINITE_TASK_ARTIFACT_RESERVATION_SCOPE_VIOLATION");
     let derivedGate = null;
     if (planningOnly) {
       const discoveryPaths = reservationValid ? [reservation.closureArtifactPath, ...reservation.testEvidencePaths] : [];
@@ -545,16 +557,22 @@ export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, pha
       if (!effectiveCertificate || effectiveCertificate.id !== "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1") findings.push("PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE");
       const measuredLines = Number.isInteger(changedLines) ? changedLines : null;
       if (measuredLines === null) findings.push("FINITE_TASK_SCOPE_MEASUREMENT_MISSING");
-      const ownerCommentIds = lease?.engineeringOwnerAuthorizationCommentIds ?? [];
-      const observedTaskIdentity = taskIdentityObservation ?? observeGitHubTaskIdentity({ pr: Number(implementationPr), branch, admittedSeedHead: lease?.admittedSeedHead ?? lease?.admittedBase, protectedBase: currentMain, leaseId: lease?.leaseId, commentId: ownerCommentIds.at(-1) ?? lease?.ownerAuthorizationCommentId, maximumFiles: reservation?.maximumFiles, maximumLines: reservation?.maximumLines });
-      derivedGate = evaluatePreimplementationGate(effectivePacket, { certificate: effectiveCertificate, productTask: true, taskIdentityObservation: observedTaskIdentity, implementationIdentity, artifactReservation: reservation, authoritativeLease: lease, ownerJurisdictionAuthority, actualScope: observedScope ? { ...observedScope, exactPlan: false } : null });
+      if (wrappedFiniteTaskArtifact && !admittedFiniteTaskArtifact) {
+        derivedGate = { clear: false, findings: ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"] };
+      } else if (admittedFiniteTaskArtifact) {
+        derivedGate = evaluateAdmittedFiniteTaskArtifactV2(admittedFiniteTaskArtifact, { taskArtifactHash: implementationIdentity?.taskArtifactHash, implementationIdentity, authoritativeLease: lease, ownerJurisdictionAuthority, actualScope: observedScope, root: ROOT });
+      } else {
+        const ownerCommentIds = lease?.engineeringOwnerAuthorizationCommentIds ?? [];
+        const observedTaskIdentity = taskIdentityObservation ?? observeGitHubTaskIdentity({ pr: Number(implementationPr), branch, admittedSeedHead: lease?.admittedSeedHead ?? lease?.admittedBase, protectedBase: currentMain, leaseId: lease?.leaseId, commentId: ownerCommentIds.at(-1) ?? lease?.ownerAuthorizationCommentId, maximumFiles: reservation?.maximumFiles, maximumLines: reservation?.maximumLines });
+        derivedGate = evaluatePreimplementationGate(effectivePacket, { certificate: effectiveCertificate, productTask: true, taskIdentityObservation: observedTaskIdentity, implementationIdentity, artifactReservation: reservation, authoritativeLease: lease, ownerJurisdictionAuthority, actualScope: observedScope ? { ...observedScope, exactPlan: false } : null });
+      }
       if (!derivedGate.clear) findings.push(...derivedGate.findings);
       if (effectiveCertificate?.featureDomain !== featureId) findings.push("PREIMPLEMENTATION_AFFECTED_DOMAIN_INCOMPLETE");
       const implementationPaths = reservationValid ? [reservation.closureArtifactPath, ...reservation.testEvidencePaths, ...reservation.pathGlobs] : [];
       if (changedPaths.some((file) => !(lease?.allowedPaths ?? []).includes(file) && !matches(file, implementationPaths))) findings.push("FINITE_TASK_ARTIFACT_RESERVATION_SCOPE_VIOLATION");
     }
     const highRiskAuthorized = (file) => expansionRecords.some((record) => record?.path === file && record?.ownerLeaseAmendment?.highRiskApproved === true && validExpansion(record, file)); const highRiskPaths = [...reservation?.excludedHighRiskPaths ?? [], "supabase/migrations/**", "app/admin/**", "package-lock.json", "android/**", "ios/**"];
-    if (reservationValid && (changedPaths.length > reservation.maximumFiles || (Number.isInteger(changedLines) && changedLines > reservation.maximumLines) || changedPaths.some((file) => matches(file, highRiskPaths) && !highRiskAuthorized(file)))) findings.push("FINITE_TASK_ARTIFACT_RESERVATION_SCOPE_VIOLATION");
+    if (reservationValid && (changedPaths.length > reservation.maximumFiles || (Number.isInteger(changedLines) && changedLines > reservation.maximumLines) || changedPaths.some((file) => matches(file, highRiskPaths) && !highRiskAuthorized(file) && !(admittedReservationBound && file.startsWith("supabase/migrations/") && admittedPlanPaths.includes(file))))) findings.push("FINITE_TASK_ARTIFACT_RESERVATION_SCOPE_VIOLATION");
     if (!samePr) findings.push("ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE");
     const clear = !planningOnly && derivedGate?.clear === true && findings.length === 0;
     const classification = findings.length ? "BOUND_INCOMPLETE" : clear ? "PREIMPLEMENTATION_ENGINEERING_CLEAR" : "ENGINEERING_DISCOVERY_RESERVED";
