@@ -25,6 +25,16 @@
     "sourceBindingPrRequired": false,
     "provenancePrRequired": false
   },
+  "taskLocalGoverningEdgeClosurePolicy": {
+    "contract": "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+    "baselineGraphRemainsImmutable": true,
+    "taskLocalEvidenceAllowed": true,
+    "independentVerificationRequired": true,
+    "staticEdgeAllowlistRequired": false,
+    "staticExclusionCombinationRequired": false,
+    "productMutationBeforeAdmission": false,
+    "admissionRequiresClearClosure": true
+  },
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,

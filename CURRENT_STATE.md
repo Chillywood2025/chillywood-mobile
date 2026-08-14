@@ -41,12 +41,17 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 ## Pre-admission engineering seed capability
 
 - Contract `OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1` is `ACTIVE`; product mutation is `false` until finite lease admission through `FINITE_TASK_ADMISSION_TO_CLEARANCE_V1`.
-- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: `RESUME_PR_229_PRE_ADMISSION_ENGINEERING_CLOSURE`.
+- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: `RESUME_PR_229_PRE_ADMISSION_EDGE_CLOSURE`.
 
 ## Finite-task admission-to-clearance capability
 
 - Contract `FINITE_TASK_ADMISSION_TO_CLEARANCE_V1` is `ACTIVE`; admission and computed clearance share one protected transition: `true`.
 - Product mutation before admission merge is `false`; a post-admission clearance PR is required: `false`. Source descendants retain the finite lease: `true`.
+
+## Task-local governing-edge closure capability
+
+- Contract `TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1` is `ACTIVE`; the baseline graph remains immutable: `true`.
+- Task-local evidence requires independent verification: `true`; static edge allowlists and exclusion combinations are not required. Product mutation before admission remains `false`.
 
 ## Open implementation PRs
 

@@ -1125,7 +1125,7 @@
     "staticBindingRequired": false,
     "sourceBindingPrRequired": false,
     "provenancePrRequired": false,
-    "nextAction": "RESUME_PR_229_PRE_ADMISSION_ENGINEERING_CLOSURE",
+    "nextAction": "RESUME_PR_229_PRE_ADMISSION_EDGE_CLOSURE",
     "authority": {
       "providerMutation": false,
       "build": false,
@@ -1145,6 +1145,25 @@
     "sourceBindingPrRequired": false,
     "provenancePrRequired": false,
     "sourceDescendantsRetainLease": true,
+    "authority": {
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
+  "taskLocalGoverningEdgeClosureCapability": {
+    "contract": "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+    "status": "ACTIVE",
+    "baselineGraphRemainsImmutable": true,
+    "taskLocalEvidenceAllowed": true,
+    "independentVerificationRequired": true,
+    "staticEdgeAllowlistRequired": false,
+    "staticExclusionCombinationRequired": false,
+    "productMutationBeforeAdmission": false,
+    "admissionRequiresClearClosure": true,
     "authority": {
       "providerMutation": false,
       "databaseDeployment": false,

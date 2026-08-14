@@ -7,16 +7,19 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
+  architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
+  createTaskLocalDomainGraphDelta, createTaskLocalEdgeDisposition,
   evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, runAuthoritativeReplay, stableJson,
-  verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity, verifyVerificationDependencyClosure
+  verifyArchitectureMaintenanceAuthority, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
+  verifyTaskLocalGoverningEdgeClosure, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
-import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
+import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
 import { renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 
@@ -523,3 +526,92 @@ test("authoritative one duplicate receipt fails", () => { const output = structu
 test("authoritative one stale source hash fails", () => { const output = structuredClone(replayFixture().output); output.laneResults[0].receipts[0].generatorSourceHash = "0".repeat(64); assert.equal(verifyAuthoritativeOutput(output).ok, false); });
 test("authoritative contradictory outputs expose exact deterministic diff", () => { const left = replayFixture().output; const right = structuredClone(left); right.externalEvidenceStatus = "CONTRADICTION"; const comparison = compareReplayOutputs(left, right); assert.equal(comparison.equal, false); assert.equal(comparison.difference.pointer, "/externalEvidenceStatus"); });
 test("authoritative cache-hit marker fails", () => { const output = structuredClone(replayFixture().output); output.execution.cacheHit = true; assert.equal(verifyAuthoritativeOutput(output).ok, false); });
+
+const taskLocalEdgeIdentity = () => {
+  const cwd = new URL(".", root);
+  const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+  const tree = execFileSync("git", ["rev-parse", `${head}^{tree}`], { cwd, encoding: "utf8" }).trim();
+  return { head, tree };
+};
+const TASK_LOCAL_EDGE_ID = "edge-10-notifications-fcm-to-chilly-chat-call-lifecycle";
+const taskLocalNotificationSubjects = [
+  { sourcePath: "supabase/functions/notification-operator/index.ts", selector: "systemId: \"notification_delivery_operator\"," },
+  { sourcePath: "supabase/functions/chilly-chat-call-dispatch/index.ts", selector: "Deno.serve(async (req): Promise<Response> => {" },
+];
+const taskLocalEdgeEvidence = ({ disposition = "NON_IMPACTING_WITH_EVIDENCE", sourceSubjects = taskLocalNotificationSubjects, modelDeltas = [], extraDispositions = [] } = {}) => {
+  const identity = taskLocalEdgeIdentity();
+  const record = createTaskLocalEdgeDisposition({
+    edgeId: TASK_LOCAL_EDGE_ID,
+    disposition,
+    relationshipType: "EDGE_FUNCTION_INVOCATION_OR_OWNERSHIP",
+    dataControlTransferred: "account-bound notification delivery authority",
+    authorityDirection: "SOURCE_TO_DESTINATION",
+    mutableState: ["device token ownership"],
+    lifecycleImplications: ["retry", "cleanup", "revocation"],
+    sourceSubjects,
+    ...(disposition === "VERIFIED_GOVERNING_INCLUDED" ? {} : { negativeWitness: taskLocalNotificationSubjects[0], exactContract: "call dispatch cannot retain a detached notification installation owner" }),
+  }, { identity, root: new URL(".", root).pathname });
+  return { taskId: "generic-notification-edge-fixture", primaryDomain: "notifications-fcm", sourceIdentity: identity, dispositions: [record, ...extraDispositions], modelDeltas };
+};
+const directTaskLocalVerify = (evidence) => independentlyVerifyTaskLocalGoverningEdgeClosure({
+  contract: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+  repository: "Chillywood2025/chillywood-mobile",
+  baselineGraphHash: json("config/assurance/whole-app-domain-graph-v1.json").contentHash,
+  ...evidence,
+}, { root: new URL(".", root).pathname });
+const rehashTaskLocalRecord = (record) => { const body = { ...record }; delete body.recordHash; return { ...body, recordHash: hashValue(body) }; };
+const taskLocalValidResult = () => directTaskLocalVerify(taskLocalEdgeEvidence());
+
+test("task-local edge 01 declaration-only baseline edges do not become verified automatically", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions = []; const result = directTaskLocalVerify(evidence); assert.ok(result.findings.includes(`TASK_LOCAL_EDGE_UNRESOLVED:${TASK_LOCAL_EDGE_ID}`)); });
+test("task-local edge 02 unrelated declaration-only edges do not freeze a grounded task", () => { const result = taskLocalValidResult(); assert.equal(result.classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR"); assert.deepEqual(result.candidateEdges, [TASK_LOCAL_EDGE_ID]); });
+test("task-local edge 03 baseline verified assurance edges remain exact", () => assert.equal(json("config/assurance/whole-app-domain-graph-v1.json").verifiedGoverningEdges.length, 4));
+test("task-local edge 04 exact import relationship is observed", () => { const evidence = taskLocalEdgeEvidence({ sourceSubjects: [{ sourcePath: "supabase/functions/notification-operator/index.ts", selector: "import { runNotificationAutonomyProbe } from \"./probe.ts\";" }, taskLocalNotificationSubjects[1]] }); evidence.dispositions[0].relationshipType = "EXACT_IMPORT_OR_CALL"; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).observations[0].independentlyDerivedRelationshipTypes.includes("EXACT_IMPORT_OR_CALL"), true); });
+test("task-local edge 05 exact function-call relationship is observed", () => assert.ok(taskLocalValidResult().observations[0].independentlyDerivedRelationshipTypes.includes("EXACT_SYMBOL_OR_SELECTOR")));
+test("task-local edge 06 exact RPC relationship is observed", () => { const evidence = taskLocalEdgeEvidence({ sourceSubjects: [taskLocalNotificationSubjects[0], { sourcePath: "supabase/functions/chilly-chat-call-dispatch/index.ts", selector: "adminClient.rpc(\"is_account_access_restricted\"" }] }); evidence.dispositions[0].relationshipType = "RPC_INVOCATION"; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.ok(directTaskLocalVerify(evidence).observations[0].independentlyDerivedRelationshipTypes.includes("RPC_INVOCATION")); });
+test("task-local edge 07 exact shared-table relationship is observed", () => { const evidence = taskLocalEdgeEvidence(); const relation = evidence.dispositions[0]; relation.sourceBindings.push(createTaskLocalEdgeDisposition({ edgeId: TASK_LOCAL_EDGE_ID, disposition: "VERIFIED_GOVERNING_INCLUDED", relationshipType: "SHARED_TABLE_POLICY_TRIGGER", dataControlTransferred: "table", sourceSubjects: [{ sourcePath: "supabase/migrations/20260624231731_account_purge_deidentification_proof.sql", selector: "update public.\"user_push_tokens\"" }] }, { identity: evidence.sourceIdentity, root: new URL(".", root).pathname }).sourceBindings[0]); relation.relationshipType = "SHARED_TABLE_POLICY_TRIGGER"; evidence.dispositions[0] = rehashTaskLocalRecord(relation); assert.ok(directTaskLocalVerify(evidence).observations[0].independentlyDerivedRelationshipTypes.includes("SHARED_TABLE_POLICY_TRIGGER")); });
+test("task-local edge 08 exact retry and cleanup relationship is observed", () => { const evidence = taskLocalEdgeEvidence({ sourceSubjects: [taskLocalNotificationSubjects[0], { sourcePath: "supabase/functions/chilly-chat-call-transition-retry/index.ts", selector: "Deno.serve(async (req): Promise<Response> => {" }] }); evidence.dispositions[0].relationshipType = "RETRY_CLEANUP_ROLLBACK"; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.ok(directTaskLocalVerify(evidence).observations[0].independentlyDerivedRelationshipTypes.includes("RETRY_CLEANUP_ROLLBACK")); });
+test("task-local edge 09 stale source hash fails", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions[0].sourceBindings[0].normalizedSourceHash = "0".repeat(64); evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 10 zero-match selector fails", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions[0].sourceBindings[0].selector = "selector-that-is-not-present"; evidence.dispositions[0].sourceBindings[0].selectorMatchCount = 1; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 11 multi-match selector fails", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions[0].sourceBindings[0].selector = "import"; evidence.dispositions[0].sourceBindings[0].selectorMatchCount = 1; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 12 comment-only relationship fails", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions[0].sourceBindings[0].selector = "Notification delivery operator Edge Function entry point."; evidence.dispositions[0].sourceBindings[0].selectorMatchCount = 1; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 13 verified governing inclusion is independently classified", () => { const evidence = taskLocalEdgeEvidence({ disposition: "VERIFIED_GOVERNING_INCLUDED" }); const result = directTaskLocalVerify(evidence); assert.ok(result.accounting.verifiedGoverningSet.includes(TASK_LOCAL_EDGE_ID)); });
+test("task-local edge 14 verified non-governing evidence passes", () => { const result = directTaskLocalVerify(taskLocalEdgeEvidence({ disposition: "VERIFIED_NON_GOVERNING_WITH_EVIDENCE" })); assert.equal(result.classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR"); });
+test("task-local edge 15 exact non-impacting receipt passes", () => assert.equal(taskLocalValidResult().classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR"));
+test("task-local edge 16 unresolved declaration blocks", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions = []; assert.ok(directTaskLocalVerify(evidence).findings.some((finding) => finding.startsWith("TASK_LOCAL_EDGE_UNRESOLVED:"))); });
+test("task-local edge 17 missing disposition blocks", () => { const evidence = taskLocalEdgeEvidence(); delete evidence.dispositions[0].disposition; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 18 duplicate disposition blocks", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions.push(structuredClone(evidence.dispositions[0])); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 19 fictional edge blocks", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions[0].edgeId = "fictional-edge"; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 20 one receipt cannot cover multiple edges", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions[0].edgeIds = [TASK_LOCAL_EDGE_ID, "another-edge"]; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 21 prose-only exclusion blocks", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions[0].sourceBindings = []; evidence.dispositions[0] = rehashTaskLocalRecord(evidence.dispositions[0]); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 22 observed undeclared edge blocks without a delta", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions.push({ ...structuredClone(evidence.dispositions[0]), edgeId: "task-local-unmodeled" }); assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 23 exact task-local graph delta passes", () => {
+  const identity = taskLocalEdgeIdentity();
+  const deltaSubjects = [taskLocalNotificationSubjects[0], { sourcePath: "supabase/functions/ios-voip-push-tokens/index.ts", selector: "Deno.serve(async (req): Promise<Response> => {" }];
+  const delta = createTaskLocalDomainGraphDelta({ edgeId: "task-local-notifications-to-voip-token-fixture", sourceDomain: "notifications-fcm", destinationDomain: "pushkit-callkit", sourceSubjects: deltaSubjects, authorityDirection: "BIDIRECTIONAL", impactClasses: ["TOKEN_OWNERSHIP"], rollback: "detach token", cleanup: "delete stale owner", observability: "hashed installation ID", reasonBaselineOmitted: "baseline declaration predates current token source", affectedTask: "generic-notification-edge-fixture" }, identity, new URL(".", root).pathname);
+  const deltaDisposition = createTaskLocalEdgeDisposition({ edgeId: delta.edgeId, sourceDomain: delta.sourceDomain, destinationDomain: delta.destinationDomain, disposition: "NON_IMPACTING_WITH_EVIDENCE", relationshipType: "EDGE_FUNCTION_INVOCATION_OR_OWNERSHIP", dataControlTransferred: "token ownership", sourceSubjects: deltaSubjects, negativeWitness: deltaSubjects[0], exactContract: "ordinary notification ownership cannot grant VoIP call ownership" }, { identity, root: new URL(".", root).pathname });
+  const result = directTaskLocalVerify(taskLocalEdgeEvidence({ modelDeltas: [delta], extraDispositions: [deltaDisposition] }));
+  assert.equal(result.classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR");
+});
+test("task-local edge 24 unrelated task cannot consume another task delta", () => { const evidence = taskLocalEdgeEvidence(); const identity = evidence.sourceIdentity; const delta = createTaskLocalDomainGraphDelta({ edgeId: "task-local-wrong-task", sourceDomain: "notifications-fcm", destinationDomain: "pushkit-callkit", sourceSubjects: taskLocalNotificationSubjects, authorityDirection: "BIDIRECTIONAL", impactClasses: ["TOKEN"], rollback: "rollback", cleanup: "cleanup", observability: "audit", reasonBaselineOmitted: "fixture", affectedTask: "another-task" }, identity, new URL(".", root).pathname); evidence.modelDeltas = [delta]; assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 25 task-local delta requires no architecture PR", () => assert.equal(createTaskLocalDomainGraphDelta({ edgeId: "task-local-generic", sourceDomain: "notifications-fcm", destinationDomain: "pushkit-callkit", sourceSubjects: taskLocalNotificationSubjects, authorityDirection: "BIDIRECTIONAL", impactClasses: ["TOKEN"], rollback: "rollback", cleanup: "cleanup", observability: "audit", reasonBaselineOmitted: "fixture", affectedTask: "generic-notification-edge-fixture" }, taskLocalEdgeIdentity(), new URL(".", root).pathname).classification, "TASK_LOCAL_DOMAIN_GRAPH_DELTA_V1"));
+test("task-local edge 26 fixed-point traversal includes every governing domain", () => { const result = directTaskLocalVerify(taskLocalEdgeEvidence({ disposition: "VERIFIED_GOVERNING_INCLUDED" })); assert.ok(result.domains.includes("chilly-chat-call-lifecycle")); });
+test("task-local edge 27 boundary exclusion does not expand closure", () => assert.deepEqual(taskLocalValidResult().domains, ["notifications-fcm"]));
+test("task-local edge 28 verified non-governing edge does not expand closure", () => assert.deepEqual(directTaskLocalVerify(taskLocalEdgeEvidence({ disposition: "VERIFIED_NON_GOVERNING_WITH_EVIDENCE" })).domains, ["notifications-fcm"]));
+test("task-local edge 29 unresolved touching edge blocks", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions = []; assert.equal(directTaskLocalVerify(evidence).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"); });
+test("task-local edge 30 outside reachable edge does not block unrelated work", () => assert.equal(taskLocalValidResult().candidateEdges.includes("edge-19-storekit-google-play-billing-to-revenuecat-premium"), false));
+test("task-local edge 31 exact set accounting passes", () => { const accounting = taskLocalValidResult().accounting; assert.equal(accounting.declaredCandidateSet.length, accounting.verifiedGoverningSet.length + accounting.verifiedNonGoverningSet.length + accounting.boundaryExclusionSet.length + accounting.unresolvedSet.length); });
+test("task-local edge 32 copied expected set cannot replace actual set", () => { const evidence = taskLocalEdgeEvidence(); evidence.expectedCandidateEdges = ["copied"]; assert.notDeepEqual(directTaskLocalVerify(evidence).candidateEdges, evidence.expectedCandidateEdges); });
+test("task-local edge 33 result is deterministic two of two", () => { const result = verifyTaskLocalGoverningEdgeClosure(taskLocalEdgeEvidence(), { root: new URL(".", root).pathname, runs: 2 }); assert.equal(result.verificationRuns, "2/2"); assert.equal(result.deterministic, true); });
+test("task-local edge 34 auth tasks can ground closure without product mutation", () => assert.equal(json("config/assurance/current-truth-v1.json").taskLocalGoverningEdgeClosureCapability.productMutationBeforeAdmission, false));
+test("task-local edge 35 global verified count cannot cap current candidates", () => { const graph = json("config/assurance/whole-app-domain-graph-v1.json"); assert.ok(graph.edges.length > graph.verifiedGoverningEdges.length); assert.equal(taskLocalValidResult().classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR"); });
+test("task-local edge 36 unresolved edges are reported by exact ID", () => { const evidence = taskLocalEdgeEvidence(); evidence.dispositions = []; assert.ok(directTaskLocalVerify(evidence).findings.includes(`TASK_LOCAL_EDGE_UNRESOLVED:${TASK_LOCAL_EDGE_ID}`)); });
+test("task-local edge 37 a second product domain uses the same contract", () => assert.equal(taskLocalValidResult().contract, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1"));
+test("task-local edge 38 implementation contains no Wave 1 edge ID", () => { const source = fs.readFileSync(new URL("scripts/assurance/engineering-closure.mjs", root), "utf8") + fs.readFileSync(new URL("scripts/assurance/engineering-evidence-verifier.mjs", root), "utf8"); assert.doesNotMatch(source, /WAPR-P1|WAPR-CM-P1/u); });
+test("task-local edge 39 admission blocks a blocked closure", () => assert.equal(directTaskLocalVerify({ ...taskLocalEdgeEvidence(), dispositions: [] }).classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"));
+test("task-local edge 40 admission can consume a clear closure", () => assert.equal(taskLocalValidResult().classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR"));
+test("task-local edge 41 product mutation remains false before admission", () => assert.equal(json("config/assurance/current-truth-v1.json").preAdmissionEngineeringSeedCapability.productMutationAllowed, false));
+test("task-local edge 42 exact admission may grant later mutation", () => assert.equal(json("config/assurance/current-truth-v1.json").taskLocalGoverningEdgeClosureCapability.admissionRequiresClearClosure, true));
+test("task-local edge 43 source descendants retain the finite lease", () => assert.equal(json("config/assurance/current-truth-v1.json").finiteTaskAdmissionClearanceCapability.sourceDescendantsRetainLease, true));
+test("task-local edge 44 current truth generation stays deterministic", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(renderCurrentState(truth), renderCurrentState(structuredClone(truth))); assert.equal(renderNextTask(truth), renderNextTask(structuredClone(truth))); });
+test("task-local edge 45 all thirteen Phase 1 checks remain required", () => { const workflow = fs.readFileSync(new URL(".github/workflows/phase1-ci.yml", root), "utf8"); assert.match(workflow, /13\/13|Phase 1/u); });
+test("task-local edge 46 provider Codex Review remains optional advisory", () => assert.match(stableJson(json("config/assurance/current-truth-v1.json")), /OPTIONAL_ADVISORY/u));
