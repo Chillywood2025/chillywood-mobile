@@ -1173,6 +1173,29 @@
       "publicRelease": false
     }
   },
+  "receiptLifecyclePolicy": {
+    "contract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
+    "ownerAuthorizationRequiredBeforeDevelopment": true,
+    "ownerAuthorizationSurvivesInScopeDescendants": true,
+    "finalSourceAttestationRequiredDuringDevelopment": false,
+    "finalSourceAttestationRequiredForSelfHost": false,
+    "finalSourceAttestationRequiredForRepositoryReview": false,
+    "finalSourceAttestationRequiredForPhase1": false,
+    "finalSourceAttestationIssuedAfterReviewAndPhase1": true,
+    "finalSourceAttestationRequiredForMerge": true,
+    "historicalInvalidAttestationsNonBlocking": true,
+    "appendOnlyEvidenceCorrectionAllowed": true,
+    "sourceChangeInvalidatesAttestationNotOwnerAuthority": true,
+    "authority": {
+      "productMutation": false,
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
   "taskContextArchitecture": {
     "contractId": "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1",
     "architecturePr": 227,

@@ -7,7 +7,9 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
+  ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_RECEIPT_LIFECYCLE_V2, PHASE1_REQUIRED_JOB_NAMES,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
+  architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
@@ -15,8 +17,9 @@ import {
   createTaskLocalDomainGraphDelta, createTaskLocalEdgeDisposition,
   evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
-  observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, runAuthoritativeReplay, stableJson,
-  verifyArchitectureMaintenanceAuthority, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
+  observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
+  verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
+  verifyPhase1RunEvidence,
   verifyTaskLocalGoverningEdgeClosure, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
@@ -625,18 +628,71 @@ test("task-local architecture maintenance authority accepts the exact reusable p
   const result = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
   assert.equal(result.ok, true);
 });
-test("task-local architecture final-source receipt is canonical and single-use", () => {
+const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
+  const paths = ["scripts/assurance/engineering-closure.mjs"];
   const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 301, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
   const originalTree = "c".repeat(40);
-  const originalScope = { files: ["scripts/assurance/engineering-closure.mjs"], additions: 10, deletions: 1, netChangedLines: 9 };
+  const originalScope = { files: paths, additions: 10, deletions: 1, netChangedLines: 9, diffHash: "1".repeat(64) };
   const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1" });
   const original = taskLocalArchitectureComment({ id: 700002, pr: originalIdentity.pr, body: architectureMaintenanceOwnerCommentBody(originalSubject) });
-  const identity = { ...originalIdentity, headSha: "d".repeat(40) };
+  let identity = { ...originalIdentity, headSha: "d".repeat(40) };
+  if (currentIdentityMutator) identity = currentIdentityMutator(identity);
   const tree = "e".repeat(40);
-  const scope = { files: ["scripts/assurance/engineering-closure.mjs", "tests/assurance/engineering-doctrine.test.mjs"], additions: 20, deletions: 2, netChangedLines: 18, diffHash: "f".repeat(64) };
-  const finalSubject = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: original });
-  const final = taskLocalArchitectureComment({ id: 700003, pr: identity.pr, body: architectureFinalSourceOwnerCommentBody(finalSubject) });
-  const result = verifyArchitectureMaintenanceAuthority({ raw: original, allComments: [original, final], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
-  assert.equal(result.ok, true);
-  assert.equal(result.currentFinalSourceReceiptId, final.id);
+  const scope = { files: paths, additions: 20, deletions: 2, netChangedLines: 18, diffHash: "f".repeat(64) };
+  let reviewSubject = architectureRepositoryReviewSubject({ identity, tree, scope });
+  if (reviewMutator) reviewSubject = reviewMutator(structuredClone(reviewSubject));
+  const review = taskLocalArchitectureComment({ id: 700004, pr: identity.pr, body: architectureRepositoryReviewCommentBody(reviewSubject) });
+  const run = { id: 900001, run_attempt: 1, name: "Phase 1 CI", event: "pull_request", status: "completed", conclusion: "success", head_sha: identity.headSha, head_branch: identity.branch, pull_requests: [{ number: identity.pr, head: { sha: identity.headSha }, base: { sha: identity.baseSha } }] };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: identity.headSha }));
+  if (phase1Mutator) phase1Mutator(run, jobs);
+  const phase1 = verifyPhase1RunEvidence({ run, jobs, identity, tree });
+  const prematureSubject = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: original });
+  const premature = taskLocalArchitectureComment({ id: 5289720389, pr: identity.pr, body: architectureFinalSourceOwnerCommentBody(prematureSubject) });
+  const historical = [premature, ...extraHistorical];
+  const finalSubject = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: original, historicalAttestationRaws: historical, repositoryReviewRaw: review, phase1Evidence: phase1 });
+  const final = taskLocalArchitectureComment({ id: 700005, pr: identity.pr, body: architectureFinalSourceOwnerCommentBody(finalSubject) });
+  const comments = [original, ...historical, review, final];
+  const evaluate = (overrides = {}) => verifyArchitectureMaintenanceAuthority({ raw: original, allComments: comments, paginationComplete: true, identity, tree, scope, ancestryVerified: true, phase1EvidenceResolver: () => phase1, ...overrides });
+  return { originalIdentity, originalTree, originalScope, originalSubject, original, identity, tree, scope, review, phase1, premature, final, comments, evaluate };
+};
+
+test("receipt lifecycle V2 regression matrix 34/34", async (t) => {
+  const cases = [
+    ["01 Owner authorization is valid without final attestation", () => { const f = receiptLifecycleFixture(); const r = verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }); assert.equal(r.authorizationOk, true); assert.equal(r.mergeEligible, false); }],
+    ["02 in-scope descendants retain Owner authorization", () => assert.equal(receiptLifecycleFixture().evaluate().authorizationOk, true)],
+    ["03 out-of-scope descendants fail", () => { const f = receiptLifecycleFixture(); const scope = { ...f.scope, files: [...f.scope.files, "package.json"] }; assert.equal(f.evaluate({ scope }).authorizationOk, false); }],
+    ["04 budget overflow fails", () => { const f = receiptLifecycleFixture(); assert.equal(f.evaluate({ scope: { ...f.scope, netChangedLines: 3201 } }).authorizationOk, false); }],
+    ["05 objective change fails", () => { const f = receiptLifecycleFixture(); const changed = { ...f.originalSubject, objective: "different objective" }; const raw = taskLocalArchitectureComment({ id: f.original.id, pr: f.identity.pr, body: architectureMaintenanceOwnerCommentBody(changed) }); assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }).ok, false); }],
+    ["06 prohibited authority expansion fails", () => { const f = receiptLifecycleFixture(); const changed = structuredClone(f.originalSubject); changed.authority.product = true; const raw = taskLocalArchitectureComment({ id: f.original.id, pr: f.identity.pr, body: architectureMaintenanceOwnerCommentBody(changed) }); assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }).ok, false); }],
+    ["07 final attestation is not required for local self-host", () => { const f = receiptLifecycleFixture(); const r = verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }); assert.equal(r.ok, true); }],
+    ["08 final attestation is not required for repository review", () => { const f = receiptLifecycleFixture(); const r = verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original, f.review], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }); assert.equal(r.ok, true); }],
+    ["09 final attestation is not required for Phase 1", () => { const f = receiptLifecycleFixture(); const r = verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }); assert.equal(r.finalSourceAttestationRequiredAtThisStage, false); }],
+    ["10 PR event derives exact self-host context", () => { const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: new URL(".", root), encoding: "utf8" }).trim(); const tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: new URL(".", root), encoding: "utf8" }).trim(); const base = execFileSync("git", ["rev-parse", "origin/main"], { cwd: new URL(".", root), encoding: "utf8" }).trim(); const branch = execFileSync("git", ["branch", "--show-current"], { cwd: new URL(".", root), encoding: "utf8" }).trim(); const event = { number: 232, repository: { full_name: "Chillywood2025/chillywood-mobile" }, pull_request: { number: 232, html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/232", head: { sha: head, ref: branch }, base: { sha: base, ref: "main" } } }; const readback = { number: 232, repository: event.repository.full_name, baseRef: "main", baseSha: base, headRef: branch, headSha: head, htmlUrl: event.pull_request.html_url, state: "open" }; const result = resolveEngineeringClosureTaskContext({ event, localIdentity: { head, tree, base, branch }, scope: { files: ["scripts/assurance/engineering-closure.mjs"] }, currentTruth: {}, readPull: () => readback, observeAuthorities: () => ({ architectureAuthority: { ok: true, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" } }), sourceAncestryVerified: true }); assert.equal(result.ok, true); }],
+    ["11 premature receipt cannot establish task context", () => { const f = receiptLifecycleFixture(); const r = verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original, f.premature], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }); assert.equal(r.commentId, f.original.id); assert.equal(r.currentFinalSourceReceiptId, null); }],
+    ["12 local self-host without exact context fails closed", () => assert.equal(resolveEngineeringClosureTaskContext({ event: null, eventPath: null }).ok, false)],
+    ["13 pre-review final attestation is historical", () => assert.equal(receiptLifecycleFixture().evaluate().finalSourceAttestationClassifications.find(({ commentId }) => commentId === 5289720389).status, "HISTORICAL_PRE_CI_FINAL_SOURCE_ATTESTATION")],
+    ["14 pre-Phase-1 final attestation is historical", () => { const f = receiptLifecycleFixture(); assert.equal(verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original, f.premature, f.review], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }).mergeEligible, false); }],
+    ["15 post-review and 13-of-13 attestation is current", () => assert.equal(receiptLifecycleFixture().evaluate().mergeEligible, true)],
+    ["16 review head mismatch fails", () => { const f = receiptLifecycleFixture({ reviewMutator: (review) => ({ ...review, reviewedHead: "0".repeat(40) }) }); assert.equal(f.evaluate().mergeEligible, false); }],
+    ["17 Phase 1 head mismatch fails", () => { const f = receiptLifecycleFixture({ phase1Mutator: (run) => { run.head_sha = "0".repeat(40); } }); assert.equal(f.evaluate().mergeEligible, false); }],
+    ["18 Phase 1 below 13-of-13 fails", () => { const f = receiptLifecycleFixture({ phase1Mutator: (_run, jobs) => { jobs.pop(); } }); assert.equal(f.evaluate().mergeEligible, false); }],
+    ["19 source change invalidates final attestation", () => { const f = receiptLifecycleFixture(); const identity = { ...f.identity, headSha: "9".repeat(40) }; const r = f.evaluate({ identity, ancestryVerified: true }); assert.equal(r.mergeEligible, false); }],
+    ["20 source change does not revoke Owner authorization", () => { const f = receiptLifecycleFixture(); const identity = { ...f.identity, headSha: "9".repeat(40) }; assert.equal(f.evaluate({ identity, ancestryVerified: true }).authorizationOk, true); }],
+    ["21 historical stale attestations do not block current", () => assert.equal(receiptLifecycleFixture().evaluate().mergeEligible, true)],
+    ["22 historical malformed attestations do not block current", () => { const malformed = taskLocalArchitectureComment({ id: 700006, pr: 301, body: `${ARCHITECTURE_FINAL_SOURCE_MARKER}\n{}` }); const f = receiptLifecycleFixture({ extraHistorical: [malformed] }); assert.equal(f.evaluate().mergeEligible, true); }],
+    ["23 GitHub comment order does not affect selection", () => { const f = receiptLifecycleFixture(); assert.equal(f.evaluate({ allComments: [...f.comments].reverse() }).currentFinalSourceReceiptId, f.final.id); }],
+    ["24 two current attestations fail", () => { const f = receiptLifecycleFixture(); const duplicate = { ...f.final, id: 700007, node_id: "IC_duplicate_700007", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/301#issuecomment-700007" }; assert.equal(f.evaluate({ allComments: [...f.comments, duplicate] }).mergeEligible, false); }],
+    ["25 evidence-only correction requires no source commit", () => { const f = receiptLifecycleFixture(); assert.equal(f.final.body.includes(f.identity.headSha), true); assert.equal(f.evaluate().mergeEligible, true); }],
+    ["26 evidence-only correction requires no new authorization", () => { const f = receiptLifecycleFixture(); assert.equal(f.comments.filter(({ body }) => body.startsWith("<!-- chillywood-assurance-architecture-maintenance-v1 -->")).length, 1); }],
+    ["27 merge eligibility fails without final attestation", () => { const f = receiptLifecycleFixture(); assert.equal(f.evaluate({ allComments: [f.original, f.review] }).mergeEligible, false); }],
+    ["28 merge eligibility passes with exact review CI and attestation", () => assert.equal(receiptLifecycleFixture().evaluate().mergeEligible, true)],
+    ["29 terminal merge evidence binds exact attestation", () => { const f = receiptLifecycleFixture(); const r = f.evaluate(); assert.equal(r.currentFinalSourceReceiptId, f.final.id); assert.equal(f.final.body.includes(f.identity.headSha), true); assert.equal(f.final.body.includes(f.tree), true); }],
+    ["30 task-local edge regressions remain clear", () => assert.equal(taskLocalValidResult().classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR")],
+    ["31 doctrine truth remains clear", () => assert.deepEqual(validateEngineeringDoctrineTruth(json("config/assurance/current-truth-v1.json"), json("config/assurance/current-truth-contract-v1.json")), [])],
+    ["32 active-task authority remains fail closed", () => assert.equal(validateEngineeringTaskAuthority({ activeTaskPacket: null }).ok, false)],
+    ["33 all thirteen Phase 1 checks remain required", () => assert.equal(PHASE1_REQUIRED_JOB_NAMES.length, 13)],
+    ["34 Provider Codex Review remains optional", () => assert.equal(json("config/assurance/current-truth-v1.json").reviewPolicy.classification, "OPTIONAL_ADVISORY")],
+  ];
+  assert.equal(cases.length, 34);
+  for (const [name, assertion] of cases) await t.test(name, assertion);
 });

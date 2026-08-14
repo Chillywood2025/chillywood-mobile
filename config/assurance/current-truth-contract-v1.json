@@ -35,6 +35,20 @@
     "productMutationBeforeAdmission": false,
     "admissionRequiresClearClosure": true
   },
+  "receiptLifecyclePolicy": {
+    "contract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
+    "ownerAuthorizationRequiredBeforeDevelopment": true,
+    "ownerAuthorizationSurvivesInScopeDescendants": true,
+    "finalSourceAttestationRequiredDuringDevelopment": false,
+    "finalSourceAttestationRequiredForSelfHost": false,
+    "finalSourceAttestationRequiredForRepositoryReview": false,
+    "finalSourceAttestationRequiredForPhase1": false,
+    "finalSourceAttestationIssuedAfterReviewAndPhase1": true,
+    "finalSourceAttestationRequiredForMerge": true,
+    "historicalInvalidAttestationsNonBlocking": true,
+    "appendOnlyEvidenceCorrectionAllowed": true,
+    "sourceChangeInvalidatesAttestationNotOwnerAuthority": true
+  },
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,

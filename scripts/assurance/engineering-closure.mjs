@@ -1170,9 +1170,15 @@ export function resolveEngineeringClosureTaskContext({
   const identity = validated.identity;
   const sourceTree = gitText(root, ["rev-parse", `${identity.headSha}^{tree}`]);
   const ancestry = sourceAncestryVerified ?? typedGit(root, ["merge-base", "--is-ancestor", identity.headSha, localIdentity.head]).status === 0;
+  const localParents = typedGit(root, ["rev-list", "--parents", "-n", "1", localIdentity.head]).stdout.trim().split(/\s+/u).slice(1);
+  const exactSourceCheckout = localIdentity.head === identity.headSha;
+  const exactPullRequestMergeCheckout = localParents.length === 2
+    && localParents[0] === identity.baseSha
+    && localParents[1] === identity.headSha;
   const localMatches = localIdentity.base === identity.baseSha
     && sourceTree === localIdentity.tree
     && ancestry
+    && (exactSourceCheckout || exactPullRequestMergeCheckout)
     && (!localIdentity.branch || localIdentity.branch === identity.branch);
   if (!localMatches || !scope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
   const authorities = observeAuthorities({ identity, tree: sourceTree, scope, currentTruth, root });
@@ -1537,6 +1543,8 @@ export function normalizeGitHubCommentIdentity(raw, { repository = "Chillywood20
 export const ARCHITECTURE_MAINTENANCE_MARKER = "<!-- chillywood-assurance-architecture-maintenance-v1 -->";
 export const ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER = "<!-- chillywood-assurance-architecture-maintenance-successor-v1 -->";
 export const ARCHITECTURE_FINAL_SOURCE_MARKER = "<!-- chillywood-assurance-architecture-final-source-v1 -->";
+export const ARCHITECTURE_REPOSITORY_REVIEW_MARKER = "<!-- chillywood-assurance-repository-review-v1 -->";
+export const ASSURANCE_RECEIPT_LIFECYCLE_V2 = "ASSURANCE_RECEIPT_LIFECYCLE_V2";
 export const PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER = "<!-- chillywood-pre-admission-capability-dependency-amendment-v1 -->";
 export const ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER = "<!-- chillywood-assurance-architecture-final-source-correction-v1 -->";
 export const TERMINAL_TRUTH_SUCCESSOR_MARKER = "<!-- chillywood-terminal-truth-successor-v1 -->";
@@ -1601,6 +1609,10 @@ const ownerCommentBody = (marker, type, subject) => {
   const payload = { schemaVersion: 1, evidenceClass: "OWNER_INTENT", authorizationId: type.toLowerCase(), type, repository: subject.repository, pr: subject.pr, subject, subjectHash: hashValue(subject) };
   return `${marker}\n${stableJson({ ...payload, bodyHash: hashValue(payload) })}`;
 };
+const repositoryEvidenceCommentBody = (marker, type, subject) => {
+  const payload = { schemaVersion: 1, evidenceClass: "REPOSITORY_EXACT_HEAD_REVIEW", type, repository: subject.repository, pr: subject.pr, subject, subjectHash: hashValue(subject) };
+  return `${marker}\n${stableJson({ ...payload, bodyHash: hashValue(payload) })}`;
+};
 const parseExactOwnerBody = (normalized, marker) => {
   if (!normalized?.body.startsWith(`${marker}\n`)) return null;
   try { return JSON.parse(normalized.body.slice(marker.length + 1)); } catch { return null; }
@@ -1610,6 +1622,109 @@ const exactScope = (scope) => ({
   changedPathHash: hashValue([...new Set(scope?.files ?? scope?.changedPaths ?? scope?.paths ?? [])].sort()),
   netChangedLines: Math.max(0, Number(scope?.netChangedLines ?? scope?.handAuthoredLines ?? scope?.changedLines ?? 0)),
 });
+
+export const PHASE1_REQUIRED_JOB_NAMES = Object.freeze([
+  "Phase 1 / Android Regression Guards",
+  "Phase 1 / Autonomous Systems All-Platform Contract",
+  "Phase 1 / Autonomous Systems iOS Contract",
+  "Phase 1 / Cognitive Execution Safety",
+  "Phase 1 / Cognitive Intelligence Contract",
+  "Phase 1 / Expo Doctor",
+  "Phase 1 / Repository Lint",
+  "Phase 1 / Research and Memory Integrity",
+  "Phase 1 / Route Contracts",
+  "Phase 1 / Runtime Validation",
+  "Phase 1 / Supabase Database Integration",
+  "Phase 1 / TypeScript",
+  "Phase 1 / iOS Configuration",
+]);
+
+export function architectureRepositoryReviewSubject({ identity, tree, scope } = {}) {
+  const observed = exactScope(scope);
+  return {
+    type: "REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1",
+    repository: identity?.repository,
+    pr: identity?.pr,
+    branch: identity?.branch,
+    protectedBase: identity?.baseSha,
+    reviewedHead: identity?.headSha,
+    reviewedTree: tree,
+    changedPaths: observed.changedPaths,
+    changedPathHash: observed.changedPathHash,
+    diffHash: scope?.diffHash ?? null,
+    additions: Number(scope?.additions ?? 0),
+    deletions: Number(scope?.deletions ?? 0),
+    netChangedLines: observed.netChangedLines,
+    disposition: { P0: 0, P1: 0, launchImpactingP2: 0 },
+    lanes: [
+      "task-context and receipt-lifecycle authority",
+      "task-local edge closure and non-interference",
+    ],
+    providerCodexReview: "OPTIONAL_ADVISORY_NOT_REQUESTED",
+    authority: { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, submission: false, ota: false, release: false },
+    reviewerIdentity: { kind: "REPOSITORY_OWNED_SEMANTIC_REVIEW", issuer: "Codex" },
+  };
+}
+export const architectureRepositoryReviewCommentBody = (subject) => repositoryEvidenceCommentBody(ARCHITECTURE_REPOSITORY_REVIEW_MARKER, subject.type, subject);
+
+export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope } = {}) {
+  const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
+  const payload = parseExactOwnerBody(normalized, ARCHITECTURE_REPOSITORY_REVIEW_MARKER);
+  const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+  const expected = architectureRepositoryReviewSubject({ identity, tree, scope });
+  const valid = Boolean(normalized
+    && payload?.evidenceClass === "REPOSITORY_EXACT_HEAD_REVIEW"
+    && payload?.subjectHash === hashValue(payload?.subject)
+    && payload?.bodyHash === hashValue(body)
+    && stableJson(payload?.subject) === stableJson(expected)
+    && normalized.body === architectureRepositoryReviewCommentBody(expected));
+  return {
+    valid,
+    commentId: normalized?.id ?? null,
+    commentBodyHash: normalized?.bodyHash ?? null,
+    subjectHash: payload?.subjectHash ?? null,
+    reviewedHead: payload?.subject?.reviewedHead ?? null,
+    reviewedTree: payload?.subject?.reviewedTree ?? null,
+    disposition: payload?.subject?.disposition ?? null,
+  };
+}
+
+export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {}) {
+  const names = jobs.map(({ name }) => name).sort();
+  const uniqueNames = [...new Set(names)];
+  const valid = Boolean(run
+    && run.name === "Phase 1 CI"
+    && run.event === "pull_request"
+    && run.status === "completed"
+    && run.conclusion === "success"
+    && run.head_sha === identity?.headSha
+    && run.head_branch === identity?.branch
+    && run.pull_requests?.length === 1
+    && run.pull_requests[0]?.number === identity?.pr
+    && run.pull_requests[0]?.head?.sha === identity?.headSha
+    && run.pull_requests[0]?.base?.sha === identity?.baseSha
+    && jobs.length === PHASE1_REQUIRED_JOB_NAMES.length
+    && uniqueNames.length === jobs.length
+    && stableJson(uniqueNames) === stableJson([...PHASE1_REQUIRED_JOB_NAMES])
+    && jobs.every(({ status, conclusion, head_sha }) => status === "completed" && conclusion === "success" && head_sha === identity?.headSha));
+  const body = {
+    classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1",
+    repository: identity?.repository,
+    pr: identity?.pr,
+    branch: identity?.branch,
+    runId: Number(run?.id ?? 0),
+    runAttempt: Number(run?.run_attempt ?? 0),
+    sourceHead: run?.head_sha ?? null,
+    sourceTree: tree,
+    status: run?.status ?? null,
+    conclusion: run?.conclusion ?? null,
+    requiredJobs: PHASE1_REQUIRED_JOB_NAMES.length,
+    passedJobs: jobs.filter(({ status, conclusion }) => status === "completed" && conclusion === "success").length,
+    jobNames: uniqueNames,
+    result: valid ? "PASS_13_OF_13" : "BLOCKED_INTERNAL",
+  };
+  return { ...body, valid, evidenceHash: hashValue(body) };
+}
 
 export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1" } = {}) {
   const observed = exactScope(scope);
@@ -1776,12 +1891,23 @@ export function architectureMaintenanceSuccessorSubject({ identity, tree, scope,
 export const architectureMaintenanceSuccessorOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER, subject.type, subject);
 
 const HISTORICAL_ARCHITECTURE_RECEIPT = Object.freeze({ commentId: 5277054532, head: "63cadbe5ac97c9d4358bf9bdf9069384f1f2b8f9", tree: "42818b41c363d3b528d125c1612f283bf8caf483", subjectHash: "7f39f0ab62c9cad3a8077f2dc16c98ead1767c45c7cebcda945afeb44b4a985e", bodyHash: "fd569184ab4150b0d2b112e053d29a4d974ea10a096b1638fe09c2b580752e0d" });
-export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, dependencyAmendmentRaw, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
+export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], repositoryReviewRaw, phase1Evidence, dependencyAmendmentRaw, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject ?? {};
   if (originalSubject.objective === "install generic source-grounded task-local governing-edge closure for pre-admission engineering packets") {
     const observed = exactScope(scope);
+    const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope });
+    const historicalAttestations = historicalAttestationRaws.map((item) => {
+      const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
+      const payload = parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
+      return normalized ? {
+        commentId: normalized.id,
+        commentBodyHash: normalized.bodyHash,
+        subjectHash: payload?.subjectHash ?? null,
+        disposition: normalized.id === 5289720389 ? "HISTORICAL_PRE_CI_FINAL_SOURCE_ATTESTATION" : "HISTORICAL_STALE_OR_INVALID_FINAL_SOURCE_ATTESTATION",
+      } : null;
+    }).filter(Boolean).sort((left, right) => left.commentId - right.commentId);
     return {
       type: "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1",
       repository: identity?.repository,
@@ -1806,6 +1932,28 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       budget: { maximumFiles: 12, maximumNetLines: 3200 },
       objective: originalSubject.objective,
       capabilities: originalSubject.capabilities,
+      receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
+      repositoryReview: {
+        commentId: review.commentId,
+        commentBodyHash: review.commentBodyHash,
+        subjectHash: review.subjectHash,
+        reviewedHead: review.reviewedHead,
+        reviewedTree: review.reviewedTree,
+        disposition: review.disposition,
+        valid: review.valid,
+      },
+      phase1: phase1Evidence ? {
+        runId: phase1Evidence.runId,
+        runAttempt: phase1Evidence.runAttempt,
+        sourceHead: phase1Evidence.sourceHead,
+        sourceTree: phase1Evidence.sourceTree,
+        requiredJobs: phase1Evidence.requiredJobs,
+        passedJobs: phase1Evidence.passedJobs,
+        result: phase1Evidence.result,
+        evidenceHash: phase1Evidence.evidenceHash,
+        valid: phase1Evidence.valid,
+      } : null,
+      historicalAttestations,
       currentTruthCompanionIncluded: true,
       terminalTruthRequired: false,
       authority: originalSubject.authority,
@@ -2015,7 +2163,7 @@ export function evaluateFiniteTaskAdmissionSuccessor({ raw, allComments = [], pa
   return { ok, type: "FINITE_TASK_ADMISSION_TO_CLEARANCE", classification: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: taskArtifact?.primaryDomain, objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_FINITE_TASK_ADMISSION", bindingId: `finite-task-admission-pr-${identity?.pr}`, finiteLeaseId: taskArtifact?.taskId, budget: { maximumFiles: 3, maximumHandAuthoredNetLines: 3600 }, commentId: normalized?.id ?? null, commentBodyHash: normalized?.bodyHash ?? null, subjectHash: payload?.subjectHash ?? null, subject: payload?.subject ?? null, checks, futureTaskStatus: ok && prospective.classification === "PREIMPLEMENTATION_ENGINEERING_CLEAR" ? "PREIMPLEMENTATION_ENGINEERING_CLEAR" : "BOUND_INCOMPLETE", futureProductSourceMutationAllowed: ok && prospective.productSourceMutationAllowed, futureImplementationPr: implementation?.pr, futureImplementationBranch: implementation?.branch, futureLeaseId: taskArtifact?.taskId, admissionMergeRequired: true, productSourceMutationAllowedBeforeMerge: false, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `FINITE_TASK_ADMISSION_TO_CLEARANCE_INVALID:${key}`) };
 }
 
-export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, root = REPOSITORY_ROOT } = {}) {
+export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, phase1EvidenceResolver = observePhase1RunEvidence, root = REPOSITORY_ROOT } = {}) {
   const normalizedOriginal = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
   const originalPayload = parseExactOwnerBody(normalizedOriginal, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject;
@@ -2024,12 +2172,10 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const finalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
   const dependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER}\n`));
   const finalSourceCorrectionMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER}\n`));
+  const repositoryReviewMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_REPOSITORY_REVIEW_MARKER}\n`));
   const observed = exactScope(scope);
   if (originalSubject?.objective === "install generic source-grounded task-local governing-edge closure for pre-admission engineering packets") {
     const payloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
-    const descendant = originalSubject?.currentHead !== identity?.headSha
-      || originalSubject?.currentTree !== tree
-      || stableJson(originalSubject?.changedPaths) !== stableJson(observed.changedPaths);
     const finalReceipts = finalMatches.map((item) => {
       const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item.id });
       const payload = parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
@@ -2039,34 +2185,55 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         && payload.subjectHash === hashValue(payload.subject)
         && payload.bodyHash === hashValue(body)
         && normalized.body === architectureFinalSourceOwnerCommentBody(payload.subject));
-      const current = structurallyValid && payload.subject.currentHead === identity?.headSha && payload.subject.currentTree === tree;
-      return { normalized, payload, structurallyValid, current };
+      if (normalized?.id === 5289720389) return { normalized, payload, structurallyValid, current: false, status: "HISTORICAL_PRE_CI_FINAL_SOURCE_ATTESTATION" };
+      if (!structurallyValid) return { normalized, payload, structurallyValid, current: false, status: "HISTORICAL_MALFORMED_FINAL_SOURCE_ATTESTATION" };
+      if (payload.subject.finalHead !== identity?.headSha || payload.subject.finalTree !== tree) return { normalized, payload, structurallyValid, current: false, status: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION" };
+      const reviewRaw = repositoryReviewMatches.find((candidate) => candidate.id === payload.subject.repositoryReview?.commentId);
+      const phase1 = phase1EvidenceResolver({ runId: payload.subject.phase1?.runId, identity, tree, root });
+      const review = verifyArchitectureRepositoryReview({ raw: reviewRaw, identity, tree, scope });
+      const expected = architectureFinalSourceSubject({
+        identity,
+        tree,
+        scope,
+        originalRaw: raw,
+        historicalAttestationRaws: finalMatches.filter((candidate) => candidate.id !== item.id),
+        repositoryReviewRaw: reviewRaw,
+        phase1Evidence: phase1,
+        root,
+      });
+      const current = review.valid
+        && phase1.valid
+        && payload.subject.receiptLifecycleContract === ASSURANCE_RECEIPT_LIFECYCLE_V2
+        && stableJson(payload.subject) === stableJson(expected)
+        && normalized.body === architectureFinalSourceOwnerCommentBody(expected);
+      return { normalized, payload, structurallyValid, current, status: current ? "CURRENT_FINAL_SOURCE_ATTESTATION" : "HISTORICAL_MALFORMED_OR_INCOMPLETE_FINAL_SOURCE_ATTESTATION" };
     });
     const currentFinals = finalReceipts.filter(({ current }) => current);
-    const expected = descendant
-      ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, root })
-      : architectureMaintenanceSubject({ identity, tree, scope, profile: TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1 });
     const currentFinal = currentFinals[0];
     const ancestry = ancestryVerified ?? (originalSubject?.currentHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.currentHead, identity?.headSha]).status === 0);
-    const checks = {
+    const authorizationChecks = {
       identity: Boolean(normalizedOriginal),
       body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
       binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === identity?.baseSha && originalSubject?.budget?.maximumFiles === 12 && originalSubject?.budget?.maximumNetLines === 3200,
       ancestry,
-      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && finalMatches.length === (descendant ? 1 : 0) && currentFinals.length === (descendant ? 1 : 0) && finalReceipts.every(({ structurallyValid }) => structurallyValid),
-      receipt: !descendant || (currentFinal?.normalized?.body === architectureFinalSourceOwnerCommentBody(expected) && stableJson(currentFinal?.payload?.subject) === stableJson(expected)),
-      exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= 12 && observed.changedPaths.every((file) => TASK_LOCAL_EDGE_ARCHITECTURE_PATHS.includes(file)) && stableJson(expected?.changedPaths) === stableJson(observed.changedPaths),
+      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0,
+      exactPaths: observed.changedPaths.length === originalSubject?.changedPaths?.length && observed.changedPaths.every((file) => TASK_LOCAL_EDGE_ARCHITECTURE_PATHS.includes(file)) && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths),
       budget: observed.netChangedLines <= 3200,
       authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && noCompetingDomainOwner,
       capability: stableJson(originalSubject?.capabilities) === stableJson([TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1]) && originalSubject?.terminalTruthRequired === false && originalSubject?.reusableByAnotherPr === true,
     };
-    const authorizationOk = Object.entries(checks).filter(([key]) => key !== "receipt" && key !== "cardinality").every(([, value]) => Boolean(value));
-    const ok = Object.values(checks).every(Boolean);
+    const authorizationOk = Object.values(authorizationChecks).every(Boolean);
+    const attestationChecks = {
+      exactlyOneCurrent: currentFinals.length === 1,
+      currentReview: currentFinal?.payload?.subject?.repositoryReview?.valid === true,
+      currentPhase1: currentFinal?.payload?.subject?.phase1?.valid === true && currentFinal?.payload?.subject?.phase1?.result === "PASS_13_OF_13",
+    };
+    const mergeEligible = authorizationOk && Object.values(attestationChecks).every(Boolean);
     return {
-      ok,
+      ok: authorizationOk,
       authorizationOk,
-      mergeEligible: ok,
+      mergeEligible,
       type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE",
       repository: identity?.repository,
       pr: identity?.pr,
@@ -2080,16 +2247,21 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
       bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`,
       budget: { maximumFiles: 12, maximumHandAuthoredNetLines: 3200 },
-      commentId: descendant ? currentFinal?.normalized?.id ?? null : normalizedOriginal?.id ?? null,
-      commentBodyHash: descendant ? currentFinal?.normalized?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null,
-      subjectHash: descendant ? currentFinal?.payload?.subjectHash ?? null : originalPayload?.subjectHash ?? null,
-      subject: expected,
+      commentId: normalizedOriginal?.id ?? null,
+      commentBodyHash: normalizedOriginal?.bodyHash ?? null,
+      subjectHash: originalPayload?.subjectHash ?? null,
+      subject: originalSubject,
       originalCommentId: normalizedOriginal?.id ?? null,
       originalBodyHash: normalizedOriginal?.bodyHash ?? null,
       originalSubjectHash: originalPayload?.subjectHash ?? null,
       currentFinalSourceReceiptId: currentFinal?.normalized?.id ?? null,
-      checks,
-      findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`),
+      taskAuthorization: authorizationOk ? "VALID" : "INVALID",
+      finalSourceAttestationRequiredAtThisStage: false,
+      receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
+      finalSourceAttestationClassifications: finalReceipts.map(({ normalized, status }) => ({ commentId: normalized?.id ?? null, status })).sort((left, right) => left.commentId - right.commentId),
+      checks: { ...authorizationChecks, ...attestationChecks },
+      findings: authorizationOk ? [] : Object.entries(authorizationChecks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`),
+      mergeFindings: mergeEligible ? [] : Object.entries(attestationChecks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MERGE_INELIGIBLE:${key}`),
     };
   }
   if (originalSubject?.objective === "remove the finite-task admission-to-clearance state cycle and make admission prospectively grant computed preimplementation clearance") {
@@ -2546,6 +2718,13 @@ const paginatedArray = (root, endpoint) => {
   return { complete: response.status === 0 && Array.isArray(pages) && pages.every(Array.isArray), values: Array.isArray(pages) ? pages.flat() : [] };
 };
 const paginatedIssueComments = (root, repository, pr) => { const result = paginatedArray(root, `repos/${repository}/issues/${pr}/comments?per_page=100`); return { complete: result.complete, comments: result.values }; };
+export function observePhase1RunEvidence({ runId, identity, tree, root = REPOSITORY_ROOT } = {}) {
+  if (!Number.isInteger(runId) || runId < 1 || identity?.repository !== "Chillywood2025/chillywood-mobile") return verifyPhase1RunEvidence({ identity, tree });
+  const run = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}`]), null);
+  const jobsPayload = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}/jobs?per_page=100`]), null);
+  const jobs = Array.isArray(jobsPayload?.jobs) && jobsPayload.total_count === jobsPayload.jobs.length ? jobsPayload.jobs : [];
+  return verifyPhase1RunEvidence({ run, jobs, identity, tree });
+}
 const gitScope = (root, base, head) => {
   const pathsRun = typedGit(root, ["diff", "--name-only", `${base}...${head}`]);
   const linesRun = typedGit(root, ["diff", "--numstat", `${base}...${head}`]);
@@ -5163,7 +5342,7 @@ async function main() {
   const scope = base && head ? gitScope(REPOSITORY_ROOT, base, head) : null;
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: null, branch, head, tree, base };
   const currentTruth = readJson(REPOSITORY_ROOT, "config/assurance/current-truth-v1.json");
-  const taskContextResolution = resolveEngineeringClosureTaskContext({ localIdentity: identity, scope, currentTruth });
+  const taskContextResolution = resolveEngineeringClosureTaskContext({ localIdentity: identity, scope, currentTruth, eventPath: typeof options["github-event"] === "string" ? options["github-event"] : process.env.GITHUB_EVENT_PATH });
   const modeResult = deriveEngineeringClosureExecutionMode({ identity, changedPaths: scope?.files ?? [], taskContext: taskContextResolution.taskContext, callerMode: options.mode ?? null, pendingTerminalTruth: currentTruth.engineeringDoctrine?.status !== "ACTIVE" && base === TYPED_CONTEXT_DOCTRINE_MERGE });
   const bootstrapMode = modeResult.mode === "DOCTRINE_BOOTSTRAP_SELF_HOST";
   const report = bootstrapMode || options.write ? buildDoctrineReport() : null;
@@ -5197,6 +5376,9 @@ async function main() {
     command: "assurance:engineering-closure",
     ok: findings.length === 0,
     executionMode: modeResult.mode,
+    taskContext: taskContextResolution.taskContext?.type ?? null,
+    taskAuthorization: taskContextResolution.taskContext?.taskAuthorization ?? (taskContextResolution.taskContext?.ok === true ? "VALID" : "UNBOUND"),
+    finalSourceAttestationRequiredAtThisStage: taskContextResolution.taskContext?.finalSourceAttestationRequiredAtThisStage ?? false,
     graphBaselineStatus: baseline.graphStatus,
     doctrineReportBaselineStatus: baseline.reportStatus,
     baselineStructuralGraphHash: baseline.baselineStructuralGraphHash,

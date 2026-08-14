@@ -53,6 +53,11 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Contract `TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1` is `ACTIVE`; the baseline graph remains immutable: `true`.
 - Task-local evidence requires independent verification: `true`; static edge allowlists and exclusion combinations are not required. Product mutation before admission remains `false`.
 
+## Assurance receipt lifecycle
+
+- Contract `ASSURANCE_RECEIPT_LIFECYCLE_V2`; Owner task authorization survives exact in-scope descendants: `true`.
+- Final-source attestation is required during development/self-host/review/Phase 1: `false`/`false`/`false`/`false`; it is issued after review and Phase 1 and required for merge. Historical invalid attestations are non-blocking when exactly one valid current attestation exists.
+
 ## Open implementation PRs
 
 - None.
