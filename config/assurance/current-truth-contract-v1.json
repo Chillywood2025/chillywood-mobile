@@ -25,6 +25,30 @@
     "sourceBindingPrRequired": false,
     "provenancePrRequired": false
   },
+  "taskLocalGoverningEdgeClosurePolicy": {
+    "contract": "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+    "baselineGraphRemainsImmutable": true,
+    "taskLocalEvidenceAllowed": true,
+    "independentVerificationRequired": true,
+    "staticEdgeAllowlistRequired": false,
+    "staticExclusionCombinationRequired": false,
+    "productMutationBeforeAdmission": false,
+    "admissionRequiresClearClosure": true
+  },
+  "receiptLifecyclePolicy": {
+    "contract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
+    "ownerAuthorizationRequiredBeforeDevelopment": true,
+    "ownerAuthorizationSurvivesInScopeDescendants": true,
+    "finalSourceAttestationRequiredDuringDevelopment": false,
+    "finalSourceAttestationRequiredForSelfHost": false,
+    "finalSourceAttestationRequiredForRepositoryReview": false,
+    "finalSourceAttestationRequiredForPhase1": false,
+    "finalSourceAttestationIssuedAfterReviewAndPhase1": true,
+    "finalSourceAttestationRequiredForMerge": true,
+    "historicalInvalidAttestationsNonBlocking": true,
+    "appendOnlyEvidenceCorrectionAllowed": true,
+    "sourceChangeInvalidatesAttestationNotOwnerAuthority": true
+  },
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,

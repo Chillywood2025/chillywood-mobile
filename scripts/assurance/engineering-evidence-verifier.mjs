@@ -34,6 +34,221 @@ const normalizedSourceHash = (source) => hashValue(source.replace(/\r\n?/gu, "\n
 const shaFile = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const optionsFrom = (argv) => Object.fromEntries(argv.map((entry) => { const [key, value = true] = entry.replace(/^--/u, "").split("=", 2); return [key, value]; }));
 
+const TASK_LOCAL_EDGE_DISPOSITIONS = new Set([
+  "VERIFIED_GOVERNING_INCLUDED",
+  "NON_IMPACTING_WITH_EVIDENCE",
+  "VERIFIED_NON_GOVERNING_WITH_EVIDENCE",
+]);
+const safeTaskPath = (value) => typeof value === "string" && value.length > 0 && !path.isAbsolute(value) && !value.includes("*") && !value.split("/").includes("..");
+const stripCommentOnlyLines = (source) => source.split(/\r?\n/gu).filter((line) => !/^\s*(?:\/\/|\/\*|\*|--|#)/u.test(line)).join("\n");
+const selectorCount = (source, selector) => typeof selector === "string" && selector.length >= 3 && !selector.includes("*") ? source.split(selector).length - 1 : 0;
+const normalizedToken = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "");
+const globPrefix = (value) => typeof value === "string" && value.endsWith("/**") && !value.slice(0, -3).includes("*") ? value.slice(0, -3) : null;
+const bindingDomains = (binding, source, baseline, registry) => {
+  const domains = new Set();
+  const sourcePath = binding.sourcePath;
+  const sourceBase = sourcePath.startsWith("supabase/functions/") ? sourcePath.split("/").slice(0, 3).join("/") : sourcePath;
+  for (const node of baseline?.nodes ?? []) {
+    for (const asset of node.inventoryAssets ?? []) {
+      const assetPath = asset.asset;
+      if (typeof assetPath !== "string" || assetPath.includes(":")) continue;
+      if (sourcePath === assetPath || sourcePath.startsWith(`${assetPath}/`) || sourceBase === assetPath) domains.add(node.domain);
+    }
+  }
+  for (const feature of registry?.features ?? []) {
+    const pathMatch = (feature.sourcePathGlobs ?? []).some((pattern) => {
+      const prefix = globPrefix(pattern);
+      return prefix ? sourcePath === prefix || sourcePath.startsWith(`${prefix}/`) : sourcePath === pattern;
+    });
+    const routeMatch = (feature.routes ?? []).some((route) => typeof route === "string" && route.startsWith("app/") && (sourcePath === route || sourcePath.startsWith(`${route}/`)));
+    const componentMatch = (feature.components ?? []).some((component) => typeof component === "string" && component.includes("/") && (sourcePath === component || sourcePath.startsWith(`${component}/`)));
+    const edgeDirectory = sourcePath.startsWith("supabase/functions/") ? sourcePath.split("/")[2] : null;
+    const edgeMatch = edgeDirectory && (feature.edgeFunctions ?? []).some((entry) => {
+      const token = normalizedToken(entry);
+      return token.length >= 5 && (normalizedToken(edgeDirectory) === token || normalizedToken(edgeDirectory).includes(token) || token.includes(normalizedToken(edgeDirectory)));
+    });
+    const migrationMatch = sourcePath.startsWith("supabase/migrations/") && feature.featureId === "supabase-migrations-rls";
+    const semanticTokens = [feature.productOwner, ...(feature.ownerSystems ?? []), ...(feature.tablesRpcs ?? []), ...(feature.providers ?? [])]
+      .filter((value) => typeof value === "string" && value.length >= 8 && !["supabase", "production", "sandbox", "server", "android", "ios"].includes(value.toLowerCase()));
+    const semanticMatch = semanticTokens.some((token) => source.includes(token) && binding.selector.includes(token));
+    if (pathMatch || routeMatch || componentMatch || edgeMatch || migrationMatch || semanticMatch) domains.add(feature.featureId);
+  }
+  return [...domains].sort(compareUtf8);
+};
+const relationshipTypes = (binding) => {
+  const types = new Set(["EXACT_SYMBOL_OR_SELECTOR"]);
+  const subject = `${binding.sourcePath}\n${binding.selector}`;
+  if (/\bimport\b|\bfrom\b|require\s*\(/u.test(binding.selector)) types.add("EXACT_IMPORT_OR_CALL");
+  if (/\.rpc\s*\(|\brpc\b/iu.test(subject)) types.add("RPC_INVOCATION");
+  if (binding.sourcePath.startsWith("supabase/functions/")) types.add("EDGE_FUNCTION_INVOCATION_OR_OWNERSHIP");
+  if (binding.sourcePath.startsWith("supabase/migrations/") || binding.sourcePath.endsWith(".sql")) types.add("SHARED_TABLE_POLICY_TRIGGER");
+  if (/retry|cleanup|rollback|revoke|detach|signout|sign_out/iu.test(subject)) types.add("RETRY_CLEANUP_ROLLBACK");
+  return [...types].sort(compareUtf8);
+};
+const exactBinding = (binding, { root, sourceHead, sourceTree, baseline, registry }) => {
+  if (!binding || !safeTaskPath(binding.sourcePath) || !["TEXT_SELECTOR", "JSON_POINTER"].includes(binding.bindingType) || typeof binding.selector !== "string") return { valid: false, domains: [], relationshipTypes: [] };
+  const absolute = path.join(root, binding.sourcePath);
+  if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) return { valid: false, domains: [], relationshipTypes: [] };
+  const source = fs.readFileSync(absolute, "utf8");
+  const committed = spawnSync("git", ["show", `${sourceHead}:${binding.sourcePath}`], { cwd: root, encoding: "utf8", shell: false });
+  if (committed.status !== 0 || normalizedSourceHash(committed.stdout) !== normalizedSourceHash(source)) return { valid: false, domains: [], relationshipTypes: [] };
+  let count = 0;
+  if (binding.bindingType === "JSON_POINTER") {
+    try {
+      count = binding.selector.startsWith("/") && binding.selector.slice(1).split("/").reduce((value, token) => value?.[token.replaceAll("~1", "/").replaceAll("~0", "~")], JSON.parse(source)) !== undefined ? 1 : 0;
+    } catch { count = 0; }
+  } else count = selectorCount(stripCommentOnlyLines(source), binding.selector);
+  const valid = count === 1
+    && binding.selectorMatchCount === 1
+    && binding.normalizedSourceHash === normalizedSourceHash(source)
+    && binding.sourceHead === sourceHead
+    && binding.sourceTree === sourceTree;
+  return { valid, domains: valid ? bindingDomains(binding, source, baseline, registry) : [], relationshipTypes: valid ? relationshipTypes(binding) : [] };
+};
+
+const edgeKey = ({ sourceDomain, destinationDomain }) => [sourceDomain, destinationDomain].sort(compareUtf8).join("::");
+const canonicalEdge = (edge) => ({ edgeId: edge.edgeId, sourceDomain: edge.sourceDomain, destinationDomain: edge.destinationDomain });
+const exactKeys = (value, allowed) => value && Object.keys(value).every((key) => allowed.has(key));
+const DELTA_KEYS = new Set(["classification", "edgeId", "sourceDomain", "destinationDomain", "sourceBindings", "authorityDirection", "impactClasses", "rollback", "cleanup", "observability", "reasonBaselineOmitted", "affectedTask", "modelDisposition", "deltaHash"]);
+const DISPOSITION_KEYS = new Set(["edgeId", "sourceDomain", "destinationDomain", "disposition", "relationshipType", "dataControlTransferred", "authorityDirection", "mutableState", "lifecycleImplications", "sourceBindings", "negativeWitness", "exactContract", "sourceHead", "sourceTree", "recordHash"]);
+
+export function verifyTaskLocalGoverningEdgeClosure(input, { root = DEFAULT_ROOT } = {}) {
+  const findings = [];
+  const baselinePath = path.join(root, "config/assurance/whole-app-domain-graph-v1.json");
+  let baseline;
+  try { baseline = JSON.parse(fs.readFileSync(baselinePath, "utf8")); } catch { baseline = null; }
+  let registry;
+  try { registry = JSON.parse(fs.readFileSync(path.join(root, "config/assurance/feature-registry-v1.json"), "utf8")); } catch { registry = null; }
+  const sourceHead = input?.sourceIdentity?.head;
+  const sourceTree = input?.sourceIdentity?.tree;
+  const actualTree = /^[0-9a-f]{40}$/u.test(sourceHead ?? "") ? spawnSync("git", ["rev-parse", `${sourceHead}^{tree}`], { cwd: root, encoding: "utf8", shell: false }).stdout.trim() : null;
+  if (input?.contract !== "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1") findings.push("TASK_LOCAL_EDGE_CONTRACT_INVALID");
+  if (input?.repository !== "Chillywood2025/chillywood-mobile" || typeof input?.taskId !== "string" || !input.taskId || typeof input?.primaryDomain !== "string" || !input.primaryDomain) findings.push("TASK_LOCAL_EDGE_IDENTITY_INVALID");
+  if (!baseline || input?.baselineGraphHash !== baseline.contentHash) findings.push("TASK_LOCAL_EDGE_BASELINE_MISMATCH");
+  if (!/^[0-9a-f]{40}$/u.test(sourceHead ?? "") || actualTree !== sourceTree) findings.push("TASK_LOCAL_EDGE_SOURCE_IDENTITY_INVALID");
+  const baselineEdges = new Map((baseline?.edges ?? []).map((edge) => [edge.edgeId, canonicalEdge(edge)]));
+  const baselineKeys = new Map((baseline?.edges ?? []).map((edge) => [edgeKey(edge), edge.edgeId]));
+  const deltas = new Map();
+  for (const delta of input?.modelDeltas ?? []) {
+    const body = { ...delta }; delete body.deltaHash;
+    const deltaBindingResults = Array.isArray(delta?.sourceBindings) ? delta.sourceBindings.map((binding) => exactBinding(binding, { root, sourceHead, sourceTree, baseline, registry })) : [];
+    const deltaDomains = new Set(deltaBindingResults.flatMap(({ domains }) => domains));
+    const valid = exactKeys(delta, DELTA_KEYS) && delta?.classification === "TASK_LOCAL_DOMAIN_GRAPH_DELTA_V1"
+      && typeof delta.edgeId === "string" && delta.edgeId.startsWith("task-local-")
+      && typeof delta.sourceDomain === "string" && typeof delta.destinationDomain === "string" && delta.sourceDomain !== delta.destinationDomain
+      && !baselineKeys.has(edgeKey(delta)) && !deltas.has(delta.edgeId)
+      && deltaBindingResults.length > 0 && deltaBindingResults.every(({ valid: bindingValid }) => bindingValid)
+      && deltaDomains.has(delta.sourceDomain) && deltaDomains.has(delta.destinationDomain)
+      && ["SOURCE_TO_DESTINATION", "DESTINATION_TO_SOURCE", "BIDIRECTIONAL"].includes(delta.authorityDirection)
+      && Array.isArray(delta.impactClasses) && delta.impactClasses.length > 0
+      && [delta.rollback, delta.cleanup, delta.observability, delta.reasonBaselineOmitted, delta.affectedTask, delta.modelDisposition].every((value) => typeof value === "string" && value.length > 0)
+      && delta.affectedTask === input.taskId && delta.modelDisposition === "PREDICTABLE_MODEL_OMISSION"
+      && delta.deltaHash === hashValue(body);
+    if (!valid) findings.push(`TASK_LOCAL_MODEL_DELTA_INVALID:${delta?.edgeId ?? "UNKNOWN"}`);
+    else deltas.set(delta.edgeId, canonicalEdge(delta));
+  }
+  const allEdges = new Map([...baselineEdges, ...deltas]);
+  const dispositions = new Map();
+  const observations = [];
+  for (const record of input?.dispositions ?? []) {
+    const edge = allEdges.get(record?.edgeId);
+    const body = { ...record }; delete body.recordHash;
+    const bindingResults = Array.isArray(record?.sourceBindings) ? record.sourceBindings.map((binding) => exactBinding(binding, { root, sourceHead, sourceTree, baseline, registry })) : [];
+    const bindingsValid = bindingResults.length > 0 && bindingResults.every(({ valid }) => valid);
+    const witnessedDomains = new Set(bindingResults.flatMap(({ domains }) => domains));
+    const independentlyGroundedEndpoints = edge && witnessedDomains.has(edge.sourceDomain) && witnessedDomains.has(edge.destinationDomain);
+    const observedRelationshipTypes = new Set(bindingResults.flatMap((item) => item.relationshipTypes));
+    const witnessResult = record?.negativeWitness ? exactBinding(record.negativeWitness, { root, sourceHead, sourceTree, baseline, registry }) : null;
+    const witnessValid = record?.disposition === "VERIFIED_GOVERNING_INCLUDED" || (witnessResult?.valid && typeof record.exactContract === "string" && record.exactContract.length > 0);
+    const valid = exactKeys(record, DISPOSITION_KEYS) && edge && !dispositions.has(record.edgeId) && TASK_LOCAL_EDGE_DISPOSITIONS.has(record.disposition)
+      && record.sourceDomain === edge.sourceDomain && record.destinationDomain === edge.destinationDomain
+      && bindingsValid && independentlyGroundedEndpoints && witnessValid
+      && observedRelationshipTypes.has(record.relationshipType)
+      && typeof record.dataControlTransferred === "string" && record.dataControlTransferred.length > 0
+      && ["SOURCE_TO_DESTINATION", "DESTINATION_TO_SOURCE", "BIDIRECTIONAL", "NO_AUTHORITY_DIRECTION_INFERRED"].includes(record.authorityDirection)
+      && Array.isArray(record.mutableState) && Array.isArray(record.lifecycleImplications)
+      && record.sourceHead === sourceHead && record.sourceTree === sourceTree
+      && record.recordHash === hashValue(body);
+    if (!valid) findings.push(`TASK_LOCAL_EDGE_DISPOSITION_INVALID:${record?.edgeId ?? "UNKNOWN"}`);
+    else {
+      dispositions.set(record.edgeId, record);
+      const observationBody = {
+        edgeId: record.edgeId,
+        relationshipType: record.relationshipType,
+        sourceDomain: edge.sourceDomain,
+        destinationDomain: edge.destinationDomain,
+        exactSourceSubjects: record.sourceBindings.map(({ sourcePath, selector, normalizedSourceHash: sourceHash }) => ({ sourcePath, selector, sourceHash })),
+        dataControlTransferred: record.dataControlTransferred,
+        authorityDirection: record.authorityDirection,
+        mutableState: record.mutableState,
+        lifecycleImplications: record.lifecycleImplications,
+        independentlyDerivedDomains: [...witnessedDomains].sort(compareUtf8),
+        independentlyDerivedRelationshipTypes: [...observedRelationshipTypes].sort(compareUtf8),
+        verifierResult: record.disposition,
+        sourceHead,
+        sourceTree,
+      };
+      observations.push({ ...observationBody, observationId: hashValue(observationBody) });
+    }
+  }
+  const domains = new Set([input?.primaryDomain]);
+  const candidateIds = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of allEdges.values()) {
+      if (!domains.has(edge.sourceDomain) && !domains.has(edge.destinationDomain)) continue;
+      candidateIds.add(edge.edgeId);
+      const record = dispositions.get(edge.edgeId);
+      if (record?.disposition !== "VERIFIED_GOVERNING_INCLUDED") continue;
+      for (const domain of [edge.sourceDomain, edge.destinationDomain]) if (!domains.has(domain)) { domains.add(domain); changed = true; }
+    }
+  }
+  const unresolved = [...candidateIds].filter((edgeId) => !dispositions.has(edgeId)).sort(compareUtf8);
+  for (const edgeId of unresolved) findings.push(`TASK_LOCAL_EDGE_UNRESOLVED:${edgeId}`);
+  const irrelevant = [...dispositions.keys()].filter((edgeId) => !candidateIds.has(edgeId)).sort(compareUtf8);
+  for (const edgeId of irrelevant) findings.push(`TASK_LOCAL_EDGE_OUTSIDE_REACHABLE_CUT:${edgeId}`);
+  const governing = [...candidateIds].filter((edgeId) => dispositions.get(edgeId)?.disposition === "VERIFIED_GOVERNING_INCLUDED").sort(compareUtf8);
+  const nonGoverning = [...candidateIds].filter((edgeId) => dispositions.get(edgeId)?.disposition === "VERIFIED_NON_GOVERNING_WITH_EVIDENCE").sort(compareUtf8);
+  const exclusions = [...candidateIds].filter((edgeId) => dispositions.get(edgeId)?.disposition === "NON_IMPACTING_WITH_EVIDENCE").sort(compareUtf8);
+  const boundary = exclusions.filter((edgeId) => { const edge = allEdges.get(edgeId); return domains.has(edge.sourceDomain) !== domains.has(edge.destinationDomain); }).sort(compareUtf8);
+  if (boundary.length !== exclusions.length) findings.push("TASK_LOCAL_EDGE_BOUNDARY_ACCOUNTING_INVALID");
+  const memberships = [...governing, ...nonGoverning, ...exclusions, ...unresolved];
+  if (memberships.length !== candidateIds.size || new Set(memberships).size !== memberships.length) findings.push("TASK_LOCAL_EDGE_SET_ACCOUNTING_INVALID");
+  const observedUndeclared = observations.filter(({ edgeId }) => deltas.has(edgeId)).map(({ edgeId }) => edgeId).sort(compareUtf8);
+  if (observedUndeclared.some((edgeId) => !deltas.has(edgeId))) findings.push("TASK_LOCAL_EDGE_UNDECLARED_UNMODELED");
+  const accounting = {
+    declaredCandidateSet: [...candidateIds].filter((edgeId) => baselineEdges.has(edgeId)).sort(compareUtf8),
+    observedRelationshipSet: observations.filter(({ edgeId }) => candidateIds.has(edgeId)).map(({ edgeId }) => edgeId).sort(compareUtf8),
+    verifiedGoverningSet: governing,
+    verifiedNonGoverningSet: nonGoverning,
+    boundaryExclusionSet: exclusions,
+    unresolvedSet: unresolved,
+    observedUndeclaredSet: observedUndeclared,
+  };
+  const evidenceSubject = { observations: observations.filter(({ edgeId }) => candidateIds.has(edgeId)).sort((a, b) => compareUtf8(a.edgeId, b.edgeId)), dispositions: [...candidateIds].map((edgeId) => dispositions.get(edgeId)).filter(Boolean), modelDeltas: [...deltas.keys()].sort(compareUtf8) };
+  const closureSubject = { taskId: input?.taskId, primaryDomain: input?.primaryDomain, domains: [...domains].sort(compareUtf8), includedGoverningEdges: governing, boundaryCutSet: boundary, accounting };
+  const result = {
+    classification: findings.length ? "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED" : "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR",
+    contract: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+    taskId: input?.taskId,
+    primaryDomain: input?.primaryDomain,
+    sourceIdentity: input?.sourceIdentity,
+    baselineGraphHash: baseline?.contentHash ?? null,
+    domains: closureSubject.domains,
+    candidateEdges: [...candidateIds].sort(compareUtf8),
+    observations: evidenceSubject.observations,
+    accounting,
+    includedGoverningEdges: governing,
+    boundaryCutSet: boundary,
+    modelDeltaEdges: [...deltas.keys()].sort(compareUtf8),
+    evidenceHash: hashValue(evidenceSubject),
+    closureHash: hashValue(closureSubject),
+    findings: [...new Set(findings)].sort(compareUtf8),
+  };
+  return { ...result, resultHash: hashValue(result) };
+}
+
 const parseFunctions = (source, fileName) => {
   const ts = require("typescript");
   const unit = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith(".ts") || fileName.endsWith(".tsx") ? ts.ScriptKind.TS : ts.ScriptKind.JS);
@@ -253,6 +468,13 @@ export function runIsolatedAuthoritativeReplay({ root = DEFAULT_ROOT, runs = 2, 
 
 async function main() {
   const options = optionsFrom(process.argv.slice(2));
+  if (options["task-local-edge-input"]) {
+    const input = JSON.parse(fs.readFileSync(path.resolve(String(options["task-local-edge-input"])), "utf8"));
+    const result = verifyTaskLocalGoverningEdgeClosure(input, { root: options.root ?? DEFAULT_ROOT });
+    process.stdout.write(`${stableJson(result)}\n`);
+    if (result.classification !== "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR") process.exitCode = 1;
+    return;
+  }
   if (!options.replay) return;
   const result = runIsolatedAuthoritativeReplay({ root: options.root ?? DEFAULT_ROOT, runs: Number(options.runs ?? 2), taskOptions: options });
   process.stdout.write(`${stableJson(result)}\n`);
