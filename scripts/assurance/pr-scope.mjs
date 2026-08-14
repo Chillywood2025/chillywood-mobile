@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 import { args, emit, evaluateProtectedMainAdvancement, git, readJson } from "./lib.mjs";
-import { canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
+import { canonicalGitDiffArgs, canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
 import { deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
 const options = args();
@@ -24,7 +24,7 @@ const readGitScope = (base, head) => {
   const numstat = git(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean);
   const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
   const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
-  const diff = git(["diff", "--full-index", "--no-ext-diff", `${base}...${head}`]);
+  const diff = git(canonicalGitDiffArgs(`${base}...${head}`));
   return { files, additions, deletions, diffHash: canonicalGitDiffHash(diff) };
 };
 const readPull = (repository, pr) => {
@@ -88,7 +88,7 @@ if (!event.pull_request) {
   } catch {}
   const typedAuthorities = validatedIdentity.ok && tree
     ? observeTypedTaskAuthorities({ identity: validatedIdentity.identity, tree, scope, currentTruth })
-    : { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null };
+    : { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null };
   const context = deriveTaskScopeContext({
     event,
     readback,

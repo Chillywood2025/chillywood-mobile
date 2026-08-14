@@ -65,6 +65,7 @@ export function deriveTaskScopeContext({
   finiteTaskAuthority = null,
   architectureAuthority = null,
   terminalTruthAuthority = null,
+  finiteTaskAdmissionAuthority = null,
   protectedMainRuntime = null,
   requestedFeature = null,
   requestedWaiver = null
@@ -90,7 +91,8 @@ export function deriveTaskScopeContext({
   if (boundAuthority(finiteTaskAuthority, identity)) candidates.push({ ...finiteTaskAuthority, source: "ACTIVE_FINITE_TASK_LEASE" });
   if (boundAuthority(architectureAuthority, identity)) candidates.push({ ...architectureAuthority, source: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" });
   if (boundAuthority(terminalTruthAuthority, identity)) candidates.push({ ...terminalTruthAuthority, source: "TERMINAL_TRUTH_SUCCESSOR_V1" });
-  for (const attempted of [finiteTaskAuthority, architectureAuthority, terminalTruthAuthority]) if (attempted && attempted.ok !== true) findings.push(...(attempted.findings ?? []));
+  if (boundAuthority(finiteTaskAdmissionAuthority, identity)) candidates.push({ ...finiteTaskAdmissionAuthority, source: "FINITE_TASK_ADMISSION_SUCCESSOR_V1" });
+  for (const attempted of [finiteTaskAuthority, architectureAuthority, terminalTruthAuthority, finiteTaskAdmissionAuthority]) if (attempted && attempted.ok !== true) findings.push(...(attempted.findings ?? []));
   if (candidates.length === 0) findings.push("ASSURANCE_TASK_CONTEXT_UNBOUND");
   if (candidates.length > 1 || historical.length > 1) findings.push("ASSURANCE_TASK_CONTEXT_AMBIGUOUS");
   const selected = candidates.length === 1 ? candidates[0] : null;

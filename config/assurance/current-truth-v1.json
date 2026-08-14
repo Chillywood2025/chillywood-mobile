@@ -1116,6 +1116,24 @@
       {"featureId":"ads-applovin-future-integration","architectureStatus":"BOUND_INCOMPLETE","sourceStatus":"BOUND_INCOMPLETE","integrationStatus":"BOUND_INCOMPLETE","nativeProviderStatus":"BOUND_COMPLETE_WITH_EXTERNAL_PROOF_BLOCKED","signedInstalledPhysicalPublicStatus":"BOUND_COMPLETE_WITH_EXTERNAL_PROOF_BLOCKED","blockers":["post-launch domain task closure pending","provider and runtime evidence BLOCKED_EXTERNAL"],"lastEvidence":"deterministic doctrine baseline","disposition":"post-launch status unresolved","proofTiers":{"T0_REQUIREMENT":"BLOCKED_INTERNAL","T1_SOURCE":"BLOCKED_INTERNAL","T2_MODEL":"BLOCKED_INTERNAL","T3_INTEGRATION":"BLOCKED_INTERNAL","T4_NATIVE_PROVIDER":"BLOCKED_EXTERNAL","T5_SIGNED_ARTIFACT":"BLOCKED_EXTERNAL","T6_INSTALLED_PHYSICAL":"BLOCKED_EXTERNAL","T7_PUBLIC_CANARY":"BLOCKED_EXTERNAL"}}
     ]
   },
+  "preAdmissionEngineeringSeedCapability": {
+    "contract": "OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1",
+    "status": "ACTIVE",
+    "productMutationAllowed": false,
+    "finiteLeaseRequiredBeforeImplementation": true,
+    "admissionContext": "FINITE_TASK_ADMISSION_SUCCESSOR_V1",
+    "staticBindingRequired": false,
+    "sourceBindingPrRequired": false,
+    "provenancePrRequired": false,
+    "nextAction": "RESUME_PR_229_PRE_ADMISSION_ENGINEERING_CLOSURE",
+    "authority": {
+      "providerMutation": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
   "taskContextArchitecture": {
     "contractId": "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1",
     "architecturePr": 227,
