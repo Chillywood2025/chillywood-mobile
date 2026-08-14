@@ -668,6 +668,12 @@ const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, c
   return { originalIdentity, originalTree, originalScope, originalSubject, original, identity, tree, scope, review, phase1, premature, final, comments, evaluate };
 };
 
+test("Phase 1 evidence ignores optional advisory check-runs", () => {
+  const fixture = receiptLifecycleFixture({ phase1Mutator: (_run, jobs) => jobs.push({ name: "Chi'llywood / Codex Review Exact Head", status: "completed", conclusion: "neutral" }) });
+  assert.equal(fixture.phase1.valid, true);
+  assert.equal(fixture.phase1.result, "PASS_13_OF_13");
+});
+
 test("receipt lifecycle V2 regression matrix 35/35", async (t) => {
   const cases = [
     ["01 Owner authorization is valid without final attestation", () => { const f = receiptLifecycleFixture(); const r = verifyArchitectureMaintenanceAuthority({ raw: f.original, allComments: [f.original], paginationComplete: true, identity: f.identity, tree: f.tree, scope: f.scope, ancestryVerified: true }); assert.equal(r.authorizationOk, true); assert.equal(r.mergeEligible, false); }],

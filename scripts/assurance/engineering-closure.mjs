@@ -1910,7 +1910,8 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
 }
 
 export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {}) {
-  const names = jobs.map(({ name }) => name).sort();
+  const requiredJobs = jobs.filter(({ name }) => PHASE1_REQUIRED_JOB_NAMES.includes(name));
+  const names = requiredJobs.map(({ name }) => name).sort();
   const uniqueNames = [...new Set(names)];
   const valid = Boolean(run
     && run.name === "Phase 1 CI"
@@ -1923,10 +1924,10 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {})
     && run.pull_requests[0]?.number === identity?.pr
     && run.pull_requests[0]?.head?.sha === identity?.headSha
     && run.pull_requests[0]?.base?.sha === identity?.baseSha
-    && jobs.length === PHASE1_REQUIRED_JOB_NAMES.length
-    && uniqueNames.length === jobs.length
+    && requiredJobs.length === PHASE1_REQUIRED_JOB_NAMES.length
+    && uniqueNames.length === requiredJobs.length
     && stableJson(uniqueNames) === stableJson([...PHASE1_REQUIRED_JOB_NAMES])
-    && jobs.every(({ status, conclusion, head_sha }) => status === "completed" && conclusion === "success" && head_sha === identity?.headSha));
+    && requiredJobs.every(({ status, conclusion, head_sha }) => status === "completed" && conclusion === "success" && head_sha === identity?.headSha));
   const body = {
     classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1",
     repository: identity?.repository,
@@ -1939,7 +1940,7 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {})
     status: run?.status ?? null,
     conclusion: run?.conclusion ?? null,
     requiredJobs: PHASE1_REQUIRED_JOB_NAMES.length,
-    passedJobs: jobs.filter(({ status, conclusion }) => status === "completed" && conclusion === "success").length,
+    passedJobs: requiredJobs.filter(({ status, conclusion }) => status === "completed" && conclusion === "success").length,
     jobNames: uniqueNames,
     result: valid ? "PASS_13_OF_13" : "BLOCKED_INTERNAL",
   };
