@@ -91,7 +91,7 @@ export function deriveTaskScopeContext({
   if (boundAuthority(finiteTaskAuthority, identity)) candidates.push({ ...finiteTaskAuthority, source: "ACTIVE_FINITE_TASK_LEASE" });
   if (boundAuthority(architectureAuthority, identity)) candidates.push({ ...architectureAuthority, source: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" });
   if (boundAuthority(terminalTruthAuthority, identity)) candidates.push({ ...terminalTruthAuthority, source: "TERMINAL_TRUTH_SUCCESSOR_V1" });
-  if (boundAuthority(finiteTaskAdmissionAuthority, identity)) candidates.push({ ...finiteTaskAdmissionAuthority, source: "FINITE_TASK_ADMISSION_SUCCESSOR_V1" });
+  if (boundAuthority(finiteTaskAdmissionAuthority, identity)) candidates.push({ ...finiteTaskAdmissionAuthority, source: finiteTaskAdmissionAuthority.classification === "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1" ? "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1" : "FINITE_TASK_ADMISSION_SUCCESSOR_V1" });
   for (const attempted of [finiteTaskAuthority, architectureAuthority, terminalTruthAuthority, finiteTaskAdmissionAuthority]) if (attempted && attempted.ok !== true) findings.push(...(attempted.findings ?? []));
   if (candidates.length === 0) findings.push("ASSURANCE_TASK_CONTEXT_UNBOUND");
   if (candidates.length > 1 || historical.length > 1) findings.push("ASSURANCE_TASK_CONTEXT_AMBIGUOUS");

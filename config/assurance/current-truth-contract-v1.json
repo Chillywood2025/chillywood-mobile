@@ -14,6 +14,17 @@
     "postMergeTruthPaths": ["config/assurance/current-truth-v1.json", "CURRENT_STATE.md", "NEXT_TASK.md"],
     "postMergeNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
   },
+  "finiteTaskAdmissionClearancePolicy": {
+    "contract": "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1",
+    "admissionAndClearanceSameProtectedTransition": true,
+    "persistedPlanningStatus": "DEFECT_LEDGER_STABLE",
+    "computedClearanceStatus": "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    "productMutationBeforeAdmissionMerge": false,
+    "postAdmissionClearancePrRequired": false,
+    "staticBindingRequired": false,
+    "sourceBindingPrRequired": false,
+    "provenancePrRequired": false
+  },
   "reviewPolicy": {
     "classification": "OPTIONAL_ADVISORY",
     "requiredStatusCheck": false,
