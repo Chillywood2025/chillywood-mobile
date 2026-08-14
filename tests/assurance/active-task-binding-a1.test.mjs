@@ -11,6 +11,8 @@ import {
   OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1,
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject,
+  resolveEngineeringArtifactInput,
+  taskArtifactHashFromFile,
   validateEngineeringTaskAuthority,
   validateStructuredBinding,
   verifyActiveTaskOwnerJurisdictionPolicy,
@@ -2963,6 +2965,44 @@ test("active-task frozen artifact 01: malformed generic state models fail closed
   assert.doesNotThrow(() => evaluateAdmittedFiniteTaskArtifactV2({ certificate: {}, closure: { affectedDomainClosure: { domains: [] }, sections: {} }, taskLocalEdgeEvidence: { modelDeltas: [null] } }));
 });
 
+test("active-task frozen artifact 01a: the leased artifact hash is computed from exact file bytes", () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "wave1-artifact-hash-"));
+  const artifactPath = "docs/assurance/tasks/hash-fixture.json";
+  try {
+    fs.mkdirSync(path.join(parent, path.dirname(artifactPath)), { recursive: true });
+    const bytes = `${JSON.stringify({ z: 1, a: [2, 3] })}\n`;
+    fs.writeFileSync(path.join(parent, artifactPath), bytes);
+    assert.equal(taskArtifactHashFromFile(artifactPath, parent), digest(bytes));
+    assert.equal(taskArtifactHashFromFile("../outside.json", parent), null);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("active-task frozen artifact 01b: the admitted lease selects and reconciles the immutable full wrapper", () => {
+  const fixture = admittedWave1ArtifactFixture();
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "wave1-artifact-input-"));
+  const artifactPath = fixture.lease.artifactReservation.closureArtifactPath;
+  try {
+    fs.mkdirSync(path.join(parent, path.dirname(artifactPath)), { recursive: true });
+    fs.writeFileSync(path.join(parent, artifactPath), fixture.taskArtifactBytes);
+    const promoted = resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: fixture.taskArtifact.certificate, root: parent });
+    assert.equal(promoted.ok, true);
+    assert.deepEqual(promoted.packet, fixture.taskArtifact);
+    assert.deepEqual(promoted.certificate, fixture.taskArtifact.certificate);
+    const mutated = structuredClone(fixture.taskArtifact.closure);
+    mutated.completionStatus = "BLOCKED";
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: mutated, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: { ...fixture.taskArtifact.certificate, status: "BLOCKED" }, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, root: path.join(parent, "missing") }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    const legacy = structuredClone(fixture.lease);
+    delete legacy.closure;
+    assert.equal(resolveEngineeringArtifactInput({ lease: legacy, suppliedPacket: fixture.taskArtifact.closure, root: parent }).packet, fixture.taskArtifact.closure);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test("active-task frozen artifact 02: the exact admitted Wave 1 wrapper uses its canonical split-model verifier", () => {
   const fixture = admittedWave1ArtifactFixture();
   const result = evaluateAdmittedFiniteTaskArtifactV2(fixture.taskArtifact, { taskArtifactBytes: fixture.taskArtifactBytes, taskArtifactHash: fixture.taskArtifactHash, implementationIdentity: fixture.implementationIdentity, authoritativeLease: fixture.lease, ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority, actualScope: fixture.actualScope });
@@ -2987,6 +3027,30 @@ test("active-task frozen artifact 05: full wrappers and legacy direct packets st
   assert.match(source, /admittedFiniteTaskArtifact[\s\S]+evaluateAdmittedFiniteTaskArtifactV2\(admittedFiniteTaskArtifact/u);
   assert.match(source, /PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED/u);
   assert.match(source, /else \{[\s\S]+evaluatePreimplementationGate\(effectivePacket/u);
+  const fixture = admittedWave1ArtifactFixture();
+  const args = {
+    doctrineTruth: { status: "ACTIVE" },
+    featureId: fixture.taskArtifact.primaryDomain,
+    phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    lease: fixture.lease,
+    certificate: fixture.taskArtifact.certificate,
+    branch: fixture.lease.implementationBranch,
+    currentMain: fixture.implementationIdentity.currentProtectedMain,
+    currentHead: fixture.implementationIdentity.implementationHead,
+    implementationPr: fixture.lease.implementationPr,
+    scopeObservation: fixture.actualScope,
+    implementationIdentity: fixture.implementationIdentity,
+    ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority,
+  };
+  const unwrapped = validateEngineeringTaskAuthority({ ...args, closurePacket: fixture.taskArtifact.closure });
+  assert.equal(unwrapped.ok, false);
+  assert.ok(unwrapped.findings.includes("PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"));
+  const hybrid = structuredClone(fixture.taskArtifact);
+  delete hybrid.closure.sections;
+  hybrid.sections = fixture.taskArtifact.closure.sections;
+  const partial = validateEngineeringTaskAuthority({ ...args, closurePacket: hybrid });
+  assert.equal(partial.ok, false);
+  assert.ok(partial.findings.includes("PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"));
 });
 
 test("active-task frozen artifact 06: frozen edge evidence is reverified at the immutable planning snapshot", () => {
