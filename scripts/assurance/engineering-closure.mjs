@@ -3158,7 +3158,8 @@ export function createImplementationIdentityObservation({
     && typeof finiteLeaseId === "string" && finiteLeaseId.length > 0
     && safeRepoPath(taskArtifactPath)
     && /^[0-9a-f]{64}$/u.test(taskArtifactHash ?? "")
-    && changedPaths.length === 1 && changedPaths[0] === taskArtifactPath
+    && changedPaths.includes(taskArtifactPath)
+    && (admissionMerged === true || (changedPaths.length === 1 && changedPaths[0] === taskArtifactPath))
     && seedIsAncestor === true
     && protectedBaseIsAncestor === true
     && ownerApprovalValid === true
