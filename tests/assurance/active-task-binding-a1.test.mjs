@@ -7,10 +7,13 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   activeTask,
+  admittedFiniteTaskCommandRule,
   evaluatePreAdmissionEngineeringSeed,
   OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1,
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject,
+  redactActiveTaskPacket,
+  resolveEngineeringArtifactInput,
   validateEngineeringTaskAuthority,
   validateStructuredBinding,
   verifyActiveTaskOwnerJurisdictionPolicy,
@@ -51,7 +54,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, contentSnapshotSubject, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, readGitHubApi, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts } from "../../scripts/assurance/engineering-closure.mjs";
+import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -368,6 +371,50 @@ test("active-task jurisdiction 11: active-task consumes a nonembedded inherited 
   assert.equal(result.ok, true, result.findings?.join(","));
   assert.equal(result.evidence.domainBinding.taskSpecific, true);
   assert.equal(result.evidence.domainBinding.domainCoverageReusable, false);
+});
+
+const activeTaskCorrectionMaintenanceFixture = (mutate = () => {}) => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 399, branch: "codex/wave1-active-task-frozen-model-correction-v1", headSha: "7".repeat(40), baseSha: "8".repeat(40) };
+  const tree = "9".repeat(40);
+  const scope = { files: ["scripts/assurance/active-task.mjs", "scripts/assurance/engineering-closure.mjs", "tests/assurance/active-task-binding-a1.test.mjs"], additions: 120, deletions: 8, netChangedLines: 112 };
+  const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2" });
+  mutate(subject);
+  const body = architectureMaintenanceOwnerCommentBody(subject);
+  const raw = { id: 799001, node_id: "IC_active_task_correction", user: { login: "Chillywood2025" }, author_association: "OWNER", body, created_at: "2026-08-14T20:00:00Z", updated_at: "2026-08-14T20:00:00Z", issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${identity.pr}`, html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${identity.pr}#issuecomment-799001` };
+  return { identity, tree, scope, raw };
+};
+
+test("active-task correction maintenance 01: assurance-only empty objective domain remains valid beside the active product task", () => {
+  const fixture = activeTaskCorrectionMaintenanceFixture();
+  const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false });
+  assert.equal(result.ok, true, result.findings?.join(","));
+});
+
+test("active-task correction maintenance 02: objective-domain expansion cannot borrow the assurance-only exception", () => {
+  const fixture = activeTaskCorrectionMaintenanceFixture((subject) => { subject.objectiveDomains = ["auth-session-password-recovery"]; });
+  const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false });
+  assert.equal(result.ok, false);
+});
+
+test("active-task correction maintenance 03: product authority cannot borrow the assurance-only exception", () => {
+  const fixture = activeTaskCorrectionMaintenanceFixture((subject) => { subject.authority.product = true; });
+  const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false });
+  assert.equal(result.ok, false);
+});
+
+test("active-task correction maintenance 04: only the exact canonical closed-authority profile can coexist with the active task", () => {
+  const mutations = [
+    (subject) => { subject.authority = {}; },
+    (subject) => { delete subject.ownerIdentity; },
+    (subject) => { subject.currentTruthCompanionIncluded = false; },
+    (subject) => { subject.expiresOn = "NEVER"; },
+    (subject) => { subject.authority.unlisted = false; },
+  ];
+  for (const mutate of mutations) {
+    const fixture = activeTaskCorrectionMaintenanceFixture(mutate);
+    const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false });
+    assert.equal(result.ok, false);
+  }
 });
 const e0CompletionFacts = [
   "repository.assurance-control.a1.requirements",
@@ -2834,4 +2881,272 @@ test("activeTask rejects generic product auto-clear and ignores caller-supplied 
   const activeTruth = { ...truth, engineeringDoctrine: { status: "ACTIVE" }, activeTaskBinding: implementationBinding, finiteTaskLeases: { ...truth.finiteTaskLeases, tasks: [...truth.finiteTaskLeases.tasks, lease] } }; const candidate = { pr: binding.implementationPr, branch: binding.implementationBranch, prState: "open", head: binding.currentImplementationHead, tree: binding.currentImplementationTree, seedTree: binding.immutableSourceTree, seedIsAncestor: true, baseIsAncestor: true, changedPaths: future.actualScope.paths, changedLines: future.actualScope.changedLines, diffHash: "1".repeat(64), changedPathHash: "2".repeat(64), finalReceiptHead: null, repositoryReviewHead: null, phase1Head: null, findings: { P0: 0, P1: 0, launchImpactingP2: 0 } };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-gh-")); const log = path.join(dir, "readback.log"); const raw = { id: comments[0].id, html_url: comments[0].url, user: comments[0].author, author_association: comments[0].authorAssociation, created_at: comments[0].createdAt, updated_at: comments[0].updatedAt, body: comments[0].body }; const fakeGh = path.join(dir, "gh"); fs.writeFileSync(fakeGh, `#!/usr/bin/env node\nrequire("fs").appendFileSync(${JSON.stringify(log)}, process.argv.slice(2).join(" ")+"\\n");process.stdout.write(${JSON.stringify(JSON.stringify(raw))});\n`); fs.chmodSync(fakeGh, 0o755); const originalPath = process.env.PATH; process.env.PATH = `${dir}:${originalPath}`;
   try { const result = activeTask({ ...facts, currentTruth: activeTruth, protectedMainTruth: activeTruth, finiteTaskCandidateObservation: candidate, engineeringClosurePacket: future.packet, engineeringCertificate: future.certificate, engineeringOwnerAuthorizationComments: comments, autonomousEngineeringRequest: {}, identity: { ...identity, changedFiles: future.actualScope.paths }, changedLines: future.actualScope.changedLines }); assert.equal(result.ok, false); assert.ok(result.findings.includes("PREIMPLEMENTATION_DEPENDENCY_CLOSURE_INCOMPLETE")); assert.ok(result.findings.includes("PREIMPLEMENTATION_STATE_MODEL_INCOMPLETE")); assert.match(fs.readFileSync(log, "utf8"), new RegExp(`issues/comments/${comments[0].id}$`, "mu")); } finally { process.env.PATH = originalPath; fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+let admittedWave1ArtifactFixtureCache = null;
+const admittedWave1ArtifactFixture = () => {
+  if (admittedWave1ArtifactFixtureCache) return admittedWave1ArtifactFixtureCache;
+  const artifactPath = "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json";
+  const artifactSource = spawnSync("git", ["show", `14e6d3a05bc4110712f88de11c76968cb610dae1:${artifactPath}`], { encoding: "utf8" }).stdout;
+  const taskArtifact = JSON.parse(artifactSource);
+  const taskArtifactHash = digest(artifactSource);
+  const lease = structuredClone(canonicalTruth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 229));
+  const activeBinding = canonicalTruth.activeTaskBinding;
+  const domainIds = [...taskArtifact.closure.affectedDomainClosure.domains];
+  const scope = { launchProgram: "chillywood-united-states-pre-release", product: "chillywood-mobile", repository: "Chillywood2025/chillywood-mobile" };
+  const taskEvidence = finiteTaskJurisdictionEvidenceV2(taskArtifact, taskArtifactHash);
+  const taskIdentity = {
+    implementationBranch: lease.implementationBranch,
+    implementationPr: lease.implementationPr,
+    leaseId: lease.leaseId,
+    originalSeedHead: lease.admittedSeedHead,
+    originalSeedTree: lease.admittedSeedTree,
+    ownerApprovalCommentId: lease.ownerAuthorizationCommentId,
+    planningHead: activeBinding.currentImplementationHead,
+    planningTree: activeBinding.currentImplementationTree,
+    taskArtifactPath: artifactPath,
+    taskId: lease.leaseId,
+  };
+  const rendered = preflightOwnerJurisdictionDecisionV2({
+    domainApplications: domainIds.map((domainId) => ({ decision: `Exact Wave 1 United States application for ${domainId}.`, domainId, jurisdictionDecisionOwner: "Chillywood2025", market: "UNITED_STATES_ONLY", minimumCreatorAge: ["creator-money-ledger", "payouts-stripe-connect"].includes(domainId) ? 18 : null })),
+    domainIds,
+    owner: { association: "OWNER", login: "Chillywood2025" },
+    registry,
+    scope,
+    taskEvidence,
+    taskIdentity,
+  });
+  assert.equal(rendered.ok, true, rendered.findings?.join(","));
+  const raw = { id: 799101, node_id: "IC_admitted_wave1", user: { login: "Chillywood2025" }, author_association: "OWNER", body: rendered.body, created_at: "2026-08-14T20:01:00Z", updated_at: "2026-08-14T20:01:00Z", issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${lease.implementationPr}`, html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${lease.implementationPr}#issuecomment-799101` };
+  const ownerJurisdictionAuthority = verifyOwnerJurisdictionAuthorityV2({ raw, policyRaws: [raw], paginationComplete: true, repository: scope.repository, pr: lease.implementationPr, registry, expected: { ...scope, domainIds, ownerLogin: "Chillywood2025", task: lease.leaseId }, expectedTaskIdentity: taskIdentity, expectedTaskEvidence: taskEvidence });
+  assert.equal(ownerJurisdictionAuthority.ok, true, ownerJurisdictionAuthority.findings?.join(","));
+  const actualScope = observeCandidateScopeFromGit(lease.admittedBase, activeBinding.currentImplementationHead);
+  assert.ok(actualScope);
+  const implementationIdentity = createImplementationIdentityObservation({
+    repository: scope.repository,
+    workflowPr: lease.implementationPr,
+    implementationPr: lease.implementationPr,
+    implementationBranch: lease.implementationBranch,
+    implementationHead: activeBinding.currentImplementationHead,
+    implementationTree: activeBinding.currentImplementationTree,
+    originalSeedHead: lease.admittedSeedHead,
+    originalSeedTree: lease.admittedSeedTree,
+    protectedBase: lease.admittedBase,
+    currentProtectedMain: lease.admittedBase,
+    finiteLeaseId: lease.leaseId,
+    taskArtifactPath: artifactPath,
+    taskArtifactHash,
+    implementationChangedPaths: actualScope.paths,
+    seedIsAncestor: true,
+    protectedBaseIsAncestor: true,
+    ownerApprovalValid: true,
+    artifactFrozen: true,
+    prospectiveLeasePresent: true,
+    admissionMerged: true,
+  });
+  assert.equal(implementationIdentity.candidateEligible, true);
+  admittedWave1ArtifactFixtureCache = { actualScope, implementationIdentity, lease, ownerJurisdictionAuthority, taskArtifact, taskArtifactBytes: artifactSource, taskArtifactHash };
+  return admittedWave1ArtifactFixtureCache;
+};
+
+test("active-task frozen artifact 01: malformed generic state models fail closed without throwing", () => {
+  for (const malformed of [
+    { sections: { F_STATE_MODEL: { domainModels: [{ domain: "auth-session-password-recovery", states: ["ACTIVE"], transitions: ["W1-T-01"] }] } } },
+    { sections: { F_STATE_MODEL: { domainModels: [null] } } },
+    { sections: { F_STATE_MODEL: { domainModels: [{ domain: "auth-session-password-recovery", transitionContracts: [null] }] } } },
+  ]) {
+    let result;
+    assert.doesNotThrow(() => { result = evaluatePreimplementationGate(malformed); });
+    assert.equal(result.clear, false);
+    assert.ok(result.findings.includes("PREIMPLEMENTATION_STATE_MODEL_INCOMPLETE"));
+  }
+  assert.doesNotThrow(() => evaluateFrozenFiniteTaskArtifactV2({ certificate: { invariants: {} }, closure: {} }));
+  assert.doesNotThrow(() => evaluateFrozenFiniteTaskArtifactV2({ certificate: { invariants: [], mutants: [], positiveWitnesses: [], negativeWitnesses: [], reachableStates: [], transitions: [] }, closure: {}, invariants: [null], mutants: [], stateTransitionModel: {} }));
+  assert.doesNotThrow(() => evaluateAdmittedFiniteTaskArtifactV2({ certificate: { invariants: {} }, closure: {} }));
+  assert.doesNotThrow(() => evaluateAdmittedFiniteTaskArtifactV2({ certificate: {}, closure: { affectedDomainClosure: { domains: [] }, sections: {} }, taskLocalEdgeEvidence: { modelDeltas: [null] } }));
+});
+
+test("active-task frozen artifact 01a: the leased artifact is read from the exact regular Git blob", () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "wave1-artifact-hash-"));
+  const artifactPath = "docs/assurance/tasks/hash-fixture.json";
+  try {
+    fs.mkdirSync(path.join(parent, path.dirname(artifactPath)), { recursive: true });
+    const bytes = `${JSON.stringify({ z: 1, a: [2, 3] })}\n`;
+    fs.writeFileSync(path.join(parent, artifactPath), bytes);
+    for (const args of [["init", "--quiet"], ["config", "user.email", "test@example.com"], ["config", "user.name", "Test"], ["add", artifactPath], ["commit", "--quiet", "-m", "fixture"]]) assert.equal(spawnSync("git", args, { cwd: parent }).status, 0);
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: parent, encoding: "utf8" }).stdout.trim();
+    const exact = readTaskArtifactAtGitHead(artifactPath, head, parent);
+    assert.equal(exact.artifactHash, digest(bytes));
+    assert.deepEqual(exact.artifact, { z: 1, a: [2, 3] });
+    fs.writeFileSync(path.join(parent, artifactPath), `${JSON.stringify({ substituted: true })}\n`);
+    assert.equal(readTaskArtifactAtGitHead(artifactPath, head, parent).artifactHash, digest(bytes));
+    assert.equal(readTaskArtifactAtGitHead("../outside.json", head, parent), null);
+    fs.rmSync(path.join(parent, artifactPath));
+    fs.symlinkSync("outside.json", path.join(parent, artifactPath));
+    assert.equal(spawnSync("git", ["add", artifactPath], { cwd: parent }).status, 0);
+    assert.equal(spawnSync("git", ["commit", "--quiet", "-m", "symlink substitution"], { cwd: parent }).status, 0);
+    const symlinkHead = spawnSync("git", ["rev-parse", "HEAD"], { cwd: parent, encoding: "utf8" }).stdout.trim();
+    assert.equal(readTaskArtifactAtGitHead(artifactPath, symlinkHead, parent), null);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("active-task frozen artifact 01b: the admitted lease selects and reconciles the immutable full wrapper", () => {
+  const fixture = admittedWave1ArtifactFixture();
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "wave1-artifact-input-"));
+  const artifactPath = fixture.lease.artifactReservation.closureArtifactPath;
+  try {
+    fs.mkdirSync(path.join(parent, path.dirname(artifactPath)), { recursive: true });
+    fs.writeFileSync(path.join(parent, artifactPath), fixture.taskArtifactBytes);
+    for (const args of [["init", "--quiet"], ["config", "user.email", "test@example.com"], ["config", "user.name", "Test"], ["add", artifactPath], ["commit", "--quiet", "-m", "fixture"]]) assert.equal(spawnSync("git", args, { cwd: parent }).status, 0);
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: parent, encoding: "utf8" }).stdout.trim();
+    const promoted = resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: fixture.taskArtifact.certificate, head, root: parent });
+    assert.equal(promoted.ok, true);
+    assert.deepEqual(promoted.packet, fixture.taskArtifact);
+    assert.deepEqual(promoted.certificate, fixture.taskArtifact.certificate);
+    const mutated = structuredClone(fixture.taskArtifact.closure);
+    mutated.completionStatus = "BLOCKED";
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: mutated, head, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, suppliedPacket: fixture.taskArtifact.closure, suppliedCertificate: { ...fixture.taskArtifact.certificate, status: "BLOCKED" }, head, root: parent }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    assert.deepEqual(resolveEngineeringArtifactInput({ lease: fixture.lease, head, root: path.join(parent, "missing") }).findings, ["PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"]);
+    const legacy = structuredClone(fixture.lease);
+    delete legacy.closure;
+    assert.equal(resolveEngineeringArtifactInput({ lease: legacy, suppliedPacket: fixture.taskArtifact.closure, root: parent }).packet, fixture.taskArtifact.closure);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("active-task frozen artifact 01c: only the verified task-bound policy enum bypasses the secret false positive", () => {
+  const packet = { ownerJurisdictionPolicy: { policySource: { referenceScope: "TASK_BOUND_COMPOSITE" } }, status: "CLEAR" };
+  assert.deepEqual(redactActiveTaskPacket(packet), packet);
+  for (const secret of ["sk_abcdefghijklmnop", "pk_abcdefghijklmnop", "owner@example.com"]) {
+    const unsafe = { ...packet, secret };
+    assert.notEqual(stableJson(redactActiveTaskPacket(unsafe)), stableJson(unsafe));
+  }
+  const substituted = { ownerJurisdictionPolicy: { policySource: { referenceScope: "TASK_BOUND_COMPOSITE_sk_abcdefghijklmnop" } } };
+  assert.notEqual(stableJson(redactActiveTaskPacket(substituted)), stableJson(substituted));
+});
+
+test("active-task frozen artifact 02: the exact admitted Wave 1 wrapper uses its canonical split-model verifier", () => {
+  const fixture = admittedWave1ArtifactFixture();
+  const result = evaluateAdmittedFiniteTaskArtifactV2(fixture.taskArtifact, { taskArtifactBytes: fixture.taskArtifactBytes, taskArtifactHash: fixture.taskArtifactHash, implementationIdentity: fixture.implementationIdentity, authoritativeLease: fixture.lease, ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority, actualScope: fixture.actualScope });
+  assert.equal(result.clear, true, JSON.stringify(result));
+  assert.equal(result.status, "PREIMPLEMENTATION_ENGINEERING_CLEAR");
+  const engineeringAuthority = { ok: true, classification: result.status, derivedGate: result };
+  const focused = admittedFiniteTaskCommandRule({ contractCommand: "focused auth/RLS suite", featureId: fixture.taskArtifact.primaryDomain, engineeringAuthority, taskArtifact: fixture.taskArtifact, taskArtifactHash: fixture.taskArtifactHash, lease: fixture.lease });
+  assert.equal(focused.resultContract.executable, false);
+  assert.deepEqual(focused.resultContract.testEvidencePaths, fixture.taskArtifact.implementationPlan.tests);
+  const plan = admittedFiniteTaskCommandRule({ contractCommand: "assurance:plan", featureId: fixture.taskArtifact.primaryDomain, engineeringAuthority, taskArtifact: fixture.taskArtifact, taskArtifactHash: fixture.taskArtifactHash, lease: fixture.lease });
+  assert.deepEqual(plan.args, ["scripts/assurance/plan.mjs", "--feature=auth-session-password-recovery"]);
+  const mismatchedLease = structuredClone(fixture.lease);
+  mismatchedLease.artifactReservation.testEvidencePaths = ["tests/substituted.test.mjs"];
+  assert.equal(admittedFiniteTaskCommandRule({ contractCommand: "focused auth/RLS suite", featureId: fixture.taskArtifact.primaryDomain, engineeringAuthority, taskArtifact: fixture.taskArtifact, taskArtifactHash: fixture.taskArtifactHash, lease: mismatchedLease }), null);
+});
+
+test("active-task frozen artifact 03: artifact-byte substitution fails closed", () => {
+  const fixture = admittedWave1ArtifactFixture();
+  const result = evaluateAdmittedFiniteTaskArtifactV2(fixture.taskArtifact, { taskArtifactBytes: fixture.taskArtifactBytes, taskArtifactHash: "0".repeat(64), implementationIdentity: fixture.implementationIdentity, authoritativeLease: fixture.lease, ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority, actualScope: fixture.actualScope });
+  assert.equal(result.clear, false);
+});
+
+test("active-task frozen artifact 04: missing immutable Owner jurisdiction authority fails closed", () => {
+  const fixture = admittedWave1ArtifactFixture();
+  const result = evaluateAdmittedFiniteTaskArtifactV2(fixture.taskArtifact, { taskArtifactBytes: fixture.taskArtifactBytes, taskArtifactHash: fixture.taskArtifactHash, implementationIdentity: fixture.implementationIdentity, authoritativeLease: fixture.lease, ownerJurisdictionAuthority: null, actualScope: fixture.actualScope });
+  assert.equal(result.clear, false);
+});
+
+test("active-task frozen artifact 05: full wrappers and legacy direct packets stay on distinct evaluator paths", () => {
+  const source = fs.readFileSync("scripts/assurance/active-task.mjs", "utf8");
+  assert.match(source, /admittedFiniteTaskArtifact[\s\S]+evaluateAdmittedFiniteTaskArtifactV2\(admittedFiniteTaskArtifact/u);
+  assert.match(source, /PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED/u);
+  assert.match(source, /else \{[\s\S]+evaluatePreimplementationGate\(effectivePacket/u);
+  const fixture = admittedWave1ArtifactFixture();
+  const args = {
+    doctrineTruth: { status: "ACTIVE" },
+    featureId: fixture.taskArtifact.primaryDomain,
+    phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    lease: fixture.lease,
+    certificate: fixture.taskArtifact.certificate,
+    branch: fixture.lease.implementationBranch,
+    currentMain: fixture.implementationIdentity.currentProtectedMain,
+    currentHead: fixture.implementationIdentity.implementationHead,
+    implementationPr: fixture.lease.implementationPr,
+    scopeObservation: fixture.actualScope,
+    implementationIdentity: fixture.implementationIdentity,
+    ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority,
+  };
+  const unwrapped = validateEngineeringTaskAuthority({ ...args, closurePacket: fixture.taskArtifact.closure });
+  assert.equal(unwrapped.ok, false);
+  assert.ok(unwrapped.findings.includes("PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"));
+  const hybrid = structuredClone(fixture.taskArtifact);
+  delete hybrid.closure.sections;
+  hybrid.sections = fixture.taskArtifact.closure.sections;
+  const partial = validateEngineeringTaskAuthority({ ...args, closurePacket: hybrid });
+  assert.equal(partial.ok, false);
+  assert.ok(partial.findings.includes("PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"));
+});
+
+test("active-task frozen artifact 06: frozen edge evidence is reverified at the immutable planning snapshot", () => {
+  const fixture = admittedWave1ArtifactFixture();
+  const temporaryParent = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "wave1-mutable-root-"));
+  const root = path.join(temporaryParent, "repository");
+  try {
+    assert.equal(spawnSync("git", ["clone", "--quiet", "--local", process.cwd(), root], { encoding: "utf8" }).status, 0);
+    fs.appendFileSync(path.join(root, "_lib/notifications.ts"), "\n// temporary authorized implementation mutation\n");
+    const result = evaluateAdmittedFiniteTaskArtifactV2(fixture.taskArtifact, { root, taskArtifactBytes: fixture.taskArtifactBytes, taskArtifactHash: fixture.taskArtifactHash, implementationIdentity: fixture.implementationIdentity, authoritativeLease: fixture.lease, ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority, actualScope: fixture.actualScope });
+    assert.equal(result.clear, true, JSON.stringify(result));
+  } finally {
+    fs.rmSync(temporaryParent, { recursive: true, force: true });
+  }
+});
+
+const coordinatedAdmittedWave1Mutation = (mutate, commentId) => {
+  const base = admittedWave1ArtifactFixture();
+  const taskArtifact = structuredClone(base.taskArtifact);
+  mutate(taskArtifact);
+  const domainIds = [...taskArtifact.closure.affectedDomainClosure.domains].sort();
+  const packetFacts = Object.fromEntries(Object.entries(taskArtifact.closure.sections).filter(([key]) => key !== "L_COMPLETENESS_CERTIFICATE"));
+  taskArtifact.certificate.packetFactsHash = hashValue(packetFacts);
+  const certificateBody = { ...taskArtifact.certificate }; delete certificateBody.certificateHash;
+  taskArtifact.certificate.certificateHash = hashValue(certificateBody);
+  taskArtifact.closure.sections.L_COMPLETENESS_CERTIFICATE = structuredClone(taskArtifact.certificate);
+  const closureBody = { ...taskArtifact.closure }; delete closureBody.packetHash;
+  taskArtifact.closure.packetHash = hashValue(closureBody);
+  const taskArtifactBytes = Buffer.from(`${JSON.stringify(taskArtifact)}\n`);
+  const taskArtifactHash = digest(taskArtifactBytes);
+  const taskEvidence = finiteTaskJurisdictionEvidenceV2(taskArtifact, taskArtifactHash);
+  const lease = structuredClone(base.lease);
+  lease.artifactReservation.allowedDomains = domainIds;
+  lease.closure = { artifactHash: taskEvidence.taskArtifactHash, packetHash: taskEvidence.closurePacketHash, certificateHash: taskEvidence.completenessCertificateHash, edgeClosureHash: taskEvidence.taskLocalEdgeClosureHash, edgeEvidenceHash: taskEvidence.taskLocalEdgeEvidenceHash, modelDeltaHash: taskEvidence.taskLocalModelHash };
+  const taskIdentity = structuredClone(base.ownerJurisdictionAuthority.taskBinding.taskIdentity);
+  const scope = structuredClone(base.ownerJurisdictionAuthority.taskBinding.scope);
+  const rendered = preflightOwnerJurisdictionDecisionV2({ domainApplications: domainIds.map((domainId) => ({ decision: `Exact test application for ${domainId}.`, domainId, jurisdictionDecisionOwner: "Chillywood2025", market: "UNITED_STATES_ONLY", minimumCreatorAge: null })), domainIds, owner: { association: "OWNER", login: "Chillywood2025" }, registry, scope, taskEvidence, taskIdentity });
+  assert.equal(rendered.ok, true, rendered.findings?.join(","));
+  const raw = { id: commentId, node_id: `IC_admitted_wave1_mutation_${commentId}`, user: { login: "Chillywood2025" }, author_association: "OWNER", body: rendered.body, created_at: "2026-08-14T20:02:00Z", updated_at: "2026-08-14T20:02:00Z", issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${lease.implementationPr}`, html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${lease.implementationPr}#issuecomment-${commentId}` };
+  const ownerJurisdictionAuthority = verifyOwnerJurisdictionAuthorityV2({ raw, policyRaws: [raw], paginationComplete: true, repository: scope.repository, pr: lease.implementationPr, registry, expected: { ...scope, domainIds, ownerLogin: "Chillywood2025", task: lease.leaseId }, expectedTaskIdentity: taskIdentity, expectedTaskEvidence: taskEvidence });
+  assert.equal(ownerJurisdictionAuthority.ok, true, ownerJurisdictionAuthority.findings?.join(","));
+  const original = base.implementationIdentity;
+  const implementationIdentity = createImplementationIdentityObservation({ repository: original.repository, workflowPr: original.implementationPr, implementationPr: original.implementationPr, implementationBranch: original.implementationBranch, implementationHead: original.implementationHead, implementationTree: original.implementationTree, originalSeedHead: original.originalSeedHead, originalSeedTree: original.originalSeedTree, protectedBase: original.protectedBase, currentProtectedMain: original.currentProtectedMain, finiteLeaseId: original.finiteLeaseId, taskArtifactPath: original.taskArtifactPath, taskArtifactHash, implementationChangedPaths: original.implementationChangedPaths, seedIsAncestor: true, protectedBaseIsAncestor: true, ownerApprovalValid: true, artifactFrozen: true, prospectiveLeasePresent: true, admissionMerged: true });
+  assert.equal(implementationIdentity.candidateEligible, true);
+  return evaluateAdmittedFiniteTaskArtifactV2(taskArtifact, { taskArtifactBytes, taskArtifactHash, implementationIdentity, authoritativeLease: lease, ownerJurisdictionAuthority, actualScope: base.actualScope });
+};
+
+test("active-task frozen artifact 07: exact task domains cannot exceed the frozen edge-closure domains", () => {
+  const result = coordinatedAdmittedWave1Mutation((taskArtifact) => {
+    const domains = [...taskArtifact.closure.affectedDomainClosure.domains, "chilly-chat-call-lifecycle"].sort();
+    taskArtifact.closure.affectedDomainClosure.domains = domains;
+    taskArtifact.closure.sections.C_AFFECTED_DOMAIN_CLOSURE.includedDependencies = domains.filter((domain) => domain !== taskArtifact.primaryDomain);
+  }, 799102);
+  assert.equal(result.clear, false);
+  assert.ok(result.findings.includes("PREIMPLEMENTATION_TASK_LOCAL_EDGE_CLOSURE_INCOMPLETE"));
+});
+
+test("active-task frozen artifact 08: packet edge summaries cannot contradict independently verified edge evidence", () => {
+  const result = coordinatedAdmittedWave1Mutation((taskArtifact) => {
+    taskArtifact.closure.sections.C_AFFECTED_DOMAIN_CLOSURE.taskLocalGoverningEdgeClosure.classification = "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED";
+  }, 799103);
+  assert.equal(result.clear, false);
+  assert.ok(result.findings.includes("PREIMPLEMENTATION_TASK_LOCAL_EDGE_CLOSURE_INCOMPLETE"));
 });
