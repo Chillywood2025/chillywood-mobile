@@ -23,6 +23,7 @@ import {
   verifyProviderImplementationSnapshot,
   validateFiniteTaskLeaseRegistry,
   validateEngineeringDoctrineTruth,
+  validateOwnerJurisdictionPolicyTruth,
   validateProofTierStatuses,
   validateTerminalTaskEvidence
 } from "./lib.mjs";
@@ -241,6 +242,7 @@ if (mode) {
   const runtimeFindings = finiteTaskRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const protectedMainFindings = protectedMainRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const engineeringDoctrineFindings = validateEngineeringDoctrineTruth(record, currentTruthContract, { currentMain: remoteMain, implementationMerged: remoteMain !== "8bf6459c3ae1cec62e26a1694f03063e4291b9f8", protectedMainRuntime });
+  const ownerJurisdictionPolicyFindings = validateOwnerJurisdictionPolicyTruth(record, currentTruthContract);
   const taskContextArchitectureFindings = [];
   if (record.engineeringDoctrine?.status === "ACTIVE") {
     const architecture = record.taskContextArchitecture;
@@ -275,7 +277,7 @@ if (mode) {
       || Object.values(architecture.authority).some((value) => value !== false)
       || !mergeAncestor) taskContextArchitectureFindings.push({ id: "ASSURANCE_TYPED_TASK_CONTEXT_TERMINAL_TRUTH_INVALID", status: "BLOCKED_INTERNAL" });
   }
-  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
+  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...ownerJurisdictionPolicyFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({
