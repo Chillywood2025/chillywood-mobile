@@ -1752,6 +1752,16 @@ export const PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER = "<!-- chillywood-pre-ad
 export const ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER = "<!-- chillywood-assurance-architecture-final-source-correction-v1 -->";
 export const TERMINAL_TRUTH_SUCCESSOR_MARKER = "<!-- chillywood-terminal-truth-successor-v1 -->";
 export const FINITE_TASK_ADMISSION_MARKER = "<!-- chillywood-finite-task-admission-v1 -->";
+export const AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2 = "AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2";
+export const AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2_CUTOVER = Object.freeze({
+  firstRequiredPullRequest: 237,
+  lastLegacyPullRequest: 236,
+  mergeSha: "928a9734f5bda16c90bb4fc95cb96e81ae9dd131",
+  mergeTree: "52e2343ecf44cca964fa63126411d51d91e055d8",
+});
+const AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH = "config/assurance/current-truth-v1.json";
+const AUTHORITY_CONTROL_CURRENT_STATE_PATH = "CURRENT_STATE.md";
+const AUTHORITY_CONTROL_NEXT_TASK_PATH = "NEXT_TASK.md";
 export const TYPED_CONTEXT_ARCHITECTURE_PATHS = Object.freeze([
   "config/assurance/pr-scope-policy-v1.json",
   "scripts/assurance/current-truth.mjs",
@@ -1844,6 +1854,52 @@ const exactScope = (scope) => ({
   changedPathHash: hashValue([...new Set(scope?.files ?? scope?.changedPaths ?? scope?.paths ?? [])].sort()),
   netChangedLines: Math.max(0, Number(scope?.netChangedLines ?? scope?.handAuthoredLines ?? scope?.changedLines ?? 0)),
 });
+
+const authorityControlCurrentTruthCompanionV2Required = ({ identity, root = REPOSITORY_ROOT } = {}) => {
+  void root;
+  if (identity?.repository !== "Chillywood2025/chillywood-mobile") return false;
+  const pullRequest = Number(identity?.pr);
+  return Number.isSafeInteger(pullRequest)
+    && pullRequest >= AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2_CUTOVER.firstRequiredPullRequest;
+};
+
+export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOSITORY_ROOT } = {}) {
+  if (!authorityControlCurrentTruthCompanionV2Required({ identity, root })) return null;
+  const recordBytes = fs.readFileSync(path.join(root, AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH));
+  const currentStateBytes = fs.readFileSync(path.join(root, AUTHORITY_CONTROL_CURRENT_STATE_PATH));
+  const nextTaskBytes = fs.readFileSync(path.join(root, AUTHORITY_CONTROL_NEXT_TASK_PATH));
+  const record = JSON.parse(recordBytes.toString("utf8"));
+  const baseTreeRun = spawnSync("git", ["rev-parse", `${identity.baseSha}^{tree}`], { cwd: root, encoding: "utf8", shell: false });
+  const baseTree = baseTreeRun.status === 0 ? baseTreeRun.stdout.trim() : null;
+  if (record?.mainSha !== identity.baseSha
+    || record?.protectedMainAuthority?.checkpointSha !== identity.baseSha
+    || record?.protectedMainAuthority?.checkpointTree !== baseTree
+    || currentStateBytes.toString("utf8") !== renderCurrentState(record)
+    || nextTaskBytes.toString("utf8") !== renderNextTask(record)) {
+    throw new Error("AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_INVALID");
+  }
+  const value = {
+    schemaVersion: 2,
+    contractId: AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2,
+    hashDomain: "CHILLYWOOD_ASSURANCE_AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2",
+    cutover: { ...AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2_CUTOVER },
+    requiredChangedPaths: [AUTHORITY_CONTROL_CURRENT_STATE_PATH, AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH].sort(),
+    currentTruth: {
+      path: AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH,
+      sha256: shaBytes(recordBytes),
+      mainSha: record.mainSha,
+      checkpointSha: record.protectedMainAuthority.checkpointSha,
+      checkpointTree: record.protectedMainAuthority.checkpointTree,
+    },
+    generatedDocuments: [
+      { path: AUTHORITY_CONTROL_CURRENT_STATE_PATH, sha256: shaBytes(currentStateBytes) },
+      { path: AUTHORITY_CONTROL_NEXT_TASK_PATH, sha256: shaBytes(nextTaskBytes) },
+    ],
+    bindingMode: "EMBEDDED_ROLLING_PROTECTED_MAIN_AUTHORITY",
+    authority: { product: false, provider: false, database: false, build: false, submission: false, ota: false, publicRelease: false },
+  };
+  return Object.freeze({ ...value, companionHash: hashValue({ hashDomain: value.hashDomain, value }) });
+}
 
 export const PHASE1_REQUIRED_JOB_NAMES = Object.freeze([
   "Phase 1 / Android Regression Guards",
@@ -1965,8 +2021,9 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {})
   return { ...body, valid, evidenceHash: hashValue(body) };
 }
 
-export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1" } = {}) {
+export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1", root = REPOSITORY_ROOT } = {}) {
   const observed = exactScope(scope);
+  const currentTruthCompanion = authorityControlCurrentTruthCompanionV2({ identity, root });
   if (profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2") return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
     classification: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -2000,6 +2057,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     createdAtEqualsUpdatedAtRequired: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
     reusableByAnotherPr: true,
+    ...(currentTruthCompanion ? { currentTruthCompanion } : {}),
   };
   if (profile === "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1") return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -2032,6 +2090,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     createdAtEqualsUpdatedAtRequired: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
     reusableByAnotherPr: true,
+    ...(currentTruthCompanion ? { currentTruthCompanion } : {}),
   };
   if (profile === "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1") return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -2064,6 +2123,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     createdAtEqualsUpdatedAtRequired: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
     reusableByAnotherPr: true,
+    ...(currentTruthCompanion ? { currentTruthCompanion } : {}),
   };
   if (profile === "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1") return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -2094,6 +2154,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     createdAtEqualsUpdatedAtRequired: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
     reusableByAnotherPr: true,
+    ...(currentTruthCompanion ? { currentTruthCompanion } : {}),
   };
   return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -2121,6 +2182,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     createdAtEqualsUpdatedAtRequired: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
     reusableByAnotherPr: false,
+    ...(currentTruthCompanion ? { currentTruthCompanion } : {}),
   };
 }
 export const architectureMaintenanceOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_MARKER, subject.type, subject);
@@ -2231,6 +2293,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       } : null,
       historicalAttestations,
       currentTruthCompanionIncluded: true,
+      ...(originalSubject.currentTruthCompanion ? { currentTruthCompanion: originalSubject.currentTruthCompanion } : {}),
       terminalTruthRequired: false,
       authority: originalSubject.authority,
       ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
@@ -2266,6 +2329,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       objective: originalSubject.objective,
       capabilities: originalSubject.capabilities,
       currentTruthCompanionIncluded: true,
+      ...(originalSubject.currentTruthCompanion ? { currentTruthCompanion: originalSubject.currentTruthCompanion } : {}),
       terminalTruthRequired: false,
       authority: originalSubject.authority,
       ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
@@ -2904,6 +2968,37 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const finalSourceCorrectionMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER}\n`));
   const repositoryReviewMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_REPOSITORY_REVIEW_MARKER}\n`));
   const observed = exactScope(scope);
+  const companionRequired = authorityControlCurrentTruthCompanionV2Required({ identity, root });
+  let expectedCompanion = null;
+  try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root }); } catch { expectedCompanion = null; }
+  const subjectHasCompanion = Object.hasOwn(originalSubject ?? {}, "currentTruthCompanion");
+  const requiredCompanionPaths = expectedCompanion?.requiredChangedPaths ?? [];
+  const companionValid = companionRequired
+    ? Boolean(expectedCompanion
+      && stableJson(originalSubject?.currentTruthCompanion) === stableJson(expectedCompanion)
+      && requiredCompanionPaths.every((file) => observed.changedPaths.includes(file) && originalSubject?.changedPaths?.includes(file)))
+    : !subjectHasCompanion;
+  if (!companionValid) return {
+    ok: false,
+    authorizationOk: false,
+    mergeEligible: false,
+    type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE",
+    repository: identity?.repository,
+    pr: identity?.pr,
+    branch: identity?.branch,
+    currentHead: identity?.headSha,
+    currentTree: tree,
+    featureId: "assurance-efficiency-e0",
+    objectiveDomains: [],
+    supportingDomains: ["CI-test-infrastructure"],
+    authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
+    bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`,
+    commentId: normalizedOriginal?.id ?? null,
+    originalCommentId: normalizedOriginal?.id ?? null,
+    checks: { currentTruthCompanion: false },
+    findings: ["OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:currentTruthCompanion"],
+    mergeFindings: ["OWNER_ASSURANCE_ARCHITECTURE_MERGE_INELIGIBLE:currentTruthCompanion"],
+  };
   if ([
     "install generic source-grounded task-local governing-edge closure for pre-admission engineering packets",
     "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
@@ -2963,6 +3058,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       tree: originalSubject?.currentTree,
       scope: { files: originalSubject?.changedPaths, additions: originalSubject?.additions, deletions: originalSubject?.deletions, netChangedLines: originalSubject?.netChangedLines },
       profile: jurisdictionModel ? "OWNER_JURISDICTION_CANONICAL_MODEL_V2" : "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
+      root,
     });
     const canonicalProfile = stableJson(originalSubject) === stableJson(canonicalOriginalSubject);
     const assuranceOnlyNonDomainMaintenance = canonicalProfile
@@ -2973,6 +3069,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       && Object.values(originalSubject?.authority ?? {}).every((value) => value === false);
     const authorizationChecks = {
       identity: Boolean(normalizedOriginal),
+      currentTruthCompanion: companionValid,
       body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
       binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === identity?.baseSha && originalSubject?.budget?.maximumFiles === maximumFiles && originalSubject?.budget?.maximumNetLines === maximumNetLines,
@@ -3044,7 +3141,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const currentFinals = finalReceipts.filter(({ current }) => current);
     const expected = descendant
       ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, root })
-      : architectureMaintenanceSubject({ identity, tree, scope, profile: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1" });
+      : architectureMaintenanceSubject({ identity, tree, scope, profile: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1", root });
     const currentFinal = currentFinals[0];
     const ancestry = ancestryVerified ?? (originalSubject?.currentHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.currentHead, identity?.headSha]).status === 0);
     const checks = {
@@ -3119,7 +3216,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const finalPayload = currentFinals[0]?.payload ?? null;
     const expected = descendant
       ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, dependencyAmendmentRaw: amendmentRaw, historicalRejectedRaws: rejectedRaws, finalSourceCorrectionRaw: correctionRaw, dependencyEvidence: finalPayload?.subject?.dependencyEvidence, root })
-      : architectureMaintenanceSubject({ identity, tree, scope, profile: "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1" });
+      : architectureMaintenanceSubject({ identity, tree, scope, profile: "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1", root });
     const dependency = finalPayload?.subject?.dependencyEvidence;
     const fixedAddedPaths = ["package-lock.json", "package.json", "scripts/test-brace-expansion-compat.mjs"];
     const amendmentAuthority = !amended || (dependencyAmendmentMatches.length === 1
@@ -3249,7 +3346,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   });
   const currentFinals = finalReceipts.filter(({ status }) => status === "CURRENT_CANONICAL");
   const currentReceiptValid = !descendant || currentFinals.length === 1;
-  const subject = descendant ? currentFinals[0]?.payload?.subject : architectureMaintenanceSubject({ identity, tree, scope });
+  const subject = descendant ? currentFinals[0]?.payload?.subject : architectureMaintenanceSubject({ identity, tree, scope, root });
   const ancestry = ancestryVerified ?? (originalSubject?.currentHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.currentHead, identity?.headSha]).status === 0);
   const originalPayloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
   const checks = {

@@ -620,7 +620,7 @@ test("task-local edge 45 all thirteen Phase 1 checks remain required", () => { c
 test("task-local edge 46 provider Codex Review remains optional advisory", () => assert.match(stableJson(json("config/assurance/current-truth-v1.json")), /OPTIONAL_ADVISORY/u));
 const taskLocalArchitectureComment = ({ id, pr, body }) => ({ id, node_id: `IC_task_local_${id}`, user: { login: "Chillywood2025" }, author_association: "OWNER", body, created_at: "2026-08-14T01:00:00Z", updated_at: "2026-08-14T01:00:00Z", issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${pr}`, html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${pr}#issuecomment-${id}` });
 test("task-local architecture maintenance authority accepts the exact reusable profile", () => {
-  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 301, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
   const tree = "c".repeat(40);
   const scope = { files: ["scripts/assurance/engineering-closure.mjs"], additions: 10, deletions: 1, netChangedLines: 9 };
   const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1" });
@@ -629,7 +629,7 @@ test("task-local architecture maintenance authority accepts the exact reusable p
   assert.equal(result.ok, true);
 });
 test("Owner jurisdiction architecture maintenance uses the one bounded assurance-only route", () => {
-  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 302, branch: "codex/owner-jurisdiction-canonical-model-v1", headSha: "d".repeat(40), baseSha: "e".repeat(40) };
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 234, branch: "codex/owner-jurisdiction-canonical-model-v1", headSha: "d".repeat(40), baseSha: "e".repeat(40) };
   const tree = "f".repeat(40);
   const scope = { files: ["scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "tests/assurance/jurisdiction-policy.test.mjs"], additions: 1200, deletions: 20, netChangedLines: 1180 };
   const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2" });
@@ -642,7 +642,7 @@ test("Owner jurisdiction architecture maintenance uses the one bounded assurance
 });
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];
-  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 301, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
   const originalTree = "c".repeat(40);
   const originalScope = { files: paths, additions: 10, deletions: 1, netChangedLines: 9, diffHash: "1".repeat(64) };
   const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1" });
@@ -697,9 +697,9 @@ test("receipt lifecycle V2 regression matrix 35/35", async (t) => {
     ["19 source change invalidates final attestation", () => { const f = receiptLifecycleFixture(); const identity = { ...f.identity, headSha: "9".repeat(40) }; const r = f.evaluate({ identity, ancestryVerified: true }); assert.equal(r.mergeEligible, false); }],
     ["20 source change does not revoke Owner authorization", () => { const f = receiptLifecycleFixture(); const identity = { ...f.identity, headSha: "9".repeat(40) }; assert.equal(f.evaluate({ identity, ancestryVerified: true }).authorizationOk, true); }],
     ["21 historical stale attestations do not block current", () => assert.equal(receiptLifecycleFixture().evaluate().mergeEligible, true)],
-    ["22 historical malformed attestations do not block current", () => { const malformed = taskLocalArchitectureComment({ id: 700006, pr: 301, body: `${ARCHITECTURE_FINAL_SOURCE_MARKER}\n{}` }); const f = receiptLifecycleFixture({ extraHistorical: [malformed] }); assert.equal(f.evaluate().mergeEligible, true); }],
+    ["22 historical malformed attestations do not block current", () => { const malformed = taskLocalArchitectureComment({ id: 700006, pr: 230, body: `${ARCHITECTURE_FINAL_SOURCE_MARKER}\n{}` }); const f = receiptLifecycleFixture({ extraHistorical: [malformed] }); assert.equal(f.evaluate().mergeEligible, true); }],
     ["23 GitHub comment order does not affect selection", () => { const f = receiptLifecycleFixture(); assert.equal(f.evaluate({ allComments: [...f.comments].reverse() }).currentFinalSourceReceiptId, f.final.id); }],
-    ["24 two current attestations fail", () => { const f = receiptLifecycleFixture(); const duplicate = { ...f.final, id: 700007, node_id: "IC_duplicate_700007", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/301#issuecomment-700007" }; assert.equal(f.evaluate({ allComments: [...f.comments, duplicate] }).mergeEligible, false); }],
+    ["24 two current attestations fail", () => { const f = receiptLifecycleFixture(); const duplicate = { ...f.final, id: 700007, node_id: "IC_duplicate_700007", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/230#issuecomment-700007" }; assert.equal(f.evaluate({ allComments: [...f.comments, duplicate] }).mergeEligible, false); }],
     ["25 evidence-only correction requires no source commit", () => { const f = receiptLifecycleFixture(); assert.equal(f.final.body.includes(f.identity.headSha), true); assert.equal(f.evaluate().mergeEligible, true); }],
     ["26 evidence-only correction requires no new authorization", () => { const f = receiptLifecycleFixture(); assert.equal(f.comments.filter(({ body }) => body.startsWith("<!-- chillywood-assurance-architecture-maintenance-v1 -->")).length, 1); }],
     ["27 merge eligibility fails without final attestation", () => { const f = receiptLifecycleFixture(); assert.equal(f.evaluate({ allComments: [f.original, f.review] }).mergeEligible, false); }],

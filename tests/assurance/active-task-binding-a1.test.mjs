@@ -54,7 +54,7 @@ import {
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -374,7 +374,7 @@ test("active-task jurisdiction 11: active-task consumes a nonembedded inherited 
 });
 
 const activeTaskCorrectionMaintenanceFixture = (mutate = () => {}) => {
-  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 399, branch: "codex/wave1-active-task-frozen-model-correction-v1", headSha: "7".repeat(40), baseSha: "8".repeat(40) };
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch: "codex/wave1-active-task-frozen-model-correction-v1", headSha: "7".repeat(40), baseSha: "8".repeat(40) };
   const tree = "9".repeat(40);
   const scope = { files: ["scripts/assurance/active-task.mjs", "scripts/assurance/engineering-closure.mjs", "tests/assurance/active-task-binding-a1.test.mjs"], additions: 120, deletions: 8, netChangedLines: 112 };
   const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2" });
@@ -415,6 +415,111 @@ test("active-task correction maintenance 04: only the exact canonical closed-aut
     const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false });
     assert.equal(result.ok, false);
   }
+});
+
+const currentTruthCompanionV2Fixture = ({ files, mutateSubject = () => {} } = {}) => {
+  const identity = {
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: 400,
+    branch: "codex/authority-control-current-truth-companion-v2",
+    headSha: "a".repeat(40),
+    baseSha: "928a9734f5bda16c90bb4fc95cb96e81ae9dd131",
+  };
+  const tree = "b".repeat(40);
+  const scope = {
+    files: files ?? [
+      "CURRENT_STATE.md",
+      "config/assurance/current-truth-v1.json",
+      "scripts/assurance/engineering-closure.mjs",
+      "tests/assurance/active-task-binding-a1.test.mjs",
+    ],
+    additions: 160,
+    deletions: 12,
+    netChangedLines: 148,
+    diffHash: "c".repeat(64),
+  };
+  const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2" });
+  mutateSubject(subject);
+  const body = architectureMaintenanceOwnerCommentBody(subject);
+  const raw = {
+    id: 800001,
+    node_id: "IC_authority_companion_v2",
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    body,
+    created_at: "2026-08-14T22:00:00Z",
+    updated_at: "2026-08-14T22:00:00Z",
+    issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${identity.pr}`,
+    html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${identity.pr}#issuecomment-800001`,
+  };
+  return { identity, tree, scope, subject, raw };
+};
+
+test("active-task correction maintenance 05: legacy V1 receipts retain their original no-companion semantics", () => {
+  const fixture = activeTaskCorrectionMaintenanceFixture();
+  assert.equal(JSON.parse(fixture.raw.body.split("\n")[1]).subject.currentTruthCompanion, undefined);
+  const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false });
+  assert.equal(result.ok, true, result.findings?.join(","));
+});
+
+test("active-task correction maintenance 06: post-cutover authority maintenance binds the exact V2 current-truth companion", () => {
+  const fixture = currentTruthCompanionV2Fixture();
+  assert.equal(fixture.subject.currentTruthCompanion.contractId, AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2);
+  assert.deepEqual(fixture.subject.currentTruthCompanion.requiredChangedPaths, ["CURRENT_STATE.md", "config/assurance/current-truth-v1.json"]);
+  assert.equal(fixture.subject.currentTruthCompanion.currentTruth.checkpointSha, fixture.identity.baseSha);
+  const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false });
+  assert.equal(result.ok, true, result.findings?.join(","));
+  assert.equal(result.checks.currentTruthCompanion, true);
+});
+
+test("active-task correction maintenance 07: a post-cutover missing or substituted companion fails closed", () => {
+  const omitted = currentTruthCompanionV2Fixture({ files: ["CURRENT_STATE.md", "scripts/assurance/engineering-closure.mjs", "tests/assurance/active-task-binding-a1.test.mjs"] });
+  assert.deepEqual(
+    verifyArchitectureMaintenanceAuthority({ ...omitted, allComments: [omitted.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false }).findings,
+    ["OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:currentTruthCompanion"],
+  );
+  const substituted = currentTruthCompanionV2Fixture({ mutateSubject: (subject) => { subject.currentTruthCompanion.currentTruth.sha256 = "0".repeat(64); } });
+  assert.deepEqual(
+    verifyArchitectureMaintenanceAuthority({ ...substituted, allComments: [substituted.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false }).findings,
+    ["OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:currentTruthCompanion"],
+  );
+  assert.throws(() => architectureMaintenanceSubject({
+    identity: { ...omitted.identity, pr: 237, baseSha: "f".repeat(40) },
+    tree: omitted.tree,
+    scope: omitted.scope,
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+  }), /AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_INVALID/u);
+});
+
+test("active-task correction maintenance 08: final-source lifecycle carries the exact V2 companion", () => {
+  const fixture = currentTruthCompanionV2Fixture();
+  const reviewSubject = architectureRepositoryReviewSubject(fixture);
+  const reviewRaw = {
+    ...fixture.raw,
+    id: 800002,
+    node_id: "IC_authority_companion_review",
+    body: architectureRepositoryReviewCommentBody(reviewSubject),
+    html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${fixture.identity.pr}#issuecomment-800002`,
+  };
+  const phase1Evidence = { runId: 400001, runAttempt: 1, sourceHead: fixture.identity.headSha, sourceTree: fixture.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13", evidenceHash: "d".repeat(64), valid: true };
+  const finalSubject = architectureFinalSourceSubject({ ...fixture, originalRaw: fixture.raw, repositoryReviewRaw: reviewRaw, phase1Evidence });
+  assert.deepEqual(finalSubject.currentTruthCompanion, fixture.subject.currentTruthCompanion);
+  const finalRaw = {
+    ...fixture.raw,
+    id: 800003,
+    node_id: "IC_authority_companion_final",
+    body: architectureFinalSourceOwnerCommentBody(finalSubject),
+    html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${fixture.identity.pr}#issuecomment-800003`,
+  };
+  const result = verifyArchitectureMaintenanceAuthority({
+    ...fixture,
+    allComments: [fixture.raw, reviewRaw, finalRaw],
+    paginationComplete: true,
+    ancestryVerified: true,
+    noCompetingDomainOwner: false,
+    phase1EvidenceResolver: () => phase1Evidence,
+  });
+  assert.equal(result.mergeEligible, true, [...(result.findings ?? []), ...(result.mergeFindings ?? [])].join(","));
 });
 const e0CompletionFacts = [
   "repository.assurance-control.a1.requirements",
