@@ -1465,6 +1465,23 @@ export const PRE_ADMISSION_ARCHITECTURE_PATHS = Object.freeze([
   "tests/assurance/engineering-doctrine.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
+export const ADMISSION_CLEARANCE_ARCHITECTURE_PATHS = Object.freeze([
+  "CURRENT_STATE.md",
+  "NEXT_TASK.md",
+  "config/assurance/current-truth-contract-v1.json",
+  "config/assurance/current-truth-v1.json",
+  "config/assurance/schemas-v1.json",
+  "scripts/assurance/active-task.mjs",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
+  "scripts/assurance/pr-scope-lib.mjs",
+  "scripts/assurance/pr-scope.mjs",
+  "scripts/assurance/current-truth.mjs",
+  "tests/assurance/active-task-binding-a1.test.mjs",
+  "tests/assurance/engineering-doctrine.test.mjs",
+  "tests/assurance/pr-scope-feature-bundles.test.mjs",
+  "tests/assurance/current-truth-sync.test.mjs",
+]);
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 const TYPED_CONTEXT_DOCTRINE_MERGE = "c1f9ec1f71cc8bc4448afd2327c4341cac309573";
 const TYPED_CONTEXT_NEXT_TASK = "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE";
@@ -1484,6 +1501,38 @@ const exactScope = (scope) => ({
 
 export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1" } = {}) {
   const observed = exactScope(scope);
+  if (profile === "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1") return {
+    type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
+    classification: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
+    repository: identity?.repository,
+    pr: identity?.pr,
+    branch: identity?.branch,
+    protectedBase: identity?.baseSha,
+    currentHead: identity?.headSha,
+    currentTree: tree,
+    changedPaths: observed.changedPaths,
+    changedPathHash: observed.changedPathHash,
+    additions: Number(scope?.additions ?? 0),
+    deletions: Number(scope?.deletions ?? 0),
+    netChangedLines: observed.netChangedLines,
+    budget: { maximumFiles: 15, maximumNetLines: 3500 },
+    featureId: "assurance-efficiency-e0",
+    objectiveDomains: [],
+    supportingDomains: ["CI-test-infrastructure"],
+    objective: "remove the finite-task admission-to-clearance state cycle and make admission prospectively grant computed preimplementation clearance",
+    capabilities: ["FINITE_TASK_ADMISSION_TO_CLEARANCE_V1"],
+    relatedWave1Pr: 229,
+    relatedOwnerComment: 5285464582,
+    currentTruthCompanionIncluded: true,
+    terminalTruthRequired: false,
+    authorityLevel: "LEVEL_0_1_REPOSITORY_ARCHITECTURE_MAINTENANCE",
+    authority: { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+    immutableCommentRequired: true,
+    createdAtEqualsUpdatedAtRequired: true,
+    expiresOn: `PR_${identity?.pr}_MERGE`,
+    reusableByAnotherPr: true,
+  };
   if (profile === "PRE_ADMISSION_ENGINEERING_SEED_AND_ADMISSION_SUCCESSOR_V1") return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
     classification: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -1587,6 +1636,41 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject ?? {};
+  if (originalSubject.objective === "remove the finite-task admission-to-clearance state cycle and make admission prospectively grant computed preimplementation clearance") {
+    const observed = exactScope(scope);
+    return {
+      type: "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1",
+      repository: identity?.repository,
+      pr: identity?.pr,
+      branch: identity?.branch,
+      protectedBase: identity?.baseSha,
+      originalCommentId: original?.id,
+      originalSubjectHash: originalPayload?.subjectHash,
+      originalBodyHash: original?.bodyHash,
+      originalHead: originalSubject.currentHead,
+      originalTree: originalSubject.currentTree,
+      currentHead: identity?.headSha,
+      currentTree: tree,
+      finalHead: identity?.headSha,
+      finalTree: tree,
+      changedPaths: observed.changedPaths,
+      changedPathHash: observed.changedPathHash,
+      diffHash: scope?.diffHash ?? null,
+      additions: Number(scope?.additions ?? 0),
+      deletions: Number(scope?.deletions ?? 0),
+      netChangedLines: observed.netChangedLines,
+      budget: { maximumFiles: 15, maximumNetLines: 3500 },
+      objective: originalSubject.objective,
+      capabilities: originalSubject.capabilities,
+      currentTruthCompanionIncluded: true,
+      terminalTruthRequired: false,
+      authority: originalSubject.authority,
+      ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+      immutableCommentRequired: true,
+      createdAtEqualsUpdatedAtRequired: true,
+      expiresOn: `PR_${identity?.pr}_MERGE`,
+    };
+  }
   if (originalSubject.objective === "install governed pre-admission seed packets and generic finite-task admission successors") {
     const observed = exactScope(scope);
     const amendment = normalizeGitHubCommentIdentity(dependencyAmendmentRaw, { repository: identity?.repository, pr: identity?.pr, commentId: dependencyAmendmentRaw?.id });
@@ -1625,12 +1709,35 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
 }
 export const architectureFinalSourceOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_FINAL_SOURCE_MARKER, subject.type, subject);
 
+export function evaluateAdmissionClearanceState({ finiteLeasePresent = false, admissionMerged = false, artifactFrozen = false, computedGateFindings = [], persistedPhase } = {}) {
+  const findings = [...new Set(computedGateFindings ?? [])].sort();
+  const planningOnly = finiteLeasePresent !== true || admissionMerged !== true || artifactFrozen !== true || findings.length > 0;
+  return {
+    persistedPhase,
+    planningOnly,
+    classification: planningOnly
+      ? findings.length > 0 && finiteLeasePresent === true && admissionMerged === true && artifactFrozen === true
+        ? "BOUND_INCOMPLETE"
+        : "ENGINEERING_DISCOVERY_RESERVED"
+      : "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    productSourceMutationAllowed: !planningOnly,
+    findings,
+  };
+}
+
+export function deriveFiniteTaskRuntimeState({ preimplementationClear = false, changedPaths = [], taskArtifactPath } = {}) {
+  if (preimplementationClear !== true) return "ENGINEERING_DISCOVERY_RESERVED";
+  return [...new Set(changedPaths ?? [])].some((file) => file !== taskArtifactPath)
+    ? "IMPLEMENTATION"
+    : "PREIMPLEMENTATION_ENGINEERING_CLEAR";
+}
+
 export function finiteTaskAdmissionSubject({ identity, tree, scope, implementation, taskArtifact, taskArtifactHash } = {}) {
   const observed = exactScope(scope);
   const closure = taskArtifact?.closure;
   const certificate = taskArtifact?.certificate;
   return {
-    type: "FINITE_TASK_ADMISSION_SUCCESSOR_V1",
+    type: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1",
     repository: identity?.repository,
     pr: identity?.pr,
     admissionPr: identity?.pr,
@@ -1654,9 +1761,10 @@ export function finiteTaskAdmissionSubject({ identity, tree, scope, implementati
     featureId: taskArtifact?.primaryDomain,
     allowedDomains: closure?.affectedDomainClosure?.domains,
     allowedPaths: taskArtifact?.implementationPlan?.allowedPaths,
+    tests: taskArtifact?.implementationPlan?.tests,
     scope: { maximumFiles: 30, maximumHandAuthoredNetLines: 3600 },
     amendmentMaximum: { maximumFiles: 36, maximumHandAuthoredNetLines: 4500, maximumAmendments: 1 },
-    recursion: { admissionPrMaximum: 1, sourceBindingPrMaximum: 0, provenancePrMaximum: 0, terminalTruthPrMaximum: 1 },
+    recursion: { admissionPrMaximum: 1, postAdmissionClearancePrMaximum: 0, sourceBindingPrMaximum: 0, provenancePrMaximum: 0, terminalTruthPrMaximum: 1 },
     packageChanges: false,
     authority: { providerMutation: false, build: false, submission: false, ota: false, publicRelease: false },
     ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
@@ -1678,6 +1786,22 @@ export function evaluateFiniteTaskAdmissionSuccessor({ raw, allComments = [], pa
   const closure = taskArtifact?.closure;
   const certificate = taskArtifact?.certificate;
   const priorDuplicate = (priorTruth?.finiteTaskLeases?.tasks ?? []).some(({ implementationPr }) => implementationPr === implementation?.pr);
+  const competingTask = (priorTruth?.finiteTaskLeases?.tasks ?? []).some(({ implementationPr, taskState }) => implementationPr !== implementation?.pr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
+  const invariantEvidenceComplete = Array.isArray(taskArtifact?.invariants)
+    && taskArtifact.invariants.length >= 30
+    && taskArtifact.invariants.every((item) => typeof item?.id === "string" && typeof item?.positiveWitness === "string" && typeof item?.negativeWitness === "string" && typeof item?.targetedMutant === "string");
+  const prospectiveGateFindings = [
+    taskArtifact?.status === "DEFECT_LEDGER_STABLE" ? null : "PREIMPLEMENTATION_DEFECT_LEDGER_UNSTABLE",
+    taskArtifact?.authorizationStatus === "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED" ? null : "PREIMPLEMENTATION_SELF_AUTHORIZATION_REJECTED",
+    closure?.classification === "ENGINEERING_CLOSURE_PACKET_V1" && closure?.id === "ENGINEERING_CLOSURE_PACKET_V1" ? null : "PREIMPLEMENTATION_AFFECTED_DOMAIN_INCOMPLETE",
+    certificate?.classification === "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1" && certificate?.id === "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1" ? null : "PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE",
+    invariantEvidenceComplete ? null : "PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE",
+    Array.isArray(taskArtifact?.rootDefects) && taskArtifact.rootDefects.length === 6 ? null : "PREIMPLEMENTATION_DEFECT_LEDGER_UNSTABLE",
+    Array.isArray(taskArtifact?.implementationPlan?.allowedPaths) && taskArtifact.implementationPlan.allowedPaths.length > 0 ? null : "PREIMPLEMENTATION_SCOPE_UNBOUNDED",
+    Array.isArray(taskArtifact?.implementationPlan?.tests) && taskArtifact.implementationPlan.tests.length > 0 ? null : "PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE",
+    Array.isArray(taskArtifact?.mutants) && taskArtifact.mutants.length >= taskArtifact.invariants?.length ? null : "PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE",
+    taskArtifact?.rollback && taskArtifact?.cleanup && taskArtifact?.observability ? null : "PREIMPLEMENTATION_RECOVERY_INCOMPLETE",
+  ].filter(Boolean);
   const checks = {
     identity: identity?.baseRef === "main" && identity?.pr === expected.admissionPr && identity?.headSha === expected.admissionHead,
     exactScope: stableJson(exactPaths) === stableJson(TERMINAL_TRUTH_PATHS) && exactPaths.length === 3,
@@ -1688,14 +1812,16 @@ export function evaluateFiniteTaskAdmissionSuccessor({ raw, allComments = [], pa
     seed: seedIsAncestor && implementationBaseIsAncestor && /^[0-9a-f]{40}$/u.test(implementation?.seedHead ?? "") && /^[0-9a-f]{40}$/u.test(implementation?.seedTree ?? "") && implementation?.observedSeedTree === implementation?.seedTree,
     owner: ownerApproval?.id === implementation?.ownerCommentId && Boolean(ownerPayload?.subject) && ownerPayload.subjectHash === hashValue(ownerPayload.subject) && ownerPayload.subject.primaryFeature === taskArtifact?.primaryDomain && ownerPayload.subject.admittedSeed?.head === implementation?.seedHead,
     artifact: taskArtifact?.status === "DEFECT_LEDGER_STABLE" && taskArtifact?.authorizationStatus === "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED" && closure?.classification === "ENGINEERING_CLOSURE_PACKET_V1" && certificate?.classification === "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1" && /^[0-9a-f]{64}$/u.test(taskArtifactHash ?? "") && /^[0-9a-f]{64}$/u.test(closure?.packetHash ?? "") && /^[0-9a-f]{64}$/u.test(certificate?.certificateHash ?? ""),
-    frozenModel: Array.isArray(closure?.affectedDomainClosure?.domains) && closure.affectedDomainClosure.domains.length > 0 && Array.isArray(taskArtifact?.rootDefects) && taskArtifact.rootDefects.length === 6 && Array.isArray(taskArtifact?.stateTransitionModel?.states) && Array.isArray(taskArtifact?.stateTransitionModel?.transitions) && Array.isArray(taskArtifact?.invariants) && taskArtifact.invariants.length >= 30 && Array.isArray(taskArtifact?.implementationPlan?.allowedPaths) && taskArtifact.implementationPlan.allowedPaths.length > 0 && Array.isArray(taskArtifact?.implementationPlan?.tests) && Array.isArray(taskArtifact?.mutants) && taskArtifact?.rollback && taskArtifact?.cleanup && taskArtifact?.observability,
-    truthLease: lease.length === 1 && lease[0]?.implementationPr === implementation?.pr && lease[0]?.implementationBranch === implementation?.branch && lease[0]?.admittedSeedHead === implementation?.seedHead && lease[0]?.admittedSeedTree === implementation?.seedTree && lease[0]?.protectedAdmissionPr === identity?.pr && lease[0]?.taskState === "ACTIVE_IMPLEMENTATION" && stableJson(lease[0]?.allowedPaths) === stableJson(taskArtifact?.implementationPlan?.allowedPaths) && stableJson(lease[0]?.artifactReservation?.allowedDomains) === stableJson(closure?.affectedDomainClosure?.domains) && lease[0]?.scopeBudget?.maximumFiles === 30 && lease[0]?.scopeBudget?.maximumChangedLines === 3600,
-    truthBinding: active?.featureId === taskArtifact?.primaryDomain && active?.implementationPr === implementation?.pr && active?.implementationBranch === implementation?.branch && active?.immutableSourceHead === implementation?.seedHead && active?.immutableSourceTree === implementation?.seedTree && active?.currentImplementationHead === implementation?.planningHead && active?.currentImplementationTree === implementation?.planningTree && active?.phase === "DEFECT_LEDGER_STABLE" && active?.executionState === "PRE_RELEASE_WAVE_1_PREIMPLEMENTATION_ADMITTED",
-    authority: truthRecord?.preAdmissionEngineeringSeedCapability?.status === "ACTIVE" && truthRecord?.preAdmissionEngineeringSeedCapability?.productMutationAllowed === false && Object.values(expected.authority).every((value) => value === false) && expected.packageChanges === false,
+    frozenModel: prospectiveGateFindings.length === 0 && Array.isArray(closure?.affectedDomainClosure?.domains) && closure.affectedDomainClosure.domains.length > 0 && Array.isArray(taskArtifact?.stateTransitionModel?.states) && taskArtifact.stateTransitionModel.states.length > 0 && Array.isArray(taskArtifact?.stateTransitionModel?.transitions) && taskArtifact.stateTransitionModel.transitions.length > 0,
+    truthLease: lease.length === 1 && lease[0]?.implementationPr === implementation?.pr && lease[0]?.implementationBranch === implementation?.branch && lease[0]?.admittedSeedHead === implementation?.seedHead && lease[0]?.admittedSeedTree === implementation?.seedTree && lease[0]?.protectedAdmissionPr === identity?.pr && lease[0]?.taskState === "PREIMPLEMENTATION_ENGINEERING_CLEAR" && stableJson(lease[0]?.allowedPaths) === stableJson(taskArtifact?.implementationPlan?.allowedPaths) && stableJson(lease[0]?.artifactReservation?.allowedDomains) === stableJson(closure?.affectedDomainClosure?.domains) && lease[0]?.scopeBudget?.maximumFiles === 30 && lease[0]?.scopeBudget?.maximumChangedLines === 3600,
+    truthBinding: active?.featureId === taskArtifact?.primaryDomain && active?.implementationPr === implementation?.pr && active?.implementationBranch === implementation?.branch && active?.immutableSourceHead === implementation?.seedHead && active?.immutableSourceTree === implementation?.seedTree && active?.currentImplementationHead === implementation?.planningHead && active?.currentImplementationTree === implementation?.planningTree && active?.phase === "PREIMPLEMENTATION_ENGINEERING_CLEAR" && active?.executionState === "PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED" && active?.productSourceMutationAllowed === true,
+    authority: truthRecord?.preAdmissionEngineeringSeedCapability?.status === "ACTIVE" && truthRecord?.preAdmissionEngineeringSeedCapability?.productMutationAllowed === false && truthRecord?.finiteTaskAdmissionClearanceCapability?.status === "ACTIVE" && truthRecord?.finiteTaskAdmissionClearanceCapability?.productMutationBeforeAdmissionMerge === false && Object.values(expected.authority).every((value) => value === false) && expected.packageChanges === false,
     duplicate: priorDuplicate === false,
+    competingTask: competingTask === false,
   };
   const ok = Object.values(checks).every(Boolean);
-  return { ok, type: "FINITE_TASK_ADMISSION_SUCCESSOR", classification: "FINITE_TASK_ADMISSION_SUCCESSOR_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: taskArtifact?.primaryDomain, objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_FINITE_TASK_ADMISSION", bindingId: `finite-task-admission-pr-${identity?.pr}`, finiteLeaseId: taskArtifact?.taskId, budget: { maximumFiles: 3, maximumHandAuthoredNetLines: 3600 }, commentId: normalized?.id ?? null, commentBodyHash: normalized?.bodyHash ?? null, subjectHash: payload?.subjectHash ?? null, subject: payload?.subject ?? null, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `FINITE_TASK_ADMISSION_SUCCESSOR_INVALID:${key}`) };
+  const prospective = evaluateAdmissionClearanceState({ finiteLeasePresent: checks.truthLease, admissionMerged: true, artifactFrozen: checks.frozenModel, computedGateFindings: prospectiveGateFindings, persistedPhase: taskArtifact?.status });
+  return { ok, type: "FINITE_TASK_ADMISSION_TO_CLEARANCE", classification: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: taskArtifact?.primaryDomain, objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: "IMMUTABLE_OWNER_FINITE_TASK_ADMISSION", bindingId: `finite-task-admission-pr-${identity?.pr}`, finiteLeaseId: taskArtifact?.taskId, budget: { maximumFiles: 3, maximumHandAuthoredNetLines: 3600 }, commentId: normalized?.id ?? null, commentBodyHash: normalized?.bodyHash ?? null, subjectHash: payload?.subjectHash ?? null, subject: payload?.subject ?? null, checks, futureTaskStatus: ok && prospective.classification === "PREIMPLEMENTATION_ENGINEERING_CLEAR" ? "PREIMPLEMENTATION_ENGINEERING_CLEAR" : "BOUND_INCOMPLETE", futureProductSourceMutationAllowed: ok && prospective.productSourceMutationAllowed, futureImplementationPr: implementation?.pr, futureImplementationBranch: implementation?.branch, futureLeaseId: taskArtifact?.taskId, admissionMergeRequired: true, productSourceMutationAllowedBeforeMerge: false, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `FINITE_TASK_ADMISSION_TO_CLEARANCE_INVALID:${key}`) };
 }
 
 export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, root = REPOSITORY_ROOT } = {}) {
@@ -1708,6 +1834,73 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const dependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER}\n`));
   const finalSourceCorrectionMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER}\n`));
   const observed = exactScope(scope);
+  if (originalSubject?.objective === "remove the finite-task admission-to-clearance state cycle and make admission prospectively grant computed preimplementation clearance") {
+    const payloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
+    const descendant = originalSubject?.currentHead !== identity?.headSha
+      || originalSubject?.currentTree !== tree
+      || stableJson(originalSubject?.changedPaths) !== stableJson(observed.changedPaths);
+    const finalReceipts = finalMatches.map((item) => {
+      const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item.id });
+      const payload = parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
+      const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+      const structurallyValid = Boolean(normalized
+        && payload?.subject?.type === "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1"
+        && payload.subjectHash === hashValue(payload.subject)
+        && payload.bodyHash === hashValue(body)
+        && normalized.body === architectureFinalSourceOwnerCommentBody(payload.subject));
+      const current = structurallyValid && payload.subject.currentHead === identity?.headSha && payload.subject.currentTree === tree;
+      return { normalized, payload, structurallyValid, current };
+    });
+    const currentFinals = finalReceipts.filter(({ current }) => current);
+    const expected = descendant
+      ? architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, root })
+      : architectureMaintenanceSubject({ identity, tree, scope, profile: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1" });
+    const currentFinal = currentFinals[0];
+    const ancestry = ancestryVerified ?? (originalSubject?.currentHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.currentHead, identity?.headSha]).status === 0);
+    const checks = {
+      identity: Boolean(normalizedOriginal),
+      body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
+      hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
+      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === identity?.baseSha && originalSubject?.budget?.maximumFiles === 15 && originalSubject?.budget?.maximumNetLines === 3500,
+      ancestry,
+      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && finalMatches.length === (descendant ? 1 : 0) && currentFinals.length === (descendant ? 1 : 0) && finalReceipts.every(({ structurallyValid }) => structurallyValid),
+      receipt: !descendant || (currentFinal?.normalized?.body === architectureFinalSourceOwnerCommentBody(expected) && stableJson(currentFinal?.payload?.subject) === stableJson(expected)),
+      exactPaths: observed.changedPaths.length > 0 && observed.changedPaths.length <= 15 && observed.changedPaths.every((file) => ADMISSION_CLEARANCE_ARCHITECTURE_PATHS.includes(file)) && stableJson(expected?.changedPaths) === stableJson(observed.changedPaths),
+      budget: observed.netChangedLines <= 3500,
+      authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && noCompetingDomainOwner,
+      capability: stableJson(originalSubject?.capabilities) === stableJson(["FINITE_TASK_ADMISSION_TO_CLEARANCE_V1"]) && originalSubject?.terminalTruthRequired === false && originalSubject?.reusableByAnotherPr === true,
+    };
+    const authorizationOk = Object.entries(checks).filter(([key]) => key !== "receipt" && key !== "cardinality").every(([, value]) => Boolean(value));
+    const ok = Object.values(checks).every(Boolean);
+    return {
+      ok,
+      authorizationOk,
+      mergeEligible: ok,
+      type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE",
+      repository: identity?.repository,
+      pr: identity?.pr,
+      branch: identity?.branch,
+      currentHead: identity?.headSha,
+      currentTree: tree,
+      featureId: "assurance-efficiency-e0",
+      objectiveDomains: [],
+      supportingDomains: ["CI-test-infrastructure"],
+      historicalWaiverPath: null,
+      authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
+      bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`,
+      budget: { maximumFiles: 15, maximumHandAuthoredNetLines: 3500 },
+      commentId: descendant ? currentFinal?.normalized?.id ?? null : normalizedOriginal?.id ?? null,
+      commentBodyHash: descendant ? currentFinal?.normalized?.bodyHash ?? null : normalizedOriginal?.bodyHash ?? null,
+      subjectHash: descendant ? currentFinal?.payload?.subjectHash ?? null : originalPayload?.subjectHash ?? null,
+      subject: expected,
+      originalCommentId: normalizedOriginal?.id ?? null,
+      originalBodyHash: normalizedOriginal?.bodyHash ?? null,
+      originalSubjectHash: originalPayload?.subjectHash ?? null,
+      currentFinalSourceReceiptId: currentFinal?.normalized?.id ?? null,
+      checks,
+      findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`),
+    };
+  }
   if (originalSubject?.objective === "install governed pre-admission seed packets and generic finite-task admission successors") {
     const body = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
     const descendant = originalSubject?.currentHead !== identity?.headSha || originalSubject?.currentTree !== tree;
@@ -2931,6 +3124,72 @@ export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillyw
   return observation;
 }
 const trustedGitHubTaskIdentity = (value) => trustedGitHubTaskIdentities.has(value) && value?.candidateEligible === true;
+const trustedImplementationIdentities = new WeakSet();
+const trustedImplementationIdentity = (value) => trustedImplementationIdentities.has(value) && value?.candidateEligible === true;
+
+export function createImplementationIdentityObservation({
+  repository,
+  workflowPr,
+  implementationPr,
+  implementationBranch,
+  implementationHead,
+  implementationTree,
+  originalSeedHead,
+  originalSeedTree,
+  protectedBase,
+  currentProtectedMain,
+  finiteLeaseId,
+  taskArtifactPath,
+  taskArtifactHash,
+  implementationChangedPaths,
+  seedIsAncestor = false,
+  protectedBaseIsAncestor = false,
+  ownerApprovalValid = false,
+  artifactFrozen = false,
+  prospectiveLeasePresent = false,
+  admissionMerged = false,
+} = {}) {
+  const changedPaths = [...new Set(implementationChangedPaths ?? [])].sort();
+  const candidateEligible = repository === "Chillywood2025/chillywood-mobile"
+    && Number.isInteger(workflowPr) && workflowPr > 0
+    && Number.isInteger(implementationPr) && implementationPr > 0
+    && typeof implementationBranch === "string" && implementationBranch.length > 0
+    && [implementationHead, implementationTree, originalSeedHead, originalSeedTree, protectedBase, currentProtectedMain].every((value) => /^[0-9a-f]{40}$/u.test(value ?? ""))
+    && typeof finiteLeaseId === "string" && finiteLeaseId.length > 0
+    && safeRepoPath(taskArtifactPath)
+    && /^[0-9a-f]{64}$/u.test(taskArtifactHash ?? "")
+    && changedPaths.length === 1 && changedPaths[0] === taskArtifactPath
+    && seedIsAncestor === true
+    && protectedBaseIsAncestor === true
+    && ownerApprovalValid === true
+    && artifactFrozen === true
+    && prospectiveLeasePresent === true;
+  const observation = {
+    repository,
+    workflowPr,
+    implementationPr,
+    implementationBranch,
+    implementationHead,
+    implementationTree,
+    originalSeedHead,
+    originalSeedTree,
+    protectedBase,
+    currentProtectedMain,
+    finiteLeaseId,
+    taskArtifactPath,
+    taskArtifactHash,
+    implementationChangedPaths: changedPaths,
+    seedIsAncestor,
+    protectedBaseIsAncestor,
+    ownerApprovalValid,
+    artifactFrozen,
+    prospectiveLeasePresent,
+    admissionMerged,
+    candidateEligible,
+  };
+  if (candidateEligible) trustedImplementationIdentities.add(observation);
+  return observation;
+}
 export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT) {
   if (!/^[0-9a-f]{40}$/u.test(base ?? "") || !/^[0-9a-f]{40}$/u.test(head ?? "")) return null;
   const run = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false });
@@ -3456,31 +3715,58 @@ function evaluateDeclaredPacketGate(packet, supplied = {}) {
 export function evaluatePreimplementationGate(packet, supplied = {}) {
   const root = supplied.root ?? REPOSITORY_ROOT;
   const taskIdentity = supplied.taskIdentityObservation;
-  const authoritativeIdentity = trustedGitHubTaskIdentity(taskIdentity);
-  const replay = authoritativeIdentity ? runAuthoritativeReplay({ root, taskIdentity, runs: 1 }).output : authoritativeReplayOnce({ root });
+  const implementationIdentity = supplied.implementationIdentity;
+  const authoritativeDoctrineIdentity = trustedGitHubTaskIdentity(taskIdentity);
+  const authoritativeImplementationIdentity = trustedImplementationIdentity(implementationIdentity);
+  const authoritativeIdentity = authoritativeDoctrineIdentity || authoritativeImplementationIdentity;
+  const normalizedIdentity = authoritativeImplementationIdentity ? {
+    repository: implementationIdentity.repository,
+    pr: implementationIdentity.implementationPr,
+    branch: implementationIdentity.implementationBranch,
+    head: implementationIdentity.implementationHead,
+    tree: implementationIdentity.implementationTree,
+    base: implementationIdentity.currentProtectedMain,
+    leaseId: implementationIdentity.finiteLeaseId,
+    paths: implementationIdentity.implementationChangedPaths,
+  } : taskIdentity;
+  const replay = authoritativeDoctrineIdentity ? runAuthoritativeReplay({ root, taskIdentity, runs: 1 }).output : authoritativeReplayOnce({ root });
   const declared = evaluateDeclaredPacketGate(packet, {
     ...supplied,
-    taskIdentity: authoritativeIdentity ? { task: packet?.task, pr: String(taskIdentity.pr), leaseId: String(taskIdentity.leaseId), closureArtifactHash: packet?.sections?.L_COMPLETENESS_CERTIFICATE?.closureArtifactHash, currentHead: taskIdentity.head } : supplied.taskIdentity,
-    actualScope: authoritativeIdentity ? taskIdentity : supplied.actualScope,
+    taskIdentity: authoritativeIdentity ? { task: packet?.task, pr: String(normalizedIdentity.pr), leaseId: String(normalizedIdentity.leaseId), closureArtifactHash: packet?.sections?.L_COMPLETENESS_CERTIFICATE?.closureArtifactHash, currentHead: normalizedIdentity.head } : supplied.taskIdentity,
+    actualScope: authoritativeDoctrineIdentity ? taskIdentity : supplied.actualScope,
   });
   const findings = new Set(declared.findings);
   const C = packet?.sections?.C_AFFECTED_DOMAIN_CLOSURE;
   const F = packet?.sections?.F_STATE_MODEL;
   const J = packet?.sections?.J_STABLE_DEFECT_LEDGER;
-  const expectedClosure = replay.closure;
+  const graph = generateDomainGraph(root, { authoritative: true });
+  const genericSourceIdentity = authoritativeImplementationIdentity ? {
+    head: implementationIdentity.implementationHead,
+    tree: implementationIdentity.implementationTree,
+    candidateSnapshotHash: implementationIdentity.taskArtifactHash,
+    authority: "ACTUAL_GITHUB_PR",
+  } : replay.sourceIdentity;
+  const expectedClosure = authoritativeImplementationIdentity && C?.primaryDomain
+    ? deriveAffectedDomainClosure(graph, C.primaryDomain, { exclusionReceipts: C.nonImpactingWithEvidence ?? [], identity: genericSourceIdentity, root })
+    : replay.closure;
   const closureDeclaration = C?.computedClosure;
   if (!closureDeclaration || stableJson(closureDeclaration) !== stableJson(expectedClosure)) findings.add("PREIMPLEMENTATION_DEPENDENCY_CLOSURE_INCOMPLETE");
   if (!F?.sourceBoundModel || stableJson(F.sourceBoundModel) !== stableJson(replay.transitionModel)) findings.add("PREIMPLEMENTATION_STATE_MODEL_INCOMPLETE");
-  const groundedTransitionShapes = replay.transitionModel.domains.map(({ domain, states, transitions }) => ({ domain, states: canonicalSort(states.map(({ stateId }) => stateId)), transitions: transitions.map(({ transitionId, sourceStates, destinationStates }) => ({ id: transitionId, from: sourceStates[0], to: destinationStates[0] })).sort((a, b) => compareUtf8(a.id, b.id)) })).sort((a, b) => compareUtf8(a.domain, b.domain));
+  const expectedDomains = new Set(expectedClosure?.domains ?? []);
+  const groundedTransitionShapes = replay.transitionModel.domains.filter(({ domain }) => expectedDomains.has(domain)).map(({ domain, states, transitions }) => ({ domain, states: canonicalSort(states.map(({ stateId }) => stateId)), transitions: transitions.map(({ transitionId, sourceStates, destinationStates }) => ({ id: transitionId, from: sourceStates[0], to: destinationStates[0] })).sort((a, b) => compareUtf8(a.id, b.id)) })).sort((a, b) => compareUtf8(a.domain, b.domain));
   const declaredTransitionShapes = (F?.domainModels ?? []).filter(({ domain }) => groundedTransitionShapes.some((item) => item.domain === domain)).map(({ domain, transitionContracts }) => ({ domain, states: canonicalSort([...new Set((transitionContracts ?? []).flatMap(({ from, to }) => [from, to]))]), transitions: (transitionContracts ?? []).map(({ id, from, to }) => ({ id, from, to })).sort((a, b) => compareUtf8(a.id, b.id)) })).sort((a, b) => compareUtf8(a.domain, b.domain));
   if (stableJson(declaredTransitionShapes) !== stableJson(groundedTransitionShapes)) findings.add("PREIMPLEMENTATION_STATE_MODEL_INCOMPLETE");
   if (!J?.authoritativeReplay || stableJson(J.authoritativeReplay) !== stableJson(replay.laneResults) || J.authoritativeReplayHash !== replay.authoritativeReplayHash) findings.add("PREIMPLEMENTATION_DEFECT_LEDGER_UNSTABLE");
   if (packet?.sections?.B_BOUNDED_COMPLETENESS?.evidenceAuthorityHash !== hashValue(readJson(root, "config/assurance/engineering-evidence-authority-v1.json"))) findings.add("PREIMPLEMENTATION_INVARIANT_COVERAGE_INCOMPLETE");
-  if (!replay.inventoryVerification.ok) findings.add("PREIMPLEMENTATION_AFFECTED_DOMAIN_INCOMPLETE");
+  const genericInventoryVerification = authoritativeImplementationIdentity
+    ? verifyInventoryNonVacuity(replay.inventory, { root, affectedDomains: expectedClosure?.domains ?? [], plannedFiles: packet?.sections?.K_IMPLEMENTATION_PLAN?.files ?? [] })
+    : replay.inventoryVerification;
+  if (!genericInventoryVerification.ok) findings.add("PREIMPLEMENTATION_AFFECTED_DOMAIN_INCOMPLETE");
   if (replay.result === "BLOCKED") findings.add(...replay.laneResults.flatMap(({ candidateFindings }) => candidateFindings));
   const bootstrap = packet?.classification === "OWNER_AUTHORIZED_DOCTRINE_BOOTSTRAP_V1";
   if (!authoritativeIdentity) findings.add("PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_REQUIRED");
-  if (authoritativeIdentity && (taskIdentity.repository !== "Chillywood2025/chillywood-mobile" || taskIdentity.branch !== DOCTRINE_BRANCH || taskIdentity.base !== DOCTRINE_BASE || taskIdentity.leaseId !== packet?.sections?.L_COMPLETENESS_CERTIFICATE?.leaseId || stableJson(taskIdentity.paths) !== stableJson(packet?.sections?.K_IMPLEMENTATION_PLAN?.files?.slice().sort()))) findings.add("PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_MISMATCH");
+  if (authoritativeDoctrineIdentity && (taskIdentity.repository !== "Chillywood2025/chillywood-mobile" || taskIdentity.branch !== DOCTRINE_BRANCH || taskIdentity.base !== DOCTRINE_BASE || taskIdentity.leaseId !== packet?.sections?.L_COMPLETENESS_CERTIFICATE?.leaseId || stableJson(taskIdentity.paths) !== stableJson(packet?.sections?.K_IMPLEMENTATION_PLAN?.files?.slice().sort()))) findings.add("PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_MISMATCH");
+  if (authoritativeImplementationIdentity && (normalizedIdentity.repository !== "Chillywood2025/chillywood-mobile" || normalizedIdentity.pr !== implementationIdentity.implementationPr || normalizedIdentity.branch !== implementationIdentity.implementationBranch || normalizedIdentity.leaseId !== packet?.sections?.L_COMPLETENESS_CERTIFICATE?.leaseId || implementationIdentity.workflowPr === implementationIdentity.implementationPr && implementationIdentity.admissionMerged !== true)) findings.add("PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_MISMATCH");
   const blockingFindings = [...findings].filter((finding) => finding !== "PREIMPLEMENTATION_GIT_GITHUB_IDENTITY_REQUIRED");
   const status = authoritativeIdentity && findings.size === 0 ? "PREIMPLEMENTATION_ENGINEERING_CLEAR" : bootstrap && !authoritativeIdentity && blockingFindings.length === 0 ? "ENGINEERING_PLAN_DRAFTED" : "BLOCKED";
   const result = {
@@ -3488,7 +3774,7 @@ export function evaluatePreimplementationGate(packet, supplied = {}) {
     status,
     clear: status === "PREIMPLEMENTATION_ENGINEERING_CLEAR",
     computed: true,
-    subject: authoritativeIdentity ? { repository: taskIdentity.repository, pr: taskIdentity.pr, branch: taskIdentity.branch, head: taskIdentity.head, tree: taskIdentity.tree, base: taskIdentity.base, leaseId: taskIdentity.leaseId } : { repository: "Chillywood2025/chillywood-mobile", branch: DOCTRINE_BRANCH, localDraft: true },
+    subject: authoritativeIdentity ? { repository: normalizedIdentity.repository, pr: normalizedIdentity.pr, branch: normalizedIdentity.branch, head: normalizedIdentity.head, tree: normalizedIdentity.tree, base: normalizedIdentity.base, leaseId: normalizedIdentity.leaseId } : { repository: "Chillywood2025/chillywood-mobile", branch: DOCTRINE_BRANCH, localDraft: true },
     evidenceAuthorityHash: hashValue(readJson(root, "config/assurance/engineering-evidence-authority-v1.json")),
     inventoryHash: replay.inventoryHash,
     graphHash: replay.graphHash,
