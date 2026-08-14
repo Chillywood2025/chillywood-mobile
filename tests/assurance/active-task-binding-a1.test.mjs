@@ -418,11 +418,12 @@ test("active-task correction maintenance 04: only the exact canonical closed-aut
 });
 
 const currentTruthCompanionV2Fixture = ({ files, mutateSubject = () => {} } = {}) => {
+  const committedHead = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
   const identity = {
     repository: "Chillywood2025/chillywood-mobile",
     pr: 400,
     branch: "codex/authority-control-current-truth-companion-v2",
-    headSha: "a".repeat(40),
+    headSha: committedHead,
     baseSha: "928a9734f5bda16c90bb4fc95cb96e81ae9dd131",
   };
   const tree = "b".repeat(40);
@@ -520,6 +521,23 @@ test("active-task correction maintenance 08: final-source lifecycle carries the 
     phase1EvidenceResolver: () => phase1Evidence,
   });
   assert.equal(result.mergeEligible, true, [...(result.findings ?? []), ...(result.mergeFindings ?? [])].join(","));
+});
+
+test("active-task correction maintenance 09: immutable companion verification ignores later working-tree truth", () => {
+  const fixture = currentTruthCompanionV2Fixture();
+  const temporaryParent = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "authority-companion-history-"));
+  const clonedRoot = path.join(temporaryParent, "repository");
+  try {
+    assert.equal(spawnSync("git", ["clone", "--quiet", "--local", process.cwd(), clonedRoot], { encoding: "utf8" }).status, 0);
+    fs.writeFileSync(path.join(clonedRoot, "config/assurance/current-truth-v1.json"), "{}\n");
+    fs.writeFileSync(path.join(clonedRoot, "CURRENT_STATE.md"), "later current state\n");
+    fs.writeFileSync(path.join(clonedRoot, "NEXT_TASK.md"), "later next task\n");
+    const result = verifyArchitectureMaintenanceAuthority({ ...fixture, allComments: [fixture.raw], paginationComplete: true, ancestryVerified: true, noCompetingDomainOwner: false, root: clonedRoot });
+    assert.equal(result.authorizationOk, true, result.findings?.join(","));
+    assert.equal(result.checks.currentTruthCompanion, true);
+  } finally {
+    fs.rmSync(temporaryParent, { recursive: true, force: true });
+  }
 });
 const e0CompletionFacts = [
   "repository.assurance-control.a1.requirements",
