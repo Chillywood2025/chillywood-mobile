@@ -8,13 +8,32 @@
   "repository": "Chillywood2025/chillywood-mobile",
   "implementation": {
     "branch": "codex/pre-release-identity-entitlement-authority-v1",
-    "pullRequest": null,
-    "seedHead": null,
-    "seedTree": null,
+    "pullRequest": 229,
+    "seedHead": "6c135fa4f09b41687f5f9607d92e237b4d400ad6",
+    "seedTree": "35abbae7d5ea1429ce768f72052602a6f63af6ca",
     "protectedBase": {
-      "head": "35ba9d852f0136141ee863ed44d58ed450192033",
-      "tree": "f4d581596f146190d3799e3efe76aa10c7fda9c5"
-    }
+      "head": "b69029d575befc4d16ac842b15c096a421932391",
+      "tree": "a88a7615248a1ec6166aa2fc9002dbf0a5f8d014"
+    },
+    "baseSynchronizationHead": "ed72a29779729e99f39931992bacc1ad4de6bb1c",
+    "baseSynchronizationTree": "104a8feda856ca6cdbfdb0b084c22b511f30ed4e"
+  },
+  "preAdmissionCapability": {
+    "classification": "OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1",
+    "capabilityPullRequest": 230,
+    "capabilitySourceHead": "ce58bcb3ea3ba631a5f8ed0f99c9d522fee7fb34",
+    "capabilitySourceTree": "a88a7615248a1ec6166aa2fc9002dbf0a5f8d014",
+    "capabilityMerge": "b69029d575befc4d16ac842b15c096a421932391",
+    "ownerApprovalComment": {
+      "id": 5285464582,
+      "subjectHash": "65123660102dc13aa1a0583b2acd497d221dfefdb9224ca2e12f08bb98224e43",
+      "rawBodyHash": "b7eca07028b1837df1bc87dad6d4b78fe91aecf4b47fcdddab833f50dc22c77f",
+      "embeddedBodyHash": "332033558b5a5e90af22bea5efd72cbfbaf984b6b144c630b36f08504b294e6d"
+    },
+    "productSourceMutationAllowed": false,
+    "finiteLeasePresent": false,
+    "admissionRequired": true,
+    "highestPermittedState": "ENGINEERING_PLAN_DRAFTED"
   },
   "planningIdentities": {
     "validatedMasterLedger": "ff0e472dba7f0d931de052e7c0a220aaf07c6d8cd4da5e158142c2666858d345",
