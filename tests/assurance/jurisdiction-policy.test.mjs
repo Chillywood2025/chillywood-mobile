@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import test from "node:test";
 
 import {
@@ -33,7 +34,7 @@ import {
   verifyOwnerJurisdictionDecisionV2,
   verifyTaskJurisdictionBindingV2,
 } from "../../scripts/assurance/jurisdiction-policy.mjs";
-import { architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 
 const DOMAINS = Object.freeze([
   "auth-session-password-recovery",
@@ -82,6 +83,17 @@ const registry = Object.freeze({
     productOwner: `product-${index}`,
     providers: [`provider-${index}`],
   })),
+});
+
+test("admission lease state matches the canonical current-truth schema and contract", () => {
+  const schemas = JSON.parse(fs.readFileSync(new URL("../../config/assurance/schemas-v1.json", import.meta.url), "utf8"));
+  const contract = JSON.parse(fs.readFileSync(new URL("../../config/assurance/current-truth-contract-v1.json", import.meta.url), "utf8"));
+  const schemaStates = schemas.$defs.currentTruthRecord.properties.finiteTaskLeases.properties.tasks.items.properties.taskState.enum;
+  assert.equal(FINITE_TASK_ADMISSION_LEASE_STATE, "ACTIVE_IMPLEMENTATION");
+  assert.equal(schemaStates.includes(FINITE_TASK_ADMISSION_LEASE_STATE), true);
+  assert.equal(contract.finiteTaskLeasePolicy.taskStates.includes(FINITE_TASK_ADMISSION_LEASE_STATE), true);
+  assert.equal(finiteTaskAdmissionLeaseStateValid({ taskState: FINITE_TASK_ADMISSION_LEASE_STATE }), true);
+  assert.equal(finiteTaskAdmissionLeaseStateValid({ taskState: "PREIMPLEMENTATION_ENGINEERING_CLEAR" }), false);
 });
 const decisions = Object.freeze(DOMAINS.map((domainId) => ({
   decision: `United States Wave 1 market application for ${domainId}; external evidence remains fail closed.`,
