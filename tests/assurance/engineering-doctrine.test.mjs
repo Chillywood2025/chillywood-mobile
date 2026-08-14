@@ -615,3 +615,28 @@ test("task-local edge 43 source descendants retain the finite lease", () => asse
 test("task-local edge 44 current truth generation stays deterministic", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(renderCurrentState(truth), renderCurrentState(structuredClone(truth))); assert.equal(renderNextTask(truth), renderNextTask(structuredClone(truth))); });
 test("task-local edge 45 all thirteen Phase 1 checks remain required", () => { const workflow = fs.readFileSync(new URL(".github/workflows/phase1-ci.yml", root), "utf8"); assert.match(workflow, /13\/13|Phase 1/u); });
 test("task-local edge 46 provider Codex Review remains optional advisory", () => assert.match(stableJson(json("config/assurance/current-truth-v1.json")), /OPTIONAL_ADVISORY/u));
+const taskLocalArchitectureComment = ({ id, pr, body }) => ({ id, node_id: `IC_task_local_${id}`, user: { login: "Chillywood2025" }, author_association: "OWNER", body, created_at: "2026-08-14T01:00:00Z", updated_at: "2026-08-14T01:00:00Z", issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${pr}`, html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${pr}#issuecomment-${id}` });
+test("task-local architecture maintenance authority accepts the exact reusable profile", () => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 301, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
+  const tree = "c".repeat(40);
+  const scope = { files: ["scripts/assurance/engineering-closure.mjs"], additions: 10, deletions: 1, netChangedLines: 9 };
+  const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1" });
+  const raw = taskLocalArchitectureComment({ id: 700001, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+  const result = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
+  assert.equal(result.ok, true);
+});
+test("task-local architecture final-source receipt is canonical and single-use", () => {
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 301, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
+  const originalTree = "c".repeat(40);
+  const originalScope = { files: ["scripts/assurance/engineering-closure.mjs"], additions: 10, deletions: 1, netChangedLines: 9 };
+  const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1" });
+  const original = taskLocalArchitectureComment({ id: 700002, pr: originalIdentity.pr, body: architectureMaintenanceOwnerCommentBody(originalSubject) });
+  const identity = { ...originalIdentity, headSha: "d".repeat(40) };
+  const tree = "e".repeat(40);
+  const scope = { files: ["scripts/assurance/engineering-closure.mjs", "tests/assurance/engineering-doctrine.test.mjs"], additions: 20, deletions: 2, netChangedLines: 18, diffHash: "f".repeat(64) };
+  const finalSubject = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: original });
+  const final = taskLocalArchitectureComment({ id: 700003, pr: identity.pr, body: architectureFinalSourceOwnerCommentBody(finalSubject) });
+  const result = verifyArchitectureMaintenanceAuthority({ raw: original, allComments: [original, final], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
+  assert.equal(result.ok, true);
+  assert.equal(result.currentFinalSourceReceiptId, final.id);
+});
