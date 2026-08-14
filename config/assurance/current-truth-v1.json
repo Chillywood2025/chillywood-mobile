@@ -641,7 +641,7 @@
         "ownerAuthorizationCommentId": 5285464582,
         "domain": "pre-release-wave1-identity-entitlement-authority",
         "domainOwnership": "ACTIVE",
-        "taskState": "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+        "taskState": "ACTIVE_IMPLEMENTATION",
         "allowedPaths": [
           "_lib/accountAccess.ts",
           "_lib/accountLegalAcceptance.ts",
@@ -760,7 +760,7 @@
           "certificateHash": "4ad770781b04e2af860b2c0da0ec9cdd9ce16ecf911322c389f92429408c3845",
           "edgeClosureHash": "8c4e81388574b1c8ae28bc5af7d6effb5b5fde9f3ff4e08115e1241677dfe6aa",
           "edgeEvidenceHash": "693abd32e7cd5c80fd43c6358cf13470d8aa73fcc7c3e9e87515ff7ec804d61a",
-          "modelDeltaHash": "50999590eee432659dc77942e9dacf82cdd8f307b94df5a338f14c85aca76cde"
+          "modelDeltaHash": "5ca0cdb63f64f9d77edfc5b5929c68e78806b1f47710c798c49b8853104217ef"
         },
         "authority": {
           "productSourceMutationAfterAdmissionMerge": true,
@@ -775,13 +775,48 @@
     ]
   },
   "finiteTaskRuntime": {
+    "schemaVersion": 1,
+    "authority": "PROTECTED_FINITE_TASK_LEASE",
+    "candidatePolicy": "DYNAMIC_READ_ONLY_NOT_PROTECTED_TRUTH_AUTHORITY",
     "candidateObservation": {
       "pr": 229,
       "branch": "codex/pre-release-identity-entitlement-authority-v1",
       "prState": "open",
       "head": "14e6d3a05bc4110712f88de11c76968cb610dae1",
       "tree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
-      "observation": "planning-only descendant; exact runtime identity remains read-only"
+      "classification": "PREIMPLEMENTATION_ENGINEERING_CLEAR_OBSERVATION",
+      "observedAt": "2026-08-14T18:43:16Z"
+    },
+    "finalEvidence": {
+      "ownerReceipt": false,
+      "repositoryReview": false,
+      "phase1": false,
+      "mergeEligible": false
+    },
+    "historicalCandidates": [
+      {
+        "pr": 214,
+        "head": "532243450bccd3d373cc17804da98bd01490c2ae",
+        "tree": "8b9e4082a96b7a83cfa86559c01ea955fb35717b",
+        "classification": "MERGED_VERIFIED",
+        "mergeSha": "40f57256500b05f083c71acc77c8b020609692cf",
+        "phase1RunId": 31542362294,
+        "phase1Result": "PASS_13_OF_13"
+      },
+      {
+        "pr": 214,
+        "head": "e76831f2edb2c17e9b827587594573bfef7c6fef",
+        "tree": "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3",
+        "classification": "HISTORICAL_SUPERSEDED_CANDIDATE",
+        "phase1RunId": 31535089216,
+        "phase1Result": "FAILED_3_OF_13_STALE_PROVENANCE"
+      }
+    ],
+    "authorityClosed": {
+      "build": true,
+      "provider": true,
+      "database": true,
+      "publicRelease": true
     }
   },
   "activeTaskBinding": {
@@ -1423,6 +1458,76 @@
       "publicRelease": false
     }
   },
+  "ownerJurisdictionPolicyBinding": {
+    "schemaVersion": 2,
+    "contract": "OWNER_JURISDICTION_POLICY_BINDING_V2",
+    "repository": "Chillywood2025/chillywood-mobile",
+    "product": "chillywood-mobile",
+    "launchProgram": "chillywood-united-states-pre-release",
+    "policySource": {
+      "commentId": 5296932596,
+      "referenceScope": "TASK_BOUND_COMPOSITE",
+      "standingPolicyType": "OWNER_JURISDICTION_STANDING_POLICY_V2",
+      "standingPolicyVersion": 2,
+      "status": "ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION",
+      "sequence": 0,
+      "standingPolicyHash": "16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f",
+      "decisionVersion": "OWNER_JURISDICTION_DECISION_V2",
+      "subjectHash": "b3813943515ca3086583f3bb48c149977a885235aed3ba84565da2d1cac28eb2",
+      "bodyHash": "6f454d6e18babcdbf581fd41b0ae54f7aa30cef26cf1ace1d925997be61f01eb",
+      "envelopeHash": "0ddb3d068284e21ca3aae9d3d277db8bc557674123ce8c6224e02456bda3c43c"
+    },
+    "taskBinding": {
+      "taskId": "pre-release-identity-entitlement-authority-v1",
+      "prNumber": 229,
+      "planningHead": "14e6d3a05bc4110712f88de11c76968cb610dae1",
+      "planningTree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
+      "standingPolicyCommentId": 5296932596,
+      "standingPolicyHash": "16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f",
+      "bindingType": "OWNER_JURISDICTION_TASK_BINDING_V2",
+      "bindingVersion": 2,
+      "domainIds": [
+        "auth-session-password-recovery",
+        "chilly-chat-inbox-thread",
+        "creator-money-ledger",
+        "moderation-reporting",
+        "notifications-fcm",
+        "payouts-stripe-connect",
+        "revenuecat-premium",
+        "storekit-google-play-billing",
+        "supabase-migrations-rls"
+      ],
+      "bindingHash": "d636937b9d63e21e51079ce0b3171fe3e57eea6fab2fe65919fb2d0f3a87efad",
+      "conflictStatus": "NONE"
+    },
+    "coverage": {
+      "status": "EXACT_TASK_DOMAINS_BOUND",
+      "coveredDomainIds": [
+        "auth-session-password-recovery",
+        "chilly-chat-inbox-thread",
+        "creator-money-ledger",
+        "moderation-reporting",
+        "notifications-fcm",
+        "payouts-stripe-connect",
+        "revenuecat-premium",
+        "storekit-google-play-billing",
+        "supabase-migrations-rls"
+      ],
+      "coveredCount": 9,
+      "unresolvedDomainIds": []
+    },
+    "externalProofInherited": false,
+    "operationalOwnershipPreserved": true,
+    "authority": {
+      "productMutation": false,
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
   "receiptLifecyclePolicy": {
     "contract": "ASSURANCE_RECEIPT_LIFECYCLE_V2",
     "ownerAuthorizationRequiredBeforeDevelopment": true,
@@ -1530,7 +1635,7 @@
     "certificateHash": "4ad770781b04e2af860b2c0da0ec9cdd9ce16ecf911322c389f92429408c3845",
     "taskLocalEdgeClosureHash": "8c4e81388574b1c8ae28bc5af7d6effb5b5fde9f3ff4e08115e1241677dfe6aa",
     "taskLocalEdgeEvidenceHash": "693abd32e7cd5c80fd43c6358cf13470d8aa73fcc7c3e9e87515ff7ec804d61a",
-    "taskLocalModelDeltaHash": "50999590eee432659dc77942e9dacf82cdd8f307b94df5a338f14c85aca76cde",
+    "taskLocalModelDeltaHash": "5ca0cdb63f64f9d77edfc5b5929c68e78806b1f47710c798c49b8853104217ef",
     "finalDomains": [
       "auth-session-password-recovery",
       "chilly-chat-inbox-thread",
@@ -1601,7 +1706,7 @@
       "ota": false,
       "publicRelease": false
     },
-    "leaseHash": "263d1963a72b136ecc75468eb8bb6272016d07ef5fafe10eeff649ce6c8cea88"
+    "leaseHash": "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a"
   },
   "taskContextArchitecture": {
     "contractId": "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1",
