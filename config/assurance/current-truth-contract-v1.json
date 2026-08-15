@@ -390,7 +390,109 @@
     "finalReceiptFields": ["pr", "branch", "admitted-seed", "final-head", "final-tree", "diff-hash", "changed-path-hash", "scope-result", "call-domain-closure-ledger-hash", "focused-test-hash", "mutation-negative-control-hash", "repository-review-hash", "phase1-run-id-and-head", "owner-author-association", "body-and-subject-hashes"],
     "mergeProvenance": {"parents": 2, "firstParent": "exact-current-protected-base", "secondParent": "exact-final-implementation-head", "sourceTree": "exact-final-receipt-tree", "syntheticMergeTreeRecorded": true, "actualMergeSecondParentExact": true, "actualMergeTreeExact": true, "squashRebaseOctopusAllowed": false},
     "productFindingDisposition": {"state": "BLOCKED_PRODUCT_FINDING", "leaseRevoked": false},
-    "inPlaceAmendment": {"marker": "chillywood-assurance-task-lease-amendment-v1", "ownerCommentRequired": true, "protectedMainUpdateRequired": false, "sameDomainOnly": true, "wildcardsAllowed": false, "authorityExpansionAllowed": false},
+    "inPlaceAmendment": {
+      "marker": "chillywood-assurance-task-lease-amendment-v1",
+      "ownerCommentRequired": true,
+      "protectedMainUpdateRequired": false,
+      "sameDomainOnly": true,
+      "wildcardsAllowed": false,
+      "authorityExpansionAllowed": false,
+      "registrationCompatibility": {
+        "reservedAmendmentRequiresExactlyOneRegisteredPolicyDomain": true,
+        "policyMaximumFilesMayExceedReservedMaximum": false,
+        "policyMaximumChangedLinesMayExceedReservedMaximum": false,
+        "unregisteredReservedAmendmentActivationAllowed": false,
+        "tasksWithoutReservedAmendmentUnaffected": true,
+        "wildcardsAllowed": false,
+        "implicitPathsAllowed": false
+      },
+      "commentDiscovery": {
+        "source": "GITHUB_ISSUE_COMMENTS_COMPLETE_PAGINATION",
+        "completePaginationRequired": true,
+        "incompletePaginationAccepted": false,
+        "topLevelOwnerCommentRequired": true,
+        "editedCommentsAccepted": false,
+        "fixturesOrDryRunsAcceptedAsLiveAuthority": false
+      },
+      "cardinality": {
+        "baseOnlyAllowed": true,
+        "effectiveAmendmentMinimum": 0,
+        "effectiveAmendmentMaximumSource": "TASK_AMENDMENT_MAXIMUM",
+        "supportedMaximumAmendments": 1,
+        "duplicatesAccepted": false
+      },
+      "historyBinding": {
+        "boundStartingHeadMustExistOnSamePullRequestAndBranch": true,
+        "boundStartingHeadMustPassBaseReservation": true,
+        "currentHeadMustDescendFromBoundStartingHead": true,
+        "descendantCommitsRemainAuthorized": true,
+        "siblingHeadsAccepted": false,
+        "rebasedHeadsAccepted": false,
+        "forcePushedReplacementHistoriesAccepted": false,
+        "unrelatedHistoriesAccepted": false,
+        "forksAccepted": false,
+        "normalMergeToProtectedMainPreservesReceipt": true
+      },
+      "effectiveReservationOverlay": {
+        "source": "BASE_ARTIFACT_RESERVATION_PLUS_ZERO_OR_ONE_VERIFIED_IMMUTABLE_AMENDMENT",
+        "fields": [
+          "allowedPaths",
+          "scopeBudget.maximumFiles",
+          "scopeBudget.maximumChangedLines",
+          "artifactReservation.pathGlobs",
+          "artifactReservation.maximumFiles",
+          "artifactReservation.maximumLines"
+        ],
+        "baseAndEffectiveReportingRequired": true,
+        "normalizedReceiptIdentityAndHashesRequired": true,
+        "canonicalResolverRequired": true,
+        "independentEvaluatorConstantsAllowed": false,
+        "canonicalConsumerSet": [
+          "current-truth",
+          "active-task",
+          "engineering-closure",
+          "pr-scope",
+          "exact-head-repository-review",
+          "final-source-attestation",
+          "merge-eligibility",
+          "terminal-truth"
+        ],
+        "byteIdenticalAcrossConsumersRequired": true
+      },
+      "receiptIntegrity": {
+        "requiredBindings": [
+          "repository",
+          "pull-request",
+          "branch",
+          "task",
+          "lease",
+          "domain",
+          "base-lease-hash",
+          "bound-starting-head",
+          "bound-starting-tree",
+          "owner-login",
+          "owner-association",
+          "immutable-timestamp"
+        ],
+        "requiredHashes": ["subject", "body", "raw-body"],
+        "normalizedReceiptFields": ["commentId", "subjectHash", "bodyHash", "rawBodyHash"],
+        "ownerAssociation": "OWNER",
+        "createdAtMustEqualUpdatedAt": true,
+        "exactMarkerSchemaSubjectBodyRequired": true,
+        "editedReceiptRejected": true,
+        "exactTaskOnly": true,
+        "reusable": false,
+        "secretsOrProviderPayloadsAllowed": false
+      },
+      "authority": {
+        "providerMutation": false,
+        "databaseDeployment": false,
+        "build": false,
+        "submission": false,
+        "ota": false,
+        "publicRelease": false
+      }
+    },
     "perTaskRecursionBudget": {"maximumAdmissionPrs": 1, "maximumFinalSourceBindingPrs": 0, "maximumMergeProvenancePrs": 0, "maximumPostMergeTruthPrs": 1},
     "recursiveFailureCode": "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE",
     "providerCodexReview": "OPTIONAL_ADVISORY",

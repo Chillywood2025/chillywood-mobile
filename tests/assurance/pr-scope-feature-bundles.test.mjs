@@ -22,7 +22,8 @@ const admissionFixture = () => {
   const taskArtifact = { taskId: "pre-release-identity-entitlement-authority-v1", primaryDomain: "auth-session-password-recovery", status: "DEFECT_LEDGER_STABLE", authorizationStatus: "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED", rootDefects: Array.from({ length: 6 }, (_, index) => `DEFECT-${index}`), closure: { id: "ENGINEERING_CLOSURE_PACKET_V1", classification: "ENGINEERING_CLOSURE_PACKET_V1", packetHash: "5".repeat(64), affectedDomainClosure: { domains } }, certificate: { id: "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1", classification: "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1", certificateHash: "6".repeat(64) }, stateTransitionModel: { states: ["SIGNED_OUT"], transitions: ["SIGN_IN"] }, invariants: Array.from({ length: 30 }, (_, index) => ({ id: `I-${index}`, positiveWitness: `positive-${index}`, negativeWitness: `negative-${index}`, targetedMutant: `mutant-${index}` })), implementationPlan: { allowedPaths, tests: [allowedPaths.at(-1)] }, mutants: Array.from({ length: 30 }, (_, index) => ({ id: `M-${index}` })), rollback: { strategy: "forward correction" }, cleanup: { strategy: "idempotent" }, observability: { strategy: "audit" } };
   const implementation = { pr: 229, branch: "codex/pre-release-identity-entitlement-authority-v1", planningHead, planningTree, baseSha: "7".repeat(40), state: "open", draft: true, seedHead, seedTree, observedSeedTree: seedTree, ownerCommentId: 5285464582, taskArtifactPath: artifactPath, changedPaths: [artifactPath] };
   const lease = { leaseId: taskArtifact.taskId, featureId: taskArtifact.primaryDomain, implementationPr: 229, implementationBranch: implementation.branch, admittedSeedHead: seedHead, admittedSeedTree: seedTree, admittedBase: implementation.baseSha, protectedAdmissionPr: 230, ownerAuthorizationCommentId: implementation.ownerCommentId, domain: taskArtifact.primaryDomain, domainOwnership: "ACTIVE", taskState: "ACTIVE_IMPLEMENTATION", allowedPaths, scopeBudget: { maximumFiles: 30, maximumChangedLines: 3600 }, artifactReservation: { closureArtifactPath: artifactPath, allowedDomains: domains, pathGlobs: allowedPaths, testEvidencePaths: [allowedPaths.at(-1)], maximumFiles: 30, maximumLines: 3600, excludedHighRiskPaths: [] }, recursionBudget: { maximumAdmissionPrs: 1, maximumFinalSourceBindingPrs: 0, maximumMergeProvenancePrs: 0, maximumPostMergeTruthPrs: 1 } };
-  const truthRecord = { preAdmissionEngineeringSeedCapability: { status: "ACTIVE", productMutationAllowed: false }, finiteTaskAdmissionClearanceCapability: { status: "ACTIVE", productMutationBeforeAdmissionMerge: false }, finiteTaskLeases: { tasks: [lease] }, activeTaskBinding: { featureId: taskArtifact.primaryDomain, implementationPr: 229, implementationBranch: implementation.branch, immutableSourceHead: seedHead, immutableSourceTree: seedTree, currentImplementationHead: planningHead, currentImplementationTree: planningTree, phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR", executionState: "PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED", productSourceMutationAllowed: true } };
+  const finiteTaskLeases = { schemaVersion: 1, policyId: "ASSURANCE_FINITE_TASK_LEASE_V1", terminalMetaPr: 217, recursiveFailureCode: "ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE", providerCodexReview: "OPTIONAL_ADVISORY", authority: { build: false, provider: false, database: false, publicRelease: false }, amendmentPolicy: { marker: "chillywood-assurance-task-lease-amendment-v1", protectedMainUpdateRequired: false, ownerCommentRequired: true, domains: [{ id: "chilly-chat-call-media", amendablePaths: ["_lib/nativeCallTransitionProvenance.mjs"], maximumFiles: 12, maximumChangedLines: 6000 }] }, tasks: [lease] };
+  const truthRecord = { preAdmissionEngineeringSeedCapability: { status: "ACTIVE", productMutationAllowed: false }, finiteTaskAdmissionClearanceCapability: { status: "ACTIVE", productMutationBeforeAdmissionMerge: false }, finiteTaskLeases, activeTaskBinding: { featureId: taskArtifact.primaryDomain, implementationPr: 229, implementationBranch: implementation.branch, immutableSourceHead: seedHead, immutableSourceTree: seedTree, currentImplementationHead: planningHead, currentImplementationTree: planningTree, phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR", executionState: "PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED", productSourceMutationAllowed: true } };
   const ownerSubject = { primaryFeature: taskArtifact.primaryDomain, admittedSeed: { head: seedHead, tree: seedTree } }; const ownerBase = { subject: ownerSubject, subjectHash: hashValue(ownerSubject) }; const ownerPayload = { ...ownerBase, bodyHash: hashValue(ownerBase) }; const ownerApproval = { id: implementation.ownerCommentId, body: `<!-- chillywood-pre-release-plan-wave1-owner-approval-v1 -->\n${stableJson(ownerPayload)}` };
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/pre-release-identity-entitlement-authority-admission-v1", headSha: "8".repeat(40), baseRef: "main", baseSha: "9".repeat(40) }; const tree = "a".repeat(40); const scope = { files: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], netChangedLines: 500 }; const taskArtifactHash = hashValue(taskArtifact);
   const subject = finiteTaskAdmissionSubject({ identity, tree, scope, implementation, taskArtifact, taskArtifactHash }); const raw = githubComment({ id: 9901, pr: identity.pr, body: finiteTaskAdmissionOwnerCommentBody(subject) });
@@ -49,6 +50,22 @@ test("admission 36: static PR binding is not required", () => { const args = adm
 test("admission 37: future implementation binding validates on admission branch", () => { const result = evaluateFiniteTaskAdmissionSuccessor(admissionFixture()); assert.equal(result.ok, true); assert.equal(result.featureId, "auth-session-password-recovery"); });
 test("admission 38: merged successor leaves normal finite-task identity", () => { const args = admissionFixture(); assert.equal(args.truthRecord.activeTaskBinding.implementationPr, 229); assert.equal(args.truthRecord.finiteTaskLeases.tasks[0].implementationPr, 229); });
 test("admission 39: source push invalidates admission evidence without losing lease", () => { const args = admissionFixture(); args.implementation.changedPaths.push("_lib/session.tsx"); assert.equal(evaluateFiniteTaskAdmissionSuccessor(args).ok, false); assert.equal(args.truthRecord.finiteTaskLeases.tasks.length, 1); });
+test("admission 40: a future task cannot activate a reserved amendment without one compatible registered policy", () => {
+  const args = admissionFixture();
+  args.truthRecord.finiteTaskLeases.tasks[0].amendmentMaximum = { maximumFiles: 36, maximumChangedLines: 4500, maximumAmendments: 1 };
+  const result = evaluateFiniteTaskAdmissionSuccessor(args);
+  assert.equal(result.ok, false);
+  assert.equal(result.checks.registryCompatibility, false);
+  assert.ok(result.findings.includes("FINITE_TASK_ADMISSION_TO_CLEARANCE_INVALID:registryCompatibility"));
+});
+test("admission 41: a reserved amendment with exactly one compatible bounded policy remains prospectively admissible", () => {
+  const args = admissionFixture();
+  args.truthRecord.finiteTaskLeases.tasks[0].amendmentMaximum = { maximumFiles: 36, maximumChangedLines: 4500, maximumAmendments: 1 };
+  args.truthRecord.finiteTaskLeases.amendmentPolicy.domains.push({ id: args.truthRecord.finiteTaskLeases.tasks[0].domain, amendablePaths: ["_lib/accessEntitlements.ts"], maximumFiles: 36, maximumChangedLines: 4500 });
+  const result = evaluateFiniteTaskAdmissionSuccessor(args);
+  assert.equal(result.checks.registryCompatibility, true);
+  assert.ok(!result.findings.includes("FINITE_TASK_ADMISSION_TO_CLEARANCE_INVALID:registryCompatibility"));
+});
 test("admission 40: all 13 Phase 1 checks remain required", () => assert.equal(JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8")).reviewPolicy.requiredPhase1Checks, 13));
 test("admission 41: provider review remains optional advisory", () => assert.equal(JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8")).reviewPolicy.classification, "OPTIONAL_ADVISORY"));
 
@@ -620,6 +637,42 @@ test("general 43: a new finite task resolves without a static PR entry", () => {
   const fixture = pullFixture({ pr: 903, branch: "codex/finite-descendant" });
   const finiteTaskAuthority = { ok: true, repository: "Chillywood2025/chillywood-mobile", pr: 903, branch: fixture.event.pull_request.head.ref, currentHead: fixture.event.pull_request.head.sha, type: "ACTIVE_FINITE_TASK_LEASE", authoritySource: "ACTIVE_FINITE_TASK_LEASE", featureId: "chilly-chat-call-lifecycle", objectiveDomains: ["Chat", "notifications-native-calls"], supportingDomains: ["CI-test-infrastructure"], bindingId: "finite-903", finiteLeaseId: "lease-903" };
   assert.equal(derive({ fixture, finiteTaskAuthority }).source, "ACTIVE_FINITE_TASK_LEASE");
+});
+test("general 43a: PR scope consumes the shared effective finite-task budget while retaining the base reservation report", () => {
+  const fixture = pullFixture({ pr: 904, branch: "codex/finite-amended-descendant" });
+  const baseReservation = { allowedPaths: ["_lib/session.tsx"], pathGlobs: ["_lib/session.tsx"], maximumFiles: 30, maximumLines: 3600, eligiblePathCount: 30, reservationHash: "a".repeat(64) };
+  const effectiveReservation = { allowedPaths: ["_lib/accessEntitlements.ts", "_lib/roomRules.ts", "_lib/session.tsx"], pathGlobs: ["_lib/accessEntitlements.ts", "_lib/roomRules.ts", "_lib/session.tsx"], maximumFiles: 32, maximumLines: 4500, eligiblePathCount: 32, reservationHash: "b".repeat(64) };
+  const finiteTaskAuthority = {
+    ok: true,
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: 904,
+    branch: fixture.event.pull_request.head.ref,
+    currentHead: fixture.event.pull_request.head.sha,
+    type: "ACTIVE_FINITE_TASK_LEASE",
+    authoritySource: "ACTIVE_FINITE_TASK_LEASE",
+    featureId: "chilly-chat-call-lifecycle",
+    objectiveDomains: ["Chat", "notifications-native-calls"],
+    supportingDomains: ["CI-test-infrastructure"],
+    bindingId: "finite-904",
+    finiteLeaseId: "lease-904",
+    budget: { maximumFiles: effectiveReservation.maximumFiles, maximumHandAuthoredNetLines: effectiveReservation.maximumLines },
+    baseReservation,
+    effectiveReservation,
+    effectiveReservationHash: effectiveReservation.reservationHash,
+    amendmentReceipt: { id: 700030, subjectHash: "c".repeat(64), bodyHash: "d".repeat(64), rawBodyHash: "e".repeat(64) },
+  };
+  const result = derive({ fixture, finiteTaskAuthority });
+  assert.equal(result.ok, true, stableJson(result.findings));
+  assert.deepEqual(result.budget, { maximumFiles: 32, maximumHandAuthoredNetLines: 4500 });
+  assert.equal(finiteTaskAuthority.baseReservation.maximumFiles, 30);
+  assert.equal(finiteTaskAuthority.effectiveReservationHash, effectiveReservation.reservationHash);
+});
+test("general 43b: an incomplete live effective-reservation observation fails PR scope closed", () => {
+  const fixture = pullFixture({ pr: 905, branch: "codex/finite-amended-incomplete" });
+  const finiteTaskAuthority = { ok: false, findings: ["FINITE_TASK_LEASE_AMENDMENT_DISCOVERY_INCOMPLETE"] };
+  const result = derive({ fixture, finiteTaskAuthority });
+  assert.ok(result.findings.includes("FINITE_TASK_LEASE_AMENDMENT_DISCOVERY_INCOMPLETE"));
+  assert.ok(result.findings.includes("ASSURANCE_TASK_CONTEXT_UNBOUND"));
 });
 test("general 44: typed-context ambiguity fails", () => {
   const value = architectureFixture();
