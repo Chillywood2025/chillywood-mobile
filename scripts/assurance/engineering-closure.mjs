@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { canonicalGitText, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -2566,7 +2566,7 @@ export function evaluateFiniteTaskAdmissionSuccessor({ raw, allComments = [], pa
     && edgeClosure?.accounting?.unresolvedSet?.length === 0
     && edgeClosure?.accounting?.observedUndeclaredSet?.every((edgeId) => edgeClosure.modelDeltaEdges?.includes(edgeId));
   const priorDuplicate = (priorTruth?.finiteTaskLeases?.tasks ?? []).some(({ implementationPr }) => implementationPr === implementation?.pr);
-  const competingTask = (priorTruth?.finiteTaskLeases?.tasks ?? []).some(({ implementationPr, taskState }) => implementationPr !== implementation?.pr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
+  const competingTask = (priorTruth?.finiteTaskLeases?.tasks ?? []).some((task) => task.implementationPr !== implementation?.pr && !finiteTaskLeaseEffectivelyTerminal(priorTruth.finiteTaskLeases, task));
   const invariantEvidenceComplete = Array.isArray(taskArtifact?.invariants)
     && taskArtifact.invariants.length >= 30
     && taskArtifact.invariants.every((item) => typeof item?.id === "string" && typeof item?.positiveWitness === "string" && typeof item?.negativeWitness === "string" && typeof item?.targetedMutant === "string");
@@ -2600,6 +2600,7 @@ export function evaluateFiniteTaskAdmissionSuccessor({ raw, allComments = [], pa
     authority: truthRecord?.preAdmissionEngineeringSeedCapability?.status === "ACTIVE" && truthRecord?.preAdmissionEngineeringSeedCapability?.productMutationAllowed === false && truthRecord?.finiteTaskAdmissionClearanceCapability?.status === "ACTIVE" && truthRecord?.finiteTaskAdmissionClearanceCapability?.productMutationBeforeAdmissionMerge === false && truthRecord?.taskLocalGoverningEdgeClosureCapability?.status === "ACTIVE" && truthRecord.taskLocalGoverningEdgeClosureCapability.admissionRequiresClearClosure === true && Object.values(expected.authority).every((value) => value === false) && expected.packageChanges === false,
     duplicate: priorDuplicate === false,
     competingTask: competingTask === false,
+    completionLedgerPreserved: stableJson(truthRecord?.finiteTaskLeases?.completedLeaseOutcomes ?? []) === stableJson(priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []),
   };
   const ok = Object.values(checks).every(Boolean);
   const prospective = evaluateAdmissionClearanceState({ finiteLeasePresent: checks.truthLease, admissionMerged: true, artifactFrozen: checks.frozenModel, computedGateFindings: prospectiveGateFindings, persistedPhase: taskArtifact?.status });
@@ -2962,7 +2963,7 @@ export function evaluateFiniteTaskAdmissionSuccessorV2({ raw, allComments = [], 
   const active = truthRecord?.activeTaskBinding;
   const expectedTruthPolicy = trustedOwnerJurisdictionAuthority(ownerJurisdictionAuthority) ? ownerJurisdictionPolicyBindingTruthV2(ownerJurisdictionAuthority) : null;
   const priorDuplicate = (priorTruth?.finiteTaskLeases?.tasks ?? []).some(({ implementationPr }) => implementationPr === implementation?.pr);
-  const competingTask = (priorTruth?.finiteTaskLeases?.tasks ?? []).some(({ implementationPr, taskState }) => implementationPr !== implementation?.pr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
+  const competingTask = (priorTruth?.finiteTaskLeases?.tasks ?? []).some((task) => task.implementationPr !== implementation?.pr && !finiteTaskLeaseEffectivelyTerminal(priorTruth.finiteTaskLeases, task));
   const frozenGate = evaluateFrozenFiniteTaskArtifactV2(taskArtifact, { root });
   const prospectiveGateFindings = [...frozenGate.findings, verifiedEdgeClosure?.classification === "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR" && stableJson(edgeClosure) === stableJson(verifiedEdgeClosure) && edgeClosure?.accounting?.unresolvedSet?.length === 0 && edgeClosure?.accounting?.observedUndeclaredSet?.every((edgeId) => edgeClosure.modelDeltaEdges?.includes(edgeId)) ? null : "PREIMPLEMENTATION_TASK_LOCAL_EDGE_CLOSURE_INCOMPLETE", ownerJurisdictionAuthority?.coverage?.result === `${domains.length}/${domains.length}` && stableJson(binding?.domainIds) === stableJson(domains) ? null : "PREIMPLEMENTATION_AUTHORITY_UNOWNED"].filter(Boolean);
   const leaseRecord = lease[0];
@@ -2988,6 +2989,7 @@ export function evaluateFiniteTaskAdmissionSuccessorV2({ raw, allComments = [], 
     authority: truthRecord?.ownerJurisdictionPolicyCapability?.status === "ACTIVE" && truthRecord?.finiteTaskAdmissionClearanceCapability?.status === "ACTIVE" && truthRecord.finiteTaskAdmissionClearanceCapability.productMutationBeforeAdmissionMerge === false,
     duplicate: priorDuplicate === false,
     competingTask: competingTask === false,
+    completionLedgerPreserved: stableJson(truthRecord?.finiteTaskLeases?.completedLeaseOutcomes ?? []) === stableJson(priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []),
   };
   const ok = Object.values(checks).every(Boolean);
   const result = {
@@ -3666,6 +3668,7 @@ export function verifyFiniteTaskTerminalTruthAuthority({
     transition: finiteTaskPostMergeTransitionAuthorityValid(terminalTransition) && terminalEvidence?.mergeSha === identity?.baseSha,
     immutableBaseLease: Boolean(baseLease && priorBaseLease && stableJson(baseLease) === stableJson(priorBaseLease) && hashValue(baseLease) === terminalEvidence?.baseLeaseHash),
     terminalProjection: stableJson(truthRecord?.finiteTaskRuntime?.terminalOutcome) === stableJson(terminalEvidence)
+      && stableJson(truthRecord?.finiteTaskLeases?.completedLeaseOutcomes ?? []) === stableJson([...(priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []), terminalEvidence])
       && binding?.phase === "TERMINAL"
       && binding?.currentImplementationHead === terminalEvidence?.sourceHead
       && binding?.currentImplementationTree === terminalEvidence?.sourceTree
@@ -3937,7 +3940,7 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     : null;
 
   const activeLeaseStates = new Set(["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "IMPLEMENTATION", "VERIFY", "NATIVE_PROVIDER_PROOF", "MERGE_ELIGIBLE", "ACTIVE_IMPLEMENTATION"]);
-  const leases = (currentTruth?.finiteTaskLeases?.tasks ?? []).filter((lease) => lease?.implementationPr === identity.pr && lease?.implementationBranch === identity.branch && activeLeaseStates.has(lease?.taskState));
+  const leases = (currentTruth?.finiteTaskLeases?.tasks ?? []).filter((lease) => lease?.implementationPr === identity.pr && lease?.implementationBranch === identity.branch && activeLeaseStates.has(lease?.taskState) && !finiteTaskLeaseEffectivelyTerminal(currentTruth.finiteTaskLeases, lease));
   let finiteTaskAuthority = null;
   if (leases.length === 1) {
     const lease = leases[0];
@@ -4202,7 +4205,7 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     });
     if (finiteTerminalRaw && priorTruth) {
       const terminalTransition = observeFiniteTaskPostMergeTransition({ record: priorTruth, currentProtectedMain: identity.baseSha, root });
-      terminalTruthAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: finiteTerminalRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, terminalTransition, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.finiteTaskRuntime?.terminalOutcome?.mergeSha === identity.baseSha, root });
+      terminalTruthAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: finiteTerminalRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, terminalTransition, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: (priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []).some(({ mergeSha }) => mergeSha === identity.baseSha), root });
     } else {
       terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.taskContextArchitecture?.mergeSha === identity.baseSha });
     }
@@ -4477,7 +4480,9 @@ export function observeFiniteTaskPostMergeTransition({
   const alreadyProjected = unique.length === 0
     && binding?.phase === "TERMINAL"
     && stableJson(record?.finiteTaskRuntime?.terminalOutcome) === stableJson(normalizedTerminalEvidence)
-    && stableJson(binding?.terminalEvidence) === stableJson(normalizedTerminalEvidence);
+    && stableJson(binding?.terminalEvidence) === stableJson(normalizedTerminalEvidence)
+    && (record?.finiteTaskLeases?.completedLeaseOutcomes ?? []).filter(({ leaseId }) => leaseId === lease.leaseId).length === 1
+    && stableJson((record?.finiteTaskLeases?.completedLeaseOutcomes ?? []).find(({ leaseId }) => leaseId === lease.leaseId)) === stableJson(normalizedTerminalEvidence);
   const transition = {
     applicable: alreadyProjected ? false : true,
     ok: unique.length === 0,

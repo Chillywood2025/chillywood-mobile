@@ -32,6 +32,7 @@ import {
   finiteTaskEffectiveReservationAuthorityValid,
   finiteTaskFinalReceiptBody,
   finiteTaskFinalReceiptSubject,
+  finiteTaskLeaseEffectivelyTerminal,
   finiteTaskLeaseFor,
   HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1,
   implementationRemoteRef,
@@ -2086,7 +2087,6 @@ function wave1AmendmentResolution({ subject = wave1AmendmentSubject(), candidate
     ...resolver
   });
 }
-
 test("finite amendment resolver: base-only Wave 1 rejects both unamended paths", () => {
   const result = resolveFiniteTaskEffectiveReservation({
     registry: canonicalTruth.finiteTaskLeases,
@@ -2099,7 +2099,6 @@ test("finite amendment resolver: base-only Wave 1 rejects both unamended paths",
   assert.equal(result.ok, false);
   assert.ok(result.findings.includes("FINITE_TASK_EFFECTIVE_RESERVATION_PATH_VIOLATION"));
 });
-
 test("finite amendment resolver: exact Wave 1 delta overlays every reservation field at 32/4500", () => {
   const result = wave1AmendmentResolution();
   assert.equal(result.ok, true, result.findings.join(","));
@@ -2116,7 +2115,6 @@ test("finite amendment resolver: exact Wave 1 delta overlays every reservation f
   assert.equal(wave1AmendmentResolution({ resolver: { observationMode: "LIVE_GITHUB_COMPLETE_READBACK" } }).authority.liveReceipt, false);
   for (const hash of [result.effectiveReservation.reservationHash, result.amendmentReceipt.subjectHash, result.amendmentReceipt.bodyHash, result.amendmentReceipt.rawBodyHash]) assert.match(hash, /^[0-9a-f]{64}$/u);
 });
-
 test("finite amendment resolver: a reserved amendment requires V2 while the legacy V1 fixture remains valid", () => {
   const legacyWave1 = taskLeaseAmendmentSubject({
     schemaVersion: 1,
@@ -2145,7 +2143,6 @@ test("finite amendment resolver: a reserved amendment requires V2 while the lega
   const historical = amendmentSubject();
   assert.equal(verifyTaskLeaseAmendment({ registry: finiteRegistry, lease: pr214Lease, candidate: { head: f252Head }, subject: historical, observation: amendmentObservation(historical) }).ok, true);
 });
-
 test("finite amendment resolver: only resolver-branded structurally unchanged base scope is authoritative", () => {
   assert.equal(finiteTaskEffectiveReservationAuthorityValid({ ok: true, status: "BASE_ONLY", effectiveLease: { allowedPaths: ["package.json"] } }), false);
   const syntheticReserved = resolveFiniteTaskEffectiveReservation({
@@ -2158,7 +2155,6 @@ test("finite amendment resolver: only resolver-branded structurally unchanged ba
   });
   assert.equal(syntheticReserved.status, "BASE_ONLY");
   assert.equal(finiteTaskEffectiveReservationAuthorityValid(syntheticReserved), false);
-
   const legacySynthetic = resolveFiniteTaskEffectiveReservation({
     registry: finiteRegistry,
     lease: pr214Lease,
@@ -2167,7 +2163,6 @@ test("finite amendment resolver: only resolver-branded structurally unchanged ba
   });
   assert.equal(legacySynthetic.status, "BASE_ONLY");
   assert.equal(finiteTaskEffectiveReservationAuthorityValid(legacySynthetic), true);
-
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-live-base-only-"));
   const fakeGh = path.join(temporary, "gh");
   const pull = {
@@ -2202,14 +2197,12 @@ test("finite amendment resolver: only resolver-branded structurally unchanged ba
   liveReserved.effectiveLease.allowedPaths.push("package.json");
   assert.equal(finiteTaskEffectiveReservationAuthorityValid(liveReserved), false);
 });
-
 test("finite amendment resolver: path 33 and changed line 4501 fail", () => {
   const path33 = wave1AmendmentResolution({ candidate: wave1Candidate({ changedPaths: [...wave1Candidate().changedPaths, "_lib/not-authorized.ts"] }) });
   assert.ok(path33.findings.includes("FINITE_TASK_EFFECTIVE_RESERVATION_PATH_VIOLATION"));
   const line4501 = wave1AmendmentResolution({ candidate: wave1Candidate({ changedLines: 4501 }) });
   assert.ok(line4501.findings.includes("FINITE_TASK_EFFECTIVE_RESERVATION_SCOPE_OVERFLOW"));
 });
-
 test("finite amendment resolver: malformed binding matrix fails closed", () => {
   const cases = [
     wave1AmendmentSubject({ addedPaths: [wave1AddedPaths[0]] }),
@@ -2232,7 +2225,6 @@ test("finite amendment resolver: malformed binding matrix fails closed", () => {
   assert.equal(wave1AmendmentResolution({ raw: { author_association: "MEMBER" } }).ok, false);
   assert.equal(wave1AmendmentResolution({ raw: { updated_at: "2026-08-14T22:01:00Z" } }).ok, false);
 });
-
 test("finite amendment resolver: edited duplicate incomplete and unregistered observations fail", () => {
   assert.equal(wave1AmendmentResolution({ raw: { body: `${taskLeaseAmendmentCommentBody(wave1AmendmentSubject())}\nedited` } }).ok, false);
   assert.equal(wave1AmendmentResolution({ resolver: { commentsPaginationComplete: false } }).ok, false);
@@ -2246,7 +2238,6 @@ test("finite amendment resolver: edited duplicate incomplete and unregistered ob
   unregistered.amendmentPolicy.domains = unregistered.amendmentPolicy.domains.filter(({ id }) => id !== wave1Lease.domain);
   assert.equal(wave1AmendmentResolution({ resolver: { registry: unregistered } }).ok, false);
 });
-
 test("finite amendment resolver: missing timestamps, missing start trees, and duplicate path reasons fail", () => {
   assert.equal(wave1AmendmentResolution({ raw: { created_at: null, updated_at: null } }).ok, false);
   assert.ok(wave1AmendmentResolution({ resolver: { commits: [
@@ -2259,7 +2250,6 @@ test("finite amendment resolver: missing timestamps, missing start trees, and du
   ] });
   assert.equal(wave1AmendmentResolution({ subject: duplicateReason }).ok, false);
 });
-
 test("finite amendment resolver: bound start must pass base scope and remain an ancestor on the same PR", () => {
   assert.ok(wave1AmendmentResolution({ gitOptions: { startingPaths: ["_lib/not-authorized.ts"] } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_OUTSIDE_BASE_RESERVATION"));
   assert.ok(wave1AmendmentResolution({ gitOptions: { startingLines: 3601 } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_OUTSIDE_BASE_RESERVATION"));
@@ -2267,7 +2257,6 @@ test("finite amendment resolver: bound start must pass base scope and remain an 
   assert.ok(wave1AmendmentResolution({ gitOptions: { descendant: false } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_HISTORY_INVALID"));
   assert.ok(wave1AmendmentResolution({ resolver: { commits: [{ sha: wave1Descendant, commit: { tree: { sha: wave1DescendantTree } } }] } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_NOT_ON_PR"));
 });
-
 test("finite amendment resolver: starting base is the exact merge base and tolerates later protected-base descendants", () => {
   const advancedBase = "7".repeat(40);
   const advanced = wave1AmendmentResolution({ resolver: { pullRequest: {
@@ -2280,7 +2269,6 @@ test("finite amendment resolver: starting base is the exact merge base and toler
   const wrongMergeBase = wave1AmendmentResolution({ gitOptions: { mergeBase: "8".repeat(40) } });
   assert.ok(wrongMergeBase.findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_BASE_MISMATCH"));
 });
-
 test("finite amendment resolver: sibling, rebased, force-pushed replacement, and unrelated histories all fail", () => {
   const sibling = wave1AmendmentResolution({ gitOptions: { descendant: false } });
   const rebased = wave1AmendmentResolution({
@@ -2296,7 +2284,6 @@ test("finite amendment resolver: sibling, rebased, force-pushed replacement, and
   for (const result of [rebased, forcePushedReplacement]) assert.ok(result.findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_NOT_ON_PR"));
   assert.ok(unrelated.findings.includes("FINITE_TASK_LEASE_AMENDMENT_HISTORY_INVALID"));
 });
-
 test("finite amendment resolver: future reserved amendments require one bounded registered policy", () => {
   const missing = structuredClone(canonicalTruth.finiteTaskLeases);
   missing.amendmentPolicy.domains = missing.amendmentPolicy.domains.filter(({ id }) => id !== wave1Lease.domain);
@@ -2308,7 +2295,7 @@ test("finite amendment resolver: future reserved amendments require one bounded 
   excessive.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).maximumFiles = 37;
   assert.ok(validateFiniteTaskLeaseRegistry(excessive).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_UNAVAILABLE"));
   const wildcard = structuredClone(canonicalTruth.finiteTaskLeases);
-  wildcard.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).amendablePaths = ["_lib/accessEntitlements?.ts"];
+  wildcard.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).amendablePaths = ["_lib/accessEntitlements[.]ts"];
   assert.ok(validateFiniteTaskLeaseRegistry(wildcard).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_MALFORMED"));
   const reservedBaseWildcard = structuredClone(canonicalTruth.finiteTaskLeases);
   const reservedLease = reservedBaseWildcard.tasks.find(({ implementationPr }) => implementationPr === wave1Lease.implementationPr);
@@ -2325,7 +2312,6 @@ test("finite amendment resolver: future reserved amendments require one bounded 
   unusableCapacity.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).maximumFiles = 30;
   assert.ok(validateFiniteTaskLeaseRegistry(unusableCapacity).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_UNAVAILABLE"));
 });
-
 test("finite amendment resolver: frozen Wave 1 evidence remains byte-identical", () => {
   assert.equal(wave1Lease.closure.artifactHash, "0cc09e1a908c2520e22652c8e258babb862166875bb449db2648a10f54e01361");
   assert.equal(wave1Lease.closure.packetHash, "0b238a3fb3b73cd5022dd5f571653d0cd4af4067569181062376d56a49c0839e");
@@ -2334,7 +2320,6 @@ test("finite amendment resolver: frozen Wave 1 evidence remains byte-identical",
   assert.equal(wave1Lease.closure.edgeEvidenceHash, "693abd32e7cd5c80fd43c6358cf13470d8aa73fcc7c3e9e87515ff7ec804d61a");
   assert.equal(wave1Lease.closure.modelDeltaHash, "5ca0cdb63f64f9d77edfc5b5929c68e78806b1f47710c798c49b8853104217ef");
 });
-
 test("finite lifecycle: amendment-capable tasks require supplied live final-source evidence for merge eligibility", () => {
   const record = historicalRollingRecord();
   record.finiteTaskRuntime.finalEvidence = { ownerReceipt: true, repositoryReview: true, phase1: true, mergeEligible: true };
@@ -2375,7 +2360,6 @@ test("finite lifecycle: amendment-capable tasks require supplied live final-sour
   assert.equal(legacy.liveFinalEvidenceRequired, false);
   assert.equal(legacy.mergeEligible, true);
 });
-
 test("finite lifecycle: verified post-merge evidence requires exactly one finite-task terminal truth", () => {
   const record = historicalRollingRecord();
   const observed = trustedWave1PostMergeFixture();
@@ -2401,7 +2385,6 @@ test("finite lifecycle: verified post-merge evidence requires exactly one finite
   observed.transition.findings.push("forged-after-observation");
   assert.ok(evaluateProtectedMainAdvancement(args).findings.includes("FINITE_TASK_POST_MERGE_TRANSITION_AUTHORITY_INVALID"));
 });
-
 test("finite lifecycle: terminal projection preserves the immutable base lease and derives the canonical next task", () => {
   const resolution = wave1AmendmentResolution();
   const base = {
@@ -2432,11 +2415,37 @@ test("finite lifecycle: terminal projection preserves the immutable base lease a
   assert.equal(stableJson(finiteTaskLeaseFor(projected.finiteTaskLeases, { implementationPr: 229, implementationBranch: wave1Lease.implementationBranch, featureId: wave1Lease.featureId })), originalLease);
   assert.equal(projected.activeTaskBinding.phase, "TERMINAL");
   assert.equal(projected.finiteTaskRuntime.terminalOutcome.effectiveReservation.reservationHash, resolution.effectiveReservation.reservationHash);
+  assert.deepEqual(projected.finiteTaskLeases.completedLeaseOutcomes, [evidence]);
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(projected.finiteTaskLeases, wave1Lease), true);
+  assert.ok(evaluateFiniteTaskCandidate({ lease: wave1Lease, registry: projected.finiteTaskLeases, candidate: finiteCandidate(wave1Lease, 90) }).findings.includes("FINITE_TASK_TERMINAL"));
+  const reorderedPolicy = structuredClone(projected.finiteTaskLeases); reorderedPolicy.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).amendablePaths.reverse(); assert.deepEqual(validateFiniteTaskLeaseRegistry(reorderedPolicy), []);
+  assert.match(renderCurrentState(projected), /state `MERGED_VERIFIED`/u);
+  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: projected, terminalEvidence: evidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, [evidence]);
+  const conflict = { ...evidence, nextTask: "CONFLICT" }; conflict.evidenceHash = hashValue(Object.fromEntries(Object.entries(conflict).filter(([key]) => key !== "evidenceHash")));
+  assert.throws(() => projectFiniteTaskTerminalTruth({ record: projected, terminalEvidence: conflict, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }), /FINITE_TASK_TERMINAL_PROJECTION_CONFLICT/u);
+  const preAdmission = preAdmissionFixture(); preAdmission.currentTruth = projected;
+  assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmission).ok, true);
+  const rebound = structuredClone(projected); rebound.activeTaskBinding = { ...rebound.activeTaskBinding, implementationPr: 230, implementationBranch: "codex/future-task", phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR" };
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(rebound.finiteTaskLeases, wave1Lease), true);
+  const futureLease = { ...structuredClone(wave1Lease), leaseId: "future-same-domain-v1", implementationPr: 230, implementationBranch: "codex/future-same-domain-v1" };
+  const futureRegistry = { ...rebound.finiteTaskLeases, tasks: [...rebound.finiteTaskLeases.tasks, futureLease] };
+  assert.equal(evaluateFiniteTaskCandidate({ lease: futureLease, registry: futureRegistry, candidate: finiteCandidate(futureLease, 91) }).ok, true);
+  rebound.finiteTaskLeases = futureRegistry; rebound.activeTaskBinding.implementationBranch = futureLease.implementationBranch;
+  const futureSourceHead = "c".repeat(40); const futureBase = { ...evidence, taskId: futureLease.leaseId, leaseId: futureLease.leaseId, implementationPr: futureLease.implementationPr, implementationBranch: futureLease.implementationBranch, baseLeaseHash: hashValue(futureLease), amendmentReceipt: { ...evidence.amendmentReceipt, commentId: 810002, subjectHash: "a".repeat(64), bodyHash: "b".repeat(64), rawBodyHash: "c".repeat(64) }, finalSourceReceipt: { ...evidence.finalSourceReceipt, commentId: 820002, subjectHash: "d".repeat(64), bodyHash: "e".repeat(64), rawBodyHash: "f".repeat(64), amendmentCommentId: 810002, finalHead: futureSourceHead }, sourceHead: futureSourceHead, mergeSha: "d".repeat(40), mergeParents: ["e".repeat(40), futureSourceHead] };
+  const futureEvidence = { ...futureBase, evidenceHash: hashValue(Object.fromEntries(Object.entries(futureBase).filter(([key]) => key !== "evidenceHash"))) };
+  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: rebound, terminalEvidence: futureEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, [evidence, futureEvidence]);
+  const replayBase = Object.fromEntries(Object.entries({ ...futureEvidence, amendmentReceipt: evidence.amendmentReceipt, finalSourceReceipt: evidence.finalSourceReceipt, sourceHead: evidence.sourceHead, sourceTree: evidence.sourceTree, mergeSha: evidence.mergeSha, mergeTree: evidence.mergeTree, mergeParents: evidence.mergeParents }).filter(([key]) => key !== "evidenceHash")); const replayEvidence = { ...replayBase, evidenceHash: hashValue(replayBase) };
+  const replayedRegistry = structuredClone(futureRegistry); replayedRegistry.completedLeaseOutcomes = [evidence, replayEvidence]; assert.ok(validateFiniteTaskLeaseRegistry(replayedRegistry).includes("FINITE_TASK_COMPLETION_LEDGER_IDENTITY_REUSED")); assert.throws(() => projectFiniteTaskTerminalTruth({ record: rebound, terminalEvidence: replayEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }), /FINITE_TASK_TERMINAL_PROJECTION_IDENTITY_REUSED/u);
+  const tampered = structuredClone(projected); tampered.finiteTaskLeases.completedLeaseOutcomes[0].evidenceHash = "f".repeat(64); preAdmission.currentTruth = tampered;
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(tampered.finiteTaskLeases, wave1Lease), false);
+  assert.ok(validateFiniteTaskLeaseRegistry(tampered.finiteTaskLeases).includes("FINITE_TASK_COMPLETION_LEDGER_MALFORMED"));
+  assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmission).findings.includes("PRE_ADMISSION_ACTIVE_FINITE_TASK"), true);
+  const duplicated = structuredClone(projected.finiteTaskLeases); duplicated.completedLeaseOutcomes.push(conflict);
+  assert.ok(validateFiniteTaskLeaseRegistry(duplicated).includes("FINITE_TASK_COMPLETION_LEDGER_DUPLICATE"));
   assert.equal(validateTerminalTaskEvidence(projected.activeTaskBinding, projected.latestMergedImplementationPr).length, 0);
   assert.match(renderNextTask(projected), new RegExp(canonicalTruth.engineeringDoctrine.nextPermittedAction, "u"));
   assert.doesNotMatch(renderNextTask(projected), /IMPLEMENT_PRE_RELEASE_WAVE_1_IDENTITY_ENTITLEMENT_AUTHORITY/u);
 });
-
 test("finite lifecycle: every real evaluator derives one byte-identical Wave 1 effective reservation", () => {
   const resolution = wave1AmendmentResolution();
   const expectedReservation = stableJson(resolution.effectiveReservation);
@@ -2611,7 +2620,7 @@ test("finite lifecycle: every real evaluator derives one byte-identical Wave 1 e
     sourceHead: candidate.head,
     sourceTree: candidate.tree,
     mergeSha: "1".repeat(40),
-    mergeTree,
+    mergeTree: candidate.tree,
     mergeParents: [wave1BoundBase, candidate.head],
     nextTask: canonicalTruth.engineeringDoctrine.nextPermittedAction,
     authority: closedAuthority

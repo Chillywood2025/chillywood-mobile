@@ -699,6 +699,9 @@ const finiteTaskActiveStates = new Set(finiteTaskStates.filter((state) => !finit
 const sha256Pattern = /^[0-9a-f]{64}$/u;
 const finiteTaskPathHasWildcard = (file) => typeof file === "string"
   && (/[?*{}]/u.test(file) || /(?:!|@|\+)\(/u.test(file));
+const finiteTaskAmendmentPathHasWildcard = (file) => finiteTaskPathHasWildcard(file)
+  || /[\[\]]/u.test(file.replace(/(^|\/)\[[A-Za-z][A-Za-z0-9_]*\](?=\/|\.|$)/gu, "$1"));
+const finiteTaskTerminalOutcomeIdentity = (outcome) => [outcome?.amendmentReceipt?.commentId, outcome?.finalSourceReceipt?.commentId, outcome?.sourceHead, outcome?.mergeSha];
 
 export function finiteTaskLeaseFor(registry, { implementationPr, implementationBranch, featureId } = {}) {
   const matches = (registry?.tasks ?? []).filter((task) => task?.implementationPr === implementationPr
@@ -710,6 +713,7 @@ export function finiteTaskLeaseFor(registry, { implementationPr, implementationB
 export function validateFiniteTaskLeaseRegistry(registry) {
   const findings = [];
   const tasks = Array.isArray(registry?.tasks) ? registry.tasks : [];
+  const completedLeaseOutcomes = Array.isArray(registry?.completedLeaseOutcomes) ? registry.completedLeaseOutcomes : [];
   const amendmentDomains = Array.isArray(registry?.amendmentPolicy?.domains) ? registry.amendmentPolicy.domains : [];
   if (registry?.schemaVersion !== 1
     || registry?.policyId !== "ASSURANCE_FINITE_TASK_LEASE_V1"
@@ -724,13 +728,14 @@ export function validateFiniteTaskLeaseRegistry(registry) {
     || registry?.amendmentPolicy?.protectedMainUpdateRequired !== false
     || registry?.amendmentPolicy?.ownerCommentRequired !== true
     || amendmentDomains.length < 1
-    || tasks.length < 1) findings.push("FINITE_TASK_LEASE_REGISTRY_MALFORMED");
+    || tasks.length < 1
+    || (registry?.completedLeaseOutcomes !== undefined && !Array.isArray(registry.completedLeaseOutcomes))) findings.push("FINITE_TASK_LEASE_REGISTRY_MALFORMED");
   const amendmentDomainIds = new Set();
   for (const domain of amendmentDomains) {
     if (typeof domain?.id !== "string" || !domain.id
       || !Array.isArray(domain.amendablePaths) || !domain.amendablePaths.length
       || new Set(domain.amendablePaths).size !== domain.amendablePaths.length
-      || domain.amendablePaths.some((file) => typeof file !== "string" || !file || finiteTaskPathHasWildcard(file) || file.startsWith("/") || file.includes("..") || file.endsWith("lock") || file === "package.json")
+      || domain.amendablePaths.some((file) => typeof file !== "string" || !file || finiteTaskAmendmentPathHasWildcard(file) || file.startsWith("/") || file.includes("..") || file.endsWith("lock") || file === "package.json")
       || !Number.isInteger(domain.maximumFiles) || domain.maximumFiles < 1
       || !Number.isInteger(domain.maximumChangedLines) || domain.maximumChangedLines < 1) findings.push("FINITE_TASK_LEASE_AMENDMENT_POLICY_MALFORMED");
     if (amendmentDomainIds.has(domain?.id)) findings.push("FINITE_TASK_LEASE_AMENDMENT_POLICY_DUPLICATE");
@@ -801,6 +806,14 @@ export function validateFiniteTaskLeaseRegistry(registry) {
     seenPrs.add(task?.implementationPr);
     seenBranches.add(task?.implementationBranch);
   }
+  if (new Set(completedLeaseOutcomes.map((outcome) => outcome?.leaseId)).size !== completedLeaseOutcomes.length
+    || new Set(completedLeaseOutcomes.map((outcome) => outcome?.implementationPr)).size !== completedLeaseOutcomes.length) findings.push("FINITE_TASK_COMPLETION_LEDGER_DUPLICATE");
+  const completionIdentities = completedLeaseOutcomes.map(finiteTaskTerminalOutcomeIdentity);
+  if (completionIdentities.some((identity, index) => identity.some((value, field) => completionIdentities.some((other, otherIndex) => otherIndex !== index && other[field] === value)))) findings.push("FINITE_TASK_COMPLETION_LEDGER_IDENTITY_REUSED");
+  for (const outcome of completedLeaseOutcomes) {
+    const leases = tasks.filter(({ leaseId }) => leaseId === outcome?.leaseId);
+    if (leases.length !== 1 || !finiteTaskTerminalOutcomeMatchesLease(registry, leases[0], outcome)) findings.push("FINITE_TASK_COMPLETION_LEDGER_MALFORMED");
+  }
   return [...new Set(findings)].sort();
 }
 
@@ -836,9 +849,9 @@ export function evaluateFiniteTaskCandidate({ lease, registry, candidate }) {
   const competitors = (registry?.tasks ?? []).filter((task) => task.leaseId !== lease.leaseId
     && task.domain === lease.domain
     && task.domainOwnership === "ACTIVE"
-    && !finiteTaskTerminalStates.has(task.taskState));
+    && !finiteTaskLeaseEffectivelyTerminal(registry, task));
   if (competitors.length) findings.push("FINITE_TASK_COMPETING_DOMAIN_OWNER");
-  if (!finiteTaskActiveStates.has(lease.taskState)) findings.push("FINITE_TASK_TERMINAL");
+  if (!finiteTaskActiveStates.has(lease.taskState) || finiteTaskLeaseEffectivelyTerminal(registry, lease)) findings.push("FINITE_TASK_TERMINAL");
   const blockingFinding = candidate.findings?.P0 > 0
     || candidate.findings?.P1 > 0
     || candidate.findings?.launchImpactingP2 > 0;
@@ -992,7 +1005,6 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
     && observation.body === body;
   return { ok, stale: typeof receipt?.subjectHash === "string" && receipt.subjectHash !== subjectHash, subject, subjectHash, bodyHash: subject.schemaVersion === 2 ? payloadBodyHash : rawBodyHash, rawBodyHash };
 }
-
 export function verifyFiniteTaskFinalSourceEligibility({
   lease,
   candidate,
@@ -1435,6 +1447,7 @@ export function evaluateFiniteTaskLeaseRuntime({
       && terminalOutcome?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
       && stableJson(binding?.terminalEvidence) === stableJson(terminalOutcome)
       && terminalOutcome?.baseLeaseHash === sha256(lease)
+      && finiteTaskLeaseEffectivelyTerminal(record?.finiteTaskLeases, lease)
       && finiteTaskActiveStates.has(lease?.taskState)
       && lease?.domainOwnership === "ACTIVE";
     const legacyTerminalProjection = lease?.taskState === "MERGED_VERIFIED"
@@ -2243,7 +2256,6 @@ const trustedFiniteTaskResolutionFingerprints = new WeakMap();
 const trustedFiniteTaskPostMergeCandidates = new WeakMap();
 const trustedFiniteTaskPostMergeTransitions = new WeakMap();
 const trustedFiniteTaskImplementationLifecycles = new WeakMap();
-
 const finiteTaskImplementationLifecycleFingerprint = (value) => sha256(value);
 export function finiteTaskImplementationLifecycleAuthorityValid(value) {
   return value?.mergeEligible === true
@@ -2288,7 +2300,6 @@ export function finiteTaskPostMergeTransitionAuthorityValid(value) {
   return value?.applicable === true && value?.ok === true
     && trustedFiniteTaskPostMergeTransitions.get(value) === sha256(value);
 }
-
 function finiteTaskPostMergeCandidateFingerprint(candidate) {
   return sha256({
     pr: candidate?.pr,
@@ -2311,13 +2322,11 @@ function finiteTaskPostMergeCandidateFingerprint(candidate) {
     recordedObservationHead: candidate?.recordedObservationHead
   });
 }
-
 function finiteTaskPostMergeCandidateValid(candidate) {
   return candidate?.prState === "closed"
     && candidate?.observationSource === "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE"
     && trustedFiniteTaskPostMergeCandidates.get(candidate) === finiteTaskPostMergeCandidateFingerprint(candidate);
 }
-
 function finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTransition } = {}) {
   const observationTrusted = liveObservation && typeof liveObservation === "object"
     && trustedFiniteTaskLiveObservations.get(liveObservation) === sha256(liveObservation);
@@ -2383,7 +2392,6 @@ function finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTra
     mergeSha: terminal.mergeSha
   } : null;
 }
-
 export function registerVerifiedFiniteTaskPostMergeTransition({ lease, liveObservation, postMergeTransition } = {}) {
   if (finiteTaskImplementationLifecycleAuthorityValid(postMergeTransition?.lifecycle)
     && finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTransition })) {
@@ -2391,12 +2399,10 @@ export function registerVerifiedFiniteTaskPostMergeTransition({ lease, liveObser
   }
   return postMergeTransition;
 }
-
 function verifiedFiniteTaskClosedSource({ lease, liveObservation, postMergeTransition } = {}) {
   if (!finiteTaskPostMergeTransitionAuthorityValid(postMergeTransition)) return null;
   return finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTransition });
 }
-
 function finiteTaskResolutionAuthorityFingerprint(resolution) {
   return sha256({
     ok: resolution?.ok,
@@ -2414,7 +2420,6 @@ function finiteTaskResolutionAuthorityFingerprint(resolution) {
     authority: resolution?.authority
   });
 }
-
 export function finiteTaskEffectiveReservationAuthorityValid(resolution) {
   if (resolution?.ok !== true
     || trustedFiniteTaskResolutionFingerprints.get(resolution) !== finiteTaskResolutionAuthorityFingerprint(resolution)) return false;
@@ -2435,7 +2440,6 @@ export function finiteTaskEffectiveReservationAuthorityValid(resolution) {
     && resolution.authority?.amendmentEffective === true
     && resolution.authority?.liveReceipt === true;
 }
-
 function readCompleteGitHubApiPages(endpoint) {
   try {
     const pages = JSON.parse(execFileSync("gh", ["api", "--method=GET", "--paginate", "--slurp", endpoint], {
@@ -2449,10 +2453,8 @@ function readCompleteGitHubApiPages(endpoint) {
       : { complete: false, items: [] };
   } catch { return { complete: false, items: [] }; }
 }
-
 const decodeGitHubHtml = (value) => value.replace(/&#x([0-9a-f]+);/giu, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/&#(\d+);/gu, (_, decimal) => String.fromCodePoint(Number(decimal))).replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&#39;", "'").replaceAll("&amp;", "&");
 const finiteTaskGitValue = (args) => { try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); } catch { return null; } };
-
 export function observePublicGitHubPullRequest({ repository = "Chillywood2025/chillywood-mobile", pr } = {}) {
   const invalid = { comments: [], commentsPaginationComplete: false, commits: [], commitsPaginationComplete: false, pullRequest: null };
   if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
@@ -2491,7 +2493,6 @@ export function observePublicGitHubPullRequest({ repository = "Chillywood2025/ch
   const pullRequest = state && gitShaPattern.test(baseSha ?? "") ? { number: pr, state, draft: pull.state === "DRAFT", merged: pull.state === "MERGED", merged_at: pull.mergedTime, merge_commit_sha: mergeCommitSha, head: { ref: pull.headBranch, sha: pull.headSha, repo: { full_name: `${pull.headRepositoryOwnerLogin}/${pull.headRepositoryName}` } }, base: { ref: pull.baseBranch, sha: baseSha, repo: { full_name: repository } } } : null;
   return { comments, commentsPaginationComplete, commits, commitsPaginationComplete, pullRequest };
 }
-
 export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chillywood2025/chillywood-mobile", pr, authorityEvidence = null } = {}) {
   const invalid = {
     comments: [],
@@ -2547,11 +2548,9 @@ function taskLeaseAmendmentEnvelope(value) {
   const payload = { subject, subjectHash };
   return { ...payload, bodyHash: sha256(payload) };
 }
-
 export function taskLeaseAmendmentCommentBody(value) {
   return `${taskLeaseAmendmentMarker}\n${stableJson(taskLeaseAmendmentEnvelope(value))}`;
 }
-
 function normalizeIssueComment(raw) {
   return {
     id: raw?.id ?? raw?.commentId ?? null,
@@ -2564,7 +2563,6 @@ function normalizeIssueComment(raw) {
     body: raw?.body ?? null
   };
 }
-
 function parseTaskLeaseAmendmentBody(body) {
   if (typeof body !== "string" || !body.startsWith(`${taskLeaseAmendmentMarker}\n`)) return null;
   try {
@@ -2575,7 +2573,6 @@ function parseTaskLeaseAmendmentBody(body) {
     return null;
   }
 }
-
 function normalizedPullRequest(raw) {
   return {
     repository: raw?.head?.repo?.full_name ?? raw?.repository ?? null,
@@ -2587,18 +2584,15 @@ function normalizedPullRequest(raw) {
     base: raw?.base?.sha ?? raw?.baseSha ?? raw?.base ?? null
   };
 }
-
 function normalizedPullCommit(raw) {
   if (typeof raw === "string") return { sha: raw, tree: null };
   return { sha: raw?.sha ?? null, tree: raw?.commit?.tree?.sha ?? raw?.tree?.sha ?? raw?.tree ?? null };
 }
-
 function gitChangedLines(gitCommand, range) {
   return gitCommand(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean)
     .reduce((total, line) => total + line.split("\t").slice(0, 2)
       .reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0), 0);
 }
-
 export function finiteTaskReservationProjection(lease) {
   const allowedPaths = [...new Set(Array.isArray(lease?.allowedPaths) ? lease.allowedPaths : [])].sort();
   const pathGlobs = [...new Set(Array.isArray(lease?.artifactReservation?.pathGlobs)
@@ -2612,6 +2606,34 @@ export function finiteTaskReservationProjection(lease) {
     eligiblePathCount: allowedPaths.length
   };
   return { ...projection, reservationHash: sha256(projection) };
+}
+
+const finiteTaskReservationRecordValid = (reservation) => {
+  const { reservationHash, ...projection } = reservation ?? {}; const paths = reservation?.allowedPaths;
+  return Array.isArray(paths) && paths.length > 0 && stableJson(paths) === stableJson([...new Set(paths)].sort()) && stableJson(reservation.pathGlobs) === stableJson(paths)
+    && reservation.eligiblePathCount === paths.length && Number.isInteger(reservation.maximumFiles) && reservation.maximumFiles >= paths.length && Number.isInteger(reservation.maximumLines) && reservation.maximumLines > 0 && reservationHash === sha256(projection);
+};
+function finiteTaskTerminalOutcomeMatchesLease(registry, lease, outcome) {
+  const receipt = outcome?.amendmentReceipt; const final = outcome?.finalSourceReceipt;
+  const added = receipt?.addedPaths; const policy = (registry?.amendmentPolicy?.domains ?? []).filter(({ id }) => id === lease?.domain);
+  const effectivePaths = Array.isArray(added) ? [...new Set([...(lease?.allowedPaths ?? []), ...added])].sort() : [];
+  const unhashed = Object.fromEntries(Object.entries(outcome ?? {}).filter(([key]) => key !== "evidenceHash"));
+  return outcome?.schemaVersion === 1 && outcome.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    && outcome.repository === "Chillywood2025/chillywood-mobile" && outcome.taskId === lease?.leaseId && outcome.leaseId === lease?.leaseId && outcome.implementationPr === lease?.implementationPr && outcome.implementationBranch === lease?.implementationBranch
+    && outcome.baseLeaseHash === sha256(lease) && stableJson(outcome.baseReservation) === stableJson(finiteTaskReservationProjection(lease))
+    && policy.length === 1 && finiteTaskReservationRecordValid(outcome.effectiveReservation) && stableJson(outcome.effectiveReservation.allowedPaths) === stableJson(effectivePaths) && outcome.effectiveReservation.maximumFiles === effectivePaths.length
+    && outcome.effectiveReservation.maximumFiles <= lease?.amendmentMaximum?.maximumFiles && outcome.effectiveReservation.maximumFiles <= policy[0]?.maximumFiles && outcome.effectiveReservation.maximumLines >= outcome.baseReservation.maximumLines && outcome.effectiveReservation.maximumLines <= lease?.amendmentMaximum?.maximumChangedLines && outcome.effectiveReservation.maximumLines <= policy[0]?.maximumChangedLines
+    && Array.isArray(added) && added.length > 0 && stableJson(added) === stableJson([...(policy[0]?.amendablePaths ?? [])].sort()) && added.every((file) => !finiteTaskAmendmentPathHasWildcard(file))
+    && Number.isInteger(receipt?.commentId) && receipt.commentId > 0 && validInstant(receipt.createdAt) && [receipt.subjectHash, receipt.bodyHash, receipt.rawBodyHash].every((hash) => sha256Pattern.test(hash ?? "")) && receipt.domain === lease.domain && receipt.authorityClassification === "LIVE_IMMUTABLE_OWNER_RECEIPT" && gitShaPattern.test(receipt.boundStartingHead ?? "") && gitShaPattern.test(receipt.boundStartingTree ?? "")
+    && Number.isInteger(final?.commentId) && final.commentId > 0 && validInstant(final.createdAt) && [final.subjectHash, final.bodyHash, final.rawBodyHash].every((hash) => sha256Pattern.test(hash ?? ""))
+    && final.amendmentCommentId === receipt.commentId && final.effectiveReservationHash === outcome.effectiveReservation.reservationHash && final.finalHead === outcome.sourceHead && final.finalTree === outcome.sourceTree
+    && [outcome.sourceHead, outcome.sourceTree, outcome.mergeSha, outcome.mergeTree].every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeTree === outcome.sourceTree && Array.isArray(outcome.mergeParents) && outcome.mergeParents.length === 2 && outcome.mergeParents.every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeParents[1] === outcome.sourceHead
+    && typeof outcome.nextTask === "string" && outcome.nextTask.length > 0 && stableJson(outcome.authority) === stableJson({ providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false }) && outcome.evidenceHash === sha256(unhashed);
+}
+export function finiteTaskLeaseEffectivelyTerminal(registry, lease) {
+  if (finiteTaskTerminalStates.has(lease?.taskState)) return true;
+  const matches = (registry?.completedLeaseOutcomes ?? []).filter(({ leaseId }) => leaseId === lease?.leaseId);
+  return matches.length === 1 && finiteTaskTerminalOutcomeMatchesLease(registry, lease, matches[0]);
 }
 
 function amendFiniteTaskLease(lease, addedPaths, maximum) {
@@ -2635,7 +2657,6 @@ function amendFiniteTaskLease(lease, addedPaths, maximum) {
   if (artifactReservation) amended.artifactReservation = artifactReservation;
   return amended;
 }
-
 function exactAuthorityEvidence(lease, authorityEvidence) {
   const owner = authorityEvidence?.ownerApproval ?? lease?.ownerApproval;
   const jurisdiction = authorityEvidence?.jurisdictionDecision;
@@ -2654,7 +2675,6 @@ function exactAuthorityEvidence(lease, authorityEvidence) {
     }
   };
 }
-
 export function verifyTaskLeaseAmendment({
   registry,
   lease,
@@ -2680,7 +2700,7 @@ export function verifyTaskLeaseAmendment({
   const competitor = (registry?.tasks ?? []).some((task) => task.leaseId !== lease?.leaseId
     && task.domain === lease?.domain
     && task.domainOwnership === "ACTIVE"
-    && !finiteTaskTerminalStates.has(task.taskState));
+    && !finiteTaskLeaseEffectivelyTerminal(registry, task));
   if ((lease?.amendmentMaximum?.maximumAmendments ?? 0) > 0 && subject.schemaVersion !== 2) {
     findings.push("FINITE_TASK_LEASE_AMENDMENT_SCHEMA_UNSUPPORTED");
   }
@@ -2696,7 +2716,7 @@ export function verifyTaskLeaseAmendment({
       || subject.registeredDomain !== lease.domain
       || typeof subject.reason !== "string" || !subject.reason
       || !addedPaths.length
-      || addedPaths.some((file) => !authorizedPaths.has(file) || finiteTaskPathHasWildcard(file) || file.endsWith("lock") || file === "package.json")
+      || addedPaths.some((file) => !authorizedPaths.has(file) || finiteTaskAmendmentPathHasWildcard(file) || file.endsWith("lock") || file === "package.json")
       || stableJson(subject.excludedAuthority) !== stableJson(closedMaintenanceAuthority)
       || !Number.isInteger(subject.newScopeMaximum?.maximumFiles)
       || !Number.isInteger(subject.newScopeMaximum?.maximumChangedLines)
@@ -2715,7 +2735,7 @@ export function verifyTaskLeaseAmendment({
       ? [...subject.pathReasons].sort((left, right) => String(left?.path).localeCompare(String(right?.path)))
       : [];
     const subjectPathsSafe = addedPaths.length > 0
-      && addedPaths.every((file) => typeof file === "string" && file && !finiteTaskPathHasWildcard(file) && !file.startsWith("/") && !file.includes("..") && !file.endsWith("lock") && file !== "package.json");
+      && addedPaths.every((file) => typeof file === "string" && file && !finiteTaskAmendmentPathHasWildcard(file) && !file.startsWith("/") && !file.includes("..") && !file.endsWith("lock") && file !== "package.json");
     if (!lease || !candidate
       || subject.policyId !== "ASSURANCE_FINITE_TASK_LEASE_AMENDMENT_V2"
       || subject.repository !== "Chillywood2025/chillywood-mobile"
@@ -2831,7 +2851,6 @@ export function verifyTaskLeaseAmendment({
   };
   return result;
 }
-
 export function resolveFiniteTaskEffectiveReservation({
   registry,
   lease,
@@ -4648,7 +4667,7 @@ export function renderCurrentState(record) {
     featureId: active.featureId
   });
   const leaseLine = activeLease
-    ? `\n- Finite task lease: \`${record.finiteTaskLeases.policyId}\`, admitted seed \`${activeLease.admittedSeedHead}\` / \`${activeLease.admittedSeedTree}\`, protected admission PR #${activeLease.protectedAdmissionPr}, state \`${activeLease.taskState}\`; descendant heads do not require another admission, source binding, or merge-provenance PR.`
+    ? `\n- Finite task lease: \`${record.finiteTaskLeases.policyId}\`, admitted seed \`${activeLease.admittedSeedHead}\` / \`${activeLease.admittedSeedTree}\`, protected admission PR #${activeLease.protectedAdmissionPr}, state \`${finiteTaskLeaseEffectivelyTerminal(record.finiteTaskLeases, activeLease) ? "MERGED_VERIFIED" : activeLease.taskState}\`; descendant heads do not require another admission, source binding, or merge-provenance PR.`
     : "";
   const runtimeObservation = record.finiteTaskRuntime?.candidateObservation;
   const implementationBindingLine = active.phase === "TERMINAL"
@@ -4708,7 +4727,13 @@ export function projectFiniteTaskTerminalTruth({ record, terminalEvidence, proof
   if (!lease
     || sha256(lease) !== terminalEvidence?.baseLeaseHash
     || terminalEvidence?.classification !== "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    || !finiteTaskTerminalOutcomeMatchesLease(projected?.finiteTaskLeases, lease, terminalEvidence)
     || !sha256Pattern.test(proofTierApplicabilityHash ?? "")) throw new Error("FINITE_TASK_TERMINAL_PROJECTION_INVALID");
+  const priorOutcomes = projected.finiteTaskLeases.completedLeaseOutcomes ?? [];
+  const sameLease = priorOutcomes.filter(({ leaseId }) => leaseId === lease.leaseId);
+  if (sameLease.length > 1 || (sameLease.length === 1 && stableJson(sameLease[0]) !== stableJson(terminalEvidence))) throw new Error("FINITE_TASK_TERMINAL_PROJECTION_CONFLICT");
+  if (!sameLease.length && priorOutcomes.some((outcome) => finiteTaskTerminalOutcomeIdentity(outcome).some((value, index) => value === finiteTaskTerminalOutcomeIdentity(terminalEvidence)[index]))) throw new Error("FINITE_TASK_TERMINAL_PROJECTION_IDENTITY_REUSED");
+  projected.finiteTaskLeases.completedLeaseOutcomes = sameLease.length ? priorOutcomes : [...priorOutcomes, structuredClone(terminalEvidence)];
   projected.mainSha = terminalEvidence.mergeSha;
   projected.protectedMainAuthority.checkpointSha = terminalEvidence.mergeSha;
   projected.protectedMainAuthority.checkpointTree = terminalEvidence.mergeTree;

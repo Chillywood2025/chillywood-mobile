@@ -66,6 +66,7 @@ test("admission 41: a reserved amendment with exactly one compatible bounded pol
   assert.equal(result.checks.registryCompatibility, true);
   assert.ok(!result.findings.includes("FINITE_TASK_ADMISSION_TO_CLEARANCE_INVALID:registryCompatibility"));
 });
+test("admission 42: later admission cannot drop the append-only completion ledger", () => { const args = admissionFixture(); args.priorTruth.finiteTaskLeases.completedLeaseOutcomes = [{ leaseId: "completed-v1" }]; assert.equal(evaluateFiniteTaskAdmissionSuccessor(args).checks.completionLedgerPreserved, false); });
 test("admission 40: all 13 Phase 1 checks remain required", () => assert.equal(JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8")).reviewPolicy.requiredPhase1Checks, 13));
 test("admission 41: provider review remains optional advisory", () => assert.equal(JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8")).reviewPolicy.classification, "OPTIONAL_ADVISORY"));
 

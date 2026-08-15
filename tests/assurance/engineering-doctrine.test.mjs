@@ -786,6 +786,8 @@ test("finite-task terminal truth projection preserves the base lease but synthet
   const mutatedTruth = structuredClone(truthRecord);
   finiteTaskLeaseFor(mutatedTruth.finiteTaskLeases, { implementationPr: 229, implementationBranch: lease.implementationBranch, featureId: lease.featureId }).taskState = "MERGED_VERIFIED";
   assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, truthRecord: mutatedTruth, currentStateText: renderCurrentState(mutatedTruth), nextTaskText: renderNextTask(mutatedTruth) }).authorizationOk, false);
+  const missingLedger = structuredClone(truthRecord); delete missingLedger.finiteTaskLeases.completedLeaseOutcomes;
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, truthRecord: missingLedger, currentStateText: renderCurrentState(missingLedger), nextTaskText: renderNextTask(missingLedger) }).checks.terminalProjection, false);
 });
 
 test("finite-task lease amendment repair final source requires the repair review profile and Phase 1 13/13", () => {

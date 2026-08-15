@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, observeLiveFiniteTaskEffectiveReservation, optionalCodexReviewPolicyValid, readJson, redact, resolveFiniteTaskEffectiveReservation, stableJson, validateOwnerJurisdictionPolicyTruth, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
+import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, observeLiveFiniteTaskEffectiveReservation, optionalCodexReviewPolicyValid, readJson, redact, resolveFiniteTaskEffectiveReservation, stableJson, validateOwnerJurisdictionPolicyTruth, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, sha64, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
@@ -121,11 +121,11 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
   const subject = payload?.subject;
   const featureMatches = (facts.registry?.features ?? []).filter(({ featureId }) => featureId === subject?.primaryFeature);
   const changedPaths = [...new Set(facts.changedPaths ?? [])].sort();
-  const activeLeases = (truth?.finiteTaskLeases?.tasks ?? []).filter(({ taskState }) => !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
+  const activeLeases = (truth?.finiteTaskLeases?.tasks ?? []).filter((lease) => !finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, lease));
   const payloadWithoutHash = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
   if (facts.callerFeature !== undefined) findings.push("PRE_ADMISSION_CALLER_FEATURE_FORBIDDEN");
   if (truth?.engineeringDoctrine?.status !== "ACTIVE") findings.push("PRE_ADMISSION_DOCTRINE_NOT_ACTIVE");
-  if (truth?.engineeringDoctrine?.taskLeaseState !== "NO_ACTIVE_TASK" || activeLeases.length) findings.push("PRE_ADMISSION_ACTIVE_FINITE_TASK");
+  if ((truth?.engineeringDoctrine?.taskLeaseState !== "NO_ACTIVE_TASK" && !((truth?.finiteTaskLeases?.completedLeaseOutcomes?.length ?? 0) > 0 && activeLeases.length === 0)) || activeLeases.length) findings.push("PRE_ADMISSION_ACTIVE_FINITE_TASK");
   if (truth?.taskContextArchitecture?.pendingTransitionCountAfterSynchronization !== 0) findings.push("PRE_ADMISSION_PENDING_TERMINAL_TRANSITION");
   if (pr?.number !== facts.requestedPr || pr?.state !== "open" || pr?.draft !== true || pr?.repository !== subject?.repository || pr?.branch !== subject?.implementationBranch) findings.push("PRE_ADMISSION_PR_IDENTITY_MISMATCH");
   if (pr?.baseRef !== "main" || pr?.baseSha !== facts.currentProtectedMain || facts.baseIsAncestor !== true) findings.push("PRE_ADMISSION_PROTECTED_BASE_MISMATCH");
@@ -1012,6 +1012,7 @@ function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease)
   const terminalOutcome = truth?.finiteTaskRuntime?.terminalOutcome;
   const amendedTerminalProjection = binding.phase === "TERMINAL"
     && terminalOutcome?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    && finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, lease)
     && effectiveResolution?.baseLeaseHash === terminalOutcome?.baseLeaseHash
     && effectiveResolution?.effectiveReservation?.reservationHash === terminalOutcome?.effectiveReservation?.reservationHash
     && stableJson(effectiveResolution?.amendmentReceipt) === stableJson(terminalOutcome?.amendmentReceipt);
@@ -1248,8 +1249,7 @@ export function activeTask(facts = {}) {
       const finiteLease = baseFiniteTaskLease;
       if (finiteLease && checkoutBranch !== finiteLease.implementationBranch) {
         const amendedTerminalProjection = resolution.binding.phase === "TERMINAL"
-          && truth?.finiteTaskRuntime?.terminalOutcome?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
-          && truth.finiteTaskRuntime.terminalOutcome.baseLeaseHash;
+          && finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, finiteLease);
         if (resolution.binding.phase === "TERMINAL" && (finiteLease.taskState === "MERGED_VERIFIED" || amendedTerminalProjection)) {
           identity = {
             branch: resolution.binding.implementationBranch,
@@ -1308,8 +1308,7 @@ export function activeTask(facts = {}) {
   let finiteTaskCandidate = facts.finiteTaskCandidateObservation ?? derivedFiniteTaskCandidate;
   if (baseFiniteTaskLease) {
     const terminalLease = resolution.binding?.phase === "TERMINAL"
-      || baseFiniteTaskLease.taskState === "MERGED_VERIFIED"
-      || truth?.finiteTaskRuntime?.terminalOutcome?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1";
+      || finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, baseFiniteTaskLease);
     finiteTaskCandidate ??= terminalLease
       ? {
           ...(truth?.finiteTaskRuntime?.candidateObservation ?? {}),
