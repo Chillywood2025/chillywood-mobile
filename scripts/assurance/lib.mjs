@@ -2432,6 +2432,20 @@ export function finiteTaskEffectiveReservationAuthorityValid(resolution) {
     && resolution.authority?.liveReceipt === true;
 }
 
+const readPublicFiniteTaskGitHubApi = (endpoint) => {
+  const allowed = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls\/[1-9]\d*|(?:issues\/[1-9]\d*\/comments|pulls\/[1-9]\d*\/commits)\?per_page=100(?:&page=[1-9]\d*)?)$/u;
+  if (!allowed.test(endpoint)) return null;
+  try {
+    return JSON.parse(execFileSync("curl", [
+      "--fail", "--silent", "--show-error",
+      "--header", "Accept: application/vnd.github+json",
+      "--header", "X-GitHub-Api-Version: 2022-11-28",
+      "--header", "User-Agent: chillywood-assurance-readonly",
+      `https://api.github.com/${endpoint}`
+    ], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 }));
+  } catch { return null; }
+};
+
 function readCompleteGitHubApiPages(endpoint) {
   try {
     const pages = JSON.parse(execFileSync("gh", ["api", "--method=GET", "--paginate", "--slurp", endpoint], {
@@ -2443,9 +2457,15 @@ function readCompleteGitHubApiPages(endpoint) {
     return Array.isArray(pages) && pages.every(Array.isArray)
       ? { complete: true, items: pages.flat() }
       : { complete: false, items: [] };
-  } catch {
-    return { complete: false, items: [] };
+  } catch {}
+  const items = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const values = readPublicFiniteTaskGitHubApi(`${endpoint}&page=${page}`);
+    if (!Array.isArray(values)) return { complete: false, items: [] };
+    items.push(...values);
+    if (values.length < 100) return { complete: true, items };
   }
+  return { complete: false, items: [] };
 }
 
 export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chillywood2025/chillywood-mobile", pr, authorityEvidence = null } = {}) {
@@ -2462,7 +2482,7 @@ export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chilly
   if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
   const comments = readCompleteGitHubApiPages(`repos/${repository}/issues/${pr}/comments?per_page=100`);
   const commits = readCompleteGitHubApiPages(`repos/${repository}/pulls/${pr}/commits?per_page=100`);
-  let pullRequest = null;
+  let pullRequest;
   try {
     pullRequest = JSON.parse(execFileSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], {
       cwd: ROOT,
@@ -2470,7 +2490,7 @@ export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chilly
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024
     }));
-  } catch {}
+  } catch { pullRequest = readPublicFiniteTaskGitHubApi(`repos/${repository}/pulls/${pr}`); }
   const observation = {
     comments: comments.items,
     commentsPaginationComplete: comments.complete,

@@ -3556,6 +3556,28 @@ test("engineering closure uses bounded public readback when a contract job has n
   assert.notEqual(readGitHubApi({ args: ["--paginate", "--slurp", "repos/other/repository/issues/228/comments"], run }).status, 0);
 });
 
+test("finite task live observation uses bounded public readback when a contract job has no GH token", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-public-readback-"));
+  const originalPath = process.env.PATH;
+  const pull = { number: 229, state: "open", head: { ref: wave1Lease.implementationBranch, sha: wave1BoundStart, repo: { full_name: "Chillywood2025/chillywood-mobile" } }, base: { ref: "main", sha: wave1BoundBase, repo: { full_name: "Chillywood2025/chillywood-mobile" } } };
+  fs.writeFileSync(path.join(temporary, "gh"), "#!/bin/sh\nexit 4\n");
+  fs.writeFileSync(path.join(temporary, "curl"), `#!/usr/bin/env node\nconst url = process.argv.at(-1);\nif (url.includes('/comments?')) process.stdout.write('[]');\nelse if (url.includes('/commits?')) process.stdout.write(JSON.stringify([{sha:${JSON.stringify(wave1BoundStart)},commit:{tree:{sha:${JSON.stringify(wave1BoundStartTree)}}}}]));\nelse process.stdout.write(${JSON.stringify(JSON.stringify(pull))});\n`);
+  fs.chmodSync(path.join(temporary, "gh"), 0o755);
+  fs.chmodSync(path.join(temporary, "curl"), 0o755);
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+    const observed = observeLiveFiniteTaskEffectiveReservation({ repository: "Chillywood2025/chillywood-mobile", pr: 229, authorityEvidence: wave1AuthorityEvidence });
+    assert.equal(observed.observationMode, "LIVE_GITHUB_COMPLETE_READBACK");
+    assert.equal(observed.commentsPaginationComplete, true);
+    assert.equal(observed.commitsPaginationComplete, true);
+    assert.equal(observed.pullRequest.number, 229);
+    assert.equal(observed.commits[0].sha, wave1BoundStart);
+  } finally {
+    process.env.PATH = originalPath;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
 const d2aTerminalStatuses = {
   T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
   T1_SOURCE: "SOURCE_CLEAR",
