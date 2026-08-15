@@ -1351,7 +1351,7 @@ export function evaluateFiniteTaskLeaseRuntime({
   };
   const leaseFreshness = scopedFreshness(binding?.requiredFreshnessClaims ?? []);
   const providerFreshness = scopedFreshness(providerCriticalRuntimeRequirement);
-  const authorityEvidence = effectiveReservationObservation?.authorityEvidence ?? {
+  const declaredAuthorityEvidence = effectiveReservationObservation?.authorityEvidence ?? {
     taskArtifactHash: lease?.closure?.artifactHash,
     ownerApproval: lease?.ownerApproval,
     jurisdictionDecision: record?.ownerJurisdictionPolicyBinding?.policySource ? {
@@ -1361,6 +1361,10 @@ export function evaluateFiniteTaskLeaseRuntime({
       envelopeHash: record.ownerJurisdictionPolicyBinding.policySource.envelopeHash
     } : undefined
   };
+  const reservationObservation = effectiveReservationObservation ?? (lease?.amendmentMaximum?.maximumAmendments > 0
+    ? observeLiveFiniteTaskEffectiveReservation({ pr: lease.implementationPr, authorityEvidence: declaredAuthorityEvidence })
+    : null);
+  const authorityEvidence = reservationObservation?.authorityEvidence ?? declaredAuthorityEvidence;
   const resolveEffectiveReservation = (candidate) => {
     const supplied = effectiveReservationResolution;
     if (supplied?.baseLeaseHash === (lease ? sha256(lease) : null)
@@ -1370,17 +1374,17 @@ export function evaluateFiniteTaskLeaseRuntime({
       registry: record?.finiteTaskLeases,
       lease,
       candidate,
-      comments: effectiveReservationObservation?.comments ?? [],
-      commentsPaginationComplete: effectiveReservationObservation?.commentsPaginationComplete ?? false,
-      pullRequest: effectiveReservationObservation?.pullRequest ?? null,
-      commits: effectiveReservationObservation?.commits ?? [],
-      commitsPaginationComplete: effectiveReservationObservation?.commitsPaginationComplete ?? false,
+      comments: reservationObservation?.comments ?? [],
+      commentsPaginationComplete: reservationObservation?.commentsPaginationComplete ?? false,
+      pullRequest: reservationObservation?.pullRequest ?? null,
+      commits: reservationObservation?.commits ?? [],
+      commitsPaginationComplete: reservationObservation?.commitsPaginationComplete ?? false,
       gitCommand,
-      requireCompleteDiscovery: effectiveReservationObservation?.requireCompleteDiscovery
-        ?? effectiveReservationObservation?.observationMode === "LIVE_GITHUB_COMPLETE_READBACK",
-      observationMode: effectiveReservationObservation?.observationMode ?? "SYNTHETIC_NO_WRITE",
+      requireCompleteDiscovery: reservationObservation?.requireCompleteDiscovery
+        ?? reservationObservation?.observationMode === "LIVE_GITHUB_COMPLETE_READBACK",
+      observationMode: reservationObservation?.observationMode ?? "SYNTHETIC_NO_WRITE",
       authorityEvidence,
-      liveObservation: effectiveReservationObservation
+      liveObservation: reservationObservation
     });
   };
   const terminalTask = binding?.phase === "TERMINAL" || finiteTaskTerminalStates.has(lease?.taskState);
@@ -1533,7 +1537,7 @@ export function evaluateFiniteTaskLeaseRuntime({
     githubEvent: event,
     checkoutHead,
     currentProtectedBase: resolvedProtectedBase,
-    effectiveReservationObservation,
+    effectiveReservationObservation: reservationObservation,
     finiteTaskPostMergeTransition,
     gitCommand,
     environment
@@ -2432,20 +2436,6 @@ export function finiteTaskEffectiveReservationAuthorityValid(resolution) {
     && resolution.authority?.liveReceipt === true;
 }
 
-const readPublicFiniteTaskGitHubApi = (endpoint) => {
-  const allowed = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls\/[1-9]\d*|(?:issues\/[1-9]\d*\/comments|pulls\/[1-9]\d*\/commits)\?per_page=100(?:&page=[1-9]\d*)?)$/u;
-  if (!allowed.test(endpoint)) return null;
-  try {
-    return JSON.parse(execFileSync("curl", [
-      "--fail", "--silent", "--show-error",
-      "--header", "Accept: application/vnd.github+json",
-      "--header", "X-GitHub-Api-Version: 2022-11-28",
-      "--header", "User-Agent: chillywood-assurance-readonly",
-      `https://api.github.com/${endpoint}`
-    ], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 }));
-  } catch { return null; }
-};
-
 function readCompleteGitHubApiPages(endpoint) {
   try {
     const pages = JSON.parse(execFileSync("gh", ["api", "--method=GET", "--paginate", "--slurp", endpoint], {
@@ -2457,15 +2447,49 @@ function readCompleteGitHubApiPages(endpoint) {
     return Array.isArray(pages) && pages.every(Array.isArray)
       ? { complete: true, items: pages.flat() }
       : { complete: false, items: [] };
-  } catch {}
-  const items = [];
-  for (let page = 1; page <= 20; page += 1) {
-    const values = readPublicFiniteTaskGitHubApi(`${endpoint}&page=${page}`);
-    if (!Array.isArray(values)) return { complete: false, items: [] };
-    items.push(...values);
-    if (values.length < 100) return { complete: true, items };
+  } catch { return { complete: false, items: [] }; }
+}
+
+const decodeGitHubHtml = (value) => value.replace(/&#x([0-9a-f]+);/giu, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/&#(\d+);/gu, (_, decimal) => String.fromCodePoint(Number(decimal))).replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&#39;", "'").replaceAll("&amp;", "&");
+const finiteTaskGitValue = (args) => { try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); } catch { return null; } };
+
+export function observePublicGitHubPullRequest({ repository = "Chillywood2025/chillywood-mobile", pr } = {}) {
+  const invalid = { comments: [], commentsPaginationComplete: false, commits: [], commitsPaginationComplete: false, pullRequest: null };
+  if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
+  let html;
+  try { html = execFileSync("curl", ["--fail", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", "--header", "User-Agent: chillywood-assurance-readonly", `https://github.com/${repository}/pull/${pr}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 }); } catch { return invalid; }
+  let pull;
+  for (const match of html.matchAll(/<script type="application\/json" data-target="react-app\.embeddedData">([\s\S]*?)<\/script>/gu)) {
+    try { const payload = JSON.parse(match[1])?.payload; pull = payload?.pullRequestsLayoutRoute?.pullRequest ?? payload?.pullRequestsConversationsRoute?.pullRequestsLayoutRoute?.pullRequest; } catch {}
+    if (pull?.number === pr) break;
   }
-  return { complete: false, items: [] };
+  if (pull?.number !== pr || pull.headRepositoryOwnerLogin !== "Chillywood2025" || pull.headRepositoryName !== "chillywood-mobile") return invalid;
+  let mergeCommitSha = null;
+  let baseSha = finiteTaskGitValue(["rev-parse", `origin/${pull.baseBranch}`]);
+  if (["OPEN", "DRAFT"].includes(pull.state) && finiteTaskGitValue(["show-ref", "--verify", "--hash", `refs/remotes/origin/${pull.headBranch}`]) !== pull.headSha) return invalid;
+  if (pull.state === "MERGED") for (const candidate of new Set([...html.matchAll(/href="\/Chillywood2025\/chillywood-mobile\/commit\/([0-9a-f]{40})"/gu)].map((match) => match[1]))) {
+    const parents = finiteTaskGitValue(["rev-list", "--parents", "-n", "1", candidate])?.split(/\s+/u) ?? [];
+    if (parents.length === 3 && parents[2] === pull.headSha) { [mergeCommitSha, baseSha] = [candidate, parents[1]]; break; }
+  }
+  const starts = [...html.matchAll(/data-url="\/Chillywood2025\/chillywood-mobile\/comments\/([^/"?]+)\/partials\/timeline_issue_comment"[\s\S]*?<div class=" timeline-comment-group[^>]*id="issuecomment-(\d+)">/gu)];
+  const comments = starts.map((start, index) => {
+    const block = html.slice(start.index, starts[index + 1]?.index ?? html.length);
+    const bodyMatch = /<clipboard-copy role="menuitem" value="([\s\S]*?)" data-view-component/gu.exec(block);
+    const time = /<relative-time datetime="([^"]+)"/gu.exec(block)?.[1];
+    const login = /data-hovercard-url="\/users\/([^/"?]+)\/hovercard"/gu.exec(block)?.[1];
+    const body = bodyMatch ? decodeGitHubHtml(bodyMatch[1]) : null;
+    const version = /data-body-version="([0-9a-f]{64})"/gu.exec(block)?.[1];
+    if (!body || !time || !login || version !== sha256(body)) return null;
+    return { id: Number(start[2]), node_id: start[1], user: { login }, author_association: block.includes("This user is the owner of the chillywood-mobile repository.") ? "OWNER" : "NONE", body, created_at: time, updated_at: block.includes("js-comment-edit-history") ? "EDITED" : time, issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${start[2]}` };
+  }).filter(Boolean);
+  const commentsPaginationComplete = html.includes('id="partial-timeline"') && html.includes("</html>") && !html.includes("ajax-pagination-btn") && comments.length === starts.length && new Set(comments.flatMap(({ id, node_id }) => [id, node_id])).size === comments.length * 2;
+  const rangeBase = finiteTaskGitValue(["merge-base", baseSha ?? `origin/${pull.baseBranch}`, pull.headSha]);
+  const commitShas = finiteTaskGitValue(["rev-list", "--reverse", `${rangeBase}..${pull.headSha}`])?.split(/\r?\n/gu).filter(Boolean) ?? [];
+  const commits = commitShas.map((sha) => ({ sha, commit: { tree: { sha: finiteTaskGitValue(["rev-parse", `${sha}^{tree}`]) } } }));
+  const commitsPaginationComplete = commitShas.length === pull.commitsCount && commitShas.at(-1) === pull.headSha && commits.every(({ commit }) => gitShaPattern.test(commit.tree.sha ?? ""));
+  const state = ["MERGED", "CLOSED"].includes(pull.state) ? "closed" : ["OPEN", "DRAFT"].includes(pull.state) ? "open" : null;
+  const pullRequest = state && gitShaPattern.test(baseSha ?? "") ? { number: pr, state, draft: pull.state === "DRAFT", merged: pull.state === "MERGED", merged_at: pull.mergedTime, merge_commit_sha: mergeCommitSha, head: { ref: pull.headBranch, sha: pull.headSha, repo: { full_name: `${pull.headRepositoryOwnerLogin}/${pull.headRepositoryName}` } }, base: { ref: pull.baseBranch, sha: baseSha, repo: { full_name: repository } } } : null;
+  return { comments, commentsPaginationComplete, commits, commitsPaginationComplete, pullRequest };
 }
 
 export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chillywood2025/chillywood-mobile", pr, authorityEvidence = null } = {}) {
@@ -2482,7 +2506,7 @@ export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chilly
   if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
   const comments = readCompleteGitHubApiPages(`repos/${repository}/issues/${pr}/comments?per_page=100`);
   const commits = readCompleteGitHubApiPages(`repos/${repository}/pulls/${pr}/commits?per_page=100`);
-  let pullRequest;
+  let pullRequest = null;
   try {
     pullRequest = JSON.parse(execFileSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], {
       cwd: ROOT,
@@ -2490,7 +2514,13 @@ export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chilly
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024
     }));
-  } catch { pullRequest = readPublicFiniteTaskGitHubApi(`repos/${repository}/pulls/${pr}`); }
+  } catch {}
+  if (!comments.complete || !commits.complete || !pullRequest) {
+    const fallback = observePublicGitHubPullRequest({ repository, pr });
+    if (!comments.complete && fallback.commentsPaginationComplete) Object.assign(comments, { complete: true, items: fallback.comments });
+    if (!commits.complete && fallback.commitsPaginationComplete) Object.assign(commits, { complete: true, items: fallback.commits });
+    pullRequest ??= fallback.pullRequest;
+  }
   const observation = {
     comments: comments.items,
     commentsPaginationComplete: comments.complete,

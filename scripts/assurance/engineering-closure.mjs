@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { canonicalGitText, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, observeLiveFiniteTaskEffectiveReservation, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -3887,7 +3887,7 @@ export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSy
   for (let page = 1; page <= 20; page += 1) {
     const separator = endpoint.includes("?") ? "&" : "?";
     const pageEndpoint = paginated ? `${endpoint}${separator}per_page=100&page=${page}` : endpoint;
-    const response = run("curl", ["--fail", "--silent", "--show-error", "--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28", "--header", "User-Agent: chillywood-assurance-readonly", `https://api.github.com/${pageEndpoint}`], options);
+    const response = run("curl", ["--fail", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", "--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28", "--header", "User-Agent: chillywood-assurance-readonly", `https://api.github.com/${pageEndpoint}`], options);
     if (response.status !== 0) return response;
     if (!paginated) return response;
     let values;
@@ -3907,7 +3907,7 @@ const paginatedArray = (root, endpoint) => {
   const pages = parsedResponse(response, null);
   return { complete: response.status === 0 && Array.isArray(pages) && pages.every(Array.isArray), values: Array.isArray(pages) ? pages.flat() : [] };
 };
-const paginatedIssueComments = (root, repository, pr) => { const result = paginatedArray(root, `repos/${repository}/issues/${pr}/comments?per_page=100`); return { complete: result.complete, comments: result.values }; };
+const paginatedIssueComments = (root, repository, pr) => { const result = paginatedArray(root, `repos/${repository}/issues/${pr}/comments?per_page=100`); const fallback = result.complete ? null : observePublicGitHubPullRequest({ repository, pr }); return { complete: result.complete || fallback?.commentsPaginationComplete === true, comments: result.complete ? result.values : fallback?.comments ?? [] }; };
 export function observePhase1RunEvidence({ runId, identity, tree, root = REPOSITORY_ROOT } = {}) {
   if (!Number.isInteger(runId) || runId < 1 || identity?.repository !== "Chillywood2025/chillywood-mobile") return verifyPhase1RunEvidence({ identity, tree });
   const run = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}`]), null);
