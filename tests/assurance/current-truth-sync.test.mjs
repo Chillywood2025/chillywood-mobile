@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { validateEngineeringDoctrineTruth, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskEffectiveReservationAuthorityValid, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 import { STANDING_POLICY_INHERITANCE_ALLOWLIST, STANDING_POLICY_INHERITANCE_DENYLIST } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const recordedMain = "a".repeat(40);
@@ -172,4 +172,50 @@ assert.equal(schemas.$defs.ownerJurisdictionPolicyBinding.properties.coverage.pr
 assert.deepEqual(schemas.$defs.finiteTaskAdmissionSupersessionV2.properties.predecessor.properties.version.enum, [1, 2]);
 assert.equal(JSON.stringify(schemas.$defs.ownerJurisdictionPolicyBinding).includes("standingPolicyBody"), false);
 
-process.stdout.write("current-truth synchronization contract: PASS (44 cases)\n");
+const wave1Lease = truthRecord.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 229);
+const baseOnlyRuns = Array.from({ length: 3 }, () => resolveFiniteTaskEffectiveReservation({
+  registry: truthRecord.finiteTaskLeases,
+  lease: wave1Lease,
+  comments: [],
+  commentsPaginationComplete: true,
+  commits: [],
+  commitsPaginationComplete: true,
+  requireCompleteDiscovery: true,
+  observationMode: "LIVE_GITHUB_COMPLETE_READBACK"
+}));
+assert.equal(baseOnlyRuns.every(({ ok, status }) => ok && status === "BASE_ONLY"), true);
+assert.equal(new Set(baseOnlyRuns.map((result) => stableJson(result))).size, 1);
+assert.deepEqual(baseOnlyRuns[0].baseReservation, baseOnlyRuns[0].effectiveReservation);
+assert.equal(baseOnlyRuns[0].effectiveReservation.eligiblePathCount, 30);
+assert.equal(baseOnlyRuns[0].amendmentReceipt, null);
+assert.deepEqual(baseOnlyRuns[0].authority, {
+  providerMutation: false,
+  databaseDeployment: false,
+  build: false,
+  submission: false,
+  ota: false,
+  publicRelease: false,
+  amendmentEffective: false,
+  liveReceipt: false
+});
+assert.equal(finiteTaskEffectiveReservationAuthorityValid(baseOnlyRuns[0]), false);
+assert.equal(finiteTaskEffectiveReservationAuthorityValid({ ok: true, status: "AMENDED", authority: { liveReceipt: true } }), false);
+const incompleteCommentDiscovery = resolveFiniteTaskEffectiveReservation({
+  registry: truthRecord.finiteTaskLeases,
+  lease: wave1Lease,
+  comments: [],
+  commentsPaginationComplete: false,
+  commits: [],
+  commitsPaginationComplete: true,
+  requireCompleteDiscovery: true,
+  observationMode: "LIVE_GITHUB_COMPLETE_READBACK"
+});
+assert.equal(incompleteCommentDiscovery.ok, false);
+assert.equal(incompleteCommentDiscovery.findings.includes("FINITE_TASK_LEASE_AMENDMENT_COMMENT_DISCOVERY_INCOMPLETE"), true);
+const currentTruthSource = (await import("node:fs")).readFileSync("scripts/assurance/current-truth.mjs", "utf8");
+assert.match(currentTruthSource, /effectiveReservationObservation/u);
+assert.match(currentTruthSource, /observeLiveFiniteTaskEffectiveReservation/u);
+assert.match(currentTruthSource, /baseReservation: finiteTaskRuntime\.baseReservation/u);
+assert.match(currentTruthSource, /effectiveReservation: finiteTaskRuntime\.effectiveReservation/u);
+
+process.stdout.write("current-truth synchronization contract: PASS (56 cases)\n");

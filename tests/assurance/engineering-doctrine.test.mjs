@@ -7,9 +7,10 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_RECEIPT_LIFECYCLE_V2, PHASE1_REQUIRED_JOB_NAMES,
+  ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
+  finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
@@ -19,12 +20,12 @@ import {
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
   verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
-  verifyPhase1RunEvidence,
+  verifyFiniteTaskTerminalTruthAuthority, verifyPhase1RunEvidence,
   verifyTaskLocalGoverningEdgeClosure, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 
 const root = new URL("../../", import.meta.url);
 const json = (name) => JSON.parse(fs.readFileSync(new URL(name, root), "utf8"));
@@ -639,6 +640,167 @@ test("Owner jurisdiction architecture maintenance uses the one bounded assurance
   assert.equal(result.mergeEligible, false);
   assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]);
   assert.deepEqual(Object.values(subject.authority), [false, false, false, false, false, false, false, false, false, false]);
+});
+const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 } = {}) => {
+  const paths = [
+    "CURRENT_STATE.md",
+    "config/assurance/current-truth-contract-v1.json",
+    "config/assurance/current-truth-v1.json",
+    "scripts/assurance/active-task.mjs",
+    "scripts/assurance/current-truth.mjs",
+    "scripts/assurance/engineering-closure.mjs",
+    "scripts/assurance/lib.mjs",
+    "tests/assurance/active-task-binding-a1.test.mjs",
+    "tests/assurance/current-truth-sync.test.mjs",
+    "tests/assurance/engineering-doctrine.test.mjs",
+    "tests/assurance/pr-scope-feature-bundles.test.mjs",
+  ].sort();
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch: "codex/finite-task-lease-amendment-control-plane-repair-v1", headSha: "1".repeat(40), baseSha: "2".repeat(40) };
+  const originalTree = "3".repeat(40);
+  const originalScope = { files: paths, additions: 900, deletions: 100, netChangedLines: 800, diffHash: "4".repeat(64) };
+  const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 });
+  const original = taskLocalArchitectureComment({ id: 700020, pr: originalIdentity.pr, body: architectureMaintenanceOwnerCommentBody(originalSubject) });
+  const identity = { ...originalIdentity, headSha: "5".repeat(40) };
+  const tree = "6".repeat(40);
+  const scope = { ...originalScope, additions: 1000, deletions: 120, netChangedLines: 880, diffHash: "7".repeat(64) };
+  const reviewSubject = architectureRepositoryReviewSubject({ identity, tree, scope, profile: reviewProfile });
+  const review = taskLocalArchitectureComment({ id: 700021, pr: identity.pr, body: architectureRepositoryReviewCommentBody(reviewSubject) });
+  const run = { id: 900020, run_attempt: 1, name: "Phase 1 CI", event: "pull_request", status: "completed", conclusion: "success", head_sha: identity.headSha, head_branch: identity.branch, pull_requests: [{ number: identity.pr, head: { sha: identity.headSha }, base: { sha: identity.baseSha } }] };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: identity.headSha }));
+  const phase1 = verifyPhase1RunEvidence({ run, jobs, identity, tree });
+  const finalSubject = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: original, repositoryReviewRaw: review, phase1Evidence: phase1 });
+  const final = taskLocalArchitectureComment({ id: 700022, pr: identity.pr, body: architectureFinalSourceOwnerCommentBody(finalSubject) });
+  const args = { raw: original, allComments: [original, review, final], paginationComplete: true, identity, tree, scope, ancestryVerified: true, phase1EvidenceResolver: () => phase1 };
+  return { paths, originalIdentity, originalTree, originalScope, originalSubject, original, identity, tree, scope, reviewSubject, review, phase1, finalSubject, final, args };
+};
+
+test("finite-task lease amendment repair reuses the canonical Owner jurisdiction profile without changing historical defaults", () => {
+  const repair = amendmentControlLifecycleFixture();
+  const historical = architectureMaintenanceSubject({ identity: repair.originalIdentity, tree: repair.originalTree, scope: repair.originalScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2" });
+  assert.equal(repair.originalSubject.objective, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1);
+  assert.deepEqual(repair.originalSubject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]);
+  assert.equal(historical.objective, "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession");
+  assert.deepEqual(historical.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]);
+  assert.equal(repair.originalSubject.budget.maximumFiles, 15);
+  assert.equal(repair.originalSubject.budget.maximumNetLines, 3500);
+  assert.equal(repair.originalSubject.reusableByAnotherPr, false);
+  assert.equal(historical.reusableByAnotherPr, true);
+  assert.ok(Object.values(repair.originalSubject.authority).every((value) => value === false));
+});
+
+test("finite-task lease amendment repair exact-head review covers RC-1 through RC-5, effective scope, and closed authority", () => {
+  const { reviewSubject } = amendmentControlLifecycleFixture();
+  assert.equal(reviewSubject.reviewProfile, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1);
+  for (const rootCause of ["RC-1", "RC-2", "RC-3", "RC-4", "RC-5"]) assert.ok(reviewSubject.lanes.some((lane) => lane.includes(rootCause)));
+  assert.ok(reviewSubject.lanes.some((lane) => lane.includes("effective path and line ceilings")));
+  assert.ok(reviewSubject.lanes.some((lane) => lane.includes("prohibited provider")));
+  assert.ok(Object.values(reviewSubject.authority).every((value) => value === false));
+});
+
+test("finite-task implementation exact-head review binds the effective reservation and rejects synthetic amendment authority", () => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 229, branch: "codex/pre-release-identity-entitlement-authority-v1", headSha: "8".repeat(40), baseSha: "9".repeat(40) };
+  const tree = "a".repeat(40);
+  const scope = { files: ["_lib/accessEntitlements.ts", "_lib/roomRules.ts"], additions: 20, deletions: 2, netChangedLines: 18, diffHash: "b".repeat(64) };
+  const syntheticResolution = {
+    ok: true,
+    status: "AMENDED",
+    baseLeaseHash: "c".repeat(64),
+    baseLease: { leaseId: "pre-release-identity-entitlement-authority-v1", domain: "pre-release-wave1-identity-entitlement-authority" },
+    baseReservation: { allowedPaths: ["_lib/session.tsx"], reservationHash: "d".repeat(64), eligiblePathCount: 30, maximumFiles: 30, maximumLines: 3600 },
+    effectiveReservation: { allowedPaths: ["_lib/accessEntitlements.ts", "_lib/roomRules.ts", "_lib/session.tsx"], reservationHash: "e".repeat(64), eligiblePathCount: 32, maximumFiles: 32, maximumLines: 4500 },
+    amendmentsConsumed: 1,
+    amendmentReceipt: { commentId: 700040, subjectHash: "f".repeat(64), bodyHash: "1".repeat(64), rawBodyHash: "2".repeat(64) },
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false, amendmentEffective: true, liveReceipt: true },
+  };
+  const subject = architectureRepositoryReviewSubject({ identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: syntheticResolution });
+  const raw = taskLocalArchitectureComment({ id: 700041, pr: identity.pr, body: architectureRepositoryReviewCommentBody(subject) });
+  const result = verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: syntheticResolution });
+  assert.equal(subject.reviewProfile, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1);
+  assert.equal(subject.finiteTaskEffectiveReservation.authorityValid, false);
+  assert.equal(subject.finiteTaskEffectiveReservation.baseLeaseHash, syntheticResolution.baseLeaseHash);
+  assert.equal(subject.finiteTaskEffectiveReservation.effectiveReservation.maximumFiles, 32);
+  assert.deepEqual(subject.finiteTaskEffectiveReservation.amendmentReceipt, syntheticResolution.amendmentReceipt);
+  assert.ok(subject.lanes.some((lane) => lane.includes("UNKNOWN remains fail-closed")));
+  assert.ok(subject.lanes.some((lane) => lane.includes("account-generation isolation")));
+  assert.ok(subject.lanes.some((lane) => lane.includes("Premium entitlement and money authority")));
+  assert.ok(subject.lanes.some((lane) => lane.includes("exact effective lease reservation")));
+  assert.ok(Object.values(subject.authority).every((value) => value === false));
+  assert.equal(result.valid, false);
+});
+
+test("finite-task terminal truth projection preserves the base lease but synthetic transition authority fails closed", () => {
+  const priorTruth = json("config/assurance/current-truth-v1.json");
+  const lease = finiteTaskLeaseFor(priorTruth.finiteTaskLeases, { implementationPr: 229, implementationBranch: "codex/pre-release-identity-entitlement-authority-v1", featureId: "auth-session-password-recovery" });
+  const baseReservation = finiteTaskReservationProjection(lease);
+  const effectivePaths = [...lease.allowedPaths, "_lib/accessEntitlements.ts", "_lib/roomRules.ts"].sort();
+  const effectiveReservationBase = { allowedPaths: effectivePaths, pathGlobs: effectivePaths, maximumFiles: 32, maximumLines: 4500, eligiblePathCount: 32 };
+  const effectiveReservation = { ...effectiveReservationBase, reservationHash: hashValue(effectiveReservationBase) };
+  const sourceHead = "5".repeat(40);
+  const sourceTree = "6".repeat(40);
+  const mergeSha = "7".repeat(40);
+  const terminalBase = {
+    schemaVersion: 1,
+    classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    repository: "Chillywood2025/chillywood-mobile",
+    taskId: lease.leaseId,
+    leaseId: lease.leaseId,
+    implementationPr: lease.implementationPr,
+    implementationBranch: lease.implementationBranch,
+    baseLeaseHash: hashValue(lease),
+    baseReservation,
+    effectiveReservation,
+    amendmentReceipt: { commentId: 710001, createdAt: "2026-08-14T22:00:00Z", subjectHash: "1".repeat(64), bodyHash: "2".repeat(64), rawBodyHash: "3".repeat(64), boundStartingHead: "4".repeat(40), boundStartingTree: "8".repeat(40), addedPaths: ["_lib/accessEntitlements.ts", "_lib/roomRules.ts"], domain: lease.domain, authorityClassification: "LIVE_IMMUTABLE_OWNER_RECEIPT" },
+    finalSourceReceipt: { commentId: 710002, createdAt: "2026-08-14T23:00:00Z", subjectHash: "4".repeat(64), bodyHash: "5".repeat(64), rawBodyHash: "6".repeat(64), finalHead: sourceHead, finalTree: sourceTree, effectiveReservationHash: effectiveReservation.reservationHash, amendmentCommentId: 710001 },
+    sourceHead,
+    sourceTree,
+    mergeSha,
+    mergeTree: sourceTree,
+    mergeParents: ["8".repeat(40), sourceHead],
+    nextTask: priorTruth.engineeringDoctrine.nextPermittedAction,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  };
+  const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
+  const transition = { applicable: true, ok: true, terminalEvidence, findings: [] };
+  const feature = json("config/assurance/feature-registry-v1.json").features.find(({ featureId }) => featureId === lease.featureId);
+  const truthRecord = projectFiniteTaskTerminalTruth({ record: priorTruth, terminalEvidence, proofTierApplicabilityHash: hashValue(feature.proofTierApplicability), implementationTitle: "Wave 1" });
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseSha: mergeSha, headSha: "9".repeat(40) };
+  const tree = "a".repeat(40);
+  const scope = { files: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], additions: 40, deletions: 10, netChangedLines: 30, diffHash: "b".repeat(64) };
+  const priorTruthHash = hashValue(stableJson(priorTruth));
+  const ownerSubject = finiteTaskTerminalTruthSubject({ identity, tree, scope, terminalTransition: transition, priorTruthHash });
+  const owner = taskLocalArchitectureComment({ id: 710010, pr: identity.pr, body: finiteTaskTerminalTruthOwnerCommentBody(ownerSubject) });
+  const reviewSubject = architectureRepositoryReviewSubject({ identity, tree, scope, profile: FINITE_TASK_TERMINAL_TRUTH_V1 });
+  const review = taskLocalArchitectureComment({ id: 710011, pr: identity.pr, body: architectureRepositoryReviewCommentBody(reviewSubject) });
+  const run = { id: 910010, run_attempt: 1, name: "Phase 1 CI", event: "pull_request", status: "completed", conclusion: "success", head_sha: identity.headSha, head_branch: identity.branch, pull_requests: [{ number: identity.pr, head: { sha: identity.headSha }, base: { sha: identity.baseSha } }] };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: identity.headSha }));
+  const phase1 = verifyPhase1RunEvidence({ run, jobs, identity, tree });
+  const finalSubject = finiteTaskTerminalTruthFinalSourceSubject({ identity, tree, scope, ownerRaw: owner, repositoryReviewRaw: review, phase1Evidence: phase1, terminalTransition: transition });
+  const final = taskLocalArchitectureComment({ id: 710012, pr: identity.pr, body: finiteTaskTerminalTruthFinalSourceOwnerCommentBody(finalSubject) });
+  const common = { raw: owner, allComments: [owner, review, final], paginationComplete: true, identity, tree, scope, terminalTransition: transition, priorTruthHash, priorTruth, truthRecord, currentStateText: renderCurrentState(truthRecord), nextTaskText: renderNextTask(truthRecord), currentMain: mergeSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false, ancestryVerified: true, phase1EvidenceResolver: () => phase1 };
+  const verified = verifyFiniteTaskTerminalTruthAuthority(common);
+  assert.equal(verified.authorizationOk, false);
+  assert.ok(verified.findings.includes("FINITE_TASK_TERMINAL_TRUTH_INVALID:transition"));
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, terminalTransition: structuredClone(transition) }).authorizationOk, false);
+  assert.deepEqual(scope.files, ownerSubject.changedPaths);
+  assert.equal(stableJson(finiteTaskLeaseFor(truthRecord.finiteTaskLeases, { implementationPr: 229, implementationBranch: lease.implementationBranch, featureId: lease.featureId })), stableJson(lease));
+  const mutatedTruth = structuredClone(truthRecord);
+  finiteTaskLeaseFor(mutatedTruth.finiteTaskLeases, { implementationPr: 229, implementationBranch: lease.implementationBranch, featureId: lease.featureId }).taskState = "MERGED_VERIFIED";
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, truthRecord: mutatedTruth, currentStateText: renderCurrentState(mutatedTruth), nextTaskText: renderNextTask(mutatedTruth) }).authorizationOk, false);
+  const missingLedger = structuredClone(truthRecord); delete missingLedger.finiteTaskLeases.completedLeaseOutcomes;
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, truthRecord: missingLedger, currentStateText: renderCurrentState(missingLedger), nextTaskText: renderNextTask(missingLedger) }).checks.terminalProjection, false);
+});
+
+test("finite-task lease amendment repair final source requires the repair review profile and Phase 1 13/13", () => {
+  const valid = amendmentControlLifecycleFixture();
+  const result = verifyArchitectureMaintenanceAuthority(valid.args);
+  assert.equal(result.authorizationOk, true, stableJson(result.findings));
+  assert.equal(result.mergeEligible, true, stableJson(result.mergeFindings));
+  assert.equal(result.currentFinalSourceReceiptId, valid.final.id);
+  assert.equal(valid.finalSubject.repositoryReview.profile, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1);
+  assert.equal(valid.finalSubject.phase1.result, "PASS_13_OF_13");
+
+  const wrongReview = amendmentControlLifecycleFixture({ reviewProfile: null });
+  assert.equal(verifyArchitectureMaintenanceAuthority(wrongReview.args).mergeEligible, false);
 });
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];
