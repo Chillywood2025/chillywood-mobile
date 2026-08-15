@@ -697,6 +697,11 @@ export const finiteTaskStates = [
 const finiteTaskTerminalStates = new Set(["MERGED_VERIFIED", "ABANDONED_BY_OWNER"]);
 const finiteTaskActiveStates = new Set(finiteTaskStates.filter((state) => !finiteTaskTerminalStates.has(state)));
 const sha256Pattern = /^[0-9a-f]{64}$/u;
+const finiteTaskPathHasWildcard = (file) => typeof file === "string"
+  && (/[?*{}]/u.test(file) || /(?:!|@|\+)\(/u.test(file));
+const finiteTaskAmendmentPathHasWildcard = (file) => finiteTaskPathHasWildcard(file)
+  || /[\[\]]/u.test(file.replace(/(^|\/)\[[A-Za-z][A-Za-z0-9_]*\](?=\/|\.|$)/gu, "$1"));
+const finiteTaskTerminalOutcomeIdentity = (outcome) => [outcome?.amendmentReceipt?.commentId, outcome?.finalSourceReceipt?.commentId, outcome?.sourceHead, outcome?.mergeSha];
 
 export function finiteTaskLeaseFor(registry, { implementationPr, implementationBranch, featureId } = {}) {
   const matches = (registry?.tasks ?? []).filter((task) => task?.implementationPr === implementationPr
@@ -708,6 +713,7 @@ export function finiteTaskLeaseFor(registry, { implementationPr, implementationB
 export function validateFiniteTaskLeaseRegistry(registry) {
   const findings = [];
   const tasks = Array.isArray(registry?.tasks) ? registry.tasks : [];
+  const completedLeaseOutcomes = Array.isArray(registry?.completedLeaseOutcomes) ? registry.completedLeaseOutcomes : [];
   const amendmentDomains = Array.isArray(registry?.amendmentPolicy?.domains) ? registry.amendmentPolicy.domains : [];
   if (registry?.schemaVersion !== 1
     || registry?.policyId !== "ASSURANCE_FINITE_TASK_LEASE_V1"
@@ -722,18 +728,25 @@ export function validateFiniteTaskLeaseRegistry(registry) {
     || registry?.amendmentPolicy?.protectedMainUpdateRequired !== false
     || registry?.amendmentPolicy?.ownerCommentRequired !== true
     || amendmentDomains.length < 1
-    || tasks.length < 1) findings.push("FINITE_TASK_LEASE_REGISTRY_MALFORMED");
+    || tasks.length < 1
+    || (registry?.completedLeaseOutcomes !== undefined && !Array.isArray(registry.completedLeaseOutcomes))) findings.push("FINITE_TASK_LEASE_REGISTRY_MALFORMED");
+  const amendmentDomainIds = new Set();
   for (const domain of amendmentDomains) {
     if (typeof domain?.id !== "string" || !domain.id
       || !Array.isArray(domain.amendablePaths) || !domain.amendablePaths.length
       || new Set(domain.amendablePaths).size !== domain.amendablePaths.length
-      || domain.amendablePaths.some((file) => typeof file !== "string" || !file || file.includes("*") || file.startsWith("/") || file.includes("..") || file.endsWith("lock") || file === "package.json")
+      || domain.amendablePaths.some((file) => typeof file !== "string" || !file || finiteTaskAmendmentPathHasWildcard(file) || file.startsWith("/") || file.includes("..") || file.endsWith("lock") || file === "package.json")
       || !Number.isInteger(domain.maximumFiles) || domain.maximumFiles < 1
       || !Number.isInteger(domain.maximumChangedLines) || domain.maximumChangedLines < 1) findings.push("FINITE_TASK_LEASE_AMENDMENT_POLICY_MALFORMED");
+    if (amendmentDomainIds.has(domain?.id)) findings.push("FINITE_TASK_LEASE_AMENDMENT_POLICY_DUPLICATE");
+    amendmentDomainIds.add(domain?.id);
   }
   const seenPrs = new Set();
   const seenBranches = new Set();
   for (const task of tasks) {
+    const basePaths = Array.isArray(task?.allowedPaths) ? task.allowedPaths : [];
+    const artifactPaths = task?.artifactReservation?.pathGlobs;
+    const amendmentMaximum = task?.amendmentMaximum;
     if (!task || typeof task !== "object"
       || typeof task.leaseId !== "string" || !task.leaseId
       || typeof task.featureId !== "string" || !task.featureId
@@ -752,12 +765,54 @@ export function validateFiniteTaskLeaseRegistry(registry) {
       || task.allowedPaths.some((entry) => typeof entry !== "string" || !entry || entry.startsWith("/") || entry.includes(".."))
       || !Number.isInteger(task.scopeBudget?.maximumFiles) || task.scopeBudget.maximumFiles < 1
       || !Number.isInteger(task.scopeBudget?.maximumChangedLines) || task.scopeBudget.maximumChangedLines < 1
+      || task.scopeBudget?.maximumFiles < basePaths.length
+      || (amendmentMaximum?.maximumAmendments > 0 && (
+        !Array.isArray(artifactPaths)
+        || basePaths.some(finiteTaskPathHasWildcard)
+        || artifactPaths.some(finiteTaskPathHasWildcard)
+        || stableJson([...artifactPaths].sort()) !== stableJson([...basePaths].sort())
+        || task.artifactReservation?.maximumFiles !== task.scopeBudget?.maximumFiles
+        || task.artifactReservation?.maximumLines !== task.scopeBudget?.maximumChangedLines
+      ))
       || stableJson(task.recursionBudget) !== stableJson({ maximumAdmissionPrs: 1, maximumFinalSourceBindingPrs: 0, maximumMergeProvenancePrs: 0, maximumPostMergeTruthPrs: 1 })) {
       findings.push("FINITE_TASK_LEASE_MALFORMED");
+    }
+    if (amendmentMaximum !== undefined) {
+      const compatibleDomains = amendmentDomains.filter(({ id }) => id === task?.domain);
+      const amendmentMaximumValid = Number.isInteger(amendmentMaximum?.maximumFiles)
+        && amendmentMaximum.maximumFiles >= task.scopeBudget?.maximumFiles
+        && Number.isInteger(amendmentMaximum?.maximumChangedLines)
+        && amendmentMaximum.maximumChangedLines >= task.scopeBudget?.maximumChangedLines
+        && Number.isInteger(amendmentMaximum?.maximumAmendments)
+        && amendmentMaximum.maximumAmendments >= 0
+        && amendmentMaximum.maximumAmendments <= 1
+        && (amendmentMaximum.maximumAmendments === 0 || task?.artifactReservation && typeof task.artifactReservation === "object");
+      if (!amendmentMaximumValid) findings.push("FINITE_TASK_LEASE_AMENDMENT_RESERVATION_MALFORMED");
+      if (amendmentMaximum?.maximumAmendments > 0) {
+        const policy = compatibleDomains[0];
+        const effectivePathCount = new Set([...basePaths, ...(policy?.amendablePaths ?? [])]).size;
+        if (compatibleDomains.length !== 1
+          || policy?.maximumFiles > amendmentMaximum.maximumFiles
+          || policy?.maximumChangedLines > amendmentMaximum.maximumChangedLines
+          || policy?.maximumFiles < effectivePathCount
+          || amendmentMaximum.maximumFiles < effectivePathCount
+          || policy?.maximumChangedLines < task.scopeBudget?.maximumChangedLines
+          || policy?.amendablePaths?.some((file) => basePaths.includes(file))) {
+          findings.push("FINITE_TASK_LEASE_AMENDMENT_POLICY_UNAVAILABLE");
+        }
+      }
     }
     if (seenPrs.has(task?.implementationPr) || seenBranches.has(task?.implementationBranch)) findings.push("FINITE_TASK_LEASE_DUPLICATE");
     seenPrs.add(task?.implementationPr);
     seenBranches.add(task?.implementationBranch);
+  }
+  if (new Set(completedLeaseOutcomes.map((outcome) => outcome?.leaseId)).size !== completedLeaseOutcomes.length
+    || new Set(completedLeaseOutcomes.map((outcome) => outcome?.implementationPr)).size !== completedLeaseOutcomes.length) findings.push("FINITE_TASK_COMPLETION_LEDGER_DUPLICATE");
+  const completionIdentities = completedLeaseOutcomes.map(finiteTaskTerminalOutcomeIdentity);
+  if (completionIdentities.some((identity, index) => identity.some((value, field) => completionIdentities.some((other, otherIndex) => otherIndex !== index && other[field] === value)))) findings.push("FINITE_TASK_COMPLETION_LEDGER_IDENTITY_REUSED");
+  for (const outcome of completedLeaseOutcomes) {
+    const leases = tasks.filter(({ leaseId }) => leaseId === outcome?.leaseId);
+    if (leases.length !== 1 || !finiteTaskTerminalOutcomeMatchesLease(registry, leases[0], outcome)) findings.push("FINITE_TASK_COMPLETION_LEDGER_MALFORMED");
   }
   return [...new Set(findings)].sort();
 }
@@ -765,9 +820,10 @@ export function validateFiniteTaskLeaseRegistry(registry) {
 export function evaluateFiniteTaskCandidate({ lease, registry, candidate }) {
   const findings = validateFiniteTaskLeaseRegistry(registry);
   if (!lease || !candidate) return { ok: false, leaseRetained: false, findings: [...new Set([...findings, "FINITE_TASK_CANDIDATE_MALFORMED"])].sort() };
+  const verifiedPostMergeSource = finiteTaskPostMergeCandidateValid(candidate);
   if (candidate.pr !== lease.implementationPr) findings.push("FINITE_TASK_WRONG_PR");
   if (candidate.branch !== lease.implementationBranch) findings.push("FINITE_TASK_WRONG_BRANCH");
-  if (candidate.prState !== "open") findings.push("FINITE_TASK_PR_NOT_OPEN");
+  if (candidate.prState !== "open" && !verifiedPostMergeSource) findings.push("FINITE_TASK_PR_NOT_OPEN");
   if (!gitShaPattern.test(candidate.head ?? "") || !gitShaPattern.test(candidate.tree ?? "")) findings.push("FINITE_TASK_CANDIDATE_MALFORMED");
   if (candidate.seedTree !== lease.admittedSeedTree) findings.push("FINITE_TASK_ADMITTED_ANCESTRY_REWRITTEN");
   if (candidate.seedIsAncestor !== true) findings.push("FINITE_TASK_NON_DESCENDANT_HEAD");
@@ -779,7 +835,9 @@ export function evaluateFiniteTaskCandidate({ lease, registry, candidate }) {
       if (candidate.mergeRefParents[1] !== candidate.head) findings.push("FINITE_TASK_MERGE_REF_WRONG_SECOND_PARENT");
     }
     if (candidate.mergeRefSourceTree !== candidate.tree) findings.push("FINITE_TASK_MERGE_REF_WRONG_SOURCE_TREE");
-  } else if (candidate.observationSource !== undefined && candidate.observationSource !== "LOCAL_REMOTE_IMPLEMENTATION_BRANCH") {
+  } else if (candidate.observationSource !== undefined
+    && candidate.observationSource !== "LOCAL_REMOTE_IMPLEMENTATION_BRANCH"
+    && !(candidate.observationSource === "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE" && verifiedPostMergeSource)) {
     findings.push("FINITE_TASK_CANDIDATE_OBSERVATION_SOURCE_INVALID");
   }
   const changedPaths = Array.isArray(candidate.changedPaths) ? candidate.changedPaths : [];
@@ -791,9 +849,9 @@ export function evaluateFiniteTaskCandidate({ lease, registry, candidate }) {
   const competitors = (registry?.tasks ?? []).filter((task) => task.leaseId !== lease.leaseId
     && task.domain === lease.domain
     && task.domainOwnership === "ACTIVE"
-    && !finiteTaskTerminalStates.has(task.taskState));
+    && !finiteTaskLeaseEffectivelyTerminal(registry, task));
   if (competitors.length) findings.push("FINITE_TASK_COMPETING_DOMAIN_OWNER");
-  if (!finiteTaskActiveStates.has(lease.taskState)) findings.push("FINITE_TASK_TERMINAL");
+  if (!finiteTaskActiveStates.has(lease.taskState) || finiteTaskLeaseEffectivelyTerminal(registry, lease)) findings.push("FINITE_TASK_TERMINAL");
   const blockingFinding = candidate.findings?.P0 > 0
     || candidate.findings?.P1 > 0
     || candidate.findings?.launchImpactingP2 > 0;
@@ -819,9 +877,10 @@ const finalReceiptFields = [
   "schemaVersion", "policyId", "repository", "featureId", "implementationPr", "implementationBranch",
   "admittedSeedHead", "finalHead", "finalTree", "diffHash", "changedPathHash", "scopeResult",
   "callDomainClosureLedgerHash", "focusedTestHash", "mutationNegativeControlHash", "repositoryReviewHash",
-  "phase1RunId", "phase1Head"
+  "phase1RunId", "phase1Head", "baseLeaseHash", "baseReservation", "effectiveReservation",
+  "amendmentReceipt", "authority"
 ];
-const finalReceiptMarker = "<!-- chillywood-assurance-final-task-receipt-v1 -->";
+export const finalReceiptMarker = "<!-- chillywood-assurance-final-task-receipt-v1 -->";
 
 export function finiteTaskFinalReceiptSubject(value) {
   return Object.fromEntries(finalReceiptFields.map((field) => [field, structuredClone(value?.[field])]));
@@ -829,12 +888,24 @@ export function finiteTaskFinalReceiptSubject(value) {
 
 export function finiteTaskFinalReceiptBody(value) {
   const subject = finiteTaskFinalReceiptSubject(value);
-  return `${finalReceiptMarker}\n${stableJson({ subject, subjectHash: sha256(subject) })}`;
+  const payload = { subject, subjectHash: sha256(subject) };
+  return `${finalReceiptMarker}\n${stableJson(subject.schemaVersion === 2 ? { ...payload, bodyHash: sha256(payload) } : payload)}`;
 }
 
-export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation }) {
+export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation, effectiveReservationResolution = null }) {
+  const amendmentBound = effectiveReservationResolution?.status === "AMENDED"
+    || evidence?.effectiveReservation !== undefined
+    || evidence?.amendmentReceipt !== undefined;
+  const resolvedAuthority = effectiveReservationResolution ? {
+    providerMutation: effectiveReservationResolution.authority?.providerMutation,
+    databaseDeployment: effectiveReservationResolution.authority?.databaseDeployment,
+    build: effectiveReservationResolution.authority?.build,
+    submission: effectiveReservationResolution.authority?.submission,
+    ota: effectiveReservationResolution.authority?.ota,
+    publicRelease: effectiveReservationResolution.authority?.publicRelease
+  } : evidence?.authority;
   const subject = finiteTaskFinalReceiptSubject({
-    schemaVersion: 1,
+    schemaVersion: amendmentBound ? 2 : 1,
     policyId: "ASSURANCE_FINITE_TASK_LEASE_V1",
     repository: "Chillywood2025/chillywood-mobile",
     featureId: lease?.featureId,
@@ -851,20 +922,77 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
     mutationNegativeControlHash: evidence?.mutationNegativeControlHash,
     repositoryReviewHash: evidence?.repositoryReviewHash,
     phase1RunId: evidence?.phase1RunId,
-    phase1Head: evidence?.phase1Head
+    phase1Head: evidence?.phase1Head,
+    baseLeaseHash: amendmentBound ? effectiveReservationResolution?.baseLeaseHash ?? evidence?.baseLeaseHash : undefined,
+    baseReservation: amendmentBound ? effectiveReservationResolution?.baseReservation ?? evidence?.baseReservation : undefined,
+    effectiveReservation: amendmentBound ? effectiveReservationResolution?.effectiveReservation ?? evidence?.effectiveReservation : undefined,
+    amendmentReceipt: amendmentBound ? effectiveReservationResolution?.amendmentReceipt ?? evidence?.amendmentReceipt : undefined,
+    authority: amendmentBound ? resolvedAuthority : undefined
   });
   const hashesValid = [subject.diffHash, subject.changedPathHash, subject.callDomainClosureLedgerHash,
     subject.focusedTestHash, subject.mutationNegativeControlHash, subject.repositoryReviewHash]
     .every((value) => sha256Pattern.test(value ?? ""));
   const body = finiteTaskFinalReceiptBody(subject);
   const subjectHash = sha256(subject);
-  const bodyHash = sha256(body);
+  const payloadBodyHash = sha256({ subject, subjectHash });
+  const rawBodyHash = sha256(body);
+  const receiptHashesValid = subject.schemaVersion === 2
+    ? receipt?.subjectHash === subjectHash
+      && receipt?.bodyHash === payloadBodyHash
+      && receipt?.rawBodyHash === rawBodyHash
+    : receipt?.subjectHash === subjectHash && receipt?.bodySha256 === rawBodyHash;
   const ok = hashesValid
     && subject.scopeResult === "PASS"
     && Number.isInteger(subject.phase1RunId) && subject.phase1RunId > 0
     && subject.phase1Head === candidate?.head
-    && receipt?.subjectHash === subjectHash
-    && receipt?.bodySha256 === bodyHash
+    && (!amendmentBound || (
+      evidence?.repositoryReview?.valid === true
+      && evidence.repositoryReview.reviewedHead === candidate?.head
+      && evidence.repositoryReview.reviewedTree === candidate?.tree
+      && stableJson(evidence.repositoryReview.disposition) === stableJson({ P0: 0, P1: 0, launchImpactingP2: 0 })
+      && subject.repositoryReviewHash === evidence.repositoryReview.subjectHash
+      && evidence?.phase1Evidence?.valid === true
+      && evidence.phase1Evidence.result === "PASS_13_OF_13"
+      && evidence.phase1Evidence.sourceHead === candidate?.head
+      && evidence.phase1Evidence.sourceTree === candidate?.tree
+      && subject.phase1RunId === evidence.phase1Evidence.runId
+      && subject.phase1Head === evidence.phase1Evidence.sourceHead
+    ))
+    && (!amendmentBound || (
+      finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
+      && effectiveReservationResolution?.status === "AMENDED"
+      && effectiveReservationResolution?.authority?.liveReceipt === true
+      && effectiveReservationResolution?.candidateHead === candidate?.head
+      && effectiveReservationResolution?.candidateTree === candidate?.tree
+      && subject.baseLeaseHash === sha256(lease)
+      && subject.baseReservation?.reservationHash === sha256({
+        allowedPaths: subject.baseReservation?.allowedPaths,
+        pathGlobs: subject.baseReservation?.pathGlobs,
+        maximumFiles: subject.baseReservation?.maximumFiles,
+        maximumLines: subject.baseReservation?.maximumLines,
+        eligiblePathCount: subject.baseReservation?.eligiblePathCount
+      })
+      && subject.effectiveReservation?.reservationHash === sha256({
+        allowedPaths: subject.effectiveReservation?.allowedPaths,
+        pathGlobs: subject.effectiveReservation?.pathGlobs,
+        maximumFiles: subject.effectiveReservation?.maximumFiles,
+        maximumLines: subject.effectiveReservation?.maximumLines,
+        eligiblePathCount: subject.effectiveReservation?.eligiblePathCount
+      })
+      && Number.isInteger(subject.amendmentReceipt?.commentId)
+      && subject.amendmentReceipt.commentId > 0
+      && [subject.amendmentReceipt.subjectHash, subject.amendmentReceipt.bodyHash, subject.amendmentReceipt.rawBodyHash]
+        .every((value) => sha256Pattern.test(value ?? ""))
+      && stableJson(subject.authority) === stableJson({
+        providerMutation: false,
+        databaseDeployment: false,
+        build: false,
+        submission: false,
+        ota: false,
+        publicRelease: false
+      })
+    ))
+    && receiptHashesValid
     && Number.isInteger(receipt?.commentId) && receipt.commentId > 0
     && receipt?.commentId === observation?.commentId
     && receipt?.author === "Chillywood2025"
@@ -875,7 +1003,61 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
     && observation.createdAt === observation.updatedAt
     && observation.issueUrl === `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${lease?.implementationPr}`
     && observation.body === body;
-  return { ok, stale: typeof receipt?.subjectHash === "string" && receipt.subjectHash !== subjectHash, subject, subjectHash, bodyHash };
+  return { ok, stale: typeof receipt?.subjectHash === "string" && receipt.subjectHash !== subjectHash, subject, subjectHash, bodyHash: subject.schemaVersion === 2 ? payloadBodyHash : rawBodyHash, rawBodyHash };
+}
+export function verifyFiniteTaskFinalSourceEligibility({
+  lease,
+  candidate,
+  evidence,
+  effectiveReservationResolution,
+  comments = [],
+  commentsPaginationComplete = false
+} = {}) {
+  const findings = [];
+  if (!Array.isArray(comments) || commentsPaginationComplete !== true) findings.push("FINITE_TASK_FINAL_SOURCE_DISCOVERY_INCOMPLETE");
+  const matches = (Array.isArray(comments) ? comments : []).filter(({ body }) => typeof body === "string" && body.includes(finalReceiptMarker));
+  if (matches.length !== 1) findings.push("FINITE_TASK_FINAL_SOURCE_CARDINALITY_INVALID");
+  let verified = null;
+  let normalizedReceipt = null;
+  if (matches.length === 1) {
+    const observation = normalizeIssueComment(matches[0]);
+    let envelope = null;
+    try {
+      envelope = observation.body.startsWith(`${finalReceiptMarker}\n`)
+        ? JSON.parse(observation.body.slice(finalReceiptMarker.length + 1))
+        : null;
+    } catch {}
+    const receipt = {
+      commentId: observation.commentId,
+      author: observation.author,
+      authorAssociation: observation.authorAssociation,
+      subjectHash: envelope?.subjectHash,
+      bodyHash: envelope?.bodyHash,
+      rawBodyHash: sha256(observation.body ?? ""),
+      bodySha256: sha256(observation.body ?? "")
+    };
+    verified = verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation, effectiveReservationResolution });
+    if (!verified.ok) findings.push("FINITE_TASK_FINAL_SOURCE_RECEIPT_INVALID");
+    normalizedReceipt = verified.ok ? {
+      commentId: observation.commentId,
+      createdAt: observation.createdAt,
+      subjectHash: verified.subjectHash,
+      bodyHash: verified.bodyHash,
+      rawBodyHash: verified.rawBodyHash,
+      finalHead: verified.subject.finalHead,
+      finalTree: verified.subject.finalTree,
+      effectiveReservationHash: verified.subject.effectiveReservation?.reservationHash ?? null,
+      amendmentCommentId: verified.subject.amendmentReceipt?.commentId ?? null
+    } : null;
+  }
+  const unique = [...new Set(findings)].sort();
+  return {
+    ok: unique.length === 0,
+    mergeEligible: unique.length === 0,
+    findings: unique,
+    receipt: normalizedReceipt,
+    subject: verified?.subject ?? null
+  };
 }
 
 export function transitionFiniteTaskState(currentState, event) {
@@ -896,7 +1078,7 @@ export function transitionFiniteTaskState(currentState, event) {
   return state ? { ok: true, state, finding: null } : { ok: false, state: currentState, finding: "FINITE_TASK_EVENT_MALFORMED" };
 }
 
-export function verifyFiniteTaskMergeProvenance({ lease, receiptSubject, currentProtectedBase, mergeRef, actualMerge = null }) {
+export function verifyFiniteTaskMergeProvenance({ lease, receiptSubject, currentProtectedBase, mergeRef, actualMerge = null, effectiveReservationResolution = null }) {
   const findings = [];
   if (mergeRef?.pr !== lease?.implementationPr) findings.push("FINITE_MERGE_WRONG_PR");
   if (mergeRef?.branch !== lease?.implementationBranch) findings.push("FINITE_MERGE_WRONG_BRANCH");
@@ -907,6 +1089,13 @@ export function verifyFiniteTaskMergeProvenance({ lease, receiptSubject, current
   }
   if (mergeRef?.sourceTree !== receiptSubject?.finalTree) findings.push("FINITE_MERGE_WRONG_SOURCE_TREE");
   if (!gitShaPattern.test(mergeRef?.tree ?? "")) findings.push("FINITE_MERGE_TREE_MALFORMED");
+  if (receiptSubject?.schemaVersion === 2 && (
+    !finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
+    || receiptSubject.baseLeaseHash !== effectiveReservationResolution?.baseLeaseHash
+    || receiptSubject.baseReservation?.reservationHash !== effectiveReservationResolution?.baseReservation?.reservationHash
+    || receiptSubject.effectiveReservation?.reservationHash !== effectiveReservationResolution?.effectiveReservation?.reservationHash
+    || stableJson(receiptSubject.amendmentReceipt) !== stableJson(effectiveReservationResolution?.amendmentReceipt)
+  )) findings.push("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH");
   if (actualMerge) {
     if (!Array.isArray(actualMerge.parents) || actualMerge.parents.length !== 2) findings.push("FINITE_ACTUAL_MERGE_NOT_TWO_PARENT");
     else {
@@ -997,6 +1186,8 @@ export function deriveFiniteTaskCandidateObservation({
   githubEvent,
   checkoutHead,
   currentProtectedBase,
+  effectiveReservationObservation = null,
+  finiteTaskPostMergeTransition = null,
   gitCommand = git,
   environment = process.env
 } = {}) {
@@ -1008,8 +1199,13 @@ export function deriveFiniteTaskCandidateObservation({
   const eventPr = event?.pull_request;
   const eventNumber = eventPr?.number ?? event?.number;
   const matchingPullRequestEvent = eventNumber === lease.implementationPr;
+  const verifiedClosedSource = verifiedFiniteTaskClosedSource({
+    lease,
+    liveObservation: effectiveReservationObservation,
+    postMergeTransition: finiteTaskPostMergeTransition
+  });
   let identity;
-  if (matchingPullRequestEvent) {
+  if (matchingPullRequestEvent && eventPr?.state === "open") {
     identity = {
       pr: eventNumber,
       branch: eventPr?.head?.ref,
@@ -1023,21 +1219,38 @@ export function deriveFiniteTaskCandidateObservation({
       || identity.prState !== "open"
       || !gitShaPattern.test(identity.head ?? "")
       || !gitShaPattern.test(identity.eventBase ?? "")) findings.push("FINITE_TASK_GITHUB_EVENT_MALFORMED");
+  } else if (matchingPullRequestEvent && verifiedClosedSource) {
+    identity = {
+      pr: verifiedClosedSource.pr,
+      branch: verifiedClosedSource.branch,
+      prState: "closed",
+      head: verifiedClosedSource.head,
+      eventBase: protectedBase,
+      scopeBase: verifiedClosedSource.scopeBase,
+      mergeSha: verifiedClosedSource.mergeSha,
+      observationSource: "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE"
+    };
+  } else if (matchingPullRequestEvent) {
+    findings.push("FINITE_TASK_GITHUB_EVENT_MALFORMED");
   } else {
     const observed = suppliedObservation ?? record?.finiteTaskRuntime?.candidateObservation;
     const remoteHead = safeRuntimeGit(gitCommand, ["show-ref", "--verify", "--hash", implementationRemoteRef(lease.implementationBranch)]);
+    const postMergeFallback = !gitShaPattern.test(remoteHead ?? "") ? verifiedClosedSource : null;
     identity = {
-      pr: observed?.pr,
-      branch: observed?.branch,
-      prState: observed?.prState,
-      head: remoteHead,
+      pr: postMergeFallback?.pr ?? observed?.pr,
+      branch: postMergeFallback?.branch ?? observed?.branch,
+      prState: postMergeFallback ? "closed" : observed?.prState,
+      head: postMergeFallback?.head ?? remoteHead,
       eventBase: protectedBase,
-      observationSource: "LOCAL_REMOTE_IMPLEMENTATION_BRANCH",
+      scopeBase: postMergeFallback?.scopeBase ?? protectedBase,
+      mergeSha: postMergeFallback?.mergeSha ?? null,
+      observationSource: postMergeFallback ? "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE" : "LOCAL_REMOTE_IMPLEMENTATION_BRANCH",
       recordedObservationHead: observed?.head ?? null
     };
     if (!Number.isInteger(identity.pr)
       || !isValidGitBranchName(identity.branch)
-      || identity.prState !== "open"
+      || (!postMergeFallback && identity.prState !== "open")
+      || (postMergeFallback && identity.prState !== "closed")
       || !gitShaPattern.test(identity.head ?? "")) findings.push("FINITE_TASK_LOCAL_OBSERVATION_MALFORMED");
   }
   if (findings.length) return { ok: false, candidate: null, findings: [...new Set(findings)].sort() };
@@ -1047,7 +1260,7 @@ export function deriveFiniteTaskCandidateObservation({
     const seedTree = gitCommand(["rev-parse", `${lease.admittedSeedHead}^{tree}`]);
     const seedIsAncestor = safeRuntimeGit(gitCommand, ["merge-base", "--is-ancestor", lease.admittedSeedHead, head], null) !== null;
     const baseIsAncestor = safeRuntimeGit(gitCommand, ["merge-base", "--is-ancestor", lease.admittedBase, head], null) !== null;
-    const range = `${protectedBase}...${head}`;
+    const range = `${identity.scopeBase ?? protectedBase}...${head}`;
     const changedPaths = gitCommand(["diff", "--name-only", range]).split(/\r?\n/gu).filter(Boolean).sort();
     const changedLines = runtimeChangedLines(gitCommand, range);
     const candidate = {
@@ -1068,13 +1281,18 @@ export function deriveFiniteTaskCandidateObservation({
         : { P0: 0, P1: 0, launchImpactingP2: 0 },
       observationSource: identity.observationSource,
       currentProtectedBase: protectedBase,
+      postMergeSha: identity.mergeSha ?? null,
+      scopeBase: identity.scopeBase ?? protectedBase,
       recordedObservationHead: identity.recordedObservationHead ?? null
     };
-    if (matchingPullRequestEvent) {
+    if (matchingPullRequestEvent && identity.observationSource === "GITHUB_PULL_REQUEST_EVENT") {
       const mergeHead = checkoutHead ?? environment?.GITHUB_SHA ?? "HEAD";
       candidate.mergeRefParents = gitCommand(["show", "-s", "--format=%P", mergeHead]).split(/\s+/u).filter(Boolean);
       candidate.mergeRefSourceTree = gitCommand(["rev-parse", `${candidate.mergeRefParents[1] ?? "missing"}^{tree}`]);
       candidate.eventBase = identity.eventBase;
+    }
+    if (identity.observationSource === "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE") {
+      trustedFiniteTaskPostMergeCandidates.set(candidate, finiteTaskPostMergeCandidateFingerprint(candidate));
     }
     return { ok: true, candidate, findings: [] };
   } catch {
@@ -1098,6 +1316,9 @@ export function evaluateFiniteTaskLeaseRuntime({
   githubEvent,
   checkoutHead,
   currentProtectedBase,
+  effectiveReservationObservation = null,
+  effectiveReservationResolution = null,
+  finiteTaskPostMergeTransition = null,
   gitCommand = git,
   environment = process.env
 } = {}) {
@@ -1142,10 +1363,49 @@ export function evaluateFiniteTaskLeaseRuntime({
   };
   const leaseFreshness = scopedFreshness(binding?.requiredFreshnessClaims ?? []);
   const providerFreshness = scopedFreshness(providerCriticalRuntimeRequirement);
+  const declaredAuthorityEvidence = effectiveReservationObservation?.authorityEvidence ?? {
+    taskArtifactHash: lease?.closure?.artifactHash,
+    ownerApproval: lease?.ownerApproval,
+    jurisdictionDecision: record?.ownerJurisdictionPolicyBinding?.policySource ? {
+      commentId: record.ownerJurisdictionPolicyBinding.policySource.commentId,
+      subjectHash: record.ownerJurisdictionPolicyBinding.policySource.subjectHash,
+      bodyHash: record.ownerJurisdictionPolicyBinding.policySource.bodyHash,
+      envelopeHash: record.ownerJurisdictionPolicyBinding.policySource.envelopeHash
+    } : undefined
+  };
+  const reservationObservation = effectiveReservationObservation ?? (lease?.amendmentMaximum?.maximumAmendments > 0
+    ? observeLiveFiniteTaskEffectiveReservation({ pr: lease.implementationPr, authorityEvidence: declaredAuthorityEvidence })
+    : null);
+  const authorityEvidence = reservationObservation?.authorityEvidence ?? declaredAuthorityEvidence;
+  const resolveEffectiveReservation = (candidate) => {
+    const supplied = effectiveReservationResolution;
+    if (supplied?.baseLeaseHash === (lease ? sha256(lease) : null)
+      && supplied?.candidateHead === (candidate?.head ?? null)
+      && supplied?.candidateTree === (candidate?.tree ?? null)) return supplied;
+    return resolveFiniteTaskEffectiveReservation({
+      registry: record?.finiteTaskLeases,
+      lease,
+      candidate,
+      comments: reservationObservation?.comments ?? [],
+      commentsPaginationComplete: reservationObservation?.commentsPaginationComplete ?? false,
+      pullRequest: reservationObservation?.pullRequest ?? null,
+      commits: reservationObservation?.commits ?? [],
+      commitsPaginationComplete: reservationObservation?.commitsPaginationComplete ?? false,
+      gitCommand,
+      requireCompleteDiscovery: reservationObservation?.requireCompleteDiscovery
+        ?? reservationObservation?.observationMode === "LIVE_GITHUB_COMPLETE_READBACK",
+      observationMode: reservationObservation?.observationMode ?? "SYNTHETIC_NO_WRITE",
+      authorityEvidence,
+      liveObservation: reservationObservation
+    });
+  };
   const terminalTask = binding?.phase === "TERMINAL" || finiteTaskTerminalStates.has(lease?.taskState);
   if (!currentProtectedBaseResolution.ok) {
+    const reservationResolution = resolveEffectiveReservation(null);
     const findings = [...new Set([
       ...leaseFreshness.blockers.map(({ id }) => id),
+      ...reservationResolution.findings,
+      ...(finiteTaskEffectiveReservationAuthorityValid(reservationResolution) ? [] : ["FINITE_TASK_EFFECTIVE_RESERVATION_LIVE_AUTHORITY_REQUIRED"]),
       ...currentProtectedBaseResolution.findings
     ])].sort();
     return {
@@ -1169,6 +1429,11 @@ export function evaluateFiniteTaskLeaseRuntime({
         findings
       },
       currentProtectedBaseResolution,
+      effectiveReservationResolution: reservationResolution,
+      baseReservation: reservationResolution.baseReservation,
+      effectiveReservation: reservationResolution.effectiveReservation,
+      amendmentReceipt: reservationResolution.amendmentReceipt,
+      effectiveLease: reservationResolution.effectiveLease,
       taskState: lease?.taskState ?? null,
       terminal: terminalTask
     };
@@ -1177,10 +1442,19 @@ export function evaluateFiniteTaskLeaseRuntime({
   if (terminalTask) {
     const observation = record?.finiteTaskRuntime?.candidateObservation;
     const latest = record?.latestMergedImplementationPr;
+    const terminalOutcome = record?.finiteTaskRuntime?.terminalOutcome;
+    const amendedTerminalProjection = binding?.phase === "TERMINAL"
+      && terminalOutcome?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+      && stableJson(binding?.terminalEvidence) === stableJson(terminalOutcome)
+      && terminalOutcome?.baseLeaseHash === sha256(lease)
+      && finiteTaskLeaseEffectivelyTerminal(record?.finiteTaskLeases, lease)
+      && finiteTaskActiveStates.has(lease?.taskState)
+      && lease?.domainOwnership === "ACTIVE";
+    const legacyTerminalProjection = lease?.taskState === "MERGED_VERIFIED"
+      && lease?.domainOwnership === "PRESERVED_DEPENDENT";
     const terminalFindings = [];
     if (binding?.phase !== "TERMINAL"
-      || lease?.taskState !== "MERGED_VERIFIED"
-      || lease?.domainOwnership !== "PRESERVED_DEPENDENT") terminalFindings.push("FINITE_TASK_TERMINAL_STATE_MISMATCH");
+      || (!legacyTerminalProjection && !amendedTerminalProjection)) terminalFindings.push("FINITE_TASK_TERMINAL_STATE_MISMATCH");
     if (observation?.pr !== lease?.implementationPr
       || observation?.branch !== lease?.implementationBranch
       || observation?.prState !== "merged"
@@ -1209,8 +1483,24 @@ export function evaluateFiniteTaskLeaseRuntime({
     } catch {
       terminalFindings.push("FINITE_TASK_TERMINAL_MERGE_ANCESTRY_INVALID");
     }
+    const terminalCandidate = {
+      pr: lease?.implementationPr,
+      branch: lease?.implementationBranch,
+      prState: "closed",
+      head: binding?.currentImplementationHead,
+      tree: binding?.currentImplementationTree
+    };
+    const reservationResolution = resolveEffectiveReservation(terminalCandidate);
+    if (amendedTerminalProjection && (
+      reservationResolution?.baseLeaseHash !== terminalOutcome.baseLeaseHash
+      || reservationResolution?.effectiveReservation?.reservationHash !== terminalOutcome.effectiveReservation?.reservationHash
+      || stableJson(reservationResolution?.amendmentReceipt) !== stableJson(terminalOutcome.amendmentReceipt)
+      || terminalOutcome?.finalSourceReceipt?.effectiveReservationHash !== terminalOutcome.effectiveReservation?.reservationHash
+    )) terminalFindings.push("FINITE_TASK_TERMINAL_EFFECTIVE_RESERVATION_MISMATCH");
     const findings = [...new Set([
       ...leaseFreshness.blockers.map(({ id }) => id),
+      ...reservationResolution.findings,
+      ...(finiteTaskEffectiveReservationAuthorityValid(reservationResolution) ? [] : ["FINITE_TASK_EFFECTIVE_RESERVATION_LIVE_AUTHORITY_REQUIRED"]),
       ...terminalFindings
     ])].sort();
     const terminalEligible = leaseFreshness.eligible && findings.length === 0;
@@ -1227,6 +1517,11 @@ export function evaluateFiniteTaskLeaseRuntime({
       leaseFreshness,
       providerFreshness,
       currentProtectedBaseResolution,
+      effectiveReservationResolution: reservationResolution,
+      baseReservation: reservationResolution.baseReservation,
+      effectiveReservation: reservationResolution.effectiveReservation,
+      amendmentReceipt: reservationResolution.amendmentReceipt,
+      effectiveLease: reservationResolution.effectiveLease,
       candidate: terminalEligible ? {
         pr: lease.implementationPr,
         branch: lease.implementationBranch,
@@ -1239,11 +1534,12 @@ export function evaluateFiniteTaskLeaseRuntime({
       candidateEvaluation: {
         ok: terminalEligible,
         leaseRetained: true,
-        taskState: lease?.taskState ?? null,
+        taskState: amendedTerminalProjection ? "MERGED_VERIFIED" : lease?.taskState ?? null,
         invalidated: { ownerFinalReceipt: false, repositoryReview: false, phase1: false, mergeEligibility: true },
         findings
       },
-      taskState: lease?.taskState ?? null,
+      taskState: amendedTerminalProjection ? "MERGED_VERIFIED" : lease?.taskState ?? null,
+      terminalProjectionVerified: amendedTerminalProjection && terminalEligible,
       terminal: true
     };
   }
@@ -1254,23 +1550,31 @@ export function evaluateFiniteTaskLeaseRuntime({
     githubEvent: event,
     checkoutHead,
     currentProtectedBase: resolvedProtectedBase,
+    effectiveReservationObservation: reservationObservation,
+    finiteTaskPostMergeTransition,
     gitCommand,
     environment
   });
+  const reservationResolution = resolveEffectiveReservation(derived.candidate);
+  const effectiveLease = reservationResolution.effectiveLease ?? lease;
   const candidateEvaluation = derived.candidate
-    ? evaluateFiniteTaskCandidate({ lease, registry: record?.finiteTaskLeases, candidate: derived.candidate })
+    ? evaluateFiniteTaskCandidate({ lease: effectiveLease, registry: record?.finiteTaskLeases, candidate: derived.candidate })
     : { ok: false, findings: derived.findings, invalidated: null, taskState: lease?.taskState ?? null };
   const findings = [...new Set([
     ...leaseFreshness.blockers.map(({ id }) => id),
+    ...reservationResolution.findings,
+    ...(finiteTaskEffectiveReservationAuthorityValid(reservationResolution) ? [] : ["FINITE_TASK_EFFECTIVE_RESERVATION_LIVE_AUTHORITY_REQUIRED"]),
     ...derived.findings,
     ...candidateEvaluation.findings
   ])].sort();
   const sourceOnlyEligible = leaseFreshness.eligible
     && derived.ok
+    && reservationResolution.ok
+    && finiteTaskEffectiveReservationAuthorityValid(reservationResolution)
     && candidateEvaluation.ok;
   return {
     leaseAuthorityEligible: leaseFreshness.eligible,
-    candidateEligible: derived.ok && candidateEvaluation.ok,
+    candidateEligible: derived.ok && candidateEvaluation.ok && finiteTaskEffectiveReservationAuthorityValid(reservationResolution),
     candidateHead: derived.candidate?.head ?? null,
     candidateTree: derived.candidate?.tree ?? null,
     scopeResult: candidateEvaluation.ok ? "PASS" : "FAIL",
@@ -1281,6 +1585,11 @@ export function evaluateFiniteTaskLeaseRuntime({
     leaseFreshness,
     providerFreshness,
     currentProtectedBaseResolution,
+    effectiveReservationResolution: reservationResolution,
+    baseReservation: reservationResolution.baseReservation,
+    effectiveReservation: reservationResolution.effectiveReservation,
+    amendmentReceipt: reservationResolution.amendmentReceipt,
+    effectiveLease: reservationResolution.effectiveLease,
     candidate: derived.candidate,
     candidateEvaluation,
     taskState: lease?.taskState ?? null,
@@ -1574,6 +1883,8 @@ export function evaluateProtectedMainAdvancement({
   observedProtectedMainSha,
   candidateHead,
   finiteTaskRuntime,
+  finiteTaskFinalSourceEligibility,
+  finiteTaskPostMergeTransition,
   gitCommand = git,
   advancementObservations,
   pendingTransitionPolicy = {
@@ -1647,7 +1958,12 @@ export function evaluateProtectedMainAdvancement({
     implementationBranch: record?.activeTaskBinding?.implementationBranch,
     featureId: record?.activeTaskBinding?.featureId
   });
-  const activeLeasePaths = new Set(activeLease?.allowedPaths ?? []);
+  const activeLeasePaths = new Set(
+    finiteTaskRuntime?.effectiveReservation?.allowedPaths
+    ?? finiteTaskRuntime?.effectiveReservationResolution?.effectiveReservation?.allowedPaths
+    ?? activeLease?.allowedPaths
+    ?? []
+  );
   let prior = checkpointSha;
   const advancements = [];
   const pendingTransitions = [];
@@ -1745,8 +2061,12 @@ export function evaluateProtectedMainAdvancement({
       candidateCurrent = false;
     }
   }
-  const terminalTask = finiteTaskRuntime?.terminal === true && finiteTaskRuntime?.taskState === "MERGED_VERIFIED";
-  const candidateBaseStatus = terminalTask
+  const verifiedAmendedTerminal = finiteTaskPostMergeTransitionAuthorityValid(finiteTaskPostMergeTransition);
+  const terminalTask = finiteTaskRuntime?.terminal === true
+    && (finiteTaskRuntime?.taskState === "MERGED_VERIFIED" || finiteTaskRuntime?.terminalProjectionVerified === true);
+  const candidateBaseStatus = verifiedAmendedTerminal
+    ? "FINITE_TASK_MERGE_VERIFIED_TERMINAL_TRUTH_REQUIRED"
+    : terminalTask
     ? "TERMINAL_MERGED_VERIFIED"
     : candidateCurrent === true ? "CURRENT_WITH_PROTECTED_MAIN" : "BASE_SYNC_REQUIRED";
   const aggregateChangedPaths = [...new Set(advancements.flatMap(({ changedPaths }) => changedPaths))].sort();
@@ -1770,9 +2090,32 @@ export function evaluateProtectedMainAdvancement({
     && pendingTransitions.length === 0
     && pendingConsumptionCount === 0
     && (finiteTaskRuntime?.providerDependentEligible ?? false);
-  const finalEvidence = record?.finiteTaskRuntime?.finalEvidence ?? {};
-  const finalEvidenceCurrent = ["ownerReceipt", "repositoryReview", "phase1", "mergeEligible"].every((key) => finalEvidence[key] === true);
-  const mergeEligible = !terminalTask && sourceOnlyEligible && candidateCurrent === true && finalEvidenceCurrent;
+  const legacyFinalEvidence = record?.finiteTaskRuntime?.finalEvidence ?? {};
+  const legacyFinalEvidenceCurrent = ["ownerReceipt", "repositoryReview", "phase1", "mergeEligible"].every((key) => legacyFinalEvidence[key] === true);
+  const liveFinalEvidenceSupplied = finiteTaskFinalSourceEligibility !== undefined;
+  const liveFinalEvidenceRequired = Number(activeLease?.amendmentMaximum?.maximumAmendments ?? 0) > 0;
+  const finalEvidenceCurrent = liveFinalEvidenceSupplied
+    ? (!liveFinalEvidenceRequired || finiteTaskImplementationLifecycleAuthorityValid(finiteTaskFinalSourceEligibility))
+      && finiteTaskFinalSourceEligibility?.mergeEligible === true
+      && finiteTaskFinalSourceEligibility?.candidateHead === candidateHead
+      && finiteTaskFinalSourceEligibility?.candidateTree === finiteTaskRuntime?.candidateTree
+    : !liveFinalEvidenceRequired && legacyFinalEvidenceCurrent;
+  if (liveFinalEvidenceRequired && liveFinalEvidenceSupplied
+    && finiteTaskFinalSourceEligibility?.mergeEligible === true
+    && !finiteTaskImplementationLifecycleAuthorityValid(finiteTaskFinalSourceEligibility)) findings.push("FINITE_TASK_IMPLEMENTATION_LIFECYCLE_AUTHORITY_INVALID");
+  if (finiteTaskPostMergeTransition?.applicable === true && !verifiedAmendedTerminal) {
+    findings.push(...(finiteTaskPostMergeTransition.findings ?? ["FINITE_TASK_POST_MERGE_TRANSITION_INVALID"]));
+    findings.push("FINITE_TASK_POST_MERGE_TRANSITION_AUTHORITY_INVALID");
+  } else if (finiteTaskPostMergeTransition !== undefined
+    && finiteTaskPostMergeTransition?.applicable !== true
+    && finiteTaskPostMergeTransition?.applicable !== false) {
+    findings.push(...(finiteTaskPostMergeTransition?.findings ?? ["FINITE_TASK_POST_MERGE_DISCOVERY_INCOMPLETE"]));
+  }
+  const mergeEligible = !terminalTask
+    && finiteTaskPostMergeTransition?.applicable !== true
+    && sourceOnlyEligible
+    && candidateCurrent === true
+    && finalEvidenceCurrent;
   const evidenceInvalidation = protectedMainEvidenceInvalidation(activeTaskInputsInvalidated);
   return {
     authorityCheckpointEligible,
@@ -1791,7 +2134,9 @@ export function evaluateProtectedMainAdvancement({
     activeTaskInputsInvalidated,
     evidenceInvalidation,
     candidateBaseStatus,
-    nextRequiredAction: pendingTransitions.length
+    nextRequiredAction: verifiedAmendedTerminal
+      ? "CREATE_EXACT_FINITE_TASK_TERMINAL_TRUTH"
+      : pendingTransitions.length
       ? "CREATE_EXACT_TERMINAL_TRUTH_SUCCESSOR"
       : terminalTask
       ? "CONTINUE_TERMINAL_HANDOFF"
@@ -1802,12 +2147,17 @@ export function evaluateProtectedMainAdvancement({
     submissionEligible: false,
     otaEligible: false,
     publicReleaseEligible: false,
-    pendingTerminalTruth: pendingTransitions.length > 0,
-    pendingTransitionCount: pendingTransitions.length,
+    pendingTerminalTruth: verifiedAmendedTerminal || pendingTransitions.length > 0,
+    pendingTransitionCount: pendingTransitions.length + (verifiedAmendedTerminal ? 1 : 0),
     pendingTransitionConsumptionCount: pendingConsumptionCount,
     pendingTransitions,
-    terminalSuccessorRequired: pendingTransitions.length > 0,
-    currentTruthStatus: pendingTransitions.length ? "PENDING_TERMINAL_TRUTH_SUCCESSOR" : "CURRENT",
+    terminalSuccessorRequired: verifiedAmendedTerminal || pendingTransitions.length > 0,
+    currentTruthStatus: verifiedAmendedTerminal
+      ? "PENDING_FINITE_TASK_TERMINAL_TRUTH"
+      : pendingTransitions.length ? "PENDING_TERMINAL_TRUTH_SUCCESSOR" : "CURRENT",
+    finiteTaskFinalSourceEligibility: liveFinalEvidenceSupplied ? finiteTaskFinalSourceEligibility : null,
+    liveFinalEvidenceRequired,
+    finiteTaskPostMergeTransition: finiteTaskPostMergeTransition ?? null,
     mergeEligible,
     findings: [...new Set(findings)].sort()
   };
@@ -1885,68 +2235,751 @@ export function verifyControlMaintenanceAuthorization({ subject: input, observat
   };
 }
 
-const taskLeaseAmendmentMarker = "<!-- chillywood-assurance-task-lease-amendment-v1 -->";
-const amendmentSubjectFields = ["schemaVersion", "repository", "leaseId", "pr", "branch", "currentCandidateHead", "currentLeaseHash", "addedPaths", "registeredDomain", "reason", "newScopeMaximum", "excludedAuthority"];
+export const taskLeaseAmendmentMarker = "<!-- chillywood-assurance-task-lease-amendment-v1 -->";
+const amendmentSubjectFieldsV1 = ["schemaVersion", "repository", "leaseId", "pr", "branch", "currentCandidateHead", "currentLeaseHash", "addedPaths", "registeredDomain", "reason", "newScopeMaximum", "excludedAuthority"];
+const amendmentSubjectFieldsV2 = [
+  "schemaVersion", "policyId", "repository", "pr", "branch", "taskId", "leaseId", "domain",
+  "baseLeaseHash", "boundStartingBaseHead", "boundStartingBaseTree", "boundStartingHead", "boundStartingTree",
+  "taskArtifactHash", "ownerApproval", "jurisdictionDecision", "addedPaths", "pathReasons", "affectedDefect",
+  "affectedInvariants", "effectiveReservation", "amendmentUse", "applicability", "authority"
+];
+const finiteTaskAmendmentClosedAuthority = Object.freeze({
+  providerMutation: false,
+  databaseDeployment: false,
+  build: false,
+  submission: false,
+  ota: false,
+  publicRelease: false
+});
+const trustedFiniteTaskLiveObservations = new WeakMap();
+const trustedFiniteTaskResolutionFingerprints = new WeakMap();
+const trustedFiniteTaskPostMergeCandidates = new WeakMap();
+const trustedFiniteTaskPostMergeTransitions = new WeakMap();
+const trustedFiniteTaskImplementationLifecycles = new WeakMap();
+const finiteTaskImplementationLifecycleFingerprint = (value) => sha256(value);
+export function finiteTaskImplementationLifecycleAuthorityValid(value) {
+  return value?.mergeEligible === true
+    && trustedFiniteTaskImplementationLifecycles.get(value) === finiteTaskImplementationLifecycleFingerprint(value);
+}
+export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: value, effectiveReservationResolution: resolution, liveObservation } = {}) {
+  const trustedLive = liveObservation && trustedFiniteTaskLiveObservations.get(liveObservation) === sha256(liveObservation)
+    && liveObservation.commentsPaginationComplete === true && liveObservation.commitsPaginationComplete === true
+    && liveObservation.requireCompleteDiscovery === true && liveObservation.observationMode === "LIVE_GITHUB_COMPLETE_READBACK";
+  const readEnvelope = (marker) => {
+    const matches = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${marker}\n`));
+    if (matches.length !== 1) return null;
+    const raw = matches[0]; let envelope;
+    try { envelope = JSON.parse(raw.body.slice(marker.length + 1)); } catch { return null; }
+    const body = Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "bodyHash"));
+    return raw.user?.login === "Chillywood2025" && raw.author_association === "OWNER" && raw.created_at === raw.updated_at
+      && envelope.subjectHash === sha256(envelope.subject) && envelope.bodyHash === sha256(body) ? { raw, envelope } : null;
+  };
+  const review = readEnvelope("<!-- chillywood-assurance-repository-review-v1 -->"); const final = readEnvelope(finalReceiptMarker);
+  const phase = value?.phase1Evidence; const { valid: _valid, evidenceHash: _hash, ...phaseBody } = phase ?? {};
+  if (trustedLive && finiteTaskEffectiveReservationAuthorityValid(resolution)
+    && value?.ok === true && value?.authorizationOk === true && value?.mergeEligible === true && value?.findings?.length === 0
+    && value?.effectiveReservationHash === resolution.effectiveReservation?.reservationHash
+    && value.candidateHead === resolution.candidateHead && value.candidateTree === resolution.candidateTree
+    && value.baseLeaseHash === resolution.baseLeaseHash && stableJson(value.baseReservation) === stableJson(resolution.baseReservation)
+    && stableJson(value.effectiveReservation) === stableJson(resolution.effectiveReservation) && stableJson(value.amendmentReceipt) === stableJson(resolution.amendmentReceipt)
+    && liveObservation.pullRequest?.number === resolution.baseLease?.implementationPr && liveObservation.pullRequest?.head?.ref === resolution.baseLease?.implementationBranch
+    && liveObservation.pullRequest?.head?.sha === value.candidateHead && liveObservation.pullRequest?.head?.repo?.full_name === "Chillywood2025/chillywood-mobile"
+    && value?.repositoryReview?.valid === true && value?.finalSource?.mergeEligible === true && value?.finalSourceSubject
+    && phase?.valid === true && phase.result === "PASS_13_OF_13" && phase.evidenceHash === sha256(phaseBody)
+    && value.candidateHead === value.finalSourceSubject.finalHead && value.candidateTree === value.finalSourceSubject.finalTree
+    && value.finalSourceSubject.repositoryReviewHash === value.repositoryReview.subjectHash
+    && value.finalSourceSubject.phase1RunId === phase.runId && value.finalSourceSubject.phase1Head === phase.sourceHead
+    && review?.raw.id === value.repositoryReview.commentId && review.envelope.subjectHash === value.repositoryReview.subjectHash
+    && review.envelope.subject?.reviewedHead === value.candidateHead && review.envelope.subject?.reviewedTree === value.candidateTree
+    && final?.raw.id === value.finalSource.receipt?.commentId && stableJson(final.envelope.subject) === stableJson(value.finalSourceSubject)) {
+    trustedFiniteTaskImplementationLifecycles.set(value, finiteTaskImplementationLifecycleFingerprint(value));
+  }
+  return value;
+}
+export function finiteTaskPostMergeTransitionAuthorityValid(value) {
+  return value?.applicable === true && value?.ok === true
+    && trustedFiniteTaskPostMergeTransitions.get(value) === sha256(value);
+}
+function finiteTaskPostMergeCandidateFingerprint(candidate) {
+  return sha256({
+    pr: candidate?.pr,
+    branch: candidate?.branch,
+    prState: candidate?.prState,
+    head: candidate?.head,
+    tree: candidate?.tree,
+    seedTree: candidate?.seedTree,
+    seedIsAncestor: candidate?.seedIsAncestor,
+    baseIsAncestor: candidate?.baseIsAncestor,
+    changedPaths: candidate?.changedPaths,
+    changedLines: candidate?.changedLines,
+    diffHash: candidate?.diffHash,
+    changedPathHash: candidate?.changedPathHash,
+    findings: candidate?.findings,
+    observationSource: candidate?.observationSource,
+    currentProtectedBase: candidate?.currentProtectedBase,
+    postMergeSha: candidate?.postMergeSha,
+    scopeBase: candidate?.scopeBase,
+    recordedObservationHead: candidate?.recordedObservationHead
+  });
+}
+function finiteTaskPostMergeCandidateValid(candidate) {
+  return candidate?.prState === "closed"
+    && candidate?.observationSource === "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE"
+    && trustedFiniteTaskPostMergeCandidates.get(candidate) === finiteTaskPostMergeCandidateFingerprint(candidate);
+}
+function finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTransition } = {}) {
+  const observationTrusted = liveObservation && typeof liveObservation === "object"
+    && trustedFiniteTaskLiveObservations.get(liveObservation) === sha256(liveObservation);
+  if (!observationTrusted
+    || liveObservation.commentsPaginationComplete !== true
+    || liveObservation.commitsPaginationComplete !== true
+    || liveObservation.requireCompleteDiscovery !== true
+    || liveObservation.observationMode !== "LIVE_GITHUB_COMPLETE_READBACK") return null;
+  const pullRequest = liveObservation.pullRequest;
+  const terminal = postMergeTransition?.terminalEvidence;
+  const lifecycle = postMergeTransition?.lifecycle;
+  const finalSource = lifecycle?.finalSourceSubject ?? lifecycle?.finalSource?.subject;
+  const evidenceBody = terminal && typeof terminal === "object" ? { ...terminal } : null;
+  if (evidenceBody) delete evidenceBody.evidenceHash;
+  const repository = "Chillywood2025/chillywood-mobile";
+  const closedAuthority = stableJson(terminal?.authority) === stableJson(finiteTaskAmendmentClosedAuthority);
+  const sourceValid = postMergeTransition?.applicable === true
+    && postMergeTransition?.ok === true
+    && postMergeTransition?.consumed === false
+    && postMergeTransition?.baseLeaseUnchanged === true
+    && lifecycle?.mergeEligible === true
+    && postMergeTransition?.mergeProvenance?.ok === true
+    && terminal?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    && terminal?.repository === repository
+    && terminal?.taskId === lease?.leaseId
+    && terminal?.leaseId === lease?.leaseId
+    && terminal?.implementationPr === lease?.implementationPr
+    && terminal?.implementationBranch === lease?.implementationBranch
+    && terminal?.baseLeaseHash === sha256(lease)
+    && gitShaPattern.test(terminal?.sourceHead ?? "")
+    && gitShaPattern.test(terminal?.sourceTree ?? "")
+    && gitShaPattern.test(terminal?.mergeSha ?? "")
+    && gitShaPattern.test(terminal?.mergeTree ?? "")
+    && Array.isArray(terminal?.mergeParents)
+    && terminal.mergeParents.length === 2
+    && terminal.mergeParents[1] === terminal.sourceHead
+    && terminal.evidenceHash === sha256(evidenceBody)
+    && closedAuthority
+    && lifecycle?.candidateHead === terminal.sourceHead
+    && lifecycle?.candidateTree === terminal.sourceTree
+    && lifecycle?.effectiveReservationHash === terminal?.effectiveReservation?.reservationHash
+    && finalSource?.finalHead === terminal.sourceHead
+    && finalSource?.finalTree === terminal.sourceTree
+    && finalSource?.effectiveReservation?.reservationHash === terminal?.effectiveReservation?.reservationHash;
+  const pullRequestValid = pullRequest?.number === lease?.implementationPr
+    && pullRequest?.state === "closed"
+    && pullRequest?.merged === true
+    && typeof pullRequest?.merged_at === "string"
+    && Number.isFinite(new Date(pullRequest.merged_at).valueOf())
+    && pullRequest?.merge_commit_sha === terminal?.mergeSha
+    && pullRequest?.head?.ref === lease?.implementationBranch
+    && pullRequest?.head?.sha === terminal?.sourceHead
+    && pullRequest?.head?.repo?.full_name === repository
+    && pullRequest?.base?.ref === "main"
+    && pullRequest?.base?.sha === terminal?.mergeParents?.[0]
+    && pullRequest?.base?.repo?.full_name === repository;
+  return sourceValid && pullRequestValid ? {
+    pr: lease.implementationPr,
+    branch: lease.implementationBranch,
+    head: terminal.sourceHead,
+    tree: terminal.sourceTree,
+    scopeBase: terminal.mergeParents[0],
+    mergeSha: terminal.mergeSha
+  } : null;
+}
+export function registerVerifiedFiniteTaskPostMergeTransition({ lease, liveObservation, postMergeTransition } = {}) {
+  if (finiteTaskImplementationLifecycleAuthorityValid(postMergeTransition?.lifecycle)
+    && finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTransition })) {
+    trustedFiniteTaskPostMergeTransitions.set(postMergeTransition, sha256(postMergeTransition));
+  }
+  return postMergeTransition;
+}
+function verifiedFiniteTaskClosedSource({ lease, liveObservation, postMergeTransition } = {}) {
+  if (!finiteTaskPostMergeTransitionAuthorityValid(postMergeTransition)) return null;
+  return finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTransition });
+}
+function finiteTaskResolutionAuthorityFingerprint(resolution) {
+  return sha256({
+    ok: resolution?.ok,
+    findings: resolution?.findings,
+    status: resolution?.status,
+    baseLease: resolution?.baseLease,
+    baseLeaseHash: resolution?.baseLeaseHash,
+    baseReservation: resolution?.baseReservation,
+    effectiveLease: resolution?.effectiveLease,
+    effectiveReservation: resolution?.effectiveReservation,
+    amendmentsConsumed: resolution?.amendmentsConsumed,
+    amendmentReceipt: resolution?.amendmentReceipt,
+    candidateHead: resolution?.candidateHead,
+    candidateTree: resolution?.candidateTree,
+    authority: resolution?.authority
+  });
+}
+export function finiteTaskEffectiveReservationAuthorityValid(resolution) {
+  if (resolution?.ok !== true
+    || trustedFiniteTaskResolutionFingerprints.get(resolution) !== finiteTaskResolutionAuthorityFingerprint(resolution)) return false;
+  if (resolution.status === "BASE_ONLY") {
+    return resolution.amendmentsConsumed === 0
+      && resolution.amendmentReceipt === null
+      && stableJson(resolution.baseLease) === stableJson(resolution.effectiveLease)
+      && stableJson(resolution.baseReservation) === stableJson(resolution.effectiveReservation)
+      && stableJson(resolution.authority) === stableJson({
+        ...finiteTaskAmendmentClosedAuthority,
+        amendmentEffective: false,
+        liveReceipt: false
+      });
+  }
+  return resolution.status === "AMENDED"
+    && resolution.amendmentsConsumed === 1
+    && resolution.amendmentReceipt !== null
+    && resolution.authority?.amendmentEffective === true
+    && resolution.authority?.liveReceipt === true;
+}
+function readCompleteGitHubApiPages(endpoint) {
+  try {
+    const pages = JSON.parse(execFileSync("gh", ["api", "--method=GET", "--paginate", "--slurp", endpoint], {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 32 * 1024 * 1024
+    }));
+    return Array.isArray(pages) && pages.every(Array.isArray)
+      ? { complete: true, items: pages.flat() }
+      : { complete: false, items: [] };
+  } catch { return { complete: false, items: [] }; }
+}
+const decodeGitHubHtml = (value) => value.replace(/&#x([0-9a-f]+);/giu, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/&#(\d+);/gu, (_, decimal) => String.fromCodePoint(Number(decimal))).replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&#39;", "'").replaceAll("&amp;", "&");
+const finiteTaskGitValue = (args) => { try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); } catch { return null; } };
+export function observePublicGitHubPullRequest({ repository = "Chillywood2025/chillywood-mobile", pr } = {}) {
+  const invalid = { comments: [], commentsPaginationComplete: false, commits: [], commitsPaginationComplete: false, pullRequest: null };
+  if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
+  let html;
+  try { html = execFileSync("curl", ["--fail", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", "--header", "User-Agent: chillywood-assurance-readonly", `https://github.com/${repository}/pull/${pr}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 }); } catch { return invalid; }
+  let pull;
+  for (const match of html.matchAll(/<script type="application\/json" data-target="react-app\.embeddedData">([\s\S]*?)<\/script>/gu)) {
+    try { const payload = JSON.parse(match[1])?.payload; pull = payload?.pullRequestsLayoutRoute?.pullRequest ?? payload?.pullRequestsConversationsRoute?.pullRequestsLayoutRoute?.pullRequest; } catch {}
+    if (pull?.number === pr) break;
+  }
+  if (pull?.number !== pr || pull.headRepositoryOwnerLogin !== "Chillywood2025" || pull.headRepositoryName !== "chillywood-mobile") return invalid;
+  let mergeCommitSha = null;
+  let baseSha = finiteTaskGitValue(["rev-parse", `origin/${pull.baseBranch}`]);
+  if (["OPEN", "DRAFT"].includes(pull.state) && finiteTaskGitValue(["show-ref", "--verify", "--hash", `refs/remotes/origin/${pull.headBranch}`]) !== pull.headSha) return invalid;
+  if (pull.state === "MERGED") for (const candidate of new Set([...html.matchAll(/href="\/Chillywood2025\/chillywood-mobile\/commit\/([0-9a-f]{40})"/gu)].map((match) => match[1]))) {
+    const parents = finiteTaskGitValue(["rev-list", "--parents", "-n", "1", candidate])?.split(/\s+/u) ?? [];
+    if (parents.length === 3 && parents[2] === pull.headSha) { [mergeCommitSha, baseSha] = [candidate, parents[1]]; break; }
+  }
+  const starts = [...html.matchAll(/data-url="\/Chillywood2025\/chillywood-mobile\/comments\/([^/"?]+)\/partials\/timeline_issue_comment"[\s\S]*?<div class=" timeline-comment-group[^>]*id="issuecomment-(\d+)">/gu)];
+  const comments = starts.map((start, index) => {
+    const block = html.slice(start.index, starts[index + 1]?.index ?? html.length);
+    const bodyMatch = /<clipboard-copy role="menuitem" value="([\s\S]*?)" data-view-component/gu.exec(block);
+    const time = /<relative-time datetime="([^"]+)"/gu.exec(block)?.[1];
+    const login = /data-hovercard-url="\/users\/([^/"?]+)\/hovercard"/gu.exec(block)?.[1];
+    const body = bodyMatch ? decodeGitHubHtml(bodyMatch[1]) : null;
+    const version = /data-body-version="([0-9a-f]{64})"/gu.exec(block)?.[1];
+    if (!body || !time || !login || version !== sha256(body)) return null;
+    return { id: Number(start[2]), node_id: start[1], user: { login }, author_association: block.includes("This user is the owner of the chillywood-mobile repository.") ? "OWNER" : "NONE", body, created_at: time, updated_at: block.includes("js-comment-edit-history") ? "EDITED" : time, issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${start[2]}` };
+  }).filter(Boolean);
+  const commentsPaginationComplete = html.includes('id="partial-timeline"') && html.includes("</html>") && !html.includes("ajax-pagination-btn") && comments.length === starts.length && new Set(comments.flatMap(({ id, node_id }) => [id, node_id])).size === comments.length * 2;
+  const rangeBase = finiteTaskGitValue(["merge-base", baseSha ?? `origin/${pull.baseBranch}`, pull.headSha]);
+  const commitShas = finiteTaskGitValue(["rev-list", "--reverse", `${rangeBase}..${pull.headSha}`])?.split(/\r?\n/gu).filter(Boolean) ?? [];
+  const commits = commitShas.map((sha) => ({ sha, commit: { tree: { sha: finiteTaskGitValue(["rev-parse", `${sha}^{tree}`]) } } }));
+  const commitsPaginationComplete = commitShas.length === pull.commitsCount && commitShas.at(-1) === pull.headSha && commits.every(({ commit }) => gitShaPattern.test(commit.tree.sha ?? ""));
+  const state = ["MERGED", "CLOSED"].includes(pull.state) ? "closed" : ["OPEN", "DRAFT"].includes(pull.state) ? "open" : null;
+  const pullRequest = state && gitShaPattern.test(baseSha ?? "") ? { number: pr, state, draft: pull.state === "DRAFT", merged: pull.state === "MERGED", merged_at: pull.mergedTime, merge_commit_sha: mergeCommitSha, head: { ref: pull.headBranch, sha: pull.headSha, repo: { full_name: `${pull.headRepositoryOwnerLogin}/${pull.headRepositoryName}` } }, base: { ref: pull.baseBranch, sha: baseSha, repo: { full_name: repository } } } : null;
+  return { comments, commentsPaginationComplete, commits, commitsPaginationComplete, pullRequest };
+}
+export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chillywood2025/chillywood-mobile", pr, authorityEvidence = null } = {}) {
+  const invalid = {
+    comments: [],
+    commentsPaginationComplete: false,
+    pullRequest: null,
+    commits: [],
+    commitsPaginationComplete: false,
+    authorityEvidence,
+    observationMode: "LIVE_GITHUB_READBACK_FAILED",
+    requireCompleteDiscovery: true
+  };
+  if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
+  const comments = readCompleteGitHubApiPages(`repos/${repository}/issues/${pr}/comments?per_page=100`);
+  const commits = readCompleteGitHubApiPages(`repos/${repository}/pulls/${pr}/commits?per_page=100`);
+  let pullRequest = null;
+  try {
+    pullRequest = JSON.parse(execFileSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 32 * 1024 * 1024
+    }));
+  } catch {}
+  if (!comments.complete || !commits.complete || !pullRequest) {
+    const fallback = observePublicGitHubPullRequest({ repository, pr });
+    if (!comments.complete && fallback.commentsPaginationComplete) Object.assign(comments, { complete: true, items: fallback.comments });
+    if (!commits.complete && fallback.commitsPaginationComplete) Object.assign(commits, { complete: true, items: fallback.commits });
+    pullRequest ??= fallback.pullRequest;
+  }
+  const observation = {
+    comments: comments.items,
+    commentsPaginationComplete: comments.complete,
+    pullRequest,
+    commits: commits.items,
+    commitsPaginationComplete: commits.complete,
+    authorityEvidence,
+    observationMode: "LIVE_GITHUB_COMPLETE_READBACK",
+    requireCompleteDiscovery: true
+  };
+  if (comments.complete && commits.complete && pullRequest) trustedFiniteTaskLiveObservations.set(observation, sha256(observation));
+  return observation;
+}
 
 export function taskLeaseAmendmentSubject(value) {
-  return Object.fromEntries(amendmentSubjectFields.map((field) => [field, structuredClone(value?.[field])]));
+  const fields = value?.schemaVersion === 2 ? amendmentSubjectFieldsV2 : amendmentSubjectFieldsV1;
+  return Object.fromEntries(fields.map((field) => [field, structuredClone(value?.[field])]));
 }
 
-export function taskLeaseAmendmentCommentBody(value) {
+function taskLeaseAmendmentEnvelope(value) {
   const subject = taskLeaseAmendmentSubject(value);
-  return `${taskLeaseAmendmentMarker}\n${stableJson({ subject, subjectHash: sha256(subject) })}`;
+  const subjectHash = sha256(subject);
+  if (subject.schemaVersion !== 2) return { subject, subjectHash };
+  const payload = { subject, subjectHash };
+  return { ...payload, bodyHash: sha256(payload) };
+}
+export function taskLeaseAmendmentCommentBody(value) {
+  return `${taskLeaseAmendmentMarker}\n${stableJson(taskLeaseAmendmentEnvelope(value))}`;
+}
+function normalizeIssueComment(raw) {
+  return {
+    id: raw?.id ?? raw?.commentId ?? null,
+    commentId: raw?.id ?? raw?.commentId ?? null,
+    author: raw?.user?.login ?? raw?.author ?? null,
+    authorAssociation: raw?.author_association ?? raw?.authorAssociation ?? null,
+    createdAt: raw?.created_at ?? raw?.createdAt ?? null,
+    updatedAt: raw?.updated_at ?? raw?.updatedAt ?? null,
+    issueUrl: raw?.issue_url ?? raw?.issueUrl ?? null,
+    body: raw?.body ?? null
+  };
+}
+function parseTaskLeaseAmendmentBody(body) {
+  if (typeof body !== "string" || !body.startsWith(`${taskLeaseAmendmentMarker}\n`)) return null;
+  try {
+    const envelope = JSON.parse(body.slice(taskLeaseAmendmentMarker.length + 1));
+    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
+    return envelope;
+  } catch {
+    return null;
+  }
+}
+function normalizedPullRequest(raw) {
+  return {
+    repository: raw?.head?.repo?.full_name ?? raw?.repository ?? null,
+    baseRepository: raw?.base?.repo?.full_name ?? raw?.baseRepository ?? null,
+    pr: raw?.number ?? raw?.pr ?? null,
+    state: raw?.state ?? raw?.prState ?? null,
+    branch: raw?.head?.ref ?? raw?.branch ?? null,
+    head: raw?.head?.sha ?? raw?.headSha ?? raw?.head ?? null,
+    base: raw?.base?.sha ?? raw?.baseSha ?? raw?.base ?? null
+  };
+}
+function normalizedPullCommit(raw) {
+  if (typeof raw === "string") return { sha: raw, tree: null };
+  return { sha: raw?.sha ?? null, tree: raw?.commit?.tree?.sha ?? raw?.tree?.sha ?? raw?.tree ?? null };
+}
+function gitChangedLines(gitCommand, range) {
+  return gitCommand(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean)
+    .reduce((total, line) => total + line.split("\t").slice(0, 2)
+      .reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0), 0);
+}
+export function finiteTaskReservationProjection(lease) {
+  const allowedPaths = [...new Set(Array.isArray(lease?.allowedPaths) ? lease.allowedPaths : [])].sort();
+  const pathGlobs = [...new Set(Array.isArray(lease?.artifactReservation?.pathGlobs)
+    ? lease.artifactReservation.pathGlobs
+    : allowedPaths)].sort();
+  const projection = {
+    allowedPaths,
+    pathGlobs,
+    maximumFiles: lease?.artifactReservation?.maximumFiles ?? lease?.scopeBudget?.maximumFiles ?? null,
+    maximumLines: lease?.artifactReservation?.maximumLines ?? lease?.scopeBudget?.maximumChangedLines ?? null,
+    eligiblePathCount: allowedPaths.length
+  };
+  return { ...projection, reservationHash: sha256(projection) };
 }
 
-export function verifyTaskLeaseAmendment({ registry, lease, candidate, subject: input, observation } = {}) {
-  const subject = taskLeaseAmendmentSubject(input);
+const finiteTaskReservationRecordValid = (reservation) => {
+  const { reservationHash, ...projection } = reservation ?? {}; const paths = reservation?.allowedPaths;
+  return Array.isArray(paths) && paths.length > 0 && stableJson(paths) === stableJson([...new Set(paths)].sort()) && stableJson(reservation.pathGlobs) === stableJson(paths)
+    && reservation.eligiblePathCount === paths.length && Number.isInteger(reservation.maximumFiles) && reservation.maximumFiles >= paths.length && Number.isInteger(reservation.maximumLines) && reservation.maximumLines > 0 && reservationHash === sha256(projection);
+};
+function finiteTaskTerminalOutcomeMatchesLease(registry, lease, outcome) {
+  const receipt = outcome?.amendmentReceipt; const final = outcome?.finalSourceReceipt;
+  const added = receipt?.addedPaths; const policy = (registry?.amendmentPolicy?.domains ?? []).filter(({ id }) => id === lease?.domain);
+  const effectivePaths = Array.isArray(added) ? [...new Set([...(lease?.allowedPaths ?? []), ...added])].sort() : [];
+  const unhashed = Object.fromEntries(Object.entries(outcome ?? {}).filter(([key]) => key !== "evidenceHash"));
+  return outcome?.schemaVersion === 1 && outcome.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    && outcome.repository === "Chillywood2025/chillywood-mobile" && outcome.taskId === lease?.leaseId && outcome.leaseId === lease?.leaseId && outcome.implementationPr === lease?.implementationPr && outcome.implementationBranch === lease?.implementationBranch
+    && outcome.baseLeaseHash === sha256(lease) && stableJson(outcome.baseReservation) === stableJson(finiteTaskReservationProjection(lease))
+    && policy.length === 1 && finiteTaskReservationRecordValid(outcome.effectiveReservation) && stableJson(outcome.effectiveReservation.allowedPaths) === stableJson(effectivePaths) && outcome.effectiveReservation.maximumFiles === effectivePaths.length
+    && outcome.effectiveReservation.maximumFiles <= lease?.amendmentMaximum?.maximumFiles && outcome.effectiveReservation.maximumFiles <= policy[0]?.maximumFiles && outcome.effectiveReservation.maximumLines >= outcome.baseReservation.maximumLines && outcome.effectiveReservation.maximumLines <= lease?.amendmentMaximum?.maximumChangedLines && outcome.effectiveReservation.maximumLines <= policy[0]?.maximumChangedLines
+    && Array.isArray(added) && added.length > 0 && stableJson(added) === stableJson([...(policy[0]?.amendablePaths ?? [])].sort()) && added.every((file) => !finiteTaskAmendmentPathHasWildcard(file))
+    && Number.isInteger(receipt?.commentId) && receipt.commentId > 0 && validInstant(receipt.createdAt) && [receipt.subjectHash, receipt.bodyHash, receipt.rawBodyHash].every((hash) => sha256Pattern.test(hash ?? "")) && receipt.domain === lease.domain && receipt.authorityClassification === "LIVE_IMMUTABLE_OWNER_RECEIPT" && gitShaPattern.test(receipt.boundStartingHead ?? "") && gitShaPattern.test(receipt.boundStartingTree ?? "")
+    && Number.isInteger(final?.commentId) && final.commentId > 0 && validInstant(final.createdAt) && [final.subjectHash, final.bodyHash, final.rawBodyHash].every((hash) => sha256Pattern.test(hash ?? ""))
+    && final.amendmentCommentId === receipt.commentId && final.effectiveReservationHash === outcome.effectiveReservation.reservationHash && final.finalHead === outcome.sourceHead && final.finalTree === outcome.sourceTree
+    && [outcome.sourceHead, outcome.sourceTree, outcome.mergeSha, outcome.mergeTree].every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeTree === outcome.sourceTree && Array.isArray(outcome.mergeParents) && outcome.mergeParents.length === 2 && outcome.mergeParents.every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeParents[1] === outcome.sourceHead
+    && typeof outcome.nextTask === "string" && outcome.nextTask.length > 0 && stableJson(outcome.authority) === stableJson({ providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false }) && outcome.evidenceHash === sha256(unhashed);
+}
+export function finiteTaskLeaseEffectivelyTerminal(registry, lease) {
+  if (finiteTaskTerminalStates.has(lease?.taskState)) return true;
+  const matches = (registry?.completedLeaseOutcomes ?? []).filter(({ leaseId }) => leaseId === lease?.leaseId);
+  return matches.length === 1 && finiteTaskTerminalOutcomeMatchesLease(registry, lease, matches[0]);
+}
+
+function amendFiniteTaskLease(lease, addedPaths, maximum) {
+  const allowedPaths = [...new Set([...(lease?.allowedPaths ?? []), ...addedPaths])].sort();
+  const artifactReservation = lease?.artifactReservation
+    ? {
+        ...structuredClone(lease.artifactReservation),
+        pathGlobs: allowedPaths,
+        maximumFiles: maximum.maximumFiles,
+        maximumLines: maximum.maximumChangedLines
+      }
+    : undefined;
+  const amended = {
+    ...structuredClone(lease),
+    allowedPaths,
+    scopeBudget: {
+      maximumFiles: maximum.maximumFiles,
+      maximumChangedLines: maximum.maximumChangedLines
+    }
+  };
+  if (artifactReservation) amended.artifactReservation = artifactReservation;
+  return amended;
+}
+function exactAuthorityEvidence(lease, authorityEvidence) {
+  const owner = authorityEvidence?.ownerApproval ?? lease?.ownerApproval;
+  const jurisdiction = authorityEvidence?.jurisdictionDecision;
+  return {
+    taskArtifactHash: authorityEvidence?.taskArtifactHash ?? lease?.closure?.artifactHash,
+    ownerApproval: {
+      commentId: owner?.commentId ?? owner?.id,
+      subjectHash: owner?.subjectHash,
+      rawBodyHash: owner?.rawBodyHash
+    },
+    jurisdictionDecision: {
+      commentId: jurisdiction?.commentId ?? jurisdiction?.id,
+      subjectHash: jurisdiction?.subjectHash,
+      bodyHash: jurisdiction?.bodyHash,
+      envelopeHash: jurisdiction?.envelopeHash
+    }
+  };
+}
+export function verifyTaskLeaseAmendment({
+  registry,
+  lease,
+  candidate,
+  subject: input,
+  observation: rawObservation,
+  pullRequest: rawPullRequest = null,
+  commits = [],
+  commitsPaginationComplete = false,
+  gitCommand = git,
+  authorityEvidence = null,
+  observationMode = "SYNTHETIC_NO_WRITE"
+} = {}) {
+  const observation = normalizeIssueComment(rawObservation);
+  const parsed = parseTaskLeaseAmendmentBody(observation.body);
+  const subject = taskLeaseAmendmentSubject(input ?? parsed?.subject);
   const body = taskLeaseAmendmentCommentBody(subject);
+  const envelope = taskLeaseAmendmentEnvelope(subject);
   const findings = [];
-  const domain = (registry?.amendmentPolicy?.domains ?? []).find(({ id }) => id === lease?.domain);
+  const domains = (registry?.amendmentPolicy?.domains ?? []).filter(({ id }) => id === lease?.domain);
+  const domain = domains.length === 1 ? domains[0] : null;
   const addedPaths = Array.isArray(subject.addedPaths) ? [...new Set(subject.addedPaths)].sort() : [];
-  const authorizedPaths = new Set(domain?.amendablePaths ?? []);
   const competitor = (registry?.tasks ?? []).some((task) => task.leaseId !== lease?.leaseId
     && task.domain === lease?.domain
     && task.domainOwnership === "ACTIVE"
-    && !finiteTaskTerminalStates.has(task.taskState));
-  if (!lease || !candidate || subject.schemaVersion !== 1
-    || subject.repository !== "Chillywood2025/chillywood-mobile"
-    || subject.leaseId !== lease.leaseId
-    || subject.pr !== lease.implementationPr
-    || subject.branch !== lease.implementationBranch
-    || subject.currentCandidateHead !== candidate.head
-    || subject.currentLeaseHash !== sha256(lease)
-    || subject.registeredDomain !== lease.domain
-    || typeof subject.reason !== "string" || !subject.reason
-    || !addedPaths.length
-    || addedPaths.some((file) => !authorizedPaths.has(file) || file.includes("*") || file.endsWith("lock") || file === "package.json")
-    || stableJson(subject.excludedAuthority) !== stableJson(closedMaintenanceAuthority)
-    || !Number.isInteger(subject.newScopeMaximum?.maximumFiles)
-    || !Number.isInteger(subject.newScopeMaximum?.maximumChangedLines)
-    || subject.newScopeMaximum.maximumFiles < new Set([...lease.allowedPaths, ...addedPaths]).size
-    || subject.newScopeMaximum.maximumFiles > domain?.maximumFiles
-    || subject.newScopeMaximum.maximumChangedLines < lease.scopeBudget.maximumChangedLines
-    || subject.newScopeMaximum.maximumChangedLines > domain?.maximumChangedLines) findings.push("FINITE_TASK_LEASE_AMENDMENT_MALFORMED");
+    && !finiteTaskLeaseEffectivelyTerminal(registry, task));
+  if ((lease?.amendmentMaximum?.maximumAmendments ?? 0) > 0 && subject.schemaVersion !== 2) {
+    findings.push("FINITE_TASK_LEASE_AMENDMENT_SCHEMA_UNSUPPORTED");
+  }
+  if (subject.schemaVersion === 1) {
+    const authorizedPaths = new Set(domain?.amendablePaths ?? []);
+    if (!lease || !candidate
+      || subject.repository !== "Chillywood2025/chillywood-mobile"
+      || subject.leaseId !== lease.leaseId
+      || subject.pr !== lease.implementationPr
+      || subject.branch !== lease.implementationBranch
+      || subject.currentCandidateHead !== candidate.head
+      || subject.currentLeaseHash !== sha256(lease)
+      || subject.registeredDomain !== lease.domain
+      || typeof subject.reason !== "string" || !subject.reason
+      || !addedPaths.length
+      || addedPaths.some((file) => !authorizedPaths.has(file) || finiteTaskAmendmentPathHasWildcard(file) || file.endsWith("lock") || file === "package.json")
+      || stableJson(subject.excludedAuthority) !== stableJson(closedMaintenanceAuthority)
+      || !Number.isInteger(subject.newScopeMaximum?.maximumFiles)
+      || !Number.isInteger(subject.newScopeMaximum?.maximumChangedLines)
+      || subject.newScopeMaximum.maximumFiles < new Set([...lease.allowedPaths, ...addedPaths]).size
+      || subject.newScopeMaximum.maximumFiles > domain?.maximumFiles
+      || subject.newScopeMaximum.maximumChangedLines < lease.scopeBudget.maximumChangedLines
+      || subject.newScopeMaximum.maximumChangedLines > domain?.maximumChangedLines) findings.push("FINITE_TASK_LEASE_AMENDMENT_MALFORMED");
+  } else if (subject.schemaVersion === 2) {
+    const expectedEvidence = exactAuthorityEvidence(lease, authorityEvidence);
+    const pullRequest = normalizedPullRequest(rawPullRequest);
+    const commitEntries = Array.isArray(commits) ? commits.map(normalizedPullCommit) : [];
+    const unionCount = new Set([...(lease?.allowedPaths ?? []), ...addedPaths]).size;
+    const baseScopeMaximum = lease?.scopeBudget ?? {};
+    const reservedMaximum = lease?.amendmentMaximum ?? {};
+    const expectedPathReasons = Array.isArray(subject.pathReasons)
+      ? [...subject.pathReasons].sort((left, right) => String(left?.path).localeCompare(String(right?.path)))
+      : [];
+    const subjectPathsSafe = addedPaths.length > 0
+      && addedPaths.every((file) => typeof file === "string" && file && !finiteTaskAmendmentPathHasWildcard(file) && !file.startsWith("/") && !file.includes("..") && !file.endsWith("lock") && file !== "package.json");
+    if (!lease || !candidate
+      || subject.policyId !== "ASSURANCE_FINITE_TASK_LEASE_AMENDMENT_V2"
+      || subject.repository !== "Chillywood2025/chillywood-mobile"
+      || subject.pr !== lease.implementationPr
+      || subject.branch !== lease.implementationBranch
+      || subject.taskId !== lease.leaseId
+      || subject.leaseId !== lease.leaseId
+      || subject.domain !== lease.domain
+      || subject.baseLeaseHash !== sha256(lease)
+      || !gitShaPattern.test(subject.boundStartingBaseHead ?? "")
+      || !gitShaPattern.test(subject.boundStartingBaseTree ?? "")
+      || !gitShaPattern.test(subject.boundStartingHead ?? "")
+      || !gitShaPattern.test(subject.boundStartingTree ?? "")
+      || subject.taskArtifactHash !== expectedEvidence.taskArtifactHash
+      || !sha256Pattern.test(subject.taskArtifactHash ?? "")
+      || stableJson(subject.ownerApproval) !== stableJson(expectedEvidence.ownerApproval)
+      || stableJson(subject.jurisdictionDecision) !== stableJson(expectedEvidence.jurisdictionDecision)
+      || domains.length !== 1
+      || !subjectPathsSafe
+      || stableJson(subject.addedPaths) !== stableJson(addedPaths)
+      || stableJson(addedPaths) !== stableJson([...(domain?.amendablePaths ?? [])].sort())
+      || expectedPathReasons.length !== addedPaths.length
+      || expectedPathReasons.some(({ path: file, reason }) => !addedPaths.includes(file) || typeof reason !== "string" || !reason)
+      || stableJson(expectedPathReasons.map(({ path: file }) => file)) !== stableJson(addedPaths)
+      || stableJson(subject.pathReasons) !== stableJson(expectedPathReasons)
+      || typeof subject.affectedDefect !== "string" || !subject.affectedDefect
+      || !Array.isArray(subject.affectedInvariants) || !subject.affectedInvariants.length
+      || new Set(subject.affectedInvariants).size !== subject.affectedInvariants.length
+      || subject.affectedInvariants.some((value) => typeof value !== "string" || !value)
+      || subject.effectiveReservation?.eligiblePathCount !== unionCount
+      || subject.effectiveReservation?.maximumFiles !== unionCount
+      || !Number.isInteger(subject.effectiveReservation?.maximumLines)
+      || subject.effectiveReservation.maximumLines < baseScopeMaximum.maximumChangedLines
+      || subject.effectiveReservation.maximumFiles > domain?.maximumFiles
+      || subject.effectiveReservation.maximumFiles > reservedMaximum.maximumFiles
+      || subject.effectiveReservation.maximumLines > domain?.maximumChangedLines
+      || subject.effectiveReservation.maximumLines > reservedMaximum.maximumChangedLines
+      || stableJson(subject.amendmentUse) !== stableJson({ consumed: 1, maximum: reservedMaximum.maximumAmendments })
+      || stableJson(subject.applicability) !== stableJson({ exactTaskOnly: true, nonReusable: true })
+      || stableJson(subject.authority) !== stableJson(finiteTaskAmendmentClosedAuthority)) {
+      findings.push("FINITE_TASK_LEASE_AMENDMENT_MALFORMED");
+    }
+    if (!commitsPaginationComplete || !Array.isArray(commits)) findings.push("FINITE_TASK_LEASE_AMENDMENT_COMMIT_DISCOVERY_INCOMPLETE");
+    const startCommitMatches = commitEntries.filter(({ sha }) => sha === subject.boundStartingHead);
+    if (startCommitMatches.length !== 1
+      || startCommitMatches[0]?.tree !== subject.boundStartingTree) {
+      findings.push("FINITE_TASK_LEASE_AMENDMENT_START_NOT_ON_PR");
+    }
+    if (pullRequest.repository !== subject.repository
+      || pullRequest.baseRepository !== subject.repository
+      || pullRequest.pr !== subject.pr
+      || pullRequest.branch !== subject.branch
+      || pullRequest.head !== candidate?.head
+      || !gitShaPattern.test(pullRequest.base ?? "")
+      || !["open", "closed"].includes(pullRequest.state)
+      || candidate?.pr !== subject.pr
+      || candidate?.branch !== subject.branch
+      || candidate?.head !== pullRequest.head) {
+      findings.push("FINITE_TASK_LEASE_AMENDMENT_PR_IDENTITY_MISMATCH");
+    }
+    try {
+      if (gitCommand(["rev-parse", `${subject.boundStartingBaseHead}^{tree}`]) !== subject.boundStartingBaseTree
+        || gitCommand(["rev-parse", `${subject.boundStartingHead}^{tree}`]) !== subject.boundStartingTree
+        || gitCommand(["rev-parse", `${candidate.head}^{tree}`]) !== candidate.tree) {
+        findings.push("FINITE_TASK_LEASE_AMENDMENT_TREE_MISMATCH");
+      }
+      gitCommand(["merge-base", "--is-ancestor", subject.boundStartingBaseHead, subject.boundStartingHead]);
+      gitCommand(["merge-base", "--is-ancestor", subject.boundStartingBaseHead, pullRequest.base]);
+      if (gitCommand(["merge-base", subject.boundStartingHead, pullRequest.base]) !== subject.boundStartingBaseHead) {
+        findings.push("FINITE_TASK_LEASE_AMENDMENT_START_BASE_MISMATCH");
+      }
+      gitCommand(["merge-base", "--is-ancestor", subject.boundStartingHead, candidate.head]);
+      const startingRange = `${subject.boundStartingBaseHead}...${subject.boundStartingHead}`;
+      const startingPaths = gitCommand(["diff", "--name-only", startingRange]).split(/\r?\n/gu).filter(Boolean).sort();
+      const startingLines = gitChangedLines(gitCommand, startingRange);
+      if (startingPaths.some((file) => !lease.allowedPaths.includes(file))
+        || startingPaths.length > lease.scopeBudget.maximumFiles
+        || startingLines > lease.scopeBudget.maximumChangedLines) {
+        findings.push("FINITE_TASK_LEASE_AMENDMENT_START_OUTSIDE_BASE_RESERVATION");
+      }
+    } catch {
+      findings.push("FINITE_TASK_LEASE_AMENDMENT_HISTORY_INVALID");
+    }
+  } else {
+    findings.push("FINITE_TASK_LEASE_AMENDMENT_MALFORMED");
+  }
   if (competitor) findings.push("FINITE_TASK_COMPETING_DOMAIN_OWNER");
-  if (observation?.commentId !== observation?.id
-    || !Number.isInteger(observation?.commentId) || observation.commentId < 1
+  if (observation.commentId !== observation.id
+    || !Number.isInteger(observation.commentId) || observation.commentId < 1
     || observation.author !== "Chillywood2025"
     || observation.authorAssociation !== "OWNER"
+    || typeof observation.createdAt !== "string" || !observation.createdAt
+    || typeof observation.updatedAt !== "string" || !observation.updatedAt
     || observation.createdAt !== observation.updatedAt
+    || !Number.isFinite(new Date(observation.createdAt).valueOf())
     || observation.issueUrl !== `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${lease?.implementationPr}`
-    || observation.body !== body) findings.push("FINITE_TASK_LEASE_AMENDMENT_COMMENT_INVALID");
+    || observation.body !== body
+    || stableJson(parsed) !== stableJson(envelope)) findings.push("FINITE_TASK_LEASE_AMENDMENT_COMMENT_INVALID");
   const unique = [...new Set(findings)].sort();
-  return {
+  const maximum = subject.schemaVersion === 2
+    ? { maximumFiles: subject.effectiveReservation?.maximumFiles, maximumChangedLines: subject.effectiveReservation?.maximumLines }
+    : subject.newScopeMaximum;
+  const amendedLease = unique.length ? null : amendFiniteTaskLease(lease, addedPaths, maximum);
+  const result = {
     ok: unique.length === 0,
     findings: unique,
     subject,
     subjectHash: sha256(subject),
-    bodyHash: sha256(body),
-    amendedLease: unique.length ? null : {
-      ...structuredClone(lease),
-      allowedPaths: [...new Set([...lease.allowedPaths, ...addedPaths])].sort(),
-      scopeBudget: structuredClone(subject.newScopeMaximum)
+    bodyHash: subject.schemaVersion === 2 ? envelope.bodyHash : sha256(body),
+    rawBodyHash: sha256(body),
+    liveAuthority: unique.length === 0 && observationMode === "LIVE_GITHUB_COMPLETE_READBACK",
+    amendedLease
+  };
+  return result;
+}
+export function resolveFiniteTaskEffectiveReservation({
+  registry,
+  lease,
+  candidate = null,
+  comments = [],
+  commentsPaginationComplete = false,
+  pullRequest = null,
+  commits = [],
+  commitsPaginationComplete = false,
+  gitCommand = git,
+  requireCompleteDiscovery = false,
+  observationMode = "SYNTHETIC_NO_WRITE",
+  authorityEvidence = null,
+  liveObservation = null
+} = {}) {
+  const observation = liveObservation && typeof liveObservation === "object" ? liveObservation : null;
+  const trustedLiveObservation = observation !== null
+    && trustedFiniteTaskLiveObservations.get(observation) === sha256(observation);
+  if (observation) {
+    comments = observation.comments;
+    commentsPaginationComplete = observation.commentsPaginationComplete;
+    pullRequest = observation.pullRequest;
+    commits = observation.commits;
+    commitsPaginationComplete = observation.commitsPaginationComplete;
+    requireCompleteDiscovery = observation.requireCompleteDiscovery;
+    authorityEvidence = observation.authorityEvidence ?? authorityEvidence;
+  }
+  observationMode = trustedLiveObservation ? "LIVE_GITHUB_COMPLETE_READBACK" : "SYNTHETIC_NO_WRITE";
+  const findings = [...validateFiniteTaskLeaseRegistry(registry)];
+  const baseLease = lease ? structuredClone(lease) : null;
+  const baseLeaseHash = lease ? sha256(lease) : null;
+  const baseReservation = finiteTaskReservationProjection(lease);
+  const rawComments = Array.isArray(comments) ? comments : [];
+  const marked = rawComments.filter(({ body }) => typeof body === "string" && body.includes(taskLeaseAmendmentMarker));
+  const maximumAmendments = lease?.amendmentMaximum?.maximumAmendments ?? 0;
+  if (!lease) findings.push("FINITE_TASK_EFFECTIVE_RESERVATION_LEASE_MISSING");
+  if (!Array.isArray(comments) || ((requireCompleteDiscovery || maximumAmendments > 0 || marked.length > 0) && commentsPaginationComplete !== true)) {
+    findings.push("FINITE_TASK_LEASE_AMENDMENT_COMMENT_DISCOVERY_INCOMPLETE");
+  }
+  if (marked.length > maximumAmendments || marked.length > 1) findings.push("FINITE_TASK_LEASE_AMENDMENT_CARDINALITY_EXCEEDED");
+  let verification = null;
+  let effectiveLease = baseLease;
+  if (marked.length === 1) {
+    const observation = normalizeIssueComment(marked[0]);
+    const parsed = parseTaskLeaseAmendmentBody(observation.body);
+    verification = verifyTaskLeaseAmendment({
+      registry,
+      lease,
+      candidate,
+      subject: parsed?.subject,
+      observation,
+      pullRequest,
+      commits,
+      commitsPaginationComplete,
+      gitCommand,
+      authorityEvidence,
+      observationMode
+    });
+    findings.push(...verification.findings);
+    if (verification.ok) effectiveLease = verification.amendedLease;
+  }
+  const effectiveReservation = finiteTaskReservationProjection(effectiveLease);
+  if ((lease?.amendmentMaximum?.maximumAmendments ?? 0) > 0 && (stableJson(baseReservation.allowedPaths) !== stableJson(baseReservation.pathGlobs)
+    || baseReservation.maximumFiles !== lease?.scopeBudget?.maximumFiles
+    || baseReservation.maximumLines !== lease?.scopeBudget?.maximumChangedLines)) {
+    findings.push("FINITE_TASK_BASE_RESERVATION_INCONSISTENT");
+  }
+  if (verification?.ok && (stableJson(effectiveReservation.allowedPaths) !== stableJson(effectiveReservation.pathGlobs)
+    || effectiveReservation.maximumFiles !== effectiveLease?.scopeBudget?.maximumFiles
+    || effectiveReservation.maximumLines !== effectiveLease?.scopeBudget?.maximumChangedLines)) {
+    findings.push("FINITE_TASK_EFFECTIVE_RESERVATION_INCONSISTENT");
+  }
+  if (candidate && (candidate.changedPaths !== undefined || candidate.changedLines !== undefined)) {
+    const candidatePaths = Array.isArray(candidate.changedPaths) ? candidate.changedPaths : [];
+    const uniqueCandidatePaths = [...new Set(candidatePaths)].sort();
+    if (!Array.isArray(candidate.changedPaths)
+      || uniqueCandidatePaths.length !== candidatePaths.length
+      || uniqueCandidatePaths.some((file) => !effectiveReservation.allowedPaths.includes(file))) {
+      findings.push("FINITE_TASK_EFFECTIVE_RESERVATION_PATH_VIOLATION");
+    }
+    if (uniqueCandidatePaths.length > effectiveReservation.maximumFiles
+      || !Number.isInteger(candidate.changedLines)
+      || candidate.changedLines < 0
+      || candidate.changedLines > effectiveReservation.maximumLines) {
+      findings.push("FINITE_TASK_EFFECTIVE_RESERVATION_SCOPE_OVERFLOW");
+    }
+  }
+  const unique = [...new Set(findings)].sort();
+  const amended = marked.length === 1 && verification?.ok === true && unique.length === 0;
+  const amendmentReceipt = amended ? {
+    commentId: normalizeIssueComment(marked[0]).commentId,
+    createdAt: normalizeIssueComment(marked[0]).createdAt,
+    subjectHash: verification.subjectHash,
+    bodyHash: verification.bodyHash,
+    rawBodyHash: verification.rawBodyHash,
+    boundStartingHead: verification.subject.boundStartingHead ?? verification.subject.currentCandidateHead,
+    boundStartingTree: verification.subject.boundStartingTree ?? null,
+    addedPaths: [...verification.subject.addedPaths].sort(),
+    domain: verification.subject.domain ?? verification.subject.registeredDomain,
+    authorityClassification: verification.liveAuthority ? "LIVE_IMMUTABLE_OWNER_RECEIPT" : "SYNTHETIC_NON_AUTHORITY"
+  } : null;
+  const result = {
+    ok: unique.length === 0,
+    findings: unique,
+    status: unique.length ? "INVALID" : amended ? "AMENDED" : "BASE_ONLY",
+    baseLease,
+    baseLeaseHash,
+    baseReservation,
+    effectiveLease: unique.length ? null : effectiveLease,
+    effectiveReservation: unique.length ? null : effectiveReservation,
+    amendmentsConsumed: amended ? 1 : 0,
+    amendmentReceipt,
+    candidateHead: candidate?.head ?? null,
+    candidateTree: candidate?.tree ?? null,
+    authority: {
+      ...finiteTaskAmendmentClosedAuthority,
+      amendmentEffective: amended,
+      liveReceipt: verification?.liveAuthority === true
     }
   };
+  const baseOnlyAuthorityEligible = result.ok
+    && result.status === "BASE_ONLY"
+    && (maximumAmendments === 0 || trustedLiveObservation);
+  if (baseOnlyAuthorityEligible) {
+    trustedFiniteTaskResolutionFingerprints.set(result, finiteTaskResolutionAuthorityFingerprint(result));
+  } else if (amended && trustedLiveObservation && verification?.liveAuthority === true) {
+    trustedFiniteTaskResolutionFingerprints.set(result, finiteTaskResolutionAuthorityFingerprint(result));
+  }
+  return result;
 }
 
 export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
@@ -2706,6 +3739,9 @@ export function verifyCurrentTruthHeadBindings({
   remoteMain,
   explicitBranch = "",
   explicitHead = "",
+  effectiveReservationResolution = null,
+  effectiveReservationObservation = null,
+  finiteTaskPostMergeTransition = null,
   baseSynchronizations = {},
   minimumBaseSynchronizationReviewEvidence = 1,
   baseSynchronizationReviewFreshnessHours = 24,
@@ -2751,15 +3787,32 @@ export function verifyCurrentTruthHeadBindings({
     const ref = implementationRemoteRef(entry.branch);
     const observed = Object.hasOwn(observations, ref) ? observations[ref] : null;
     const observedValid = typeof observed === "string" && gitShaPattern.test(observed);
-    let classification = observed === entry?.head ? "EXACT_SOURCE_HEAD" : "UNVERIFIED_HEAD";
+    const baseLease = finiteTaskLeaseFor(finiteTaskLeases, {
+      implementationPr: entry.number,
+      implementationBranch: entry.branch,
+      featureId: entry.featureId
+    });
+    const postMergeSource = (observed === null || observed === undefined || observed === "")
+      ? verifiedFiniteTaskClosedSource({
+          lease: baseLease,
+          liveObservation: effectiveReservationObservation,
+          postMergeTransition: finiteTaskPostMergeTransition
+        })
+      : null;
+    let classification = postMergeSource
+      ? "FINITE_TASK_VERIFIED_POST_MERGE_SOURCE"
+      : observed === entry?.head ? "EXACT_SOURCE_HEAD" : "UNVERIFIED_HEAD";
     let synchronization = null;
     let finiteLeaseCandidate = null;
     if (observedValid && headValid && observed !== entry.head) {
-      const lease = finiteTaskLeaseFor(finiteTaskLeases, {
-        implementationPr: entry.number,
-        implementationBranch: entry.branch,
-        featureId: entry.featureId
-      });
+      const resolvedLease = finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
+        && effectiveReservationResolution?.baseLeaseHash === (baseLease ? sha256(baseLease) : null)
+        && effectiveReservationResolution?.candidateHead === observed
+        && effectiveReservationResolution?.effectiveLease?.implementationPr === entry.number
+        && effectiveReservationResolution?.effectiveLease?.implementationBranch === entry.branch
+        ? effectiveReservationResolution.effectiveLease
+        : null;
+      const lease = resolvedLease ?? baseLease;
       if (lease) {
         const isAncestor = (ancestor, descendant) => {
           try { git(["merge-base", "--is-ancestor", ancestor, descendant]); return true; } catch { return false; }
@@ -2816,18 +3869,20 @@ export function verifyCurrentTruthHeadBindings({
       branch: entry.branch,
       classification,
       number: numberValid ? entry.number : null,
-      observedHead: observed,
+      observedHead: postMergeSource?.head ?? observed,
+      remoteRefHead: observed,
       recordedHead: entry?.head ?? null,
       ref,
+      verifiedPostMergeSource: postMergeSource,
       synchronization,
       finiteLeaseCandidate
     });
 
-    if (observed === null || observed === undefined || observed === "") {
+    if ((observed === null || observed === undefined || observed === "") && !postMergeSource) {
       findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_REF_MISSING", status: "BLOCKED_INTERNAL", branch: entry.branch, number: numberValid ? entry.number : null, ref });
-    } else if (!observedValid) {
+    } else if (!observedValid && !postMergeSource) {
       findings.push({ id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_OBSERVED_HEAD_MALFORMED", status: "BLOCKED_INTERNAL", branch: entry.branch, number: numberValid ? entry.number : null, observed });
-    } else if (headValid && observed !== entry.head && !synchronization?.ok && !finiteLeaseCandidate?.ok) {
+    } else if (headValid && observed !== entry.head && !postMergeSource && !synchronization?.ok && !finiteLeaseCandidate?.ok) {
       findings.push({
         id: "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_HEAD_STALE",
         status: "BLOCKED_INTERNAL",
@@ -2895,7 +3950,7 @@ export function verifyCurrentTruthHeadBindings({
   const currentEntry = entries.find((entry) => entry?.branch === contextBranch);
   const currentRef = currentEntry && isValidGitBranchName(currentEntry.branch) ? implementationRemoteRef(currentEntry.branch) : null;
   const currentBinding = bindings.find((binding) => binding.ref === currentRef);
-  const acceptedCheckoutHead = ["BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH", "CURRENT_TRUTH_BINDING_COMMIT"].includes(currentBinding?.classification)
+  const acceptedCheckoutHead = ["BASE_SYNCHRONIZED_IMPLEMENTATION_BRANCH", "CURRENT_TRUTH_BINDING_COMMIT", "FINITE_TASK_VERIFIED_POST_MERGE_SOURCE"].includes(currentBinding?.classification)
     || currentBinding?.classification === "FINITE_TASK_LEASE_CANDIDATE"
     ? currentBinding.observedHead
     : currentEntry?.head;
@@ -3068,6 +4123,29 @@ export function validateTerminalTaskEvidence(binding, latestMergedImplementation
   if (binding?.phase !== "TERMINAL") return [];
   const evidence = binding?.terminalEvidence;
   const findings = [];
+  if (evidence?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1") {
+    if (evidence.schemaVersion !== 1
+      || binding?.completionScope !== "FINITE_TASK_SOURCE_MERGED_VERIFIED"
+      || evidence.sourceHead !== binding.currentImplementationHead
+      || evidence.sourceTree !== binding.currentImplementationTree
+      || evidence.mergeSha !== latestMergedImplementationPr?.mergeSha
+      || evidence.mergeTree !== latestMergedImplementationPr?.mergeTree
+      || evidence.implementationPr !== binding.implementationPr
+      || evidence.implementationBranch !== binding.implementationBranch
+      || !sha256Pattern.test(evidence.baseLeaseHash ?? "")
+      || !sha256Pattern.test(evidence.baseReservation?.reservationHash ?? "")
+      || !sha256Pattern.test(evidence.effectiveReservation?.reservationHash ?? "")
+      || !Number.isInteger(evidence.amendmentReceipt?.commentId) || evidence.amendmentReceipt.commentId < 1
+      || !Number.isInteger(evidence.finalSourceReceipt?.commentId) || evidence.finalSourceReceipt.commentId < 1
+      || !Array.isArray(evidence.mergeParents) || evidence.mergeParents.length !== 2
+      || evidence.mergeParents[1] !== evidence.sourceHead
+      || typeof evidence.nextTask !== "string" || !evidence.nextTask
+      || stableJson(evidence.authority) !== stableJson({ providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false })
+      || evidence.evidenceHash !== sha256(Object.fromEntries(Object.entries(evidence).filter(([key]) => key !== "evidenceHash")))) {
+      findings.push({ id: "ASSURANCE_FINITE_TASK_TERMINAL_EVIDENCE_MALFORMED", status: "BLOCKED_INTERNAL" });
+    }
+    return findings;
+  }
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)
     || evidence.schemaVersion !== 1
     || evidence.completionScope !== binding.completionScope
@@ -3308,6 +4386,7 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
     if (!tierIds.includes(tier)) findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_UNKNOWN", status: "BLOCKED_INTERNAL", tier });
   }
   if (terminalTask) {
+    const finiteTaskTerminal = binding?.terminalEvidence?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1";
     const expected = {
       T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
       T1_SOURCE: "SOURCE_CLEAR",
@@ -3318,7 +4397,7 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
       T6_INSTALLED_PHYSICAL: "BLOCKED_EXTERNAL",
       T7_PUBLIC_CANARY: "BLOCKED_EXTERNAL"
     };
-    if (binding?.completionScope !== "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE"
+    if (binding?.completionScope !== (finiteTaskTerminal ? "FINITE_TASK_SOURCE_MERGED_VERIFIED" : "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE")
       || stableJson(value) !== stableJson(expected)) {
       findings.push({ id: "ASSURANCE_TERMINAL_TASK_SCOPE_STATUS_MISMATCH", status: "BLOCKED_INTERNAL" });
     }
@@ -3588,7 +4667,7 @@ export function renderCurrentState(record) {
     featureId: active.featureId
   });
   const leaseLine = activeLease
-    ? `\n- Finite task lease: \`${record.finiteTaskLeases.policyId}\`, admitted seed \`${activeLease.admittedSeedHead}\` / \`${activeLease.admittedSeedTree}\`, protected admission PR #${activeLease.protectedAdmissionPr}, state \`${activeLease.taskState}\`; descendant heads do not require another admission, source binding, or merge-provenance PR.`
+    ? `\n- Finite task lease: \`${record.finiteTaskLeases.policyId}\`, admitted seed \`${activeLease.admittedSeedHead}\` / \`${activeLease.admittedSeedTree}\`, protected admission PR #${activeLease.protectedAdmissionPr}, state \`${finiteTaskLeaseEffectivelyTerminal(record.finiteTaskLeases, activeLease) ? "MERGED_VERIFIED" : activeLease.taskState}\`; descendant heads do not require another admission, source binding, or merge-provenance PR.`
     : "";
   const runtimeObservation = record.finiteTaskRuntime?.candidateObservation;
   const implementationBindingLine = active.phase === "TERMINAL"
@@ -3624,11 +4703,92 @@ export function renderCurrentState(record) {
 }
 
 export function renderNextTask(record) {
-  const nextActions = record.preAdmissionEngineeringSeedCapability?.status === "ACTIVE" && record.engineeringDoctrine?.taskLeaseState === "NO_ACTIVE_TASK"
+  const finiteTaskTerminalNext = record?.activeTaskBinding?.phase === "TERMINAL"
+    && record?.finiteTaskRuntime?.terminalOutcome?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    ? record.finiteTaskRuntime.terminalOutcome.nextTask
+    : null;
+  const nextActions = finiteTaskTerminalNext
+    ? [finiteTaskTerminalNext]
+    : record.preAdmissionEngineeringSeedCapability?.status === "ACTIVE" && record.engineeringDoctrine?.taskLeaseState === "NO_ACTIVE_TASK"
     ? [record.preAdmissionEngineeringSeedCapability.nextAction]
     : record.engineeringDoctrine?.status === "ACTIVE" ? [record.engineeringDoctrine.nextPermittedAction] : record.assuranceProgram.nextActions;
   const actions = nextActions.map((entry, index) => `${index + 1}. ${entry}`).join("\n");
   return `# NEXT TASK\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n${actions}\n\nOrdinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.\n\nDo not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.\n\n${record.assuranceProgram.prohibitions.join("\n")}\n`;
+}
+
+export function projectFiniteTaskTerminalTruth({ record, terminalEvidence, proofTierApplicabilityHash, implementationTitle = null } = {}) {
+  const projected = structuredClone(record);
+  const binding = projected?.activeTaskBinding;
+  const lease = finiteTaskLeaseFor(projected?.finiteTaskLeases, {
+    implementationPr: terminalEvidence?.implementationPr,
+    implementationBranch: terminalEvidence?.implementationBranch,
+    featureId: binding?.featureId
+  });
+  if (!lease
+    || sha256(lease) !== terminalEvidence?.baseLeaseHash
+    || terminalEvidence?.classification !== "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    || !finiteTaskTerminalOutcomeMatchesLease(projected?.finiteTaskLeases, lease, terminalEvidence)
+    || !sha256Pattern.test(proofTierApplicabilityHash ?? "")) throw new Error("FINITE_TASK_TERMINAL_PROJECTION_INVALID");
+  const priorOutcomes = projected.finiteTaskLeases.completedLeaseOutcomes ?? [];
+  const sameLease = priorOutcomes.filter(({ leaseId }) => leaseId === lease.leaseId);
+  if (sameLease.length > 1 || (sameLease.length === 1 && stableJson(sameLease[0]) !== stableJson(terminalEvidence))) throw new Error("FINITE_TASK_TERMINAL_PROJECTION_CONFLICT");
+  if (!sameLease.length && priorOutcomes.some((outcome) => finiteTaskTerminalOutcomeIdentity(outcome).some((value, index) => value === finiteTaskTerminalOutcomeIdentity(terminalEvidence)[index]))) throw new Error("FINITE_TASK_TERMINAL_PROJECTION_IDENTITY_REUSED");
+  projected.finiteTaskLeases.completedLeaseOutcomes = sameLease.length ? priorOutcomes : [...priorOutcomes, structuredClone(terminalEvidence)];
+  projected.mainSha = terminalEvidence.mergeSha;
+  projected.protectedMainAuthority.checkpointSha = terminalEvidence.mergeSha;
+  projected.protectedMainAuthority.checkpointTree = terminalEvidence.mergeTree;
+  projected.latestMergedImplementationPr = {
+    number: terminalEvidence.implementationPr,
+    state: "merged",
+    head: terminalEvidence.sourceHead,
+    mergeSha: terminalEvidence.mergeSha,
+    mergeTree: terminalEvidence.mergeTree,
+    title: implementationTitle ?? `Finite task ${terminalEvidence.taskId}`
+  };
+  projected.openImplementationPrs = (projected.openImplementationPrs ?? []).filter(({ number }) => number !== terminalEvidence.implementationPr);
+  projected.activeTaskBinding = {
+    ...projected.activeTaskBinding,
+    currentImplementationHead: terminalEvidence.sourceHead,
+    currentImplementationTree: terminalEvidence.sourceTree,
+    phase: "TERMINAL",
+    executionState: "FINITE_TASK_SOURCE_MERGED_VERIFIED",
+    completionScope: "FINITE_TASK_SOURCE_MERGED_VERIFIED",
+    proofTiersUnderEvaluation: ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION"],
+    proofTierStatuses: {
+      T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
+      T1_SOURCE: "SOURCE_CLEAR",
+      T2_MODEL: "MODEL_CLEAR",
+      T3_INTEGRATION: "INTEGRATION_CLEAR",
+      T4_NATIVE_PROVIDER: "BLOCKED_INTERNAL",
+      T5_SIGNED_ARTIFACT: "BLOCKED_EXTERNAL",
+      T6_INSTALLED_PHYSICAL: "BLOCKED_EXTERNAL",
+      T7_PUBLIC_CANARY: "BLOCKED_EXTERNAL"
+    },
+    proofTierApplicabilityHash,
+    productSourceMutationAllowed: false,
+    providerMutationAllowed: false,
+    databaseDeploymentAllowed: false,
+    buildAllowed: false,
+    submissionAllowed: false,
+    otaAllowed: false,
+    publicReleaseAllowed: false,
+    terminalEvidence: structuredClone(terminalEvidence)
+  };
+  projected.finiteTaskRuntime = {
+    ...projected.finiteTaskRuntime,
+    candidateObservation: {
+      pr: terminalEvidence.implementationPr,
+      branch: terminalEvidence.implementationBranch,
+      prState: "merged",
+      head: terminalEvidence.sourceHead,
+      tree: terminalEvidence.sourceTree,
+      classification: "MERGED_VERIFIED",
+      observedAt: projected.timestamp
+    },
+    terminalOutcome: structuredClone(terminalEvidence)
+  };
+  if (sha256(lease) !== terminalEvidence.baseLeaseHash) throw new Error("FINITE_TASK_TERMINAL_BASE_LEASE_MUTATED");
+  return projected;
 }
 
 export function classifyMigration(remote, source) {

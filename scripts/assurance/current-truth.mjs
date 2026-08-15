@@ -7,14 +7,17 @@ import {
   emit,
   evaluateFiniteTaskLeaseRuntime,
   evaluateProtectedMainAdvancement,
+  finiteTaskLeaseFor,
   git,
   implementationRemoteRef,
   isValidGitBranchName,
   optionalCodexReviewPolicyValid,
+  observeLiveFiniteTaskEffectiveReservation,
   providerMode,
   readJson,
   readText,
   rel,
+  ROOT,
   renderCurrentState,
   renderNextTask,
   sha256,
@@ -28,6 +31,7 @@ import {
   validateTerminalTaskEvidence
 } from "./lib.mjs";
 import { validateStructuredBinding } from "./active-task.mjs";
+import { observeFiniteTaskGitScope, observeFiniteTaskImplementationLifecycle, observeFiniteTaskPostMergeTransition } from "./engineering-closure.mjs";
 import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
 
 function safeGit(gitArgs, fallback = null) {
@@ -40,6 +44,32 @@ function safeGit(gitArgs, fallback = null) {
 
 function splitNullTerminated(value) {
   return typeof value === "string" ? value.split("\0").filter(Boolean) : [];
+}
+
+function observeFiniteTaskEffectiveReservation(record) {
+  const binding = record?.activeTaskBinding;
+  const lease = finiteTaskLeaseFor(record?.finiteTaskLeases, {
+    implementationPr: binding?.implementationPr,
+    implementationBranch: binding?.implementationBranch,
+    featureId: binding?.featureId
+  });
+  if (!lease) return null;
+  const repository = record?.ownerJurisdictionPolicyBinding?.repository ?? "Chillywood2025/chillywood-mobile";
+  const policySource = record?.ownerJurisdictionPolicyBinding?.policySource;
+  return observeLiveFiniteTaskEffectiveReservation({
+    repository,
+    pr: lease.implementationPr,
+    authorityEvidence: {
+      taskArtifactHash: lease?.closure?.artifactHash ?? null,
+      ownerApproval: structuredClone(lease?.ownerApproval ?? null),
+      jurisdictionDecision: {
+        commentId: policySource?.commentId ?? null,
+        subjectHash: policySource?.subjectHash ?? null,
+        bodyHash: policySource?.bodyHash ?? null,
+        envelopeHash: policySource?.envelopeHash ?? null
+      }
+    }
+  });
 }
 
 function collectBaseSynchronizationReviewEvidence(reviewEntries) {
@@ -183,6 +213,40 @@ if (mode) {
   }
   const explicitImplementationBranch = typeof options.implementationBranch === "string" ? options.implementationBranch : "";
   const explicitImplementationHead = typeof options.implementationHead === "string" ? options.implementationHead : "";
+  const effectiveReservationObservation = observeFiniteTaskEffectiveReservation(record);
+  const finiteTaskPostMergeTransition = observeFiniteTaskPostMergeTransition({
+    record,
+    currentProtectedMain: remoteMain,
+    root: ROOT,
+    liveObservation: effectiveReservationObservation,
+  });
+  const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({
+    record,
+    contract: currentTruthContract,
+    now,
+    checkoutHead: head,
+    currentProtectedBase: remoteMain,
+    effectiveReservationObservation,
+    finiteTaskPostMergeTransition
+  });
+  const finiteTaskLifecycleScope = finiteTaskRuntime.candidateHead
+    ? observeFiniteTaskGitScope(ROOT, remoteMain, finiteTaskRuntime.candidateHead)
+    : null;
+  const finiteTaskFinalSourceEligibility = finiteTaskLifecycleScope && finiteTaskRuntime.candidateTree
+    ? observeFiniteTaskImplementationLifecycle({
+        identity: {
+          repository: record?.ownerJurisdictionPolicyBinding?.repository ?? "Chillywood2025/chillywood-mobile",
+          pr: finiteTaskRuntime.candidate?.pr,
+          branch: finiteTaskRuntime.candidate?.branch,
+          baseSha: remoteMain,
+          headSha: finiteTaskRuntime.candidateHead,
+        },
+        tree: finiteTaskRuntime.candidateTree,
+        scope: finiteTaskLifecycleScope,
+        currentTruth: record,
+        root: ROOT,
+      })
+    : null;
   const headBindings = verifyCurrentTruthHeadBindings({
     openImplementationPrs: record.openImplementationPrs,
     observedRefs: observedImplementationRefs,
@@ -193,23 +257,21 @@ if (mode) {
     explicitBranch: explicitImplementationBranch,
     explicitHead: explicitImplementationHead,
     baseSynchronizations,
+    effectiveReservationResolution: finiteTaskRuntime.effectiveReservationResolution,
+    effectiveReservationObservation,
+    finiteTaskPostMergeTransition,
     minimumBaseSynchronizationReviewEvidence: currentTruthContract.implementationHeadBinding.baseSynchronization.minimumReviewEvidence,
     baseSynchronizationReviewFreshnessHours: currentTruthContract.implementationHeadBinding.baseSynchronization.reviewFreshnessHours,
     evaluationTime: now
-  });
-  const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({
-    record,
-    contract: currentTruthContract,
-    now,
-    checkoutHead: head,
-    currentProtectedBase: remoteMain
   });
   const protectedMainRuntime = evaluateProtectedMainAdvancement({
     record,
     contract: currentTruthContract,
     observedProtectedMainSha: remoteMain,
     candidateHead: finiteTaskRuntime.candidateHead,
-    finiteTaskRuntime
+    finiteTaskRuntime,
+    finiteTaskFinalSourceEligibility,
+    finiteTaskPostMergeTransition
   });
   const claimFreshness = finiteTaskRuntime.claimFreshness;
   const taskFreshness = finiteTaskRuntime.leaseFreshness;
@@ -330,6 +392,13 @@ if (mode) {
       scopeResult: finiteTaskRuntime.scopeResult,
       sourceOnlyEligible: finiteTaskRuntime.sourceOnlyEligible,
       providerDependentEligible: finiteTaskRuntime.providerDependentEligible,
+      reservationStatus: finiteTaskRuntime.effectiveReservationResolution?.status ?? null,
+      baseReservation: finiteTaskRuntime.baseReservation ?? null,
+      effectiveReservation: finiteTaskRuntime.effectiveReservation ?? null,
+      amendmentReceipt: finiteTaskRuntime.amendmentReceipt ?? null,
+      authority: finiteTaskRuntime.effectiveReservationResolution?.authority ?? null,
+      finalSourceEligibility: finiteTaskFinalSourceEligibility,
+      postMergeTransition: finiteTaskPostMergeTransition,
       findings: finiteTaskRuntime.findings
     },
     lateReviewSentinels: (record.lateReviewSentinels ?? []).map(({ classification, prNumber, reviewedSha, successorCorrectionOwner, findings: lateFindings, blocks }) => ({

@@ -24,19 +24,28 @@ import {
   controlMaintenanceAuthorizationCommentBody,
   controlMaintenanceAuthorizationSubject,
   detectAssuranceRecursion,
+  deriveFiniteTaskCandidateObservation,
   evaluateFiniteTaskCandidate,
   evaluateFiniteTaskLeaseRuntime,
   evaluateProtectedMainAdvancement,
   exactExternalSourceProvenance,
+  finiteTaskEffectiveReservationAuthorityValid,
   finiteTaskFinalReceiptBody,
   finiteTaskFinalReceiptSubject,
+  finiteTaskLeaseEffectivelyTerminal,
   finiteTaskLeaseFor,
   HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1,
+  implementationRemoteRef,
+  observeLiveFiniteTaskEffectiveReservation,
   PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1,
   PENDING_TERMINAL_TRUTH_TRANSITION_V1,
+  projectFiniteTaskTerminalTruth,
+  registerVerifiedFiniteTaskImplementationLifecycle,
+  registerVerifiedFiniteTaskPostMergeTransition,
   renderCurrentState,
   renderNextTask,
   resolveCurrentProtectedBase,
+  resolveFiniteTaskEffectiveReservation,
   stableJson,
   TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
   taskLeaseAmendmentCommentBody,
@@ -49,12 +58,13 @@ import {
   verifyCommittedClaimEvidence,
   verifyCompletedImplementationMergeIdentity,
   verifyControlMaintenanceAuthorization,
+  verifyCurrentTruthHeadBindings,
   verifyCurrentTruthSynchronization,
   verifyFiniteTaskFinalReceipt,
   verifyFiniteTaskMergeProvenance,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -1966,6 +1976,968 @@ test("finite runtime matrix 27: unrelated-domain amendment fails", () => {
   assert.equal(verifyTaskLeaseAmendment({ registry: finiteRegistry, lease: pr214Lease, candidate: { head: f252Head }, subject, observation: amendmentObservation(subject) }).ok, false);
 });
 
+const wave1Lease = finiteTaskLeaseFor(canonicalTruth.finiteTaskLeases, {
+  implementationPr: 229,
+  implementationBranch: "codex/pre-release-identity-entitlement-authority-v1",
+  featureId: "auth-session-password-recovery"
+});
+const wave1BoundBase = "1".repeat(40);
+const wave1BoundBaseTree = "2".repeat(40);
+const wave1BoundStart = "3".repeat(40);
+const wave1BoundStartTree = "4".repeat(40);
+const wave1Descendant = "5".repeat(40);
+const wave1DescendantTree = "6".repeat(40);
+const wave1AddedPaths = ["_lib/accessEntitlements.ts", "_lib/roomRules.ts"];
+const wave1AuthorityEvidence = {
+  taskArtifactHash: wave1Lease.closure.artifactHash,
+  ownerApproval: structuredClone(wave1Lease.ownerApproval),
+  jurisdictionDecision: {
+    commentId: canonicalTruth.ownerJurisdictionPolicyBinding.policySource.commentId,
+    subjectHash: canonicalTruth.ownerJurisdictionPolicyBinding.policySource.subjectHash,
+    bodyHash: canonicalTruth.ownerJurisdictionPolicyBinding.policySource.bodyHash,
+    envelopeHash: canonicalTruth.ownerJurisdictionPolicyBinding.policySource.envelopeHash
+  }
+};
+const wave1AmendmentSubject = (overrides = {}) => taskLeaseAmendmentSubject({
+  schemaVersion: 2,
+  policyId: "ASSURANCE_FINITE_TASK_LEASE_AMENDMENT_V2",
+  repository: "Chillywood2025/chillywood-mobile",
+  pr: 229,
+  branch: wave1Lease.implementationBranch,
+  taskId: wave1Lease.leaseId,
+  leaseId: wave1Lease.leaseId,
+  domain: wave1Lease.domain,
+  baseLeaseHash: digest(stableJson(wave1Lease)),
+  boundStartingBaseHead: wave1BoundBase,
+  boundStartingBaseTree: wave1BoundBaseTree,
+  boundStartingHead: wave1BoundStart,
+  boundStartingTree: wave1BoundStartTree,
+  taskArtifactHash: wave1Lease.closure.artifactHash,
+  ownerApproval: structuredClone(wave1Lease.ownerApproval),
+  jurisdictionDecision: structuredClone(wave1AuthorityEvidence.jurisdictionDecision),
+  addedPaths: wave1AddedPaths,
+  pathReasons: [
+    { path: "_lib/accessEntitlements.ts", reason: "Add entitlement_unknown to AccessReason and preserve honest fail-closed block-source rendering." },
+    { path: "_lib/roomRules.ts", reason: "Add entitlement_unknown to RoomAccessReason; the runtime result is assigned directly to this closed union." }
+  ],
+  affectedDefect: "WAPR-P1-PREMIUM-UNKNOWN-004",
+  affectedInvariants: ["W1-I-13", "W1-I-14", "W1-I-19", "W1-I-20", "W1-I-32"],
+  effectiveReservation: { eligiblePathCount: 32, maximumFiles: 32, maximumLines: 4500 },
+  amendmentUse: { consumed: 1, maximum: 1 },
+  applicability: { exactTaskOnly: true, nonReusable: true },
+  authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  ...overrides
+});
+const wave1Candidate = (overrides = {}) => ({
+  pr: 229,
+  branch: wave1Lease.implementationBranch,
+  prState: "open",
+  head: wave1Descendant,
+  tree: wave1DescendantTree,
+  changedPaths: [...wave1Lease.allowedPaths, ...wave1AddedPaths].sort(),
+  changedLines: 4500,
+  ...overrides
+});
+const wave1Git = ({ descendant = true, mergeBase = wave1BoundBase, startingPaths = [wave1Lease.artifactReservation.closureArtifactPath], startingLines = 1 } = {}) => (gitArgs) => {
+  if (gitArgs[0] === "rev-parse") {
+    const trees = new Map([
+      [`${wave1BoundBase}^{tree}`, wave1BoundBaseTree],
+      [`${wave1BoundStart}^{tree}`, wave1BoundStartTree],
+      [`${wave1Descendant}^{tree}`, wave1DescendantTree]
+    ]);
+    if (trees.has(gitArgs[1])) return trees.get(gitArgs[1]);
+  }
+  if (gitArgs[0] === "merge-base" && gitArgs[1] === "--is-ancestor" && descendant) return "";
+  if (gitArgs[0] === "merge-base" && gitArgs[1] !== "--is-ancestor") return mergeBase;
+  if (gitArgs[0] === "diff" && gitArgs[1] === "--name-only") return startingPaths.join("\n");
+  if (gitArgs[0] === "diff" && gitArgs[1] === "--numstat") return `${startingLines}\t0\t${startingPaths[0]}`;
+  throw new Error("synthetic git rejection");
+};
+function wave1AmendmentResolution({ subject = wave1AmendmentSubject(), candidate = wave1Candidate(), raw = {}, resolver = {}, gitOptions = {} } = {}) {
+  const comment = {
+    id: 810001,
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-08-14T22:00:00Z",
+    updated_at: "2026-08-14T22:00:00Z",
+    issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229",
+    body: taskLeaseAmendmentCommentBody(subject),
+    ...raw
+  };
+  return resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate,
+    comments: [comment],
+    commentsPaginationComplete: true,
+    pullRequest: {
+      number: 229,
+      state: "open",
+      head: { ref: wave1Lease.implementationBranch, sha: candidate.head, repo: { full_name: "Chillywood2025/chillywood-mobile" } },
+      base: { sha: wave1BoundBase, repo: { full_name: "Chillywood2025/chillywood-mobile" } }
+    },
+    commits: [
+      { sha: wave1BoundStart, commit: { tree: { sha: wave1BoundStartTree } } },
+      { sha: candidate.head, commit: { tree: { sha: candidate.tree } } }
+    ],
+    commitsPaginationComplete: true,
+    gitCommand: wave1Git(gitOptions),
+    requireCompleteDiscovery: true,
+    authorityEvidence: wave1AuthorityEvidence,
+    ...resolver
+  });
+}
+test("finite amendment resolver: base-only Wave 1 rejects both unamended paths", () => {
+  const result = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate: wave1Candidate(),
+    comments: [],
+    commentsPaginationComplete: true,
+    requireCompleteDiscovery: true
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("FINITE_TASK_EFFECTIVE_RESERVATION_PATH_VIOLATION"));
+});
+test("finite amendment resolver: exact Wave 1 delta overlays every reservation field at 32/4500", () => {
+  const result = wave1AmendmentResolution();
+  assert.equal(result.ok, true, result.findings.join(","));
+  assert.equal(result.status, "AMENDED");
+  assert.equal(result.baseReservation.eligiblePathCount, 30);
+  assert.deepEqual(result.effectiveReservation.allowedPaths, [...wave1Lease.allowedPaths, ...wave1AddedPaths].sort());
+  assert.deepEqual(result.effectiveLease.artifactReservation.pathGlobs, result.effectiveReservation.allowedPaths);
+  assert.equal(result.effectiveLease.artifactReservation.maximumFiles, 32);
+  assert.equal(result.effectiveLease.artifactReservation.maximumLines, 4500);
+  assert.deepEqual(result.effectiveLease.scopeBudget, { maximumFiles: 32, maximumChangedLines: 4500 });
+  assert.equal(result.amendmentReceipt.authorityClassification, "SYNTHETIC_NON_AUTHORITY");
+  assert.equal(result.authority.liveReceipt, false);
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(result), false);
+  assert.equal(wave1AmendmentResolution({ resolver: { observationMode: "LIVE_GITHUB_COMPLETE_READBACK" } }).authority.liveReceipt, false);
+  for (const hash of [result.effectiveReservation.reservationHash, result.amendmentReceipt.subjectHash, result.amendmentReceipt.bodyHash, result.amendmentReceipt.rawBodyHash]) assert.match(hash, /^[0-9a-f]{64}$/u);
+});
+test("finite amendment resolver: a reserved amendment requires V2 while the legacy V1 fixture remains valid", () => {
+  const legacyWave1 = taskLeaseAmendmentSubject({
+    schemaVersion: 1,
+    repository: "Chillywood2025/chillywood-mobile",
+    leaseId: wave1Lease.leaseId,
+    pr: wave1Lease.implementationPr,
+    branch: wave1Lease.implementationBranch,
+    currentCandidateHead: wave1Descendant,
+    currentLeaseHash: digest(stableJson(wave1Lease)),
+    addedPaths: [wave1AddedPaths[0]],
+    registeredDomain: wave1Lease.domain,
+    reason: "legacy receipt must not bypass the descendant-persistent contract",
+    newScopeMaximum: { maximumFiles: 32, maximumChangedLines: 4500 },
+    excludedAuthority: { product: false, native: false, database: false, provider: false, build: false, release: false, money: false, authRls: false, credentials: false }
+  });
+  const legacyWave1Observation = {
+    id: 810010,
+    author: "Chillywood2025",
+    authorAssociation: "OWNER",
+    createdAt: "2026-08-14T22:00:00Z",
+    updatedAt: "2026-08-14T22:00:00Z",
+    issueUrl: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229",
+    body: taskLeaseAmendmentCommentBody(legacyWave1)
+  };
+  assert.ok(verifyTaskLeaseAmendment({ registry: canonicalTruth.finiteTaskLeases, lease: wave1Lease, candidate: { head: wave1Descendant }, subject: legacyWave1, observation: legacyWave1Observation }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_SCHEMA_UNSUPPORTED"));
+  const historical = amendmentSubject();
+  assert.equal(verifyTaskLeaseAmendment({ registry: finiteRegistry, lease: pr214Lease, candidate: { head: f252Head }, subject: historical, observation: amendmentObservation(historical) }).ok, true);
+});
+test("finite amendment resolver: only resolver-branded structurally unchanged base scope is authoritative", () => {
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid({ ok: true, status: "BASE_ONLY", effectiveLease: { allowedPaths: ["package.json"] } }), false);
+  const syntheticReserved = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate: wave1Candidate({ changedPaths: [...wave1Lease.allowedPaths], changedLines: 3600 }),
+    comments: [],
+    commentsPaginationComplete: true,
+    requireCompleteDiscovery: true
+  });
+  assert.equal(syntheticReserved.status, "BASE_ONLY");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(syntheticReserved), false);
+  const legacySynthetic = resolveFiniteTaskEffectiveReservation({
+    registry: finiteRegistry,
+    lease: pr214Lease,
+    comments: [],
+    commentsPaginationComplete: true
+  });
+  assert.equal(legacySynthetic.status, "BASE_ONLY");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(legacySynthetic), true);
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-live-base-only-"));
+  const fakeGh = path.join(temporary, "gh");
+  const pull = {
+    number: wave1Lease.implementationPr,
+    state: "open",
+    head: { ref: wave1Lease.implementationBranch, sha: wave1Descendant, repo: { full_name: "Chillywood2025/chillywood-mobile" } },
+    base: { sha: wave1BoundBase, repo: { full_name: "Chillywood2025/chillywood-mobile" } }
+  };
+  fs.writeFileSync(fakeGh, `#!/usr/bin/env node\nconst endpoint = process.argv.at(-1);\nif (endpoint.includes("/comments?") || endpoint.includes("/commits?")) process.stdout.write("[[]]");\nelse process.stdout.write(${JSON.stringify(JSON.stringify(pull))});\n`);
+  fs.chmodSync(fakeGh, 0o755);
+  const originalPath = process.env.PATH;
+  let liveObservation;
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+    liveObservation = observeLiveFiniteTaskEffectiveReservation({
+      repository: "Chillywood2025/chillywood-mobile",
+      pr: wave1Lease.implementationPr,
+      authorityEvidence: wave1AuthorityEvidence
+    });
+  } finally {
+    process.env.PATH = originalPath;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+  const liveReserved = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate: wave1Candidate({ changedPaths: [...wave1Lease.allowedPaths], changedLines: 3600 }),
+    liveObservation
+  });
+  assert.equal(liveReserved.status, "BASE_ONLY");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(liveReserved), true);
+  liveReserved.effectiveLease.allowedPaths.push("package.json");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(liveReserved), false);
+});
+test("finite amendment resolver: path 33 and changed line 4501 fail", () => {
+  const path33 = wave1AmendmentResolution({ candidate: wave1Candidate({ changedPaths: [...wave1Candidate().changedPaths, "_lib/not-authorized.ts"] }) });
+  assert.ok(path33.findings.includes("FINITE_TASK_EFFECTIVE_RESERVATION_PATH_VIOLATION"));
+  const line4501 = wave1AmendmentResolution({ candidate: wave1Candidate({ changedLines: 4501 }) });
+  assert.ok(line4501.findings.includes("FINITE_TASK_EFFECTIVE_RESERVATION_SCOPE_OVERFLOW"));
+});
+test("finite amendment resolver: malformed binding matrix fails closed", () => {
+  const cases = [
+    wave1AmendmentSubject({ addedPaths: [wave1AddedPaths[0]] }),
+    wave1AmendmentSubject({ addedPaths: [...wave1AddedPaths, wave1AddedPaths[0]] }),
+    wave1AmendmentSubject({ addedPaths: [...wave1AddedPaths, "_lib/*.ts"] }),
+    wave1AmendmentSubject({ addedPaths: [...wave1AddedPaths, "_lib/extra.ts"] }),
+    wave1AmendmentSubject({ repository: "Other/repository" }),
+    wave1AmendmentSubject({ pr: 230 }),
+    wave1AmendmentSubject({ taskId: "other-task" }),
+    wave1AmendmentSubject({ leaseId: "other-lease" }),
+    wave1AmendmentSubject({ domain: "other-domain" }),
+    wave1AmendmentSubject({ branch: "codex/other" }),
+    wave1AmendmentSubject({ baseLeaseHash: "f".repeat(64) }),
+    wave1AmendmentSubject({ taskArtifactHash: "f".repeat(64) }),
+    wave1AmendmentSubject({ effectiveReservation: { eligiblePathCount: 32, maximumFiles: 33, maximumLines: 4500 } }),
+    wave1AmendmentSubject({ authority: { providerMutation: true, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false } })
+  ];
+  assert.equal(cases.every((subject) => !wave1AmendmentResolution({ subject }).ok), true);
+  assert.equal(wave1AmendmentResolution({ raw: { user: { login: "other" } } }).ok, false);
+  assert.equal(wave1AmendmentResolution({ raw: { author_association: "MEMBER" } }).ok, false);
+  assert.equal(wave1AmendmentResolution({ raw: { updated_at: "2026-08-14T22:01:00Z" } }).ok, false);
+});
+test("finite amendment resolver: edited duplicate incomplete and unregistered observations fail", () => {
+  assert.equal(wave1AmendmentResolution({ raw: { body: `${taskLeaseAmendmentCommentBody(wave1AmendmentSubject())}\nedited` } }).ok, false);
+  assert.equal(wave1AmendmentResolution({ resolver: { commentsPaginationComplete: false } }).ok, false);
+  const exact = wave1AmendmentSubject();
+  const body = taskLeaseAmendmentCommentBody(exact);
+  assert.equal(wave1AmendmentResolution({ resolver: { comments: [
+    { id: 810001, user: { login: "Chillywood2025" }, author_association: "OWNER", created_at: "2026-08-14T22:00:00Z", updated_at: "2026-08-14T22:00:00Z", issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229", body },
+    { id: 810002, user: { login: "Chillywood2025" }, author_association: "OWNER", created_at: "2026-08-14T22:01:00Z", updated_at: "2026-08-14T22:01:00Z", issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229", body }
+  ] } }).ok, false);
+  const unregistered = structuredClone(canonicalTruth.finiteTaskLeases);
+  unregistered.amendmentPolicy.domains = unregistered.amendmentPolicy.domains.filter(({ id }) => id !== wave1Lease.domain);
+  assert.equal(wave1AmendmentResolution({ resolver: { registry: unregistered } }).ok, false);
+});
+test("finite amendment resolver: missing timestamps, missing start trees, and duplicate path reasons fail", () => {
+  assert.equal(wave1AmendmentResolution({ raw: { created_at: null, updated_at: null } }).ok, false);
+  assert.ok(wave1AmendmentResolution({ resolver: { commits: [
+    { sha: wave1BoundStart },
+    { sha: wave1Descendant, commit: { tree: { sha: wave1DescendantTree } } }
+  ] } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_NOT_ON_PR"));
+  const duplicateReason = wave1AmendmentSubject({ pathReasons: [
+    { path: wave1AddedPaths[0], reason: "first" },
+    { path: wave1AddedPaths[0], reason: "duplicate" }
+  ] });
+  assert.equal(wave1AmendmentResolution({ subject: duplicateReason }).ok, false);
+});
+test("finite amendment resolver: bound start must pass base scope and remain an ancestor on the same PR", () => {
+  assert.ok(wave1AmendmentResolution({ gitOptions: { startingPaths: ["_lib/not-authorized.ts"] } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_OUTSIDE_BASE_RESERVATION"));
+  assert.ok(wave1AmendmentResolution({ gitOptions: { startingLines: 3601 } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_OUTSIDE_BASE_RESERVATION"));
+  assert.equal(wave1AmendmentResolution().ok, true);
+  assert.ok(wave1AmendmentResolution({ gitOptions: { descendant: false } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_HISTORY_INVALID"));
+  assert.ok(wave1AmendmentResolution({ resolver: { commits: [{ sha: wave1Descendant, commit: { tree: { sha: wave1DescendantTree } } }] } }).findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_NOT_ON_PR"));
+});
+test("finite amendment resolver: starting base is the exact merge base and tolerates later protected-base descendants", () => {
+  const advancedBase = "7".repeat(40);
+  const advanced = wave1AmendmentResolution({ resolver: { pullRequest: {
+    number: 229,
+    state: "open",
+    head: { ref: wave1Lease.implementationBranch, sha: wave1Descendant, repo: { full_name: "Chillywood2025/chillywood-mobile" } },
+    base: { sha: advancedBase, repo: { full_name: "Chillywood2025/chillywood-mobile" } }
+  } } });
+  assert.equal(advanced.ok, true, advanced.findings.join(","));
+  const wrongMergeBase = wave1AmendmentResolution({ gitOptions: { mergeBase: "8".repeat(40) } });
+  assert.ok(wrongMergeBase.findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_BASE_MISMATCH"));
+});
+test("finite amendment resolver: sibling, rebased, force-pushed replacement, and unrelated histories all fail", () => {
+  const sibling = wave1AmendmentResolution({ gitOptions: { descendant: false } });
+  const rebased = wave1AmendmentResolution({
+    resolver: { commits: [{ sha: wave1Descendant, commit: { tree: { sha: wave1DescendantTree } } }] },
+    gitOptions: { descendant: false }
+  });
+  const forcePushedReplacement = wave1AmendmentResolution({
+    resolver: { commits: [{ sha: "9".repeat(40), commit: { tree: { sha: "a".repeat(40) } } }, { sha: wave1Descendant, commit: { tree: { sha: wave1DescendantTree } } }] },
+    gitOptions: { descendant: false }
+  });
+  const unrelated = wave1AmendmentResolution({ gitOptions: { descendant: false, mergeBase: "0".repeat(40) } });
+  assert.ok(sibling.findings.includes("FINITE_TASK_LEASE_AMENDMENT_HISTORY_INVALID"));
+  for (const result of [rebased, forcePushedReplacement]) assert.ok(result.findings.includes("FINITE_TASK_LEASE_AMENDMENT_START_NOT_ON_PR"));
+  assert.ok(unrelated.findings.includes("FINITE_TASK_LEASE_AMENDMENT_HISTORY_INVALID"));
+});
+test("finite amendment resolver: future reserved amendments require one bounded registered policy", () => {
+  const missing = structuredClone(canonicalTruth.finiteTaskLeases);
+  missing.amendmentPolicy.domains = missing.amendmentPolicy.domains.filter(({ id }) => id !== wave1Lease.domain);
+  assert.ok(validateFiniteTaskLeaseRegistry(missing).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_UNAVAILABLE"));
+  const duplicate = structuredClone(canonicalTruth.finiteTaskLeases);
+  duplicate.amendmentPolicy.domains.push(structuredClone(duplicate.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain)));
+  assert.ok(validateFiniteTaskLeaseRegistry(duplicate).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_DUPLICATE"));
+  const excessive = structuredClone(canonicalTruth.finiteTaskLeases);
+  excessive.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).maximumFiles = 37;
+  assert.ok(validateFiniteTaskLeaseRegistry(excessive).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_UNAVAILABLE"));
+  const wildcard = structuredClone(canonicalTruth.finiteTaskLeases);
+  wildcard.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).amendablePaths = ["_lib/accessEntitlements[.]ts"];
+  assert.ok(validateFiniteTaskLeaseRegistry(wildcard).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_MALFORMED"));
+  const reservedBaseWildcard = structuredClone(canonicalTruth.finiteTaskLeases);
+  const reservedLease = reservedBaseWildcard.tasks.find(({ implementationPr }) => implementationPr === wave1Lease.implementationPr);
+  const replacedPath = reservedLease.allowedPaths[0];
+  reservedLease.allowedPaths[0] = "_lib/**";
+  reservedLease.artifactReservation.pathGlobs[reservedLease.artifactReservation.pathGlobs.indexOf(replacedPath)] = "_lib/**";
+  assert.ok(validateFiniteTaskLeaseRegistry(reservedBaseWildcard).includes("FINITE_TASK_LEASE_MALFORMED"));
+  reservedLease.allowedPaths[0] = "_lib/@(accessEntitlements).ts";
+  reservedLease.artifactReservation.pathGlobs[reservedLease.artifactReservation.pathGlobs.indexOf("_lib/**")] = "_lib/@(accessEntitlements).ts";
+  assert.ok(validateFiniteTaskLeaseRegistry(reservedBaseWildcard).includes("FINITE_TASK_LEASE_MALFORMED"));
+  reservedLease.amendmentMaximum.maximumAmendments = 0;
+  assert.equal(validateFiniteTaskLeaseRegistry(reservedBaseWildcard).includes("FINITE_TASK_LEASE_MALFORMED"), false);
+  const unusableCapacity = structuredClone(canonicalTruth.finiteTaskLeases);
+  unusableCapacity.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).maximumFiles = 30;
+  assert.ok(validateFiniteTaskLeaseRegistry(unusableCapacity).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_UNAVAILABLE"));
+});
+test("finite amendment resolver: frozen Wave 1 evidence remains byte-identical", () => {
+  assert.equal(wave1Lease.closure.artifactHash, "0cc09e1a908c2520e22652c8e258babb862166875bb449db2648a10f54e01361");
+  assert.equal(wave1Lease.closure.packetHash, "0b238a3fb3b73cd5022dd5f571653d0cd4af4067569181062376d56a49c0839e");
+  assert.equal(wave1Lease.closure.certificateHash, "4ad770781b04e2af860b2c0da0ec9cdd9ce16ecf911322c389f92429408c3845");
+  assert.equal(wave1Lease.closure.edgeClosureHash, "8c4e81388574b1c8ae28bc5af7d6effb5b5fde9f3ff4e08115e1241677dfe6aa");
+  assert.equal(wave1Lease.closure.edgeEvidenceHash, "693abd32e7cd5c80fd43c6358cf13470d8aa73fcc7c3e9e87515ff7ec804d61a");
+  assert.equal(wave1Lease.closure.modelDeltaHash, "5ca0cdb63f64f9d77edfc5b5929c68e78806b1f47710c798c49b8853104217ef");
+});
+test("finite lifecycle: amendment-capable tasks require supplied live final-source evidence for merge eligibility", () => {
+  const record = historicalRollingRecord();
+  record.finiteTaskRuntime.finalEvidence = { ownerReceipt: true, repositoryReview: true, phase1: true, mergeEligible: true };
+  const observed = trustedWave1PostMergeFixture();
+  const candidateHead = observed.candidate.head;
+  const candidateTree = observed.candidate.tree;
+  const shared = {
+    record,
+    contract: currentTruthContract,
+    observedProtectedMainSha: record.mainSha,
+    candidateHead,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false, candidateTree },
+    checkpointTreeObservation: record.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: true,
+    candidateContainsObservedMain: true,
+  };
+  const omitted = evaluateProtectedMainAdvancement(shared);
+  assert.equal(omitted.liveFinalEvidenceRequired, true);
+  assert.equal(omitted.mergeEligible, false);
+  const honestlyIneligible = evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: { mergeEligible: false, candidateHead, candidateTree } });
+  assert.equal(honestlyIneligible.mergeEligible, false);
+  assert.equal(honestlyIneligible.findings.includes("FINITE_TASK_IMPLEMENTATION_LIFECYCLE_AUTHORITY_INVALID"), false);
+  const plain = { mergeEligible: true, candidateHead, candidateTree };
+  assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: plain }).mergeEligible, false);
+  assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: observed.transition.lifecycle }).mergeEligible, true);
+  assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: structuredClone(observed.transition.lifecycle) }).mergeEligible, false);
+  observed.transition.lifecycle.candidateHead = "f".repeat(40);
+  assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: observed.transition.lifecycle }).mergeEligible, false);
+  assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: { mergeEligible: true, candidateHead: "f".repeat(40), candidateTree } }).mergeEligible, false);
+  const legacyRecord = structuredClone(record);
+  const legacyLease = finiteTaskLeaseFor(legacyRecord.finiteTaskLeases, {
+    implementationPr: legacyRecord.activeTaskBinding.implementationPr,
+    implementationBranch: legacyRecord.activeTaskBinding.implementationBranch,
+    featureId: legacyRecord.activeTaskBinding.featureId,
+  });
+  legacyLease.amendmentMaximum = { maximumAmendments: 0, maximumFiles: 0, maximumLines: 0 };
+  const legacy = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord });
+  assert.equal(legacy.liveFinalEvidenceRequired, false);
+  assert.equal(legacy.mergeEligible, true);
+});
+test("finite lifecycle: verified post-merge evidence requires exactly one finite-task terminal truth", () => {
+  const record = historicalRollingRecord();
+  const observed = trustedWave1PostMergeFixture();
+  const args = {
+    record,
+    contract: currentTruthContract,
+    observedProtectedMainSha: record.mainSha,
+    candidateHead: observed.candidate.head,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false, candidateTree: observed.candidate.tree },
+    finiteTaskFinalSourceEligibility: observed.transition.lifecycle,
+    finiteTaskPostMergeTransition: observed.transition,
+    checkpointTreeObservation: record.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: true,
+    candidateContainsObservedMain: false,
+  };
+  const result = evaluateProtectedMainAdvancement(args);
+  assert.equal(result.candidateBaseStatus, "FINITE_TASK_MERGE_VERIFIED_TERMINAL_TRUTH_REQUIRED");
+  assert.equal(result.nextRequiredAction, "CREATE_EXACT_FINITE_TASK_TERMINAL_TRUTH");
+  assert.equal(result.pendingTransitionCount, 1);
+  assert.equal(result.terminalSuccessorRequired, true);
+  assert.equal(result.mergeEligible, false);
+  assert.ok(evaluateProtectedMainAdvancement({ ...args, finiteTaskPostMergeTransition: structuredClone(observed.transition) }).findings.includes("FINITE_TASK_POST_MERGE_TRANSITION_AUTHORITY_INVALID"));
+  observed.transition.findings.push("forged-after-observation");
+  assert.ok(evaluateProtectedMainAdvancement(args).findings.includes("FINITE_TASK_POST_MERGE_TRANSITION_AUTHORITY_INVALID"));
+});
+test("finite lifecycle: terminal projection preserves the immutable base lease and derives the canonical next task", () => {
+  const resolution = wave1AmendmentResolution();
+  const base = {
+    schemaVersion: 1,
+    classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    repository: "Chillywood2025/chillywood-mobile",
+    taskId: wave1Lease.leaseId,
+    leaseId: wave1Lease.leaseId,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    baseLeaseHash: digest(stableJson(wave1Lease)),
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: { ...resolution.amendmentReceipt, authorityClassification: "LIVE_IMMUTABLE_OWNER_RECEIPT" },
+    finalSourceReceipt: { commentId: 820001, createdAt: "2026-08-14T23:00:00Z", subjectHash: "7".repeat(64), bodyHash: "8".repeat(64), rawBodyHash: "9".repeat(64), finalHead: wave1Descendant, finalTree: wave1DescendantTree, effectiveReservationHash: resolution.effectiveReservation.reservationHash, amendmentCommentId: resolution.amendmentReceipt.commentId },
+    sourceHead: wave1Descendant,
+    sourceTree: wave1DescendantTree,
+    mergeSha: "a".repeat(40),
+    mergeTree: wave1DescendantTree,
+    mergeParents: ["b".repeat(40), wave1Descendant],
+    nextTask: canonicalTruth.engineeringDoctrine.nextPermittedAction,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  };
+  const evidence = { ...base, evidenceHash: hashValue(base) };
+  const originalLease = stableJson(wave1Lease);
+  const feature = registry.features.find(({ featureId }) => featureId === canonicalTruth.activeTaskBinding.featureId);
+  const projected = projectFiniteTaskTerminalTruth({ record: canonicalTruth, terminalEvidence: evidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)), implementationTitle: "Wave 1" });
+  assert.equal(stableJson(finiteTaskLeaseFor(projected.finiteTaskLeases, { implementationPr: 229, implementationBranch: wave1Lease.implementationBranch, featureId: wave1Lease.featureId })), originalLease);
+  assert.equal(projected.activeTaskBinding.phase, "TERMINAL");
+  assert.equal(projected.finiteTaskRuntime.terminalOutcome.effectiveReservation.reservationHash, resolution.effectiveReservation.reservationHash);
+  assert.deepEqual(projected.finiteTaskLeases.completedLeaseOutcomes, [evidence]);
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(projected.finiteTaskLeases, wave1Lease), true);
+  assert.ok(evaluateFiniteTaskCandidate({ lease: wave1Lease, registry: projected.finiteTaskLeases, candidate: finiteCandidate(wave1Lease, 90) }).findings.includes("FINITE_TASK_TERMINAL"));
+  const reorderedPolicy = structuredClone(projected.finiteTaskLeases); reorderedPolicy.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).amendablePaths.reverse(); assert.deepEqual(validateFiniteTaskLeaseRegistry(reorderedPolicy), []);
+  assert.match(renderCurrentState(projected), /state `MERGED_VERIFIED`/u);
+  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: projected, terminalEvidence: evidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, [evidence]);
+  const conflict = { ...evidence, nextTask: "CONFLICT" }; conflict.evidenceHash = hashValue(Object.fromEntries(Object.entries(conflict).filter(([key]) => key !== "evidenceHash")));
+  assert.throws(() => projectFiniteTaskTerminalTruth({ record: projected, terminalEvidence: conflict, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }), /FINITE_TASK_TERMINAL_PROJECTION_CONFLICT/u);
+  const preAdmission = preAdmissionFixture(); preAdmission.currentTruth = projected;
+  assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmission).ok, true);
+  const rebound = structuredClone(projected); rebound.activeTaskBinding = { ...rebound.activeTaskBinding, implementationPr: 230, implementationBranch: "codex/future-task", phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR" };
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(rebound.finiteTaskLeases, wave1Lease), true);
+  const futureLease = { ...structuredClone(wave1Lease), leaseId: "future-same-domain-v1", implementationPr: 230, implementationBranch: "codex/future-same-domain-v1" };
+  const futureRegistry = { ...rebound.finiteTaskLeases, tasks: [...rebound.finiteTaskLeases.tasks, futureLease] };
+  assert.equal(evaluateFiniteTaskCandidate({ lease: futureLease, registry: futureRegistry, candidate: finiteCandidate(futureLease, 91) }).ok, true);
+  rebound.finiteTaskLeases = futureRegistry; rebound.activeTaskBinding.implementationBranch = futureLease.implementationBranch;
+  const futureSourceHead = "c".repeat(40); const futureBase = { ...evidence, taskId: futureLease.leaseId, leaseId: futureLease.leaseId, implementationPr: futureLease.implementationPr, implementationBranch: futureLease.implementationBranch, baseLeaseHash: hashValue(futureLease), amendmentReceipt: { ...evidence.amendmentReceipt, commentId: 810002, subjectHash: "a".repeat(64), bodyHash: "b".repeat(64), rawBodyHash: "c".repeat(64) }, finalSourceReceipt: { ...evidence.finalSourceReceipt, commentId: 820002, subjectHash: "d".repeat(64), bodyHash: "e".repeat(64), rawBodyHash: "f".repeat(64), amendmentCommentId: 810002, finalHead: futureSourceHead }, sourceHead: futureSourceHead, mergeSha: "d".repeat(40), mergeParents: ["e".repeat(40), futureSourceHead] };
+  const futureEvidence = { ...futureBase, evidenceHash: hashValue(Object.fromEntries(Object.entries(futureBase).filter(([key]) => key !== "evidenceHash"))) };
+  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: rebound, terminalEvidence: futureEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, [evidence, futureEvidence]);
+  const replayBase = Object.fromEntries(Object.entries({ ...futureEvidence, amendmentReceipt: evidence.amendmentReceipt, finalSourceReceipt: evidence.finalSourceReceipt, sourceHead: evidence.sourceHead, sourceTree: evidence.sourceTree, mergeSha: evidence.mergeSha, mergeTree: evidence.mergeTree, mergeParents: evidence.mergeParents }).filter(([key]) => key !== "evidenceHash")); const replayEvidence = { ...replayBase, evidenceHash: hashValue(replayBase) };
+  const replayedRegistry = structuredClone(futureRegistry); replayedRegistry.completedLeaseOutcomes = [evidence, replayEvidence]; assert.ok(validateFiniteTaskLeaseRegistry(replayedRegistry).includes("FINITE_TASK_COMPLETION_LEDGER_IDENTITY_REUSED")); assert.throws(() => projectFiniteTaskTerminalTruth({ record: rebound, terminalEvidence: replayEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }), /FINITE_TASK_TERMINAL_PROJECTION_IDENTITY_REUSED/u);
+  const tampered = structuredClone(projected); tampered.finiteTaskLeases.completedLeaseOutcomes[0].evidenceHash = "f".repeat(64); preAdmission.currentTruth = tampered;
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(tampered.finiteTaskLeases, wave1Lease), false);
+  assert.ok(validateFiniteTaskLeaseRegistry(tampered.finiteTaskLeases).includes("FINITE_TASK_COMPLETION_LEDGER_MALFORMED"));
+  assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmission).findings.includes("PRE_ADMISSION_ACTIVE_FINITE_TASK"), true);
+  const duplicated = structuredClone(projected.finiteTaskLeases); duplicated.completedLeaseOutcomes.push(conflict);
+  assert.ok(validateFiniteTaskLeaseRegistry(duplicated).includes("FINITE_TASK_COMPLETION_LEDGER_DUPLICATE"));
+  assert.equal(validateTerminalTaskEvidence(projected.activeTaskBinding, projected.latestMergedImplementationPr).length, 0);
+  assert.match(renderNextTask(projected), new RegExp(canonicalTruth.engineeringDoctrine.nextPermittedAction, "u"));
+  assert.doesNotMatch(renderNextTask(projected), /IMPLEMENT_PRE_RELEASE_WAVE_1_IDENTITY_ENTITLEMENT_AUTHORITY/u);
+});
+test("finite lifecycle: every real evaluator derives one byte-identical Wave 1 effective reservation", () => {
+  const resolution = wave1AmendmentResolution();
+  const expectedReservation = stableJson(resolution.effectiveReservation);
+  const expectedHash = resolution.effectiveReservation.reservationHash;
+  const closedAuthority = { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false };
+  const candidate = wave1Candidate({
+    repository: "Chillywood2025/chillywood-mobile",
+    diffHash: "a".repeat(64),
+    changedPathHash: "b".repeat(64),
+    findings: { P0: 0, P1: 0, launchImpactingP2: 0 }
+  });
+  const runtimeGit = (gitArgs) => {
+    if (gitArgs[0] === "show-ref" && gitArgs[1] === "--verify" && gitArgs[2] === "--hash") return candidate.head;
+    if (gitArgs[0] === "rev-parse") {
+      const trees = new Map([
+        [`${candidate.head}^{tree}`, candidate.tree],
+        [`${wave1Lease.admittedSeedHead}^{tree}`, wave1Lease.admittedSeedTree]
+      ]);
+      if (trees.has(gitArgs[1])) return trees.get(gitArgs[1]);
+    }
+    if (gitArgs[0] === "merge-base" && gitArgs[1] === "--is-ancestor") return "";
+    if (gitArgs[0] === "diff" && gitArgs[1] === "--name-only") return candidate.changedPaths.join("\n");
+    if (gitArgs[0] === "diff" && gitArgs[1] === "--numstat") return `4500\t0\t${candidate.changedPaths[0]}`;
+    if (gitArgs[0] === "diff" && gitArgs[1] === "--binary" && gitArgs[2] === "--no-ext-diff") return "synthetic canonical Wave 1 diff";
+    throw new Error(`unexpected synthetic runtime git command: ${gitArgs.join(" ")}`);
+  };
+  const runtime = evaluateFiniteTaskLeaseRuntime({
+    record: canonicalTruth,
+    contract: currentTruthContract,
+    now: new Date("2026-08-14T07:00:00Z"),
+    suppliedObservation: candidate,
+    currentProtectedBase: wave1BoundBase,
+    effectiveReservationResolution: resolution,
+    gitCommand: runtimeGit
+  });
+  assert.ok(runtime.effectiveReservation, stableJson(runtime));
+  assert.equal(runtime.effectiveReservation.reservationHash, expectedHash);
+  assert.equal(stableJson(runtime.effectiveReservation), expectedReservation);
+
+  const identity = {
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: wave1Lease.implementationPr,
+    branch: wave1Lease.implementationBranch,
+    baseSha: wave1BoundBase,
+    headSha: candidate.head
+  };
+  const scope = {
+    files: candidate.changedPaths,
+    additions: 2250,
+    deletions: 2250,
+    netChangedLines: 0,
+    diffHash: candidate.diffHash
+  };
+  const reviewSubject = architectureRepositoryReviewSubject({
+    identity,
+    tree: candidate.tree,
+    scope,
+    profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1,
+    effectiveReservationResolution: resolution
+  });
+  assert.equal(reviewSubject.finiteTaskEffectiveReservation.effectiveReservation.reservationHash, expectedHash);
+  assert.deepEqual(reviewSubject.finiteTaskEffectiveReservation.effectiveReservation, {
+    reservationHash: expectedHash,
+    pathSetHash: hashValue(resolution.effectiveReservation.allowedPaths),
+    eligiblePathCount: 32,
+    maximumFiles: 32,
+    maximumLines: 4500
+  });
+
+  const phase1Evidence = {
+    runId: 900050,
+    runAttempt: 1,
+    sourceHead: candidate.head,
+    sourceTree: candidate.tree,
+    requiredJobs: 13,
+    passedJobs: 13,
+    result: "PASS_13_OF_13",
+    evidenceHash: "c".repeat(64),
+    valid: true
+  };
+  const finalSubject = finiteTaskFinalReceiptSubject({
+    schemaVersion: 2,
+    policyId: "ASSURANCE_FINITE_TASK_LEASE_V1",
+    repository: identity.repository,
+    featureId: wave1Lease.featureId,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    admittedSeedHead: wave1Lease.admittedSeedHead,
+    finalHead: candidate.head,
+    finalTree: candidate.tree,
+    diffHash: candidate.diffHash,
+    changedPathHash: candidate.changedPathHash,
+    scopeResult: "PASS",
+    callDomainClosureLedgerHash: "d".repeat(64),
+    focusedTestHash: "e".repeat(64),
+    mutationNegativeControlHash: "f".repeat(64),
+    repositoryReviewHash: hashValue(reviewSubject),
+    phase1RunId: phase1Evidence.runId,
+    phase1Head: candidate.head,
+    baseLeaseHash: resolution.baseLeaseHash,
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: resolution.amendmentReceipt,
+    authority: closedAuthority
+  });
+  const rawComment = (id, body) => ({
+    id,
+    node_id: `IC_wave1_convergence_${id}`,
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-08-14T23:00:00Z",
+    updated_at: "2026-08-14T23:00:00Z",
+    issue_url: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${wave1Lease.implementationPr}`,
+    html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${wave1Lease.implementationPr}#issuecomment-${id}`,
+    body
+  });
+  const lifecycle = verifyFiniteTaskImplementationLifecycle({
+    identity,
+    tree: candidate.tree,
+    scope,
+    finiteTaskAuthority: {
+      ok: true,
+      candidate,
+      baseLease: wave1Lease,
+      effectiveReservationResolution: resolution
+    },
+    comments: [
+      rawComment(820050, architectureRepositoryReviewCommentBody(reviewSubject)),
+      rawComment(820051, finiteTaskFinalReceiptBody(finalSubject))
+    ],
+    commentsPaginationComplete: true,
+    phase1EvidenceResolver: () => phase1Evidence
+  });
+  assert.equal(lifecycle.mergeEligible, false);
+  assert.ok(lifecycle.findings.includes("FINITE_TASK_LIFECYCLE_EFFECTIVE_RESERVATION_INVALID"));
+  assert.equal(lifecycle.effectiveReservationHash, expectedHash);
+  assert.equal(stableJson(lifecycle.effectiveReservation), expectedReservation);
+  assert.equal(lifecycle.finalSourceSubject.effectiveReservation.reservationHash, expectedHash);
+  assert.equal(stableJson(lifecycle.finalSourceSubject.effectiveReservation), expectedReservation);
+
+  const mergeTree = "7".repeat(40);
+  const mergeProvenance = verifyFiniteTaskMergeProvenance({
+    lease: wave1Lease,
+    receiptSubject: lifecycle.finalSourceSubject,
+    currentProtectedBase: wave1BoundBase,
+    mergeRef: {
+      pr: wave1Lease.implementationPr,
+      branch: wave1Lease.implementationBranch,
+      parents: [wave1BoundBase, candidate.head],
+      sourceTree: candidate.tree,
+      tree: mergeTree
+    },
+    actualMerge: { parents: [wave1BoundBase, candidate.head], tree: mergeTree },
+    effectiveReservationResolution: resolution
+  });
+  assert.equal(lifecycle.finalSourceSubject.effectiveReservation.reservationHash, expectedHash);
+  assert.deepEqual(mergeProvenance.findings, ["FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH"]);
+
+  const terminalBase = {
+    schemaVersion: 1,
+    classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    repository: identity.repository,
+    taskId: wave1Lease.leaseId,
+    leaseId: wave1Lease.leaseId,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    baseLeaseHash: resolution.baseLeaseHash,
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: { ...resolution.amendmentReceipt, authorityClassification: "LIVE_IMMUTABLE_OWNER_RECEIPT" },
+    finalSourceReceipt: { commentId: 820051, createdAt: "2026-08-14T23:00:00Z", subjectHash: "8".repeat(64), bodyHash: "9".repeat(64), rawBodyHash: "0".repeat(64), finalHead: candidate.head, finalTree: candidate.tree, effectiveReservationHash: expectedHash, amendmentCommentId: resolution.amendmentReceipt.commentId },
+    sourceHead: candidate.head,
+    sourceTree: candidate.tree,
+    mergeSha: "1".repeat(40),
+    mergeTree: candidate.tree,
+    mergeParents: [wave1BoundBase, candidate.head],
+    nextTask: canonicalTruth.engineeringDoctrine.nextPermittedAction,
+    authority: closedAuthority
+  };
+  const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
+  const feature = registry.features.find(({ featureId }) => featureId === canonicalTruth.activeTaskBinding.featureId);
+  const terminalTruth = projectFiniteTaskTerminalTruth({
+    record: canonicalTruth,
+    terminalEvidence,
+    proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)),
+    implementationTitle: "Wave 1"
+  });
+  assert.equal(terminalTruth.finiteTaskRuntime.terminalOutcome.effectiveReservation.reservationHash, expectedHash);
+  assert.equal(stableJson(terminalTruth.finiteTaskRuntime.terminalOutcome.effectiveReservation), expectedReservation);
+
+  const consumerHashes = [
+    resolution.effectiveReservation.reservationHash,
+    runtime.effectiveReservation.reservationHash,
+    reviewSubject.finiteTaskEffectiveReservation.effectiveReservation.reservationHash,
+    lifecycle.effectiveReservationHash,
+    lifecycle.finalSourceSubject.effectiveReservation.reservationHash,
+    terminalTruth.finiteTaskRuntime.terminalOutcome.effectiveReservation.reservationHash
+  ];
+  assert.deepEqual([...new Set(consumerHashes)], [expectedHash]);
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(resolution), false);
+});
+
+const wave1AmendmentBodyMutation = (mutate) => {
+  const body = taskLeaseAmendmentCommentBody(wave1AmendmentSubject());
+  const separator = body.indexOf("\n");
+  const marker = body.slice(0, separator);
+  const envelope = JSON.parse(body.slice(separator + 1));
+  mutate(envelope);
+  return `${marker}\n${stableJson(envelope)}`;
+};
+
+test("finite amendment resolver: subject body and raw comment hash corruption fail explicitly", () => {
+  const corruptedBodies = [
+    wave1AmendmentBodyMutation((envelope) => { envelope.subjectHash = "f".repeat(64); }),
+    wave1AmendmentBodyMutation((envelope) => { envelope.bodyHash = "f".repeat(64); }),
+    `${taskLeaseAmendmentCommentBody(wave1AmendmentSubject())} `
+  ];
+  for (const body of corruptedBodies) {
+    const result = wave1AmendmentResolution({ raw: { body } });
+    assert.equal(result.ok, false);
+    assert.ok(result.findings.includes("FINITE_TASK_LEASE_AMENDMENT_COMMENT_INVALID"));
+  }
+});
+
+test("finite amendment resolver: every prohibited authority flag fails closed", () => {
+  const closed = { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false };
+  for (const flag of Object.keys(closed)) {
+    const result = wave1AmendmentResolution({
+      subject: wave1AmendmentSubject({ authority: { ...closed, [flag]: true } })
+    });
+    assert.equal(result.ok, false, flag);
+    assert.ok(result.findings.includes("FINITE_TASK_LEASE_AMENDMENT_MALFORMED"), flag);
+  }
+});
+
+test("finite amendment resolver: frozen admission Owner approval and jurisdiction receipts remain byte-identical", () => {
+  assert.equal(wave1Lease.protectedAdmissionPr, 233);
+  assert.equal(canonicalTruth.preReleaseWave1Admission.admissionPr, 233);
+  assert.equal(canonicalTruth.preReleaseWave1Admission.leaseHash, "2fda855fda70c08a038afe72e4ad7e5240c38bb484e44010e735b017a254152a");
+  assert.deepEqual(wave1Lease.ownerApproval, {
+    commentId: 5285464582,
+    subjectHash: "65123660102dc13aa1a0583b2acd497d221dfefdb9224ca2e12f08bb98224e43",
+    rawBodyHash: "b7eca07028b1837df1bc87dad6d4b78fe91aecf4b47fcdddab833f50dc22c77f"
+  });
+  assert.deepEqual(wave1AuthorityEvidence.jurisdictionDecision, {
+    commentId: 5296932596,
+    subjectHash: "b3813943515ca3086583f3bb48c149977a885235aed3ba84565da2d1cac28eb2",
+    bodyHash: "6f454d6e18babcdbf581fd41b0ae54f7aa30cef26cf1ace1d925997be61f01eb",
+    envelopeHash: "0ddb3d068284e21ca3aae9d3d277db8bc557674123ce8c6224e02456bda3c43c"
+  });
+});
+
+function trustedWave1PostMergeFixture({ pullState = "closed" } = {}) {
+  const mergeSha = "7".repeat(40);
+  const mergeTree = "8".repeat(40);
+  const candidate = wave1Candidate({ prState: "closed" });
+  const amendmentComment = {
+    id: 810001,
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-08-14T22:00:00Z",
+    updated_at: "2026-08-14T22:00:00Z",
+    issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229",
+    body: taskLeaseAmendmentCommentBody(wave1AmendmentSubject())
+  };
+  const pullRequest = {
+    number: wave1Lease.implementationPr,
+    state: pullState,
+    merged: pullState === "closed",
+    merged_at: pullState === "closed" ? "2026-08-14T23:30:00Z" : null,
+    merge_commit_sha: pullState === "closed" ? mergeSha : null,
+    head: { ref: wave1Lease.implementationBranch, sha: candidate.head, repo: { full_name: "Chillywood2025/chillywood-mobile" } },
+    base: { ref: "main", sha: wave1BoundBase, repo: { full_name: "Chillywood2025/chillywood-mobile" } }
+  };
+  const commits = [
+    { sha: wave1BoundStart, commit: { tree: { sha: wave1BoundStartTree } } },
+    { sha: candidate.head, commit: { tree: { sha: candidate.tree } } }
+  ];
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-post-merge-live-"));
+  const fakeGh = path.join(temporary, "gh");
+  const commitsOutput = JSON.stringify([commits]);
+  const pullOutput = JSON.stringify(pullRequest);
+  const writeGh = (comments) => { fs.writeFileSync(fakeGh, `#!/usr/bin/env node\nconst endpoint = process.argv.at(-1);\nif (endpoint.includes("/comments?")) process.stdout.write(${JSON.stringify(JSON.stringify([comments]))});\nelse if (endpoint.includes("/commits?")) process.stdout.write(${JSON.stringify(commitsOutput)});\nelse process.stdout.write(${JSON.stringify(pullOutput)});\n`); fs.chmodSync(fakeGh, 0o755); };
+  writeGh([amendmentComment]);
+  const originalPath = process.env.PATH;
+  let liveObservation;
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+    liveObservation = observeLiveFiniteTaskEffectiveReservation({
+      repository: "Chillywood2025/chillywood-mobile",
+      pr: wave1Lease.implementationPr,
+      authorityEvidence: wave1AuthorityEvidence
+    });
+  } finally {
+    process.env.PATH = originalPath;
+  }
+  const gitCommand = (gitArgs) => {
+    if (gitArgs[0] === "show-ref") throw new Error("implementation branch deleted after merge");
+    if (gitArgs[0] === "rev-parse") {
+      const trees = new Map([
+        [`${wave1BoundBase}^{tree}`, wave1BoundBaseTree],
+        [`${wave1BoundStart}^{tree}`, wave1BoundStartTree],
+        [`${wave1Lease.admittedSeedHead}^{tree}`, wave1Lease.admittedSeedTree],
+        [`${wave1Descendant}^{tree}`, wave1DescendantTree]
+      ]);
+      if (trees.has(gitArgs[1])) return trees.get(gitArgs[1]);
+    }
+    if (gitArgs[0] === "merge-base" && gitArgs[1] === "--is-ancestor") return "";
+    if (gitArgs[0] === "merge-base") return wave1BoundBase;
+    if (gitArgs[0] === "diff" && gitArgs[1] === "--name-only") {
+      return gitArgs.at(-1) === `${wave1BoundBase}...${wave1BoundStart}`
+        ? wave1Lease.artifactReservation.closureArtifactPath
+        : candidate.changedPaths.join("\n");
+    }
+    if (gitArgs[0] === "diff" && gitArgs[1] === "--numstat") {
+      return gitArgs.at(-1) === `${wave1BoundBase}...${wave1BoundStart}`
+        ? `1\t0\t${wave1Lease.artifactReservation.closureArtifactPath}`
+        : `4500\t0\t${candidate.changedPaths[0]}`;
+    }
+    if (gitArgs[0] === "diff" && gitArgs[1] === "--binary") return "verified post-merge Wave 1 source diff";
+    throw new Error(`unexpected post-merge git command: ${gitArgs.join(" ")}`);
+  };
+  let resolution = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate,
+    liveObservation,
+    gitCommand
+  });
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 229, branch: wave1Lease.implementationBranch, baseSha: wave1BoundBase, headSha: candidate.head };
+  const scope = { files: candidate.changedPaths, additions: 2250, deletions: 2250, netChangedLines: 0, diffHash: "a".repeat(64) };
+  const reviewSubject = architectureRepositoryReviewSubject({ identity, tree: candidate.tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
+  const phaseBody = { runId: 900060, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
+  const finalSourceSubject = finiteTaskFinalReceiptSubject({ schemaVersion: 2, finalHead: candidate.head, finalTree: candidate.tree, repositoryReviewHash: hashValue(reviewSubject), phase1RunId: phaseBody.runId, phase1Head: candidate.head, baseLeaseHash: resolution.baseLeaseHash, baseReservation: resolution.baseReservation, effectiveReservation: resolution.effectiveReservation, amendmentReceipt: resolution.amendmentReceipt });
+  const immutable = (id, body) => ({ id, user: { login: "Chillywood2025" }, author_association: "OWNER", created_at: "2026-08-14T23:00:00Z", updated_at: "2026-08-14T23:00:00Z", issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229", body });
+  const reviewComment = immutable(810002, architectureRepositoryReviewCommentBody(reviewSubject));
+  const finalComment = immutable(810003, finiteTaskFinalReceiptBody(finalSourceSubject));
+  writeGh([amendmentComment, reviewComment, finalComment]);
+  try { process.env.PATH = `${temporary}:${originalPath}`; liveObservation = observeLiveFiniteTaskEffectiveReservation({ repository: "Chillywood2025/chillywood-mobile", pr: 229, authorityEvidence: wave1AuthorityEvidence }); }
+  finally { process.env.PATH = originalPath; fs.rmSync(temporary, { recursive: true, force: true }); }
+  resolution = resolveFiniteTaskEffectiveReservation({ registry: canonicalTruth.finiteTaskLeases, lease: wave1Lease, candidate, liveObservation, gitCommand });
+  const terminalBase = {
+    schemaVersion: 1,
+    classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    repository: "Chillywood2025/chillywood-mobile",
+    taskId: wave1Lease.leaseId,
+    leaseId: wave1Lease.leaseId,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    baseLeaseHash: resolution.baseLeaseHash,
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: resolution.amendmentReceipt,
+    finalSourceReceipt: { finalHead: candidate.head, finalTree: candidate.tree, effectiveReservationHash: resolution.effectiveReservation?.reservationHash },
+    sourceHead: candidate.head,
+    sourceTree: candidate.tree,
+    mergeSha,
+    mergeTree,
+    mergeParents: [wave1BoundBase, candidate.head],
+    nextTask: canonicalTruth.engineeringDoctrine.nextPermittedAction,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false }
+  };
+  const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
+  const transition = {
+    applicable: true,
+    ok: true,
+    consumed: false,
+    baseLeaseUnchanged: true,
+    lifecycle: {
+      ok: true,
+      authorizationOk: true,
+      mergeEligible: true,
+      candidateHead: candidate.head,
+      candidateTree: candidate.tree,
+      baseLeaseHash: resolution.baseLeaseHash,
+      baseReservation: resolution.baseReservation,
+      effectiveReservation: resolution.effectiveReservation,
+      effectiveReservationHash: resolution.effectiveReservation?.reservationHash,
+      amendmentReceipt: resolution.amendmentReceipt,
+      repositoryReview: { valid: true, commentId: reviewComment.id, subjectHash: hashValue(reviewSubject) },
+      phase1Evidence,
+      finalSource: { mergeEligible: true, receipt: { commentId: finalComment.id } },
+      finalSourceSubject,
+      findings: []
+    },
+    mergeProvenance: { ok: true, syntheticMergeTree: mergeTree, findings: [] },
+    terminalEvidence,
+    findings: []
+  };
+  registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: transition.lifecycle, effectiveReservationResolution: resolution, liveObservation });
+  registerVerifiedFiniteTaskPostMergeTransition({ lease: wave1Lease, liveObservation, postMergeTransition: transition });
+  return {
+    candidate,
+    gitCommand,
+    liveObservation,
+    resolution,
+    transition
+  };
+}
+
+test("finite runtime post-merge: a deleted implementation ref retains only the verified normal-merge source", () => {
+  const fixture = trustedWave1PostMergeFixture();
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(fixture.resolution), true, stableJson(fixture.resolution));
+  const input = {
+    record: canonicalTruth,
+    lease: wave1Lease,
+    suppliedObservation: { pr: 229, branch: wave1Lease.implementationBranch, prState: "open", head: wave1BoundStart },
+    currentProtectedBase: fixture.transition.terminalEvidence.mergeSha,
+    effectiveReservationObservation: fixture.liveObservation,
+    finiteTaskPostMergeTransition: fixture.transition,
+    gitCommand: fixture.gitCommand
+  };
+  const derived = deriveFiniteTaskCandidateObservation(input);
+  assert.equal(derived.ok, true, stableJson(derived));
+  assert.equal(derived.candidate.observationSource, "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE");
+  assert.equal(derived.candidate.prState, "closed");
+  assert.equal(derived.candidate.head, wave1Descendant);
+  assert.equal(derived.candidate.scopeBase, wave1BoundBase);
+  assert.equal(evaluateFiniteTaskCandidate({ lease: fixture.resolution.effectiveLease, registry: canonicalTruth.finiteTaskLeases, candidate: derived.candidate }).ok, true);
+  const runtime = evaluateFiniteTaskLeaseRuntime({
+    ...input,
+    contract: currentTruthContract,
+    now: new Date("2026-08-14T07:00:00Z")
+  });
+  assert.equal(runtime.candidateEligible, true, stableJson(runtime.findings));
+  assert.equal(runtime.candidateHead, wave1Descendant);
+  const entry = {
+    number: wave1Lease.implementationPr,
+    branch: wave1Lease.implementationBranch,
+    head: wave1BoundStart,
+    featureId: wave1Lease.featureId,
+    state: "open-draft-current"
+  };
+  const headBindingInput = {
+    openImplementationPrs: [entry],
+    observedRefs: { [implementationRemoteRef(wave1Lease.implementationBranch)]: null },
+    finiteTaskLeases: canonicalTruth.finiteTaskLeases,
+    branch: "main",
+    head: fixture.transition.terminalEvidence.mergeSha,
+    remoteMain: fixture.transition.terminalEvidence.mergeSha,
+    effectiveReservationResolution: runtime.effectiveReservationResolution,
+    effectiveReservationObservation: fixture.liveObservation,
+    finiteTaskPostMergeTransition: fixture.transition
+  };
+  const headBindings = verifyCurrentTruthHeadBindings(headBindingInput);
+  assert.equal(headBindings.ok, true, stableJson(headBindings.findings));
+  assert.equal(headBindings.bindings[0].classification, "FINITE_TASK_VERIFIED_POST_MERGE_SOURCE");
+  assert.equal(headBindings.bindings[0].remoteRefHead, null);
+  assert.equal(headBindings.bindings[0].observedHead, wave1Descendant);
+
+  const clonedObservation = structuredClone(fixture.liveObservation);
+  const synthetic = deriveFiniteTaskCandidateObservation({ ...input, effectiveReservationObservation: clonedObservation });
+  assert.equal(synthetic.ok, false);
+  assert.ok(synthetic.findings.includes("FINITE_TASK_LOCAL_OBSERVATION_MALFORMED"));
+  const syntheticBinding = verifyCurrentTruthHeadBindings({ ...headBindingInput, effectiveReservationObservation: clonedObservation });
+  assert.equal(syntheticBinding.ok, false);
+  assert.ok(syntheticBinding.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_REF_MISSING"));
+
+  const forgedTransition = structuredClone(fixture.transition);
+  forgedTransition.terminalEvidence.sourceHead = "a".repeat(40);
+  forgedTransition.terminalEvidence.mergeParents[1] = forgedTransition.terminalEvidence.sourceHead;
+  forgedTransition.lifecycle.candidateHead = forgedTransition.terminalEvidence.sourceHead;
+  forgedTransition.lifecycle.finalSourceSubject.finalHead = forgedTransition.terminalEvidence.sourceHead;
+  const forgedBody = { ...forgedTransition.terminalEvidence };
+  delete forgedBody.evidenceHash;
+  forgedTransition.terminalEvidence.evidenceHash = hashValue(forgedBody);
+  const unrelated = deriveFiniteTaskCandidateObservation({ ...input, finiteTaskPostMergeTransition: forgedTransition });
+  assert.equal(unrelated.ok, false);
+  assert.ok(unrelated.findings.includes("FINITE_TASK_LOCAL_OBSERVATION_MALFORMED"));
+  const unrelatedBinding = verifyCurrentTruthHeadBindings({ ...headBindingInput, finiteTaskPostMergeTransition: forgedTransition });
+  assert.equal(unrelatedBinding.ok, false);
+  assert.ok(unrelatedBinding.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_REF_MISSING"));
+
+  const openFixture = trustedWave1PostMergeFixture({ pullState: "open" });
+  const openMissingRef = deriveFiniteTaskCandidateObservation({
+    ...input,
+    effectiveReservationObservation: openFixture.liveObservation,
+    finiteTaskPostMergeTransition: openFixture.transition,
+    gitCommand: openFixture.gitCommand
+  });
+  assert.equal(openMissingRef.ok, false);
+  assert.ok(openMissingRef.findings.includes("FINITE_TASK_LOCAL_OBSERVATION_MALFORMED"));
+  const openBinding = verifyCurrentTruthHeadBindings({
+    ...headBindingInput,
+    effectiveReservationObservation: openFixture.liveObservation,
+    finiteTaskPostMergeTransition: openFixture.transition
+  });
+  assert.equal(openBinding.ok, false);
+  assert.ok(openBinding.findings.some(({ id }) => id === "ASSURANCE_CURRENT_TRUTH_IMPLEMENTATION_REF_MISSING"));
+});
+
 test("finite runtime matrix 28: source-only Cognitive contract passes for f252", () => {
   const result = runtimeAtF252();
   assert.equal(result.sourceOnlyEligible && result.candidateHead === f252Head, true);
@@ -2593,6 +3565,28 @@ test("engineering closure uses bounded public readback when a contract job has n
   assert.notEqual(readGitHubApi({ args: ["--paginate", "--slurp", "repos/other/repository/issues/228/comments"], run }).status, 0);
 });
 
+test("finite task live observation uses bounded public readback when a contract job has no GH token", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-public-readback-"));
+  const originalPath = process.env.PATH;
+  fs.writeFileSync(path.join(temporary, "gh"), "#!/bin/sh\nexit 4\n");
+  fs.chmodSync(path.join(temporary, "gh"), 0o755);
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+    const observed = observeLiveFiniteTaskEffectiveReservation({ repository: "Chillywood2025/chillywood-mobile", pr: 229, authorityEvidence: wave1AuthorityEvidence });
+    assert.equal(observed.observationMode, "LIVE_GITHUB_COMPLETE_READBACK");
+    assert.equal(observed.commentsPaginationComplete, true);
+    assert.equal(observed.commitsPaginationComplete, true);
+    assert.equal(observed.pullRequest.number, 229);
+    assert.equal(observed.commits.at(-1).sha, observed.pullRequest.head.sha);
+    assert.equal(observed.comments.every(({ node_id }) => typeof node_id === "string"), true);
+    assert.equal(observeLiveFiniteTaskEffectiveReservation({ repository: "Chillywood2025/chillywood-mobile", pr: 206 }).commentsPaginationComplete, false);
+    assert.equal(observeLiveFiniteTaskEffectiveReservation({ repository: "Chillywood2025/chillywood-mobile", pr: 214 }).comments.some(({ id, created_at, updated_at }) => id === 5255923464 && created_at !== updated_at), true);
+  } finally {
+    process.env.PATH = originalPath;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
 const d2aTerminalStatuses = {
   T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
   T1_SOURCE: "SOURCE_CLEAR",
@@ -3209,6 +4203,46 @@ test("active-task frozen artifact 05: full wrappers and legacy direct packets st
   const partial = validateEngineeringTaskAuthority({ ...args, closurePacket: hybrid });
   assert.equal(partial.ok, false);
   assert.ok(partial.findings.includes("PREIMPLEMENTATION_ADMITTED_ARTIFACT_CONTRACT_UNSUPPORTED"));
+});
+
+test("active-task frozen artifact 05a: a forged amended-resolution object cannot authorize an artifact path", () => {
+  const fixture = admittedWave1ArtifactFixture();
+  const forgedPath = "_lib/not-authorized-by-live-amendment.ts";
+  const forgedLease = structuredClone(fixture.lease);
+  forgedLease.allowedPaths = [...forgedLease.allowedPaths, forgedPath].sort();
+  forgedLease.artifactReservation.pathGlobs = [...forgedLease.artifactReservation.pathGlobs, forgedPath].sort();
+  forgedLease.artifactReservation.maximumFiles = 32;
+  forgedLease.artifactReservation.maximumLines = 4500;
+  forgedLease.scopeBudget = { maximumFiles: 32, maximumChangedLines: 4500 };
+  const forgedResolution = {
+    ok: true,
+    status: "AMENDED",
+    baseLease: fixture.lease,
+    effectiveLease: forgedLease,
+    amendmentReceipt: { addedPaths: [forgedPath] },
+    amendmentsConsumed: 1,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false, amendmentEffective: true, liveReceipt: true }
+  };
+  const result = validateEngineeringTaskAuthority({
+    doctrineTruth: { status: "ACTIVE" },
+    featureId: fixture.taskArtifact.primaryDomain,
+    phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    lease: forgedLease,
+    baseLease: fixture.lease,
+    effectiveReservationResolution: forgedResolution,
+    closurePacket: fixture.taskArtifact,
+    certificate: fixture.taskArtifact.certificate,
+    taskArtifactBytes: fixture.taskArtifactBytes,
+    branch: fixture.lease.implementationBranch,
+    currentMain: fixture.implementationIdentity.currentProtectedMain,
+    currentHead: fixture.implementationIdentity.implementationHead,
+    implementationPr: fixture.lease.implementationPr,
+    scopeObservation: fixture.actualScope,
+    implementationIdentity: fixture.implementationIdentity,
+    ownerJurisdictionAuthority: fixture.ownerJurisdictionAuthority
+  });
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(forgedResolution), false);
+  assert.ok(result.findings.includes("FINITE_TASK_ARTIFACT_RESERVATION_SCOPE_VIOLATION"));
 });
 
 test("active-task frozen artifact 06: frozen edge evidence is reverified at the immutable planning snapshot", () => {
