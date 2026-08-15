@@ -1,8 +1,20 @@
-import type { Tables } from "../supabase/database.types";
+import {
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
+} from "./accountSessionAuthority";
+import {
+  createUnknownEntitlementDecision,
+  entitlementGrantsProtectedAccess,
+  normalizeEntitlementAuthorityReadback,
+  type EntitlementAuthorityDecision,
+  type EntitlementAuthorityReason,
+  type EntitlementAuthorityState,
+} from "./entitlementAuthority";
 import { supabase } from "./supabase";
 
 export const USER_ENTITLEMENTS_TABLE = "user_entitlements";
-
+export const ENTITLEMENT_AUTHORITY_READBACK_RPC = "wave1_entitlement_authority_readback";
 export type PremiumEntitlementKey = "premium" | "premium_watch_party" | "premium_live" | "paid_content";
 export type PremiumEntitlementStatus =
   | "active"
@@ -11,7 +23,10 @@ export type PremiumEntitlementStatus =
   | "pending"
   | "expired"
   | "canceled"
-  | "revoked";
+  | "revoked"
+  | "unknown"
+  | "inactive"
+  | "refunded";
 
 export type PremiumEntitlementRecord = {
   userId: string;
@@ -23,20 +38,13 @@ export type PremiumEntitlementRecord = {
   revokedAt: string | null;
   updatedAt: string;
 };
-
-export type PremiumEntitlementDecision = {
+export type PremiumEntitlementDecision = EntitlementAuthorityDecision & {
   entitlementKey: PremiumEntitlementKey;
   isActive: boolean;
-  status: PremiumEntitlementStatus | "missing" | "signed_out" | "unavailable";
-  source: string | null;
-  expiresAt: string | null;
-  revokedAt: string | null;
-  reason: "active" | "signed_out" | "missing" | "expired" | "revoked" | "inactive" | "unavailable";
+  status: PremiumEntitlementStatus;
 };
-
-type UserEntitlementRow = Tables<"user_entitlements">;
-
-const ACTIVE_ENTITLEMENT_STATUSES = new Set<PremiumEntitlementStatus>(["active", "trialing", "grace_period"]);
+export type PremiumEntitlementReadOptions = { authority?: AccountSessionAuthorityBinding | null };
+type EntitlementAuthorityRpc = PromiseLike<{ data: unknown; error: { message?: string } | null }>;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -54,169 +62,67 @@ const normalizeEntitlementKey = (value: unknown): PremiumEntitlementKey | null =
 };
 
 const isPremiumEntitlementKey = (value: PremiumEntitlementKey | null): value is PremiumEntitlementKey => !!value;
-
-const normalizeEntitlementStatus = (value: unknown): PremiumEntitlementStatus => {
-  const normalized = normalizeText(value).toLowerCase();
-  if (
-    normalized === "active"
-    || normalized === "trialing"
-    || normalized === "grace_period"
-    || normalized === "expired"
-    || normalized === "canceled"
-    || normalized === "revoked"
-  ) {
-    return normalized;
-  }
-  return "pending";
-};
-
-const hasPassed = (value: string | null) => {
-  if (!value) return false;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && timestamp <= Date.now();
-};
-
-const toDecision = (
-  entitlementKey: PremiumEntitlementKey,
-  row: UserEntitlementRow | null,
-): PremiumEntitlementDecision => {
-  if (!row) {
-    return {
-      entitlementKey,
-      isActive: false,
-      status: "missing",
-      source: null,
-      expiresAt: null,
-      revokedAt: null,
-      reason: "missing",
-    };
-  }
-
-  const status = normalizeEntitlementStatus(row.status);
-  const expiresAt = normalizeText(row.expires_at) || null;
-  const revokedAt = normalizeText(row.revoked_at) || null;
-
-  if (revokedAt || status === "revoked") {
-    return {
-      entitlementKey,
-      isActive: false,
-      status,
-      source: normalizeText(row.source) || null,
-      expiresAt,
-      revokedAt,
-      reason: "revoked",
-    };
-  }
-
-  if (hasPassed(expiresAt) || status === "expired" || status === "canceled") {
-    return {
-      entitlementKey,
-      isActive: false,
-      status,
-      source: normalizeText(row.source) || null,
-      expiresAt,
-      revokedAt,
-      reason: "expired",
-    };
-  }
-
-  if (!ACTIVE_ENTITLEMENT_STATUSES.has(status)) {
-    return {
-      entitlementKey,
-      isActive: false,
-      status,
-      source: normalizeText(row.source) || null,
-      expiresAt,
-      revokedAt,
-      reason: "inactive",
-    };
-  }
-
-  return {
-    entitlementKey,
-    isActive: true,
-    status,
-    source: normalizeText(row.source) || null,
-    expiresAt,
-    revokedAt,
-    reason: "active",
-  };
-};
-
-const unavailableDecision = (
-  entitlementKey: PremiumEntitlementKey,
-  reason: PremiumEntitlementDecision["reason"] = "unavailable",
+const statusOf = (state: EntitlementAuthorityState): PremiumEntitlementStatus => ({
+  ACTIVE: "active", GRACE: "grace_period", EXPIRED: "expired", REVOKED: "revoked",
+  REFUNDED: "refunded", INACTIVE: "inactive", UNKNOWN: "unknown",
+})[state] as PremiumEntitlementStatus;
+const premiumDecision = (
+  key: PremiumEntitlementKey,
+  decision: EntitlementAuthorityDecision,
 ): PremiumEntitlementDecision => ({
-  entitlementKey,
-  isActive: false,
-  status: reason === "signed_out" ? "signed_out" : "unavailable",
-  source: null,
-  expiresAt: null,
-  revokedAt: null,
-  reason,
+  ...decision, entitlementKey: key, isActive: entitlementGrantsProtectedAccess(decision), status: statusOf(decision.state),
 });
+const unknownDecision = (
+  key: PremiumEntitlementKey,
+  reason: Exclude<EntitlementAuthorityReason, `authoritative_${string}`>,
+  authority?: AccountSessionAuthorityBinding | null,
+) => premiumDecision(key, createUnknownEntitlementDecision(key, reason, authority));
+const currentMatches = async (authority: AccountSessionAuthorityBinding) => (
+  sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())
+);
+const readBound = async (key: PremiumEntitlementKey, authority: AccountSessionAuthorityBinding) => {
+  try {
+    const rpc = (supabase.rpc as unknown as (
+      name: typeof ENTITLEMENT_AUTHORITY_READBACK_RPC,
+      args: { p_entitlement_key: string },
+    ) => EntitlementAuthorityRpc)(ENTITLEMENT_AUTHORITY_READBACK_RPC, { p_entitlement_key: key });
+    const { data, error } = await rpc;
+    return error
+      ? unknownDecision(key, "query_failed", authority)
+      : premiumDecision(key, normalizeEntitlementAuthorityReadback({ entitlementKey: key, expectedBinding: authority, readback: data }));
+  } catch {
+    return unknownDecision(key, "query_failed", authority);
+  }
+};
 
 export async function readCurrentUserEntitlement(
   entitlementKey: PremiumEntitlementKey,
+  options?: PremiumEntitlementReadOptions,
 ): Promise<PremiumEntitlementDecision> {
-  const normalizedKey = normalizeEntitlementKey(entitlementKey);
-  if (!normalizedKey) return unavailableDecision("premium");
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = normalizeText(sessionData.session?.user?.id);
-  if (!userId) return unavailableDecision(normalizedKey, "signed_out");
-
-  try {
-    const { data, error } = await supabase
-      .from(USER_ENTITLEMENTS_TABLE)
-      .select("user_id,entitlement_key,status,source,starts_at,expires_at,revoked_at,updated_at,metadata")
-      .eq("user_id", userId)
-      .eq("entitlement_key", normalizedKey)
-      .maybeSingle();
-
-    if (error) return unavailableDecision(normalizedKey);
-
-    return toDecision(normalizedKey, data);
-  } catch {
-    return unavailableDecision(normalizedKey);
-  }
+  const key = normalizeEntitlementKey(entitlementKey);
+  if (!key) return unknownDecision("premium", "invalid_entitlement_key");
+  return (await readCurrentUserEntitlements([key], options))[0]
+    ?? unknownDecision(key, "authority_unavailable", options?.authority);
 }
 
 export async function readCurrentUserEntitlements(
   entitlementKeys: readonly PremiumEntitlementKey[],
+  options?: PremiumEntitlementReadOptions,
 ): Promise<PremiumEntitlementDecision[]> {
-  const normalizedKeys = Array.from(new Set(entitlementKeys.map(normalizeEntitlementKey).filter(isPremiumEntitlementKey)));
-  if (!normalizedKeys.length) return [];
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = normalizeText(sessionData.session?.user?.id);
-  if (!userId) {
-    return normalizedKeys.map((key) => unavailableDecision(key, "signed_out"));
+  const keys = Array.from(new Set(entitlementKeys.map(normalizeEntitlementKey).filter(isPremiumEntitlementKey)));
+  if (!keys.length) return [];
+  const authority = options?.authority ?? await readCurrentAccountSessionAuthority();
+  if (!authority) return keys.map((key) => unknownDecision(key, "authority_unavailable"));
+  if (authority.restoreOnly) return keys.map((key) => unknownDecision(key, "restore_only", authority));
+  if (options?.authority && !await currentMatches(authority)) {
+    return keys.map((key) => unknownDecision(key, "stale_generation", authority));
   }
-
-  try {
-    const { data, error } = await supabase
-      .from(USER_ENTITLEMENTS_TABLE)
-      .select("user_id,entitlement_key,status,source,starts_at,expires_at,revoked_at,updated_at,metadata")
-      .eq("user_id", userId)
-      .in("entitlement_key", normalizedKeys);
-
-    if (error) {
-      return normalizedKeys.map((key) => unavailableDecision(key));
-    }
-
-    const rowsByKey = new Map<string, UserEntitlementRow>();
-    for (const row of data ?? []) {
-      const rowKey = normalizeEntitlementKey(row.entitlement_key);
-      if (rowKey) rowsByKey.set(rowKey, row);
-    }
-
-    return normalizedKeys.map((key) => toDecision(key, rowsByKey.get(key) ?? null));
-  } catch {
-    return normalizedKeys.map((key) => unavailableDecision(key));
-  }
+  const decisions = await Promise.all(keys.map((key) => readBound(key, authority)));
+  return await currentMatches(authority)
+    ? decisions
+    : keys.map((key) => unknownDecision(key, "stale_generation", authority));
 }
 
 export function hasActiveEntitlement(decisions: readonly PremiumEntitlementDecision[]) {
-  return decisions.some((decision) => decision.isActive);
+  return decisions.some(entitlementGrantsProtectedAccess);
 }

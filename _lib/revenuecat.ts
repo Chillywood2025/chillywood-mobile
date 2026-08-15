@@ -3,13 +3,16 @@ import { Linking, Platform } from "react-native";
 import Purchases, {
   LOG_LEVEL,
   PRODUCT_CATEGORY,
-  type CustomerInfo,
   type LogInResult,
   type MakePurchaseResult,
   type PurchasesOfferings,
   type PurchasesPackage,
   type PurchasesStoreProduct,
 } from "react-native-purchases";
+import {
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
+} from "./accountSessionAuthority";
 import { debugLog, reportRuntimeError } from "./logger";
 import { getRuntimeConfig } from "./runtimeConfig";
 
@@ -34,10 +37,11 @@ export type RevenueCatConfigurationState = {
 };
 
 export type RevenueCatIdentityState = {
-  status: "disabled" | "anonymous" | "identified";
+  status: "disabled" | "anonymous" | "identified" | "unavailable";
   appUserId: string;
   sourceUserId: string | null;
   isAnonymous: boolean;
+  matchesSourceUser: boolean;
 };
 
 const APPLE_PLATFORM = Platform.OS === "ios";
@@ -54,8 +58,8 @@ let configuredApiKey = "";
 let configuredAppUserId = "";
 let customerInfoListenerInstalled = false;
 let logHandlerInstalled = false;
-let latestCustomerInfo: CustomerInfo | null = null;
 let latestOfferings: PurchasesOfferings | null = null;
+let revenueCatIdentityQueue: Promise<void> = Promise.resolve();
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const appStorePurchasesEnabled = () => (
@@ -70,16 +74,30 @@ const normalizeIdentityText = (value: unknown) => {
 const normalizeRevenueCatIdentityState = (
   appUserId: string,
   sourceUserId?: string | null,
-): RevenueCatIdentityState => ({
-  status: appUserId
-    ? appUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX)
-      ? "anonymous"
-      : "identified"
-    : "disabled",
-  appUserId,
-  sourceUserId: normalizeIdentityText(sourceUserId) || null,
-  isAnonymous: appUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX),
-});
+  available = true,
+): RevenueCatIdentityState => {
+  const normalizedSourceUserId = normalizeIdentityText(sourceUserId) || null;
+  const matchesSourceUser = !!normalizedSourceUserId && appUserId === normalizedSourceUserId;
+  return {
+    status: !available
+      ? "unavailable"
+      : appUserId
+        ? appUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX)
+          ? "anonymous"
+          : "identified"
+        : "disabled",
+    appUserId,
+    sourceUserId: normalizedSourceUserId,
+    isAnonymous: appUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX),
+    matchesSourceUser,
+  };
+};
+
+const serializeRevenueCatIdentityOperation = <T>(operation: () => Promise<T>) => {
+  const result = revenueCatIdentityQueue.then(operation, operation);
+  revenueCatIdentityQueue = result.then(() => undefined, () => undefined);
+  return result;
+};
 
 const syncConfiguredAppUserId = async (fallbackAppUserId?: string | null) => {
   const appUserId = normalizeIdentityText(await Purchases.getAppUserID())
@@ -91,24 +109,16 @@ const syncConfiguredAppUserId = async (fallbackAppUserId?: string | null) => {
 
 const resetRevenueCatCustomerToAnonymous = async () => {
   const customerInfo = await Purchases.logOut();
-  latestCustomerInfo = customerInfo;
   const anonymousAppUserId = await syncConfiguredAppUserId(customerInfo.originalAppUserId);
-  debugLog("revenuecat", "Reset RevenueCat customer to anonymous session", {
-    appUserId: anonymousAppUserId,
-  });
+  debugLog("revenuecat", "Reset RevenueCat customer to anonymous session");
   return anonymousAppUserId;
 };
 
 const installCustomerInfoListener = () => {
   if (customerInfoListenerInstalled) return;
-  Purchases.addCustomerInfoUpdateListener((customerInfo) => {
-    latestCustomerInfo = customerInfo;
-    if (!configuredAppUserId) {
-      configuredAppUserId = normalizeIdentityText(customerInfo.originalAppUserId);
-    }
+  Purchases.addCustomerInfoUpdateListener(() => {
     debugLog("revenuecat", "Customer info updated", {
-      activeEntitlements: Object.keys(customerInfo.entitlements.active ?? {}).join(","),
-      appUserId: configuredAppUserId,
+      providerPayloadLogged: false,
     });
   });
   customerInfoListenerInstalled = true;
@@ -118,15 +128,14 @@ const installRevenueCatLogHandler = () => {
   if (logHandlerInstalled) return;
 
   Purchases.setLogHandler((logLevel, message) => {
-    const safeMessage = normalizeText(message);
-    if (!safeMessage) return;
+    if (!normalizeText(message)) return;
     if (!__DEV__) return;
 
-    if (safeMessage.includes(PLAY_STORE_TEST_WARNING)) {
+    if (message.includes(PLAY_STORE_TEST_WARNING)) {
       return;
     }
 
-    const prefixedMessage = `[RevenueCat] ${safeMessage}`;
+    const prefixedMessage = "[RevenueCat] SDK diagnostic event (provider message redacted)";
     if (logLevel === LOG_LEVEL.ERROR) {
       console.warn(prefixedMessage);
       return;
@@ -287,21 +296,25 @@ export async function getRevenueCatAppUserId() {
       configuredAppUserId = appUserId;
     }
     return configuredAppUserId;
-  } catch (error) {
-    reportRuntimeError("revenuecat-app-user-id", error, {
+  } catch {
+    reportRuntimeError("revenuecat-app-user-id", new Error("RevenueCat identity read failed."), {
       mode: state.mode,
     });
-    return configuredAppUserId;
+    return "";
   }
 }
 
-export async function syncRevenueCatCustomerIdentity(sourceUserId?: string | null) {
+const syncRevenueCatCustomerIdentityInternal = async (sourceUserId?: string | null) => {
   const state = configureRevenueCatOnce();
   if (!state.shouldConfigure) {
     return normalizeRevenueCatIdentityState("", sourceUserId);
   }
 
   const safeUserId = normalizeIdentityText(sourceUserId);
+  const expectedAuthority = safeUserId ? await readCurrentAccountSessionAuthority() : null;
+  if (safeUserId && (!expectedAuthority || expectedAuthority.restoreOnly || expectedAuthority.userId !== safeUserId)) {
+    return normalizeRevenueCatIdentityState("", safeUserId, false);
+  }
   const currentAppUserId = await getRevenueCatAppUserId();
   if (!safeUserId) {
     if (currentAppUserId.startsWith(REVENUECAT_ANONYMOUS_PREFIX)) {
@@ -311,11 +324,11 @@ export async function syncRevenueCatCustomerIdentity(sourceUserId?: string | nul
     try {
       const anonymousAppUserId = await resetRevenueCatCustomerToAnonymous();
       return normalizeRevenueCatIdentityState(anonymousAppUserId, null);
-    } catch (error) {
-      reportRuntimeError("revenuecat-log-out", error, {
+    } catch {
+      reportRuntimeError("revenuecat-log-out", new Error("RevenueCat identity reset failed."), {
         mode: state.mode,
       });
-      return normalizeRevenueCatIdentityState(currentAppUserId, null);
+      return normalizeRevenueCatIdentityState(currentAppUserId, null, false);
     }
   }
 
@@ -325,21 +338,25 @@ export async function syncRevenueCatCustomerIdentity(sourceUserId?: string | nul
 
   try {
     const result: LogInResult = await Purchases.logIn(safeUserId);
-    latestCustomerInfo = result.customerInfo;
     configuredAppUserId = await syncConfiguredAppUserId(safeUserId);
+    if (!sameAccountSessionAuthority(expectedAuthority, await readCurrentAccountSessionAuthority())) {
+      return normalizeRevenueCatIdentityState(configuredAppUserId, safeUserId, false);
+    }
     debugLog("revenuecat", "Synced RevenueCat customer identity", {
-      appUserId: configuredAppUserId,
       created: result.created,
-      sourceUserId: safeUserId,
+      identityMatched: configuredAppUserId === safeUserId,
     });
     return normalizeRevenueCatIdentityState(configuredAppUserId, safeUserId);
-  } catch (error) {
-    reportRuntimeError("revenuecat-log-in", error, {
+  } catch {
+    reportRuntimeError("revenuecat-log-in", new Error("RevenueCat identity sync failed."), {
       mode: state.mode,
-      sourceUserId: safeUserId,
     });
-    return normalizeRevenueCatIdentityState(currentAppUserId, safeUserId);
+    return normalizeRevenueCatIdentityState(currentAppUserId, safeUserId, false);
   }
+};
+
+export function syncRevenueCatCustomerIdentity(sourceUserId?: string | null) {
+  return serializeRevenueCatIdentityOperation(() => syncRevenueCatCustomerIdentityInternal(sourceUserId));
 }
 
 export async function readRevenueCatCustomerInfo(options?: { refresh?: boolean }) {
@@ -352,17 +369,16 @@ export async function readRevenueCatCustomerInfo(options?: { refresh?: boolean }
     }
 
     const customerInfo = await Purchases.getCustomerInfo();
-    latestCustomerInfo = customerInfo;
     if (!configuredAppUserId) {
       configuredAppUserId = await syncConfiguredAppUserId(customerInfo.originalAppUserId);
     }
     return customerInfo;
-  } catch (error) {
-    reportRuntimeError("revenuecat-customer-info", error, {
+  } catch {
+    reportRuntimeError("revenuecat-customer-info", new Error("RevenueCat customer info read failed."), {
       mode: state.mode,
       refresh: !!options?.refresh,
     });
-    return latestCustomerInfo;
+    return null;
   }
 }
 
@@ -407,7 +423,6 @@ export async function purchaseRevenueCatPackage(pkg: PurchasesPackage): Promise<
   }
 
   const result = await Purchases.purchasePackage(pkg);
-  latestCustomerInfo = result.customerInfo;
   configuredAppUserId = await getRevenueCatAppUserId() || configuredAppUserId;
   return result;
 }
@@ -466,7 +481,6 @@ export async function purchaseRevenueCatStoreProduct(product: PurchasesStoreProd
   }
 
   const result = await Purchases.purchaseStoreProduct(product);
-  latestCustomerInfo = result.customerInfo;
   configuredAppUserId = await getRevenueCatAppUserId() || configuredAppUserId;
   return result;
 }
@@ -478,7 +492,6 @@ export async function restoreRevenueCatPurchases() {
   }
 
   const customerInfo = await Purchases.restorePurchases();
-  latestCustomerInfo = customerInfo;
   configuredAppUserId = await getRevenueCatAppUserId() || configuredAppUserId;
   return customerInfo;
 }

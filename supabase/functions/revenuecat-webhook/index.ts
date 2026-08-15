@@ -55,7 +55,8 @@ type StoreProductResolution = {
   storePolicy: RevenueCatStorePolicy;
 };
 type EntitlementWriteResult = {
-  entitlementActive: boolean;
+  applied: boolean;
+  entitlementActive: boolean | null;
   status: "active" | "trialing" | "grace_period" | "pending" | "expired" | "canceled" | "revoked";
   eventType: string;
   eventId: string;
@@ -64,6 +65,7 @@ type EntitlementWriteResult = {
   environment: string | null;
   expiresAt: string | null;
   duplicateEvent: boolean;
+  staleEvent: boolean;
   moneyAccess: MoneyAccessMirrorResult;
 };
 type PremiumTransferWriteResult = {
@@ -156,6 +158,10 @@ const CHANNEL_SUBSCRIPTION_PRODUCT_TYPE = "channel_subscription";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   !!value && typeof value === "object" && !Array.isArray(value)
+);
+
+const isRevenueCatStaleEventError = (value: unknown) => (
+  isRecord(value) && toText(value.message) === "revenuecat_event_stale"
 );
 
 const isIosOrdinaryPushRolloutEnabled = () => (
@@ -2153,6 +2159,7 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
   if (!eventType) throw new Error("RevenueCat webhook event type is missing.");
   if (!userId) throw new Error("RevenueCat webhook app user id is missing or anonymous.");
   if (!hasPremiumSignal(event)) throw new Error("RevenueCat webhook event is not mapped to Premium.");
+  const writeContext = { status, eventType, eventId, userId, productId, environment, expiresAt };
 
   const productResolution = await readStoreProductResolution(adminClient, {
     event,
@@ -2190,6 +2197,21 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
     p_store_mapping_id: toText(productResolution.mapping?.id) || null,
     p_user_id: userId,
   });
+  if (error && isRevenueCatStaleEventError(error)) {
+    return {
+      ...writeContext,
+      applied: false,
+      entitlementActive: null,
+      duplicateEvent: false,
+      staleEvent: true,
+      moneyAccess: {
+        productKey: null, providerEventId: null, accessGrantId: null, ledgerEventId: null,
+        environment: normalizeMoneyAccessEnvironment(environment),
+        payableState: "not_payable", grantStatus: "blocked",
+        duplicateAccessGrant: false, duplicateLedgerEvent: false,
+      },
+    };
+  }
   if (error) throw new Error(`RevenueCat atomic Premium transaction failed: ${error.message}`);
   const result = safeObject(data);
   const entitlementActive = result.entitlementActive === true;
@@ -2207,15 +2229,11 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
   };
 
   return {
+    ...writeContext,
+    applied: !duplicateEvent,
     entitlementActive,
-    status,
-    eventType,
-    eventId,
-    userId,
-    productId,
-    environment,
-    expiresAt,
     duplicateEvent,
+    staleEvent: false,
     moneyAccess,
   };
 };
@@ -2534,11 +2552,13 @@ Deno.serve(async (req) => {
       await writeProviderReadinessAudit(adminConfig.client, {
         provider: "revenuecat",
         capability: "premium_entitlement",
-        action: entitlementWrite.duplicateEvent
-          ? "revenuecat_webhook_duplicate_ignored"
+        action: entitlementWrite.staleEvent ? "revenuecat_webhook_stale_event_ignored"
+          : entitlementWrite.duplicateEvent ? "revenuecat_webhook_duplicate_ignored"
           : "revenuecat_webhook_entitlement_synced",
         statusAfter: entitlementWrite.entitlementActive ? "sandbox_ready" : "configured",
-        reason: "RevenueCat webhook verified a provider event and reconciled the backend Premium entitlement row.",
+        reason: entitlementWrite.staleEvent
+          ? "RevenueCat webhook verified an older provider event and left the newer backend Premium authority unchanged."
+          : "RevenueCat webhook verified a provider event and reconciled the backend Premium entitlement row.",
         proofSource: FUNCTION_NAME,
         metadata: {
           revenuecat_event_hash: await hashText(rawBody),
@@ -2549,6 +2569,8 @@ Deno.serve(async (req) => {
           environment: entitlementWrite.environment,
           entitlement_status: entitlementWrite.status,
           entitlement_active: entitlementWrite.entitlementActive,
+          entitlement_applied: entitlementWrite.applied,
+          stale_event: entitlementWrite.staleEvent,
           duplicate_event: entitlementWrite.duplicateEvent,
           raw_provider_payload_stored: false,
           premium_granted: entitlementWrite.entitlementActive,
@@ -2565,21 +2587,25 @@ Deno.serve(async (req) => {
     }
 
     return jsonResponse(200, {
-      status: entitlementWrite.duplicateEvent ? "duplicate_ignored" : "processed",
+      status: entitlementWrite.staleEvent ? "stale_ignored"
+        : entitlementWrite.duplicateEvent ? "duplicate_ignored" : "processed",
       provider: storePolicy.provider,
       capability: "premium_entitlement",
       signatureVerified: true,
       webhookProcessed: true,
-      premiumGranted: entitlementWrite.entitlementActive,
-      entitlementStatus: entitlementWrite.status,
+      premiumGranted: entitlementWrite.entitlementActive === true,
+      entitlementStatus: entitlementWrite.staleEvent ? null : entitlementWrite.status,
       entitlementKey: PREMIUM_ENTITLEMENT_KEY,
+      entitlementApplied: entitlementWrite.applied,
+      entitlementUnchanged: entitlementWrite.staleEvent,
+      staleEvent: entitlementWrite.staleEvent,
       duplicateEvent: entitlementWrite.duplicateEvent,
-      moneyAccessMirrored: true,
+      moneyAccessMirrored: !entitlementWrite.staleEvent,
       moneyAccessEnvironment: entitlementWrite.moneyAccess.environment,
       moneyAccessPayableState: entitlementWrite.moneyAccess.payableState,
       liveMoneyAction: false,
-      message: entitlementWrite.entitlementActive
-        ? "RevenueCat webhook synced an active Premium entitlement."
+      message: entitlementWrite.staleEvent ? "RevenueCat webhook ignored an older event and preserved newer Premium authority."
+        : entitlementWrite.entitlementActive ? "RevenueCat webhook synced an active Premium entitlement."
         : "RevenueCat webhook synced a non-active Premium entitlement status.",
     });
   } catch (error) {

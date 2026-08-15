@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Linking,
   ActivityIndicator,
@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
+import { isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+import { consumeApplicationAuthInput, parseApplicationLink } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
 import { supabase } from "../_lib/supabase";
 
@@ -62,7 +64,7 @@ const mergeAuthCallbackState = (primary: AuthCallbackState, secondary?: AuthCall
 };
 
 const firstParam = (value?: string | string[] | null) => {
-  const normalized = Array.isArray(value) ? value[0] : value;
+  const normalized = Array.isArray(value) ? (value.length === 1 ? value[0] : "__invalid_duplicate__") : value;
   return String(normalized ?? "").trim();
 };
 
@@ -84,7 +86,9 @@ const parseAuthCallbackUrl = (url: string | null) => {
   if (!url) return null;
 
   try {
-    const parsedUrl = new URL(url);
+    const link = parseApplicationLink(url);
+    if (!link || (link.kind !== "auth_callback" && link.kind !== "password_reset")) return null;
+    const parsedUrl = new URL(link.route, "https://chillywoodstream.com");
     const params = new URLSearchParams(parsedUrl.search);
     const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
 
@@ -112,6 +116,7 @@ export default function AuthCallbackScreen() {
   const [message, setMessage] = useState("Opening your Chi'llywood email verification...");
   const [urlState, setUrlState] = useState<AuthCallbackState | null>(null);
   const [urlHydrated, setUrlHydrated] = useState(false);
+  const processingStartedRef = useRef(false);
 
   const routeState = useMemo<AuthCallbackState>(() => ({
     code: firstParam(params.code),
@@ -213,7 +218,7 @@ export default function AuthCallbackScreen() {
     let active = true;
 
     const finishCallback = async () => {
-      if (!urlHydrated) return;
+      if (!urlHydrated || processingStartedRef.current) return;
 
       try {
         if (isRecoveryCallback) {
@@ -228,12 +233,24 @@ export default function AuthCallbackScreen() {
 
           if (hasRecoveryLinkData) {
             const targetRoute = recoveryRouteQuery ? `/reset-password?${recoveryRouteQuery}` : "/reset-password";
+            if (parseApplicationLink(targetRoute)?.kind !== "password_reset") {
+              finishWithFailure("This recovery link is malformed. Request a fresh link.", "malformed_recovery_link");
+              return;
+            }
+            processingStartedRef.current = true;
             router.replace(targetRoute as Parameters<typeof router.replace>[0]);
             if (!active) return;
             setChecking(false);
             return;
           }
         }
+
+        const callbackRoute = recoveryRouteQuery ? `/auth-callback?${recoveryRouteQuery}` : "/auth-callback";
+        if (!consumeApplicationAuthInput(callbackRoute, "auth_callback")) {
+          finishWithFailure("This verification link is malformed or was already used.", "invalid_or_replayed_link");
+          return;
+        }
+        processingStartedRef.current = true;
 
         if (callbackState.accessToken && callbackState.refreshToken && !callbackState.tokenHash) {
           const { error } = await supabase.auth.setSession({
@@ -308,7 +325,6 @@ export default function AuthCallbackScreen() {
           });
           return;
         } else if (!hasVerificationCredential) {
-          await supabase.auth.signOut().catch(() => null);
           if (!active) return;
           setTitle("Go to login");
           setMessage("Use this screen after confirming your email. Sign in to continue.");
@@ -316,6 +332,11 @@ export default function AuthCallbackScreen() {
           return;
         }
 
+        const verifiedAuthority = await readCurrentAccountSessionAuthority();
+        if (!verifiedAuthority || verifiedAuthority.restoreOnly || !(await isCurrentAccountSessionAuthority(verifiedAuthority))) {
+          finishWithFailure("The verified account session changed before completion. Sign in again.", "stale_session");
+          return;
+        }
         await supabase.auth.signOut().catch(() => null);
         if (!active) return;
 

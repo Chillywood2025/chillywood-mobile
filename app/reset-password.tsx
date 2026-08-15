@@ -16,6 +16,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
+import { isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority, type AccountSessionAuthorityBinding } from "../_lib/accountSessionAuthority";
+import { consumeApplicationAuthInput, parseApplicationLink } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
 import { useSession } from "../_lib/session";
 import { supabase } from "../_lib/supabase";
@@ -92,17 +94,6 @@ type VerifiedRecoveryData = {
   } | null;
 } | null;
 
-function getRecoveryParamsKey(recovery: RecoveryParams) {
-  if (recovery.accessToken && recovery.refreshToken) {
-    return `url_session:${recovery.accessToken}:${recovery.refreshToken}`;
-  }
-  if (recovery.code) return `code:${recovery.code}`;
-  if (recovery.tokenHash) return `token_hash:${recovery.tokenHash}`;
-  if (recovery.token && recovery.email) return `email_token:${recovery.email}:${recovery.token}`;
-  if (recovery.error || recovery.errorCode) return `error:${recovery.errorCode || recovery.error}`;
-  return null;
-}
-
 const readParam = (params: URLSearchParams, key: string) => {
   const value = params.get(key);
   return value ? value.trim() : null;
@@ -113,7 +104,7 @@ const readRouteParam = (
   key: RecoveryParamKey,
 ) => {
   const value = params[key];
-  const normalizedValue = Array.isArray(value) ? value[0] : value;
+  const normalizedValue = Array.isArray(value) ? (value.length === 1 ? value[0] : null) : value;
   return normalizedValue ? normalizedValue.trim() : null;
 };
 
@@ -121,7 +112,9 @@ const parseRecoveryUrl = (url: string | null): RecoveryParams | null => {
   if (!url) return null;
 
   try {
-    const parsedUrl = new URL(url);
+    const link = parseApplicationLink(url);
+    if (link?.kind !== "password_reset") return null;
+    const parsedUrl = new URL(link.route, "https://chillywoodstream.com");
     const params = new URLSearchParams(parsedUrl.search);
     const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
 
@@ -170,7 +163,8 @@ const wait = (timeoutMs: number) => new Promise((resolve) => {
   setTimeout(resolve, timeoutMs);
 });
 
-const clearResetFlowSession = async () => {
+const clearResetFlowSession = async (expected: AccountSessionAuthorityBinding | null) => {
+  if (!expected || !(await isCurrentAccountSessionAuthority(expected))) return;
   await Promise.race([
     supabase.auth.signOut({ scope: "local" }).catch(() => null),
     wait(RESET_FLOW_SIGN_OUT_TIMEOUT_MS),
@@ -186,13 +180,14 @@ export default function ResetPasswordScreen() {
   >();
   const { isPasswordRecoverySession } = useSession();
   const insets = useSafeAreaInsets();
-  const handledRecoveryKeyRef = useRef<string | null>(null);
   const expiredActionPendingRef = useRef(false);
+  const recoveryInputConsumedRef = useRef(false);
   const [status, setStatus] = useState<RecoveryStatus>("checking");
   const [statusMessage, setStatusMessage] = useState("Checking your reset link...");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
+  const [recoveryAuthority, setRecoveryAuthority] = useState<AccountSessionAuthorityBinding | null>(null);
 
   const canSubmit = useMemo(() => (
     status === "ready"
@@ -213,7 +208,11 @@ export default function ResetPasswordScreen() {
     parseRecoveryRouteParams(routeParams)
   ), [routeParams]);
 
-  const markRecoveryReady = useCallback((flow: string) => {
+  const markRecoveryReady = useCallback(async (flow: string, expectedUserId?: string) => {
+    const [{ data }, binding] = await Promise.all([supabase.auth.getSession(), readCurrentAccountSessionAuthority()]);
+    if (!binding || binding.restoreOnly || data.session?.user?.id !== binding.userId
+      || (expectedUserId && expectedUserId !== binding.userId)) throw new Error("recovery_session_authority_mismatch");
+    setRecoveryAuthority(binding);
     setStatus("ready");
     setStatusMessage("Choose a new password for this account.");
     trackEvent("auth_password_recovery_link_opened", {
@@ -244,7 +243,7 @@ export default function ResetPasswordScreen() {
 
       if (error) throw error;
 
-      markRecoveryReady(flow);
+      await markRecoveryReady(flow);
       return true;
     }
 
@@ -263,14 +262,14 @@ export default function ResetPasswordScreen() {
     setStatusMessage("Opening password reset request...");
 
     const email = routeRecoveryParams?.email?.trim();
-    const params = new URLSearchParams({ redirectTo: "/(auth)/login" });
+    const params = new URLSearchParams();
     if (email) params.set("email", email);
     router.replace(`/forgot-password?${params.toString()}` as Href);
 
-    void clearResetFlowSession().finally(() => {
+    void clearResetFlowSession(recoveryAuthority).finally(() => {
       expiredActionPendingRef.current = false;
     });
-  }, [routeRecoveryParams?.email, router]);
+  }, [recoveryAuthority, routeRecoveryParams?.email, router]);
 
   const backToSignIn = useCallback(() => {
     if (expiredActionPendingRef.current) return;
@@ -279,17 +278,26 @@ export default function ResetPasswordScreen() {
     setStatusMessage("Returning to sign in...");
     router.replace("/(auth)/login");
 
-    void clearResetFlowSession().finally(() => {
+    void clearResetFlowSession(recoveryAuthority).finally(() => {
       expiredActionPendingRef.current = false;
     });
-  }, [router]);
+  }, [recoveryAuthority, router]);
 
   const consumeRecoveryParams = useCallback(async (recovery: RecoveryParams | null) => {
     if (!recovery) return false;
-
-    const recoveryKey = getRecoveryParamsKey(recovery);
-    if (recoveryKey && handledRecoveryKeyRef.current === recoveryKey) return true;
-    handledRecoveryKeyRef.current = recoveryKey;
+    if (recoveryInputConsumedRef.current) return true;
+    const query = new URLSearchParams();
+    const values: Record<RecoveryParamKey, string | null> = { access_token: recovery.accessToken,
+      code: recovery.code, email: recovery.email, error: recovery.error, error_code: recovery.errorCode,
+      error_description: recovery.errorDescription, refresh_token: recovery.refreshToken,
+      token: recovery.token, token_hash: recovery.tokenHash };
+    Object.entries(values).forEach(([key, value]) => { if (value) query.set(key, value); });
+    const queryString = query.toString();
+    const route = `/reset-password${queryString ? `?${queryString}` : ""}`;
+    if (!consumeApplicationAuthInput(route, "password_reset")) {
+      setStatus("failed"); setStatusMessage(RECOVERY_LINK_OPEN_ERROR); return true;
+    }
+    recoveryInputConsumedRef.current = true;
 
     if (recovery.error || recovery.errorCode) {
       setStatus("failed");
@@ -314,7 +322,7 @@ export default function ResetPasswordScreen() {
         return true;
       }
 
-      markRecoveryReady("url_session");
+      await markRecoveryReady("url_session");
       return true;
     }
 
@@ -329,7 +337,7 @@ export default function ResetPasswordScreen() {
         return true;
       }
 
-      markRecoveryReady("code");
+      await markRecoveryReady("code");
       return true;
     }
 
@@ -387,8 +395,8 @@ export default function ResetPasswordScreen() {
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "PASSWORD_RECOVERY" || !session) return;
 
-      handledRecoveryKeyRef.current = "password_recovery_event";
-      markRecoveryReady("password_recovery_event");
+      void markRecoveryReady("password_recovery_event", session.user.id)
+        .catch((error) => markRecoveryFailed(error, "password_recovery_event"));
     });
 
     return () => {
@@ -408,7 +416,7 @@ export default function ResetPasswordScreen() {
         const consumed = await consumeRecoveryUrl(initialUrl);
         if (!active || consumed) return;
         if (isPasswordRecoverySession) {
-          markRecoveryReady("recovery_session");
+          await markRecoveryReady("recovery_session");
           return;
         }
 
@@ -456,6 +464,11 @@ export default function ResetPasswordScreen() {
       return;
     }
 
+    if (!recoveryAuthority || !isPasswordRecoverySession
+      || !(await isCurrentAccountSessionAuthority(recoveryAuthority))) {
+      setStatus("failed"); setStatusMessage("This recovery session changed. Request a fresh reset link."); return;
+    }
+
     if (newPassword.length < PASSWORD_MIN_LENGTH) {
       Alert.alert("Reset password", "Use at least 8 characters for your new password.");
       return;
@@ -479,9 +492,13 @@ export default function ResetPasswordScreen() {
         return;
       }
 
+      if (!(await isCurrentAccountSessionAuthority(recoveryAuthority))) {
+        setStatus("failed"); setStatusMessage("The account session changed; no success applies to its replacement."); return;
+      }
+
       setNewPassword("");
       setConfirmPassword("");
-      await clearResetFlowSession();
+      await clearResetFlowSession(recoveryAuthority);
       trackEvent("auth_password_recovery_update_success", {
         source: "reset-password",
       });
@@ -499,7 +516,7 @@ export default function ResetPasswordScreen() {
     } finally {
       setSaving(false);
     }
-  }, [confirmPassword, newPassword, router, saving, status]);
+  }, [confirmPassword, isPasswordRecoverySession, newPassword, recoveryAuthority, router, saving, status]);
 
   return (
     <KeyboardAvoidingView

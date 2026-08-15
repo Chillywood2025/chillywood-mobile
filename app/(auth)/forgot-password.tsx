@@ -50,10 +50,10 @@ async function requestPasswordResetEmail(email: string) {
 }
 
 export default function ForgotPassword() {
-  const params = useLocalSearchParams<{ email?: string; redirectTo?: string }>();
+  const params = useLocalSearchParams<{ email?: string; redirectId?: string }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
-  const redirectTo = String(params.redirectTo ?? "").trim() || "/";
+  const redirectId = String(params.redirectId ?? "").trim();
   const [email, setEmail] = useState(String(params.email ?? "").trim());
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -159,7 +159,7 @@ export default function ForgotPassword() {
             />
 
             <Link
-              href={{ pathname: "/(auth)/login", params: { redirectTo } }}
+              href={{ pathname: "/(auth)/login", params: redirectId ? { redirectId } : {} }}
               style={styles.backLink}
             >
               Back to login

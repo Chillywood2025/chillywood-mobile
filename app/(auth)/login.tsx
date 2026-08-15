@@ -23,10 +23,10 @@ const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg
 
 export default function Login() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ redirectTo?: string }>();
+  const params = useLocalSearchParams<{ redirectId?: string }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
-  const redirectTo = String(params.redirectTo ?? "").trim() || "/";
+  const redirectId = String(params.redirectId ?? "").trim();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -47,14 +47,14 @@ export default function Login() {
 
       if (error) {
         trackEvent("auth_sign_in_failure", {
-          reason: error.message,
+          reason: error.code ?? error.name ?? "auth_error",
         });
         Alert.alert("Login Error", error.message);
         return;
       }
 
       trackEvent("auth_sign_in_success", {
-        redirectTo,
+        hasRedirect: !!redirectId,
       });
 
       const profileResult = await completePendingSignupProfile({
@@ -65,7 +65,7 @@ export default function Login() {
       }
     } catch (error) {
       reportRuntimeError("auth-login", error, {
-        redirectTo,
+        hasRedirect: !!redirectId,
       });
       trackEvent("auth_sign_in_failure", {
         reason: "runtime_error",
@@ -153,8 +153,10 @@ export default function Login() {
               accessibilityLabel="Forgot password"
               label="Forgot password?"
               onPress={() => {
-                const query = email.trim() ? `?email=${encodeURIComponent(email.trim())}` : "";
-                router.push(`/forgot-password${query}` as Href);
+                const query = new URLSearchParams();
+                if (email.trim()) query.set("email", email.trim());
+                if (redirectId) query.set("redirectId", redirectId);
+                router.push(`/forgot-password?${query.toString()}` as Href);
               }}
               style={styles.forgotPasswordButton}
               testID="login-forgot-password-button"
@@ -172,7 +174,7 @@ export default function Login() {
 
             <View style={styles.row}>
               <Text style={styles.muted}>No account?</Text>
-              <Link href={{ pathname: "/(auth)/signup", params: { redirectTo } }} style={styles.link}>
+              <Link href={{ pathname: "/(auth)/signup", params: redirectId ? { redirectId } : {} }} style={styles.link}>
                 Sign up
               </Link>
             </View>

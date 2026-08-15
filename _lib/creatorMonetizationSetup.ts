@@ -12,6 +12,15 @@ import {
   resolvePaymentRailPolicy,
 } from "./paymentRailPolicy";
 import { SUPABASE_URL, supabase } from "./supabase";
+import {
+  canCreateCreatorMoneyExposure,
+  parseCreatorEligibilityReadback,
+  type CreatorEligibilityDecision,
+} from "./creatorEligibility";
+import {
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
+} from "./accountSessionAuthority";
 
 export type CreatorMonetizationSetupSourceType =
   | "paid_content"
@@ -191,6 +200,30 @@ const creatorMonetizationSetupClient = supabase as unknown as {
   rpc: <T = unknown>(fn: string, args?: Record<string, unknown>) => Promise<{ data: T | null; error: unknown }>;
 };
 
+export async function readMyCreatorEligibilityAuthority(): Promise<CreatorEligibilityDecision> {
+  const before = await readCurrentAccountSessionAuthority();
+  if (!before || before.restoreOnly) return parseCreatorEligibilityReadback(null);
+  const { data, error } = await creatorMonetizationSetupClient.rpc("wave1_creator_eligibility_readback");
+  const after = await readCurrentAccountSessionAuthority();
+  const row = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  if (error || !sameAccountSessionAuthority(before, after) || after?.restoreOnly
+    || toText(row.userId) !== before.userId || toText(row.accountId) !== before.accountId
+    || toText(row.sessionGeneration) !== before.sessionGeneration) {
+    return parseCreatorEligibilityReadback(null);
+  }
+  return parseCreatorEligibilityReadback(data);
+}
+
+export async function assertCreatorMoneyExposureAllowed() {
+  const eligibility = await readMyCreatorEligibilityAuthority();
+  if (!canCreateCreatorMoneyExposure(eligibility)) {
+    throw new Error("Creator money setup is unavailable until server verification is complete.");
+  }
+  return eligibility;
+}
+
 const normalizeConfig = (value: unknown): CreatorMonetizationConfig | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
@@ -239,6 +272,7 @@ export async function saveCreatorSandboxMonetizationConfig(input: {
   sourceId: string;
   sourceType: CreatorMonetizationSetupSourceType;
 }) {
+  await assertCreatorMoneyExposureAllowed();
   const tier = getCreatorSandboxTier(input.productKey);
   if (tier.key !== input.productKey) throw new Error("Choose an approved sandbox product tier.");
   if (tier.sourceType !== input.sourceType) throw new Error("Source type does not match the selected product tier.");
@@ -282,6 +316,7 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
   config: CreatorMonetizationConfig;
   userId: string;
 }) {
+  await assertCreatorMoneyExposureAllowed();
   const tier = getCreatorSandboxTier(input.config.productKey);
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({

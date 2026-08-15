@@ -14,16 +14,22 @@ type AuthenticatedUserResult =
   | { error?: never; user: AuthenticatedUser };
 
 type TokenPayload = {
+  accountId?: unknown;
   action?: unknown;
   appVersion?: unknown;
   buildVersion?: unknown;
   deviceId?: unknown;
   installId?: unknown;
   metadata?: unknown;
+  operationKey?: unknown;
   permissionStatus?: unknown;
   platform?: unknown;
   provider?: unknown;
+  reason?: unknown;
+  revocationCredential?: unknown;
+  sessionGeneration?: unknown;
   token?: unknown;
+  userId?: unknown;
 };
 
 const CORS_HEADERS = {
@@ -78,20 +84,18 @@ const parseJsonPayload = async (req: Request): Promise<{ value?: TokenPayload; e
 
 const normalizeAction = (value: unknown) => {
   const normalized = toText(value).toLowerCase();
-  if (normalized === "revoke" || normalized === "status") return normalized;
-  return "register";
+  if (normalized === "register" || normalized === "revoke" || normalized === "status") return normalized;
+  return null;
 };
 
 const normalizePlatform = (value: unknown) => {
   const normalized = toText(value).toLowerCase();
-  if (normalized === "ios") return "ios";
-  return "android";
+  return normalized === "ios" || normalized === "android" ? normalized : null;
 };
 
 const normalizeProvider = (value: unknown) => {
   const normalized = toText(value).toLowerCase();
-  if (normalized === "fcm") return "fcm";
-  return "expo";
+  return normalized === "fcm" || normalized === "expo" ? normalized : null;
 };
 
 const isValidToken = (provider: string, token: string) => {
@@ -102,20 +106,27 @@ const isValidToken = (provider: string, token: string) => {
   return token.length >= 32;
 };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const REVOCATION_REASONS = new Set([
+  "sign_out",
+  "account_switch",
+  "auth_invalidation",
+  "account_deletion",
+  "recovery_replacement",
+  "auth_loss",
+  "user_request",
+]);
+
 const sha256Hex = async (value: string) => {
   const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(value));
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
 const safeMetadata = (value: unknown, permissionStatus: string) => {
-  const metadata: JsonObject = {};
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    Object.entries(value as JsonObject).forEach(([key, entry]) => {
-      if (typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean") {
-        metadata[key] = entry;
-      }
-    });
-  }
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
+  const metadata: JsonObject = typeof source.nativeCallStyle === "boolean"
+    ? { nativeCallStyle: source.nativeCallStyle }
+    : {};
   metadata.permissionStatus = permissionStatus;
   return metadata;
 };
@@ -151,139 +162,114 @@ Deno.serve(async (req): Promise<Response> => {
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
   try {
-    const auth = await readAuthenticatedUser(req);
-    if (auth.error) return auth.error;
-
     const payload = await parseJsonPayload(req);
     if (payload.error) return payload.error;
     const body = payload.value ?? {};
     const action = normalizeAction(body.action);
+    if (!action) return jsonResponse(400, { error: "invalid_action" });
     const provider = normalizeProvider(body.provider);
     const platform = normalizePlatform(body.platform);
     const installId = toText(body.installId) || null;
 
+    const supabaseUrl = readRequiredEnv("SUPABASE_URL");
+    const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (action === "revoke") {
+      const accountId = toText(body.accountId);
+      const operationKey = toText(body.operationKey);
+      const reason = toText(body.reason).toLowerCase();
+      const revocationCredential = toText(body.revocationCredential);
+      const sessionGeneration = toText(body.sessionGeneration);
+      const userId = toText(body.userId);
+      if (!platform || !installId || !UUID_PATTERN.test(userId) || accountId !== userId || !sessionGeneration
+        || !operationKey || operationKey.length > 160 || !REVOCATION_REASONS.has(reason)
+        || !/^[0-9a-f]{64}$/u.test(revocationCredential)) {
+        return jsonResponse(200, { status: "revoked" });
+      }
+      const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const { error } = await adminClient.rpc("wave1_revoke_push_ownership", {
+        p_expected_account_id: accountId,
+        p_expected_user_id: userId,
+        p_install_id: installId,
+        p_operation_key: operationKey,
+        p_platform: platform,
+        p_reason: reason,
+        p_revocation_credential_hash: await sha256Hex(revocationCredential),
+        p_session_generation: sessionGeneration,
+      });
+      if (error) return jsonResponse(503, { error: "revocation_retry_required" });
+      return jsonResponse(200, { status: "revoked" });
+    }
+
+    if (!platform || !provider) return jsonResponse(400, { error: "invalid_push_transport" });
     if (platform === "ios" && provider !== "expo") {
       return jsonResponse(400, { error: "invalid_provider_for_platform" });
     }
 
-    const supabaseUrl = readRequiredEnv("SUPABASE_URL");
-    const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+    const auth = await readAuthenticatedUser(req);
+    if (auth.error) return auth.error;
+    const authHeader = req.headers.get("authorization") ?? "";
+    const userClient = createClient(supabaseUrl, readRequiredEnv("SUPABASE_ANON_KEY"), {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: authHeader } },
+    });
 
     if (action === "status") {
       if (!installId) return jsonResponse(400, { error: "missing_install_id" });
-
-      const { data: token, error } = await adminClient
-        .from("user_push_tokens")
-        .select("id,platform,provider,token_fingerprint,enabled,last_seen_at,revoked_at")
-        .eq("user_id", auth.user.id)
-        .eq("platform", platform)
-        .eq("provider", provider)
-        .eq("install_id", installId)
-        .eq("enabled", true)
-        .is("revoked_at", null)
-        .order("last_seen_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
+      const { data: status, error } = await userClient.rpc("wave1_push_ownership_readback", {
+        p_install_id: installId,
+        p_platform: platform,
+        p_provider: provider,
+      });
       if (error) return jsonResponse(500, { error: "status_failed", message: sanitizeErrorMessage(error) });
-
+      const result = status && typeof status === "object" && !Array.isArray(status) ? status as JsonObject : {};
       return jsonResponse(200, {
-        lastSeenAt: token?.last_seen_at ?? null,
+        lastSeenAt: result.lastSeenAt ?? null,
         platform,
         provider,
-        registered: !!token,
-        status: token ? "registered" : "not_registered",
-        tokenFingerprint: token?.token_fingerprint ?? null,
+        registered: result.registered === true,
+        status: result.registered === true ? "registered" : "not_registered",
+        tokenFingerprint: result.tokenFingerprint ?? null,
       });
     }
 
     const rawToken = toText(body.token);
     const permissionStatus = toText(body.permissionStatus) || "unknown";
-
-    if (action === "revoke") {
-      let query = adminClient
-        .from("user_push_tokens")
-        .update({
-          enabled: false,
-          revoked_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", auth.user.id)
-        .eq("platform", platform)
-        .eq("provider", provider);
-
-      if (installId) {
-        query = query.eq("install_id", installId);
-      } else if (rawToken) {
-        query = query.eq("token_hash", await sha256Hex(`${provider}:${rawToken}`));
-      } else {
-        return jsonResponse(400, { error: "missing_revoke_target" });
-      }
-
-      const { error } = await query;
-      if (error) return jsonResponse(500, { error: "revoke_failed", message: sanitizeErrorMessage(error) });
-
-      return jsonResponse(200, { status: "revoked" });
-    }
-
     if (!isValidToken(provider, rawToken)) {
       return jsonResponse(400, { error: "invalid_token" });
     }
-
-    const tokenHash = await sha256Hex(`${provider}:${rawToken}`);
-    const tokenFingerprint = tokenHash.slice(0, 12);
-    const now = new Date().toISOString();
-
-    const { data: upserted, error: upsertError } = await adminClient
-      .from("user_push_tokens")
-      .upsert({
-        app_version: toText(body.appVersion) || null,
-        build_version: toText(body.buildVersion) || null,
-        device_id: toText(body.deviceId) || null,
-        enabled: true,
-        install_id: installId,
-        last_seen_at: now,
-        metadata: safeMetadata(body.metadata, permissionStatus),
-        platform,
-        provider,
-        revoked_at: null,
-        token: rawToken,
-        token_fingerprint: tokenFingerprint,
-        token_hash: tokenHash,
-        updated_at: now,
-        user_id: auth.user.id,
-      }, { onConflict: "provider,token_hash" })
-      .select("id,token_fingerprint")
-      .maybeSingle();
-
-    if (upsertError || !upserted) {
-      return jsonResponse(500, { error: "register_failed", message: sanitizeErrorMessage(upsertError) });
+    const accountId = toText(body.accountId);
+    const operationKey = toText(body.operationKey);
+    const revocationCredential = toText(body.revocationCredential);
+    const sessionGeneration = toText(body.sessionGeneration);
+    const userId = toText(body.userId);
+    if (!installId || userId !== auth.user.id || accountId !== userId || !sessionGeneration
+      || !operationKey || operationKey.length > 160 || !/^[0-9a-f]{64}$/u.test(revocationCredential)) {
+      return jsonResponse(400, { error: "session_binding_invalid" });
     }
-
-    if (installId) {
-      await adminClient
-        .from("user_push_tokens")
-        .update({
-          enabled: false,
-          revoked_at: now,
-          updated_at: now,
-        })
-        .eq("user_id", auth.user.id)
-        .eq("platform", platform)
-        .eq("provider", provider)
-        .eq("install_id", installId)
-        .neq("token_hash", tokenHash);
+    const { data: registered, error: registerError } = await userClient.rpc("wave1_register_push_token", {
+      p_app_version: toText(body.appVersion) || null,
+      p_build_version: toText(body.buildVersion) || null,
+      p_expected_account_id: accountId,
+      p_expected_user_id: userId,
+      p_install_id: installId,
+      p_metadata: safeMetadata(body.metadata, permissionStatus),
+      p_operation_key: operationKey,
+      p_permission_status: permissionStatus,
+      p_platform: platform,
+      p_provider: provider,
+      p_revocation_credential_hash: await sha256Hex(revocationCredential),
+      p_session_generation: sessionGeneration,
+      p_token: rawToken,
+    });
+    if (registerError || !registered || typeof registered !== "object") {
+      return jsonResponse(500, { error: "register_failed", message: sanitizeErrorMessage(registerError) });
     }
-
-    await adminClient
-      .from("notification_preferences")
-      .upsert({ user_id: auth.user.id }, { onConflict: "user_id" });
-
+    const result = registered as JsonObject;
     return jsonResponse(200, {
       provider,
       status: "registered",
-      tokenFingerprint: upserted.token_fingerprint,
+      tokenFingerprint: result.tokenFingerprint ?? null,
     });
   } catch (error) {
     return jsonResponse(500, { error: "notification_token_error", message: sanitizeErrorMessage(error) });
