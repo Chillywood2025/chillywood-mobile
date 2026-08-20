@@ -35,6 +35,7 @@ import {
   finiteTaskFinalReceiptBody,
   finiteTaskFinalReceiptSubject,
   finiteTaskImplementationLifecycleAuthorityValid,
+  finiteTaskPostMergeTransitionAuthorityValid,
   finiteTaskTerminalReservationMatchesOutcome,
   finiteTaskTestAdaptationCommentBody,
   finiteTaskTestAdaptationSubject,
@@ -46,6 +47,7 @@ import {
   PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1,
   PENDING_TERMINAL_TRUTH_TRANSITION_V1,
   projectFiniteTaskTerminalTruth,
+  redact,
   registerVerifiedFiniteTaskImplementationLifecycle,
   registerVerifiedFiniteTaskPostMergeTransition,
   renderCurrentState,
@@ -2687,7 +2689,7 @@ test("finite test-adaptation terminal expiry: schema and reservation status cann
     finalSourceReceipt: { subject: { scopeBase: adapted.scopeBase } }
   };
   assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: legacyOutcome, reservationResolution: amended }), true);
-  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: adaptedOutcome, reservationResolution: adapted }), true);
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: adaptedOutcome, reservationResolution: adapted }), false);
   assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: legacyOutcome, reservationResolution: adapted }), false);
   assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: adaptedOutcome, reservationResolution: amended }), false);
   for (const [field, value] of [
@@ -2895,6 +2897,8 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1,
     effectiveReservationResolution: resolution
   });
+  const finiteTaskPrRiskAuthority = reviewSubject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority;
+  assert.equal(finiteTaskPrRiskAuthority.ok, true, stableJson(finiteTaskPrRiskAuthority.findings));
   const phaseBody = { runId: 900101, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSubject = finiteTaskFinalReceiptSubject({
@@ -2925,6 +2929,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     aggregateReservation: resolution.aggregateReservation,
     scopePartitions: resolution.scopePartitions,
     testAdaptationReceipt: resolution.testAdaptationReceipt,
+    finiteTaskPrRiskAuthority,
     authority: wave1TestAdaptationAuthority
   });
   assert.equal(finalSubject.schemaVersion, 3);
@@ -2954,7 +2959,45 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
   });
   assert.equal(lifecycle.mergeEligible, true, stableJson(lifecycle.findings));
   assert.equal(lifecycle.finalSourceSubject.schemaVersion, 3);
+  assert.equal(lifecycle.finalSourceSubject.diffHash, lifecycle.repositoryReview.diffHash);
+  assert.equal(lifecycle.finalSourceSubject.changedPathHash, lifecycle.repositoryReview.changedPathHash);
+  assert.equal(lifecycle.finalSourceSubject.changedPathHash, lifecycle.finiteTaskPrRiskAuthority.observedChangedPathHash);
   assert.equal(finiteTaskImplementationLifecycleAuthorityValid(lifecycle), true);
+  const mismatchedStatusLifecycle = verifyFiniteTaskImplementationLifecycle({
+    identity,
+    tree: candidate.tree,
+    scope,
+    finiteTaskAuthority: { ok: true, candidate, baseLease: wave1Lease, effectiveReservationResolution: resolution },
+    comments: finalLive.liveObservation.comments,
+    commentsPaginationComplete: true,
+    phase1EvidenceResolver: () => phase1Evidence,
+  });
+  mismatchedStatusLifecycle.reservationStatus = "AMENDED";
+  registerVerifiedFiniteTaskImplementationLifecycle({
+    lifecycle: mismatchedStatusLifecycle,
+    effectiveReservationResolution: resolution,
+    liveObservation: finalLive.liveObservation,
+  });
+  assert.equal(finiteTaskImplementationLifecycleAuthorityValid(mismatchedStatusLifecycle), false);
+  for (const [label, candidateChanges] of [
+    ["forged diff hash", { diffHash: "e".repeat(64) }],
+    ["forged changed-path hash", { changedPathHash: "f".repeat(64) }],
+  ]) {
+    const forgedCandidate = { ...candidate, ...candidateChanges };
+    const forgedSubject = finiteTaskFinalReceiptSubject({ ...finalSubject, ...candidateChanges });
+    const forgedFinalComment = wave1ImmutableComment(810210, finiteTaskFinalReceiptBody(forgedSubject), "2026-08-15T01:02:00Z");
+    const forgedLifecycle = verifyFiniteTaskImplementationLifecycle({
+      identity,
+      tree: candidate.tree,
+      scope,
+      finiteTaskAuthority: { ok: true, candidate: forgedCandidate, baseLease: wave1Lease, effectiveReservationResolution: resolution },
+      comments: [reviewComment, forgedFinalComment],
+      commentsPaginationComplete: true,
+      phase1EvidenceResolver: () => phase1Evidence,
+    });
+    assert.equal(forgedLifecycle.mergeEligible, false, label);
+    assert.ok(forgedLifecycle.findings.includes("FINITE_TASK_FINAL_SOURCE_RECEIPT_INVALID"), label);
+  }
 
   const mergeTree = candidate.tree;
   const mergeRef = {
@@ -2970,7 +3013,8 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     currentProtectedBase: wave1BoundBase,
     mergeRef,
     actualMerge: { parents: mergeRef.parents, tree: mergeTree },
-    effectiveReservationResolution: resolution
+    effectiveReservationResolution: resolution,
+    finiteTaskPrRiskAuthority: lifecycle.finiteTaskPrRiskAuthority
   });
   assert.equal(merge.ok, true, stableJson(merge.findings));
   const mismatchedSubject = structuredClone(lifecycle.finalSourceSubject);
@@ -2981,8 +3025,27 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     currentProtectedBase: wave1BoundBase,
     mergeRef,
     actualMerge: { parents: mergeRef.parents, tree: mergeTree },
-    effectiveReservationResolution: resolution
+    effectiveReservationResolution: resolution,
+    finiteTaskPrRiskAuthority: lifecycle.finiteTaskPrRiskAuthority
   }).findings.includes("FINITE_MERGE_TEST_ADAPTATION_RESERVATION_MISMATCH"));
+  for (const [label, mutate] of [
+    ["schema downgrade", (subject) => { subject.schemaVersion = 2; }],
+    ["feature mismatch", (subject) => { subject.featureId = "notifications-fcm"; }],
+    ["changed-path mismatch", (subject) => { subject.changedPathHash = "f".repeat(64); }],
+  ]) {
+    const altered = structuredClone(lifecycle.finalSourceSubject);
+    mutate(altered);
+    const result = verifyFiniteTaskMergeProvenance({
+      lease: wave1Lease,
+      receiptSubject: altered,
+      currentProtectedBase: wave1BoundBase,
+      mergeRef,
+      actualMerge: { parents: mergeRef.parents, tree: mergeTree },
+      effectiveReservationResolution: resolution,
+      finiteTaskPrRiskAuthority: lifecycle.finiteTaskPrRiskAuthority,
+    });
+    assert.equal(result.ok, false, label);
+  }
 
   const terminalBase = {
     schemaVersion: 2,
@@ -3000,6 +3063,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     aggregateReservation: resolution.aggregateReservation,
     scopePartitions: resolution.scopePartitions,
     testAdaptationReceipt: resolution.testAdaptationReceipt,
+    finiteTaskPrRiskAuthority: lifecycle.finiteTaskPrRiskAuthority,
     finalSourceReceipt: { ...lifecycle.finalSource.receipt, subject: lifecycle.finalSource.subject },
     sourceHead: candidate.head,
     sourceTree: candidate.tree,
@@ -3010,6 +3074,16 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     authority: wave1TestAdaptationAuthority
   };
   const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({
+    terminalOutcome: terminalEvidence,
+    reservationResolution: resolution,
+  }), true);
+  const terminalFeatureMismatch = structuredClone(terminalEvidence);
+  terminalFeatureMismatch.finalSourceReceipt.subject.featureId = "notifications-fcm";
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({
+    terminalOutcome: terminalFeatureMismatch,
+    reservationResolution: resolution,
+  }), false);
   const activeFeature = registry.features.find(({ featureId }) => featureId === canonicalTruth.activeTaskBinding.featureId);
   const projected = projectFiniteTaskTerminalTruth({
     record: canonicalTruth,
@@ -3073,6 +3147,10 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     receipt.bodyHash = hashValue({ subject: receipt.subject, subjectHash: receipt.subjectHash });
     receipt.rawBodyHash = hashValue(finiteTaskFinalReceiptBody(receipt.subject));
   };
+  const rehashFiniteTaskPrRiskAuthority = (authority) => {
+    const projectionSubject = Object.fromEntries(Object.entries(authority).filter(([key]) => !["ok", "findings", "projectionHash"].includes(key)));
+    authority.projectionHash = hashValue(projectionSubject);
+  };
   const rehashAdaptationReceipt = (receipt) => {
     receipt.subject = finiteTaskTestAdaptationSubject(receipt.subject);
     const body = finiteTaskTestAdaptationCommentBody(receipt.subject);
@@ -3116,6 +3194,19 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     });
     rehashFinalReceipt(evidence.finalSourceReceipt);
   };
+  for (const [label, mutate] of [
+    ["changed-path hash", (subject) => { subject.changedPathHash = "f".repeat(64); }],
+    ["admitted seed", (subject) => { subject.admittedSeedHead = "f".repeat(40); }],
+    ["effective reservation", (subject) => { subject.effectiveReservation.maximumLines -= 1; }],
+    ["test-adaptation receipt", (subject) => { subject.testAdaptationReceipt.commentId += 1; }],
+  ]) {
+    const altered = structuredClone(terminalEvidence);
+    coherentlyMutateFinalReceiptSubject(altered, mutate);
+    assert.equal(finiteTaskTerminalReservationMatchesOutcome({
+      terminalOutcome: altered,
+      reservationResolution: resolution,
+    }), false, label);
+  }
   const terminalPartitionMutations = [
     ["implementation line overflow", (evidence) => { evidence.scopePartitions.implementation.canonicalChangedLines = 4501; }],
     ["fixture line overflow", (evidence) => { evidence.scopePartitions.testAdaptation.canonicalChangedLines = 501; }],
@@ -3154,12 +3245,30 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     ["final authority escalation", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.authority.providerMutation = true; })],
     ["final scope base", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.scopeBase = "f".repeat(40); })],
     ["final repository", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.repository = "Other/repository"; })],
+    ["final feature", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.featureId = "notifications-fcm"; })],
+    ["final admitted seed", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.admittedSeedHead = "f".repeat(40); })],
     ["final PR", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.implementationPr = 230; })],
     ["final branch", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.implementationBranch = "codex/other"; })],
     ["final policy", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.policyId = "OTHER_POLICY"; })],
     ["final scope result", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.scopeResult = "FAIL"; })],
     ["final Phase 1 head", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.phase1Head = "f".repeat(40); })],
-    ["final repository-review hash shape", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.repositoryReviewHash = "not-a-sha256"; })]
+    ["final repository-review hash shape", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.repositoryReviewHash = "not-a-sha256"; })],
+    ["coherent finite-task risk-authority transplant", (evidence) => {
+      const authority = structuredClone(evidence.finiteTaskPrRiskAuthority);
+      authority.primaryFeatureId = authority.affectedFeatureIds.find((featureId) => featureId !== wave1Lease.featureId);
+      rehashFiniteTaskPrRiskAuthority(authority);
+      evidence.finiteTaskPrRiskAuthority = authority;
+      evidence.finalSourceReceipt.subject.finiteTaskPrRiskAuthority = structuredClone(authority);
+      rehashFinalReceipt(evidence.finalSourceReceipt);
+    }],
+    ["coherent finite-task risk partition hash mismatch", (evidence) => {
+      const authority = structuredClone(evidence.finiteTaskPrRiskAuthority);
+      authority.implementationPartition.actualPathHash = "f".repeat(64);
+      rehashFiniteTaskPrRiskAuthority(authority);
+      evidence.finiteTaskPrRiskAuthority = authority;
+      evidence.finalSourceReceipt.subject.finiteTaskPrRiskAuthority = structuredClone(authority);
+      rehashFinalReceipt(evidence.finalSourceReceipt);
+    }]
   ];
   const assertTerminalRejected = (invalidEvidence, label) => {
     const invalidBinding = { ...projected.activeTaskBinding, terminalEvidence: invalidEvidence };
@@ -3183,7 +3292,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
   const legacyTerminalBase = structuredClone(terminalBase);
   legacyTerminalBase.schemaVersion = 1;
   legacyTerminalBase.classification = "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1";
-  for (const field of ["testAdaptationReservation", "aggregateReservation", "scopePartitions", "testAdaptationReceipt"]) delete legacyTerminalBase[field];
+  for (const field of ["testAdaptationReservation", "aggregateReservation", "scopePartitions", "testAdaptationReceipt", "finiteTaskPrRiskAuthority"]) delete legacyTerminalBase[field];
   for (const field of ["aggregateReservationHash", "testAdaptationCommentId", "subject"]) delete legacyTerminalBase.finalSourceReceipt[field];
   const legacyTerminalEvidence = rehashTerminal(legacyTerminalBase);
   const legacyBinding = { ...projected.activeTaskBinding, terminalEvidence: legacyTerminalEvidence };
@@ -3308,14 +3417,49 @@ test("finite amendment resolver: only resolver-branded structurally unchanged ba
     process.env.PATH = originalPath;
     fs.rmSync(temporary, { recursive: true, force: true });
   }
+  const baseOnlyCandidate = wave1Candidate({ changedPaths: [...wave1Lease.allowedPaths], changedLines: 3600 });
   const liveReserved = resolveFiniteTaskEffectiveReservation({
     registry: canonicalTruth.finiteTaskLeases,
     lease: wave1Lease,
-    candidate: wave1Candidate({ changedPaths: [...wave1Lease.allowedPaths], changedLines: 3600 }),
+    candidate: baseOnlyCandidate,
     liveObservation
   });
   assert.equal(liveReserved.status, "BASE_ONLY");
   assert.equal(finiteTaskEffectiveReservationAuthorityValid(liveReserved), true);
+  const baseOnlyMergeRef = {
+    pr: wave1Lease.implementationPr,
+    branch: wave1Lease.implementationBranch,
+    parents: [wave1BoundBase, baseOnlyCandidate.head],
+    sourceTree: baseOnlyCandidate.tree,
+    tree: baseOnlyCandidate.tree,
+  };
+  const baseOnlyV1 = finiteTaskFinalReceiptSubject({
+    schemaVersion: 1,
+    finalHead: baseOnlyCandidate.head,
+    finalTree: baseOnlyCandidate.tree,
+  });
+  assert.equal(verifyFiniteTaskMergeProvenance({
+    lease: wave1Lease,
+    receiptSubject: baseOnlyV1,
+    currentProtectedBase: wave1BoundBase,
+    mergeRef: baseOnlyMergeRef,
+    effectiveReservationResolution: liveReserved,
+  }).ok, true);
+  const baseOnlyV2 = finiteTaskFinalReceiptSubject({
+    ...baseOnlyV1,
+    schemaVersion: 2,
+    baseLeaseHash: liveReserved.baseLeaseHash,
+    baseReservation: liveReserved.baseReservation,
+    effectiveReservation: liveReserved.effectiveReservation,
+    amendmentReceipt: liveReserved.amendmentReceipt,
+  });
+  assert.ok(verifyFiniteTaskMergeProvenance({
+    lease: wave1Lease,
+    receiptSubject: baseOnlyV2,
+    currentProtectedBase: wave1BoundBase,
+    mergeRef: baseOnlyMergeRef,
+    effectiveReservationResolution: liveReserved,
+  }).findings.includes("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH"));
   liveReserved.effectiveLease.allowedPaths.push("package.json");
   assert.equal(finiteTaskEffectiveReservationAuthorityValid(liveReserved), false);
 });
@@ -3822,8 +3966,8 @@ test("finite amendment resolver: frozen admission Owner approval and jurisdictio
 
 function trustedWave1PostMergeFixture({ pullState = "closed" } = {}) {
   const mergeSha = "7".repeat(40);
-  const mergeTree = "8".repeat(40);
   const candidate = wave1Candidate({ prState: "closed" });
+  const mergeTree = candidate.tree;
   const amendmentComment = {
     id: 810001,
     user: { login: "Chillywood2025" },
@@ -3906,6 +4050,18 @@ function trustedWave1PostMergeFixture({ pullState = "closed" } = {}) {
   const immutable = (id, body) => ({ id, user: { login: "Chillywood2025" }, author_association: "OWNER", created_at: "2026-08-14T23:00:00Z", updated_at: "2026-08-14T23:00:00Z", issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229", body });
   const reviewComment = immutable(810002, architectureRepositoryReviewCommentBody(reviewSubject));
   const finalComment = immutable(810003, finiteTaskFinalReceiptBody(finalSourceSubject));
+  const finalEnvelope = JSON.parse(finalComment.body.slice(finalComment.body.indexOf("\n") + 1));
+  const normalizedFinalReceipt = {
+    commentId: finalComment.id,
+    createdAt: finalComment.created_at,
+    subjectHash: finalEnvelope.subjectHash,
+    bodyHash: finalEnvelope.bodyHash,
+    rawBodyHash: hashValue(finalComment.body),
+    finalHead: candidate.head,
+    finalTree: candidate.tree,
+    effectiveReservationHash: resolution.effectiveReservation?.reservationHash,
+    amendmentCommentId: resolution.amendmentReceipt?.commentId,
+  };
   writeGh([amendmentComment, reviewComment, finalComment]);
   try { process.env.PATH = `${temporary}:${originalPath}`; liveObservation = observeLiveFiniteTaskEffectiveReservation({ repository: "Chillywood2025/chillywood-mobile", pr: 229, authorityEvidence: wave1AuthorityEvidence }); }
   finally { process.env.PATH = originalPath; fs.rmSync(temporary, { recursive: true, force: true }); }
@@ -3922,7 +4078,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed" } = {}) {
     baseReservation: resolution.baseReservation,
     effectiveReservation: resolution.effectiveReservation,
     amendmentReceipt: resolution.amendmentReceipt,
-    finalSourceReceipt: { finalHead: candidate.head, finalTree: candidate.tree, effectiveReservationHash: resolution.effectiveReservation?.reservationHash },
+    finalSourceReceipt: normalizedFinalReceipt,
     sourceHead: candidate.head,
     sourceTree: candidate.tree,
     mergeSha,
@@ -3943,6 +4099,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed" } = {}) {
       mergeEligible: true,
       candidateHead: candidate.head,
       candidateTree: candidate.tree,
+      reservationStatus: resolution.status,
       baseLeaseHash: resolution.baseLeaseHash,
       baseReservation: resolution.baseReservation,
       effectiveReservation: resolution.effectiveReservation,
@@ -3950,7 +4107,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed" } = {}) {
       amendmentReceipt: resolution.amendmentReceipt,
       repositoryReview: { valid: true, commentId: reviewComment.id, subjectHash: hashValue(reviewSubject) },
       phase1Evidence,
-      finalSource: { mergeEligible: true, receipt: { commentId: finalComment.id } },
+      finalSource: { mergeEligible: true, receipt: normalizedFinalReceipt, subject: finalSourceSubject },
       finalSourceSubject,
       findings: []
     },
@@ -3972,6 +4129,76 @@ function trustedWave1PostMergeFixture({ pullState = "closed" } = {}) {
 test("finite runtime post-merge: a deleted implementation ref retains only the verified normal-merge source", () => {
   const fixture = trustedWave1PostMergeFixture();
   assert.equal(finiteTaskEffectiveReservationAuthorityValid(fixture.resolution), true, stableJson(fixture.resolution));
+  assert.equal(finiteTaskPostMergeTransitionAuthorityValid(fixture.transition), true);
+  const amendedMergeRef = {
+    pr: wave1Lease.implementationPr,
+    branch: wave1Lease.implementationBranch,
+    parents: fixture.transition.terminalEvidence.mergeParents,
+    sourceTree: fixture.transition.terminalEvidence.sourceTree,
+    tree: fixture.transition.terminalEvidence.mergeTree,
+  };
+  assert.equal(verifyFiniteTaskMergeProvenance({
+    lease: wave1Lease,
+    receiptSubject: fixture.transition.lifecycle.finalSourceSubject,
+    currentProtectedBase: fixture.transition.terminalEvidence.mergeParents[0],
+    mergeRef: amendedMergeRef,
+    effectiveReservationResolution: fixture.resolution,
+  }).ok, true);
+  const amendedV1 = finiteTaskFinalReceiptSubject({
+    ...fixture.transition.lifecycle.finalSourceSubject,
+    schemaVersion: 1,
+  });
+  assert.ok(verifyFiniteTaskMergeProvenance({
+    lease: wave1Lease,
+    receiptSubject: amendedV1,
+    currentProtectedBase: fixture.transition.terminalEvidence.mergeParents[0],
+    mergeRef: amendedMergeRef,
+    effectiveReservationResolution: fixture.resolution,
+  }).findings.includes("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH"));
+  const rehashTransitionEvidence = (evidence) => {
+    const body = Object.fromEntries(Object.entries(evidence).filter(([key]) => key !== "evidenceHash"));
+    return { ...body, evidenceHash: hashValue(body) };
+  };
+  const crossGenerationEvidence = rehashTransitionEvidence({ ...fixture.transition.terminalEvidence, schemaVersion: 2 });
+  const crossGenerationTransition = {
+    ...fixture.transition,
+    lifecycle: fixture.transition.lifecycle,
+    terminalEvidence: crossGenerationEvidence,
+  };
+  registerVerifiedFiniteTaskPostMergeTransition({
+    lease: wave1Lease,
+    liveObservation: fixture.liveObservation,
+    postMergeTransition: crossGenerationTransition,
+  });
+  assert.equal(finiteTaskPostMergeTransitionAuthorityValid(crossGenerationTransition), false);
+  const substitutedReceiptEvidence = structuredClone(fixture.transition.terminalEvidence);
+  substitutedReceiptEvidence.finalSourceReceipt.commentId += 1;
+  const substitutedReceiptTransition = {
+    ...fixture.transition,
+    lifecycle: fixture.transition.lifecycle,
+    terminalEvidence: rehashTransitionEvidence(substitutedReceiptEvidence),
+  };
+  registerVerifiedFiniteTaskPostMergeTransition({
+    lease: wave1Lease,
+    liveObservation: fixture.liveObservation,
+    postMergeTransition: substitutedReceiptTransition,
+  });
+  assert.equal(finiteTaskPostMergeTransitionAuthorityValid(substitutedReceiptTransition), false);
+  const substitutedMergeTreeEvidence = rehashTransitionEvidence({
+    ...fixture.transition.terminalEvidence,
+    mergeTree: "f".repeat(40),
+  });
+  const substitutedMergeTreeTransition = {
+    ...fixture.transition,
+    lifecycle: fixture.transition.lifecycle,
+    terminalEvidence: substitutedMergeTreeEvidence,
+  };
+  registerVerifiedFiniteTaskPostMergeTransition({
+    lease: wave1Lease,
+    liveObservation: fixture.liveObservation,
+    postMergeTransition: substitutedMergeTreeTransition,
+  });
+  assert.equal(finiteTaskPostMergeTransitionAuthorityValid(substitutedMergeTreeTransition), false);
   const input = {
     record: canonicalTruth,
     lease: wave1Lease,
@@ -5257,15 +5484,59 @@ test("active-task frozen artifact 01b: the admitted lease selects and reconciles
   }
 });
 
-test("active-task frozen artifact 01c: only the verified task-bound policy enum bypasses the secret false positive", () => {
+test("active-task frozen artifact 01c: boundary-aware redaction preserves canonical identifiers and every protected secret class", () => {
+  const identifiers = [
+    "ASSURANCE_TASK_CONTEXT_DOMAIN_UNKNOWN",
+    "FINITE_TASK_TEST_ADAPTATION_PARTITION_SCOPE_OVERFLOW",
+    "FINITE_TASK_TEST_ADAPTATION_PARTITION_INVALID",
+    "TASK_BOUND_COMPOSITE",
+  ];
+  for (const identifier of identifiers) assert.equal(redact(identifier), identifier);
+
+  const tokenSuffix = "syntheticcredential123456";
+  const secretValues = [
+    "Bearer synthetic.credential-123456",
+    `sk_${tokenSuffix}`,
+    `pk_${tokenSuffix}`,
+    `gho_${tokenSuffix}`,
+    `ghp_${tokenSuffix}`,
+    `ghs_${tokenSuffix}`,
+    `ghu_${tokenSuffix}`,
+    `service_role_${tokenSuffix}`,
+    "owner@example.invalid",
+  ];
+  for (const value of secretValues) assert.equal(redact(value), "[REDACTED]");
+
+  const secretKeyValues = {
+    secret: "synthetic",
+    password: "synthetic",
+    credential: "synthetic",
+    authorization: "synthetic",
+    privateKey: "synthetic",
+    rawPayload: "synthetic",
+    deviceId: "synthetic",
+    deviceSerial: "synthetic",
+    udid: "synthetic",
+    signedUrl: "https://example.invalid/object?X-Amz-Signature=synthetic",
+  };
+  assert.deepEqual(redact(secretKeyValues), Object.fromEntries(Object.keys(secretKeyValues).map((key) => [key, "[REDACTED]"])));
+
+  const signedUrls = [
+    "https://example.invalid/object?x-amz-signature=synthetic",
+    "https://example.invalid/object?x-goog-signature=synthetic",
+    "https://example.invalid/object?signature=synthetic",
+    "https://example.invalid/object?sig=synthetic",
+    "https://example.invalid/object?token=synthetic",
+  ];
+  for (const signedUrl of signedUrls) {
+    assert.equal(redact(signedUrl), "[REDACTED]");
+    assert.deepEqual(redact({ reference: signedUrl }), { reference: "[REDACTED]" });
+  }
+
   const packet = { ownerJurisdictionPolicy: { policySource: { referenceScope: "TASK_BOUND_COMPOSITE" } }, status: "CLEAR" };
   assert.deepEqual(redactActiveTaskPacket(packet), packet);
-  for (const secret of ["sk_abcdefghijklmnop", "pk_abcdefghijklmnop", "owner@example.com"]) {
-    const unsafe = { ...packet, secret };
-    assert.notEqual(stableJson(redactActiveTaskPacket(unsafe)), stableJson(unsafe));
-  }
-  const substituted = { ownerJurisdictionPolicy: { policySource: { referenceScope: "TASK_BOUND_COMPOSITE_sk_abcdefghijklmnop" } } };
-  assert.notEqual(stableJson(redactActiveTaskPacket(substituted)), stableJson(substituted));
+  const appendedSecret = { ownerJurisdictionPolicy: { policySource: { referenceScope: `TASK_BOUND_COMPOSITE_sk_${tokenSuffix}` } } };
+  assert.equal(redactActiveTaskPacket(appendedSecret).ownerJurisdictionPolicy.policySource.referenceScope, "TASK_BOUND_COMPOSITE_[REDACTED]");
 });
 
 test("active-task frozen artifact 02: the exact admitted Wave 1 wrapper uses its canonical split-model verifier", () => {
