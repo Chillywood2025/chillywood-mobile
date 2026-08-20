@@ -1967,7 +1967,7 @@ export function architectureDependencyAmendmentSubject({ identity, tree, scope, 
     const from = packageJson?.dependencies?.[entry?.name]; const before = tildePatch(from); const after = tildePatch(entry?.to);
     if (!entry || !textValue(entry.name) || ["react", "react-native"].includes(entry.name) || !before || !after || before[0] !== after[0] || before[1] !== after[1] || after[2] <= before[2]) throw new Error("ARCHITECTURE_DEPENDENCY_AMENDMENT_VERSION_ENVELOPE_INVALID");
     return { ecosystem: "npm", name: entry.name, from, to: entry.to };
-  }).sort((left, right) => left.name.localeCompare(right.name));
+  }).sort((left, right) => compareUtf8(left.name, right.name));
   const baseTree = spawnSync("git", ["rev-parse", `${identity?.baseSha}^{tree}`], { cwd: root, encoding: "utf8", shell: false }).stdout?.trim();
   const headTree = spawnSync("git", ["rev-parse", `${identity?.headSha}^{tree}`], { cwd: root, encoding: "utf8", shell: false }).stdout?.trim();
   const gitObserved = /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "") && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "")
@@ -2077,7 +2077,7 @@ export function verifyArchitectureDependencyAmendment({ raw, originalRaw, allCom
       const currentPackage = JSON.parse(currentPackageRecord.bytes); const currentLock = JSON.parse(currentLockRecord.bytes); const currentDigest = JSON.parse(currentDigestRecord.bytes);
       const expectedPackage = structuredClone(baselinePackage);
       for (const change of subject.dependencyChanges) expectedPackage.dependencies[change.name] = change.to;
-      const resolved = subject.dependencyChanges.map((change) => ({ name: change.name, spec: change.to, version: currentLock.packages?.[`node_modules/${change.name}`]?.version ?? null })).sort((a, b) => a.name.localeCompare(b.name));
+      const resolved = subject.dependencyChanges.map((change) => ({ name: change.name, spec: change.to, version: currentLock.packages?.[`node_modules/${change.name}`]?.version ?? null })).sort((a, b) => compareUtf8(a.name, b.name));
       const changedLockPaths = [...new Set([...Object.keys(baselineLock.packages ?? {}), ...Object.keys(currentLock.packages ?? {})])].filter((name) => stableJson(baselineLock.packages?.[name]) !== stableJson(currentLock.packages?.[name]));
       const allowedLockPaths = new Set(["", ...dependencyLockClosure(baselineLock, subject.dependencyChanges.map(({ name }) => name)), ...dependencyLockClosure(currentLock, subject.dependencyChanges.map(({ name }) => name))]);
       const baselineLockMeta = Object.fromEntries(Object.entries(baselineLock).filter(([key]) => key !== "packages")); const currentLockMeta = Object.fromEntries(Object.entries(currentLock).filter(([key]) => key !== "packages"));
