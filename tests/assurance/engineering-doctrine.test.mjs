@@ -29,6 +29,7 @@ import {
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
 import { finiteTaskLeaseFor, finiteTaskReservationProjection, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
 const json = (name) => JSON.parse(fs.readFileSync(new URL(name, root), "utf8"));
@@ -768,7 +769,7 @@ test("finite-task terminal truth projection preserves the base lease but synthet
     authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
   };
   const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
-  const transition = { applicable: true, ok: true, terminalEvidence, findings: [] };
+  const transition = { applicable: true, ok: true, terminalEvidence, lifecycle: { finalSourceSubject: { featureId: lease.featureId } }, findings: [] };
   const feature = json("config/assurance/feature-registry-v1.json").features.find(({ featureId }) => featureId === lease.featureId);
   const truthRecord = projectFiniteTaskTerminalTruth({ record: priorTruth, terminalEvidence, proofTierApplicabilityHash: hashValue(feature.proofTierApplicability), implementationTitle: "Wave 1" });
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseSha: mergeSha, headSha: "9".repeat(40) };
@@ -788,6 +789,80 @@ test("finite-task terminal truth projection preserves the base lease but synthet
   const verified = verifyFiniteTaskTerminalTruthAuthority(common);
   assert.equal(verified.authorizationOk, false);
   assert.ok(verified.findings.includes("FINITE_TASK_TERMINAL_TRUTH_INVALID:transition"));
+  assert.equal(verified.checks.terminalFeatureIdentity, true);
+  assert.equal(verified.featureId, lease.featureId);
+  assert.equal(verified.primaryFeatureId, lease.featureId);
+  assert.equal(verified.finiteLeaseId, lease.leaseId);
+  assert.notEqual(verified.featureId, verified.finiteLeaseId);
+  const ignoredCallerFeature = verifyFiniteTaskTerminalTruthAuthority({ ...common, featureId: "notifications-fcm" });
+  assert.equal(ignoredCallerFeature.featureId, lease.featureId);
+  const substitutedTaskTransition = structuredClone(transition);
+  substitutedTaskTransition.terminalEvidence.taskId = "notifications-fcm";
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, terminalTransition: substitutedTaskTransition }).checks.terminalFeatureIdentity, false);
+  for (const [label, featureId] of [["unknown", "unknown-finite-task-feature"], ["wrong registered", "notifications-fcm"], ["missing", null]]) {
+    const mutatedPrior = structuredClone(priorTruth);
+    const mutatedTruth = structuredClone(truthRecord);
+    const mutateFeature = (record) => {
+      const mutatedLease = record.finiteTaskLeases.tasks.find(({ leaseId }) => leaseId === lease.leaseId);
+      if (featureId === null) delete mutatedLease.featureId;
+      else mutatedLease.featureId = featureId;
+      if (featureId === null) delete record.activeTaskBinding.featureId;
+      else record.activeTaskBinding.featureId = featureId;
+    };
+    mutateFeature(mutatedPrior);
+    mutateFeature(mutatedTruth);
+    const result = verifyFiniteTaskTerminalTruthAuthority({
+      ...common,
+      priorTruth: mutatedPrior,
+      truthRecord: mutatedTruth,
+      currentStateText: renderCurrentState(mutatedTruth),
+      nextTaskText: renderNextTask(mutatedTruth),
+    });
+    assert.equal(result.authorizationOk, false, label);
+    assert.equal(result.checks.terminalFeatureIdentity, false, label);
+  }
+  const terminalPull = {
+    number: identity.pr,
+    title: "Synchronize finite-task terminal truth",
+    state: "open",
+    html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/${identity.pr}`,
+    base: { ref: "main", sha: identity.baseSha },
+    head: { ref: identity.branch, sha: identity.headSha },
+  };
+  const terminalContextInput = {
+    event: { number: identity.pr, repository: { full_name: identity.repository }, pull_request: terminalPull },
+    readback: { number: identity.pr, repository: identity.repository, baseRef: "main", baseSha: identity.baseSha, headRef: identity.branch, headSha: identity.headSha, htmlUrl: terminalPull.html_url, state: "open" },
+    policy: json("config/assurance/pr-scope-policy-v1.json"),
+    registry: json("config/assurance/feature-registry-v1.json"),
+    currentTruth: truthRecord,
+    terminalTruthAuthority: { ...verified, ok: true, authorizationOk: true, findings: [] },
+    protectedMainRuntime: { pendingTerminalTruth: true, terminalSuccessorRequired: true, pendingTransitionCount: 1 },
+    observedChangedPaths: scope.files,
+    observedCanonicalChangedLines: scope.netChangedLines,
+  };
+  const terminalContext = deriveTaskScopeContext(terminalContextInput);
+  assert.equal(terminalContext.ok, true, terminalContext.findings.join(","));
+  assert.equal(terminalContext.featureId, lease.featureId);
+  assert.equal(terminalContext.finiteLeaseId, lease.leaseId);
+  const classifiedTerminalPaths = classifyPrScopePaths(scope.files, terminalContextInput.policy);
+  const highRiskDomains = [...new Set(classifiedTerminalPaths.flatMap(({ domains }) => domains)
+    .filter((domain) => terminalContextInput.policy.domains.some(({ id, risk }) => id === domain && risk === "high")))].sort();
+  const terminalRisk = evaluateHighRiskScope({
+    highRiskDomains,
+    objectiveDomains: terminalContext.objectiveDomains,
+    featureId: terminalContext.featureId,
+    featureDomainBundles: terminalContextInput.policy.featureDomainBundles,
+    registeredFeatureIds: terminalContextInput.registry.features.map(({ featureId }) => featureId),
+    policyHighRiskDomains: terminalContextInput.policy.domains.filter(({ risk }) => risk === "high").map(({ id }) => id),
+  });
+  assert.equal(terminalRisk.relatedHighRiskScopeAuthorized, true, stableJson(terminalRisk.findings));
+  assert.deepEqual(highRiskDomains, []);
+  const callerInjection = deriveTaskScopeContext({ ...terminalContextInput, requestedFeature: "notifications-fcm" });
+  assert.equal(callerInjection.ok, false);
+  assert.ok(callerInjection.findings.includes("ASSURANCE_CALLER_FEATURE_INJECTION_REJECTED"));
+  assert.equal(callerInjection.featureId, lease.featureId);
+  const diffCannotSubstitute = deriveTaskScopeContext({ ...terminalContextInput, observedChangedPaths: ["notifications-fcm"] });
+  assert.equal(diffCannotSubstitute.featureId, lease.featureId);
   assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, terminalTransition: structuredClone(transition) }).authorizationOk, false);
   assert.deepEqual(scope.files, ownerSubject.changedPaths);
   assert.equal(stableJson(finiteTaskLeaseFor(truthRecord.finiteTaskLeases, { implementationPr: 229, implementationBranch: lease.implementationBranch, featureId: lease.featureId })), stableJson(lease));
