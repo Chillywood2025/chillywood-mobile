@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { finiteTaskEffectiveReservationAuthorityValid, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskEffectiveReservationAuthorityValid, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 import { STANDING_POLICY_INHERITANCE_ALLOWLIST, STANDING_POLICY_INHERITANCE_DENYLIST } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const recordedMain = "a".repeat(40);
@@ -172,6 +172,54 @@ assert.equal(schemas.$defs.ownerJurisdictionPolicyBinding.properties.coverage.pr
 assert.deepEqual(schemas.$defs.finiteTaskAdmissionSupersessionV2.properties.predecessor.properties.version.enum, [1, 2]);
 assert.equal(JSON.stringify(schemas.$defs.ownerJurisdictionPolicyBinding).includes("standingPolicyBody"), false);
 
+const overlayContract = truthContract.finiteTaskTestAdaptationOverlayPolicy;
+const overlayPolicy = truthRecord.finiteTaskLeases.testAdaptationPolicy;
+const overlayPolicySchema = schemas.$defs.currentTruthRecord.properties.finiteTaskLeases.properties.testAdaptationPolicy;
+assert.deepEqual(validateFiniteTaskLeaseRegistry(truthRecord.finiteTaskLeases), []);
+assert.deepEqual(schemas.$defs.currentTruthContract.properties.finiteTaskTestAdaptationOverlayPolicy.const, overlayContract);
+assert.equal(schemas.$defs.currentTruthContract.required.includes("finiteTaskTestAdaptationOverlayPolicy"), false);
+assert.equal(schemas.$defs.currentTruthRecord.properties.finiteTaskLeases.required.includes("testAdaptationPolicy"), false);
+assert.equal(overlayPolicySchema.additionalProperties, false);
+assert.equal(overlayPolicy.capability, overlayContract.capability);
+assert.equal(overlayPolicy.policyId, overlayContract.policyId);
+assert.equal(overlayPolicy.classification, overlayContract.classification);
+assert.equal(overlayPolicy.maximumFiles, overlayContract.maximumFiles);
+assert.equal(overlayPolicy.maximumChangedLines, overlayContract.maximumCanonicalChangedLines);
+assert.deepEqual(overlayPolicy.fixtureRoots, overlayContract.fixtureClass.roots);
+assert.deepEqual(overlayPolicy.fixtureExtensions, overlayContract.fixtureClass.extensions);
+assert.equal(overlayContract.fixtureClass.assertionContract, "EXACTLY_ONE_EXECUTABLE_PGTAP_PLAN_DECLARATION_PRESERVED");
+assert.equal(overlayPolicy.liveEffectiveAmendmentReceiptRequired, true);
+assert.equal(overlayPolicy.ordinaryAmendmentUsePreserved, true);
+assert.equal(overlayContract.implementationPartitionSource, "VERIFIED_LIVE_EFFECTIVE_AMENDMENT_RESERVATION");
+assert.equal(overlayContract.liveEffectiveAmendmentReceiptRequired, true);
+assert.equal(overlayContract.ordinaryAmendmentUsePreserved, true);
+assert.deepEqual(overlayPolicy.authority, overlayContract.authority);
+assert.deepEqual(overlayContract.partitionAccounting, {
+  implementationAndFixtureBudgetsIndependent: true,
+  budgetPoolingAllowed: false,
+  pathOverlapAllowed: false,
+  binaryOrMalformedNumstatAllowed: false,
+  aggregateProjectionCompatibilityOnly: true,
+});
+assert.deepEqual(overlayContract.canonicalConsumerSet, [
+  "current-truth",
+  "active-task",
+  "engineering-closure",
+  "pr-scope",
+  "exact-head-repository-review",
+  "final-source-attestation",
+  "merge-eligibility",
+  "merge-provenance",
+  "post-merge-readback",
+  "terminal-truth",
+]);
+const invalidOverlayRegistry = structuredClone(truthRecord.finiteTaskLeases);
+invalidOverlayRegistry.testAdaptationPolicy.maximumFiles = 2;
+assert.equal(validateFiniteTaskLeaseRegistry(invalidOverlayRegistry).includes("FINITE_TASK_TEST_ADAPTATION_POLICY_MALFORMED"), true);
+const historicalNoOverlayRegistry = structuredClone(truthRecord.finiteTaskLeases);
+delete historicalNoOverlayRegistry.testAdaptationPolicy;
+assert.deepEqual(validateFiniteTaskLeaseRegistry(historicalNoOverlayRegistry), []);
+
 const wave1Lease = truthRecord.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 229);
 const baseOnlyRuns = Array.from({ length: 3 }, () => resolveFiniteTaskEffectiveReservation({
   registry: truthRecord.finiteTaskLeases,
@@ -188,6 +236,11 @@ assert.equal(new Set(baseOnlyRuns.map((result) => stableJson(result))).size, 1);
 assert.deepEqual(baseOnlyRuns[0].baseReservation, baseOnlyRuns[0].effectiveReservation);
 assert.equal(baseOnlyRuns[0].effectiveReservation.eligiblePathCount, 30);
 assert.equal(baseOnlyRuns[0].amendmentReceipt, null);
+assert.equal(Object.hasOwn(baseOnlyRuns[0], "aggregateReservation"), false);
+assert.equal(Object.hasOwn(baseOnlyRuns[0], "testAdaptationReservation"), false);
+assert.equal(Object.hasOwn(baseOnlyRuns[0], "scopePartitions"), false);
+assert.equal(Object.hasOwn(baseOnlyRuns[0], "testAdaptationsConsumed"), false);
+assert.equal(Object.hasOwn(baseOnlyRuns[0], "testAdaptationReceipt"), false);
 assert.deepEqual(baseOnlyRuns[0].authority, {
   providerMutation: false,
   databaseDeployment: false,
@@ -212,10 +265,30 @@ const incompleteCommentDiscovery = resolveFiniteTaskEffectiveReservation({
 });
 assert.equal(incompleteCommentDiscovery.ok, false);
 assert.equal(incompleteCommentDiscovery.findings.includes("FINITE_TASK_LEASE_AMENDMENT_COMMENT_DISCOVERY_INCOMPLETE"), true);
+const historicalNoOverlay = resolveFiniteTaskEffectiveReservation({
+  registry: historicalNoOverlayRegistry,
+  lease: historicalNoOverlayRegistry.tasks.find(({ implementationPr }) => implementationPr === 229),
+  comments: [],
+  commentsPaginationComplete: true,
+  commits: [],
+  commitsPaginationComplete: true,
+  requireCompleteDiscovery: true,
+  observationMode: "LIVE_GITHUB_COMPLETE_READBACK"
+});
+assert.equal(historicalNoOverlay.ok, true);
+assert.equal(historicalNoOverlay.status, "BASE_ONLY");
+assert.equal(Object.hasOwn(historicalNoOverlay, "aggregateReservation"), false);
+assert.equal(Object.hasOwn(historicalNoOverlay, "testAdaptationReservation"), false);
+assert.equal(Object.hasOwn(historicalNoOverlay, "testAdaptationReceipt"), false);
 const currentTruthSource = (await import("node:fs")).readFileSync("scripts/assurance/current-truth.mjs", "utf8");
 assert.match(currentTruthSource, /effectiveReservationObservation/u);
 assert.match(currentTruthSource, /observeLiveFiniteTaskEffectiveReservation/u);
 assert.match(currentTruthSource, /baseReservation: finiteTaskRuntime\.baseReservation/u);
 assert.match(currentTruthSource, /effectiveReservation: finiteTaskRuntime\.effectiveReservation/u);
+assert.match(currentTruthSource, /finiteTaskRuntime\.effectiveReservationResolution\?\.status === "AMENDED_WITH_TEST_ADAPTATION"/u);
+assert.match(currentTruthSource, /aggregateReservation: finiteTaskRuntime\.effectiveReservationResolution\.aggregateReservation/u);
+assert.match(currentTruthSource, /testAdaptationReservation: finiteTaskRuntime\.effectiveReservationResolution\.testAdaptationReservation/u);
+assert.match(currentTruthSource, /scopePartitions: finiteTaskRuntime\.effectiveReservationResolution\.scopePartitions/u);
+assert.match(currentTruthSource, /testAdaptationReceipt: finiteTaskRuntime\.effectiveReservationResolution\.testAdaptationReceipt/u);
 
-process.stdout.write("current-truth synchronization contract: PASS (56 cases)\n");
+process.stdout.write("current-truth synchronization contract: PASS (generic overlay and historical compatibility)\n");

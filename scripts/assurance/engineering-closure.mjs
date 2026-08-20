@@ -1749,6 +1749,7 @@ export const ARCHITECTURE_FINAL_SOURCE_MARKER = "<!-- chillywood-assurance-archi
 export const ARCHITECTURE_REPOSITORY_REVIEW_MARKER = "<!-- chillywood-assurance-repository-review-v1 -->";
 export const ASSURANCE_RECEIPT_LIFECYCLE_V2 = "ASSURANCE_RECEIPT_LIFECYCLE_V2";
 export const FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 = "FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1";
+export const FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 = "FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1";
 export const FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1 = "FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_V1 = "FINITE_TASK_TERMINAL_TRUTH_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1 = "FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1";
@@ -1939,6 +1940,9 @@ const finiteTaskImplementationReviewBinding = (resolution) => {
   const base = resolution?.baseReservation;
   const effective = resolution?.effectiveReservation;
   const receipt = resolution?.amendmentReceipt;
+  const fixture = resolution?.testAdaptationReservation;
+  const aggregate = resolution?.aggregateReservation;
+  const fixtureReceipt = resolution?.testAdaptationReceipt;
   const summarize = (reservation) => reservation ? {
     reservationHash: reservation.reservationHash ?? null,
     pathSetHash: hashValue(reservation.allowedPaths ?? []),
@@ -1965,6 +1969,18 @@ const finiteTaskImplementationReviewBinding = (resolution) => {
       bodyHash: receipt.bodyHash ?? null,
       rawBodyHash: receipt.rawBodyHash ?? null,
     } : null,
+    ...(resolution?.status === "AMENDED_WITH_TEST_ADAPTATION" ? {
+      scopeBase: resolution.scopeBase,
+      testAdaptationReservation: summarize(fixture),
+      aggregateReservation: summarize(aggregate),
+      scopePartitions: resolution?.scopePartitions ?? null,
+      testAdaptationReceipt: fixtureReceipt ? {
+        commentId: fixtureReceipt.commentId ?? null,
+        subjectHash: fixtureReceipt.subjectHash ?? null,
+        bodyHash: fixtureReceipt.bodyHash ?? null,
+        rawBodyHash: fixtureReceipt.rawBodyHash ?? null,
+      } : null,
+    } : {}),
   };
 };
 
@@ -1973,6 +1989,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
   const jurisdictionModelReview = identity?.branch === "codex/owner-jurisdiction-canonical-model-v1";
   const jurisdictionAdmissionReview = profile === "FINITE_TASK_ADMISSION_JURISDICTION_V2";
   const amendmentControlRepairReview = profile === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
+  const testAdaptationOverlayReview = profile === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const finiteTaskTerminalReview = profile === FINITE_TASK_TERMINAL_TRUTH_V1;
   return {
@@ -1990,7 +2007,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
     deletions: Number(scope?.deletions ?? 0),
     netChangedLines: observed.netChangedLines,
     disposition: { P0: 0, P1: 0, launchImpactingP2: 0 },
-    ...((jurisdictionAdmissionReview || amendmentControlRepairReview || finiteTaskImplementationReview || finiteTaskTerminalReview) ? { reviewProfile: profile } : {}),
+    ...((jurisdictionAdmissionReview || amendmentControlRepairReview || testAdaptationOverlayReview || finiteTaskImplementationReview || finiteTaskTerminalReview) ? { reviewProfile: profile } : {}),
     ...(finiteTaskImplementationReview ? { finiteTaskEffectiveReservation: finiteTaskImplementationReviewBinding(effectiveReservationResolution) } : {}),
     lanes: finiteTaskTerminalReview ? [
       "exact three-path canonical finite-task terminal-truth transition",
@@ -2003,7 +2020,17 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
       "UNKNOWN remains fail-closed and semantically distinct from INACTIVE and ACTIVE",
       "identity and account-generation isolation prevents stale-account authority",
       "Premium entitlement and money authority remain explicit and honest",
-      "exact effective lease reservation, canonical line accounting, and no extra paths",
+      ...(effectiveReservationResolution?.status === "AMENDED_WITH_TEST_ADAPTATION" ? [
+        "exact effective lease plus test-adaptation receipt, independent canonical line partitions, and no extra paths",
+        "causative production authority remains intact while the exact bound legacy fixture adapts without plan or assertion loss",
+      ] : ["exact effective lease reservation, canonical line accounting, and no extra paths"]),
+      "no provider mutation or contact, database deployment, product build, submission, OTA, or public release authority",
+    ] : testAdaptationOverlayReview ? [
+      "generic finite-task test-adaptation receipt, immutable identity, and descendant-only applicability",
+      "separate implementation and fixture path/line partitions with aggregate compatibility projection",
+      "test-fixture classification boundaries, exact baseline binding, and product-path exclusion",
+      "current-truth, active-task, engineering-closure, PR-scope, review, final-source, merge, and terminal consumers",
+      "positive and adversarial receipt, ancestry, cardinality, pagination, scope, and expiry witnesses",
       "no provider mutation or contact, database deployment, product build, submission, OTA, or public release authority",
     ] : amendmentControlRepairReview ? [
       "RC-1 registered Wave 1 amendment policy and exact amendable-path bound",
@@ -2044,7 +2071,7 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const effectiveReservationBound = !finiteTaskImplementationReview || Boolean(
     finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
-    && effectiveReservationResolution?.status === "AMENDED"
+    && ["AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
     && effectiveReservationResolution?.amendmentsConsumed === 1
     && effectiveReservationResolution?.amendmentReceipt
     && effectiveReservationResolution?.baseLease?.implementationPr === identity?.pr
@@ -2055,6 +2082,14 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
     && expected.finiteTaskEffectiveReservation?.baseLeaseHash
     && expected.finiteTaskEffectiveReservation?.baseReservation?.reservationHash
     && expected.finiteTaskEffectiveReservation?.effectiveReservation?.reservationHash
+    && (effectiveReservationResolution?.status !== "AMENDED_WITH_TEST_ADAPTATION" || (
+      effectiveReservationResolution?.scopeBase === identity?.baseSha
+      && expected.finiteTaskEffectiveReservation?.scopeBase === identity?.baseSha
+      && expected.finiteTaskEffectiveReservation?.testAdaptationReservation?.reservationHash
+      && expected.finiteTaskEffectiveReservation?.aggregateReservation?.reservationHash
+      && expected.finiteTaskEffectiveReservation?.testAdaptationReceipt?.commentId
+      && expected.finiteTaskEffectiveReservation?.scopePartitions
+    ))
   );
   const valid = Boolean(normalized
     && payload?.evidenceClass === "REPOSITORY_EXACT_HEAD_REVIEW"
@@ -2118,7 +2153,8 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
   const currentTruthCompanion = authorityControlCurrentTruthCompanionV2({ identity, root });
   if (profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2") {
     const amendmentControlRepair = objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
-    if (objective !== null && !amendmentControlRepair) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_OBJECTIVE_INVALID");
+    const testAdaptationOverlay = objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
+    if (objective !== null && !amendmentControlRepair && !testAdaptationOverlay) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_OBJECTIVE_INVALID");
     return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
     classification: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -2137,9 +2173,11 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     featureId: "assurance-efficiency-e0",
     objectiveDomains: [],
     supportingDomains: ["CI-test-infrastructure"],
-    objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
+    objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
     capabilities: amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
+      : testAdaptationOverlay
+      ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1]
       : ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"],
     relatedWave1Pr: 229,
     relatedAdmissionPr: 233,
@@ -2153,7 +2191,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     immutableCommentRequired: true,
     createdAtEqualsUpdatedAtRequired: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
-    reusableByAnotherPr: amendmentControlRepair ? false : true,
+    reusableByAnotherPr: amendmentControlRepair || testAdaptationOverlay ? false : true,
     ...(currentTruthCompanion ? { currentTruthCompanion } : {}),
   };
   }
@@ -2329,13 +2367,15 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject ?? {};
   const amendmentControlRepair = originalSubject.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
+  const testAdaptationOverlay = originalSubject.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
   if ([
     "install generic source-grounded task-local governing-edge closure for pre-admission engineering packets",
     "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
     FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1,
+    FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
-    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : null;
+    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : null;
     const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope, profile: reviewProfile });
     const historicalAttestations = historicalAttestationRaws.map((item) => {
       const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
@@ -3109,15 +3149,19 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     "install generic source-grounded task-local governing-edge closure for pre-admission engineering packets",
     "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
     FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1,
+    FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
   ].includes(originalSubject?.objective)) {
     const jurisdictionModel = originalSubject?.objective === "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession";
     const amendmentControlRepair = originalSubject?.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
-    const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair;
+    const testAdaptationOverlay = originalSubject?.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
+    const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay;
     const architecturePaths = ownerJurisdictionProfile ? OWNER_JURISDICTION_ARCHITECTURE_PATHS : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
     const maximumFiles = ownerJurisdictionProfile ? 15 : 12;
     const maximumNetLines = ownerJurisdictionProfile ? 3500 : 3200;
     const expectedCapabilities = amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
+      : testAdaptationOverlay
+      ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1]
       : jurisdictionModel
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]
       : [TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1];
@@ -3142,7 +3186,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         && (ownerJurisdictionProfile || !finalMatches.some((candidate) => candidate.id === 5289720389) || claimedHistoricalIds.includes(5289720389));
       const reviewRaw = repositoryReviewMatches.find((candidate) => candidate.id === payload.subject.repositoryReview?.commentId);
       const phase1 = phase1EvidenceResolver({ runId: payload.subject.phase1?.runId, identity, tree, root });
-      const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : null;
+      const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : null;
       const review = verifyArchitectureRepositoryReview({ raw: reviewRaw, identity, tree, scope, profile: reviewProfile });
       const expected = architectureFinalSourceSubject({
         identity,
@@ -3170,7 +3214,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       tree: originalSubject?.currentTree,
       scope: { files: originalSubject?.changedPaths, additions: originalSubject?.additions, deletions: originalSubject?.deletions, netChangedLines: originalSubject?.netChangedLines },
       profile: ownerJurisdictionProfile ? "OWNER_JURISDICTION_CANONICAL_MODEL_V2" : "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
-      objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : null,
+      objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : null,
       root,
     });
     const canonicalProfile = stableJson(originalSubject) === stableJson(canonicalOriginalSubject);
@@ -3194,7 +3238,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       capability: canonicalProfile
         && stableJson(originalSubject?.capabilities) === stableJson(expectedCapabilities)
         && originalSubject?.terminalTruthRequired === false
-        && originalSubject?.reusableByAnotherPr === (amendmentControlRepair ? false : true),
+        && originalSubject?.reusableByAnotherPr === (amendmentControlRepair || testAdaptationOverlay ? false : true),
     };
     const authorizationOk = Object.values(authorizationChecks).every(Boolean);
     const attestationChecks = {
@@ -3967,6 +4011,7 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
       deletions: Number(scope?.deletions ?? 0),
       changedLines: canonicalChangedLines,
       canonicalChangedLines,
+      scopeBase: identity.baseSha,
       diffHash: scope?.diffHash ?? null,
       changedPathHash: hashValue(candidatePaths ?? []),
     };
@@ -4020,6 +4065,12 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
         : resolution?.amendmentsConsumed === 1
           && resolution?.amendmentReceipt != null
           && stableJson(effectiveAddedPaths) === stableJson([...receiptAddedPaths].sort()),
+      ...(resolution?.status === "AMENDED_WITH_TEST_ADAPTATION" ? { testAdaptationDeltaAuthenticated: Boolean(resolution?.testAdaptationReceipt
+          && resolution?.testAdaptationReservation
+          && resolution?.aggregateReservation
+          && resolution?.scopePartitions
+          && resolution?.scopeBase === identity.baseSha
+          && resolution.scopePartitions.aggregate.canonicalChangedLines === canonicalChangedLines) } : {}),
       noCompetingOwners: competingOwners.length === 0,
     };
     const valid = Object.values(localChecks).every(Boolean)
@@ -4047,8 +4098,8 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
       bindingId: `finite-lease-${lease.leaseId}`,
       finiteLeaseId: lease.leaseId,
       budget: {
-        maximumFiles: effectiveReservation?.maximumFiles ?? null,
-        maximumHandAuthoredNetLines: effectiveReservation?.maximumLines ?? null,
+        maximumFiles: resolution?.aggregateReservation?.maximumFiles ?? effectiveReservation?.maximumFiles ?? null,
+        maximumHandAuthoredNetLines: resolution?.aggregateReservation?.maximumLines ?? effectiveReservation?.maximumLines ?? null,
       },
       canonicalChangedLines,
       candidate,
@@ -4068,6 +4119,14 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
         rawBodyHash: resolution.amendmentReceipt.rawBodyHash ?? null,
         addedPaths: resolution.amendmentReceipt.addedPaths ?? [],
       } : null,
+      ...(resolution?.status === "AMENDED_WITH_TEST_ADAPTATION" ? {
+        scopeBase: resolution.scopeBase,
+        aggregateReservation: resolution.aggregateReservation,
+        testAdaptationReservation: resolution.testAdaptationReservation,
+        scopePartitions: resolution.scopePartitions,
+        testAdaptationsConsumed: resolution.testAdaptationsConsumed,
+        testAdaptationReceipt: resolution.testAdaptationReceipt,
+      } : {}),
       frozenArtifactBinding: {
         closureArtifactPath: lease?.artifactReservation?.closureArtifactPath ?? null,
         artifactHash: lease?.closure?.artifactHash ?? null,
@@ -4291,6 +4350,13 @@ export function verifyFiniteTaskImplementationLifecycle({
     effectiveReservation: resolution?.effectiveReservation ?? null,
     effectiveReservationHash: resolution?.effectiveReservation?.reservationHash ?? null,
     amendmentReceipt: resolution?.amendmentReceipt ?? null,
+    ...(resolution?.status === "AMENDED_WITH_TEST_ADAPTATION" ? {
+      scopeBase: resolution.scopeBase,
+      aggregateReservation: resolution.aggregateReservation,
+      testAdaptationReservation: resolution.testAdaptationReservation,
+      scopePartitions: resolution.scopePartitions,
+      testAdaptationReceipt: resolution.testAdaptationReceipt,
+    } : {}),
     repositoryReview: review,
     phase1Evidence,
     finalSource,
@@ -4382,6 +4448,7 @@ export function observeFiniteTaskPostMergeTransition({
     tree: sourceTree,
     changedPaths: scope.files,
     changedLines: Number(scope.additions ?? 0) + Number(scope.deletions ?? 0),
+    scopeBase: firstParent,
     diffHash: scope.diffHash,
     changedPathHash: hashValue(scope.files),
   } : null;
@@ -4455,9 +4522,10 @@ export function observeFiniteTaskPostMergeTransition({
     findings.push("FINITE_TASK_POST_MERGE_NOT_ON_PROTECTED_MAIN");
   }
   const unique = [...new Set(findings)].sort();
+  const adapted = resolution?.status === "AMENDED_WITH_TEST_ADAPTATION";
   const terminalEvidence = unique.length === 0 ? {
-    schemaVersion: 1,
-    classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    schemaVersion: adapted ? 2 : 1,
+    classification: adapted ? "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2" : "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
     repository: identity.repository,
     taskId: lease.leaseId,
     leaseId: lease.leaseId,
@@ -4467,7 +4535,15 @@ export function observeFiniteTaskPostMergeTransition({
     baseReservation: resolution.baseReservation,
     effectiveReservation: resolution.effectiveReservation,
     amendmentReceipt: resolution.amendmentReceipt,
-    finalSourceReceipt: lifecycle.finalSource.receipt,
+    ...(adapted ? {
+      testAdaptationReservation: resolution.testAdaptationReservation,
+      aggregateReservation: resolution.aggregateReservation,
+      scopePartitions: resolution.scopePartitions,
+      testAdaptationReceipt: resolution.testAdaptationReceipt,
+    } : {}),
+    finalSourceReceipt: adapted
+      ? { ...lifecycle.finalSource.receipt, subject: lifecycle.finalSource.subject }
+      : lifecycle.finalSource.receipt,
     sourceHead,
     sourceTree,
     mergeSha,
@@ -5274,7 +5350,9 @@ export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT)
   const pathsRun = run(["diff", "--name-only", range]);
   const linesRun = run(["diff", "--numstat", range]);
   const diffRun = run(canonicalGitDiffArgs(range));
-  if ([pathsRun, linesRun, diffRun].some(({ status }) => status !== 0)) return null;
+  const treeRun = run(["rev-parse", `${head}^{tree}`]);
+  if ([pathsRun, linesRun, diffRun, treeRun].some(({ status }) => status !== 0)
+    || !/^[0-9a-f]{40}$/u.test(treeRun.stdout.trim())) return null;
   const paths = pathsRun.stdout.split(/\r?\n/gu).filter(Boolean).sort();
   const rows = linesRun.stdout.split(/\r?\n/gu).filter(Boolean).map((row) => row.split("\t"));
   const additions = rows.reduce((total, [value]) => total + (/^\d+$/u.test(value) ? Number(value) : 0), 0);
@@ -5283,6 +5361,7 @@ export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT)
   const observation = {
     base,
     head,
+    tree: treeRun.stdout.trim(),
     paths,
     changedLines,
     handAuthoredLines: changedLines,
@@ -5299,6 +5378,55 @@ export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT)
   return observation;
 }
 const trustedScopeObservation = (value) => trustedScopeObservations.has(value);
+export function deriveTrustedImplementationScopeObservation(observation, effectiveReservationResolution) {
+  const scopePartitions = effectiveReservationResolution?.scopePartitions;
+  const implementation = scopePartitions?.implementation;
+  const adaptation = scopePartitions?.testAdaptation;
+  const aggregate = scopePartitions?.aggregate;
+  const exactPaths = (value) => Array.isArray(value)
+    && stableJson(value) === stableJson([...new Set(value)].sort());
+  if (!trustedScopeObservation(observation)
+    || !finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
+    || effectiveReservationResolution?.status !== "AMENDED_WITH_TEST_ADAPTATION"
+    || effectiveReservationResolution?.scopeBase !== observation.base
+    || effectiveReservationResolution?.candidateHead !== observation.head
+    || effectiveReservationResolution?.candidateTree !== observation.tree
+    || !exactPaths(implementation?.actualPaths)
+    || !exactPaths(adaptation?.actualPaths)
+    || !exactPaths(aggregate?.actualPaths)
+    || stableJson(observation.paths) !== stableJson(aggregate.actualPaths)
+    || observation.changedLines !== aggregate.canonicalChangedLines
+    || implementation.actualPaths.some((file) => adaptation.actualPaths.includes(file))
+    || stableJson(aggregate.actualPaths) !== stableJson([...new Set([...implementation.actualPaths, ...adaptation.actualPaths])].sort())
+    || !Number.isInteger(implementation.canonicalChangedLines) || implementation.canonicalChangedLines < 0
+    || !Number.isInteger(adaptation.canonicalChangedLines) || adaptation.canonicalChangedLines < 0
+    || implementation.canonicalChangedLines + adaptation.canonicalChangedLines !== aggregate.canonicalChangedLines
+    || implementation.actualPaths.some((file) => !implementation?.reservation?.allowedPaths?.includes(file))
+    || adaptation.actualPaths.some((file) => !adaptation?.reservation?.allowedPaths?.includes(file))
+    || implementation.actualPaths.length > implementation?.reservation?.maximumFiles
+    || adaptation.actualPaths.length > adaptation?.reservation?.maximumFiles
+    || implementation.canonicalChangedLines > implementation?.reservation?.maximumLines
+    || adaptation.canonicalChangedLines > adaptation?.reservation?.maximumLines
+    || aggregate.actualPaths.length > aggregate?.reservation?.maximumFiles
+    || aggregate.canonicalChangedLines > aggregate?.reservation?.maximumLines
+    || aggregate?.reservation?.maximumFiles !== implementation?.reservation?.maximumFiles + adaptation?.reservation?.maximumFiles
+    || aggregate?.reservation?.maximumLines !== implementation?.reservation?.maximumLines + adaptation?.reservation?.maximumLines
+    || stableJson(aggregate?.reservation?.allowedPaths) !== stableJson([...new Set([
+      ...(implementation?.reservation?.allowedPaths ?? []),
+      ...(adaptation?.reservation?.allowedPaths ?? [])
+    ])].sort())) return null;
+  const derived = {
+    ...observation,
+    paths: structuredClone(implementation.actualPaths),
+    changedLines: implementation.canonicalChangedLines,
+    handAuthoredLines: implementation.canonicalChangedLines,
+    pathHash: hashValue(implementation.actualPaths),
+    aggregateScope: { paths: structuredClone(aggregate.actualPaths), changedLines: aggregate.canonicalChangedLines },
+    testAdaptationScope: structuredClone(adaptation)
+  };
+  trustedScopeObservations.add(derived);
+  return derived;
+}
 const exactPathExpansion = (record, requestedPath, { packet, certificate, allowedDomains, ownerAuthorizations, currentHead }) => {
   const amendment = record?.ownerLeaseAmendment;
   const subject = {

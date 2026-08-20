@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
+  ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
@@ -294,7 +294,7 @@ test("future product packets default incomplete and cannot inject raw authority 
 
 test("only fixed git observation can establish source scope and caller cannot underreport", () => {
   const original = process.env.PATH; const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-git-")); const executable = path.join(dir, "git");
-  fs.writeFileSync(executable, `#!/bin/sh\ncase "$*" in\n*--name-only*) printf 'app/chat/a.tsx\\n';;\n*--numstat*) printf '10000\\t0\\tapp/chat/a.tsx\\n';;\n*) printf 'fixed diff';;\nesac\n`); fs.chmodSync(executable, 0o755); process.env.PATH = `${dir}:${original}`;
+  fs.writeFileSync(executable, `#!/bin/sh\ncase "$*" in\n*--name-only*) printf 'app/chat/a.tsx\\n';;\n*--numstat*) printf '10000\\t0\\tapp/chat/a.tsx\\n';;\n*rev-parse*) printf '${"3".repeat(40)}\\n';;\n*) printf 'fixed diff';;\nesac\n`); fs.chmodSync(executable, 0o755); process.env.PATH = `${dir}:${original}`;
   try { const observed = observeCandidateScopeFromGit("1".repeat(40), "2".repeat(40)); assert.equal(observed.changedLines, 10000); assert.deepEqual(observed.paths, ["app/chat/a.tsx"]); } finally { process.env.PATH = original; fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -641,7 +641,7 @@ test("Owner jurisdiction architecture maintenance uses the one bounded assurance
   assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]);
   assert.deepEqual(Object.values(subject.authority), [false, false, false, false, false, false, false, false, false, false]);
 });
-const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 } = {}) => {
+const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, objective = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, branch = "codex/finite-task-lease-amendment-control-plane-repair-v1" } = {}) => {
   const paths = [
     "CURRENT_STATE.md",
     "config/assurance/current-truth-contract-v1.json",
@@ -655,10 +655,10 @@ const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AM
     "tests/assurance/engineering-doctrine.test.mjs",
     "tests/assurance/pr-scope-feature-bundles.test.mjs",
   ].sort();
-  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch: "codex/finite-task-lease-amendment-control-plane-repair-v1", headSha: "1".repeat(40), baseSha: "2".repeat(40) };
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch, headSha: "1".repeat(40), baseSha: "2".repeat(40) };
   const originalTree = "3".repeat(40);
   const originalScope = { files: paths, additions: 900, deletions: 100, netChangedLines: 800, diffHash: "4".repeat(64) };
-  const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 });
+  const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective });
   const original = taskLocalArchitectureComment({ id: 700020, pr: originalIdentity.pr, body: architectureMaintenanceOwnerCommentBody(originalSubject) });
   const identity = { ...originalIdentity, headSha: "5".repeat(40) };
   const tree = "6".repeat(40);
@@ -801,6 +801,50 @@ test("finite-task lease amendment repair final source requires the repair review
 
   const wrongReview = amendmentControlLifecycleFixture({ reviewProfile: null });
   assert.equal(verifyArchitectureMaintenanceAuthority(wrongReview.args).mergeEligible, false);
+});
+
+test("finite-task test-adaptation overlay uses the exact generic closed-authority control profile", () => {
+  const fixture = amendmentControlLifecycleFixture({
+    objective: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
+    reviewProfile: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
+    branch: "codex/finite-task-test-adaptation-overlay-v1"
+  });
+  const policy = json("config/assurance/current-truth-v1.json").finiteTaskLeases.testAdaptationPolicy;
+  const contract = json("config/assurance/current-truth-contract-v1.json").finiteTaskTestAdaptationOverlayPolicy;
+  assert.equal(fixture.originalSubject.objective, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1);
+  assert.deepEqual(fixture.originalSubject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1]);
+  assert.equal(fixture.originalSubject.reusableByAnotherPr, false);
+  assert.equal(fixture.reviewSubject.reviewProfile, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1);
+  assert.ok(fixture.reviewSubject.lanes.some((lane) => lane.includes("separate implementation and fixture")));
+  assert.ok(fixture.reviewSubject.lanes.some((lane) => lane.includes("baseline binding")));
+  assert.equal(policy.maximumFiles, 1);
+  assert.equal(policy.maximumChangedLines, 500);
+  assert.deepEqual(policy.fixtureRoots, ["supabase/tests/"]);
+  assert.deepEqual(policy.fixtureExtensions, [".sql"]);
+  assert.equal(policy.liveEffectiveAmendmentReceiptRequired, true);
+  assert.equal(policy.ordinaryAmendmentUsePreserved, true);
+  assert.equal(contract.implementationPartitionSource, "VERIFIED_LIVE_EFFECTIVE_AMENDMENT_RESERVATION");
+  assert.equal(contract.fixtureClass.assertionContract, "EXACTLY_ONE_EXECUTABLE_PGTAP_PLAN_DECLARATION_PRESERVED");
+  assert.equal(contract.partitionAccounting.budgetPoolingAllowed, false);
+  assert.doesNotMatch(stableJson(policy), /revenuecat_atomic_transactions_test|pre-release-identity-entitlement-authority-v1|"implementationPr":229/u);
+  assert.ok(Object.values(fixture.originalSubject.authority).every((value) => value === false));
+  assert.equal(verifyArchitectureMaintenanceAuthority(fixture.args).mergeEligible, true);
+});
+
+test("finite-task test-adaptation final source rejects a review without the overlay profile", () => {
+  const wrong = amendmentControlLifecycleFixture({
+    objective: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
+    reviewProfile: null,
+    branch: "codex/finite-task-test-adaptation-overlay-v1"
+  });
+  assert.equal(verifyArchitectureMaintenanceAuthority(wrong.args).mergeEligible, false);
+  assert.throws(() => architectureMaintenanceSubject({
+    identity: wrong.originalIdentity,
+    tree: wrong.originalTree,
+    scope: wrong.originalScope,
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: "FINITE_TASK_UNREGISTERED_OVERLAY"
+  }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_OBJECTIVE_INVALID/u);
 });
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];

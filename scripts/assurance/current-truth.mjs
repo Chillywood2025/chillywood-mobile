@@ -396,6 +396,12 @@ if (mode) {
       baseReservation: finiteTaskRuntime.baseReservation ?? null,
       effectiveReservation: finiteTaskRuntime.effectiveReservation ?? null,
       amendmentReceipt: finiteTaskRuntime.amendmentReceipt ?? null,
+      ...(finiteTaskRuntime.effectiveReservationResolution?.status === "AMENDED_WITH_TEST_ADAPTATION" ? {
+        aggregateReservation: finiteTaskRuntime.effectiveReservationResolution.aggregateReservation,
+        testAdaptationReservation: finiteTaskRuntime.effectiveReservationResolution.testAdaptationReservation,
+        scopePartitions: finiteTaskRuntime.effectiveReservationResolution.scopePartitions,
+        testAdaptationReceipt: finiteTaskRuntime.effectiveReservationResolution.testAdaptationReceipt
+      } : {}),
       authority: finiteTaskRuntime.effectiveReservationResolution?.authority ?? null,
       finalSourceEligibility: finiteTaskFinalSourceEligibility,
       postMergeTransition: finiteTaskPostMergeTransition,

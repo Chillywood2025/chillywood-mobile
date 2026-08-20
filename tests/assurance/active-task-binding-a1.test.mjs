@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -14,6 +15,7 @@ import {
   ownerBootstrapBindingSubject,
   redactActiveTaskPacket,
   resolveEngineeringArtifactInput,
+  resolveFiniteTaskImplementation,
   validateEngineeringTaskAuthority,
   validateStructuredBinding,
   verifyActiveTaskOwnerJurisdictionPolicy,
@@ -32,6 +34,10 @@ import {
   finiteTaskEffectiveReservationAuthorityValid,
   finiteTaskFinalReceiptBody,
   finiteTaskFinalReceiptSubject,
+  finiteTaskImplementationLifecycleAuthorityValid,
+  finiteTaskTerminalReservationMatchesOutcome,
+  finiteTaskTestAdaptationCommentBody,
+  finiteTaskTestAdaptationSubject,
   finiteTaskLeaseEffectivelyTerminal,
   finiteTaskLeaseFor,
   HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1,
@@ -45,6 +51,7 @@ import {
   renderCurrentState,
   renderNextTask,
   resolveCurrentProtectedBase,
+  resolveFiniteTaskCurrentTruthCandidateLease,
   resolveFiniteTaskEffectiveReservation,
   stableJson,
   TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
@@ -62,9 +69,10 @@ import {
   verifyCurrentTruthSynchronization,
   verifyFiniteTaskFinalReceipt,
   verifyFiniteTaskMergeProvenance,
+  verifyFiniteTaskTestAdaptationReceipt,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyOwnerJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -1987,6 +1995,8 @@ const wave1BoundStart = "3".repeat(40);
 const wave1BoundStartTree = "4".repeat(40);
 const wave1Descendant = "5".repeat(40);
 const wave1DescendantTree = "6".repeat(40);
+const wave1AdvancedBase = "8".repeat(40);
+const wave1AdvancedBaseTree = "9".repeat(40);
 const wave1AddedPaths = ["_lib/accessEntitlements.ts", "_lib/roomRules.ts"];
 const wave1AuthorityEvidence = {
   taskArtifactHash: wave1Lease.closure.artifactHash,
@@ -2034,6 +2044,7 @@ const wave1Candidate = (overrides = {}) => ({
   prState: "open",
   head: wave1Descendant,
   tree: wave1DescendantTree,
+  scopeBase: wave1BoundBase,
   changedPaths: [...wave1Lease.allowedPaths, ...wave1AddedPaths].sort(),
   changedLines: 4500,
   ...overrides
@@ -2087,6 +2098,1117 @@ function wave1AmendmentResolution({ subject = wave1AmendmentSubject(), candidate
     ...resolver
   });
 }
+
+const wave1FixturePath = "supabase/tests/revenuecat_atomic_transactions_test.sql";
+const wave1FixtureBaselineText = "begin;\nselect plan(62);\n-- unchanged direct creator purchase-intent fixture\nrollback;\n";
+const wave1FixtureCandidateText = "begin;\nselect plan(62);\n-- adapted creator eligibility fixture\nrollback;\n";
+const wave1GitBlobOid = (text) => {
+  const bytes = Buffer.from(text);
+  return createHash("sha1").update(Buffer.from(`blob ${bytes.length}\0`)).update(bytes).digest("hex");
+};
+const wave1FixtureBaselineBlob = wave1GitBlobOid(wave1FixtureBaselineText);
+const wave1FixtureCandidateBlob = wave1GitBlobOid(wave1FixtureCandidateText);
+const wave1TaskArtifactPath = wave1Lease.artifactReservation.closureArtifactPath;
+const wave1TaskArtifactText = spawnSync("git", ["show", `14e6d3a05bc4110712f88de11c76968cb610dae1:${wave1TaskArtifactPath}`], { encoding: "utf8" }).stdout;
+assert.equal(digest(wave1TaskArtifactText), wave1Lease.closure.artifactHash);
+const wave1TaskArtifactBlob = wave1GitBlobOid(wave1TaskArtifactText);
+const wave1FixtureBaselineSha256 = digest(wave1FixtureBaselineText);
+const wave1ImplementationPaths = [...wave1Lease.allowedPaths, ...wave1AddedPaths].sort();
+const wave1OverlayPaths = [...wave1ImplementationPaths, wave1FixturePath].sort();
+const wave1TestAdaptationAuthority = { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false };
+const wave1Reservation = (paths, maximumFiles, maximumLines) => {
+  const allowedPaths = [...new Set(paths)].sort();
+  const projection = { allowedPaths, pathGlobs: allowedPaths, maximumFiles, maximumLines, eligiblePathCount: allowedPaths.length };
+  return { ...projection, reservationHash: digest(stableJson(projection)) };
+};
+const wave1PartitionRows = ({ implementationLines = 4500, fixtureLines = 500, fixturePath = wave1FixturePath } = {}) => {
+  const minimumImplementationLines = Math.max(0, wave1ImplementationPaths.length - 1);
+  return [
+    ...wave1ImplementationPaths.map((file, index) => `${index === 0 ? Math.max(0, implementationLines - minimumImplementationLines) : implementationLines > minimumImplementationLines ? 1 : 0}\t0\t${file}`),
+    `${fixtureLines}\t0\t${fixturePath}`
+  ].join("\n");
+};
+const wave1OverlayGit = ({
+  candidate = wave1Candidate({ changedPaths: wave1OverlayPaths, changedLines: 5000 }),
+  currentBase = wave1BoundBase,
+  currentBaseTree = currentBase === wave1BoundBase ? wave1BoundBaseTree : wave1AdvancedBaseTree,
+  candidateNumstat = wave1PartitionRows(),
+  startingPaths = [wave1Lease.artifactReservation.closureArtifactPath],
+  startingLines = 1,
+  baselineText = wave1FixtureBaselineText,
+  baselineBlob = wave1FixtureBaselineBlob,
+  startBlob = wave1FixtureBaselineBlob,
+  candidateFixtureText = wave1FixtureCandidateText,
+  candidateFixtureBlob = wave1FixtureCandidateBlob,
+  candidateFixturePresent = true,
+  candidateFixtureMode = "100644",
+  currentBaseFixtureBlob = wave1FixtureBaselineBlob,
+  taskArtifactText = wave1TaskArtifactText,
+  taskArtifactBlob = wave1TaskArtifactBlob,
+  taskArtifactPresent = true,
+  taskArtifactMode = "100644",
+  startDescends = true,
+  candidateDescends = true,
+  candidateDescendsCurrentBase = true,
+  protectedMainTree = wave1BoundBaseTree,
+  boundStartingTree = wave1BoundStartTree,
+  candidateTree = candidate.tree
+} = {}) => (gitArgs) => {
+  const startingRange = `${wave1BoundBase}...${wave1BoundStart}`;
+  const candidateRange = `${currentBase}...${candidate.head}`;
+  if (gitArgs[0] === "rev-parse") {
+    const trees = new Map([
+      [`${currentBase}^{tree}`, currentBaseTree],
+      [`${wave1BoundBase}^{tree}`, protectedMainTree],
+      [`${wave1BoundStart}^{tree}`, boundStartingTree],
+      [`${candidate.head}^{tree}`, candidateTree],
+      [`${currentBase}:${wave1FixturePath}`, currentBaseFixtureBlob],
+      [`${wave1BoundBase}:${wave1FixturePath}`, baselineBlob],
+      [`${wave1BoundStart}:${wave1FixturePath}`, startBlob],
+    ]);
+    if (trees.has(gitArgs[1])) return trees.get(gitArgs[1]);
+  }
+  if (gitArgs[0] === "merge-base" && gitArgs[1] === "--is-ancestor") {
+    const [, , ancestor, descendant] = gitArgs;
+    if (ancestor === wave1BoundBase && descendant === wave1BoundStart && startDescends) return "";
+    if (ancestor === wave1BoundBase && [wave1BoundBase, currentBase].includes(descendant)) return "";
+    if (ancestor === wave1BoundStart && descendant === candidate.head && candidateDescends) return "";
+    if (ancestor === currentBase && descendant === candidate.head && candidateDescendsCurrentBase) return "";
+    throw new Error("synthetic non-descendant");
+  }
+  if (gitArgs[0] === "merge-base") return wave1BoundBase;
+  if (gitArgs[0] === "diff" && gitArgs[1] === "--name-only") {
+    if (gitArgs.at(-1) === startingRange) return startingPaths.join("\n");
+    if (gitArgs.at(-1) === candidateRange) return candidate.changedPaths.join("\n");
+  }
+  if (gitArgs[0] === "diff" && gitArgs[1] === "--numstat") {
+    if (gitArgs.at(-1) === startingRange) return `${startingLines}\t0\t${startingPaths[0]}`;
+    if (gitArgs.at(-1) === candidateRange) return candidateNumstat;
+  }
+  if (gitArgs[0] === "ls-tree" && gitArgs[1] === wave1BoundBase && gitArgs.at(-1) === wave1FixturePath) return `100644 blob ${baselineBlob}\t${wave1FixturePath}`;
+  if (gitArgs[0] === "ls-tree" && gitArgs[1] === candidate.head && gitArgs.at(-1) === wave1FixturePath) return candidateFixturePresent ? `${candidateFixtureMode} blob ${candidateFixtureBlob}\t${wave1FixturePath}` : "";
+  if (gitArgs[0] === "ls-tree" && gitArgs[1] === wave1BoundStart && gitArgs.at(-1) === wave1TaskArtifactPath) return taskArtifactPresent ? `${taskArtifactMode} blob ${taskArtifactBlob}\t${wave1TaskArtifactPath}` : "";
+  if (gitArgs[0] === "show" && gitArgs[1] === `${wave1BoundBase}:${wave1FixturePath}`) return baselineText;
+  if (gitArgs[0] === "show" && gitArgs[1] === `${candidate.head}:${wave1FixturePath}` && candidateFixturePresent) return candidateFixtureText;
+  if (gitArgs[0] === "show" && gitArgs[1] === `${wave1BoundStart}:${wave1TaskArtifactPath}` && taskArtifactPresent) return taskArtifactText;
+  if (gitArgs[0] === "cat-file" && gitArgs[1] === "-s" && gitArgs[2] === baselineBlob) return String(Buffer.byteLength(baselineText));
+  if (gitArgs[0] === "cat-file" && gitArgs[1] === "-s" && gitArgs[2] === candidateFixtureBlob) return String(Buffer.byteLength(candidateFixtureText));
+  if (gitArgs[0] === "cat-file" && gitArgs[1] === "-s" && gitArgs[2] === taskArtifactBlob) return String(Buffer.byteLength(taskArtifactText));
+  throw new Error(`unexpected overlay git command: ${gitArgs.join(" ")}`);
+};
+const wave1TestAdaptationSubject = ({ amendmentReceipt, implementationReservation, overrides = {} } = {}) => {
+  const fixtureReservation = wave1Reservation([wave1FixturePath], 1, 500);
+  return finiteTaskTestAdaptationSubject({
+    schemaVersion: 1,
+    policyId: canonicalTruth.finiteTaskLeases.testAdaptationPolicy.policyId,
+    capability: canonicalTruth.finiteTaskLeases.testAdaptationPolicy.capability,
+    classification: canonicalTruth.finiteTaskLeases.testAdaptationPolicy.classification,
+    repository: "Chillywood2025/chillywood-mobile",
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    taskId: wave1Lease.leaseId,
+    leaseId: wave1Lease.leaseId,
+    baseLeaseHash: digest(stableJson(wave1Lease)),
+    amendmentReceipt,
+    boundStartingHead: wave1BoundStart,
+    boundStartingTree: wave1BoundStartTree,
+    protectedMainHead: wave1BoundBase,
+    protectedMainTree: wave1BoundBaseTree,
+    taskArtifactHash: wave1Lease.closure.artifactHash,
+    fixturePaths: [wave1FixturePath],
+    fixtureBaselines: [{ path: wave1FixturePath, blob: wave1FixtureBaselineBlob, sha256: wave1FixtureBaselineSha256, plan: "plan(62)" }],
+    fixtureBudget: { maximumFiles: 1, maximumCanonicalLines: 500 },
+    implementationPartition: implementationReservation,
+    aggregateProjection: wave1Reservation([...implementationReservation.allowedPaths, ...fixtureReservation.allowedPaths], 33, 5000),
+    causalClassification: {
+      classification: "TEST_ADAPTATION_REQUIRED",
+      unchangedFixtureFailedUnderStricterCorrectGate: true,
+      productionGateIndependentlyReviewed: true,
+      fixtureAdaptationSufficient: true,
+      productionWeakeningAllowed: false,
+      failureCode: "42501",
+      failureMessage: "creator_eligibility_required"
+    },
+    causativePaths: ["supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql"],
+    affectedDefect: "WAPR-CM-P1-CREATOR-ELIGIBILITY-014",
+    affectedInvariants: ["W1-I-25", "W1-I-27", "W1-I-29"],
+    causalEntitySets: [
+      {
+        kind: "creator",
+        ids: [
+          "65555555-5555-5555-5555-555555555555",
+          "75555555-5555-5555-5555-555555555555",
+          "95555555-5555-5555-5555-555555555555"
+        ]
+      },
+      {
+        kind: "purchase_intent",
+        ids: [
+          "60000000-0000-0000-0000-000000000001",
+          "61000000-0000-0000-0000-000000000001",
+          "70000000-0000-0000-0000-000000000001",
+          "90000000-0000-0000-0000-000000000001"
+        ]
+      }
+    ],
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+    immutability: { immutableCommentRequired: true, createdAtEqualsUpdatedAtRequired: true },
+    applicability: { exactTaskOnly: true, descendantOnly: true, expiresAtTaskTerminal: true, reusableByAnotherTaskOrPr: false },
+    authority: wave1TestAdaptationAuthority,
+    ...overrides
+  });
+};
+function wave1TestAdaptationResolution({
+  candidate = wave1Candidate({ changedPaths: wave1OverlayPaths, changedLines: 5000 }),
+  currentBase = wave1BoundBase,
+  subjectOverrides = {},
+  mutateSubject = () => {},
+  adaptationRaw = {},
+  mutateComments = () => {},
+  resolver = {},
+  gitOptions = {}
+} = {}) {
+  const amendment = wave1AmendmentResolution();
+  assert.equal(amendment.ok, true, stableJson(amendment.findings));
+  const subject = wave1TestAdaptationSubject({ amendmentReceipt: amendment.amendmentReceipt, implementationReservation: amendment.effectiveReservation, overrides: subjectOverrides });
+  mutateSubject(subject);
+  const amendmentComment = {
+    id: 810001,
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-08-14T22:00:00Z",
+    updated_at: "2026-08-14T22:00:00Z",
+    issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229",
+    body: taskLeaseAmendmentCommentBody(wave1AmendmentSubject())
+  };
+  const adaptationComment = {
+    id: 810101,
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-08-15T00:00:00Z",
+    updated_at: "2026-08-15T00:00:00Z",
+    issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229",
+    body: finiteTaskTestAdaptationCommentBody(subject),
+    ...adaptationRaw
+  };
+  const comments = [amendmentComment, adaptationComment];
+  mutateComments(comments, { amendmentComment, adaptationComment, subject });
+  const commits = [
+    { sha: wave1BoundStart, commit: { tree: { sha: wave1BoundStartTree } } },
+    { sha: candidate.head, commit: { tree: { sha: candidate.tree } } }
+  ];
+  const gitCommand = wave1OverlayGit({ candidate, currentBase, ...gitOptions });
+  const result = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate,
+    comments,
+    commentsPaginationComplete: true,
+    pullRequest: {
+      number: 229,
+      state: "open",
+      head: { ref: wave1Lease.implementationBranch, sha: candidate.head, repo: { full_name: "Chillywood2025/chillywood-mobile" } },
+      base: { sha: currentBase, repo: { full_name: "Chillywood2025/chillywood-mobile" } }
+    },
+    commits,
+    commitsPaginationComplete: true,
+    gitCommand,
+    requireCompleteDiscovery: true,
+    authorityEvidence: wave1AuthorityEvidence,
+    ...resolver
+  });
+  return { result, subject, candidate, amendment, comments, commits, gitCommand };
+}
+
+const wave1ImmutableComment = (id, body, createdAt) => ({
+  id,
+  node_id: `IC_wave1_test_adaptation_${id}`,
+  user: { login: "Chillywood2025" },
+  author_association: "OWNER",
+  created_at: createdAt,
+  updated_at: createdAt,
+  issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229",
+  html_url: `https://github.com/Chillywood2025/chillywood-mobile/pull/229#issuecomment-${id}`,
+  body
+});
+
+function observeWave1TestAdaptationLive({ comments, candidate, currentBase = wave1BoundBase }) {
+  const pullRequest = {
+    number: wave1Lease.implementationPr,
+    state: "open",
+    head: { ref: wave1Lease.implementationBranch, sha: candidate.head, repo: { full_name: "Chillywood2025/chillywood-mobile" } },
+    base: { ref: "main", sha: currentBase, repo: { full_name: "Chillywood2025/chillywood-mobile" } }
+  };
+  const commits = [
+    { sha: wave1BoundStart, commit: { tree: { sha: wave1BoundStartTree } } },
+    { sha: candidate.head, commit: { tree: { sha: candidate.tree } } }
+  ];
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-test-adaptation-live-"));
+  const fakeGh = path.join(temporary, "gh");
+  const commentsOutput = JSON.stringify([comments]);
+  const commitsOutput = JSON.stringify([commits]);
+  const pullOutput = JSON.stringify(pullRequest);
+  fs.writeFileSync(fakeGh, `#!/usr/bin/env node\nconst endpoint = process.argv.at(-1);\nif (endpoint.includes("/comments?")) process.stdout.write(${JSON.stringify(commentsOutput)});\nelse if (endpoint.includes("/commits?")) process.stdout.write(${JSON.stringify(commitsOutput)});\nelse process.stdout.write(${JSON.stringify(pullOutput)});\n`);
+  fs.chmodSync(fakeGh, 0o755);
+  const originalPath = process.env.PATH;
+  let liveObservation;
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+    liveObservation = observeLiveFiniteTaskEffectiveReservation({
+      repository: "Chillywood2025/chillywood-mobile",
+      pr: wave1Lease.implementationPr,
+      authorityEvidence: wave1AuthorityEvidence
+    });
+  } finally {
+    process.env.PATH = originalPath;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+  return { liveObservation, pullRequest, commits };
+}
+
+test("finite test-adaptation resolver: exact immutable receipt produces independent 32/4500 plus 1/500 partitions", () => {
+  const { result, subject } = wave1TestAdaptationResolution();
+  assert.equal(result.ok, true, stableJson(result.findings));
+  assert.equal(result.status, "AMENDED_WITH_TEST_ADAPTATION");
+  assert.deepEqual(result.effectiveReservation, subject.implementationPartition);
+  assert.equal(result.effectiveReservation.maximumFiles, 32);
+  assert.equal(result.effectiveReservation.maximumLines, 4500);
+  assert.deepEqual(result.testAdaptationReservation, wave1Reservation([wave1FixturePath], 1, 500));
+  assert.deepEqual(result.aggregateReservation, subject.aggregateProjection);
+  assert.equal(result.aggregateReservation.maximumFiles, 33);
+  assert.equal(result.aggregateReservation.maximumLines, 5000);
+  assert.deepEqual(result.scopePartitions.implementation.actualPaths, wave1ImplementationPaths);
+  assert.equal(result.scopePartitions.implementation.canonicalChangedLines, 4500);
+  assert.deepEqual(result.scopePartitions.testAdaptation.actualPaths, [wave1FixturePath]);
+  assert.equal(result.scopePartitions.testAdaptation.canonicalChangedLines, 500);
+  assert.equal(result.scopePartitions.aggregate.canonicalChangedLines, 5000);
+  assert.equal(result.amendmentsConsumed, 1);
+  assert.equal(result.testAdaptationsConsumed, 1);
+  assert.equal(result.testAdaptationReceipt.commentId, 810101);
+  assert.equal(result.testAdaptationReceipt.boundStartingHead, wave1BoundStart);
+  assert.equal(result.testAdaptationReceipt.boundStartingTree, wave1BoundStartTree);
+  assert.deepEqual(result.testAdaptationReceipt.fixtureBaselines, subject.fixtureBaselines);
+  assert.equal(result.testAdaptationReceipt.authorityClassification, "SYNTHETIC_NON_AUTHORITY");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(result), false);
+  for (const hash of [result.testAdaptationReceipt.subjectHash, result.testAdaptationReceipt.bodyHash, result.testAdaptationReceipt.rawBodyHash]) assert.match(hash, /^[0-9a-f]{64}$/u);
+});
+
+test("finite test-adaptation active-task scope: only a trusted layered resolution can derive the implementation observation", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-adapted-scope-"));
+  const run = (args) => spawnSync("git", args, { cwd: temporary, encoding: "utf8", shell: false });
+  try {
+    assert.equal(run(["init", "--quiet"]).status, 0);
+    assert.equal(run(["config", "user.name", "Assurance Test"]).status, 0);
+    assert.equal(run(["config", "user.email", "assurance@example.invalid"]).status, 0);
+    const implementationPath = wave1TaskArtifactPath;
+    const fixtureAbsolute = path.join(temporary, wave1FixturePath);
+    const implementationAbsolute = path.join(temporary, implementationPath);
+    fs.mkdirSync(path.dirname(fixtureAbsolute), { recursive: true });
+    fs.mkdirSync(path.dirname(implementationAbsolute), { recursive: true });
+    fs.writeFileSync(fixtureAbsolute, wave1FixtureBaselineText);
+    fs.writeFileSync(implementationAbsolute, "{\"baseline\":true}\n");
+    assert.equal(run(["add", "--", implementationPath, wave1FixturePath]).status, 0);
+    assert.equal(run(["commit", "--quiet", "-m", "baseline"]).status, 0);
+    const base = run(["rev-parse", "HEAD"]).stdout.trim();
+    const baseTree = run(["rev-parse", "HEAD^{tree}"]).stdout.trim();
+    fs.writeFileSync(fixtureAbsolute, wave1FixtureCandidateText);
+    fs.writeFileSync(implementationAbsolute, "{}\n");
+    assert.equal(run(["add", "--", implementationPath, wave1FixturePath]).status, 0);
+    assert.equal(run(["commit", "--quiet", "-m", "adapt fixture"]).status, 0);
+    const head = run(["rev-parse", "HEAD"]).stdout.trim();
+    const tree = run(["rev-parse", "HEAD^{tree}"]).stdout.trim();
+    const range = `${base}...${head}`;
+    const candidateNumstat = run(["diff", "--numstat", range]).stdout.trim();
+    const changedPaths = run(["diff", "--name-only", range]).stdout.split(/\r?\n/gu).filter(Boolean).sort();
+    const changedLines = candidateNumstat.split(/\r?\n/gu).filter(Boolean).reduce((total, row) => total + row.split("\t").slice(0, 2).reduce((sum, value) => sum + Number(value), 0), 0);
+    const candidate = wave1Candidate({ head, tree, scopeBase: base, changedPaths, changedLines });
+    const amendmentComment = wave1ImmutableComment(810001, taskLeaseAmendmentCommentBody(wave1AmendmentSubject()), "2026-08-14T22:00:00Z");
+    const implementationCandidate = wave1Candidate();
+    const initialLive = observeWave1TestAdaptationLive({ comments: [amendmentComment], candidate: implementationCandidate });
+    const initialResolution = resolveFiniteTaskEffectiveReservation({
+      registry: canonicalTruth.finiteTaskLeases,
+      lease: wave1Lease,
+      candidate: implementationCandidate,
+      liveObservation: initialLive.liveObservation,
+      gitCommand: wave1OverlayGit({ candidate: implementationCandidate })
+    });
+    assert.equal(finiteTaskEffectiveReservationAuthorityValid(initialResolution), true);
+    const adaptationSubject = wave1TestAdaptationSubject({
+      amendmentReceipt: initialResolution.amendmentReceipt,
+      implementationReservation: initialResolution.effectiveReservation
+    });
+    const adaptationComment = wave1ImmutableComment(810101, finiteTaskTestAdaptationCommentBody(adaptationSubject), "2026-08-15T00:00:00Z");
+    const adaptedLive = observeWave1TestAdaptationLive({ comments: [amendmentComment, adaptationComment], candidate, currentBase: base });
+    const resolution = resolveFiniteTaskEffectiveReservation({
+      registry: canonicalTruth.finiteTaskLeases,
+      lease: wave1Lease,
+      candidate,
+      liveObservation: adaptedLive.liveObservation,
+      gitCommand: wave1OverlayGit({ candidate, currentBase: base, candidateNumstat, currentBaseTree: baseTree, candidateTree: tree })
+    });
+    assert.equal(finiteTaskEffectiveReservationAuthorityValid(resolution), true, stableJson(resolution.findings));
+    const aggregateScope = observeCandidateScopeFromGit(base, head, temporary);
+    assert.ok(aggregateScope);
+    assert.equal(aggregateScope.tree, tree);
+    const implementationScope = deriveTrustedImplementationScopeObservation(aggregateScope, resolution);
+    assert.ok(implementationScope);
+    assert.deepEqual(implementationScope.paths, [implementationPath]);
+    assert.equal(implementationScope.changedLines, resolution.scopePartitions.implementation.canonicalChangedLines);
+    assert.deepEqual(implementationScope.aggregateScope.paths, changedPaths);
+    assert.equal(deriveTrustedImplementationScopeObservation(aggregateScope, resolution.scopePartitions), null);
+    assert.equal(deriveTrustedImplementationScopeObservation(aggregateScope, structuredClone(resolution)), null);
+    const implementationIdentity = createImplementationIdentityObservation({
+      repository: "Chillywood2025/chillywood-mobile",
+      workflowPr: wave1Lease.implementationPr,
+      implementationPr: wave1Lease.implementationPr,
+      implementationBranch: wave1Lease.implementationBranch,
+      implementationHead: head,
+      implementationTree: tree,
+      originalSeedHead: wave1Lease.admittedSeedHead,
+      originalSeedTree: wave1Lease.admittedSeedTree,
+      protectedBase: base,
+      currentProtectedMain: base,
+      finiteLeaseId: wave1Lease.leaseId,
+      taskArtifactPath: implementationPath,
+      taskArtifactHash: wave1Lease.closure.artifactHash,
+      implementationChangedPaths: implementationScope.paths,
+      seedIsAncestor: true,
+      protectedBaseIsAncestor: true,
+      ownerApprovalValid: true,
+      artifactFrozen: true,
+      prospectiveLeasePresent: true,
+      admissionMerged: true
+    });
+    assert.equal(implementationIdentity.candidateEligible, true);
+    const admitted = evaluateAdmittedFiniteTaskArtifactV2({}, {
+      taskArtifactBytes: "{}\n",
+      taskArtifactHash: wave1Lease.closure.artifactHash,
+      implementationIdentity,
+      authoritativeLease: wave1Lease,
+      ownerJurisdictionAuthority: null,
+      actualScope: implementationScope
+    });
+    assert.equal(admitted.derivedChecks.scopeObservation, true);
+    assert.equal(admitted.findings.includes("FINITE_TASK_SCOPE_MEASUREMENT_MISSING"), false);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("finite test-adaptation resolver: implementation and fixture line ceilings cannot pool", () => {
+  const implementationOverflow = wave1TestAdaptationResolution({
+    candidate: wave1Candidate({ changedPaths: wave1OverlayPaths, changedLines: 5001 }),
+    gitOptions: { candidateNumstat: wave1PartitionRows({ implementationLines: 4501, fixtureLines: 500 }) }
+  }).result;
+  assert.ok(implementationOverflow.findings.includes("FINITE_TASK_IMPLEMENTATION_PARTITION_SCOPE_OVERFLOW"), stableJson(implementationOverflow.findings));
+  assert.equal(implementationOverflow.findings.includes("FINITE_TASK_TEST_ADAPTATION_PARTITION_SCOPE_OVERFLOW"), false);
+  const fixtureOverflow = wave1TestAdaptationResolution({
+    candidate: wave1Candidate({ changedPaths: wave1OverlayPaths, changedLines: 5001 }),
+    gitOptions: { candidateNumstat: wave1PartitionRows({ implementationLines: 4500, fixtureLines: 501 }) }
+  }).result;
+  assert.ok(fixtureOverflow.findings.includes("FINITE_TASK_TEST_ADAPTATION_PARTITION_SCOPE_OVERFLOW"), stableJson(fixtureOverflow.findings));
+  assert.equal(fixtureOverflow.findings.includes("FINITE_TASK_IMPLEMENTATION_PARTITION_SCOPE_OVERFLOW"), false);
+});
+
+test("finite test-adaptation resolver: wrong second wildcard and overlapping fixture paths fail closed", () => {
+  const wrong = wave1TestAdaptationResolution({ subjectOverrides: { fixturePaths: ["tests/unrelated.test.mjs"] } }).result;
+  const second = wave1TestAdaptationResolution({ subjectOverrides: { fixturePaths: [wave1FixturePath, "tests/second.test.mjs"] } }).result;
+  const wildcard = wave1TestAdaptationResolution({ subjectOverrides: { fixturePaths: ["supabase/tests/*.sql"] } }).result;
+  const overlap = wave1TestAdaptationResolution({ subjectOverrides: { fixturePaths: [wave1ImplementationPaths[0]] } }).result;
+  for (const result of [wrong, second, wildcard, overlap]) {
+    assert.equal(result.ok, false);
+    assert.ok(result.findings.includes("FINITE_TASK_TEST_ADAPTATION_RECEIPT_MALFORMED"), stableJson(result.findings));
+  }
+});
+
+test("finite test-adaptation resolver: malformed binary duplicate and underreported numstat partitions fail closed", () => {
+  const malformed = wave1TestAdaptationResolution({ gitOptions: { candidateNumstat: `not-a-number\t0\t${wave1ImplementationPaths[0]}` } }).result;
+  const binary = wave1TestAdaptationResolution({ gitOptions: { candidateNumstat: `-\t-\t${wave1FixturePath}` } }).result;
+  const duplicate = wave1TestAdaptationResolution({ gitOptions: { candidateNumstat: `${wave1PartitionRows()}\n1\t0\t${wave1FixturePath}` } }).result;
+  const underreported = wave1TestAdaptationResolution({ candidate: wave1Candidate({ changedPaths: wave1OverlayPaths, changedLines: 4999 }) }).result;
+  for (const result of [malformed, binary, duplicate, underreported]) {
+    assert.equal(result.ok, false);
+    assert.ok(result.findings.includes("FINITE_TASK_TEST_ADAPTATION_PARTITION_INVALID"), stableJson(result.findings));
+  }
+});
+
+test("finite test-adaptation resolver: baseline blob tree plan and pre-adaptation history are immutable", () => {
+  const malformedBaselines = [
+    [null],
+    [[]],
+    [{ path: wave1FixturePath, blob: wave1FixtureBaselineBlob, sha256: wave1FixtureBaselineSha256, plan: "plan(62)", unexpected: true }]
+  ];
+  for (const fixtureBaselines of malformedBaselines) {
+    const malformed = wave1TestAdaptationResolution({ subjectOverrides: { fixtureBaselines } }).result;
+    assert.equal(malformed.ok, false);
+    assert.ok(malformed.findings.includes("FINITE_TASK_TEST_ADAPTATION_RECEIPT_MALFORMED"), stableJson(malformed.findings));
+  }
+  const wrongBlob = wave1TestAdaptationResolution({ gitOptions: { baselineBlob: "a".repeat(40) } }).result;
+  const wrongStartBlob = wave1TestAdaptationResolution({ gitOptions: { startBlob: "b".repeat(40) } }).result;
+  const wrongTree = wave1TestAdaptationResolution({ gitOptions: { protectedMainTree: "c".repeat(40) } }).result;
+  const wrongPlan = wave1TestAdaptationResolution({ gitOptions: { baselineText: "begin;\nselect plan(61);\nrollback;\n" } }).result;
+  const fixtureAlreadyChanged = wave1TestAdaptationResolution({ gitOptions: { startingPaths: [wave1Lease.artifactReservation.closureArtifactPath, wave1FixturePath] } }).result;
+  for (const result of [wrongBlob, wrongStartBlob, wrongPlan, fixtureAlreadyChanged]) {
+    assert.equal(result.ok, false);
+    assert.ok(result.findings.includes("FINITE_TASK_TEST_ADAPTATION_BASELINE_MISMATCH") || result.findings.includes("FINITE_TASK_TEST_ADAPTATION_HISTORY_INVALID"), stableJson(result.findings));
+  }
+  assert.ok(wrongTree.findings.includes("FINITE_TASK_TEST_ADAPTATION_TREE_MISMATCH"), stableJson(wrongTree.findings));
+});
+
+test("finite test-adaptation resolver: immutable receipt baseline survives only a synchronized clean main advance", () => {
+  const advanced = wave1TestAdaptationResolution({ currentBase: wave1AdvancedBase }).result;
+  assert.equal(advanced.ok, true, stableJson(advanced.findings));
+  assert.equal(advanced.status, "AMENDED_WITH_TEST_ADAPTATION");
+  assert.equal(advanced.testAdaptationReceipt.protectedMainHead, wave1BoundBase);
+  assert.equal(advanced.scopePartitions.aggregate.canonicalChangedLines, 5000);
+  const unsynchronized = wave1TestAdaptationResolution({
+    currentBase: wave1AdvancedBase,
+    gitOptions: { candidateDescendsCurrentBase: false }
+  }).result;
+  assert.ok(unsynchronized.findings.includes("FINITE_TASK_TEST_ADAPTATION_HISTORY_INVALID"), stableJson(unsynchronized.findings));
+  const mainFixtureDrift = wave1TestAdaptationResolution({
+    currentBase: wave1AdvancedBase,
+    gitOptions: { currentBaseFixtureBlob: wave1FixtureCandidateBlob }
+  }).result;
+  assert.ok(mainFixtureDrift.findings.includes("FINITE_TASK_TEST_ADAPTATION_BASELINE_MISMATCH"), stableJson(mainFixtureDrift.findings));
+});
+
+test("finite test-adaptation resolver: defect invariant path and artifact bytes stay bound to the frozen task", () => {
+  const mutatedArtifactValue = JSON.parse(wave1TaskArtifactText);
+  mutatedArtifactValue.taskId = "other-task";
+  const mutatedArtifact = stableJson(mutatedArtifactValue);
+  const cases = [
+    wave1TestAdaptationResolution({ subjectOverrides: { affectedDefect: "WAPR-NOT-IN-FROZEN-TASK" } }).result,
+    wave1TestAdaptationResolution({ subjectOverrides: { affectedInvariants: ["W1-I-NOT-IN-FROZEN-TASK"] } }).result,
+    wave1TestAdaptationResolution({ subjectOverrides: { causativePaths: [wave1AddedPaths[0]] } }).result,
+    wave1TestAdaptationResolution({ gitOptions: { taskArtifactText: mutatedArtifact, taskArtifactBlob: wave1GitBlobOid(mutatedArtifact) } }).result
+  ];
+  for (const [index, result] of cases.entries()) {
+    assert.equal(result.ok, false, `causal case ${index}: ${stableJson(result.findings)}`);
+    assert.ok(result.findings.includes("FINITE_TASK_TEST_ADAPTATION_CAUSAL_BINDING_INVALID"), `causal case ${index}: ${stableJson(result.findings)}`);
+  }
+});
+
+test("finite test-adaptation resolver: task-neutral causal entity sets are exact sorted and nonempty", () => {
+  const cases = [
+    [{ kind: "creator", ids: [] }],
+    [{ kind: "creator", ids: ["duplicate", "duplicate"] }],
+    [{ kind: "purchase_intent", ids: ["b", "a"] }],
+    [{ kind: "z", ids: ["one"] }, { kind: "a", ids: ["two"] }],
+    [{ kind: "creator", ids: ["one"] }, { kind: "creator", ids: ["two"] }],
+    [null],
+    [[]],
+    [{ kind: "creator", ids: ["one"], unexpected: true }]
+  ];
+  for (const causalEntitySets of cases) {
+    const result = wave1TestAdaptationResolution({ subjectOverrides: { causalEntitySets } }).result;
+    assert.equal(result.ok, false);
+    assert.ok(result.findings.includes("FINITE_TASK_TEST_ADAPTATION_RECEIPT_MALFORMED"), stableJson(result.findings));
+  }
+});
+
+test("finite test-adaptation resolver: candidate fixture stays a modified tracked 100644 blob with the exact plan", () => {
+  const changedPlanText = wave1FixtureCandidateText.replace("plan(62)", "plan(61)");
+  const missingPlanText = wave1FixtureCandidateText.replace("select plan(62);\n", "");
+  const commentDecoyText = wave1FixtureCandidateText.replace("select plan(62);", "-- plan(62)\nselect plan(1);");
+  const cases = [
+    wave1TestAdaptationResolution({ gitOptions: { candidateFixturePresent: false } }).result,
+    wave1TestAdaptationResolution({ gitOptions: { candidateFixtureMode: "120000" } }).result,
+    wave1TestAdaptationResolution({ gitOptions: { candidateFixtureText: wave1FixtureBaselineText, candidateFixtureBlob: wave1FixtureBaselineBlob } }).result,
+    wave1TestAdaptationResolution({ gitOptions: { candidateFixtureText: changedPlanText, candidateFixtureBlob: wave1GitBlobOid(changedPlanText) } }).result,
+    wave1TestAdaptationResolution({ gitOptions: { candidateFixtureText: missingPlanText, candidateFixtureBlob: wave1GitBlobOid(missingPlanText) } }).result,
+    wave1TestAdaptationResolution({ gitOptions: { candidateFixtureText: commentDecoyText, candidateFixtureBlob: wave1GitBlobOid(commentDecoyText) } }).result
+  ];
+  for (const result of cases) {
+    assert.equal(result.ok, false);
+    assert.ok(result.findings.includes("FINITE_TASK_TEST_ADAPTATION_FIXTURE_INTEGRITY_INVALID"), stableJson(result.findings));
+  }
+});
+
+test("finite test-adaptation resolver: start commit cardinality and descendant-only history fail closed", () => {
+  const missingStart = wave1TestAdaptationResolution({ resolver: { commits: [{ sha: wave1Descendant, commit: { tree: { sha: wave1DescendantTree } } }] } }).result;
+  assert.ok(missingStart.findings.includes("FINITE_TASK_TEST_ADAPTATION_START_NOT_ON_PR"), stableJson(missingStart.findings));
+  const duplicateStart = wave1TestAdaptationResolution({ resolver: { commits: [
+    { sha: wave1BoundStart, commit: { tree: { sha: wave1BoundStartTree } } },
+    { sha: wave1BoundStart, commit: { tree: { sha: wave1BoundStartTree } } },
+    { sha: wave1Descendant, commit: { tree: { sha: wave1DescendantTree } } }
+  ] } }).result;
+  assert.ok(duplicateStart.findings.includes("FINITE_TASK_TEST_ADAPTATION_START_NOT_ON_PR"), stableJson(duplicateStart.findings));
+  const sibling = wave1TestAdaptationResolution({ gitOptions: { candidateDescends: false } }).result;
+  assert.ok(sibling.findings.includes("FINITE_TASK_TEST_ADAPTATION_HISTORY_INVALID"), stableJson(sibling.findings));
+});
+
+test("finite test-adaptation resolver: comment cardinality pagination editing and Owner identity fail closed", () => {
+  const duplicate = wave1TestAdaptationResolution({ mutateComments: (comments, { adaptationComment }) => { comments.push({ ...adaptationComment, id: 810102 }); } }).result;
+  assert.ok(duplicate.findings.includes("FINITE_TASK_TEST_ADAPTATION_CARDINALITY_EXCEEDED"), stableJson(duplicate.findings));
+  const incomplete = wave1TestAdaptationResolution({ resolver: { commentsPaginationComplete: false } }).result;
+  assert.ok(incomplete.findings.includes("FINITE_TASK_LEASE_AMENDMENT_COMMENT_DISCOVERY_INCOMPLETE"), stableJson(incomplete.findings));
+  const edited = wave1TestAdaptationResolution({ adaptationRaw: { updated_at: "2026-08-15T00:01:00Z" } }).result;
+  const wrongOwner = wave1TestAdaptationResolution({ adaptationRaw: { user: { login: "not-owner" } } }).result;
+  const wrongAssociation = wave1TestAdaptationResolution({ adaptationRaw: { author_association: "MEMBER" } }).result;
+  for (const result of [edited, wrongOwner, wrongAssociation]) assert.ok(result.findings.includes("FINITE_TASK_TEST_ADAPTATION_COMMENT_INVALID"), stableJson(result.findings));
+});
+
+test("finite test-adaptation resolver: no overlay receipt preserves historical amended behavior", () => {
+  const historical = wave1AmendmentResolution();
+  assert.equal(historical.ok, true, stableJson(historical.findings));
+  assert.equal(historical.status, "AMENDED");
+  for (const overlayOnlyField of ["scopeBase", "testAdaptationReservation", "testAdaptationReceipt", "testAdaptationsConsumed", "aggregateReservation", "scopePartitions"]) {
+    assert.equal(Object.hasOwn(historical, overlayOnlyField), false, overlayOnlyField);
+  }
+  const legacyV2 = finiteTaskFinalReceiptSubject({ schemaVersion: 2, effectiveReservation: historical.effectiveReservation, amendmentReceipt: historical.amendmentReceipt });
+  assert.equal(legacyV2.schemaVersion, 2);
+  assert.equal(legacyV2.testAdaptationReceipt, undefined);
+});
+
+test("finite test-adaptation terminal expiry: schema and reservation status cannot cross generations", () => {
+  const amended = wave1AmendmentResolution();
+  const adapted = wave1TestAdaptationResolution().result;
+  const legacyOutcome = {
+    schemaVersion: 1,
+    classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    baseLeaseHash: amended.baseLeaseHash,
+    baseReservation: amended.baseReservation,
+    effectiveReservation: amended.effectiveReservation,
+    amendmentReceipt: amended.amendmentReceipt
+  };
+  const adaptedOutcome = {
+    schemaVersion: 2,
+    classification: "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2",
+    baseLeaseHash: adapted.baseLeaseHash,
+    baseReservation: adapted.baseReservation,
+    effectiveReservation: adapted.effectiveReservation,
+    amendmentReceipt: adapted.amendmentReceipt,
+    testAdaptationReservation: adapted.testAdaptationReservation,
+    aggregateReservation: adapted.aggregateReservation,
+    scopePartitions: adapted.scopePartitions,
+    testAdaptationReceipt: adapted.testAdaptationReceipt,
+    mergeParents: [adapted.scopeBase, adapted.candidateHead],
+    finalSourceReceipt: { subject: { scopeBase: adapted.scopeBase } }
+  };
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: legacyOutcome, reservationResolution: amended }), true);
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: adaptedOutcome, reservationResolution: adapted }), true);
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: legacyOutcome, reservationResolution: adapted }), false);
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: adaptedOutcome, reservationResolution: amended }), false);
+  for (const [field, value] of [
+    ["aggregateReservationHash", adapted.aggregateReservation.reservationHash],
+    ["testAdaptationCommentId", adapted.testAdaptationReceipt.commentId],
+    ["subject", { schemaVersion: 3 }]
+  ]) {
+    const expiredLegacy = structuredClone(legacyOutcome);
+    expiredLegacy.finalSourceReceipt = { [field]: value };
+    assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: expiredLegacy, reservationResolution: amended }), false, field);
+  }
+});
+
+test("finite test-adaptation lifecycle: trusted live overlay binds final receipt v3, merge, and terminal v2", () => {
+  const implementationCandidate = wave1Candidate({
+    seedTree: wave1Lease.admittedSeedTree,
+    seedIsAncestor: true,
+    baseIsAncestor: true,
+    findings: { P0: 0, P1: 0, launchImpactingP2: 0 }
+  });
+  const amendmentComment = wave1ImmutableComment(810001, taskLeaseAmendmentCommentBody(wave1AmendmentSubject()), "2026-08-14T22:00:00Z");
+  const initialLive = observeWave1TestAdaptationLive({ comments: [amendmentComment], candidate: implementationCandidate });
+  const initialResolution = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate: implementationCandidate,
+    liveObservation: initialLive.liveObservation,
+    gitCommand: wave1OverlayGit({ candidate: implementationCandidate })
+  });
+  assert.equal(initialResolution.status, "AMENDED");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(initialResolution), true);
+  const ordinaryBinding = {
+    ...structuredClone(canonicalTruth.activeTaskBinding),
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    currentImplementationHead: implementationCandidate.head,
+    currentImplementationTree: implementationCandidate.tree,
+    phase: "IMPLEMENTATION"
+  };
+  const ordinaryImplementation = resolveFiniteTaskImplementation(canonicalTruth, {
+    branch: implementationCandidate.branch,
+    head: implementationCandidate.head,
+    tree: implementationCandidate.tree
+  }, {
+    finiteTaskEffectiveReservationResolution: initialResolution,
+    finiteTaskCandidateObservation: implementationCandidate
+  }, ordinaryBinding, wave1Lease);
+  assert.equal(ordinaryImplementation.ok, true, stableJson(ordinaryImplementation.findings));
+  assert.equal(ordinaryImplementation.value.finiteLease.reservationStatus, "AMENDED");
+
+  const candidate = wave1Candidate({
+    changedPaths: wave1OverlayPaths,
+    changedLines: 5000,
+    diffHash: "a".repeat(64),
+    changedPathHash: digest(stableJson(wave1OverlayPaths)),
+    findings: { P0: 0, P1: 0, launchImpactingP2: 0 }
+  });
+  const adaptationSubject = wave1TestAdaptationSubject({
+    amendmentReceipt: initialResolution.amendmentReceipt,
+    implementationReservation: initialResolution.effectiveReservation
+  });
+  const adaptationComment = wave1ImmutableComment(810101, finiteTaskTestAdaptationCommentBody(adaptationSubject), "2026-08-15T00:00:00Z");
+  const gitCommand = wave1OverlayGit({ candidate });
+  const orphanedLive = observeWave1TestAdaptationLive({ comments: [adaptationComment], candidate });
+  const orphanedResolution = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate,
+    liveObservation: orphanedLive.liveObservation,
+    gitCommand
+  });
+  assert.equal(orphanedResolution.ok, false);
+  assert.notEqual(orphanedResolution.status, "BASE_ONLY");
+  assert.ok(orphanedResolution.findings.includes("FINITE_TASK_TEST_ADAPTATION_EFFECTIVE_LEASE_REQUIRED"), stableJson(orphanedResolution.findings));
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(orphanedResolution), false);
+  const adaptedLive = observeWave1TestAdaptationLive({ comments: [amendmentComment, adaptationComment], candidate });
+  let resolution = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate,
+    liveObservation: adaptedLive.liveObservation,
+    gitCommand
+  });
+  assert.equal(resolution.ok, true, stableJson(resolution.findings));
+  assert.equal(resolution.status, "AMENDED_WITH_TEST_ADAPTATION");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(resolution), true);
+  assert.equal(resolution.amendmentReceipt.authorityClassification, "LIVE_IMMUTABLE_OWNER_RECEIPT");
+  assert.equal(resolution.testAdaptationReceipt.authorityClassification, "LIVE_IMMUTABLE_OWNER_RECEIPT");
+  const currentTruthLease = resolveFiniteTaskCurrentTruthCandidateLease({
+    baseLease: wave1Lease,
+    effectiveReservationResolution: resolution,
+    observedHead: candidate.head,
+    observedTree: candidate.tree,
+    remoteMain: resolution.scopeBase,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch
+  });
+  assert.deepEqual(currentTruthLease.resolvedLease, resolution.effectiveLease);
+  assert.equal(currentTruthLease.overlayScopeBaseMismatch, false);
+  const staleCurrentTruthLease = resolveFiniteTaskCurrentTruthCandidateLease({
+    baseLease: wave1Lease,
+    effectiveReservationResolution: resolution,
+    observedHead: candidate.head,
+    observedTree: candidate.tree,
+    remoteMain: "f".repeat(40),
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch
+  });
+  assert.equal(staleCurrentTruthLease.resolvedLease, null);
+  assert.equal(staleCurrentTruthLease.overlayScopeBaseMismatch, true);
+  assert.equal(resolveFiniteTaskCurrentTruthCandidateLease({
+    baseLease: wave1Lease,
+    effectiveReservationResolution: structuredClone(resolution),
+    observedHead: candidate.head,
+    observedTree: candidate.tree,
+    remoteMain: resolution.scopeBase,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch
+  }).resolvedLease, null);
+  const layeredCandidate = {
+    ...candidate,
+    seedTree: wave1Lease.admittedSeedTree,
+    seedIsAncestor: true,
+    baseIsAncestor: true,
+    findings: { P0: 0, P1: 0, launchImpactingP2: 0 }
+  };
+  const layeredEvaluation = evaluateFiniteTaskCandidate({
+    lease: resolution.effectiveLease,
+    registry: canonicalTruth.finiteTaskLeases,
+    candidate: layeredCandidate,
+    effectiveReservationResolution: resolution
+  });
+  assert.equal(layeredEvaluation.ok, true, stableJson(layeredEvaluation.findings));
+  const staleBaseEvaluation = evaluateFiniteTaskCandidate({
+    lease: resolution.effectiveLease,
+    registry: canonicalTruth.finiteTaskLeases,
+    candidate: { ...layeredCandidate, scopeBase: "f".repeat(40), changedPaths: wave1ImplementationPaths, changedLines: 4500 },
+    effectiveReservationResolution: resolution
+  });
+  assert.ok(staleBaseEvaluation.findings.includes("FINITE_TASK_TEST_ADAPTATION_CANDIDATE_SCOPE_MISMATCH"), stableJson(staleBaseEvaluation.findings));
+  const omittedFixtureEvaluation = evaluateFiniteTaskCandidate({
+    lease: resolution.effectiveLease,
+    registry: canonicalTruth.finiteTaskLeases,
+    candidate: { ...layeredCandidate, changedPaths: wave1ImplementationPaths, changedLines: 4500 },
+    effectiveReservationResolution: resolution
+  });
+  assert.ok(omittedFixtureEvaluation.findings.includes("FINITE_TASK_SCOPE_OVERFLOW"), stableJson(omittedFixtureEvaluation.findings));
+  const protectedRecord = structuredClone(canonicalTruth);
+  const checkpoint = protectedRecord.protectedMainAuthority.checkpointSha;
+  const protectedMerge = "e".repeat(40);
+  const protectedAdvance = evaluateProtectedMainAdvancement({
+    record: protectedRecord,
+    contract: currentTruthContract,
+    observedProtectedMainSha: protectedMerge,
+    candidateHead: candidate.head,
+    finiteTaskRuntime: {
+      sourceOnlyEligible: true,
+      providerDependentEligible: false,
+      effectiveReservation: resolution.effectiveReservation,
+      effectiveReservationResolution: resolution
+    },
+    advancementObservations: [{
+      commit: protectedMerge,
+      parents: [checkpoint, "d".repeat(40)],
+      tree: "c".repeat(40),
+      subject: "Merge pull request #999 from Chillywood2025/codex/fixture-drift",
+      changedPaths: [wave1FixturePath]
+    }],
+    checkpointTreeObservation: protectedRecord.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: true,
+    candidateContainsObservedMain: true,
+    gitCommand: (args) => args[0] === "rev-parse" ? "b".repeat(40) : ""
+  });
+  assert.ok(protectedAdvance.advancementClassifications[0].classifications.includes("ACTIVE_TASK_AUTHORITATIVE_INPUT"));
+  assert.ok(protectedAdvance.activeTaskInputsInvalidated.includes(wave1FixturePath));
+  const directAdaptation = verifyFiniteTaskTestAdaptationReceipt({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate,
+    implementationReservation: resolution.effectiveReservation,
+    amendmentReceipt: resolution.amendmentReceipt,
+    subject: adaptationSubject,
+    observation: adaptationComment,
+    pullRequest: adaptedLive.pullRequest,
+    commits: adaptedLive.commits,
+    commitsPaginationComplete: true,
+    gitCommand,
+    authorityEvidence: wave1AuthorityEvidence,
+    observationMode: "LIVE_GITHUB_COMPLETE_READBACK"
+  });
+  assert.equal(directAdaptation.ok, true, stableJson(directAdaptation.findings));
+
+  const identity = {
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: wave1Lease.implementationPr,
+    branch: wave1Lease.implementationBranch,
+    baseSha: wave1BoundBase,
+    headSha: candidate.head
+  };
+  const scope = { files: candidate.changedPaths, additions: 2500, deletions: 2500, netChangedLines: 0, diffHash: candidate.diffHash };
+  const reviewSubject = architectureRepositoryReviewSubject({
+    identity,
+    tree: candidate.tree,
+    scope,
+    profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1,
+    effectiveReservationResolution: resolution
+  });
+  const phaseBody = { runId: 900101, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
+  const finalSubject = finiteTaskFinalReceiptSubject({
+    schemaVersion: 3,
+    policyId: "ASSURANCE_FINITE_TASK_LEASE_V1",
+    repository: identity.repository,
+    featureId: wave1Lease.featureId,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    admittedSeedHead: wave1Lease.admittedSeedHead,
+    finalHead: candidate.head,
+    finalTree: candidate.tree,
+    diffHash: candidate.diffHash,
+    changedPathHash: candidate.changedPathHash,
+    scopeResult: "PASS",
+    callDomainClosureLedgerHash: "b".repeat(64),
+    focusedTestHash: "c".repeat(64),
+    mutationNegativeControlHash: "d".repeat(64),
+    repositoryReviewHash: hashValue(reviewSubject),
+    phase1RunId: phase1Evidence.runId,
+    phase1Head: candidate.head,
+    baseLeaseHash: resolution.baseLeaseHash,
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: resolution.amendmentReceipt,
+    scopeBase: resolution.scopeBase,
+    testAdaptationReservation: resolution.testAdaptationReservation,
+    aggregateReservation: resolution.aggregateReservation,
+    scopePartitions: resolution.scopePartitions,
+    testAdaptationReceipt: resolution.testAdaptationReceipt,
+    authority: wave1TestAdaptationAuthority
+  });
+  assert.equal(finalSubject.schemaVersion, 3);
+  const reviewComment = wave1ImmutableComment(810201, architectureRepositoryReviewCommentBody(reviewSubject), "2026-08-15T01:00:00Z");
+  const finalComment = wave1ImmutableComment(810202, finiteTaskFinalReceiptBody(finalSubject), "2026-08-15T01:01:00Z");
+  const finalLive = observeWave1TestAdaptationLive({ comments: [amendmentComment, adaptationComment, reviewComment, finalComment], candidate });
+  resolution = resolveFiniteTaskEffectiveReservation({
+    registry: canonicalTruth.finiteTaskLeases,
+    lease: wave1Lease,
+    candidate,
+    liveObservation: finalLive.liveObservation,
+    gitCommand
+  });
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(resolution), true);
+  const lifecycle = registerVerifiedFiniteTaskImplementationLifecycle({
+    lifecycle: verifyFiniteTaskImplementationLifecycle({
+      identity,
+      tree: candidate.tree,
+      scope,
+      finiteTaskAuthority: { ok: true, candidate, baseLease: wave1Lease, effectiveReservationResolution: resolution },
+      comments: finalLive.liveObservation.comments,
+      commentsPaginationComplete: true,
+      phase1EvidenceResolver: () => phase1Evidence
+    }),
+    effectiveReservationResolution: resolution,
+    liveObservation: finalLive.liveObservation
+  });
+  assert.equal(lifecycle.mergeEligible, true, stableJson(lifecycle.findings));
+  assert.equal(lifecycle.finalSourceSubject.schemaVersion, 3);
+  assert.equal(finiteTaskImplementationLifecycleAuthorityValid(lifecycle), true);
+
+  const mergeTree = candidate.tree;
+  const mergeRef = {
+    pr: wave1Lease.implementationPr,
+    branch: wave1Lease.implementationBranch,
+    parents: [wave1BoundBase, candidate.head],
+    sourceTree: candidate.tree,
+    tree: mergeTree
+  };
+  const merge = verifyFiniteTaskMergeProvenance({
+    lease: wave1Lease,
+    receiptSubject: lifecycle.finalSourceSubject,
+    currentProtectedBase: wave1BoundBase,
+    mergeRef,
+    actualMerge: { parents: mergeRef.parents, tree: mergeTree },
+    effectiveReservationResolution: resolution
+  });
+  assert.equal(merge.ok, true, stableJson(merge.findings));
+  const mismatchedSubject = structuredClone(lifecycle.finalSourceSubject);
+  mismatchedSubject.testAdaptationReservation.maximumLines -= 1;
+  assert.ok(verifyFiniteTaskMergeProvenance({
+    lease: wave1Lease,
+    receiptSubject: mismatchedSubject,
+    currentProtectedBase: wave1BoundBase,
+    mergeRef,
+    actualMerge: { parents: mergeRef.parents, tree: mergeTree },
+    effectiveReservationResolution: resolution
+  }).findings.includes("FINITE_MERGE_TEST_ADAPTATION_RESERVATION_MISMATCH"));
+
+  const terminalBase = {
+    schemaVersion: 2,
+    classification: "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2",
+    repository: identity.repository,
+    taskId: wave1Lease.leaseId,
+    leaseId: wave1Lease.leaseId,
+    implementationPr: wave1Lease.implementationPr,
+    implementationBranch: wave1Lease.implementationBranch,
+    baseLeaseHash: resolution.baseLeaseHash,
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: resolution.amendmentReceipt,
+    testAdaptationReservation: resolution.testAdaptationReservation,
+    aggregateReservation: resolution.aggregateReservation,
+    scopePartitions: resolution.scopePartitions,
+    testAdaptationReceipt: resolution.testAdaptationReceipt,
+    finalSourceReceipt: { ...lifecycle.finalSource.receipt, subject: lifecycle.finalSource.subject },
+    sourceHead: candidate.head,
+    sourceTree: candidate.tree,
+    mergeSha: "7".repeat(40),
+    mergeTree,
+    mergeParents: [wave1BoundBase, candidate.head],
+    nextTask: canonicalTruth.engineeringDoctrine.nextPermittedAction,
+    authority: wave1TestAdaptationAuthority
+  };
+  const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
+  const activeFeature = registry.features.find(({ featureId }) => featureId === canonicalTruth.activeTaskBinding.featureId);
+  const projected = projectFiniteTaskTerminalTruth({
+    record: canonicalTruth,
+    terminalEvidence,
+    proofTierApplicabilityHash: digest(stableJson(activeFeature.proofTierApplicability)),
+    implementationTitle: "Wave 1 test-adaptation lifecycle"
+  });
+  assert.deepEqual(projected.finiteTaskRuntime.terminalOutcome, terminalEvidence);
+  assert.deepEqual(validateTerminalTaskEvidence(projected.activeTaskBinding, projected.latestMergedImplementationPr), []);
+  const terminalGit = (gitArgs) => {
+    if (gitArgs[0] === "merge-base" && gitArgs[1] === "--is-ancestor") {
+      const [, , ancestor, descendant] = gitArgs;
+      if ((ancestor === candidate.head && descendant === terminalEvidence.mergeSha)
+        || (ancestor === terminalEvidence.mergeSha && descendant === terminalEvidence.mergeSha)) return "";
+    }
+    if (gitArgs[0] === "rev-list" && gitArgs[1] === "--first-parent" && gitArgs[2] === terminalEvidence.mergeSha) {
+      return `${terminalEvidence.mergeSha}\n${wave1BoundBase}`;
+    }
+    return gitCommand(gitArgs);
+  };
+  const terminalRuntimeFor = (effectiveReservationObservation) => evaluateFiniteTaskLeaseRuntime({
+    record: projected,
+    contract: currentTruthContract,
+    now: new Date("2026-08-15T01:00:00Z"),
+    currentProtectedBase: terminalEvidence.mergeSha,
+    effectiveReservationObservation,
+    gitCommand: terminalGit,
+    environment: {}
+  });
+  const terminalRuntime = terminalRuntimeFor(finalLive.liveObservation);
+  assert.equal(terminalRuntime.scopeResult, "PASS", stableJson(terminalRuntime.findings));
+  assert.equal(terminalRuntime.candidateEligible, true, stableJson(terminalRuntime.findings));
+  assert.deepEqual(terminalRuntime.scopePartitions, terminalEvidence.scopePartitions);
+  const untrustedFinalRuntime = terminalRuntimeFor(structuredClone(finalLive.liveObservation));
+  assert.equal(untrustedFinalRuntime.scopeResult, "FAIL");
+  assert.ok(untrustedFinalRuntime.findings.includes("FINITE_TASK_TERMINAL_EFFECTIVE_RESERVATION_MISMATCH"));
+  const terminalPacket = resolveFiniteTaskImplementation(projected, {
+    branch: projected.activeTaskBinding.implementationBranch,
+    head: projected.activeTaskBinding.currentImplementationHead,
+    tree: projected.activeTaskBinding.currentImplementationTree
+  }, {
+    finiteTaskEffectiveReservationResolution: terminalRuntime.effectiveReservationResolution
+  }, projected.activeTaskBinding, wave1Lease);
+  assert.equal(terminalPacket.ok, true, stableJson(terminalPacket.findings));
+  assert.equal(terminalPacket.value.finiteLease.reservationStatus, "AMENDED_WITH_TEST_ADAPTATION");
+  assert.deepEqual(terminalPacket.value.finiteLease.scopePartitions, terminalEvidence.scopePartitions);
+  const tamperedFinalLive = observeWave1TestAdaptationLive({
+    comments: [amendmentComment, adaptationComment, reviewComment, { ...finalComment, body: `${finalComment.body}\n` }],
+    candidate
+  });
+  const tamperedFinalRuntime = terminalRuntimeFor(tamperedFinalLive.liveObservation);
+  assert.equal(tamperedFinalRuntime.scopeResult, "FAIL");
+  assert.ok(tamperedFinalRuntime.findings.includes("FINITE_TASK_TERMINAL_EFFECTIVE_RESERVATION_MISMATCH"));
+  const rehashTerminal = (evidence) => {
+    const body = Object.fromEntries(Object.entries(evidence).filter(([key]) => key !== "evidenceHash"));
+    return { ...body, evidenceHash: hashValue(body) };
+  };
+  const rehashFinalReceipt = (receipt) => {
+    receipt.subject = finiteTaskFinalReceiptSubject(receipt.subject);
+    receipt.subjectHash = hashValue(receipt.subject);
+    receipt.bodyHash = hashValue({ subject: receipt.subject, subjectHash: receipt.subjectHash });
+    receipt.rawBodyHash = hashValue(finiteTaskFinalReceiptBody(receipt.subject));
+  };
+  const rehashAdaptationReceipt = (receipt) => {
+    receipt.subject = finiteTaskTestAdaptationSubject(receipt.subject);
+    const body = finiteTaskTestAdaptationCommentBody(receipt.subject);
+    const envelope = JSON.parse(body.slice(body.indexOf("\n") + 1));
+    receipt.subjectHash = envelope.subjectHash;
+    receipt.bodyHash = envelope.bodyHash;
+    receipt.rawBodyHash = hashValue(body);
+  };
+  const coherentlyMutateAdaptationReceipt = (evidence, mutate) => {
+    mutate(evidence.testAdaptationReceipt);
+    rehashAdaptationReceipt(evidence.testAdaptationReceipt);
+    evidence.finalSourceReceipt.subject.testAdaptationReceipt = structuredClone(evidence.testAdaptationReceipt);
+    rehashFinalReceipt(evidence.finalSourceReceipt);
+  };
+  const coherentlyMutateFinalReceiptSubject = (evidence, mutate) => {
+    mutate(evidence.finalSourceReceipt.subject);
+    rehashFinalReceipt(evidence.finalSourceReceipt);
+  };
+  const coherentlyReplaceFixturePath = (evidence, fixturePath) => {
+    const fixtureReservation = wave1Reservation([fixturePath], 1, 500);
+    const aggregateReservation = wave1Reservation([...evidence.effectiveReservation.allowedPaths, fixturePath], 33, 5000);
+    evidence.testAdaptationReservation = fixtureReservation;
+    evidence.aggregateReservation = aggregateReservation;
+    evidence.scopePartitions.testAdaptation.reservation = fixtureReservation;
+    evidence.scopePartitions.testAdaptation.actualPaths = [fixturePath];
+    evidence.scopePartitions.aggregate.reservation = aggregateReservation;
+    evidence.scopePartitions.aggregate.actualPaths = [...evidence.scopePartitions.implementation.actualPaths, fixturePath].sort();
+    evidence.testAdaptationReceipt.fixturePaths = [fixturePath];
+    evidence.testAdaptationReceipt.fixtureBaselines[0].path = fixturePath;
+    evidence.testAdaptationReceipt.subject.fixturePaths = [fixturePath];
+    evidence.testAdaptationReceipt.subject.fixtureBaselines[0].path = fixturePath;
+    evidence.testAdaptationReceipt.subject.aggregateProjection = aggregateReservation;
+    rehashAdaptationReceipt(evidence.testAdaptationReceipt);
+    evidence.finalSourceReceipt.aggregateReservationHash = aggregateReservation.reservationHash;
+    Object.assign(evidence.finalSourceReceipt.subject, {
+      changedPathHash: hashValue(evidence.scopePartitions.aggregate.actualPaths),
+      testAdaptationReservation: fixtureReservation,
+      aggregateReservation,
+      scopePartitions: evidence.scopePartitions,
+      testAdaptationReceipt: evidence.testAdaptationReceipt
+    });
+    rehashFinalReceipt(evidence.finalSourceReceipt);
+  };
+  const terminalPartitionMutations = [
+    ["implementation line overflow", (evidence) => { evidence.scopePartitions.implementation.canonicalChangedLines = 4501; }],
+    ["fixture line overflow", (evidence) => { evidence.scopePartitions.testAdaptation.canonicalChangedLines = 501; }],
+    ["aggregate line sum mismatch", (evidence) => { evidence.scopePartitions.aggregate.canonicalChangedLines = 4999; }],
+    ["overlapping actual path", (evidence) => { evidence.scopePartitions.implementation.actualPaths = [...evidence.scopePartitions.implementation.actualPaths, wave1FixturePath].sort(); }],
+    ["missing aggregate actual path", (evidence) => { evidence.scopePartitions.aggregate.actualPaths = evidence.scopePartitions.aggregate.actualPaths.filter((file) => file !== wave1FixturePath); }],
+    ["coordinated actual-path omission", (evidence) => {
+      const omitted = evidence.scopePartitions.implementation.actualPaths[0];
+      evidence.scopePartitions.implementation.actualPaths = evidence.scopePartitions.implementation.actualPaths.filter((file) => file !== omitted);
+      evidence.scopePartitions.aggregate.actualPaths = evidence.scopePartitions.aggregate.actualPaths.filter((file) => file !== omitted);
+      evidence.finalSourceReceipt.subject.scopePartitions.implementation.actualPaths = evidence.finalSourceReceipt.subject.scopePartitions.implementation.actualPaths.filter((file) => file !== omitted);
+      evidence.finalSourceReceipt.subject.scopePartitions.aggregate.actualPaths = evidence.finalSourceReceipt.subject.scopePartitions.aggregate.actualPaths.filter((file) => file !== omitted);
+      rehashFinalReceipt(evidence.finalSourceReceipt);
+    }],
+    ["pooled aggregate maximum", (evidence) => {
+      evidence.aggregateReservation = wave1Reservation(evidence.aggregateReservation.allowedPaths, 33, 5500);
+      evidence.scopePartitions.aggregate.reservation = evidence.aggregateReservation;
+      evidence.finalSourceReceipt.aggregateReservationHash = evidence.aggregateReservation.reservationHash;
+    }],
+    ["fixture baseline digest", (evidence) => { evidence.testAdaptationReceipt.fixtureBaselines[0].sha256 = "f".repeat(64); }],
+    ["fixture baseline path", (evidence) => { evidence.testAdaptationReceipt.fixtureBaselines[0].path = "supabase/tests/other.sql"; }],
+    ["fixture baseline null", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.fixtureBaselines = [null]; receipt.subject.fixtureBaselines = [null]; })],
+    ["fixture baseline array", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.fixtureBaselines = [[]]; receipt.subject.fixtureBaselines = [[]]; })],
+    ["fixture baseline extra key", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.fixtureBaselines[0].unexpected = true; receipt.subject.fixtureBaselines[0].unexpected = true; })],
+    ["causal entity null", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.causalEntitySets = [null]; })],
+    ["causal entity array", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.causalEntitySets = [[]]; })],
+    ["causal entity extra key", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.causalEntitySets[0].unexpected = true; })],
+    ["adaptation authority escalation", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.authority.providerMutation = true; })],
+    ["adaptation repository", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.repository = "Other/repository"; })],
+    ["adaptation PR", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.implementationPr = 230; })],
+    ["adaptation task", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.taskId = "other-task"; })],
+    ["adaptation lease", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.leaseId = "other-lease"; })],
+    ["adaptation policy", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.policyId = "OTHER_POLICY"; })],
+    ["adaptation classification", (evidence) => coherentlyMutateAdaptationReceipt(evidence, (receipt) => { receipt.subject.classification = "OTHER_CLASSIFICATION"; })],
+    ["adaptation non-SQL fixture", (evidence) => coherentlyReplaceFixturePath(evidence, "supabase/tests/not-sql.test.mjs")],
+    ["final authority escalation", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.authority.providerMutation = true; })],
+    ["final scope base", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.scopeBase = "f".repeat(40); })],
+    ["final repository", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.repository = "Other/repository"; })],
+    ["final PR", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.implementationPr = 230; })],
+    ["final branch", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.implementationBranch = "codex/other"; })],
+    ["final policy", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.policyId = "OTHER_POLICY"; })],
+    ["final scope result", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.scopeResult = "FAIL"; })],
+    ["final Phase 1 head", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.phase1Head = "f".repeat(40); })],
+    ["final repository-review hash shape", (evidence) => coherentlyMutateFinalReceiptSubject(evidence, (subject) => { subject.repositoryReviewHash = "not-a-sha256"; })]
+  ];
+  const assertTerminalRejected = (invalidEvidence, label) => {
+    const invalidBinding = { ...projected.activeTaskBinding, terminalEvidence: invalidEvidence };
+    assert.deepEqual(validateTerminalTaskEvidence(invalidBinding, projected.latestMergedImplementationPr), [
+      { id: "ASSURANCE_FINITE_TASK_TERMINAL_EVIDENCE_MALFORMED", status: "BLOCKED_INTERNAL" }
+    ], label);
+    const terminalRegistry = structuredClone(canonicalTruth.finiteTaskLeases);
+    terminalRegistry.completedLeaseOutcomes = [invalidEvidence];
+    assert.equal(finiteTaskLeaseEffectivelyTerminal(terminalRegistry, wave1Lease), false, label);
+    assert.throws(() => projectFiniteTaskTerminalTruth({
+      record: canonicalTruth,
+      terminalEvidence: invalidEvidence,
+      proofTierApplicabilityHash: digest(stableJson(activeFeature.proofTierApplicability))
+    }), /FINITE_TASK_TERMINAL_PROJECTION_INVALID/u, label);
+  };
+  for (const [label, mutate] of terminalPartitionMutations) {
+    const altered = structuredClone(terminalEvidence);
+    mutate(altered);
+    assertTerminalRejected(rehashTerminal(altered), label);
+  }
+  const legacyTerminalBase = structuredClone(terminalBase);
+  legacyTerminalBase.schemaVersion = 1;
+  legacyTerminalBase.classification = "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1";
+  for (const field of ["testAdaptationReservation", "aggregateReservation", "scopePartitions", "testAdaptationReceipt"]) delete legacyTerminalBase[field];
+  for (const field of ["aggregateReservationHash", "testAdaptationCommentId", "subject"]) delete legacyTerminalBase.finalSourceReceipt[field];
+  const legacyTerminalEvidence = rehashTerminal(legacyTerminalBase);
+  const legacyBinding = { ...projected.activeTaskBinding, terminalEvidence: legacyTerminalEvidence };
+  assert.deepEqual(validateTerminalTaskEvidence(legacyBinding, projected.latestMergedImplementationPr), []);
+  const legacyRegistry = structuredClone(canonicalTruth.finiteTaskLeases);
+  legacyRegistry.completedLeaseOutcomes = [legacyTerminalEvidence];
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(legacyRegistry, wave1Lease), true);
+  for (const [field, value] of [
+    ["aggregateReservationHash", terminalEvidence.aggregateReservation.reservationHash],
+    ["testAdaptationCommentId", terminalEvidence.testAdaptationReceipt.commentId],
+    ["subject", terminalEvidence.finalSourceReceipt.subject]
+  ]) {
+    const altered = structuredClone(legacyTerminalEvidence);
+    altered.finalSourceReceipt[field] = structuredClone(value);
+    assertTerminalRejected(rehashTerminal(altered), `legacy nested ${field}`);
+  }
+  const tamperedTerminal = structuredClone(terminalEvidence);
+  tamperedTerminal.testAdaptationReceipt.commentId += 1;
+  tamperedTerminal.evidenceHash = hashValue(Object.fromEntries(Object.entries(tamperedTerminal).filter(([key]) => key !== "evidenceHash")));
+  assert.throws(() => projectFiniteTaskTerminalTruth({
+    record: canonicalTruth,
+    terminalEvidence: tamperedTerminal,
+    proofTierApplicabilityHash: digest(stableJson(activeFeature.proofTierApplicability))
+  }), /FINITE_TASK_TERMINAL_PROJECTION_INVALID/u);
+});
 test("finite amendment resolver: base-only Wave 1 rejects both unamended paths", () => {
   const result = resolveFiniteTaskEffectiveReservation({
     registry: canonicalTruth.finiteTaskLeases,
