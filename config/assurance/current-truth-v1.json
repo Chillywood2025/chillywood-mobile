@@ -19,13 +19,13 @@
   "protectedMainAuthority": {
     "schemaVersion": 1,
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
-    "checkpointSha": "36d1434429072c203ae213bcb0393bf0ffed51c0",
-    "checkpointTree": "d59dc9f8ea6b25d4866dced3f96227dfedefbc5a",
+    "checkpointSha": "1d0d74764473da5a22ac075b58045af7982004b0",
+    "checkpointTree": "5cd7cba9e0721e657256f454c10569795c5f8d6a",
     "allowProtectedAdvancement": true,
     "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
-  "mainSha": "36d1434429072c203ae213bcb0393bf0ffed51c0",
+  "mainSha": "1d0d74764473da5a22ac075b58045af7982004b0",
   "latestMergedImplementationPr": {"number": 212, "state": "merged", "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6", "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1", "title": "Complete Android native lifecycle and release-critical media proof"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "HISTORICAL_ONLY_PR_50_DOES_NOT_CONTAIN_FINAL_D2B_D2A"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "HISTORICAL_ONLY_PR_50_NOT_EXACT_FINAL_MAIN"},
@@ -564,6 +564,52 @@
           "maximumChangedLines": 4500
         }
       ]
+    },
+    "testAdaptationPolicy": {
+      "capability": "FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1",
+      "policyId": "ASSURANCE_FINITE_TASK_TEST_ADAPTATION_V1",
+      "marker": "chillywood-assurance-task-test-adaptation-v1",
+      "classification": "TEST_ADAPTATION_REQUIRED",
+      "ownerCommentRequired": true,
+      "liveEffectiveAmendmentReceiptRequired": true,
+      "ordinaryAmendmentUsePreserved": true,
+      "maximumReceiptsPerTask": 1,
+      "maximumFiles": 1,
+      "maximumChangedLines": 500,
+      "fixtureRoots": [
+        "supabase/tests/"
+      ],
+      "fixtureExtensions": [
+        ".sql"
+      ],
+      "prohibitedRoots": [
+        ".github/",
+        "_lib/",
+        "android/",
+        "app/",
+        "config/",
+        "ios/",
+        "modules/",
+        "package-lock.json",
+        "package.json",
+        "plugins/",
+        "scripts/",
+        "supabase/functions/",
+        "supabase/migrations/"
+      ],
+      "baselineTrackedRequired": true,
+      "completePaginationRequired": true,
+      "descendantOnly": true,
+      "taskTerminalExpiry": true,
+      "reusableByAnotherTaskOrPr": false,
+      "authority": {
+        "providerMutation": false,
+        "databaseDeployment": false,
+        "build": false,
+        "submission": false,
+        "ota": false,
+        "publicRelease": false
+      }
     },
     "tasks": [
       {

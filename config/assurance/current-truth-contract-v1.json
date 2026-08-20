@@ -498,6 +498,128 @@
     "providerCodexReview": "OPTIONAL_ADVISORY",
     "authority": {"build": false, "provider": false, "database": false, "publicRelease": false}
   },
+  "finiteTaskTestAdaptationOverlayPolicy": {
+    "capability": "FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1",
+    "policyId": "ASSURANCE_FINITE_TASK_TEST_ADAPTATION_V1",
+    "classification": "TEST_ADAPTATION_REQUIRED",
+    "source": "ZERO_OR_ONE_VERIFIED_IMMUTABLE_OWNER_RECEIPT_PER_FINITE_TASK",
+    "baseLeaseAndAmendmentPreservedByteForByte": true,
+    "implementationPartitionSource": "VERIFIED_LIVE_EFFECTIVE_AMENDMENT_RESERVATION",
+    "liveEffectiveAmendmentReceiptRequired": true,
+    "ordinaryAmendmentUsePreserved": true,
+    "taskSpecificitySource": "IMMUTABLE_IMPLEMENTATION_PR_RECEIPT",
+    "wildcardsOrImplicitPathsAllowed": false,
+    "maximumFiles": 1,
+    "maximumCanonicalChangedLines": 500,
+    "partitionAccounting": {
+      "implementationAndFixtureBudgetsIndependent": true,
+      "budgetPoolingAllowed": false,
+      "pathOverlapAllowed": false,
+      "binaryOrMalformedNumstatAllowed": false,
+      "aggregateProjectionCompatibilityOnly": true
+    },
+    "receiptIntegrity": {
+      "completeIssueCommentAndCommitPaginationRequired": true,
+      "topLevelOwnerCommentRequired": true,
+      "createdAtMustEqualUpdatedAt": true,
+      "subjectBodyAndRawBodyHashesRequired": true,
+      "boundBaselineTrackedRegularFileRequired": true,
+      "boundStartingHeadAndTreeRequired": true,
+      "currentHeadMustBeDescendant": true,
+      "siblingRebaseForcePushForkOrReplayAllowed": false,
+      "expiresAtTaskTerminal": true,
+      "reusableByAnotherTaskOrPr": false
+    },
+    "fixtureClass": {
+      "roots": ["supabase/tests/"],
+      "extensions": [".sql"],
+      "assertionContract": "EXACTLY_ONE_EXECUTABLE_PGTAP_PLAN_DECLARATION_PRESERVED",
+      "productionMigrationFunctionAppPackageWorkflowOrGeneratedProductPathsAllowed": false
+    },
+    "canonicalConsumerSet": [
+      "current-truth",
+      "active-task",
+      "engineering-closure",
+      "pr-scope",
+      "exact-head-repository-review",
+      "final-source-attestation",
+      "merge-eligibility",
+      "merge-provenance",
+      "post-merge-readback",
+      "terminal-truth"
+    ],
+    "authority": {
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false
+    }
+  },
+  "architectureDependencyBaselineAmendmentPolicy": {
+    "capability": "ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1",
+    "receiptCardinality": 1,
+    "maximumAddedFiles": 3,
+    "maximumFinalFiles": 15,
+    "maximumFinalNetLines": 4500,
+    "exactAddedPaths": [
+      "config/assurance/android-native-call-origin-backup-v1.json",
+      "package-lock.json",
+      "package.json"
+    ],
+    "manifestAndLockMoveTogether": true,
+    "exactTargetArtifactHashesRequired": true,
+    "directDependencySetMayChange": false,
+    "sameMajorMinorPatchOnly": true,
+    "reactOrReactNativeMayChange": false,
+    "completeCommentAndCommitPaginationRequired": true,
+    "descendantOnly": true,
+    "expiresAtPullRequestMerge": true,
+    "reusableByAnotherTaskOrPr": false,
+    "supplementalWitness": {
+      "capability": "ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1",
+      "receiptCardinality": 1,
+      "maximumAddedFiles": 1,
+      "maximumFinalFiles": 16,
+      "maximumFinalNetLines": 4500,
+      "pathClass": "EXACT_TRACKED_PACKAGE_SCRIPT_PHASE1_DEPENDENCY_WITNESS",
+      "pathPattern": "^scripts/test-[a-z0-9-]+-compat\\.mjs$",
+      "packageScriptReferenceRequired": true,
+      "phase1InvocationRequired": true,
+      "exactSafeIdentifierRequired": true,
+      "exactContentReplacementRequired": true,
+      "appliedDependencyAmendmentRequired": true,
+      "completeCommentAndCommitPaginationRequired": true,
+      "descendantOnly": true,
+      "expiresAtPullRequestMerge": true,
+      "reusableByAnotherTaskOrPr": false,
+      "authority": {
+        "product": false,
+        "nativeProduct": false,
+        "package": false,
+        "database": false,
+        "provider": false,
+        "build": false,
+        "submission": false,
+        "ota": false,
+        "release": false,
+        "publicRelease": false
+      }
+    },
+    "authority": {
+      "product": false,
+      "nativeProduct": false,
+      "package": false,
+      "database": false,
+      "provider": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "release": false,
+      "publicRelease": false
+    }
+  },
   "lateReviewOwnerRegistry": [
     {
       "repository": "Chillywood2025/chillywood-mobile",
