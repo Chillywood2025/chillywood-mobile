@@ -557,6 +557,39 @@
       "publicRelease": false
     }
   },
+  "architectureDependencyBaselineAmendmentPolicy": {
+    "capability": "ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1",
+    "receiptCardinality": 1,
+    "maximumAddedFiles": 3,
+    "maximumFinalFiles": 15,
+    "maximumFinalNetLines": 4500,
+    "exactAddedPaths": [
+      "config/assurance/android-native-call-origin-backup-v1.json",
+      "package-lock.json",
+      "package.json"
+    ],
+    "manifestAndLockMoveTogether": true,
+    "exactTargetArtifactHashesRequired": true,
+    "directDependencySetMayChange": false,
+    "sameMajorMinorPatchOnly": true,
+    "reactOrReactNativeMayChange": false,
+    "completeCommentAndCommitPaginationRequired": true,
+    "descendantOnly": true,
+    "expiresAtPullRequestMerge": true,
+    "reusableByAnotherTaskOrPr": false,
+    "authority": {
+      "product": false,
+      "nativeProduct": false,
+      "package": false,
+      "database": false,
+      "provider": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "release": false,
+      "publicRelease": false
+    }
+  },
   "lateReviewOwnerRegistry": [
     {
       "repository": "Chillywood2025/chillywood-mobile",

@@ -7,11 +7,13 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
+  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
+  architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
+  canonicalGitDiffArgs, canonicalGitDiffHash,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
@@ -19,7 +21,7 @@ import {
   evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
-  verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
+  verifyArchitectureDependencyAmendment, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
   verifyFiniteTaskTerminalTruthAuthority, verifyPhase1RunEvidence,
   verifyTaskLocalGoverningEdgeClosure, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
@@ -845,6 +847,158 @@ test("finite-task test-adaptation final source rejects a review without the over
     profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
     objective: "FINITE_TASK_UNREGISTERED_OVERLAY"
   }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_OBJECTIVE_INVALID/u);
+});
+
+const dependencyAmendmentControlPaths = [
+  "CURRENT_STATE.md", "config/assurance/current-truth-contract-v1.json", "config/assurance/current-truth-v1.json", "config/assurance/schemas-v1.json",
+  "scripts/assurance/active-task.mjs", "scripts/assurance/current-truth.mjs", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs",
+  "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs",
+].sort();
+const fixtureGit = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+const fixtureWrite = (cwd, name, value) => { const target = path.join(cwd, name); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, value); };
+const fixtureJson = (cwd, name, value) => fixtureWrite(cwd, name, `${JSON.stringify(value, null, 2)}\n`);
+const fixtureJsonSha = (value) => createHash("sha256").update(`${JSON.stringify(value, null, 2)}\n`).digest("hex");
+const fixtureCommit = (cwd, message) => { fixtureGit(cwd, "add", "-A"); fixtureGit(cwd, "commit", "-qm", message); return fixtureGit(cwd, "rev-parse", "HEAD"); };
+const fixtureTree = (cwd, ref) => fixtureGit(cwd, "rev-parse", `${ref}^{tree}`);
+const fixtureScope = (cwd, base, head) => {
+  const range = `${base}...${head}`; const files = fixtureGit(cwd, "diff", "--name-only", range).split("\n").filter(Boolean).sort();
+  const rows = fixtureGit(cwd, "diff", "--numstat", range).split("\n").filter(Boolean);
+  const additions = rows.reduce((sum, row) => sum + Number(row.split("\t")[0]), 0); const deletions = rows.reduce((sum, row) => sum + Number(row.split("\t")[1]), 0);
+  const diff = execFileSync("git", canonicalGitDiffArgs(range), { cwd, encoding: "utf8" });
+  return { files, additions, deletions, netChangedLines: Math.max(0, additions - deletions), diffHash: canonicalGitDiffHash(diff) };
+};
+const dependencyAmendmentFixture = ({ candidate = {} } = {}) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "dependency-amendment-"));
+  fixtureGit(cwd, "init", "-q"); fixtureGit(cwd, "config", "user.name", "Fixture"); fixtureGit(cwd, "config", "user.email", "fixture@example.test");
+  const before = { expo: "~54.0.36", "expo-constants": "~18.0.13", "expo-file-system": "~19.0.23", "expo-updates": "~29.0.19", react: "19.1.0", "react-native": "0.81.4" };
+  const after = { ...before, expo: "~54.0.37", "expo-constants": "~18.0.14", "expo-file-system": "~19.0.24", "expo-updates": "~29.0.20" };
+  const packageRecord = (dependencies) => ({ name: "dependency-amendment-fixture", version: "1.0.0", dependencies });
+  const lockRecord = (dependencies) => ({ name: "dependency-amendment-fixture", version: "1.0.0", lockfileVersion: 3, packages: { "": { name: "dependency-amendment-fixture", version: "1.0.0", dependencies }, ...Object.fromEntries(Object.entries(dependencies).map(([name, spec]) => [`node_modules/${name}`, { version: spec.startsWith("~") ? spec.slice(1) : spec }])), "node_modules/unrelated-transitive": { version: "1.0.0", integrity: "sha512-stable" } } });
+  fixtureJson(cwd, "package.json", packageRecord(before)); fixtureJson(cwd, "package-lock.json", lockRecord(before));
+  fixtureJson(cwd, "config/assurance/android-native-call-origin-backup-v1.json", { target: { correctedNativeCompatibilityDigest: "a".repeat(64), historicalInstalledNativeBuild: "86" }, preserved: true });
+  for (const name of dependencyAmendmentControlPaths) fixtureWrite(cwd, name, `base:${name}\n`);
+  const base = fixtureCommit(cwd, "base"); fixtureGit(cwd, "switch", "-qc", "control");
+  for (const name of dependencyAmendmentControlPaths) fixtureWrite(cwd, name, `control:${name}\n`);
+  const startingHead = fixtureCommit(cwd, "control"); const startingTree = fixtureTree(cwd, startingHead); const startingScope = fixtureScope(cwd, base, startingHead);
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch: "codex/dependency-amendment-fixture", baseSha: base, headSha: startingHead };
+  const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: startingTree, scope: startingScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, root: cwd });
+  const original = taskLocalArchitectureComment({ id: 800001, pr: originalIdentity.pr, body: architectureMaintenanceOwnerCommentBody(originalSubject) });
+  const historicalReviewSubject = architectureRepositoryReviewSubject({ identity: originalIdentity, tree: startingTree, scope: startingScope, profile: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 });
+  const historicalReview = taskLocalArchitectureComment({ id: 800000, pr: originalIdentity.pr, body: architectureRepositoryReviewCommentBody(historicalReviewSubject) });
+  const request = {
+    addedPaths: architectureDependencyBaselinePolicyV1.exactAddedPaths,
+    dependencies: Object.entries(after).filter(([name, spec]) => before[name] !== spec).map(([name, to]) => ({ name, to })),
+    digest: { path: "config/assurance/android-native-call-origin-backup-v1.json", pointer: "/target/correctedNativeCompatibilityDigest" },
+    failure: { runId: 32354184174, jobId: 96379705770, check: "Phase 1 / Expo Doctor", passed: 12, required: 13 },
+    finalBudget: { maximumFiles: 15, maximumNetLines: 4500 },
+    targetEvidence: { manifestSha256: fixtureJsonSha(packageRecord(after)), lockSha256: fixtureJsonSha(lockRecord(after)), nativeCompatibilityDigest: "b".repeat(64) },
+  };
+  const subject = architectureDependencyAmendmentSubject({ identity: originalIdentity, tree: startingTree, scope: startingScope, originalRaw: original, request, root: cwd });
+  const amendment = taskLocalArchitectureComment({ id: 800002, pr: originalIdentity.pr, body: architectureDependencyAmendmentOwnerCommentBody(subject) });
+  let effectiveBase = base;
+  if (candidate.baseAdvance || candidate.baseDependencyDrift) {
+    fixtureGit(cwd, "switch", "-qc", "main-advance", base);
+    if (candidate.baseDependencyDrift) fixtureJson(cwd, "package.json", packageRecord({ ...before, expo: "~54.0.35" }));
+    else fixtureWrite(cwd, "README.md", "unrelated protected-main advance\n");
+    effectiveBase = fixtureCommit(cwd, "protected main advances"); fixtureGit(cwd, "switch", "-q", "control"); fixtureGit(cwd, "merge", "-q", "--no-edit", effectiveBase);
+  }
+  const finalDependencies = { ...after };
+  if (candidate.majorMinor) finalDependencies.expo = "~55.0.0";
+  if (candidate.newDirect) finalDependencies["new-direct"] = "~1.0.1";
+  if (candidate.react) finalDependencies.react = "19.1.1";
+  if (candidate.reactNative) finalDependencies["react-native"] = "0.81.5";
+  const finalPackage = packageRecord(finalDependencies); if (candidate.manifestMutation) finalPackage.description = "unauthorized";
+  const finalLock = lockRecord(finalDependencies); if (candidate.lockMismatch) finalLock.packages[""].dependencies.expo = before.expo;
+  if (candidate.unrelatedLockMutation) finalLock.packages["node_modules/unrelated-transitive"].version = "1.0.1";
+  if (candidate.closureLockMutation) finalLock.packages["node_modules/expo"].resolved = "https://attacker.example/expo.tgz";
+  fixtureJson(cwd, "package.json", finalPackage); fixtureJson(cwd, "package-lock.json", finalLock);
+  const finalDigest = candidate.sameDigest ? "a".repeat(64) : candidate.badDigest ? "not-a-digest" : "b".repeat(64);
+  const digestRecord = { target: { correctedNativeCompatibilityDigest: finalDigest, historicalInstalledNativeBuild: "86" }, preserved: true };
+  if (candidate.digestOutsidePointer) digestRecord.preserved = false;
+  fixtureJson(cwd, "config/assurance/android-native-call-origin-backup-v1.json", digestRecord);
+  if (candidate.extraPath) fixtureWrite(cwd, "README.md", "unauthorized\n");
+  const head = fixtureCommit(cwd, "dependency descendant"); const tree = fixtureTree(cwd, head); const scope = fixtureScope(cwd, effectiveBase, head);
+  const identity = { ...originalIdentity, baseSha: effectiveBase, headSha: head };
+  const commitsFor = (tip, from = effectiveBase) => fixtureGit(cwd, "rev-list", "--reverse", `${from}..${tip}`).split("\n").filter(Boolean).map((sha) => ({ sha, commit: { tree: { sha: fixtureTree(cwd, sha) } } }));
+  const common = { raw: amendment, originalRaw: original, allComments: [original, historicalReview, amendment], paginationComplete: true, allCommits: commitsFor(head), commitsPaginationComplete: true, identity, tree, scope, root: cwd };
+  const pending = { ...common, allCommits: commitsFor(startingHead, base), identity: originalIdentity, tree: startingTree, scope: startingScope };
+  return { cwd, base, startingHead, startingTree, startingScope, originalIdentity, originalSubject, original, historicalReview, subject, amendment, identity, tree, scope, common, pending, cleanup: () => fs.rmSync(cwd, { recursive: true, force: true }) };
+};
+
+test("descendant dependency amendment canonical pending and applied receipt carries through review and final source", (t) => {
+  const fixture = dependencyAmendmentFixture(); t.after(fixture.cleanup);
+  const pending = verifyArchitectureDependencyAmendment(fixture.pending); const applied = verifyArchitectureDependencyAmendment(fixture.common);
+  assert.equal(pending.valid, true, stableJson(pending.findings)); assert.equal(pending.state, "AUTHORIZED_PENDING");
+  assert.equal(applied.valid, true, stableJson(applied.findings)); assert.equal(applied.state, "APPLIED");
+  assert.equal(fixture.subject.capability, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1);
+  assert.deepEqual(fixture.subject.originalAuthority, { commentId: fixture.original.id, subjectHash: hashValue(fixture.originalSubject), bodyHash: JSON.parse(fixture.original.body.slice(fixture.original.body.indexOf("\n") + 1)).bodyHash, rawBodyHash: hashValue(fixture.original.body) });
+  assert.deepEqual(fixture.subject.startingScope.paths, dependencyAmendmentControlPaths); assert.deepEqual(fixture.subject.finalPaths, fixture.scope.files);
+  assert.equal(fixture.amendment.body.startsWith(`${ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER}\n`), true);
+  assert.ok(Object.values(fixture.subject.authority).every((value) => value === false)); assert.equal(applied.finalEvidence.resolvedDependencies.length, 4);
+  const reviewSubject = architectureRepositoryReviewSubject({ identity: fixture.identity, tree: fixture.tree, scope: fixture.scope, profile: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, dependencyAmendmentResolution: applied });
+  const review = taskLocalArchitectureComment({ id: 800003, pr: fixture.identity.pr, body: architectureRepositoryReviewCommentBody(reviewSubject) });
+  assert.equal(verifyArchitectureRepositoryReview({ raw: review, identity: fixture.identity, tree: fixture.tree, scope: fixture.scope, profile: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, dependencyAmendmentResolution: applied }).valid, true);
+  const run = { id: 900030, run_attempt: 1, name: "Phase 1 CI", event: "pull_request", status: "completed", conclusion: "success", head_sha: fixture.identity.headSha, head_branch: fixture.identity.branch, pull_requests: [{ number: fixture.identity.pr, head: { sha: fixture.identity.headSha }, base: { sha: fixture.identity.baseSha } }] };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: fixture.identity.headSha }));
+  const phase1 = verifyPhase1RunEvidence({ run, jobs, identity: fixture.identity, tree: fixture.tree });
+  const final = architectureFinalSourceSubject({ identity: fixture.identity, tree: fixture.tree, scope: fixture.scope, originalRaw: fixture.original, historicalRepositoryReviewRaws: [fixture.historicalReview], repositoryReviewRaw: review, phase1Evidence: phase1, dependencyAmendmentResolution: applied, root: fixture.cwd });
+  assert.equal(final.dependencyAmendment.commentId, fixture.amendment.id); assert.deepEqual(final.dependencyEvidence, applied.finalEvidence); assert.equal(final.repositoryReview.valid, true); assert.equal(final.historicalRepositoryReviews[0].commentId, fixture.historicalReview.id);
+  const finalRaw = taskLocalArchitectureComment({ id: 800004, pr: fixture.identity.pr, body: architectureFinalSourceOwnerCommentBody(final) });
+  const authority = verifyArchitectureMaintenanceAuthority({ raw: fixture.original, allComments: [fixture.original, fixture.historicalReview, fixture.amendment, review, finalRaw], paginationComplete: true, allCommits: fixture.common.allCommits, commitsPaginationComplete: true, identity: fixture.identity, tree: fixture.tree, scope: fixture.scope, phase1EvidenceResolver: () => phase1, root: fixture.cwd });
+  assert.equal(authority.authorizationOk, true, stableJson(authority.findings)); assert.equal(authority.mergeEligible, true, stableJson(authority.mergeFindings)); assert.equal(authority.dependencyAmendment.commentId, fixture.amendment.id);
+  const historical = verifyArchitectureMaintenanceAuthority({ raw: fixture.original, allComments: [fixture.original], paginationComplete: true, identity: fixture.originalIdentity, tree: fixture.startingTree, scope: fixture.startingScope, ancestryVerified: true, root: fixture.cwd });
+  assert.equal(historical.authorizationOk, true, stableJson(historical.findings)); assert.equal(historical.dependencyAmendmentCommentId ?? null, null);
+});
+
+test("descendant dependency amendment permits unrelated protected-base advance and rejects dependency-baseline drift", (t) => {
+  const advanced = dependencyAmendmentFixture({ candidate: { baseAdvance: true } }); t.after(advanced.cleanup);
+  assert.equal(verifyArchitectureDependencyAmendment(advanced.common).valid, true);
+  const drifted = dependencyAmendmentFixture({ candidate: { baseDependencyDrift: true } }); t.after(drifted.cleanup);
+  const result = verifyArchitectureDependencyAmendment(drifted.common);
+  assert.equal(result.valid, false); assert.equal(result.checks.currentBasePreservesBaseline, false);
+});
+
+test("descendant dependency amendment pending receipt cannot produce current review, final source, or merge eligibility", (t) => {
+  const fixture = dependencyAmendmentFixture(); t.after(fixture.cleanup);
+  const pending = verifyArchitectureDependencyAmendment(fixture.pending);
+  assert.equal(pending.valid, true); assert.equal(pending.state, "AUTHORIZED_PENDING");
+  const reviewSubject = architectureRepositoryReviewSubject({ identity: fixture.originalIdentity, tree: fixture.startingTree, scope: fixture.startingScope, profile: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, dependencyAmendmentResolution: pending });
+  const review = taskLocalArchitectureComment({ id: 800005, pr: fixture.originalIdentity.pr, body: architectureRepositoryReviewCommentBody(reviewSubject) });
+  assert.equal(verifyArchitectureRepositoryReview({ raw: review, identity: fixture.originalIdentity, tree: fixture.startingTree, scope: fixture.startingScope, profile: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, dependencyAmendmentResolution: pending }).valid, false);
+  const run = { id: 900031, run_attempt: 1, name: "Phase 1 CI", event: "pull_request", status: "completed", conclusion: "success", head_sha: fixture.originalIdentity.headSha, head_branch: fixture.originalIdentity.branch, pull_requests: [{ number: fixture.originalIdentity.pr, head: { sha: fixture.originalIdentity.headSha }, base: { sha: fixture.originalIdentity.baseSha } }] };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: fixture.originalIdentity.headSha }));
+  const phase1 = verifyPhase1RunEvidence({ run, jobs, identity: fixture.originalIdentity, tree: fixture.startingTree });
+  const final = architectureFinalSourceSubject({ identity: fixture.originalIdentity, tree: fixture.startingTree, scope: fixture.startingScope, originalRaw: fixture.original, repositoryReviewRaw: review, phase1Evidence: phase1, dependencyAmendmentResolution: pending, root: fixture.cwd });
+  const finalRaw = taskLocalArchitectureComment({ id: 800006, pr: fixture.originalIdentity.pr, body: architectureFinalSourceOwnerCommentBody(final) });
+  const authority = verifyArchitectureMaintenanceAuthority({ raw: fixture.original, allComments: [fixture.original, fixture.historicalReview, fixture.amendment, review, finalRaw], paginationComplete: true, allCommits: fixture.pending.allCommits, commitsPaginationComplete: true, identity: fixture.originalIdentity, tree: fixture.startingTree, scope: fixture.startingScope, phase1EvidenceResolver: () => phase1, root: fixture.cwd });
+  assert.equal(authority.authorizationOk, true, stableJson(authority.findings)); assert.equal(authority.mergeEligible, false); assert.equal(authority.checks.dependencyAmendmentApplied, false);
+});
+
+test("descendant dependency amendment rejects receipt, identity, pagination, ancestry, tree, path, and budget attacks", (t) => {
+  const fixture = dependencyAmendmentFixture(); t.after(fixture.cleanup); const verify = (overrides = {}) => verifyArchitectureDependencyAmendment({ ...fixture.common, ...overrides });
+  const reissue = (mutate) => { const subject = structuredClone(fixture.subject); mutate(subject); return taskLocalArchitectureComment({ id: fixture.amendment.id, pr: fixture.identity.pr, body: architectureDependencyAmendmentOwnerCommentBody(subject) }); };
+  const attacks = [
+    ["edited body", { raw: { ...fixture.amendment, body: `${fixture.amendment.body} ` } }],
+    ["edited timestamp", { raw: { ...fixture.amendment, updated_at: "2026-08-14T01:00:01Z" } }],
+    ["wrong Owner", { raw: { ...fixture.amendment, user: { login: "attacker" } } }],
+    ["wrong association", { raw: { ...fixture.amendment, author_association: "MEMBER" } }],
+    ["duplicate receipt", { allComments: [fixture.original, fixture.amendment, { ...fixture.amendment, id: 800004 }] }],
+    ["comment pagination", { paginationComplete: false }], ["commit pagination", { commitsPaginationComplete: false }],
+    ["missing head commit", { allCommits: fixture.common.allCommits.slice(0, -1) }], ["duplicate head commit", { allCommits: [...fixture.common.allCommits, fixture.common.allCommits.at(-1)] }],
+    ["wrong commit tree", { allCommits: fixture.common.allCommits.map((item, index) => index ? item : { ...item, commit: { tree: { sha: "0".repeat(40) } } }) }],
+    ["wrong head", { identity: { ...fixture.identity, headSha: fixture.base }, tree: fixtureTree(fixture.cwd, fixture.base) }], ["wrong tree", { tree: "0".repeat(40) }],
+    ["wrong original", { originalRaw: { ...fixture.original, body: `${fixture.original.body} ` } }],
+    ["wildcard path", { raw: reissue((subject) => { subject.addedPaths[0] = "*"; }) }], ["extra authorized path", { raw: reissue((subject) => { subject.addedPaths.push("README.md"); }) }],
+    ["unlisted final path", { scope: { ...fixture.scope, files: [...fixture.scope.files, "README.md"] } }], ["line 4501", { scope: { ...fixture.scope, netChangedLines: 4501 } }],
+  ];
+  assert.deepEqual(attacks.filter(([, overrides]) => verify(overrides).valid).map(([name]) => name), []);
+});
+
+test("descendant dependency amendment rejects non-patch, direct-set, React, manifest-lock, digest, and extra-path changes", async (t) => {
+  for (const candidate of [{ majorMinor: true }, { newDirect: true }, { react: true }, { reactNative: true }, { manifestMutation: true }, { lockMismatch: true }, { unrelatedLockMutation: true }, { closureLockMutation: true }, { sameDigest: true }, { badDigest: true }, { digestOutsidePointer: true }, { extraPath: true }]) await t.test(Object.keys(candidate)[0], (inner) => {
+    const fixture = dependencyAmendmentFixture({ candidate }); inner.after(fixture.cleanup);
+    assert.equal(verifyArchitectureDependencyAmendment(fixture.common).valid, false);
+  });
 });
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];

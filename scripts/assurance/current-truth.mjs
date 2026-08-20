@@ -21,6 +21,7 @@ import {
   renderCurrentState,
   renderNextTask,
   sha256,
+  stableJson,
   verifyCurrentTruthHeadBindings,
   verifyCompletedImplementationMergeIdentity,
   verifyProviderImplementationSnapshot,
@@ -31,7 +32,7 @@ import {
   validateTerminalTaskEvidence
 } from "./lib.mjs";
 import { validateStructuredBinding } from "./active-task.mjs";
-import { observeFiniteTaskGitScope, observeFiniteTaskImplementationLifecycle, observeFiniteTaskPostMergeTransition } from "./engineering-closure.mjs";
+import { architectureDependencyBaselinePolicyV1, observeFiniteTaskGitScope, observeFiniteTaskImplementationLifecycle, observeFiniteTaskPostMergeTransition } from "./engineering-closure.mjs";
 import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
 
 function safeGit(gitArgs, fallback = null) {
@@ -305,6 +306,9 @@ if (mode) {
   const protectedMainFindings = protectedMainRuntime.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   const engineeringDoctrineFindings = validateEngineeringDoctrineTruth(record, currentTruthContract, { currentMain: remoteMain, implementationMerged: remoteMain !== "8bf6459c3ae1cec62e26a1694f03063e4291b9f8", protectedMainRuntime });
   const ownerJurisdictionPolicyFindings = validateOwnerJurisdictionPolicyTruth(record, currentTruthContract);
+  const architectureDependencyBaselinePolicyFindings = stableJson(currentTruthContract.architectureDependencyBaselineAmendmentPolicy) === stableJson(architectureDependencyBaselinePolicyV1)
+    ? []
+    : [{ id: "ASSURANCE_ARCHITECTURE_DEPENDENCY_BASELINE_POLICY_INVALID", status: "BLOCKED_INTERNAL" }];
   const taskContextArchitectureFindings = [];
   if (record.engineeringDoctrine?.status === "ACTIVE") {
     const architecture = record.taskContextArchitecture;
@@ -339,7 +343,7 @@ if (mode) {
       || Object.values(architecture.authority).some((value) => value !== false)
       || !mergeAncestor) taskContextArchitectureFindings.push({ id: "ASSURANCE_TYPED_TASK_CONTEXT_TERMINAL_TRUTH_INVALID", status: "BLOCKED_INTERNAL" });
   }
-  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...ownerJurisdictionPolicyFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
+  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...ownerJurisdictionPolicyFindings, ...architectureDependencyBaselinePolicyFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({

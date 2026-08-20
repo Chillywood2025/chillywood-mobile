@@ -1750,6 +1750,8 @@ export const ARCHITECTURE_REPOSITORY_REVIEW_MARKER = "<!-- chillywood-assurance-
 export const ASSURANCE_RECEIPT_LIFECYCLE_V2 = "ASSURANCE_RECEIPT_LIFECYCLE_V2";
 export const FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 = "FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1";
 export const FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 = "FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1";
+export const ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1 = "ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1";
+export const ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER = "<!-- chillywood-assurance-architecture-dependency-amendment-v1 -->";
 export const FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1 = "FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_V1 = "FINITE_TASK_TERMINAL_TRUTH_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1 = "FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1";
@@ -1859,6 +1861,261 @@ const exactScope = (scope) => ({
   changedPathHash: hashValue([...new Set(scope?.files ?? scope?.changedPaths ?? scope?.paths ?? [])].sort()),
   netChangedLines: Math.max(0, Number(scope?.netChangedLines ?? scope?.handAuthoredLines ?? scope?.changedLines ?? 0)),
 });
+
+const DEPENDENCY_AMENDMENT_ADDED_PATHS = Object.freeze([
+  "config/assurance/android-native-call-origin-backup-v1.json",
+  "package-lock.json",
+  "package.json",
+]);
+const DEPENDENCY_AMENDMENT_DIGEST_POINTER = "/target/correctedNativeCompatibilityDigest";
+const DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY = Object.freeze({ product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, submission: false, ota: false, release: false, publicRelease: false });
+export const architectureDependencyBaselinePolicyV1 = Object.freeze({
+  capability: ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1,
+  receiptCardinality: 1,
+  maximumAddedFiles: 3,
+  maximumFinalFiles: 15,
+  maximumFinalNetLines: 4500,
+  exactAddedPaths: DEPENDENCY_AMENDMENT_ADDED_PATHS,
+  manifestAndLockMoveTogether: true,
+  exactTargetArtifactHashesRequired: true,
+  directDependencySetMayChange: false,
+  sameMajorMinorPatchOnly: true,
+  reactOrReactNativeMayChange: false,
+  completeCommentAndCommitPaginationRequired: true,
+  descendantOnly: true,
+  expiresAtPullRequestMerge: true,
+  reusableByAnotherTaskOrPr: false,
+  authority: DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY,
+});
+
+const exactFields = (value, fields) => value !== null && typeof value === "object" && !Array.isArray(value)
+  && stableJson(Object.keys(value).sort()) === stableJson([...fields].sort());
+const dependencyPathRecordAt = (root, ref, file) => {
+  if (!/^[0-9a-f]{40}$/u.test(ref ?? "") || !DEPENDENCY_AMENDMENT_ADDED_PATHS.includes(file)) return null;
+  const listing = spawnSync("git", ["ls-tree", "-z", ref, "--", file], { cwd: root, encoding: null, shell: false });
+  const match = listing.status === 0 ? /^(100644) blob ([0-9a-f]{40})\t(.+)$/u.exec(listing.stdout.toString("utf8").replace(/\0$/u, "")) : null;
+  const content = match?.[3] === file ? spawnSync("git", ["show", `${ref}:${file}`], { cwd: root, encoding: null, shell: false, maxBuffer: 32 * 1024 * 1024 }) : null;
+  return content?.status === 0 ? { path: file, mode: match[1], blob: match[2], sha256: shaBytes(content.stdout), bytes: content.stdout } : null;
+};
+const tildePatch = (value) => { const match = /^~(\d+)\.(\d+)\.(\d+)$/u.exec(value ?? ""); return match ? match.slice(1).map(Number) : null; };
+const dependencyLockPath = (packages, from, name) => {
+  let cursor = from;
+  while (true) {
+    const candidate = cursor ? `${cursor}/node_modules/${name}` : `node_modules/${name}`;
+    if (Object.hasOwn(packages, candidate)) return candidate;
+    const index = cursor.lastIndexOf("/node_modules/");
+    if (index < 0) return Object.hasOwn(packages, `node_modules/${name}`) ? `node_modules/${name}` : null;
+    cursor = cursor.slice(0, index);
+  }
+};
+const dependencyLockClosure = (lock, roots) => {
+  const packages = lock?.packages ?? {}; const queue = roots.map((name) => dependencyLockPath(packages, "", name)).filter(Boolean); const seen = new Set();
+  while (queue.length) { const current = queue.shift(); if (seen.has(current)) continue; seen.add(current); const entry = packages[current] ?? {};
+    for (const name of Object.keys({ ...entry.dependencies, ...entry.optionalDependencies })) { const resolved = dependencyLockPath(packages, current, name); if (resolved && !seen.has(resolved)) queue.push(resolved); }
+  }
+  return seen;
+};
+const gitAncestor = (root, ancestor, descendant) => /^[0-9a-f]{40}$/u.test(ancestor ?? "") && /^[0-9a-f]{40}$/u.test(descendant ?? "")
+  && typedGit(root, ["merge-base", "--is-ancestor", ancestor, descendant]).status === 0;
+const dependencyAmendmentProjection = (verified) => verified?.valid ? {
+  capability: verified.subject.capability,
+  state: verified.state,
+  commentId: verified.commentId,
+  subjectHash: verified.subjectHash,
+  bodyHash: verified.bodyHash,
+  rawBodyHash: verified.rawBodyHash,
+  originalAuthority: verified.subject.originalAuthority,
+  protectedBase: verified.subject.protectedBase,
+  startingHead: verified.subject.startingHead,
+  startingTree: verified.subject.startingTree,
+  finalPaths: verified.subject.finalPaths,
+  finalPathHash: verified.subject.finalPathHash,
+  finalBudget: verified.subject.finalBudget,
+  dependencyChanges: verified.subject.dependencyChanges,
+  baseline: verified.subject.baseline,
+  targetEvidence: verified.subject.targetEvidence,
+  failureEvidence: verified.subject.failureEvidence,
+  digestBinding: { path: verified.subject.baseline.digest.path, pointer: verified.subject.baseline.digest.pointer, from: verified.subject.baseline.digest.value },
+  applicability: verified.subject.applicability,
+  authority: verified.subject.authority,
+  finalEvidence: verified.finalEvidence,
+} : null;
+const dependencyAmendmentReadyForFinalEvidence = (verified) => verified?.valid === true
+  && verified?.state === "APPLIED" && verified?.finalEvidence !== null;
+
+export function architectureDependencyAmendmentSubject({ identity, tree, scope, originalRaw, request, root = REPOSITORY_ROOT } = {}) {
+  if (!exactFields(request, ["addedPaths", "dependencies", "digest", "failure", "finalBudget", "targetEvidence"])
+    || !exactFields(request?.digest, ["path", "pointer"])
+    || !exactFields(request?.failure, ["runId", "jobId", "check", "passed", "required"])
+    || !exactFields(request?.finalBudget, ["maximumFiles", "maximumNetLines"])
+    || !exactFields(request?.targetEvidence, ["manifestSha256", "lockSha256", "nativeCompatibilityDigest"])) throw new Error("ARCHITECTURE_DEPENDENCY_AMENDMENT_REQUEST_INVALID");
+  const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
+  const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
+  const originalSubject = originalPayload?.subject;
+  const observed = exactScope(scope);
+  const addedPaths = [...new Set(request.addedPaths ?? [])].sort();
+  const dependencyInputs = (request.dependencies ?? []).map((entry) => exactFields(entry, ["name", "to"]) ? entry : null);
+  const packageRecord = dependencyPathRecordAt(root, identity?.headSha, "package.json");
+  const lockRecord = dependencyPathRecordAt(root, identity?.headSha, "package-lock.json");
+  const digestRecord = dependencyPathRecordAt(root, identity?.headSha, request.digest.path);
+  const basePackageRecord = dependencyPathRecordAt(root, identity?.baseSha, "package.json");
+  const baseLockRecord = dependencyPathRecordAt(root, identity?.baseSha, "package-lock.json");
+  const baseDigestRecord = dependencyPathRecordAt(root, identity?.baseSha, request.digest.path);
+  let packageJson; let digestJson;
+  try { packageJson = JSON.parse(packageRecord?.bytes); digestJson = JSON.parse(digestRecord?.bytes); } catch { throw new Error("ARCHITECTURE_DEPENDENCY_AMENDMENT_BASELINE_INVALID"); }
+  const dependencies = dependencyInputs.map((entry) => {
+    const from = packageJson?.dependencies?.[entry?.name]; const before = tildePatch(from); const after = tildePatch(entry?.to);
+    if (!entry || !textValue(entry.name) || ["react", "react-native"].includes(entry.name) || !before || !after || before[0] !== after[0] || before[1] !== after[1] || after[2] <= before[2]) throw new Error("ARCHITECTURE_DEPENDENCY_AMENDMENT_VERSION_ENVELOPE_INVALID");
+    return { ecosystem: "npm", name: entry.name, from, to: entry.to };
+  }).sort((left, right) => left.name.localeCompare(right.name));
+  const baseTree = spawnSync("git", ["rev-parse", `${identity?.baseSha}^{tree}`], { cwd: root, encoding: "utf8", shell: false }).stdout?.trim();
+  const headTree = spawnSync("git", ["rev-parse", `${identity?.headSha}^{tree}`], { cwd: root, encoding: "utf8", shell: false }).stdout?.trim();
+  const gitObserved = /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "") && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "")
+    ? observeFiniteTaskGitScope(root, identity.baseSha, identity.headSha) : null;
+  if (!original || originalSubject?.objective !== FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1
+    || headTree !== tree || !baseTree || stableJson(observed.changedPaths) !== stableJson(originalSubject.changedPaths)
+    || !gitObserved || stableJson(observed.changedPaths) !== stableJson(gitObserved.files)
+    || Number(scope?.additions ?? 0) !== gitObserved.additions || Number(scope?.deletions ?? 0) !== gitObserved.deletions
+    || observed.netChangedLines !== gitObserved.netChangedLines || scope?.diffHash !== gitObserved.diffHash
+    || stableJson(addedPaths) !== stableJson(DEPENDENCY_AMENDMENT_ADDED_PATHS)
+    || request.digest.path !== DEPENDENCY_AMENDMENT_ADDED_PATHS[0] || request.digest.pointer !== DEPENDENCY_AMENDMENT_DIGEST_POINTER
+    || request.addedPaths.length !== addedPaths.length || request.dependencies.length !== dependencies.length
+    || !packageRecord || !lockRecord || !digestRecord || !basePackageRecord || !baseLockRecord || !baseDigestRecord
+    || packageRecord.blob !== basePackageRecord.blob || lockRecord.blob !== baseLockRecord.blob || digestRecord.blob !== baseDigestRecord.blob
+    || dependencies.length < 1 || new Set(dependencies.map(({ name }) => name)).size !== dependencies.length
+    || ![request.targetEvidence.manifestSha256, request.targetEvidence.lockSha256, request.targetEvidence.nativeCompatibilityDigest].every((value) => /^[0-9a-f]{64}$/u.test(value ?? ""))
+    || request.targetEvidence.manifestSha256 === packageRecord.sha256 || request.targetEvidence.lockSha256 === lockRecord.sha256
+    || request.targetEvidence.nativeCompatibilityDigest === digestJson?.target?.correctedNativeCompatibilityDigest
+    || request.finalBudget.maximumFiles !== 15 || request.finalBudget.maximumNetLines !== 4500
+    || !Number.isInteger(request.failure.runId) || !Number.isInteger(request.failure.jobId) || !textValue(request.failure.check)
+    || !Number.isInteger(request.failure.passed) || !Number.isInteger(request.failure.required) || request.failure.passed < 0 || request.failure.required <= request.failure.passed) throw new Error("ARCHITECTURE_DEPENDENCY_AMENDMENT_SUBJECT_INVALID");
+  return {
+    schemaVersion: 1,
+    type: "OWNER_ASSURANCE_ARCHITECTURE_DEPENDENCY_AMENDMENT_V1",
+    classification: "PATCH_ONLY_DEPENDENCY_BASELINE_MAINTENANCE",
+    capability: ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1,
+    repository: identity.repository,
+    pr: identity.pr,
+    branch: identity.branch,
+    originalAuthority: { commentId: original.id, subjectHash: originalPayload.subjectHash, bodyHash: originalPayload.bodyHash, rawBodyHash: original.bodyHash },
+    protectedBase: { head: identity.baseSha, tree: baseTree },
+    startingHead: identity.headSha,
+    startingTree: tree,
+    startingScope: { paths: gitObserved.files, pathHash: hashValue(gitObserved.files), diffHash: gitObserved.diffHash, additions: gitObserved.additions, deletions: gitObserved.deletions, netChangedLines: gitObserved.netChangedLines },
+    addedPaths,
+    finalPaths: [...new Set([...observed.changedPaths, ...addedPaths])].sort(),
+    finalPathHash: hashValue([...new Set([...observed.changedPaths, ...addedPaths])].sort()),
+    originalBudget: originalSubject.budget,
+    finalBudget: request.finalBudget,
+    dependencyChanges: dependencies,
+    baseline: {
+      manifest: { path: packageRecord.path, mode: packageRecord.mode, blob: packageRecord.blob, sha256: packageRecord.sha256 },
+      lock: { path: lockRecord.path, mode: lockRecord.mode, blob: lockRecord.blob, sha256: lockRecord.sha256 },
+      digest: { path: digestRecord.path, mode: digestRecord.mode, blob: digestRecord.blob, sha256: digestRecord.sha256, pointer: request.digest.pointer, value: digestJson?.target?.correctedNativeCompatibilityDigest ?? null },
+      directDependencyNamesHash: hashValue(Object.keys(packageJson.dependencies ?? {}).sort()),
+      react: packageJson.dependencies?.react ?? null,
+      reactNative: packageJson.dependencies?.["react-native"] ?? null,
+    },
+    targetEvidence: request.targetEvidence,
+    failureEvidence: request.failure,
+    requirements: { directDependencySetUnchanged: true, manifestAndLockMoveTogether: true, sameMajorMinorPatchOnly: true, digestOnlyAtBoundPointer: true, historicalInstalledEvidenceUnchanged: true },
+    applicability: { descendantOnly: true, expiresOn: `PR_${identity.pr}_MERGE`, reusableByAnotherTaskOrPr: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+    immutability: { topLevelIssueComment: true, createdAtEqualsUpdatedAt: true, completePagination: true },
+    authority: DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY,
+  };
+}
+export const architectureDependencyAmendmentOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, subject.type, subject);
+
+export function verifyArchitectureDependencyAmendment({ raw, originalRaw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, root = REPOSITORY_ROOT } = {}) {
+  const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
+  const payload = parseExactOwnerBody(normalized, ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER);
+  const subject = payload?.subject;
+  const markers = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER}\n`));
+  let expected = null;
+  try {
+    expected = architectureDependencyAmendmentSubject({
+      identity: { repository: subject?.repository, pr: subject?.pr, branch: subject?.branch, baseSha: subject?.protectedBase?.head, headSha: subject?.startingHead },
+      tree: subject?.startingTree,
+      scope: { files: subject?.startingScope?.paths, diffHash: subject?.startingScope?.diffHash, additions: subject?.startingScope?.additions, deletions: subject?.startingScope?.deletions, netChangedLines: subject?.startingScope?.netChangedLines },
+      originalRaw,
+      request: { addedPaths: subject?.addedPaths, dependencies: subject?.dependencyChanges?.map(({ name, to }) => ({ name, to })), digest: { path: subject?.digestBinding?.path ?? subject?.baseline?.digest?.path, pointer: subject?.digestBinding?.pointer ?? subject?.baseline?.digest?.pointer }, failure: subject?.failureEvidence, finalBudget: subject?.finalBudget, targetEvidence: subject?.targetEvidence },
+      root,
+    });
+  } catch {}
+  const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+  const commits = allCommits.map((commit) => commit?.sha).filter((sha) => /^[0-9a-f]{40}$/u.test(sha ?? ""));
+  const expectedCommits = /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "") && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "")
+    ? typedGit(root, ["rev-list", "--reverse", "--topo-order", `${identity.baseSha}..${identity.headSha}`]).stdout.trim().split(/\r?\n/gu).filter(Boolean) : [];
+  const commitTreesValid = allCommits.every((commit) => /^[0-9a-f]{40}$/u.test(commit?.sha ?? "")
+    && commit?.commit?.tree?.sha === typedGit(root, ["rev-parse", `${commit.sha}^{tree}`]).stdout.trim());
+  const observed = exactScope(scope);
+  const gitObserved = /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "") && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "") ? observeFiniteTaskGitScope(root, identity.baseSha, identity.headSha) : null;
+  const currentScopeState = stableJson(observed.changedPaths) === stableJson(subject?.startingScope?.paths) ? "AUTHORIZED_PENDING" : stableJson(observed.changedPaths) === stableJson(subject?.finalPaths) ? "APPLIED" : "INVALID";
+  const originalHead = parseExactOwnerBody(normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id }), ARCHITECTURE_MAINTENANCE_MARKER)?.subject?.currentHead;
+  const currentBaseRecords = subject ? {
+    manifest: dependencyPathRecordAt(root, identity?.baseSha, subject.baseline?.manifest?.path),
+    lock: dependencyPathRecordAt(root, identity?.baseSha, subject.baseline?.lock?.path),
+    digest: dependencyPathRecordAt(root, identity?.baseSha, subject.baseline?.digest?.path),
+  } : null;
+  const currentBasePreservesBaseline = Boolean(currentBaseRecords
+    && ["manifest", "lock", "digest"].every((key) => currentBaseRecords[key]?.mode === subject.baseline[key].mode
+      && currentBaseRecords[key]?.blob === subject.baseline[key].blob
+      && currentBaseRecords[key]?.sha256 === subject.baseline[key].sha256));
+  const ancestry = Boolean(subject && gitAncestor(root, subject.startingHead, identity?.headSha)
+    && gitAncestor(root, originalHead, subject.startingHead)
+    && gitAncestor(root, subject.protectedBase.head, identity?.baseSha)
+    && gitAncestor(root, identity?.baseSha, identity?.headSha));
+  let finalEvidence = null; let applied = false;
+  if (currentScopeState === "APPLIED" && subject) {
+    try {
+      const baselinePackage = JSON.parse(dependencyPathRecordAt(root, subject.startingHead, "package.json").bytes);
+      const baselineLock = JSON.parse(dependencyPathRecordAt(root, subject.startingHead, "package-lock.json").bytes);
+      const currentPackageRecord = dependencyPathRecordAt(root, identity.headSha, "package.json");
+      const currentLockRecord = dependencyPathRecordAt(root, identity.headSha, "package-lock.json");
+      const currentDigestRecord = dependencyPathRecordAt(root, identity.headSha, subject.baseline.digest.path);
+      const currentPackage = JSON.parse(currentPackageRecord.bytes); const currentLock = JSON.parse(currentLockRecord.bytes); const currentDigest = JSON.parse(currentDigestRecord.bytes);
+      const expectedPackage = structuredClone(baselinePackage);
+      for (const change of subject.dependencyChanges) expectedPackage.dependencies[change.name] = change.to;
+      const resolved = subject.dependencyChanges.map((change) => ({ name: change.name, spec: change.to, version: currentLock.packages?.[`node_modules/${change.name}`]?.version ?? null })).sort((a, b) => a.name.localeCompare(b.name));
+      const changedLockPaths = [...new Set([...Object.keys(baselineLock.packages ?? {}), ...Object.keys(currentLock.packages ?? {})])].filter((name) => stableJson(baselineLock.packages?.[name]) !== stableJson(currentLock.packages?.[name]));
+      const allowedLockPaths = new Set(["", ...dependencyLockClosure(baselineLock, subject.dependencyChanges.map(({ name }) => name)), ...dependencyLockClosure(currentLock, subject.dependencyChanges.map(({ name }) => name))]);
+      const baselineLockMeta = Object.fromEntries(Object.entries(baselineLock).filter(([key]) => key !== "packages")); const currentLockMeta = Object.fromEntries(Object.entries(currentLock).filter(([key]) => key !== "packages"));
+      const expectedLockRoot = structuredClone(baselineLock.packages?.[""] ?? {}); expectedLockRoot.dependencies = currentPackage.dependencies;
+      const digestValue = currentDigest?.target?.correctedNativeCompatibilityDigest;
+      const baselineDigest = JSON.parse(dependencyPathRecordAt(root, subject.startingHead, subject.baseline.digest.path).bytes); const expectedDigest = structuredClone(baselineDigest); expectedDigest.target.correctedNativeCompatibilityDigest = digestValue;
+      const statusRows = typedGit(root, ["diff", "--name-status", "--no-renames", subject.startingHead, identity.headSha, "--", ...subject.addedPaths]).stdout.trim().split(/\r?\n/gu).filter(Boolean).sort();
+      applied = stableJson(currentPackage) === stableJson(expectedPackage)
+        && currentPackageRecord.sha256 === subject.targetEvidence.manifestSha256
+        && currentLockRecord.sha256 === subject.targetEvidence.lockSha256
+        && hashValue(Object.keys(currentPackage.dependencies ?? {}).sort()) === subject.baseline.directDependencyNamesHash
+        && currentPackage.dependencies.react === subject.baseline.react && currentPackage.dependencies["react-native"] === subject.baseline.reactNative
+        && stableJson(currentLock.packages?.[""] ?? {}) === stableJson(expectedLockRoot)
+        && resolved.every(({ spec, version }) => version === spec.slice(1))
+        && stableJson(currentLockMeta) === stableJson(baselineLockMeta) && changedLockPaths.every((name) => allowedLockPaths.has(name))
+        && digestValue === subject.targetEvidence.nativeCompatibilityDigest
+        && stableJson(currentDigest) === stableJson(expectedDigest)
+        && stableJson(statusRows) === stableJson(subject.addedPaths.map((file) => `M\t${file}`).sort());
+      if (applied) finalEvidence = { packageJson: { blob: currentPackageRecord.blob, sha256: currentPackageRecord.sha256 }, packageLock: { blob: currentLockRecord.blob, sha256: currentLockRecord.sha256, changedPackagePaths: changedLockPaths.sort(), graphHash: hashValue(currentLock.packages ?? {}) }, resolvedDependencies: resolved, nativeCompatibilityDigest: digestValue, digestRecord: { blob: currentDigestRecord.blob, sha256: currentDigestRecord.sha256 } };
+    } catch { applied = false; }
+  }
+  const checks = {
+    identity: Boolean(normalized && subject?.repository === identity?.repository && subject?.pr === identity?.pr && subject?.branch === identity?.branch),
+    tree: /^[0-9a-f]{40}$/u.test(tree ?? "") && tree === typedGit(root, ["rev-parse", `${identity?.headSha}^{tree}`]).stdout.trim(),
+    canonical: Boolean(expected && stableJson(subject) === stableJson(expected) && normalized?.body === architectureDependencyAmendmentOwnerCommentBody(expected) && payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(body)),
+    pagination: paginationComplete && commitsPaginationComplete,
+    cardinality: markers.length === 1,
+    commits: commits.length === allCommits.length && new Set(commits).size === commits.length && stableJson(commits) === stableJson(expectedCommits) && commitTreesValid && commits.filter((sha) => sha === subject?.startingHead).length === 1 && commits.filter((sha) => sha === identity?.headSha).length === 1,
+    ancestry,
+    protectedBase: Boolean(subject && (subject.protectedBase.head === identity?.baseSha || gitAncestor(root, subject.protectedBase.head, identity?.baseSha))),
+    currentBasePreservesBaseline,
+    scope: currentScopeState !== "INVALID" && gitObserved && stableJson(observed.changedPaths) === stableJson(gitObserved.files) && Number(scope?.additions ?? 0) === gitObserved.additions && Number(scope?.deletions ?? 0) === gitObserved.deletions && observed.netChangedLines === gitObserved.netChangedLines && scope?.diffHash === gitObserved.diffHash && observed.changedPaths.length <= subject?.finalBudget?.maximumFiles && observed.netChangedLines <= subject?.finalBudget?.maximumNetLines,
+    source: currentScopeState === "AUTHORIZED_PENDING" || applied,
+    authority: stableJson(subject?.authority) === stableJson(DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY),
+  };
+  const valid = Object.values(checks).every(Boolean);
+  return { valid, active: valid, state: currentScopeState, checks, findings: valid ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `ARCHITECTURE_DEPENDENCY_AMENDMENT_INVALID:${key}`), commentId: normalized?.id ?? null, subjectHash: payload?.subjectHash ?? null, bodyHash: payload?.bodyHash ?? null, rawBodyHash: normalized?.bodyHash ?? null, subject, finalEvidence };
+}
 
 const authorityControlCurrentTruthCompanionV2Required = ({ identity, root = REPOSITORY_ROOT } = {}) => {
   void root;
@@ -1984,7 +2241,7 @@ const finiteTaskImplementationReviewBinding = (resolution) => {
   };
 };
 
-export function architectureRepositoryReviewSubject({ identity, tree, scope, profile = null, effectiveReservationResolution = null } = {}) {
+export function architectureRepositoryReviewSubject({ identity, tree, scope, profile = null, effectiveReservationResolution = null, dependencyAmendmentResolution = null } = {}) {
   const observed = exactScope(scope);
   const jurisdictionModelReview = identity?.branch === "codex/owner-jurisdiction-canonical-model-v1";
   const jurisdictionAdmissionReview = profile === "FINITE_TASK_ADMISSION_JURISDICTION_V2";
@@ -1992,6 +2249,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
   const testAdaptationOverlayReview = profile === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const finiteTaskTerminalReview = profile === FINITE_TASK_TERMINAL_TRUTH_V1;
+  const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
   return {
     type: "REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1",
     repository: identity?.repository,
@@ -2009,6 +2267,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
     disposition: { P0: 0, P1: 0, launchImpactingP2: 0 },
     ...((jurisdictionAdmissionReview || amendmentControlRepairReview || testAdaptationOverlayReview || finiteTaskImplementationReview || finiteTaskTerminalReview) ? { reviewProfile: profile } : {}),
     ...(finiteTaskImplementationReview ? { finiteTaskEffectiveReservation: finiteTaskImplementationReviewBinding(effectiveReservationResolution) } : {}),
+    ...(dependencyAmendment ? { dependencyAmendment } : {}),
     lanes: finiteTaskTerminalReview ? [
       "exact three-path canonical finite-task terminal-truth transition",
       "immutable base lease hash and amended effective-reservation receipt preservation",
@@ -2031,6 +2290,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
       "test-fixture classification boundaries, exact baseline binding, and product-path exclusion",
       "current-truth, active-task, engineering-closure, PR-scope, review, final-source, merge, and terminal consumers",
       "positive and adversarial receipt, ancestry, cardinality, pagination, scope, and expiry witnesses",
+      ...(dependencyAmendment ? ["generic immutable dependency-baseline amendment, exact patch-only package graph, lock closure, current-source native digest, and historical installed-evidence preservation"] : []),
       "no provider mutation or contact, database deployment, product build, submission, OTA, or public release authority",
     ] : amendmentControlRepairReview ? [
       "RC-1 registered Wave 1 amendment policy and exact amendable-path bound",
@@ -2063,12 +2323,14 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
 }
 export const architectureRepositoryReviewCommentBody = (subject) => repositoryEvidenceCommentBody(ARCHITECTURE_REPOSITORY_REVIEW_MARKER, subject.type, subject);
 
-export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile = null, effectiveReservationResolution = null } = {}) {
+export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile = null, effectiveReservationResolution = null, dependencyAmendmentResolution = null } = {}) {
   const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
   const payload = parseExactOwnerBody(normalized, ARCHITECTURE_REPOSITORY_REVIEW_MARKER);
   const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
-  const expected = architectureRepositoryReviewSubject({ identity, tree, scope, profile, effectiveReservationResolution });
+  const expected = architectureRepositoryReviewSubject({ identity, tree, scope, profile, effectiveReservationResolution, dependencyAmendmentResolution });
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
+  const dependencyAmendmentBound = dependencyAmendmentResolution === null
+    || dependencyAmendmentReadyForFinalEvidence(dependencyAmendmentResolution);
   const effectiveReservationBound = !finiteTaskImplementationReview || Boolean(
     finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
     && ["AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
@@ -2097,7 +2359,8 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
     && payload?.bodyHash === hashValue(body)
     && stableJson(payload?.subject) === stableJson(expected)
     && normalized.body === architectureRepositoryReviewCommentBody(expected)
-    && effectiveReservationBound);
+    && effectiveReservationBound
+    && dependencyAmendmentBound);
   return {
     valid,
     commentId: normalized?.id ?? null,
@@ -2362,7 +2625,18 @@ export function architectureMaintenanceSuccessorSubject({ identity, tree, scope,
 export const architectureMaintenanceSuccessorOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER, subject.type, subject);
 
 const HISTORICAL_ARCHITECTURE_RECEIPT = Object.freeze({ commentId: 5277054532, head: "63cadbe5ac97c9d4358bf9bdf9069384f1f2b8f9", tree: "42818b41c363d3b528d125c1612f283bf8caf483", subjectHash: "7f39f0ab62c9cad3a8077f2dc16c98ead1767c45c7cebcda945afeb44b4a985e", bodyHash: "fd569184ab4150b0d2b112e053d29a4d974ea10a096b1638fe09c2b580752e0d" });
-export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], repositoryReviewRaw, phase1Evidence, dependencyAmendmentRaw, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
+const historicalArchitectureReviewProjection = (raws, identity) => (raws ?? []).map((raw) => {
+  const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
+  const payload = parseExactOwnerBody(normalized, ARCHITECTURE_REPOSITORY_REVIEW_MARKER);
+  const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+  return normalized && payload?.subject?.type === "REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1"
+    && payload.subject.repository === identity?.repository && payload.subject.pr === identity?.pr && payload.subject.branch === identity?.branch
+    && payload.subjectHash === hashValue(payload.subject) && payload.bodyHash === hashValue(body)
+    && normalized.body === architectureRepositoryReviewCommentBody(payload.subject)
+    ? { commentId: normalized.id, commentBodyHash: normalized.bodyHash, subjectHash: payload.subjectHash, reviewedHead: payload.subject.reviewedHead, reviewedTree: payload.subject.reviewedTree, disposition: payload.subject.disposition, status: "HISTORICAL_EXACT_HEAD_REVIEW" }
+    : null;
+}).filter(Boolean).sort((left, right) => left.commentId - right.commentId);
+export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], historicalRepositoryReviewRaws = [], repositoryReviewRaw, phase1Evidence, dependencyAmendmentRaw, dependencyAmendmentResolution = null, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject ?? {};
@@ -2376,7 +2650,9 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
     const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : null;
-    const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope, profile: reviewProfile });
+    const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
+    const historicalRepositoryReviews = dependencyAmendment ? historicalArchitectureReviewProjection(historicalRepositoryReviewRaws, identity) : [];
+    const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution });
     const historicalAttestations = historicalAttestationRaws.map((item) => {
       const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
       const payload = parseExactOwnerBody(normalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
@@ -2408,10 +2684,11 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       additions: Number(scope?.additions ?? 0),
       deletions: Number(scope?.deletions ?? 0),
       netChangedLines: observed.netChangedLines,
-      budget: originalSubject.budget,
+      budget: dependencyAmendment?.finalBudget ?? originalSubject.budget,
       objective: originalSubject.objective,
       capabilities: originalSubject.capabilities,
       receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
+      ...(dependencyAmendment ? { dependencyAmendment, dependencyEvidence: dependencyAmendment.finalEvidence, historicalRepositoryReviews } : {}),
       repositoryReview: {
         commentId: review.commentId,
         commentBodyHash: review.commentBodyHash,
@@ -3103,7 +3380,7 @@ export function verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ raw = null, 
   return { ok, mergeEligible: ok, findings: ok ? [] : [finals.length === 0 ? "FINITE_TASK_ADMISSION_FINAL_SOURCE_REQUIRED" : "FINITE_TASK_ADMISSION_FINAL_SOURCE_INVALID"], commentId: selected?.commentId ?? null, bodyHash: selected?.verified?.bodyHash ?? null, subjectHash: selected?.verified?.subjectHash ?? null, classifications: classifications.map(({ commentId, status }) => ({ commentId, status })) };
 }
 
-export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, phase1EvidenceResolver = observePhase1RunEvidence, root = REPOSITORY_ROOT } = {}) {
+export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, phase1EvidenceResolver = observePhase1RunEvidence, root = REPOSITORY_ROOT } = {}) {
   const normalizedOriginal = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
   const originalPayload = parseExactOwnerBody(normalizedOriginal, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject;
@@ -3111,17 +3388,29 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const successorMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER}\n`));
   const finalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
   const dependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER}\n`));
+  const architectureDependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER}\n`));
   const finalSourceCorrectionMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER}\n`));
   const repositoryReviewMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_REPOSITORY_REVIEW_MARKER}\n`));
   const observed = exactScope(scope);
+  const architectureDependencyAmendment = architectureDependencyAmendmentMatches[0]
+    ? verifyArchitectureDependencyAmendment({ raw: architectureDependencyAmendmentMatches[0], originalRaw: raw, allComments, paginationComplete, allCommits, commitsPaginationComplete, identity, tree, scope, root })
+    : null;
+  const architectureDependencyAmendmentActive = architectureDependencyAmendment?.valid === true;
   const companionRequired = authorityControlCurrentTruthCompanionV2Required({ identity, root });
   let expectedCompanion = null;
   try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root }); } catch { expectedCompanion = null; }
+  let originalCompanion = null;
+  try { originalCompanion = authorityControlCurrentTruthCompanionV2({ identity: { ...identity, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead }, root }); } catch { originalCompanion = null; }
   const subjectHasCompanion = Object.hasOwn(originalSubject ?? {}, "currentTruthCompanion");
-  const requiredCompanionPaths = expectedCompanion?.requiredChangedPaths ?? [];
+  const requiredCompanionPaths = originalCompanion?.requiredChangedPaths ?? [];
+  const protectedBaseAdvanced = originalSubject?.protectedBase !== identity?.baseSha
+    && gitAncestor(root, originalSubject?.protectedBase, identity?.baseSha);
   const companionValid = companionRequired
-    ? Boolean(expectedCompanion
-      && stableJson(originalSubject?.currentTruthCompanion) === stableJson(expectedCompanion)
+    ? Boolean(originalCompanion
+      && stableJson(originalSubject?.currentTruthCompanion) === stableJson(originalCompanion)
+      && expectedCompanion
+      && (stableJson(expectedCompanion) === stableJson(originalCompanion)
+        || architectureDependencyAmendmentActive && protectedBaseAdvanced)
       && requiredCompanionPaths.every((file) => observed.changedPaths.includes(file) && originalSubject?.changedPaths?.includes(file)))
     : !subjectHasCompanion;
   if (!companionValid) return {
@@ -3155,9 +3444,9 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const amendmentControlRepair = originalSubject?.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
     const testAdaptationOverlay = originalSubject?.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
     const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay;
-    const architecturePaths = ownerJurisdictionProfile ? OWNER_JURISDICTION_ARCHITECTURE_PATHS : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
-    const maximumFiles = ownerJurisdictionProfile ? 15 : 12;
-    const maximumNetLines = ownerJurisdictionProfile ? 3500 : 3200;
+    const architecturePaths = ownerJurisdictionProfile ? [...OWNER_JURISDICTION_ARCHITECTURE_PATHS, ...(architectureDependencyAmendmentActive ? DEPENDENCY_AMENDMENT_ADDED_PATHS : [])] : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
+    const maximumFiles = architectureDependencyAmendmentActive ? architectureDependencyAmendment.subject.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
+    const maximumNetLines = architectureDependencyAmendmentActive ? architectureDependencyAmendment.subject.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200;
     const expectedCapabilities = amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
       : testAdaptationOverlay
@@ -3180,22 +3469,29 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       if (payload.subject.finalHead !== identity?.headSha || payload.subject.finalTree !== tree) return { normalized, payload, structurallyValid, current: false, status: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION" };
       const claimedHistoricalIds = (payload.subject.historicalAttestations ?? []).map(({ commentId }) => commentId);
       const claimedHistoricalRaws = claimedHistoricalIds.map((commentId) => finalMatches.find((candidate) => candidate.id === commentId));
+      const claimedHistoricalReviewIds = (payload.subject.historicalRepositoryReviews ?? []).map(({ commentId }) => commentId);
+      const claimedHistoricalReviewRaws = claimedHistoricalReviewIds.map((commentId) => repositoryReviewMatches.find((candidate) => candidate.id === commentId));
       const historyBinding = claimedHistoricalIds.length === new Set(claimedHistoricalIds).size
         && claimedHistoricalRaws.every(Boolean)
         && !claimedHistoricalIds.includes(item.id)
+        && claimedHistoricalReviewIds.length === new Set(claimedHistoricalReviewIds).size
+        && claimedHistoricalReviewRaws.every(Boolean)
+        && !claimedHistoricalReviewIds.includes(payload.subject.repositoryReview?.commentId)
         && (ownerJurisdictionProfile || !finalMatches.some((candidate) => candidate.id === 5289720389) || claimedHistoricalIds.includes(5289720389));
       const reviewRaw = repositoryReviewMatches.find((candidate) => candidate.id === payload.subject.repositoryReview?.commentId);
       const phase1 = phase1EvidenceResolver({ runId: payload.subject.phase1?.runId, identity, tree, root });
       const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : null;
-      const review = verifyArchitectureRepositoryReview({ raw: reviewRaw, identity, tree, scope, profile: reviewProfile });
+      const review = verifyArchitectureRepositoryReview({ raw: reviewRaw, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution: architectureDependencyAmendmentActive ? architectureDependencyAmendment : null });
       const expected = architectureFinalSourceSubject({
         identity,
         tree,
         scope,
         originalRaw: raw,
         historicalAttestationRaws: claimedHistoricalRaws,
+        historicalRepositoryReviewRaws: claimedHistoricalReviewRaws,
         repositoryReviewRaw: reviewRaw,
         phase1Evidence: phase1,
+        dependencyAmendmentResolution: architectureDependencyAmendmentActive ? architectureDependencyAmendment : null,
         root,
       });
       const current = historyBinding
@@ -3229,10 +3525,11 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       currentTruthCompanion: companionValid,
       body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
-      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && originalSubject?.protectedBase === identity?.baseSha && originalSubject?.budget?.maximumFiles === maximumFiles && originalSubject?.budget?.maximumNetLines === maximumNetLines,
+      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === (ownerJurisdictionProfile ? 15 : 12) && originalSubject?.budget?.maximumNetLines === (ownerJurisdictionProfile ? 3500 : 3200),
       ancestry,
-      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0,
-      exactPaths: observed.changedPaths.length === originalSubject?.changedPaths?.length && observed.changedPaths.every((file) => architecturePaths.includes(file)) && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths),
+      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && architectureDependencyAmendmentMatches.length <= 1,
+      dependencyAmendment: architectureDependencyAmendmentMatches.length === 0 || architectureDependencyAmendmentActive,
+      exactPaths: observed.changedPaths.every((file) => architecturePaths.includes(file)) && (architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
       budget: observed.changedPaths.length <= maximumFiles && observed.netChangedLines <= maximumNetLines,
       authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && (noCompetingDomainOwner || assuranceOnlyNonDomainMaintenance),
       capability: canonicalProfile
@@ -3242,6 +3539,8 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     };
     const authorizationOk = Object.values(authorizationChecks).every(Boolean);
     const attestationChecks = {
+      dependencyAmendmentApplied: architectureDependencyAmendmentMatches.length === 0
+        || dependencyAmendmentReadyForFinalEvidence(architectureDependencyAmendment),
       exactlyOneCurrent: currentFinals.length === 1,
       currentReview: currentFinal?.payload?.subject?.repositoryReview?.valid === true,
       currentPhase1: currentFinal?.payload?.subject?.phase1?.valid === true && currentFinal?.payload?.subject?.phase1?.result === "PASS_13_OF_13",
@@ -3272,6 +3571,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       originalBodyHash: normalizedOriginal?.bodyHash ?? null,
       originalSubjectHash: originalPayload?.subjectHash ?? null,
       currentFinalSourceReceiptId: currentFinal?.normalized?.id ?? null,
+      dependencyAmendment: dependencyAmendmentProjection(architectureDependencyAmendment),
       taskAuthorization: authorizationOk ? "VALID" : "INVALID",
       finalSourceAttestationRequiredAtThisStage: false,
       receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
@@ -3928,7 +4228,7 @@ export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSy
   const endpoint = args.at(-1);
   const paginated = args.includes("--paginate") && args.includes("--slurp");
   const pathname = typeof endpoint === "string" ? endpoint.split("?", 1)[0] : "";
-  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/files)?)?|issues\/[1-9]\d*\/comments|commits\/[0-9a-f]{40}\/pulls)$/u.test(pathname);
+  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/(?:files|commits))?)?|issues\/[1-9]\d*\/comments|commits\/[0-9a-f]{40}\/pulls)$/u.test(pathname);
   if (!allowedPath || /(?:\.\.|%2e|%2f|#)/iu.test(endpoint)) return authenticated;
   const pages = [];
   for (let page = 1; page <= 20; page += 1) {
@@ -3955,6 +4255,7 @@ const paginatedArray = (root, endpoint) => {
   return { complete: response.status === 0 && Array.isArray(pages) && pages.every(Array.isArray), values: Array.isArray(pages) ? pages.flat() : [] };
 };
 const paginatedIssueComments = (root, repository, pr) => { const result = paginatedArray(root, `repos/${repository}/issues/${pr}/comments?per_page=100`); const fallback = result.complete ? null : observePublicGitHubPullRequest({ repository, pr }); return { complete: result.complete || fallback?.commentsPaginationComplete === true, comments: result.complete ? result.values : fallback?.comments ?? [] }; };
+const paginatedPullCommits = (root, repository, pr) => { const result = paginatedArray(root, `repos/${repository}/pulls/${pr}/commits?per_page=100`); return { complete: result.complete, commits: result.values }; };
 export function observePhase1RunEvidence({ runId, identity, tree, root = REPOSITORY_ROOT } = {}) {
   if (!Number.isInteger(runId) || runId < 1 || identity?.repository !== "Chillywood2025/chillywood-mobile") return verifyPhase1RunEvidence({ identity, tree });
   const run = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}`]), null);
@@ -3977,10 +4278,11 @@ const gitScope = observeFiniteTaskGitScope;
 export function observeTypedTaskAuthorities({ identity, tree, scope, currentTruth, root = REPOSITORY_ROOT } = {}) {
   if (!identity || !/^[0-9a-f]{40}$/u.test(tree ?? "")) return { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null };
   const commentsRead = paginatedIssueComments(root, identity.repository, identity.pr);
+  const commitsRead = paginatedPullCommits(root, identity.repository, identity.pr);
   const architectureComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
   const noCompetingDomainOwner = Array.isArray(currentTruth?.openImplementationPrs) && currentTruth.openImplementationPrs.length === 0;
   const architectureAuthority = architectureComments.length
-    ? verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, identity, tree, scope, noCompetingDomainOwner })
+    ? verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, allCommits: commitsRead.commits, commitsPaginationComplete: commitsRead.complete, identity, tree, scope, noCompetingDomainOwner })
     : null;
 
   const activeLeaseStates = new Set(["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "IMPLEMENTATION", "VERIFY", "NATIVE_PROVIDER_PROOF", "MERGE_ELIGIBLE", "ACTIVE_IMPLEMENTATION"]);

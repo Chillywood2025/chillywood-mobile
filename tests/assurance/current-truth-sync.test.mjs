@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { finiteTaskEffectiveReservationAuthorityValid, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { architectureDependencyBaselinePolicyV1 } from "../../scripts/assurance/engineering-closure.mjs";
 import { STANDING_POLICY_INHERITANCE_ALLOWLIST, STANDING_POLICY_INHERITANCE_DENYLIST } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const recordedMain = "a".repeat(40);
@@ -172,6 +173,32 @@ assert.equal(schemas.$defs.ownerJurisdictionPolicyBinding.properties.coverage.pr
 assert.deepEqual(schemas.$defs.finiteTaskAdmissionSupersessionV2.properties.predecessor.properties.version.enum, [1, 2]);
 assert.equal(JSON.stringify(schemas.$defs.ownerJurisdictionPolicyBinding).includes("standingPolicyBody"), false);
 
+const dependencyBaselinePolicy = truthContract.architectureDependencyBaselineAmendmentPolicy;
+const dependencyBaselinePolicySchema = schemas.$defs.currentTruthContract.properties.architectureDependencyBaselineAmendmentPolicy;
+const dependencyPolicyValid = (contract) => !Object.hasOwn(contract, "architectureDependencyBaselineAmendmentPolicy")
+  ? !schemas.$defs.currentTruthContract.required.includes("architectureDependencyBaselineAmendmentPolicy")
+  : stableJson(contract.architectureDependencyBaselineAmendmentPolicy) === stableJson(dependencyBaselinePolicySchema.const);
+assert.deepEqual(dependencyBaselinePolicy, architectureDependencyBaselinePolicyV1);
+assert.deepEqual(dependencyBaselinePolicySchema.const, architectureDependencyBaselinePolicyV1);
+assert.equal(schemas.$defs.currentTruthContract.required.includes("architectureDependencyBaselineAmendmentPolicy"), false);
+assert.equal(dependencyPolicyValid(truthContract), true);
+const historicalNoDependencyBaselinePolicy = structuredClone(truthContract);
+delete historicalNoDependencyBaselinePolicy.architectureDependencyBaselineAmendmentPolicy;
+assert.equal(dependencyPolicyValid(historicalNoDependencyBaselinePolicy), true);
+for (const mutate of [
+  (value) => { value.maximumFinalFiles = 16; },
+  (value) => { value.maximumFinalNetLines = 4501; },
+  (value) => { value.exactAddedPaths[0] = "package*.json"; },
+  (value) => { value.exactAddedPaths.push("app.json"); },
+  (value) => { value.sameMajorMinorPatchOnly = false; },
+  (value) => { value.reactOrReactNativeMayChange = true; },
+  (value) => { value.authority.build = true; },
+]) {
+  const malformed = structuredClone(truthContract);
+  mutate(malformed.architectureDependencyBaselineAmendmentPolicy);
+  assert.equal(dependencyPolicyValid(malformed), false);
+}
+
 const overlayContract = truthContract.finiteTaskTestAdaptationOverlayPolicy;
 const overlayPolicy = truthRecord.finiteTaskLeases.testAdaptationPolicy;
 const overlayPolicySchema = schemas.$defs.currentTruthRecord.properties.finiteTaskLeases.properties.testAdaptationPolicy;
@@ -290,5 +317,7 @@ assert.match(currentTruthSource, /aggregateReservation: finiteTaskRuntime\.effec
 assert.match(currentTruthSource, /testAdaptationReservation: finiteTaskRuntime\.effectiveReservationResolution\.testAdaptationReservation/u);
 assert.match(currentTruthSource, /scopePartitions: finiteTaskRuntime\.effectiveReservationResolution\.scopePartitions/u);
 assert.match(currentTruthSource, /testAdaptationReceipt: finiteTaskRuntime\.effectiveReservationResolution\.testAdaptationReceipt/u);
+assert.match(currentTruthSource, /stableJson\(currentTruthContract\.architectureDependencyBaselineAmendmentPolicy\) === stableJson\(architectureDependencyBaselinePolicyV1\)/u);
+assert.match(currentTruthSource, /ASSURANCE_ARCHITECTURE_DEPENDENCY_BASELINE_POLICY_INVALID/u);
 
-process.stdout.write("current-truth synchronization contract: PASS (generic overlay and historical compatibility)\n");
+process.stdout.write("current-truth synchronization contract: PASS (generic overlay, dependency baseline policy, and historical compatibility)\n");
