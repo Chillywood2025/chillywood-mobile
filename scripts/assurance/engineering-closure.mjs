@@ -2193,7 +2193,7 @@ const dependencyCompatibilityWitnessGraphSha256 = (root, ref, file, identifier) 
     const entries = Object.entries(lock.packages ?? {})
       .filter(([entryPath]) => entryPath !== "" && !closure.has(entryPath) && !entryPath.endsWith(`/node_modules/${slug}`))
       .map(([entryPath, metadata]) => [entryPath, { version: metadata.version ?? null, resolved: metadata.resolved ?? null, integrity: metadata.integrity ?? null, link: metadata.link ?? null }])
-      .sort(([left], [right]) => left.localeCompare(right));
+      .sort(([left], [right]) => compareUtf8(left, right));
     return shaBytes(Buffer.from(JSON.stringify(entries), "utf8"));
   } catch { return null; }
 };
