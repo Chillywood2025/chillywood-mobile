@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crypto from "node:crypto";
+import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -1752,6 +1753,8 @@ export const FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 = "FINITE_TASK_
 export const FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 = "FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1";
 export const ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1 = "ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1";
 export const ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER = "<!-- chillywood-assurance-architecture-dependency-amendment-v1 -->";
+export const ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1 = "ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1";
+export const ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER = "<!-- chillywood-assurance-architecture-dependency-witness-amendment-v1 -->";
 export const FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1 = "FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_V1 = "FINITE_TASK_TERMINAL_TRUTH_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1 = "FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1";
@@ -1885,6 +1888,25 @@ export const architectureDependencyBaselinePolicyV1 = Object.freeze({
   descendantOnly: true,
   expiresAtPullRequestMerge: true,
   reusableByAnotherTaskOrPr: false,
+  supplementalWitness: Object.freeze({
+    capability: ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1,
+    receiptCardinality: 1,
+    maximumAddedFiles: 1,
+    maximumFinalFiles: 16,
+    maximumFinalNetLines: 4500,
+    pathClass: "EXACT_TRACKED_PACKAGE_SCRIPT_PHASE1_DEPENDENCY_WITNESS",
+    pathPattern: "^scripts/test-[a-z0-9-]+-compat\\.mjs$",
+    packageScriptReferenceRequired: true,
+    phase1InvocationRequired: true,
+    exactSafeIdentifierRequired: true,
+    exactContentReplacementRequired: true,
+    appliedDependencyAmendmentRequired: true,
+    completeCommentAndCommitPaginationRequired: true,
+    descendantOnly: true,
+    expiresAtPullRequestMerge: true,
+    reusableByAnotherTaskOrPr: false,
+    authority: DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY,
+  }),
   authority: DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY,
 });
 
@@ -1928,9 +1950,9 @@ const dependencyAmendmentProjection = (verified) => verified?.valid ? {
   protectedBase: verified.subject.protectedBase,
   startingHead: verified.subject.startingHead,
   startingTree: verified.subject.startingTree,
-  finalPaths: verified.subject.finalPaths,
-  finalPathHash: verified.subject.finalPathHash,
-  finalBudget: verified.subject.finalBudget,
+  finalPaths: verified.effectiveFinalPaths ?? verified.subject.finalPaths,
+  finalPathHash: verified.effectiveFinalPathHash ?? verified.subject.finalPathHash,
+  finalBudget: verified.effectiveFinalBudget ?? verified.subject.finalBudget,
   dependencyChanges: verified.subject.dependencyChanges,
   baseline: verified.subject.baseline,
   targetEvidence: verified.subject.targetEvidence,
@@ -1939,9 +1961,11 @@ const dependencyAmendmentProjection = (verified) => verified?.valid ? {
   applicability: verified.subject.applicability,
   authority: verified.subject.authority,
   finalEvidence: verified.finalEvidence,
+  ...(verified.witnessAmendment ? { witnessAmendment: dependencyWitnessProjection(verified.witnessAmendment) } : {}),
 } : null;
 const dependencyAmendmentReadyForFinalEvidence = (verified) => verified?.valid === true
-  && verified?.state === "APPLIED" && verified?.finalEvidence !== null;
+  && (verified?.witnessAmendment ? verified?.state === "APPLIED_WITH_WITNESS" : verified?.state === "APPLIED")
+  && verified?.finalEvidence !== null;
 
 export function architectureDependencyAmendmentSubject({ identity, tree, scope, originalRaw, request, root = REPOSITORY_ROOT } = {}) {
   if (!exactFields(request, ["addedPaths", "dependencies", "digest", "failure", "finalBudget", "targetEvidence"])
@@ -2027,7 +2051,7 @@ export function architectureDependencyAmendmentSubject({ identity, tree, scope, 
 }
 export const architectureDependencyAmendmentOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, subject.type, subject);
 
-export function verifyArchitectureDependencyAmendment({ raw, originalRaw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, root = REPOSITORY_ROOT } = {}) {
+function verifyArchitectureDependencyAmendmentBase({ raw, originalRaw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, root = REPOSITORY_ROOT } = {}) {
   const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
   const payload = parseExactOwnerBody(normalized, ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER);
   const subject = payload?.subject;
@@ -2115,6 +2139,292 @@ export function verifyArchitectureDependencyAmendment({ raw, originalRaw, allCom
   };
   const valid = Object.values(checks).every(Boolean);
   return { valid, active: valid, state: currentScopeState, checks, findings: valid ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `ARCHITECTURE_DEPENDENCY_AMENDMENT_INVALID:${key}`), commentId: normalized?.id ?? null, subjectHash: payload?.subjectHash ?? null, bodyHash: payload?.bodyHash ?? null, rawBodyHash: normalized?.bodyHash ?? null, subject, finalEvidence };
+}
+
+const DEPENDENCY_WITNESS_POLICY = architectureDependencyBaselinePolicyV1.supplementalWitness;
+const DEPENDENCY_WITNESS_WORKFLOW = ".github/workflows/phase1-ci.yml";
+const dependencyWitnessPathAllowed = (file) => typeof file === "string"
+  && new RegExp(DEPENDENCY_WITNESS_POLICY.pathPattern, "u").test(file)
+  && safeRepoPath(file)
+  && !DEPENDENCY_AMENDMENT_ADDED_PATHS.includes(file);
+const dependencyWitnessPathRecordAt = (root, ref, file) => {
+  if (!/^[0-9a-f]{40}$/u.test(ref ?? "") || !dependencyWitnessPathAllowed(file)) return null;
+  const listing = spawnSync("git", ["ls-tree", "-z", ref, "--", file], { cwd: root, encoding: null, shell: false });
+  const match = listing.status === 0 ? /^(100644) blob ([0-9a-f]{40})\t(.+)$/u.exec(listing.stdout.toString("utf8").replace(/\0$/u, "")) : null;
+  const content = match?.[3] === file ? spawnSync("git", ["show", `${ref}:${file}`], { cwd: root, encoding: null, shell: false, maxBuffer: 32 * 1024 * 1024 }) : null;
+  return content?.status === 0 ? { path: file, mode: match[1], blob: match[2], sha256: shaBytes(content.stdout), bytes: content.stdout } : null;
+};
+const dependencyWitnessStatement = ({ identifier, graphSha256 }) => `const ${identifier} = "${graphSha256}";`;
+const dependencyWitnessReplacement = ({ bytes, identifier, from, to, root }) => {
+  if (!Buffer.isBuffer(bytes) || !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(identifier ?? "")
+    || !/^[0-9a-f]{64}$/u.test(from ?? "") || !/^[0-9a-f]{64}$/u.test(to ?? "") || from === to) return null;
+  const source = bytes.toString("utf8"); const before = dependencyWitnessStatement({ identifier, graphSha256: from });
+  if (source.split(before).length !== 2 || source.includes(dependencyWitnessStatement({ identifier, graphSha256: to }))) return null;
+  const targetBytes = Buffer.from(source.replace(before, dependencyWitnessStatement({ identifier, graphSha256: to })), "utf8");
+  const blob = spawnSync("git", ["hash-object", "--stdin"], { cwd: root, input: targetBytes, encoding: null, shell: false });
+  return blob.status === 0 ? { bytes: targetBytes, sha256: shaBytes(targetBytes), blob: blob.stdout.toString("utf8").trim() } : null;
+};
+const dependencyWitnessPackageScript = ({ root, ref, file }) => {
+  const packageRecord = dependencyPathRecordAt(root, ref, "package.json");
+  const workflow = spawnSync("git", ["show", `${ref}:${DEPENDENCY_WITNESS_WORKFLOW}`], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 4 * 1024 * 1024 });
+  try {
+    const packageJson = JSON.parse(packageRecord?.bytes); const relative = `./${file}`;
+    const matches = Object.entries(packageJson.scripts ?? {}).filter(([, command]) => command === `node ${relative}`);
+    return matches.length === 1 && workflow.status === 0 && workflow.stdout.includes(`npm run ${matches[0][0]}`) ? matches[0][0] : null;
+  } catch { return null; }
+};
+const dependencyWitnessHistoryClean = ({ root, base, head, file }) => {
+  if (!/^[0-9a-f]{40}$/u.test(base ?? "") || !/^[0-9a-f]{40}$/u.test(head ?? "") || !dependencyWitnessPathAllowed(file)) return false;
+  const observed = spawnSync("git", ["rev-list", "--full-history", head, `^${base}`, "--", file], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 4 * 1024 * 1024 });
+  return observed.status === 0 && observed.stdout.trim() === "";
+};
+const dependencyCompatibilityWitnessGraphSha256 = (root, ref, file, identifier) => {
+  const witness = dependencyWitnessPathRecordAt(root, ref, file); const lockRecord = dependencyPathRecordAt(root, ref, "package-lock.json");
+  try {
+    const source = witness.bytes.toString("utf8"); const closureMatch = /const compatibilityClosurePaths = new Set\(\[([\s\S]*?)\]\);/u.exec(source);
+    const quoted = [...(closureMatch?.[1] ?? "").matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+    const residue = (closureMatch?.[1] ?? "").replace(/"[^"]+"/gu, "").replace(/[\s,]/gu, "");
+    const slug = /^scripts\/test-([a-z0-9-]+)-compat\.mjs$/u.exec(file ?? "")?.[1];
+    const functionName = /^expected([A-Z][A-Za-z0-9]*)Sha256$/u.exec(identifier ?? "")?.[1];
+    const semanticFunction = functionName ? `${functionName[0].toLowerCase()}${functionName.slice(1)}Sha256` : null;
+    if (!closureMatch || quoted.length < 1 || residue !== "" || new Set(quoted).size !== quoted.length
+      || !slug || !semanticFunction || !source.includes(`function ${semanticFunction}(sourceLock = lock)`)) return null;
+    const lock = JSON.parse(lockRecord.bytes); const closure = new Set(quoted);
+    const entries = Object.entries(lock.packages ?? {})
+      .filter(([entryPath]) => entryPath !== "" && !closure.has(entryPath) && !entryPath.endsWith(`/node_modules/${slug}`))
+      .map(([entryPath, metadata]) => [entryPath, { version: metadata.version ?? null, resolved: metadata.resolved ?? null, integrity: metadata.integrity ?? null, link: metadata.link ?? null }])
+      .sort(([left], [right]) => left.localeCompare(right));
+    return shaBytes(Buffer.from(JSON.stringify(entries), "utf8"));
+  } catch { return null; }
+};
+const dependencyWitnessProjection = (verified) => verified?.valid ? {
+  capability: verified.subject.capability,
+  state: verified.state,
+  commentId: verified.commentId,
+  subjectHash: verified.subjectHash,
+  bodyHash: verified.bodyHash,
+  rawBodyHash: verified.rawBodyHash,
+  dependencyAmendment: verified.subject.dependencyAmendment,
+  protectedBase: verified.subject.protectedBase,
+  startingHead: verified.subject.startingHead,
+  startingTree: verified.subject.startingTree,
+  addedPaths: verified.subject.addedPaths,
+  finalPaths: verified.subject.finalPaths,
+  finalPathHash: verified.subject.finalPathHash,
+  finalBudget: verified.subject.finalBudget,
+  failureEvidence: verified.subject.failureEvidence,
+  witness: verified.subject.witness,
+  applicability: verified.subject.applicability,
+  authority: verified.subject.authority,
+  finalEvidence: verified.finalEvidence,
+} : null;
+export function architectureDependencyWitnessAmendmentSubject({ identity, tree, scope, dependencyAmendmentResolution, request, root = REPOSITORY_ROOT } = {}) {
+  if (!exactFields(request, ["addedPaths", "failure", "finalBudget", "witness"])
+    || !exactFields(request?.failure, ["runId", "jobId", "check", "step", "passed", "required", "result", "head", "tree"])
+    || !exactFields(request?.finalBudget, ["maximumFiles", "maximumNetLines"])
+    || !exactFields(request?.witness, ["path", "identifier", "targetSha256", "targetGraphSha256"])) throw new Error("ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_REQUEST_INVALID");
+  const observed = exactScope(scope); const addedPaths = [...new Set(request.addedPaths ?? [])].sort(); const file = addedPaths[0];
+  const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
+  const baseline = dependencyWitnessPathRecordAt(root, identity?.headSha, file);
+  const baseBaseline = dependencyWitnessPathRecordAt(root, identity?.baseSha, file);
+  const packageScript = dependencyWitnessPackageScript({ root, ref: identity?.headSha, file });
+  const baseTree = typedGit(root, ["rev-parse", `${identity?.baseSha}^{tree}`]).stdout.trim();
+  const headTree = typedGit(root, ["rev-parse", `${identity?.headSha}^{tree}`]).stdout.trim();
+  const failureTree = typedGit(root, ["rev-parse", `${request?.failure?.head}^{tree}`]).stdout.trim();
+  const failurePackage = dependencyPathRecordAt(root, request?.failure?.head, "package.json");
+  const failureLock = dependencyPathRecordAt(root, request?.failure?.head, "package-lock.json");
+  const failureDigest = dependencyPathRecordAt(root, request?.failure?.head, dependencyAmendmentResolution?.subject?.baseline?.digest?.path);
+  const workflowSource = typedGit(root, ["show", `${identity?.headSha}:${DEPENDENCY_WITNESS_WORKFLOW}`]).stdout;
+  const gitObserved = /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "") && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "")
+    ? observeFiniteTaskGitScope(root, identity.baseSha, identity.headSha) : null;
+  const safeIdentifier = /^expected[A-Z][A-Za-z0-9]*Sha256$/u.test(request?.witness?.identifier ?? "");
+  const fromMatch = baseline && safeIdentifier ? new RegExp(`const ${request.witness.identifier} = "([0-9a-f]{64})";`, "gu") : null;
+  const matches = baseline ? [...baseline.bytes.toString("utf8").matchAll(fromMatch)] : [];
+  const from = matches.length === 1 ? matches[0][1] : null;
+  const replacement = baseline ? dependencyWitnessReplacement({ bytes: baseline.bytes, identifier: request.witness.identifier, from, to: request.witness.targetGraphSha256, root }) : null;
+  if (!dependencyAmendmentReadyForFinalEvidence(dependencyAmendmentResolution)
+    || dependencyAmendmentResolution?.witnessAmendment
+    || headTree !== tree || !baseTree || !gitObserved
+    || stableJson(observed.changedPaths) !== stableJson(gitObserved.files)
+    || stableJson(observed.changedPaths) !== stableJson(dependencyAmendment?.finalPaths)
+    || Number(scope?.additions ?? 0) !== gitObserved.additions || Number(scope?.deletions ?? 0) !== gitObserved.deletions
+    || observed.netChangedLines !== gitObserved.netChangedLines || scope?.diffHash !== gitObserved.diffHash
+    || addedPaths.length !== 1 || request.addedPaths.length !== 1 || request.witness.path !== file || !dependencyWitnessPathAllowed(file) || observed.changedPaths.includes(file)
+    || !baseline || !baseBaseline || baseline.blob !== baseBaseline.blob || baseline.sha256 !== baseBaseline.sha256
+    || !dependencyWitnessHistoryClean({ root, base: identity.baseSha, head: identity.headSha, file })
+    || !packageScript || matches.length !== 1 || !replacement
+    || request.witness.targetSha256 !== replacement.sha256
+    || !safeIdentifier || from !== dependencyCompatibilityWitnessGraphSha256(root, identity.baseSha, file, request.witness.identifier)
+    || request.witness.targetGraphSha256 !== dependencyCompatibilityWitnessGraphSha256(root, identity.headSha, file, request.witness.identifier)
+    || request.finalBudget.maximumFiles !== DEPENDENCY_WITNESS_POLICY.maximumFinalFiles
+    || request.finalBudget.maximumNetLines !== DEPENDENCY_WITNESS_POLICY.maximumFinalNetLines
+    || !Number.isInteger(request.failure.runId) || !Number.isInteger(request.failure.jobId)
+    || !textValue(request.failure.check) || !textValue(request.failure.step) || !textValue(request.failure.result)
+    || !Number.isInteger(request.failure.passed) || !Number.isInteger(request.failure.required)
+    || request.failure.required !== PHASE1_REQUIRED_JOB_NAMES.length || request.failure.passed !== request.failure.required - 1
+    || !/^[0-9a-f]{40}$/u.test(request.failure.head ?? "") || failureTree !== request.failure.tree
+    || !gitAncestor(root, dependencyAmendmentResolution.subject.startingHead, request.failure.head)
+    || !gitAncestor(root, request.failure.head, identity.headSha)
+    || !PHASE1_REQUIRED_JOB_NAMES.includes(request.failure.check)
+    || !workflowSource.includes(`name: ${request.failure.check}`) || !workflowSource.includes(`- name: ${request.failure.step}`)
+    || failurePackage?.sha256 !== dependencyAmendment.finalEvidence.packageJson.sha256
+    || failureLock?.sha256 !== dependencyAmendment.finalEvidence.packageLock.sha256
+    || failureDigest?.sha256 !== dependencyAmendment.finalEvidence.digestRecord.sha256) throw new Error("ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_SUBJECT_INVALID");
+  const finalPaths = [...new Set([...observed.changedPaths, file])].sort();
+  return {
+    schemaVersion: 1,
+    type: "OWNER_ASSURANCE_ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_V1",
+    classification: "DEPENDENCY_COMPATIBILITY_WITNESS_BASELINE_MAINTENANCE",
+    capability: ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1,
+    repository: identity.repository,
+    pr: identity.pr,
+    branch: identity.branch,
+    originalAuthority: dependencyAmendment.originalAuthority,
+    dependencyAmendment: { commentId: dependencyAmendment.commentId, subjectHash: dependencyAmendment.subjectHash, bodyHash: dependencyAmendment.bodyHash, rawBodyHash: dependencyAmendment.rawBodyHash, finalEvidenceHash: hashValue(dependencyAmendment.finalEvidence) },
+    protectedBase: { head: identity.baseSha, tree: baseTree },
+    startingHead: identity.headSha,
+    startingTree: tree,
+    startingScope: { paths: gitObserved.files, pathHash: hashValue(gitObserved.files), diffHash: gitObserved.diffHash, additions: gitObserved.additions, deletions: gitObserved.deletions, netChangedLines: gitObserved.netChangedLines },
+    addedPaths,
+    finalPaths,
+    finalPathHash: hashValue(finalPaths),
+    priorBudget: dependencyAmendment.finalBudget,
+    finalBudget: request.finalBudget,
+    failureEvidence: request.failure,
+    witness: {
+      path: file,
+      packageScript,
+      identifier: request.witness.identifier,
+      baseline: { mode: baseline.mode, blob: baseline.blob, sha256: baseline.sha256, graphSha256: from },
+      target: { blob: replacement.blob, sha256: replacement.sha256, graphSha256: request.witness.targetGraphSha256 },
+      sourceTransitionHash: hashValue({ path: file, identifier: request.witness.identifier, from, to: request.witness.targetGraphSha256, baselineSha256: baseline.sha256, targetSha256: replacement.sha256 }),
+    },
+    requirements: { exactOneLineReplacement: true, packageScriptAndPhase1InvocationPreserved: true, dependencyPackageLockAndNativeDigestFrozen: true, historicalInstalledEvidenceUnchanged: true },
+    applicability: { descendantOnly: true, expiresOn: `PR_${identity.pr}_MERGE`, reusableByAnotherTaskOrPr: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+    immutability: { topLevelIssueComment: true, createdAtEqualsUpdatedAt: true, completePagination: true },
+    authority: DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY,
+  };
+}
+export const architectureDependencyWitnessAmendmentOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, subject.type, subject);
+
+export function verifyArchitectureDependencyWitnessAmendment({ raw, originalRaw, dependencyAmendmentRaw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, root = REPOSITORY_ROOT } = {}) {
+  const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
+  const normalizedDependency = normalizeGitHubCommentIdentity(dependencyAmendmentRaw, { repository: identity?.repository, pr: identity?.pr, commentId: dependencyAmendmentRaw?.id });
+  const payload = parseExactOwnerBody(normalized, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER); const subject = payload?.subject;
+  const markers = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER}\n`));
+  const prefixShas = subject && /^[0-9a-f]{40}$/u.test(subject.protectedBase?.head ?? "") && /^[0-9a-f]{40}$/u.test(subject.startingHead ?? "")
+    ? typedGit(root, ["rev-list", "--reverse", "--topo-order", `${subject.protectedBase.head}..${subject.startingHead}`]).stdout.trim().split(/\r?\n/gu).filter(Boolean) : [];
+  const prefixSet = new Set(prefixShas); const prefixCommits = allCommits.filter((commit) => prefixSet.has(commit?.sha));
+  const baseResolution = subject ? verifyArchitectureDependencyAmendmentBase({
+    raw: dependencyAmendmentRaw,
+    originalRaw,
+    allComments,
+    paginationComplete,
+    allCommits: prefixCommits,
+    commitsPaginationComplete,
+    identity: { repository: subject.repository, pr: subject.pr, branch: subject.branch, baseSha: subject.protectedBase.head, headSha: subject.startingHead },
+    tree: subject.startingTree,
+    scope: { files: subject.startingScope?.paths, diffHash: subject.startingScope?.diffHash, additions: subject.startingScope?.additions, deletions: subject.startingScope?.deletions, netChangedLines: subject.startingScope?.netChangedLines },
+    root,
+  }) : null;
+  let expected = null;
+  try {
+    expected = architectureDependencyWitnessAmendmentSubject({
+      identity: { repository: subject.repository, pr: subject.pr, branch: subject.branch, baseSha: subject.protectedBase.head, headSha: subject.startingHead },
+      tree: subject.startingTree,
+      scope: { files: subject.startingScope.paths, diffHash: subject.startingScope.diffHash, additions: subject.startingScope.additions, deletions: subject.startingScope.deletions, netChangedLines: subject.startingScope.netChangedLines },
+      dependencyAmendmentResolution: baseResolution,
+      request: { addedPaths: subject.addedPaths, failure: subject.failureEvidence, finalBudget: subject.finalBudget, witness: { path: subject.witness?.path, identifier: subject.witness?.identifier, targetSha256: subject.witness?.target?.sha256, targetGraphSha256: subject.witness?.target?.graphSha256 } },
+      root,
+    });
+  } catch {}
+  const observed = exactScope(scope); const gitObserved = /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "") && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "") ? observeFiniteTaskGitScope(root, identity.baseSha, identity.headSha) : null;
+  const state = stableJson(observed.changedPaths) === stableJson(subject?.startingScope?.paths) && identity?.headSha === subject?.startingHead
+    ? "AUTHORIZED_PENDING" : stableJson(observed.changedPaths) === stableJson(subject?.finalPaths) && identity?.headSha !== subject?.startingHead ? "APPLIED" : "INVALID";
+  const currentRecord = subject ? dependencyWitnessPathRecordAt(root, identity?.headSha, subject.witness?.path) : null;
+  const currentBaseRecord = subject ? dependencyWitnessPathRecordAt(root, identity?.baseSha, subject.witness?.path) : null;
+  const currentReplacement = subject ? dependencyWitnessReplacement({ bytes: dependencyWitnessPathRecordAt(root, subject.startingHead, subject.witness?.path)?.bytes, identifier: subject.witness?.identifier, from: subject.witness?.baseline?.graphSha256, to: subject.witness?.target?.graphSha256, root }) : null;
+  const dependencyRecords = baseResolution?.finalEvidence ? {
+    manifest: dependencyPathRecordAt(root, identity?.headSha, "package.json"),
+    lock: dependencyPathRecordAt(root, identity?.headSha, "package-lock.json"),
+    digest: dependencyPathRecordAt(root, identity?.headSha, baseResolution.subject?.baseline?.digest?.path),
+  } : null;
+  const dependencyBaseRecords = baseResolution?.subject?.baseline ? {
+    manifest: dependencyPathRecordAt(root, identity?.baseSha, baseResolution.subject.baseline.manifest.path),
+    lock: dependencyPathRecordAt(root, identity?.baseSha, baseResolution.subject.baseline.lock.path),
+    digest: dependencyPathRecordAt(root, identity?.baseSha, baseResolution.subject.baseline.digest.path),
+  } : null;
+  const dependencyFrozen = Boolean(dependencyRecords
+    && dependencyRecords.manifest?.sha256 === baseResolution.finalEvidence.packageJson.sha256
+    && dependencyRecords.manifest?.blob === baseResolution.finalEvidence.packageJson.blob
+    && dependencyRecords.lock?.sha256 === baseResolution.finalEvidence.packageLock.sha256
+    && dependencyRecords.lock?.blob === baseResolution.finalEvidence.packageLock.blob
+    && dependencyRecords.digest?.sha256 === baseResolution.finalEvidence.digestRecord.sha256
+    && dependencyRecords.digest?.blob === baseResolution.finalEvidence.digestRecord.blob);
+  const dependencyBasePreserved = Boolean(dependencyBaseRecords && ["manifest", "lock", "digest"].every((key) =>
+    dependencyBaseRecords[key]?.mode === baseResolution.subject.baseline[key].mode
+      && dependencyBaseRecords[key]?.blob === baseResolution.subject.baseline[key].blob
+      && dependencyBaseRecords[key]?.sha256 === baseResolution.subject.baseline[key].sha256));
+  const witnessStatus = subject && identity?.headSha !== subject.startingHead
+    ? typedGit(root, ["diff", "--name-status", "--no-renames", subject.startingHead, identity.headSha, "--", subject.witness.path]).stdout.trim() : "";
+  const witnessNumstat = subject && identity?.headSha !== subject.startingHead
+    ? typedGit(root, ["diff", "--numstat", "--no-renames", subject.startingHead, identity.headSha, "--", subject.witness.path]).stdout.trim() : "";
+  const commits = allCommits.map((commit) => commit?.sha).filter((sha) => /^[0-9a-f]{40}$/u.test(sha ?? ""));
+  const expectedCommits = /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "") && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "")
+    ? typedGit(root, ["rev-list", "--reverse", "--topo-order", `${identity.baseSha}..${identity.headSha}`]).stdout.trim().split(/\r?\n/gu).filter(Boolean) : [];
+  const commitTreesValid = allCommits.every((commit) => /^[0-9a-f]{40}$/u.test(commit?.sha ?? "")
+    && commit?.commit?.tree?.sha === typedGit(root, ["rev-parse", `${commit.sha}^{tree}`]).stdout.trim());
+  const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+  const source = state === "AUTHORIZED_PENDING"
+    ? currentRecord?.blob === subject?.witness?.baseline?.blob && currentRecord?.sha256 === subject?.witness?.baseline?.sha256
+    : state === "APPLIED" && witnessStatus === `M\t${subject?.witness?.path}` && witnessNumstat === `1\t1\t${subject?.witness?.path}`
+      && currentRecord?.blob === subject?.witness?.target?.blob && currentRecord?.sha256 === subject?.witness?.target?.sha256
+      && currentReplacement?.blob === currentRecord?.blob && currentReplacement?.sha256 === currentRecord?.sha256
+      && dependencyWitnessPackageScript({ root, ref: identity?.headSha, file: subject?.witness?.path }) === subject?.witness?.packageScript
+      && dependencyCompatibilityWitnessGraphSha256(root, identity?.headSha, subject?.witness?.path, subject?.witness?.identifier) === subject?.witness?.target?.graphSha256;
+  const preReceiptHistoryClean = subject ? dependencyWitnessHistoryClean({ root, base: subject.protectedBase?.head, head: subject.startingHead, file: subject.witness?.path }) : false;
+  const checks = {
+    identity: Boolean(normalized && subject?.repository === identity?.repository && subject?.pr === identity?.pr && subject?.branch === identity?.branch),
+    tree: tree === typedGit(root, ["rev-parse", `${identity?.headSha}^{tree}`]).stdout.trim(),
+    canonical: Boolean(expected && stableJson(subject) === stableJson(expected) && normalized?.body === architectureDependencyWitnessAmendmentOwnerCommentBody(expected) && payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(body)),
+    pagination: paginationComplete && commitsPaginationComplete,
+    cardinality: markers.length === 1,
+    receiptOrder: Boolean(normalized && normalizedDependency && Date.parse(normalized.createdAt) > Date.parse(normalizedDependency.createdAt)),
+    commits: commits.length === allCommits.length && new Set(commits).size === commits.length && stableJson(commits) === stableJson(expectedCommits) && commitTreesValid && commits.filter((sha) => sha === subject?.startingHead).length === 1 && commits.filter((sha) => sha === identity?.headSha).length === 1,
+    ancestry: Boolean(subject && gitAncestor(root, subject.startingHead, identity?.headSha) && gitAncestor(root, identity?.baseSha, identity?.headSha) && gitAncestor(root, subject.protectedBase.head, identity?.baseSha)),
+    preReceiptHistory: preReceiptHistoryClean,
+    currentBasePreservesBaseline: Boolean(currentBaseRecord && currentBaseRecord.mode === subject?.witness?.baseline?.mode && currentBaseRecord.blob === subject?.witness?.baseline?.blob && currentBaseRecord.sha256 === subject?.witness?.baseline?.sha256 && dependencyBasePreserved),
+    dependencyAmendment: dependencyAmendmentReadyForFinalEvidence(baseResolution) && stableJson(subject?.dependencyAmendment) === stableJson(expected?.dependencyAmendment) && dependencyFrozen,
+    scope: state !== "INVALID" && gitObserved && stableJson(observed.changedPaths) === stableJson(gitObserved.files) && Number(scope?.additions ?? 0) === gitObserved.additions && Number(scope?.deletions ?? 0) === gitObserved.deletions && observed.netChangedLines === gitObserved.netChangedLines && scope?.diffHash === gitObserved.diffHash && observed.changedPaths.length <= subject?.finalBudget?.maximumFiles && observed.netChangedLines <= subject?.finalBudget?.maximumNetLines,
+    source,
+    authority: stableJson(subject?.authority) === stableJson(DEPENDENCY_AMENDMENT_CLOSED_AUTHORITY),
+  };
+  const valid = Object.values(checks).every(Boolean); const finalEvidence = valid && state === "APPLIED" ? { path: currentRecord.path, mode: currentRecord.mode, blob: currentRecord.blob, sha256: currentRecord.sha256, identifier: subject.witness.identifier, graphSha256: subject.witness.target.graphSha256, sourceTransitionHash: subject.witness.sourceTransitionHash } : null;
+  return { valid, active: valid, state, checks, findings: valid ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_INVALID:${key}`), commentId: normalized?.id ?? null, subjectHash: payload?.subjectHash ?? null, bodyHash: payload?.bodyHash ?? null, rawBodyHash: normalized?.bodyHash ?? null, subject, finalEvidence, dependencyAmendmentResolution: baseResolution };
+}
+
+export function verifyArchitectureDependencyAmendment(args = {}) {
+  const witnesses = (args.allComments ?? []).filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER}\n`));
+  if (witnesses.length === 0) return verifyArchitectureDependencyAmendmentBase(args);
+  const witness = verifyArchitectureDependencyWitnessAmendment({ ...args, raw: witnesses[0], dependencyAmendmentRaw: args.raw });
+  const base = witness.dependencyAmendmentResolution;
+  if (!base) return { valid: false, active: false, state: "INVALID", checks: { witnessAmendment: false }, findings: ["ARCHITECTURE_DEPENDENCY_AMENDMENT_INVALID:witnessAmendment"], commentId: args.raw?.id ?? null, subject: null, finalEvidence: null, witnessAmendment: witness };
+  const valid = witnesses.length === 1 && witness.valid;
+  return {
+    ...base,
+    valid,
+    active: valid,
+    state: witness.state === "APPLIED" ? "APPLIED_WITH_WITNESS" : witness.state === "AUTHORIZED_PENDING" ? "WITNESS_AUTHORIZED_PENDING" : "INVALID",
+    checks: { ...base.checks, witnessAmendment: valid },
+    findings: valid ? [] : [...base.findings, ...witness.findings, ...(witnesses.length === 1 ? [] : ["ARCHITECTURE_DEPENDENCY_AMENDMENT_INVALID:witnessCardinality"])],
+    effectiveAddedPaths: [...new Set([...base.subject.addedPaths, ...(witness.subject?.addedPaths ?? [])])].sort(),
+    effectiveFinalPaths: witness.subject?.finalPaths ?? base.subject?.finalPaths,
+    effectiveFinalPathHash: witness.subject?.finalPathHash ?? base.subject?.finalPathHash,
+    effectiveFinalBudget: witness.subject?.finalBudget ?? base.subject?.finalBudget,
+    finalEvidence: witness.state === "APPLIED" && valid ? { ...base.finalEvidence, witness: witness.finalEvidence } : null,
+    witnessAmendment: witness,
+  };
 }
 
 const authorityControlCurrentTruthCompanionV2Required = ({ identity, root = REPOSITORY_ROOT } = {}) => {
@@ -2291,6 +2601,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
       "current-truth, active-task, engineering-closure, PR-scope, review, final-source, merge, and terminal consumers",
       "positive and adversarial receipt, ancestry, cardinality, pagination, scope, and expiry witnesses",
       ...(dependencyAmendment ? ["generic immutable dependency-baseline amendment, exact patch-only package graph, lock closure, current-source native digest, and historical installed-evidence preservation"] : []),
+      ...(dependencyAmendment?.witnessAmendment ? ["immutable dependency-compatibility witness amendment, exact one-line semantic digest rebind, and unchanged package, lock, native digest, and Phase 1 safety checks"] : []),
       "no provider mutation or contact, database deployment, product build, submission, OTA, or public release authority",
     ] : amendmentControlRepairReview ? [
       "RC-1 registered Wave 1 amendment policy and exact amendable-path bound",
@@ -3389,6 +3700,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const finalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
   const dependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER}\n`));
   const architectureDependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER}\n`));
+  const architectureDependencyWitnessAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER}\n`));
   const finalSourceCorrectionMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER}\n`));
   const repositoryReviewMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_REPOSITORY_REVIEW_MARKER}\n`));
   const observed = exactScope(scope);
@@ -3396,6 +3708,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     ? verifyArchitectureDependencyAmendment({ raw: architectureDependencyAmendmentMatches[0], originalRaw: raw, allComments, paginationComplete, allCommits, commitsPaginationComplete, identity, tree, scope, root })
     : null;
   const architectureDependencyAmendmentActive = architectureDependencyAmendment?.valid === true;
+  const architectureDependencyProjection = dependencyAmendmentProjection(architectureDependencyAmendment);
   const companionRequired = authorityControlCurrentTruthCompanionV2Required({ identity, root });
   let expectedCompanion = null;
   try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root }); } catch { expectedCompanion = null; }
@@ -3444,9 +3757,9 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const amendmentControlRepair = originalSubject?.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
     const testAdaptationOverlay = originalSubject?.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
     const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay;
-    const architecturePaths = ownerJurisdictionProfile ? [...OWNER_JURISDICTION_ARCHITECTURE_PATHS, ...(architectureDependencyAmendmentActive ? DEPENDENCY_AMENDMENT_ADDED_PATHS : [])] : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
-    const maximumFiles = architectureDependencyAmendmentActive ? architectureDependencyAmendment.subject.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
-    const maximumNetLines = architectureDependencyAmendmentActive ? architectureDependencyAmendment.subject.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200;
+    const architecturePaths = ownerJurisdictionProfile ? [...OWNER_JURISDICTION_ARCHITECTURE_PATHS, ...(architectureDependencyAmendmentActive ? architectureDependencyAmendment.effectiveAddedPaths ?? DEPENDENCY_AMENDMENT_ADDED_PATHS : [])] : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
+    const maximumFiles = architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
+    const maximumNetLines = architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200;
     const expectedCapabilities = amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
       : testAdaptationOverlay
@@ -3527,8 +3840,10 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
       binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === (ownerJurisdictionProfile ? 15 : 12) && originalSubject?.budget?.maximumNetLines === (ownerJurisdictionProfile ? 3500 : 3200),
       ancestry,
-      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && architectureDependencyAmendmentMatches.length <= 1,
-      dependencyAmendment: architectureDependencyAmendmentMatches.length === 0 || architectureDependencyAmendmentActive,
+      cardinality: paginationComplete && originalMatches.length === 1 && successorMatches.length === 0 && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
+      dependencyAmendment: architectureDependencyAmendmentMatches.length === 0
+        ? architectureDependencyWitnessAmendmentMatches.length === 0
+        : architectureDependencyAmendmentActive,
       exactPaths: observed.changedPaths.every((file) => architecturePaths.includes(file)) && (architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
       budget: observed.changedPaths.length <= maximumFiles && observed.netChangedLines <= maximumNetLines,
       authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && (noCompetingDomainOwner || assuranceOnlyNonDomainMaintenance),
