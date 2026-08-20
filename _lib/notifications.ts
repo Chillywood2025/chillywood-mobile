@@ -1540,33 +1540,79 @@ type PendingPushRevocation = PushSessionBinding & {
   revocationCredential: string;
 };
 
-const readPendingPushRevocations = async (): Promise<PendingPushRevocation[]> => {
-  try {
-    const stored = JSON.parse(await AsyncStorage.getItem(PENDING_PUSH_REVOCATIONS_STORAGE_KEY) || "[]") as unknown;
-    if (!Array.isArray(stored)) return [];
-    return stored.filter((entry): entry is PendingPushRevocation => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
-      const row = entry as Record<string, unknown>;
-      return typeof row.userId === "string" && typeof row.accountId === "string"
-        && typeof row.sessionGeneration === "string" && typeof row.reason === "string"
-        && typeof row.installId === "string" && typeof row.operationKey === "string"
-        && (row.platform === "android" || row.platform === "ios")
-        && typeof row.revocationCredential === "string";
-    }).slice(-8);
-  } catch {
-    return [];
+const PUSH_REVOCATION_REASONS = new Set<PushRevocationReason>([
+  "sign_out",
+  "account_switch",
+  "auth_invalidation",
+  "account_deletion",
+  "recovery_replacement",
+  "auth_loss",
+  "user_request",
+]);
+let pushRevocationLedgerQueue: Promise<void> = Promise.resolve();
+
+const serializePushRevocationLedger = <T>(operation: () => Promise<T>) => {
+  const result = pushRevocationLedgerQueue.then(operation, operation);
+  pushRevocationLedgerQueue = result.then(() => undefined, () => undefined);
+  return result;
+};
+
+const pendingPushRevocationKey = (entry: Pick<PendingPushRevocation,
+  "accountId" | "installId" | "platform" | "sessionGeneration" | "userId"
+>) => JSON.stringify([
+  entry.platform,
+  entry.installId,
+  entry.userId,
+  entry.accountId,
+  entry.sessionGeneration,
+]);
+
+const mergePendingPushRevocations = (entries: PendingPushRevocation[]) => {
+  const targets = new Map<string, PendingPushRevocation>();
+  for (const entry of entries) {
+    const key = pendingPushRevocationKey(entry);
+    if (!targets.has(key)) targets.set(key, entry);
   }
+  return [...targets.values()];
+};
+
+const readPendingPushRevocations = async (): Promise<PendingPushRevocation[]> => {
+  const raw = await AsyncStorage.getItem(PENDING_PUSH_REVOCATIONS_STORAGE_KEY);
+  if (raw === null) return [];
+  const stored = JSON.parse(raw) as unknown;
+  if (!Array.isArray(stored)) throw new Error("push_revocation_ledger_invalid");
+  const entries = stored.filter((entry): entry is PendingPushRevocation => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+    const row = entry as Record<string, unknown>;
+    return typeof row.userId === "string" && row.userId.length > 0 && row.accountId === row.userId
+      && typeof row.sessionGeneration === "string" && row.sessionGeneration.length > 0
+      && PUSH_REVOCATION_REASONS.has(row.reason as PushRevocationReason)
+      && typeof row.installId === "string" && row.installId.length > 0
+      && typeof row.operationKey === "string" && row.operationKey.length > 0 && row.operationKey.length <= 160
+      && (row.platform === "android" || row.platform === "ios")
+      && typeof row.revocationCredential === "string" && /^[0-9a-f]{64}$/u.test(row.revocationCredential);
+  });
+  if (entries.length !== stored.length) throw new Error("push_revocation_ledger_invalid");
+  return mergePendingPushRevocations(entries);
 };
 
 const writePendingPushRevocations = (entries: PendingPushRevocation[]) => AsyncStorage.setItem(
   PENDING_PUSH_REVOCATIONS_STORAGE_KEY,
-  JSON.stringify(entries.slice(-8)),
+  JSON.stringify(mergePendingPushRevocations(entries)),
 );
 
 const readCurrentPushSessionBinding = async (): Promise<Omit<PushSessionBinding, "reason"> | null> => {
   const authority = await readCurrentAccountSessionAuthority();
   return !authority || authority.restoreOnly || authority.accountId !== authority.userId ? null : authority;
 };
+
+const samePushSessionBinding = (
+  left: Omit<PushSessionBinding, "reason"> | null,
+  right: Omit<PushSessionBinding, "reason"> | null,
+) => !!left && !!right
+  && left.userId === right.userId
+  && left.accountId === right.accountId
+  && left.sessionGeneration === right.sessionGeneration;
 
 const parsePreferenceRow = (row: NotificationPreferenceRow | null): NotificationPreferenceSettings => {
   if (!row) return DEFAULT_NOTIFICATION_PREFERENCES;
@@ -1719,7 +1765,7 @@ const readExpoProjectId = () => {
 
 export async function configureNotificationRuntime() {
   if (Platform.OS === "web") return;
-  await retryPendingPushRevocations();
+  await retryPendingPushRevocations().catch(() => null);
 
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -1950,14 +1996,12 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
 }
 
 async function registerPushTokenWithBackend(input: {
+  authority: Omit<PushSessionBinding, "reason">;
   permissionStatus: PushPermissionState;
   provider: PushTokenProvider;
   token: string;
 }): Promise<PushRegistrationState> {
-  await retryPendingPushRevocations();
-  const installId = await getNotificationInstallId();
-  const authority = await readCurrentPushSessionBinding();
-  if (!authority) {
+  if (!samePushSessionBinding(input.authority, await readCurrentPushSessionBinding())) {
     return {
       message: "Sign in again before registering this device for notifications.",
       permissionState: input.permissionStatus,
@@ -1967,10 +2011,12 @@ async function registerPushTokenWithBackend(input: {
       nativeTokenFingerprint: null,
     };
   }
+  const installId = await getNotificationInstallId();
   const revocationCredential = await getNotificationRevocationCredential();
+  const operationKey = `register:${randomHex(16)}`;
   const { data, error } = await supabase.functions.invoke("notification-device-tokens", {
     body: {
-      accountId: authority.accountId,
+      accountId: input.authority.accountId,
       action: "register",
       appVersion: Application.nativeApplicationVersion,
       buildVersion: Application.nativeBuildVersion,
@@ -1978,18 +2024,36 @@ async function registerPushTokenWithBackend(input: {
       metadata: {
         nativeCallStyle: input.provider === "fcm",
       },
-      operationKey: `register:${randomHex(16)}`,
+      operationKey,
       permissionStatus: input.permissionStatus,
       platform: Platform.OS,
       provider: input.provider,
       revocationCredential,
-      sessionGeneration: authority.sessionGeneration,
+      sessionGeneration: input.authority.sessionGeneration,
       token: input.token,
-      userId: authority.userId,
+      userId: input.authority.userId,
     },
   });
 
-  if (error) {
+  const response = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : null;
+  const exactResponse = !error && response?.requestAccepted === true
+    && normalizeText(response.status) === "registered"
+    && normalizeText(response.userId) === input.authority.userId
+    && normalizeText(response.accountId) === input.authority.accountId
+    && normalizeText(response.sessionGeneration) === input.authority.sessionGeneration
+    && normalizeText(response.installId) === installId
+    && normalizeText(response.platform) === Platform.OS
+    && normalizeText(response.provider) === input.provider
+    && normalizeText(response.operationKey) === operationKey
+    && /^[0-9a-f]{12}$/u.test(normalizeText(response.tokenFingerprint));
+  const currentAuthority = await readCurrentPushSessionBinding();
+  if (!samePushSessionBinding(input.authority, currentAuthority)) {
+    await revokePushOwnershipForSession({ ...input.authority, reason: "account_switch" }).catch(() => null);
+  }
+
+  if (!exactResponse || !samePushSessionBinding(input.authority, currentAuthority)) {
     return {
       message: "Unable to register this device for notifications.",
       permissionState: input.permissionStatus,
@@ -2000,7 +2064,7 @@ async function registerPushTokenWithBackend(input: {
     };
   }
 
-  const tokenFingerprint = normalizeText((data as { tokenFingerprint?: unknown } | null)?.tokenFingerprint) || null;
+  const tokenFingerprint = normalizeText(response.tokenFingerprint);
   return {
     message: input.provider === "fcm"
       ? "This Android device is registered for native Chi'lly Chat call alerts."
@@ -2015,13 +2079,16 @@ async function registerPushTokenWithBackend(input: {
   };
 }
 
-async function registerAndroidNativeFcmToken(permissionStatus: PushPermissionState): Promise<PushRegistrationState | null> {
+async function registerAndroidNativeFcmToken(
+  permissionStatus: PushPermissionState,
+  authority: Omit<PushSessionBinding, "reason">,
+): Promise<PushRegistrationState | null> {
   if (Platform.OS !== "android") return null;
   try {
     const token = await Notifications.getDevicePushTokenAsync();
     const rawToken = normalizeText(token.data);
     if (!rawToken) return null;
-    return registerPushTokenWithBackend({ permissionStatus, provider: "fcm", token: rawToken });
+    return registerPushTokenWithBackend({ authority, permissionStatus, provider: "fcm", token: rawToken });
   } catch {
     return {
       message: "Unable to register the native Android call-alert token. Standard push registration may still work.",
@@ -2103,11 +2170,13 @@ export async function requestPushPermissionAndRegister(): Promise<PushRegistrati
   }
 
   try {
+    const authority = await readCurrentPushSessionBinding();
+    if (!authority) throw new Error("Push registration requires an active session binding.");
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     const rawToken = normalizeText(token.data);
     if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ permissionStatus: finalPermissionState, provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken(finalPermissionState);
+    const expoResult = await registerPushTokenWithBackend({ authority, permissionStatus: finalPermissionState, provider: "expo", token: rawToken });
+    const nativeResult = await registerAndroidNativeFcmToken(finalPermissionState, authority);
     return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
   } catch {
     return {
@@ -2157,11 +2226,13 @@ export async function refreshPushRegistrationIfGranted(): Promise<PushRegistrati
   }
 
   try {
+    const authority = await readCurrentPushSessionBinding();
+    if (!authority) throw new Error("Push registration requires an active session binding.");
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     const rawToken = normalizeText(token.data);
     if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ permissionStatus: permissionState, provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken(permissionState);
+    const expoResult = await registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken });
+    const nativeResult = await registerAndroidNativeFcmToken(permissionState, authority);
     return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
   } catch {
     return {
@@ -2202,19 +2273,42 @@ const invokePendingPushRevocation = (entry: PendingPushRevocation) => supabase.f
   },
 );
 
-export async function retryPendingPushRevocations() {
+const isExactPushRevocationResponse = (entry: PendingPushRevocation, data: unknown) => {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  const response = data as Record<string, unknown>;
+  return response.requestAccepted === true
+    && normalizeText(response.status) === "revoked"
+    && ["revoked", "already_revoked", "already_detached"].includes(normalizeText(response.disposition))
+    && normalizeText(response.userId) === entry.userId
+    && normalizeText(response.accountId) === entry.accountId
+    && normalizeText(response.sessionGeneration) === entry.sessionGeneration
+    && normalizeText(response.installId) === entry.installId
+    && normalizeText(response.platform) === entry.platform
+    && normalizeText(response.operationKey) === entry.operationKey;
+};
+
+const retryPendingPushRevocationsInternal = async () => {
   const pending = await readPendingPushRevocations();
   const remaining: PendingPushRevocation[] = [];
   for (const entry of pending) {
-    const { data, error } = await invokePendingPushRevocation(entry);
-    const status = data && typeof data === "object" && !Array.isArray(data)
-      ? normalizeText((data as Record<string, unknown>).status)
-      : "";
-    if (error || status !== "revoked") remaining.push(entry);
+    try {
+      const { data, error } = await invokePendingPushRevocation(entry);
+      if (error || !isExactPushRevocationResponse(entry, data)) remaining.push(entry);
+    } catch {
+      remaining.push(entry);
+    }
   }
   await writePendingPushRevocations(remaining);
-  return { pending: remaining.length, revoked: pending.length - remaining.length };
-}
+  return {
+    pending: remaining.length,
+    pendingTargetKeys: new Set(remaining.map(pendingPushRevocationKey)),
+    revoked: pending.length - remaining.length,
+  };
+};
+
+export const retryPendingPushRevocations = () => serializePushRevocationLedger(
+  retryPendingPushRevocationsInternal,
+);
 
 export async function revokePushOwnershipForSession(binding: PushSessionBinding): Promise<PushRegistrationState> {
   if (Platform.OS === "web") {
@@ -2227,7 +2321,8 @@ export async function revokePushOwnershipForSession(binding: PushSessionBinding)
       nativeTokenFingerprint: null,
     };
   }
-  if (!binding.userId || binding.accountId !== binding.userId || !binding.sessionGeneration) {
+  if (!binding.userId || binding.accountId !== binding.userId || !binding.sessionGeneration
+    || !PUSH_REVOCATION_REASONS.has(binding.reason)) {
     return {
       message: "The previous notification owner could not be verified.",
       permissionState: await readPushPermissionState(),
@@ -2237,21 +2332,35 @@ export async function revokePushOwnershipForSession(binding: PushSessionBinding)
       nativeTokenFingerprint: null,
     };
   }
-  const installId = await getNotificationInstallId();
-  const pending = await readPendingPushRevocations();
-  const existing = pending.find((entry) => entry.userId === binding.userId
-    && entry.accountId === binding.accountId && entry.sessionGeneration === binding.sessionGeneration
-    && entry.reason === binding.reason && entry.installId === installId);
-  const target: PendingPushRevocation = existing ?? {
-    ...binding,
-    installId,
-    operationKey: `revoke:${randomHex(16)}`,
-    platform: Platform.OS as "android" | "ios",
-    revocationCredential: await getNotificationRevocationCredential(),
-  };
-  if (!existing) await writePendingPushRevocations([...pending, target]);
-  const result = await retryPendingPushRevocations();
-  if (result.pending > 0) {
+  let targetPending = true;
+  try {
+    targetPending = await serializePushRevocationLedger(async () => {
+      const installId = await getNotificationInstallId();
+      const identity = {
+        accountId: binding.accountId,
+        installId,
+        platform: Platform.OS as "android" | "ios",
+        sessionGeneration: binding.sessionGeneration,
+        userId: binding.userId,
+      };
+      const pending = await readPendingPushRevocations();
+      const targetKey = pendingPushRevocationKey(identity);
+      const existing = pending.find((entry) => pendingPushRevocationKey(entry) === targetKey);
+      if (!existing) {
+        await writePendingPushRevocations([...pending, {
+          ...binding,
+          installId,
+          operationKey: `revoke:${randomHex(16)}`,
+          platform: identity.platform,
+          revocationCredential: await getNotificationRevocationCredential(),
+        }]);
+      }
+      return (await retryPendingPushRevocationsInternal()).pendingTargetKeys.has(targetKey);
+    });
+  } catch {
+    targetPending = true;
+  }
+  if (targetPending) {
     return {
       message: "Notification ownership revocation is queued for retry.",
       permissionState: await readPushPermissionState(),

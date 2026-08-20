@@ -1,6 +1,6 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
@@ -278,11 +278,12 @@ function RouteAnalyticsBridge() {
   }, [params, pathname]);
 
   useEffect(() => {
+    let active = true;
     const refreshPushIfAllowed = async () => {
       const userId = String(user?.id ?? "").trim();
       if (!isSignedIn || !userId) return;
       const preferences = await readNotificationPreferences(userId).catch(() => null);
-      if (preferences?.pushEnabled === false) return;
+      if (!active || preferences?.pushEnabled === false) return;
       await refreshPushRegistrationIfGranted().catch(() => null);
     };
 
@@ -299,6 +300,7 @@ function RouteAnalyticsBridge() {
       void refreshPushIfAllowed();
     });
     return () => {
+      active = false;
       subscription.remove();
       appStateSubscription.remove();
     };
@@ -1380,7 +1382,7 @@ function LegalAcceptanceScreen({ readback, onAccepted, onRetry }: {
   const accept = async () => {
     if (!authority || !confirmed || busy) return;
     setBusy(true); setError(null);
-    const result = await recordAccountLegalAcceptance(supabase, authority.userId).catch(() => null);
+    const result = await recordAccountLegalAcceptance(supabase, authority.userId, "account", readback).catch(() => null);
     setBusy(false);
     if (!result?.ok) { setError("Chi'llywood could not verify this acceptance. Nothing was unlocked; try again."); return; }
     setConfirmed(false); onAccepted(result.readback);
@@ -1438,6 +1440,7 @@ function AuthRouteGate() {
   const [initialReplayDeepLink, setInitialReplayDeepLink] = useState<boolean | null>(null);
   const [legalReadback, setLegalReadback] = useState<LegalRequirementsReadback | null>(null);
   const [legalStatus, setLegalStatus] = useState<"idle" | "checking" | "accepted" | "required" | "error">("idle");
+  const [acceptedLegalVerificationKey, setAcceptedLegalVerificationKey] = useState("");
   const [legalRetry, setLegalRetry] = useState(0);
   const authNavigationStartedRef = useRef(false);
 
@@ -1452,11 +1455,14 @@ function AuthRouteGate() {
     && !isPasswordRecoverySession && !isPublicLegalPath(pathname)
     && !["/auth-callback", "/callback", "/confirm", "/verify", "/reset-password"].includes(pathname)
     && !pathname.startsWith("/auth/");
-  const legalGateBlocking = legalGateApplicable && legalStatus !== "accepted";
+  const legalVerificationKey = authority && legalGateApplicable
+    ? `${authority.userId}:${authority.accountId}:${authority.sessionGeneration}:${pathname}` : "";
+  const legalGateBlocking = legalGateApplicable
+    && (legalStatus !== "accepted" || acceptedLegalVerificationKey !== legalVerificationKey);
 
   useEffect(() => {
     if (!legalGateApplicable || !authority) {
-      setLegalReadback(null); setLegalStatus("idle");
+      setLegalReadback(null); setLegalStatus("idle"); setAcceptedLegalVerificationKey("");
       return;
     }
     let active = true;
@@ -1465,15 +1471,28 @@ function AuthRouteGate() {
       .then((readback) => {
         if (!active) return;
         if (!sameLegalAuthorityBinding(readback, authority)) {
-          setLegalReadback(null); setLegalStatus("error"); return;
+          setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey(""); return;
         }
-        setLegalReadback(readback); setLegalStatus(legalRequirementsAreCurrent(readback, authority) ? "accepted" : "required");
+        const accepted = legalRequirementsAreCurrent(readback, authority);
+        setLegalReadback(readback); setLegalStatus(accepted ? "accepted" : "required");
+        setAcceptedLegalVerificationKey(accepted ? legalVerificationKey : "");
       })
       .catch(() => {
-        if (active) { setLegalReadback(null); setLegalStatus("error"); }
+        if (active) { setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey(""); }
       });
     return () => { active = false; };
-  }, [authority, legalGateApplicable, legalRetry]);
+  }, [authority, legalGateApplicable, legalRetry, legalVerificationKey]);
+
+  useEffect(() => {
+    if (!legalGateApplicable) return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        setLegalStatus("checking"); setAcceptedLegalVerificationKey("");
+        setLegalRetry((value) => value + 1);
+      }
+    });
+    return () => subscription.remove();
+  }, [legalGateApplicable]);
 
   useEffect(() => {
     let active = true;
@@ -1510,6 +1529,10 @@ function AuthRouteGate() {
   useEffect(() => {
     if (authorityStatus === "restore_only" || authorityStatus === "restricted" || authorityStatus === "unknown") return;
     if (isLoading) return;
+    if (authorityStatus === "recovery_only") {
+      if (!insideResetPassword) router.replace("/reset-password");
+      return;
+    }
     if (waitingForInitialReplayDeepLink || allowInitialReplayDeepLink) return;
 
     if (!isSignedIn && insideTabsGroup) {
@@ -1519,11 +1542,6 @@ function AuthRouteGate() {
     }
 
     if (!isSignedIn) { authNavigationStartedRef.current = false; return; }
-
-    if (isSignedIn && isPasswordRecoverySession && !insideResetPassword) {
-      router.replace("/reset-password");
-      return;
-    }
 
     if (isSignedIn && insideAuthGroup && !legalGateBlocking && authority && !authNavigationStartedRef.current) {
       authNavigationStartedRef.current = true;
@@ -1535,12 +1553,15 @@ function AuthRouteGate() {
   if (authorityStatus === "restore_only") return <AccountRestoreOnlyScreen />;
   if (authorityStatus === "unknown") return <AuthBootScreen message="Protected access remains locked because session authority is unavailable." />;
   if (authorityStatus === "restricted") return <AuthBootScreen message="This session is restricted and is being signed out safely." />;
+  if (authorityStatus === "recovery_only" && !insideResetPassword) return <AuthBootScreen message="Password recovery must finish before protected access resumes." />;
   if (legalGateBlocking) {
     if (legalStatus === "checking" || legalStatus === "idle") return <AuthBootScreen message="Checking current policy requirements…" />;
     return (
       <LegalAcceptanceScreen
         readback={legalStatus === "required" ? legalReadback : null}
-        onAccepted={(next) => { setLegalReadback(next); setLegalStatus("accepted"); }}
+        onAccepted={(next) => {
+          setLegalReadback(next); setLegalStatus("accepted"); setAcceptedLegalVerificationKey(legalVerificationKey);
+        }}
         onRetry={() => setLegalRetry((value) => value + 1)}
       />
     );
@@ -1549,7 +1570,6 @@ function AuthRouteGate() {
   if (
     waitingForInitialReplayDeepLink
     || (!allowInitialReplayDeepLink && !isSignedIn && insideTabsGroup)
-    || (isSignedIn && isPasswordRecoverySession && !insideResetPassword)
     || (isSignedIn && insideAuthGroup)
   ) {
     return <AuthBootScreen />;

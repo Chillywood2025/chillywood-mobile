@@ -184,10 +184,10 @@ Deno.serve(async (req): Promise<Response> => {
       if (!platform || !installId || !UUID_PATTERN.test(userId) || accountId !== userId || !sessionGeneration
         || !operationKey || operationKey.length > 160 || !REVOCATION_REASONS.has(reason)
         || !/^[0-9a-f]{64}$/u.test(revocationCredential)) {
-        return jsonResponse(200, { status: "revoked" });
+        return jsonResponse(400, { requestAccepted: false, status: "invalid" });
       }
       const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-      const { error } = await adminClient.rpc("wave1_revoke_push_ownership", {
+      const { data: revoked, error } = await adminClient.rpc("wave1_revoke_push_ownership", {
         p_expected_account_id: accountId,
         p_expected_user_id: userId,
         p_install_id: installId,
@@ -197,8 +197,19 @@ Deno.serve(async (req): Promise<Response> => {
         p_revocation_credential_hash: await sha256Hex(revocationCredential),
         p_session_generation: sessionGeneration,
       });
-      if (error) return jsonResponse(503, { error: "revocation_retry_required" });
-      return jsonResponse(200, { status: "revoked" });
+      const result = revoked && typeof revoked === "object" && !Array.isArray(revoked) ? revoked as JsonObject : {};
+      const disposition = toText(result.disposition);
+      const exactReceipt = result.requestAccepted === true && result.status === "revoked"
+        && ["revoked", "already_revoked", "already_detached"].includes(disposition)
+        && result.userId === userId && result.accountId === accountId
+        && result.sessionGeneration === sessionGeneration && result.installId === installId
+        && result.platform === platform && result.operationKey === operationKey;
+      if (error || !exactReceipt) return jsonResponse(503, { error: "revocation_retry_required" });
+      return jsonResponse(200, {
+        accountId: result.accountId, disposition, installId: result.installId,
+        operationKey: result.operationKey, platform: result.platform, requestAccepted: true,
+        sessionGeneration: result.sessionGeneration, status: "revoked", userId: result.userId,
+      });
     }
 
     if (!platform || !provider) return jsonResponse(400, { error: "invalid_push_transport" });
@@ -266,10 +277,14 @@ Deno.serve(async (req): Promise<Response> => {
       return jsonResponse(500, { error: "register_failed", message: sanitizeErrorMessage(registerError) });
     }
     const result = registered as JsonObject;
+    const tokenFingerprint = toText(result.tokenFingerprint);
+    if (result.status !== "registered" || result.ownershipState !== "ACCOUNT_BOUND"
+      || result.sessionGeneration !== sessionGeneration || !/^[0-9a-f]{12}$/u.test(tokenFingerprint)) {
+      return jsonResponse(503, { error: "register_confirmation_failed" });
+    }
     return jsonResponse(200, {
-      provider,
-      status: "registered",
-      tokenFingerprint: result.tokenFingerprint ?? null,
+      accountId, installId, operationKey, platform, provider, requestAccepted: true,
+      sessionGeneration, status: "registered", tokenFingerprint, userId,
     });
   } catch (error) {
     return jsonResponse(500, { error: "notification_token_error", message: sanitizeErrorMessage(error) });

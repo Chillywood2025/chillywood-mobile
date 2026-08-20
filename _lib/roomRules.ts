@@ -19,6 +19,7 @@ export type RoomAccessReason =
   | "identity_required"
   | "room_locked"
   | "removed"
+  | "entitlement_unknown"
   | "party_pass_required"
   | "premium_required";
 

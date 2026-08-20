@@ -90,11 +90,9 @@ const RECOVERY_AUTH_TYPES = new Set(["recover", "recovery"]);
 const AUTH_CALLBACK_PARAM_NAMES = [
   "access_token",
   "code",
-  "confirmation_token",
   "error",
   "error_code",
   "error_description",
-  "recovery_token",
   "refresh_token",
   "token",
   "token_hash",
@@ -295,7 +293,9 @@ const hasValidAuthParams = (params: URLSearchParams) => {
 
   const credentialKinds = [params.has("code"), params.has("token_hash"), params.has("token"),
     params.has("access_token") || params.has("refresh_token")].filter(Boolean).length;
+  const hasError = params.has("error") || params.has("error_code");
   if (credentialKinds > 1) return false;
+  if ((hasError && credentialKinds > 0) || (params.has("error_description") && !hasError)) return false;
   if (params.has("access_token") !== params.has("refresh_token")) return false;
   if (params.has("token") !== params.has("email")) return false;
   return true;

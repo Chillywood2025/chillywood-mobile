@@ -7,6 +7,7 @@ import {
   createUnknownEntitlementDecision,
   entitlementGrantsProtectedAccess,
   normalizeEntitlementAuthorityReadback,
+  withAuthorityReadDeadline,
   type EntitlementAuthorityDecision,
   type EntitlementAuthorityReason,
   type EntitlementAuthorityState,
@@ -86,7 +87,11 @@ const readBound = async (key: PremiumEntitlementKey, authority: AccountSessionAu
       name: typeof ENTITLEMENT_AUTHORITY_READBACK_RPC,
       args: { p_entitlement_key: string },
     ) => EntitlementAuthorityRpc)(ENTITLEMENT_AUTHORITY_READBACK_RPC, { p_entitlement_key: key });
-    const { data, error } = await rpc;
+    const result = await withAuthorityReadDeadline<unknown>(rpc, null);
+    if (!result || typeof result !== "object" || Array.isArray(result)) {
+      return unknownDecision(key, "query_failed", authority);
+    }
+    const { data, error } = result as { data?: unknown; error?: unknown };
     return error
       ? unknownDecision(key, "query_failed", authority)
       : premiumDecision(key, normalizeEntitlementAuthorityReadback({ entitlementKey: key, expectedBinding: authority, readback: data }));
@@ -111,7 +116,7 @@ export async function readCurrentUserEntitlements(
 ): Promise<PremiumEntitlementDecision[]> {
   const keys = Array.from(new Set(entitlementKeys.map(normalizeEntitlementKey).filter(isPremiumEntitlementKey)));
   if (!keys.length) return [];
-  const authority = options?.authority ?? await readCurrentAccountSessionAuthority();
+  const authority = options?.authority === undefined ? await readCurrentAccountSessionAuthority() : options.authority;
   if (!authority) return keys.map((key) => unknownDecision(key, "authority_unavailable"));
   if (authority.restoreOnly) return keys.map((key) => unknownDecision(key, "restore_only", authority));
   if (options?.authority && !await currentMatches(authority)) {

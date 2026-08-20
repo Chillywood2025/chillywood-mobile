@@ -1,5 +1,6 @@
 import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClient, type Session } from "@supabase/supabase-js";
 import {
   ActivityIndicator,
   Alert,
@@ -16,11 +17,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
-import { isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority, type AccountSessionAuthorityBinding } from "../_lib/accountSessionAuthority";
+import { clearExactLocalAuthSession, isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority, sameAccountSessionAuthority, type AccountSessionAuthorityBinding, type LockedLocalAuthClient } from "../_lib/accountSessionAuthority";
 import { consumeApplicationAuthInput, parseApplicationLink } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
-import { useSession } from "../_lib/session";
-import { supabase } from "../_lib/supabase";
+import { beginPasswordRecoverySessionQuarantine, cancelPasswordRecoverySessionQuarantine, clearQuarantinedPasswordRecoverySession, persistVerifiedPasswordRecoveryBinding } from "../_lib/session";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../_lib/supabase";
+import type { Database } from "../supabase/database.types";
 
 type RecoveryParams = {
   accessToken: string | null;
@@ -35,6 +37,7 @@ type RecoveryParams = {
 };
 
 type RecoveryStatus = "checking" | "ready" | "missing" | "failed";
+type CapturedRecoverySession = AccountSessionAuthorityBinding & { accessToken: string; refreshToken: string };
 
 const PASSWORD_MIN_LENGTH = 8;
 const RESET_FLOW_SIGN_OUT_TIMEOUT_MS = 2500;
@@ -87,12 +90,7 @@ function getSanitizedRecoveryErrorReason(error: unknown) {
   return "auth_error";
 }
 
-type VerifiedRecoveryData = {
-  session?: {
-    access_token?: string | null;
-    refresh_token?: string | null;
-  } | null;
-} | null;
+type VerifiedRecoveryData = { session?: Session | null } | null;
 
 const readParam = (params: URLSearchParams, key: string) => {
   const value = params.get(key);
@@ -163,14 +161,40 @@ const wait = (timeoutMs: number) => new Promise((resolve) => {
   setTimeout(resolve, timeoutMs);
 });
 
-const clearResetFlowSession = async (expected: AccountSessionAuthorityBinding | null) => {
-  if (!expected || !(await isCurrentAccountSessionAuthority(expected))) return;
-  await Promise.race([
-    supabase.auth.signOut({ scope: "local" }).catch(() => null),
-    wait(RESET_FLOW_SIGN_OUT_TIMEOUT_MS),
-  ]);
+const clearResetFlowSession = async (expected: AccountSessionAuthorityBinding | null, expectedAccessToken?: string) => {
+  if (!expected || !expectedAccessToken) return clearQuarantinedPasswordRecoverySession(true);
+  const cleared = await Promise.race([
+    clearExactLocalAuthSession(supabase.auth as unknown as LockedLocalAuthClient, expected.userId, expectedAccessToken).catch(() => false),
+    wait(RESET_FLOW_SIGN_OUT_TIMEOUT_MS).then(() => false),
+  ]); return cleared ? cancelPasswordRecoverySessionQuarantine() : false;
+};
 
-  void supabase.auth.signOut().catch(() => null);
+const abandonRecoveryCandidate = async (candidate?: Session | null) => {
+  const cleared = !candidate?.access_token || !candidate.user?.id || await Promise.race([
+    clearExactLocalAuthSession(supabase.auth as unknown as LockedLocalAuthClient, candidate.user.id, candidate.access_token).catch(() => false),
+    wait(RESET_FLOW_SIGN_OUT_TIMEOUT_MS).then(() => false),
+  ]);
+  return cleared ? cancelPasswordRecoverySessionQuarantine() : false;
+};
+
+const updateCapturedRecoveryPassword = async (captured: CapturedRecoverySession, password: string) => {
+  const isolated = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+  });
+  const { data, error } = await isolated.auth.setSession({
+    access_token: captured.accessToken, refresh_token: captured.refreshToken,
+  });
+  if (error || data.session?.user.id !== captured.userId) throw error ?? new Error("recovery_session_authority_mismatch");
+  const { error: updateError } = await isolated.auth.updateUser({ password });
+  if (updateError) throw updateError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const cleanup = await Promise.race([
+      isolated.auth.signOut({ scope: "local" }).then(({ error }) => !error, () => false),
+      wait(RESET_FLOW_SIGN_OUT_TIMEOUT_MS).then(() => false),
+    ]);
+    if (cleanup) return true;
+  }
+  return false;
 };
 
 export default function ResetPasswordScreen() {
@@ -178,10 +202,11 @@ export default function ResetPasswordScreen() {
   const routeParams = useLocalSearchParams<
     Partial<Record<RecoveryParamKey, string | string[]>>
   >();
-  const { isPasswordRecoverySession } = useSession();
   const insets = useSafeAreaInsets();
   const expiredActionPendingRef = useRef(false);
   const recoveryInputConsumedRef = useRef(false);
+  const recoverySessionRef = useRef<CapturedRecoverySession | null>(null);
+  const recoveryProofRef = useRef<AccountSessionAuthorityBinding | null>(null);
   const [status, setStatus] = useState<RecoveryStatus>("checking");
   const [statusMessage, setStatusMessage] = useState("Checking your reset link...");
   const [newPassword, setNewPassword] = useState("");
@@ -208,10 +233,22 @@ export default function ResetPasswordScreen() {
     parseRecoveryRouteParams(routeParams)
   ), [routeParams]);
 
-  const markRecoveryReady = useCallback(async (flow: string, expectedUserId?: string) => {
-    const [{ data }, binding] = await Promise.all([supabase.auth.getSession(), readCurrentAccountSessionAuthority()]);
-    if (!binding || binding.restoreOnly || data.session?.user?.id !== binding.userId
-      || (expectedUserId && expectedUserId !== binding.userId)) throw new Error("recovery_session_authority_mismatch");
+  const markRecoveryReady = useCallback(async (flow: string, candidate?: Session | null, verifiedRecovery = false) => {
+    const { data: before } = await supabase.auth.getSession();
+    const session = candidate ?? before.session;
+    if (!session?.access_token || !session.refresh_token) throw new Error("recovery_session_authority_mismatch");
+    const binding = await readCurrentAccountSessionAuthority();
+    const { data: after } = await supabase.auth.getSession();
+    if (!binding || binding.restoreOnly || binding.accountId !== binding.userId || session.user.id !== binding.userId
+      || before.session?.access_token !== session.access_token || before.session.refresh_token !== session.refresh_token
+      || after.session?.access_token !== session.access_token || after.session.refresh_token !== session.refresh_token
+    ) { await abandonRecoveryCandidate(session); throw new Error("recovery_session_authority_mismatch"); }
+    if (verifiedRecovery && !await persistVerifiedPasswordRecoveryBinding(binding)) {
+      await abandonRecoveryCandidate(session);
+      throw new Error("recovery_binding_persistence_failed");
+    }
+    recoverySessionRef.current = { ...binding, accessToken: session.access_token, refreshToken: session.refresh_token };
+    recoveryProofRef.current = binding;
     setRecoveryAuthority(binding);
     setStatus("ready");
     setStatusMessage("Choose a new password for this account.");
@@ -220,7 +257,8 @@ export default function ResetPasswordScreen() {
     });
   }, []);
 
-  const markRecoveryFailed = useCallback((error: unknown, flow: string) => {
+  const markRecoveryFailed = useCallback((error: unknown, flow: string, candidate?: Session | null) => {
+    void (candidate ? abandonRecoveryCandidate(candidate) : clearQuarantinedPasswordRecoverySession()).then((cleared) => { if (cleared) { recoveryInputConsumedRef.current = false; recoverySessionRef.current = null; recoveryProofRef.current = null; setRecoveryAuthority(null); } });
     setStatus("failed");
     setStatusMessage(RECOVERY_LINK_OPEN_ERROR);
     trackEvent("auth_password_recovery_link_failed", {
@@ -236,14 +274,7 @@ export default function ResetPasswordScreen() {
     const verifiedSession = data?.session;
 
     if (verifiedSession?.access_token && verifiedSession.refresh_token) {
-      const { error } = await supabase.auth.setSession({
-        access_token: verifiedSession.access_token,
-        refresh_token: verifiedSession.refresh_token,
-      });
-
-      if (error) throw error;
-
-      await markRecoveryReady(flow);
+      await markRecoveryReady(flow, verifiedSession, true);
       return true;
     }
 
@@ -251,6 +282,7 @@ export default function ResetPasswordScreen() {
   }, [markRecoveryReady]);
 
   const markMissingRecoveryLink = useCallback(() => {
+    void clearQuarantinedPasswordRecoverySession().then((cleared) => { if (cleared) { recoveryInputConsumedRef.current = false; recoverySessionRef.current = null; recoveryProofRef.current = null; setRecoveryAuthority(null); } });
     setStatus("missing");
     setStatusMessage("This reset link is missing or expired. Request a fresh password reset email.");
   }, []);
@@ -264,9 +296,9 @@ export default function ResetPasswordScreen() {
     const email = routeRecoveryParams?.email?.trim();
     const params = new URLSearchParams();
     if (email) params.set("email", email);
-    router.replace(`/forgot-password?${params.toString()}` as Href);
-
-    void clearResetFlowSession(recoveryAuthority).finally(() => {
+    void clearResetFlowSession(recoveryAuthority, recoverySessionRef.current?.accessToken).then((cleared) => {
+      if (cleared) router.replace(`/forgot-password?${params.toString()}` as Href); else { setStatus("failed"); setStatusMessage("Unable to safely close the reset session. Try again."); }
+    }).finally(() => {
       expiredActionPendingRef.current = false;
     });
   }, [recoveryAuthority, routeRecoveryParams?.email, router]);
@@ -276,9 +308,9 @@ export default function ResetPasswordScreen() {
     expiredActionPendingRef.current = true;
     setStatus("checking");
     setStatusMessage("Returning to sign in...");
-    router.replace("/(auth)/login");
-
-    void clearResetFlowSession(recoveryAuthority).finally(() => {
+    void clearResetFlowSession(recoveryAuthority, recoverySessionRef.current?.accessToken).then((cleared) => {
+      if (cleared) router.replace("/(auth)/login"); else { setStatus("failed"); setStatusMessage("Unable to safely close the reset session. Try again."); }
+    }).finally(() => {
       expiredActionPendingRef.current = false;
     });
   }, [recoveryAuthority, router]);
@@ -294,54 +326,35 @@ export default function ResetPasswordScreen() {
     Object.entries(values).forEach(([key, value]) => { if (value) query.set(key, value); });
     const queryString = query.toString();
     const route = `/reset-password${queryString ? `?${queryString}` : ""}`;
-    if (!consumeApplicationAuthInput(route, "password_reset")) {
-      setStatus("failed"); setStatusMessage(RECOVERY_LINK_OPEN_ERROR); return true;
-    }
+    if (!consumeApplicationAuthInput(route, "password_reset")) { markRecoveryFailed(new Error("invalid_recovery_input"), "route"); return true; }
     recoveryInputConsumedRef.current = true;
 
-    if (recovery.error || recovery.errorCode) {
-      setStatus("failed");
-      setStatusMessage(RECOVERY_LINK_OPEN_ERROR);
-      trackEvent("auth_password_recovery_link_failed", {
-        reason: getSanitizedRecoveryErrorReason(recovery.errorCode || recovery.error),
-      });
-      return true;
-    }
+    if (recovery.error || recovery.errorCode) { markRecoveryFailed(recovery.errorCode || recovery.error, "provider_error"); return true; }
 
     if (recovery.accessToken && recovery.refreshToken) {
-      setStatus("checking");
-      setStatusMessage("Opening your reset session...");
-
-      const { error } = await supabase.auth.setSession({
-        access_token: recovery.accessToken,
-        refresh_token: recovery.refreshToken,
-      });
-
-      if (error) {
-        markRecoveryFailed(error, "url_session");
-        return true;
-      }
-
-      await markRecoveryReady("url_session");
+      markRecoveryFailed(new Error("unverified_recovery_session"), "url_session");
       return true;
     }
 
     if (recovery.code) {
+      if (!await beginPasswordRecoverySessionQuarantine()) { markRecoveryFailed(new Error("recovery_quarantine_persistence_failed"), "code"); return true; }
       setStatus("checking");
       setStatusMessage("Opening your reset session...");
 
-      const { error } = await supabase.auth.exchangeCodeForSession(recovery.code);
+      const { data, error } = await supabase.auth.exchangeCodeForSession(recovery.code);
+      const redirectType = (data as typeof data & { redirectType?: unknown }).redirectType;
 
-      if (error) {
-        markRecoveryFailed(error, "code");
+      if (error || redirectType !== "PASSWORD_RECOVERY" || !data.session) {
+        markRecoveryFailed(error ?? new Error("unverified_recovery_code"), "code", data.session);
         return true;
       }
 
-      await markRecoveryReady("code");
+      await markRecoveryReady("code", data.session, true);
       return true;
     }
 
     if (recovery.tokenHash) {
+      if (!await beginPasswordRecoverySessionQuarantine()) { markRecoveryFailed(new Error("recovery_quarantine_persistence_failed"), "token_hash"); return true; }
       setStatus("checking");
       setStatusMessage("Opening your reset session...");
 
@@ -351,7 +364,7 @@ export default function ResetPasswordScreen() {
       });
 
       if (error) {
-        markRecoveryFailed(error, "token_hash");
+        markRecoveryFailed(error, "token_hash", data.session);
         return true;
       }
 
@@ -363,6 +376,7 @@ export default function ResetPasswordScreen() {
     }
 
     if (recovery.token && recovery.email) {
+      if (!await beginPasswordRecoverySessionQuarantine()) { markRecoveryFailed(new Error("recovery_quarantine_persistence_failed"), "email_token"); return true; }
       setStatus("checking");
       setStatusMessage("Opening your reset session...");
 
@@ -373,7 +387,7 @@ export default function ResetPasswordScreen() {
       });
 
       if (error) {
-        markRecoveryFailed(error, "email_token");
+        markRecoveryFailed(error, "email_token", data.session);
         return true;
       }
 
@@ -384,7 +398,7 @@ export default function ResetPasswordScreen() {
       return true;
     }
 
-    return false;
+    recoveryInputConsumedRef.current = false; return false;
   }, [establishVerifiedRecoverySession, markRecoveryFailed, markRecoveryReady]);
 
   const consumeRecoveryUrl = useCallback(async (url: string | null) => (
@@ -395,14 +409,14 @@ export default function ResetPasswordScreen() {
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "PASSWORD_RECOVERY" || !session) return;
 
-      void markRecoveryReady("password_recovery_event", session.user.id)
-        .catch((error) => markRecoveryFailed(error, "password_recovery_event"));
+      void markRecoveryReady("password_recovery_event", session, true)
+        .catch((error) => markRecoveryFailed(error, "password_recovery_event", session));
     });
 
     return () => {
       data.subscription.unsubscribe();
     };
-  }, [markRecoveryReady]);
+  }, [markRecoveryFailed, markRecoveryReady]);
 
   useEffect(() => {
     let active = true;
@@ -415,13 +429,9 @@ export default function ResetPasswordScreen() {
         const initialUrl = await Linking.getInitialURL();
         const consumed = await consumeRecoveryUrl(initialUrl);
         if (!active || consumed) return;
-        if (isPasswordRecoverySession) {
-          await markRecoveryReady("recovery_session");
-          return;
-        }
-
         markMissingRecoveryLink();
       } catch (error) {
+        void clearQuarantinedPasswordRecoverySession().then((cleared) => { if (cleared) recoveryInputConsumedRef.current = false; });
         if (!active) return;
         reportRuntimeError("auth-password-recovery-bootstrap", error, {
           source: "reset-password",
@@ -435,6 +445,7 @@ export default function ResetPasswordScreen() {
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
       void consumeRecoveryUrl(url).catch((error) => {
+        void clearQuarantinedPasswordRecoverySession().then((cleared) => { if (cleared) recoveryInputConsumedRef.current = false; });
         reportRuntimeError("auth-password-recovery-link", error, {
           source: "reset-password",
         });
@@ -450,7 +461,6 @@ export default function ResetPasswordScreen() {
   }, [
     consumeRecoveryParams,
     consumeRecoveryUrl,
-    isPasswordRecoverySession,
     markMissingRecoveryLink,
     markRecoveryReady,
     routeRecoveryParams,
@@ -464,7 +474,9 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    if (!recoveryAuthority || !isPasswordRecoverySession
+    const captured = recoverySessionRef.current;
+    if (!captured || !recoveryAuthority || !sameAccountSessionAuthority(captured, recoveryAuthority)
+      || !sameAccountSessionAuthority(recoveryProofRef.current, recoveryAuthority)
       || !(await isCurrentAccountSessionAuthority(recoveryAuthority))) {
       setStatus("failed"); setStatusMessage("This recovery session changed. Request a fresh reset link."); return;
     }
@@ -482,23 +494,28 @@ export default function ResetPasswordScreen() {
     setSaving(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-
-      if (error) {
+      try {
+        const cleanupConfirmed = await updateCapturedRecoveryPassword(captured, newPassword);
+        if (!cleanupConfirmed) {
+          setStatus("failed");
+          setStatusMessage("Password updated, but reset-session cleanup could not be confirmed. Sign in again before continuing.");
+          return;
+        }
+      } catch (error) {
         trackEvent("auth_password_recovery_update_failed", {
-          reason: error.name ?? "auth_error",
+          reason: getSanitizedRecoveryErrorReason(error),
         });
         Alert.alert("Reset password", getPasswordUpdateErrorMessage(error));
         return;
       }
 
-      if (!(await isCurrentAccountSessionAuthority(recoveryAuthority))) {
+      if (!await clearResetFlowSession(recoveryAuthority, captured.accessToken)) {
         setStatus("failed"); setStatusMessage("The account session changed; no success applies to its replacement."); return;
       }
 
       setNewPassword("");
       setConfirmPassword("");
-      await clearResetFlowSession(recoveryAuthority);
+      recoverySessionRef.current = null; recoveryProofRef.current = null; setRecoveryAuthority(null);
       trackEvent("auth_password_recovery_update_success", {
         source: "reset-password",
       });
@@ -516,7 +533,7 @@ export default function ResetPasswordScreen() {
     } finally {
       setSaving(false);
     }
-  }, [confirmPassword, isPasswordRecoverySession, newPassword, recoveryAuthority, router, saving, status]);
+  }, [confirmPassword, newPassword, recoveryAuthority, router, saving, status]);
 
   return (
     <KeyboardAvoidingView

@@ -44,16 +44,17 @@ export function parseLegalRequirementsReadback(value: unknown): LegalRequirement
     const acceptedAt = item.acceptedAt == null ? null : text(item.acceptedAt);
     if (!legalKeys.has(documentKey) || seen.has(documentKey) || !version) return null;
     if (item.state === "CURRENT_ACCEPTED" && (item.accepted !== true || !acceptedAt || !Number.isFinite(Date.parse(acceptedAt)))) return null;
-    if (item.state === "REQUIRED_UNACCEPTED" && item.accepted !== false) return null;
+    if (item.state === "REQUIRED_UNACCEPTED" && (item.accepted !== false || acceptedAt !== null)) return null;
     if (item.state !== "CURRENT_ACCEPTED" && item.state !== "REQUIRED_UNACCEPTED") return null;
     seen.add(documentKey);
-    parsed.push({ documentKey, version, state: item.state, accepted: item.accepted, acceptedAt });
+    parsed.push({ documentKey, version, state: item.state, accepted: item.accepted === true, acceptedAt });
   }
   const userId = text(row.userId);
   const accountId = text(row.accountId);
   const sessionGeneration = text(row.sessionGeneration);
-  if (row.authoritative !== true || row.market !== WAVE1_LEGAL_MARKET || !capabilities.has(capability)) return null;
-  if (!userId || !accountId || !sessionGeneration || parsed.length !== requiredKeys[capability].length) return null;
+  if (row.authoritative !== true || row.state !== "ACTIVE" || row.restoreOnly !== false
+    || row.market !== WAVE1_LEGAL_MARKET || !capabilities.has(capability)) return null;
+  if (!userId || accountId !== userId || !sessionGeneration || parsed.length !== requiredKeys[capability].length) return null;
   if (requiredKeys[capability].some((key) => !seen.has(key))) return null;
   return {
     authoritative: true, userId, accountId, sessionGeneration, state: "ACTIVE", restoreOnly: false,
@@ -90,7 +91,8 @@ export async function readAccountLegalRequirements(client: SupabaseClient<Databa
     p_capability: LegalCapability;
   }) => LegalRpc)("wave1_legal_requirements_readback", { p_capability: capability });
   const { data, error } = await rpc;
-  return error ? null : parseLegalRequirementsReadback(data);
+  const readback = error ? null : parseLegalRequirementsReadback(data);
+  return readback?.capability === capability ? readback : null;
 }
 
 export type AccountLegalAcceptanceWriteResult =
@@ -101,21 +103,25 @@ export async function recordAccountLegalAcceptance(
   client: SupabaseClient<Database>,
   userId: string,
   capability: LegalCapability = "account",
+  expectedReadback?: LegalRequirementsReadback | null,
 ): Promise<AccountLegalAcceptanceWriteResult> {
   const authority = await readCurrentAccountSessionAuthority();
   if (!authority || authority.restoreOnly || authority.userId !== String(userId ?? "").trim()) {
     return { ok: false, errorMessage: "legal_acceptance_session_authority_unavailable" };
   }
-  const requirements = await readAccountLegalRequirements(client, capability);
-  if (!sameLegalAuthorityBinding(requirements, authority)) {
+  const requirements = expectedReadback ?? await readAccountLegalRequirements(client, capability);
+  if (requirements?.capability !== capability || !sameLegalAuthorityBinding(requirements, authority)) {
     return { ok: false, errorMessage: "legal_acceptance_session_changed" };
   }
   const acceptances = buildLegalAcceptancePayload(requirements!);
   if (!acceptances) return { ok: false, errorMessage: "legal_document_version_unavailable" };
   const rpc = (client.rpc as unknown as (fn: "wave1_accept_legal_documents", args: {
     p_acceptances: Json; p_market: typeof WAVE1_LEGAL_MARKET; p_capability: LegalCapability;
+    p_expected_user_id: string; p_expected_account_id: string; p_session_generation: string;
   }) => LegalRpc)("wave1_accept_legal_documents", {
     p_acceptances: acceptances, p_market: WAVE1_LEGAL_MARKET, p_capability: capability,
+    p_expected_user_id: authority.userId, p_expected_account_id: authority.accountId,
+    p_session_generation: authority.sessionGeneration,
   });
   const { data, error } = await rpc;
   if (error) return { ok: false, errorMessage: error.message ?? "legal_acceptance_failed", code: error.code };

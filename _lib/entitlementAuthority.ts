@@ -12,7 +12,26 @@ export type EntitlementAuthorityDecision = EntitlementSessionBinding & {
   grantsProtectedAccess: boolean; reason: EntitlementAuthorityReason;
 };
 
+export const AUTHORITY_READ_TIMEOUT_MS = 8_000;
+export async function withAuthorityReadDeadline<T>(
+  operation: PromiseLike<T>, fallback: T, timeoutMs = AUTHORITY_READ_TIMEOUT_MS,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(operation),
+      new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), Math.max(1, timeoutMs)); }),
+    ]);
+  } catch {
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 const STATE_SET = new Set<string>(ENTITLEMENT_AUTHORITY_STATES); const KEY_PATTERN = /^[a-z0-9][a-z0-9_]{0,63}$/;
+const SOURCE_SET = new Set(["revenuecat", "operator_grant", "billing_sync", "migration", "test_grant", "server_absence"]);
+const MAX_AUTHORITY_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const text = (value: unknown) => String(value ?? "").trim();
 const optionalText = (value: unknown) => text(value) || null;
 const timestamp = (value: unknown) => { const normalized = optionalText(value); return normalized && Number.isFinite(Date.parse(normalized)) ? normalized : null; };
@@ -69,7 +88,12 @@ export const normalizeEntitlementAuthorityReadback = (options: {
   }
   const state = normalizeEntitlementAuthorityState(options.readback.state);
   const authoritativeAt = timestamp(options.readback.authoritativeAt);
-  if (normalizeEntitlementAuthorityKey(options.readback.entitlementKey) !== key || !state || state === "UNKNOWN" || !authoritativeAt) {
+  const source = optionalText(options.readback.source);
+  const expectedGrant = state === "ACTIVE" || state === "GRACE";
+  if (normalizeEntitlementAuthorityKey(options.readback.entitlementKey) !== key || !state || state === "UNKNOWN"
+    || !authoritativeAt || Date.parse(authoritativeAt) > Date.now() + MAX_AUTHORITY_CLOCK_SKEW_MS
+    || options.readback.authoritative !== true || options.readback.grantsProtectedAccess !== expectedGrant
+    || !source || !SOURCE_SET.has(source)) {
     return createUnknownEntitlementDecision(key, "malformed_response", options.expectedBinding);
   }
   const rawExpiresAt = optionalText(options.readback.expiresAt);
@@ -79,9 +103,14 @@ export const normalizeEntitlementAuthorityReadback = (options: {
   if ((rawExpiresAt && !expiresAt) || (rawRevokedAt && !revokedAt)) {
     return createUnknownEntitlementDecision(key, "malformed_response", options.expectedBinding);
   }
-  const grantsProtectedAccess = state === "ACTIVE" || state === "GRACE";
-  return { ...binding, entitlementKey: key, state, source: optionalText(options.readback.source), expiresAt,
-    revokedAt, authoritativeAt, authoritative: true, grantsProtectedAccess, reason: stateReason(state) };
+  if ((revokedAt && Date.parse(revokedAt) > Date.parse(authoritativeAt))
+    || ((state === "ACTIVE" || state === "GRACE")
+      && (!!revokedAt || !!expiresAt && Date.parse(expiresAt) <= Date.parse(authoritativeAt)))
+    || (source === "server_absence" && state !== "INACTIVE")) {
+    return createUnknownEntitlementDecision(key, "malformed_response", options.expectedBinding);
+  }
+  return { ...binding, entitlementKey: key, state, source, expiresAt,
+    revokedAt, authoritativeAt, authoritative: true, grantsProtectedAccess: expectedGrant, reason: stateReason(state) };
 };
 export const rejectStaleEntitlementDecision = (
   decision: EntitlementAuthorityDecision, currentBinding?: EntitlementSessionBinding | null,
@@ -92,3 +121,22 @@ export const entitlementGrantsProtectedAccess = (decision?: EntitlementAuthority
   decision?.authoritative === true && decision.restoreOnly === false && decision.grantsProtectedAccess === true
   && (decision.state === "ACTIVE" || decision.state === "GRACE")
 );
+
+export const resolveAlternativeEntitlementAuthority = (
+  candidates: readonly Pick<EntitlementAuthorityDecision, "authoritative" | "grantsProtectedAccess" | "state">[],
+  expectedCount = candidates.length,
+) => {
+  const active = candidates.find((candidate) => candidate.authoritative && candidate.grantsProtectedAccess
+    && candidate.state === "ACTIVE");
+  const grace = candidates.find((candidate) => candidate.authoritative && candidate.grantsProtectedAccess
+    && candidate.state === "GRACE");
+  const granting = active ?? grace;
+  const completeDenial = candidates.length === expectedCount
+    && candidates.every((candidate) => candidate.authoritative);
+  const authoritative = !!granting || completeDenial;
+  return {
+    authoritative,
+    grantsProtectedAccess: !!granting,
+    state: granting?.state ?? (authoritative ? candidates[0]?.state ?? "INACTIVE" : "UNKNOWN"),
+  } as const;
+};

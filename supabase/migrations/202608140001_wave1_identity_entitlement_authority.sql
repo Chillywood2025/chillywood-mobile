@@ -1,6 +1,5 @@
 -- Wave 1 identity, entitlement, legal, push, and creator authority foundation.
 -- Source only: this migration performs no provider call, payout, or production deployment.
-
 create table if not exists public."wave1_authority_audit_events" (
   "id" uuid primary key default gen_random_uuid(), "domain" text not null,
   "subject_hash" text not null, "object_hash" text,
@@ -12,7 +11,6 @@ create table if not exists public."wave1_authority_audit_events" (
   constraint "wave1_authority_audit_operation_unique" unique ("domain", "subject_hash", "operation_key"),
   constraint "wave1_authority_audit_retention_check" check ("retention_expires_at" > "created_at" and "retention_expires_at" <= "created_at" + interval '7 years')
 );
-
 create table if not exists public."wave1_legal_document_versions" (
   "document_key" text not null, "version" text not null,
   "market" text not null, "capability" text not null,
@@ -23,10 +21,8 @@ create table if not exists public."wave1_legal_document_versions" (
   constraint "wave1_legal_document_market_check" check ("market" = 'UNITED_STATES'),
   constraint "wave1_legal_document_capability_check" check ("capability" in ('account', 'creator', 'creator_money'))
 );
-
 create unique index if not exists "wave1_legal_document_one_active_version"
   on public."wave1_legal_document_versions" ("document_key", "market", "capability") where "active";
-
 create table if not exists public."wave1_legal_acceptances" (
   "id" uuid primary key default gen_random_uuid(), "user_id" uuid references auth.users(id) on delete set null,
   "subject_hash" text not null, "document_key" text not null,
@@ -41,12 +37,10 @@ create table if not exists public."wave1_legal_acceptances" (
   constraint "wave1_legal_acceptance_source_check" check ("authority_source" in ('authenticated_rpc', 'service_reconciliation')),
   constraint "wave1_legal_acceptance_retention_check" check ("retention_expires_at" > "accepted_at" and "retention_expires_at" <= "accepted_at" + interval '7 years')
 );
-
 create unique index if not exists "wave1_legal_acceptance_exact_unique"
   on public."wave1_legal_acceptances" ("user_id", "document_key", "document_version", "market", "role_key", "capability")
   where "user_id" is not null and "invalidated_at" is null;
 create index if not exists "wave1_legal_acceptance_user_fkey_idx" on public."wave1_legal_acceptances" ("user_id");
-
 create table if not exists public."wave1_push_installation_ownership" (
   "platform" text not null, "install_id" text not null,
   "user_id" uuid not null references auth.users(id) on delete cascade,
@@ -63,7 +57,6 @@ create table if not exists public."wave1_push_installation_ownership" (
   constraint "wave1_push_owner_credential_check" check ("revocation_credential_hash" ~ '^[0-9a-f]{64}$'),
   constraint "wave1_push_owner_attempts_check" check ("revocation_attempts" >= 0)
 );
-
 create table if not exists public."wave1_creator_eligibility" (
   "creator_user_id" uuid primary key references auth.users(id) on delete cascade,
   "state" text not null default 'PENDING_VERIFICATION', "account_status" text not null default 'UNKNOWN',
@@ -81,28 +74,23 @@ create table if not exists public."wave1_creator_eligibility" (
   constraint "wave1_creator_market_check" check ("market" in ('UNITED_STATES', 'EXCLUDED_TERRITORY', 'OTHER', 'UNKNOWN')),
   constraint "wave1_creator_input_versions_safe" check ("input_versions"::text !~* '(secret|token|password|private_key|raw_payload|tax_id|document)')
 );
-
 create index if not exists "wave1_push_owner_user_fkey_idx" on public."wave1_push_installation_ownership" ("user_id");
 create index if not exists "wave1_push_owner_account_fkey_idx" on public."wave1_push_installation_ownership" ("account_id");
-
 alter table public."user_push_tokens"
   add column if not exists "session_generation" text,
   add column if not exists "ownership_state" text not null default 'INVALID',
   add column if not exists "ownership_operation_key" text;
-
 update public."user_push_tokens"
 set "enabled" = false,
     "ownership_state" = 'INVALID',
     "revoked_at" = coalesce("revoked_at", timezone('utc'::text, now())),
     "updated_at" = timezone('utc'::text, now())
 where "enabled" or "ownership_state" <> 'INVALID';
-
 alter table public."user_push_tokens" drop constraint if exists "user_push_tokens_wave1_ownership_check";
 alter table public."user_push_tokens" add constraint "user_push_tokens_wave1_ownership_check" check (
   "ownership_state" in ('UNBOUND', 'ACCOUNT_BOUND', 'REVOCATION_PENDING', 'REVOKED', 'INVALID')
   and (not "enabled" or ("ownership_state" = 'ACCOUNT_BOUND' and "session_generation" is not null and "install_id" is not null))
 );
-
 insert into public."wave1_legal_document_versions" ("document_key", "version", "market", "capability", "effective_at") values
   ('terms', '1.0', 'UNITED_STATES', 'account', '2026-05-21T00:00:00Z'),
   ('privacy', '1.0', 'UNITED_STATES', 'account', '2026-05-21T00:00:00Z'),
@@ -110,7 +98,6 @@ insert into public."wave1_legal_document_versions" ("document_key", "version", "
   ('creator_terms', '1.0', 'UNITED_STATES', 'creator', '2026-05-21T00:00:00Z'),
   ('money_terms', '1.0', 'UNITED_STATES', 'creator_money', '2026-05-21T00:00:00Z')
 on conflict do nothing;
-
 alter table public."wave1_authority_audit_events" enable row level security;
 alter table public."wave1_authority_audit_events" force row level security;
 alter table public."wave1_legal_document_versions" enable row level security;
@@ -121,20 +108,28 @@ alter table public."wave1_push_installation_ownership" enable row level security
 alter table public."wave1_push_installation_ownership" force row level security;
 alter table public."wave1_creator_eligibility" enable row level security;
 alter table public."wave1_creator_eligibility" force row level security;
-
 revoke all on table public."wave1_authority_audit_events", public."wave1_legal_document_versions",
   public."wave1_legal_acceptances", public."wave1_push_installation_ownership", public."wave1_creator_eligibility"
   from public, anon, authenticated;
 grant select, insert, update, delete on table public."wave1_authority_audit_events", public."wave1_legal_document_versions",
   public."wave1_legal_acceptances", public."wave1_push_installation_ownership", public."wave1_creator_eligibility"
   to service_role;
-
 revoke insert, update, delete on table public."user_account_legal_acceptances" from authenticated;
-
 create or replace function public."wave1_sha256"(p_value text)
 returns text language sql immutable set search_path = ''
 as $$ select encode(extensions.digest(convert_to(coalesce(p_value, ''), 'UTF8'), 'sha256'), 'hex') $$;
-
+create or replace function public."wave1_audit_legal_invalidation"()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if old."invalidated_at" is null and new."invalidated_at" is not null then
+    insert into public."wave1_authority_audit_events" ("domain","subject_hash","object_hash","from_state","to_state","reason","authority_source","operation_key")
+    values ('LEGAL_ACCEPTANCE',new."subject_hash",public."wave1_sha256"(new."document_key"||':'||new."document_version"||':'||new."capability"),'CURRENT_ACCEPTED','REVOKED_OR_INVALID','acceptance_invalidated',coalesce(nullif(current_setting('request.jwt.claim.role',true),''),session_user),'legal-invalidate:'||new."id"::text||':'||new."invalidated_at"::text) on conflict do nothing;
+  end if;
+  return new;
+end $$;
+revoke all on function public."wave1_audit_legal_invalidation"() from public, anon, authenticated, service_role;
+drop trigger if exists "wave1_audit_legal_invalidation" on public."wave1_legal_acceptances";
+create trigger "wave1_audit_legal_invalidation" after update of "invalidated_at" on public."wave1_legal_acceptances" for each row execute function public."wave1_audit_legal_invalidation"();
 create or replace function public."wave1_session_authority_readback"()
 returns jsonb language plpgsql stable security definer set search_path = ''
 as $$
@@ -158,7 +153,6 @@ begin
     'observedAt', timezone('utc'::text, now()));
 end;
 $$;
-
 create or replace function public."wave1_legal_requirements_readback"(p_capability text default 'account')
 returns jsonb language plpgsql stable security definer set search_path = ''
 as $$
@@ -173,7 +167,7 @@ begin
     or public."is_account_access_restricted"(v_user::text) then raise exception 'account_access_restricted'; end if;
   if v_capability not in ('account', 'creator', 'creator_money', 'payout') then raise exception 'legal_capability_invalid'; end if;
   select coalesce(nullif(lower(trim("channel_role")), ''), 'member') into v_role
-  from public."user_profiles" where "user_id" = v_user;
+  from public."user_profiles" where "user_id" = v_user::text;
   v_role := coalesce(v_role, 'member');
   select coalesce(jsonb_agg(jsonb_build_object(
     'documentKey', doc."document_key", 'version', doc."version",
@@ -199,9 +193,9 @@ begin
     'allAccepted', not jsonb_path_exists(v_requirements, '$[*] ? (@.accepted == false)'));
 end;
 $$;
-
 create or replace function public."wave1_accept_legal_documents"(
-  p_acceptances jsonb, p_market text, p_capability text default 'account'
+  p_acceptances jsonb, p_market text, p_expected_user_id uuid, p_expected_account_id uuid,
+  p_session_generation text, p_capability text default 'account'
 )
 returns jsonb language plpgsql security definer set search_path = ''
 as $$
@@ -214,14 +208,20 @@ declare
   v_requirement record;
   v_expected_count integer := 0;
   v_operation_key text;
+  v_acceptance_ids text := '';
+  v_acceptance_id uuid;
 begin
   if v_session->>'state' <> 'ACTIVE' or coalesce((v_session->>'restoreOnly')::boolean, false)
     or public."is_account_access_restricted"(v_user::text) then raise exception 'account_access_restricted'; end if;
+  if p_expected_user_id is null or p_expected_account_id is distinct from p_expected_user_id
+    or v_user is distinct from p_expected_user_id or (v_session->>'accountId')::uuid is distinct from p_expected_account_id
+    or v_generation is distinct from nullif(trim(coalesce(p_session_generation, '')), '')
+  then raise exception 'legal_session_binding_mismatch'; end if;
   if p_market <> 'UNITED_STATES' then raise exception 'legal_market_invalid'; end if;
   if jsonb_typeof(p_acceptances) <> 'object' then raise exception 'legal_acceptances_invalid'; end if;
   if v_capability not in ('account', 'creator', 'creator_money', 'payout') then raise exception 'legal_capability_invalid'; end if;
   select coalesce(nullif(lower(trim("channel_role")), ''), 'member') into v_role
-  from public."user_profiles" where "user_id" = v_user;
+  from public."user_profiles" where "user_id" = v_user::text;
   v_role := coalesce(v_role, 'member');
   for v_requirement in
     select * from public."wave1_legal_document_versions" doc
@@ -240,20 +240,20 @@ begin
     ) values (
       v_user, public."wave1_sha256"(v_user::text), v_requirement."document_key", v_requirement."version",
       'UNITED_STATES', v_role, v_requirement."capability", v_generation, 'authenticated_rpc'
-    ) on conflict do nothing;
+    ) on conflict do nothing returning "id" into v_acceptance_id;
+    if found then v_acceptance_ids := v_acceptance_ids || ':' || v_acceptance_id::text; end if;
   end loop;
   if (select count(*) from jsonb_object_keys(p_acceptances)) <> v_expected_count then
     raise exception 'legal_acceptance_set_mismatch';
   end if;
-  v_operation_key := public."wave1_sha256"(v_user::text || ':' || v_generation || ':' || v_capability || ':' || p_acceptances::text);
-  insert into public."wave1_authority_audit_events" (
-    "domain", "subject_hash", "to_state", "reason", "authority_source", "operation_key"
-  ) values ('LEGAL_ACCEPTANCE', public."wave1_sha256"(v_user::text), 'CURRENT_ACCEPTED',
-    'exact_versions_accepted', 'authenticated_rpc', v_operation_key) on conflict do nothing;
+  if v_acceptance_ids <> '' then
+    v_operation_key := public."wave1_sha256"(v_user::text || ':' || v_generation || ':' || v_capability || ':' || v_role || ':' || p_acceptances::text || v_acceptance_ids);
+    insert into public."wave1_authority_audit_events" ("domain", "subject_hash", "to_state", "reason", "authority_source", "operation_key")
+    values ('LEGAL_ACCEPTANCE', public."wave1_sha256"(v_user::text), 'CURRENT_ACCEPTED', 'exact_versions_accepted', 'authenticated_rpc', v_operation_key) on conflict do nothing;
+  end if;
   return public."wave1_legal_requirements_readback"(v_capability);
 end;
 $$;
-
 create or replace function public."wave1_entitlement_authority_readback"(p_entitlement_key text)
 returns jsonb language plpgsql stable security definer set search_path = ''
 as $$
@@ -279,7 +279,7 @@ begin
       else 'UNKNOWN'
     end;
   end if;
-  return v_session || jsonb_build_object('entitlementKey', v_key, 'state', v_state,
+  return v_session || jsonb_build_object('authoritative', true, 'entitlementKey', v_key, 'state', v_state,
     'grantsProtectedAccess', v_state in ('ACTIVE', 'GRACE'),
     'source', case when found then v_row."source" else 'server_absence' end,
     'expiresAt', case when found then v_row."expires_at" else null end,
@@ -287,7 +287,6 @@ begin
     'authoritativeAt', case when found then v_row."updated_at" else (v_session->>'observedAt')::timestamptz end);
 end;
 $$;
-
 create or replace function public."wave1_push_ownership_readback"(p_platform text, p_provider text, p_install_id text)
 returns jsonb language plpgsql stable security definer set search_path = ''
 as $$
@@ -309,7 +308,6 @@ begin
     'lastSeenAt', case when found then v_token."last_seen_at" else null end);
 end;
 $$;
-
 create or replace function public."wave1_register_push_token"(
   p_expected_user_id uuid, p_expected_account_id uuid, p_session_generation text,
   p_platform text, p_provider text, p_install_id text, p_token text,
@@ -319,17 +317,15 @@ create or replace function public."wave1_register_push_token"(
 returns jsonb language plpgsql security definer set search_path = ''
 as $$
 declare
-  v_session jsonb := public."wave1_session_authority_readback"();
+  v_session jsonb;
   v_owner public."wave1_push_installation_ownership"%rowtype;
+  v_previous_owner public."wave1_push_installation_ownership"%rowtype;
+  v_previous_token public."user_push_tokens"%rowtype;
   v_token_hash text;
   v_fingerprint text;
+  v_audit_operation_key text;
   v_now timestamptz := timezone('utc'::text, now());
 begin
-  if v_session->>'state' <> 'ACTIVE' or coalesce((v_session->>'restoreOnly')::boolean, false)
-    or public."is_account_access_restricted"(v_session->>'userId')
-    or (v_session->>'userId')::uuid <> p_expected_user_id
-    or p_expected_account_id <> p_expected_user_id or v_session->>'sessionGeneration' <> p_session_generation
-  then raise exception 'push_session_binding_mismatch'; end if;
   if p_platform not in ('android', 'ios') or p_provider not in ('expo', 'fcm')
     or (p_platform = 'ios' and p_provider <> 'expo') then raise exception 'push_provider_invalid'; end if;
   if nullif(trim(p_install_id), '') is null or length(p_install_id) > 256
@@ -340,11 +336,53 @@ begin
     or jsonb_typeof(coalesce(p_metadata, '{}'::jsonb)) <> 'object'
     or length(coalesce(p_app_version, '')) > 64 or length(coalesce(p_build_version, '')) > 64
   then raise exception 'push_registration_invalid'; end if;
-  perform pg_advisory_xact_lock(hashtextextended('wave1-push:' || p_platform || ':' || p_install_id, 0));
+  perform pg_advisory_xact_lock(hashtextextended('wave1-push-authority', 0));
+  v_session := public."wave1_session_authority_readback"();
+  if v_session->>'state' <> 'ACTIVE' or coalesce((v_session->>'restoreOnly')::boolean, false)
+    or public."is_account_access_restricted"(v_session->>'userId')
+    or (v_session->>'userId')::uuid <> p_expected_user_id
+    or p_expected_account_id <> p_expected_user_id or v_session->>'sessionGeneration' <> p_session_generation
+  then raise exception 'push_session_binding_mismatch'; end if;
   v_token_hash := public."wave1_sha256"(p_provider || ':' || p_token);
   v_fingerprint := left(v_token_hash, 12);
+  v_audit_operation_key := public."wave1_sha256"(p_operation_key || ':' || p_expected_user_id::text || ':' || p_session_generation || ':' || p_platform || ':' || p_install_id || ':' || p_provider || ':' || v_token_hash);
+  perform pg_advisory_xact_lock(hashtextextended('wave1-push-token:' || p_provider || ':' || v_token_hash, 0));
+  select * into v_previous_token from public."user_push_tokens"
+  where "provider" = p_provider and "token_hash" = v_token_hash for update;
+  perform pg_advisory_xact_lock(hashtextextended(lock_key, 0)) from (
+    select distinct lock_key from (values
+      ('wave1-push:' || p_platform || ':' || p_install_id),
+      (case when v_previous_token."install_id" is not null then 'wave1-push:' || v_previous_token."platform" || ':' || v_previous_token."install_id" end)
+    ) value(lock_key) where lock_key is not null order by lock_key
+  ) locks;
+  if v_previous_token."install_id" is not null
+    and (v_previous_token."platform" <> p_platform or v_previous_token."install_id" <> p_install_id) then
+    select * into v_previous_owner from public."wave1_push_installation_ownership"
+    where "platform" = v_previous_token."platform" and "install_id" = v_previous_token."install_id" for update;
+    if found and v_previous_owner."user_id" = v_previous_token."user_id"
+      and v_previous_owner."session_generation" is not distinct from v_previous_token."session_generation"
+      and v_previous_owner."ownership_state" in ('ACCOUNT_BOUND', 'REVOCATION_PENDING') then
+      if v_previous_owner."revocation_credential_hash" is distinct from p_revocation_credential_hash then raise exception 'push_registration_credential_mismatch'; end if;
+      update public."user_push_tokens" set "enabled" = false, "ownership_state" = 'REVOKED',
+        "revoked_at" = coalesce("revoked_at", v_now), "updated_at" = v_now
+      where "platform" = v_previous_owner."platform" and "install_id" = v_previous_owner."install_id";
+      update public."wave1_push_installation_ownership" set "ownership_state" = 'REVOKED',
+        "last_operation_key" = p_operation_key, "last_reason" = 'token_superseded',
+        "last_transition_at" = v_now, "revoked_at" = coalesce("revoked_at", v_now)
+      where "platform" = v_previous_owner."platform" and "install_id" = v_previous_owner."install_id";
+      insert into public."wave1_authority_audit_events" (
+        "domain", "subject_hash", "object_hash", "from_state", "to_state", "reason", "authority_source", "operation_key"
+      ) values ('PUSH_INSTALLATION_OWNERSHIP', public."wave1_sha256"(v_previous_owner."user_id"::text),
+        public."wave1_sha256"(v_previous_owner."platform" || ':' || v_previous_owner."install_id"),
+        v_previous_owner."ownership_state", 'REVOKED', 'token_superseded', 'notification-device-tokens',
+        public."wave1_sha256"(v_audit_operation_key || ':token-superseded:' || v_previous_owner."ownership_version"::text)) on conflict do nothing;
+    elsif coalesce(v_previous_token."enabled", false) and v_previous_token."ownership_state" = 'ACCOUNT_BOUND' then raise exception 'push_registration_credential_mismatch'; end if;
+  end if;
   select * into v_owner from public."wave1_push_installation_ownership"
   where "platform" = p_platform and "install_id" = p_install_id for update;
+  v_audit_operation_key := public."wave1_sha256"(v_audit_operation_key || ':' || coalesce((v_owner."ownership_version" + 1)::text, '1'));
+  if found and v_owner."ownership_state" in ('ACCOUNT_BOUND','REVOCATION_PENDING')
+    and v_owner."revocation_credential_hash" is distinct from p_revocation_credential_hash then raise exception 'push_registration_credential_mismatch'; end if;
   if found and v_owner."user_id" = p_expected_user_id and v_owner."account_id" = p_expected_account_id
     and v_owner."session_generation" = p_session_generation and v_owner."ownership_state" = 'ACCOUNT_BOUND'
     and v_owner."revocation_credential_hash" = p_revocation_credential_hash
@@ -388,13 +426,12 @@ begin
   insert into public."wave1_authority_audit_events" (
     "domain", "subject_hash", "object_hash", "from_state", "to_state", "reason", "authority_source", "operation_key"
   ) values ('PUSH_INSTALLATION_OWNERSHIP', public."wave1_sha256"(p_expected_user_id::text),
-    public."wave1_sha256"(p_platform || ':' || p_install_id), 'UNBOUND', 'ACCOUNT_BOUND',
-    'authenticated_registration', 'notification-device-tokens', p_operation_key) on conflict do nothing;
+    public."wave1_sha256"(p_platform || ':' || p_install_id), coalesce(v_owner."ownership_state", 'UNBOUND'), 'ACCOUNT_BOUND',
+    'authenticated_registration', 'notification-device-tokens', v_audit_operation_key) on conflict do nothing;
   return jsonb_build_object('status', 'registered', 'ownershipState', 'ACCOUNT_BOUND',
     'tokenFingerprint', v_fingerprint, 'sessionGeneration', p_session_generation);
 end;
 $$;
-
 create or replace function public."wave1_revoke_push_ownership"(
   p_expected_user_id uuid, p_expected_account_id uuid, p_session_generation text,
   p_platform text, p_install_id text, p_revocation_credential_hash text,
@@ -405,24 +442,42 @@ as $$
 declare
   v_owner public."wave1_push_installation_ownership"%rowtype;
   v_now timestamptz := timezone('utc'::text, now());
+  v_receipt jsonb;
 begin
-  if p_platform not in ('android', 'ios') or nullif(trim(p_install_id), '') is null
+  if p_expected_user_id is null or p_expected_account_id <> p_expected_user_id
+    or nullif(trim(p_session_generation), '') is null or p_platform not in ('android', 'ios')
+    or nullif(trim(p_install_id), '') is null or length(p_install_id) > 256
     or p_revocation_credential_hash !~ '^[0-9a-f]{64}$'
     or nullif(trim(p_operation_key), '') is null
     or p_reason not in ('sign_out', 'account_switch', 'auth_invalidation', 'account_deletion', 'recovery_replacement', 'auth_loss', 'user_request')
   then raise exception 'push_revocation_invalid'; end if;
+  v_receipt := jsonb_build_object('userId', p_expected_user_id, 'accountId', p_expected_account_id,
+    'sessionGeneration', p_session_generation, 'platform', p_platform, 'installId', p_install_id,
+    'operationKey', p_operation_key);
+  perform pg_advisory_xact_lock(hashtextextended('wave1-push-authority', 0));
   perform pg_advisory_xact_lock(hashtextextended('wave1-push:' || p_platform || ':' || p_install_id, 0));
   select * into v_owner from public."wave1_push_installation_ownership"
   where "platform" = p_platform and "install_id" = p_install_id for update;
-  if not found then return jsonb_build_object('status', 'revoked'); end if;
-  if v_owner."revocation_credential_hash" <> p_revocation_credential_hash then
-    return jsonb_build_object('status', 'revoked');
-  end if;
-  if v_owner."user_id" <> p_expected_user_id or v_owner."account_id" <> p_expected_account_id
+  if not found or v_owner."user_id" <> p_expected_user_id or v_owner."account_id" <> p_expected_account_id
     or v_owner."session_generation" <> p_session_generation
-  then return jsonb_build_object('status', 'revoked'); end if;
+  then
+    if exists (select 1 from public."user_push_tokens" where "platform" = p_platform and "install_id" = p_install_id
+      and "user_id" = p_expected_user_id and "session_generation" = p_session_generation and "enabled")
+    then return v_receipt || jsonb_build_object('status', 'retry_required', 'requestAccepted', false); end if;
+    return v_receipt || jsonb_build_object('status', 'revoked', 'requestAccepted', true,
+      'disposition', 'already_detached', 'idempotent', true);
+  end if;
+  if v_owner."revocation_credential_hash" <> p_revocation_credential_hash then
+    return v_receipt || jsonb_build_object('status', 'retry_required', 'requestAccepted', false);
+  end if;
   if v_owner."ownership_state" in ('REVOKED', 'INVALID', 'UNBOUND') then
-    return jsonb_build_object('status', 'revoked');
+    update public."user_push_tokens" set "enabled" = false, "ownership_state" = 'REVOKED',
+      "revoked_at" = coalesce("revoked_at", v_now), "updated_at" = v_now
+    where "platform" = p_platform and "install_id" = p_install_id and "user_id" = p_expected_user_id
+      and "session_generation" = p_session_generation;
+    return v_receipt || jsonb_build_object('status', 'revoked', 'requestAccepted', true,
+      'disposition', case when v_owner."ownership_state" = 'REVOKED' then 'already_revoked' else 'already_detached' end,
+      'idempotent', true);
   end if;
   update public."wave1_push_installation_ownership" set "ownership_state" = 'REVOCATION_PENDING',
     "revocation_attempts" = "revocation_attempts" + 1, "last_operation_key" = p_operation_key,
@@ -431,17 +486,20 @@ begin
     "revoked_at" = coalesce("revoked_at", v_now), "updated_at" = v_now, "ownership_operation_key" = p_operation_key
   where "platform" = p_platform and "install_id" = p_install_id and "user_id" = p_expected_user_id
     and "session_generation" = p_session_generation;
+  if exists (select 1 from public."user_push_tokens" where "platform" = p_platform and "install_id" = p_install_id
+    and "user_id" = p_expected_user_id and "session_generation" = p_session_generation and "enabled")
+  then return v_receipt || jsonb_build_object('status', 'retry_required', 'requestAccepted', false); end if;
   update public."wave1_push_installation_ownership" set "ownership_state" = 'REVOKED', "revoked_at" = v_now,
     "last_transition_at" = v_now where "platform" = p_platform and "install_id" = p_install_id;
   insert into public."wave1_authority_audit_events" (
     "domain", "subject_hash", "object_hash", "from_state", "to_state", "reason", "authority_source", "operation_key"
   ) values ('PUSH_INSTALLATION_OWNERSHIP', public."wave1_sha256"(p_expected_user_id::text),
     public."wave1_sha256"(p_platform || ':' || p_install_id), v_owner."ownership_state", 'REVOKED',
-    p_reason, 'notification-device-tokens', p_operation_key) on conflict do nothing;
-  return jsonb_build_object('status', 'revoked');
+    p_reason, 'notification-device-tokens', public."wave1_sha256"(p_operation_key || ':' || p_expected_user_id::text || ':' || p_session_generation || ':' || p_platform || ':' || p_install_id || ':' || p_reason || ':' || v_owner."ownership_version"::text)) on conflict do nothing;
+  return v_receipt || jsonb_build_object('status', 'revoked', 'requestAccepted', true,
+    'disposition', 'revoked', 'idempotent', false);
 end;
 $$;
-
 create or replace function public."wave1_compute_creator_eligibility"(p_inputs jsonb, p_previous_state text default 'INELIGIBLE')
 returns jsonb language plpgsql immutable set search_path = ''
 as $$
@@ -486,11 +544,11 @@ begin
     'canCreateMoneyExposure', v_state = 'VERIFIED', 'canProcessHistoricalObligations', true);
 end;
 $$;
-
 create or replace function public."wave1_revoke_push_on_session_delete"()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
+  perform pg_advisory_xact_lock(hashtextextended('wave1-push-authority', 0));
   with targets as (
     select "platform", "install_id", "ownership_state" from public."wave1_push_installation_ownership"
     where "user_id" = old."user_id" and "session_generation" = old."id"::text
@@ -513,7 +571,67 @@ revoke all on function public."wave1_revoke_push_on_session_delete"() from publi
 drop trigger if exists "wave1_revoke_push_on_session_delete" on auth.sessions;
 create trigger "wave1_revoke_push_on_session_delete" after delete on auth.sessions
   for each row execute function public."wave1_revoke_push_on_session_delete"();
-
+create or replace function public."wave1_revoke_push_on_account_deletion"()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+begin
+  perform pg_advisory_xact_lock(hashtextextended('wave1-push-authority', 0));
+  perform pg_advisory_xact_lock(hashtextextended('wave1-creator:' || new."user_id"::text, 0));
+  if new."status" = 'scheduled' then
+    with targets as (
+      select "platform", "install_id", "ownership_state" from public."wave1_push_installation_ownership"
+      where "user_id" = new."user_id" and "ownership_state" in ('ACCOUNT_BOUND','REVOCATION_PENDING') for update
+    ), revoked as (
+      update public."wave1_push_installation_ownership" owner set "ownership_state" = 'REVOKED',
+        "revocation_attempts" = owner."revocation_attempts" + 1, "last_reason" = 'account_deletion',
+        "last_operation_key" = 'account-deletion:' || new."id"::text, "last_transition_at" = now(),
+        "revoked_at" = coalesce(owner."revoked_at", now()) from targets
+      where owner."platform" = targets."platform" and owner."install_id" = targets."install_id"
+      returning owner."platform", owner."install_id", targets."ownership_state"
+    ) insert into public."wave1_authority_audit_events" ("domain","subject_hash","object_hash","from_state","to_state","reason","authority_source","operation_key")
+      select 'PUSH_INSTALLATION_OWNERSHIP', public."wave1_sha256"(new."user_id"::text),
+        public."wave1_sha256"("platform"||':'||"install_id"), "ownership_state", 'REVOKED',
+        'account_deletion', 'account_deletion_requests', 'account-deletion:'||new."id"::text||':'||"platform"||':'||"install_id"
+      from revoked on conflict do nothing;
+    update public."user_push_tokens" set "enabled" = false, "ownership_state" = 'REVOKED',
+      "revoked_at" = coalesce("revoked_at", now()), "updated_at" = now() where "user_id" = new."user_id";
+    insert into public."wave1_authority_audit_events" ("domain","subject_hash","from_state","to_state","reason","authority_source","operation_key") select 'CREATOR_ELIGIBILITY',public."wave1_sha256"(new."user_id"::text),"state",'SUSPENDED','account_restricted','account_deletion_requests','account-deletion:'||new."id"::text||':creator-suspend' from public."wave1_creator_eligibility" where "creator_user_id"=new."user_id" and "state"<>'REVOKED' and not ("state"='SUSPENDED' and "reason_codes" @> array['account_restricted']) on conflict do nothing;
+    update public."wave1_creator_eligibility" set "state" = 'SUSPENDED', "account_status"='RESTRICTED', "reason_codes" = array(select distinct unnest(coalesce("reason_codes",'{}'::text[]) || array['account_restricted'])),
+      "version" = "version" + 1, "evaluated_at" = now() where "creator_user_id" = new."user_id" and "state" <> 'REVOKED' and not ("state"='SUSPENDED' and "reason_codes" @> array['account_restricted']);
+  elsif tg_op = 'UPDATE' and old."status" = 'scheduled' and new."status" in ('restored','canceled','rejected') then
+    insert into public."wave1_authority_audit_events" ("domain","subject_hash","from_state","to_state","reason","authority_source","operation_key") select 'CREATOR_ELIGIBILITY',public."wave1_sha256"(new."user_id"::text),"state",case when "moderation_state"='SUSPENDED' then 'SUSPENDED' else 'PENDING_VERIFICATION' end,case when "moderation_state"='SUSPENDED' then 'account_restriction_lifted_other_suspension_remains' else 'restriction_lift_requires_reevaluation' end,'account_deletion_requests','account-deletion:'||new."id"::text||':creator-restore' from public."wave1_creator_eligibility" where "creator_user_id"=new."user_id" and "state"='SUSPENDED' and ("reason_codes" @> array['account_restricted'] or "account_status"='RESTRICTED') and not public."is_account_access_restricted"(new."user_id"::text) on conflict do nothing;
+    update public."wave1_creator_eligibility" set "state"=case when "moderation_state"='SUSPENDED' then 'SUSPENDED' else 'PENDING_VERIFICATION' end, "account_status"='ACTIVE',
+      "reason_codes"=case when "moderation_state"='SUSPENDED' then array(select distinct unnest(array_remove("reason_codes",'account_restricted')||array['authority_suspended'])) else array['restriction_lift_requires_reevaluation'] end, "version"="version"+1, "evaluated_at"=now()
+    where "creator_user_id"=new."user_id" and "state"='SUSPENDED' and ("reason_codes" @> array['account_restricted'] or "account_status"='RESTRICTED') and not public."is_account_access_restricted"(new."user_id"::text);
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public."wave1_revoke_push_on_account_deletion"() from public, anon, authenticated, service_role;
+drop trigger if exists "wave1_revoke_push_on_account_deletion" on public."account_deletion_requests";
+create trigger "wave1_revoke_push_on_account_deletion" after insert or update of "status" on public."account_deletion_requests"
+  for each row execute function public."wave1_revoke_push_on_account_deletion"();
+update public."account_deletion_requests" set "status"="status" where "status"='scheduled';
+create or replace function public."wave1_recheck_creator_on_auth_restriction"()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  perform pg_advisory_xact_lock(hashtextextended('wave1-creator:' || new."id"::text, 0));
+  if new."banned_until" > now() then
+    insert into public."wave1_authority_audit_events" ("domain","subject_hash","from_state","to_state","reason","authority_source","operation_key") select 'CREATOR_ELIGIBILITY',public."wave1_sha256"(new."id"::text),"state",'SUSPENDED','account_restricted','auth.users','auth-restriction:'||public."wave1_sha256"(new."id"::text)||':'||new."banned_until"::text from public."wave1_creator_eligibility" where "creator_user_id"=new."id" and "state"<>'REVOKED' and not ("state"='SUSPENDED' and "reason_codes" @> array['account_restricted']) on conflict do nothing;
+    update public."wave1_creator_eligibility" set "state"='SUSPENDED', "account_status"='RESTRICTED', "reason_codes"=array(select distinct unnest(coalesce("reason_codes",'{}'::text[])||array['account_restricted'])),
+      "version"="version"+1, "evaluated_at"=now() where "creator_user_id"=new."id" and "state" <> 'REVOKED' and not ("state"='SUSPENDED' and "reason_codes" @> array['account_restricted']);
+  elsif old."banned_until" > now() and coalesce(new."banned_until", '-infinity'::timestamptz) <= now() then
+    insert into public."wave1_authority_audit_events" ("domain","subject_hash","from_state","to_state","reason","authority_source","operation_key") select 'CREATOR_ELIGIBILITY',public."wave1_sha256"(new."id"::text),"state",case when "moderation_state"='SUSPENDED' then 'SUSPENDED' else 'PENDING_VERIFICATION' end,case when "moderation_state"='SUSPENDED' then 'account_restriction_lifted_other_suspension_remains' else 'restriction_lift_requires_reevaluation' end,'auth.users','auth-restriction-lift:'||public."wave1_sha256"(new."id"::text)||':'||old."banned_until"::text from public."wave1_creator_eligibility" where "creator_user_id"=new."id" and "state"='SUSPENDED' and ("reason_codes" @> array['account_restricted'] or "account_status"='RESTRICTED') and not public."is_account_access_restricted"(new."id"::text) on conflict do nothing;
+    update public."wave1_creator_eligibility" set "state"=case when "moderation_state"='SUSPENDED' then 'SUSPENDED' else 'PENDING_VERIFICATION' end, "account_status"='ACTIVE',
+      "reason_codes"=case when "moderation_state"='SUSPENDED' then array(select distinct unnest(array_remove("reason_codes",'account_restricted')||array['authority_suspended'])) else array['restriction_lift_requires_reevaluation'] end, "version"="version"+1, "evaluated_at"=now()
+    where "creator_user_id"=new."id" and "state"='SUSPENDED' and ("reason_codes" @> array['account_restricted'] or "account_status"='RESTRICTED') and not public."is_account_access_restricted"(new."id"::text);
+  end if;
+  return new;
+end $$;
+revoke all on function public."wave1_recheck_creator_on_auth_restriction"() from public, anon, authenticated, service_role;
+drop trigger if exists "wave1_recheck_creator_on_auth_restriction" on auth.users;
+create trigger "wave1_recheck_creator_on_auth_restriction" after update of "banned_until" on auth.users
+  for each row execute function public."wave1_recheck_creator_on_auth_restriction"();
 create or replace function public."wave1_evaluate_creator_eligibility"(
   p_creator_user_id uuid, p_inputs jsonb, p_operation_key text, p_authority_source text
 )
@@ -522,19 +640,38 @@ as $$
 declare
   v_previous public."wave1_creator_eligibility"%rowtype;
   v_result jsonb;
+  v_input_versions jsonb := p_inputs->'inputVersions';
+  v_sequence bigint;
   v_now timestamptz := timezone('utc'::text, now());
 begin
   if p_creator_user_id is null or jsonb_typeof(p_inputs) <> 'object'
-    or nullif(trim(p_operation_key), '') is null
+    or nullif(trim(p_operation_key), '') is null or length(p_operation_key) > 160
     or p_authority_source not in ('money_flow_control', 'moderation_safety_operator', 'security_owner_operator', 'local_pgtap')
   then raise exception 'creator_evaluation_invalid'; end if;
+  if jsonb_typeof(v_input_versions) <> 'object'
+    or coalesce(v_input_versions->>'evaluationSequence','') !~ '^[1-9][0-9]{0,17}$'
+  then raise exception 'creator_input_version_invalid'; end if;
+  v_sequence := (v_input_versions->>'evaluationSequence')::bigint;
+  perform pg_advisory_xact_lock(hashtextextended('wave1-creator:' || p_creator_user_id::text, 0));
   p_inputs := p_inputs || jsonb_build_object('rolloutEligible',
     mod(hashtextextended('chillywood-wave1-us-rollout-v1:' || p_creator_user_id::text, 20260814), 100) = 0);
   select * into v_previous from public."wave1_creator_eligibility" where "creator_user_id" = p_creator_user_id for update;
-  if found and v_previous."last_operation_key" = p_operation_key then
+  if found and exists (select 1 from public."wave1_authority_audit_events" where "domain"='CREATOR_ELIGIBILITY'
+    and "subject_hash"=public."wave1_sha256"(p_creator_user_id::text) and "operation_key"=p_operation_key) then
     return jsonb_build_object('state', v_previous."state", 'reasonCodes', to_jsonb(v_previous."reason_codes"),
       'canCreateMoneyExposure', v_previous."state" = 'VERIFIED', 'canProcessHistoricalObligations', true,
       'idempotent', true, 'version', v_previous."version");
+  end if;
+  if found and v_sequence <= coalesce((v_previous."input_versions"->>'evaluationSequence')::bigint, 0) then
+    insert into public."wave1_authority_audit_events" ("domain","subject_hash","from_state","to_state","reason","authority_source","operation_key")
+    values ('CREATOR_ELIGIBILITY',public."wave1_sha256"(p_creator_user_id::text),v_previous."state",v_previous."state",
+      'stale_input_rejected',p_authority_source,p_operation_key) on conflict do nothing;
+    return jsonb_build_object('state',v_previous."state",'reasonCodes',to_jsonb(v_previous."reason_codes"),
+      'canCreateMoneyExposure',v_previous."state"='VERIFIED','canProcessHistoricalObligations',true,
+      'idempotent',true,'staleInput',true,'version',v_previous."version");
+  end if;
+  if public."is_account_access_restricted"(p_creator_user_id::text) then
+    p_inputs := p_inputs || jsonb_build_object('accountStatus', 'RESTRICTED');
   end if;
   v_result := public."wave1_compute_creator_eligibility"(p_inputs, coalesce(v_previous."state", 'INELIGIBLE'));
   insert into public."wave1_creator_eligibility" (
@@ -548,7 +685,7 @@ begin
     (p_inputs->>'providerEligible')::boolean, (p_inputs->>'kycComplete')::boolean,
     (p_inputs->>'taxComplete')::boolean, (p_inputs->>'sanctionsClear')::boolean,
     (p_inputs->>'payoutEligible')::boolean, array(select jsonb_array_elements_text(v_result->'reasonCodes')),
-    coalesce(p_inputs->'inputVersions', '{}'::jsonb), p_authority_source, p_operation_key, v_now)
+    v_input_versions, p_authority_source, p_operation_key, v_now)
   on conflict ("creator_user_id") do update set "state" = excluded."state", "account_status" = excluded."account_status",
     "age_18_plus" = excluded."age_18_plus", "legal_accepted" = excluded."legal_accepted",
     "creator_role" = excluded."creator_role", "moderation_state" = excluded."moderation_state", "market" = excluded."market",
@@ -568,7 +705,6 @@ begin
     'version', coalesce(v_previous."version", 0) + 1, 'evaluatedAt', v_now);
 end;
 $$;
-
 create or replace function public."wave1_creator_eligibility_readback"()
 returns jsonb language plpgsql stable security definer set search_path = ''
 as $$
@@ -601,19 +737,31 @@ begin
     'minimumAge', 18, 'rollout', 'CONTROLLED_1_PERCENT_UNITED_STATES');
 end;
 $$;
-
 create or replace function public."wave1_enforce_creator_money_exposure"()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
   if (tg_op = 'UPDATE' and tg_table_name = 'creator_monetization_configs' and new."status" in ('disabled', 'revoked'))
     or (tg_table_name = 'money_purchase_intents' and new."creator_id" is null) then return new; end if;
-  if new."creator_id" is null or not exists (
+  perform pg_advisory_xact_lock(hashtextextended('wave1-creator:' || new."creator_id"::text, 0));
+  perform 1 from public."wave1_legal_document_versions" where "market"='UNITED_STATES' and "document_key" in ('terms','privacy','community_guidelines','creator_terms','money_terms') for share;
+  perform 1 from public."wave1_legal_acceptances" where "user_id"=new."creator_id" and "invalidated_at" is null for share;
+  if new."creator_id" is null or public."is_account_access_restricted"(new."creator_id"::text) or not exists (
     select 1 from public."wave1_creator_eligibility" where "creator_user_id" = new."creator_id"
       and "state" = 'VERIFIED' and "account_status" = 'ACTIVE' and "age_18_plus" and "legal_accepted"
       and "creator_role" and "moderation_state" = 'CLEAR' and "market" = 'UNITED_STATES'
       and "rollout_eligible" and "platform_capability" and "provider_eligible" and "kyc_complete"
       and "tax_complete" and "sanctions_clear" and "payout_eligible"
+  ) or (select count(*) from public."wave1_legal_document_versions" doc where doc."active" and doc."market"='UNITED_STATES'
+    and (doc."document_key",doc."capability") in (('terms','account'),('privacy','account'),('community_guidelines','account'),('creator_terms','creator'),('money_terms','creator_money'))) <> 5
+  or exists (
+    select 1 from public."wave1_legal_document_versions" doc where doc."active" and doc."market"='UNITED_STATES'
+      and doc."capability" in ('account','creator','creator_money') and not exists (
+        select 1 from public."wave1_legal_acceptances" acceptance where acceptance."user_id"=new."creator_id"
+          and acceptance."document_key"=doc."document_key" and acceptance."document_version"=doc."version"
+          and acceptance."market"=doc."market" and acceptance."capability"=doc."capability"
+          and acceptance."role_key"=coalesce((select nullif(lower(trim("channel_role")),'') from public."user_profiles" where "user_id"=new."creator_id"::text),'member')
+          and acceptance."invalidated_at" is null)
   ) then raise exception 'creator_eligibility_required' using errcode = '42501'; end if;
   return new;
 end;
@@ -623,9 +771,8 @@ drop trigger if exists "wave1_creator_config_eligibility" on public."creator_mon
 create trigger "wave1_creator_config_eligibility" before insert or update on public."creator_monetization_configs"
   for each row execute function public."wave1_enforce_creator_money_exposure"();
 drop trigger if exists "wave1_purchase_intent_creator_eligibility" on public."money_purchase_intents";
-create trigger "wave1_purchase_intent_creator_eligibility" before insert on public."money_purchase_intents"
+create trigger "wave1_purchase_intent_creator_eligibility" before insert or update of "creator_id" on public."money_purchase_intents"
   for each row execute function public."wave1_enforce_creator_money_exposure"();
-
 create or replace function public."wave1_purge_expired_authority_evidence"()
 returns integer language plpgsql security definer set search_path = ''
 as $$
@@ -638,9 +785,8 @@ begin
   return v_count + v_step;
 end;
 $$;
-
 revoke all on function public."wave1_sha256"(text), public."wave1_session_authority_readback"(),
-  public."wave1_legal_requirements_readback"(text), public."wave1_accept_legal_documents"(jsonb, text, text),
+  public."wave1_legal_requirements_readback"(text), public."wave1_accept_legal_documents"(jsonb, text, uuid, uuid, text, text),
   public."wave1_entitlement_authority_readback"(text), public."wave1_push_ownership_readback"(text, text, text),
   public."wave1_register_push_token"(uuid, uuid, text, text, text, text, text, text, text, text, text, text, jsonb),
   public."wave1_revoke_push_ownership"(uuid, uuid, text, text, text, text, text, text),
@@ -648,9 +794,8 @@ revoke all on function public."wave1_sha256"(text), public."wave1_session_author
   public."wave1_evaluate_creator_eligibility"(uuid, jsonb, text, text),
   public."wave1_creator_eligibility_readback"(),
   public."wave1_purge_expired_authority_evidence"() from public, anon, authenticated;
-
 grant execute on function public."wave1_session_authority_readback"(),
-  public."wave1_legal_requirements_readback"(text), public."wave1_accept_legal_documents"(jsonb, text, text),
+  public."wave1_legal_requirements_readback"(text), public."wave1_accept_legal_documents"(jsonb, text, uuid, uuid, text, text),
   public."wave1_entitlement_authority_readback"(text), public."wave1_push_ownership_readback"(text, text, text),
   public."wave1_register_push_token"(uuid, uuid, text, text, text, text, text, text, text, text, text, text, jsonb),
   public."wave1_creator_eligibility_readback"() to authenticated;
@@ -659,7 +804,6 @@ grant execute on function public."wave1_sha256"(text),
   public."wave1_compute_creator_eligibility"(jsonb, text),
   public."wave1_evaluate_creator_eligibility"(uuid, jsonb, text, text),
   public."wave1_purge_expired_authority_evidence"() to service_role;
-
 comment on table public."wave1_legal_acceptances" is
   'Server-timestamped exact-version acceptance. Account deletion removes direct identity while retaining bounded pseudonymous audit.';
 comment on table public."wave1_push_installation_ownership" is

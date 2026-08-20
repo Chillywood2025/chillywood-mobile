@@ -107,6 +107,9 @@ export const canProcessCreatorHistoricalObligation = (
 
 const toBooleanOrNull = (value: unknown) => typeof value === "boolean" ? value : null;
 const toText = (value: unknown) => String(value ?? "").trim();
+const CREATOR_AUTHORITY_SOURCES = new Set([
+  "money_flow_control", "moderation_safety_operator", "security_owner_operator", "local_pgtap",
+]);
 
 export function parseCreatorEligibilityReadback(value: unknown): CreatorEligibilityDecision {
   const row = value && typeof value === "object" && !Array.isArray(value)
@@ -139,7 +142,14 @@ export function parseCreatorEligibilityReadback(value: unknown): CreatorEligibil
       Array.isArray(row.reasonCodes) ? row.reasonCodes.map(toText).filter(Boolean) : ["server_authority_required"]);
   }
   const independentlyVerified = evaluateCreatorEligibility(inputs);
-  if (independentlyVerified.state !== "VERIFIED") {
+  const version = Number(row.version); const evaluatedAt = toText(row.evaluatedAt);
+  const verifiedOutputCoherent = row.restoreOnly === false && row.canCreateMoneyExposure === true
+    && row.canProcessHistoricalObligations === true && toText(row.accountId) === toText(row.userId)
+    && !!toText(row.userId) && !!toText(row.sessionGeneration)
+    && CREATOR_AUTHORITY_SOURCES.has(toText(row.authoritySource))
+    && Number.isInteger(version) && version > 0 && !!evaluatedAt && Number.isFinite(Date.parse(evaluatedAt))
+    && row.minimumAge === CREATOR_MINIMUM_AGE && row.rollout === "CONTROLLED_1_PERCENT_UNITED_STATES";
+  if (independentlyVerified.state !== "VERIFIED" || !verifiedOutputCoherent) {
     return parsedDecision(inputs, "PENDING_VERIFICATION", ["incomplete_verified_readback"]);
   }
   return parsedDecision(inputs, "VERIFIED",

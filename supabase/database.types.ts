@@ -20541,7 +20541,7 @@ export type Database = {
     }
     Functions: {
       wave1_accept_legal_documents: {
-        Args: { p_acceptances: Json; p_capability?: string; p_market: string }
+        Args: { p_acceptances: Json; p_expected_account_id: string; p_expected_user_id: string; p_market: string; p_session_generation: string; p_capability?: string }
         Returns: Json
       }
       wave1_creator_eligibility_readback: { Args: never; Returns: Json }

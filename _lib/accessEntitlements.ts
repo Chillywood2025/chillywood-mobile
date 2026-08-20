@@ -63,6 +63,7 @@ export type AccessReason =
   | "channel_defaults_mixed"
   | "creator_capability_normalized"
   | "allowed"
+  | "entitlement_unknown"
   | "premium_required"
   | "party_pass_required"
   | "identity_required"
@@ -497,7 +498,7 @@ export async function resolveContentAccess(
   const renderState: AccessRenderState = access.allowed ? "accessible" : "blocked";
   const blockSource: AccessBlockSource = access.allowed
     ? "none"
-    : access.reason === "premium_required" || access.reason === "party_pass_required"
+    : access.reason === "entitlement_unknown" || access.reason === "premium_required" || access.reason === "party_pass_required"
       ? "user_entitlement"
       : "none";
   const preview = canPreviewLockedSurface({
@@ -572,7 +573,7 @@ export async function resolveRoomAccess(
         ? "room_rule"
         : decision.reason === "removed"
           ? "room_membership"
-          : decision.reason === "premium_required" || decision.reason === "party_pass_required"
+          : decision.reason === "entitlement_unknown" || decision.reason === "premium_required" || decision.reason === "party_pass_required"
             ? "user_entitlement"
             : "none";
   const preview = canPreviewLockedSurface({

@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
-import { isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+import { clearExactLocalAuthSession, readCurrentAccountSessionAuthority, type LockedLocalAuthClient } from "../_lib/accountSessionAuthority";
 import { consumeApplicationAuthInput, parseApplicationLink } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
 import { supabase } from "../_lib/supabase";
@@ -44,24 +44,7 @@ type AuthCallbackState = {
   type: string;
 };
 
-const isDefined = (value: string) => value.trim().length > 0;
-
-const mergeAuthCallbackState = (primary: AuthCallbackState, secondary?: AuthCallbackState | null) => {
-  if (!secondary) return primary;
-  return {
-    code: isDefined(secondary.code) ? secondary.code : primary.code,
-    token: isDefined(secondary.token) ? secondary.token : primary.token,
-    tokenHash: isDefined(secondary.tokenHash) ? secondary.tokenHash : primary.tokenHash,
-    accessToken: isDefined(secondary.accessToken) ? secondary.accessToken : primary.accessToken,
-    refreshToken: isDefined(secondary.refreshToken) ? secondary.refreshToken : primary.refreshToken,
-    error: isDefined(secondary.error) ? secondary.error : primary.error,
-    errorCode: isDefined(secondary.errorCode) ? secondary.errorCode : primary.errorCode,
-    errorDescription: isDefined(secondary.errorDescription) ? secondary.errorDescription : primary.errorDescription,
-    email: isDefined(secondary.email) ? secondary.email : primary.email,
-    flow: isDefined(secondary.flow) ? secondary.flow : primary.flow,
-    type: isDefined(secondary.type) ? secondary.type : primary.type,
-  };
-};
+const hasAuthCallbackState = (state: AuthCallbackState) => Object.values(state).some((value) => value.trim().length > 0);
 
 const firstParam = (value?: string | string[] | null) => {
   const normalized = Array.isArray(value) ? (value.length === 1 ? value[0] : "__invalid_duplicate__") : value;
@@ -132,7 +115,7 @@ export default function AuthCallbackScreen() {
     type: firstParam(params.type),
   }), [params]);
 
-  const callbackState = useMemo(() => mergeAuthCallbackState(routeState, urlState), [routeState, urlState]);
+  const callbackState = useMemo(() => hasAuthCallbackState(routeState) ? routeState : urlState ?? routeState, [routeState, urlState]);
 
   const hydrateUrlState = useCallback(async () => {
     try {
@@ -252,6 +235,14 @@ export default function AuthCallbackScreen() {
         }
         processingStartedRef.current = true;
 
+        if (callbackState.error || callbackState.errorCode) {
+          finishWithFailure(
+            callbackState.errorDescription || "This email link could not be verified. Try signing in or request a fresh email.",
+            callbackState.errorCode || callbackState.error || "unknown",
+          );
+          return;
+        }
+
         if (callbackState.accessToken && callbackState.refreshToken && !callbackState.tokenHash) {
           const { error } = await supabase.auth.setSession({
             access_token: callbackState.accessToken,
@@ -265,14 +256,6 @@ export default function AuthCallbackScreen() {
             );
             return;
           }
-        }
-
-        if (callbackState.error || callbackState.errorCode) {
-          finishWithFailure(
-            callbackState.errorDescription || "This email link could not be verified. Try signing in or request a fresh email.",
-            callbackState.errorCode || callbackState.error || "unknown",
-          );
-          return;
         }
 
         const hasVerificationCredential = !!(
@@ -332,12 +315,16 @@ export default function AuthCallbackScreen() {
           return;
         }
 
+        const { data: currentAuth } = await supabase.auth.getSession();
+        const capturedSession = currentAuth.session;
         const verifiedAuthority = await readCurrentAccountSessionAuthority();
-        if (!verifiedAuthority || verifiedAuthority.restoreOnly || !(await isCurrentAccountSessionAuthority(verifiedAuthority))) {
+        if (!capturedSession?.access_token || !verifiedAuthority || verifiedAuthority.restoreOnly
+          || capturedSession.user.id !== verifiedAuthority.userId
+          || !await clearExactLocalAuthSession(supabase.auth as unknown as LockedLocalAuthClient,
+            verifiedAuthority.userId, capturedSession.access_token)) {
           finishWithFailure("The verified account session changed before completion. Sign in again.", "stale_session");
           return;
         }
-        await supabase.auth.signOut().catch(() => null);
         if (!active) return;
 
         finishWithAuthSuccess();
