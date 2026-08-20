@@ -668,7 +668,7 @@ test("architecture final source: one current receipt and one historical stale re
 test("architecture final source: edited, duplicate, stale, over-budget, ninth-path, and wildcard receipts fail", () => {
   const mutations = [
     ["edited", (v) => { v.args.allComments[2].body += " "; }],
-    ["duplicate", (v) => { v.args.allComments.push({ ...v.final, id: v.final.id + 1, node_id: `IC_${v.final.id + 1}` }); }],
+    ["duplicate", (v) => { v.args.allComments.push(rawOwnerComment({ id: v.final.id + 1, pr: v.identity.pr, body: v.final.body })); }],
     ["stale", (v) => { v.args.identity.headSha = "e".repeat(40); }],
     ["over-budget", (v) => { v.args.scope.netChangedLines = 1801; }],
     ["ninth-path", (v) => { v.args.scope.files.push("README.md"); }],
@@ -693,7 +693,7 @@ test("canonical predecessor receipt selection is content-derived and order-indep
     assert.deepEqual(authority.rejectedFinalSourceReceiptIds, [5277679438]);
     assert.ok(authority.historicalFinalSourceReceiptIds.includes(5277054532));
   }
-  const duplicate = { ...canonical, id: 5280109324, node_id: "IC_5280109324" };
+  const duplicate = rawOwnerComment({ id: 5280109324, pr: 227, body: canonical.body });
   assert.equal(verifyArchitectureMaintenanceAuthority({ ...value.args, allComments: [...comments, duplicate] }).ok, false);
 });
 test("architecture successor: exact PR 227 is the only bootstrap recovery context while doctrine truth is pending", () => {
@@ -820,7 +820,7 @@ const terminalRepairFixture = () => {
   const subject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: oldRaw });
   const currentRaw = rawOwnerComment({ id: 6000000228, pr: 228, body: terminalTruthSuccessorVerifierRepairOwnerCommentBody(subject) });
   const args = { raw: oldRaw, allComments: [oldRaw, currentRaw], paginationComplete: true, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false };
-  return { args, oldRaw, currentRaw, authority: verifyTerminalTruthSuccessorAuthority(args) };
+  return { args, oldRaw, currentRaw, subject, authority: verifyTerminalTruthSuccessorAuthority(args) };
 };
 
 test("terminal verifier repair revisions retain one stale receipt and one canonical current receipt", () => {
@@ -829,8 +829,51 @@ test("terminal verifier repair revisions retain one stale receipt and one canoni
   assert.equal(value.authority.authoritySource, "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1");
   assert.deepEqual(value.authority.historicalTerminalReceiptIds, [5280368893]);
   assert.equal(value.authority.currentTerminalReceiptId, 6000000228);
-  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [...value.args.allComments, { ...value.currentRaw, id: 6000000229, node_id: "IC_6000000229" }] }).ok, false);
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [...value.args.allComments, rawOwnerComment({ id: 6000000229, pr: 228, body: value.currentRaw.body })] }).ok, false);
   assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [value.currentRaw] }).ok, false);
+});
+test("terminal verifier repair current-valid matrix retains invalid and synchronized history without caller selection", () => {
+  const value = terminalRepairFixture();
+  const repairRaw = (id, { identity = value.args.identity, tree = value.args.tree, mutateSubject = () => {}, raw = {} } = {}) => {
+    const subject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope: value.args.scope, predecessor: value.args.predecessor, predecessorAuthority: value.args.predecessorAuthority, priorTruthHash: value.args.priorTruthHash, originalRaw: value.oldRaw });
+    mutateSubject(subject);
+    return { ...rawOwnerComment({ id, pr: value.args.identity.pr, body: terminalTruthSuccessorVerifierRepairOwnerCommentBody(subject) }), ...raw };
+  };
+  const staleHead = repairRaw(6000000230, { identity: { ...value.args.identity, headSha: "e".repeat(40) }, raw: { created_at: "2026-08-14T06:00:00Z", updated_at: "2026-08-14T06:00:00Z" } });
+  const staleTree = repairRaw(6000000231, { tree: "f".repeat(40) });
+  const retained = verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [staleTree, value.currentRaw, value.oldRaw, staleHead] });
+  assert.equal(retained.ok, true, retained.findings.join(","));
+  assert.equal(retained.currentTerminalReceiptId, value.currentRaw.id);
+  assert.deepEqual(retained.historicalTerminalReceiptIds, [value.oldRaw.id, staleHead.id, staleTree.id].sort((left, right) => left - right));
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [value.oldRaw] }).ok, false);
+
+  const invalidHistorical = [
+    ["malformed newer", { ...rawOwnerComment({ id: 6000000232, pr: 228, body: "<!-- chillywood-terminal-truth-successor-v1 -->\n{malformed" }), created_at: "2026-08-14T07:00:00Z", updated_at: "2026-08-14T07:00:00Z" }],
+    ["edited", { ...repairRaw(6000000233), updated_at: "2026-08-13T05:00:01Z" }],
+    ["wrong Owner", { ...repairRaw(6000000234), user: { login: "not-owner" } }],
+    ["wrong association", { ...repairRaw(6000000235), author_association: "MEMBER" }],
+    ["wrong PR", { ...repairRaw(6000000236), issue_url: "https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/229", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/229#issuecomment-6000000236" }],
+    ["wrong branch", repairRaw(6000000237, { identity: { ...value.args.identity, branch: "codex/wrong-terminal" } })],
+    ["wrong authority", repairRaw(6000000238, { mutateSubject: (subject) => { subject.authority.build = true; } })],
+    ["wrong classification", repairRaw(6000000239, { mutateSubject: (subject) => { subject.type = "TERMINAL_TRUTH_UNRELATED_V9"; } })],
+    ["unrelated historical", rawOwnerComment({ id: 6000000240, pr: 228, body: terminalTruthSuccessorOwnerCommentBody({ ...value.subject, head: "0".repeat(40), tree: "1".repeat(40), type: "TERMINAL_TRUTH_SUCCESSOR_V1" }) })],
+  ];
+  for (const [label, historical] of invalidHistorical) {
+    const withCurrent = verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [value.oldRaw, value.currentRaw, historical] });
+    assert.equal(withCurrent.ok, true, `${label}: ${withCurrent.findings.join(",")}`);
+    assert.equal(withCurrent.currentTerminalReceiptId, value.currentRaw.id, label);
+    assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, allComments: [value.oldRaw, historical] }).ok, false, `${label} cannot become current`);
+  }
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, raw: staleHead, allComments: [value.oldRaw, staleHead, value.currentRaw] }).currentTerminalReceiptId, value.currentRaw.id);
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...value.args, paginationComplete: false }).ok, false);
+
+  const synchronizedIdentity = { ...value.args.identity, headSha: "2".repeat(40) };
+  const synchronizedTree = "3".repeat(40);
+  const synchronizedCurrent = repairRaw(6000000241, { identity: synchronizedIdentity, tree: synchronizedTree });
+  const synchronized = verifyTerminalTruthSuccessorAuthority({ ...value.args, identity: synchronizedIdentity, tree: synchronizedTree, raw: value.oldRaw, allComments: [value.oldRaw, value.currentRaw, synchronizedCurrent] });
+  assert.equal(synchronized.ok, true, synchronized.findings.join(","));
+  assert.equal(synchronized.currentTerminalReceiptId, synchronizedCurrent.id);
+  assert.ok(synchronized.historicalTerminalReceiptIds.includes(value.currentRaw.id));
 });
 test("terminal verifier repair scope rejects expansion, product, dependency, workflow, provider, release, and budget mutations", () => {
   const mutations = [

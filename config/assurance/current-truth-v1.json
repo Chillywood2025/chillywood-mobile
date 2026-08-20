@@ -19,13 +19,13 @@
   "protectedMainAuthority": {
     "schemaVersion": 1,
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
-    "checkpointSha": "d47a1cf5fd99d4b9e8577297b94a93269802c3ad",
-    "checkpointTree": "9052f9d57b8c64ee1b838cc4c03eba2189591a31",
+    "checkpointSha": "406a776a697c3a786fd37911b6e2160906fb9121",
+    "checkpointTree": "49afd9bd5c4644106cb3b1f4d93e551f773ac2c3",
     "allowProtectedAdvancement": true,
     "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
-  "mainSha": "d47a1cf5fd99d4b9e8577297b94a93269802c3ad",
+  "mainSha": "406a776a697c3a786fd37911b6e2160906fb9121",
   "latestMergedImplementationPr": {"number": 212, "state": "merged", "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6", "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1", "title": "Complete Android native lifecycle and release-critical media proof"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "HISTORICAL_ONLY_PR_50_DOES_NOT_CONTAIN_FINAL_D2B_D2A"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "HISTORICAL_ONLY_PR_50_NOT_EXACT_FINAL_MAIN"},
