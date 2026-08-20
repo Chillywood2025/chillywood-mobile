@@ -3,10 +3,10 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskLeaseFor, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, observeLiveFiniteTaskEffectiveReservation, optionalCodexReviewPolicyValid, readJson, redact, resolveFiniteTaskEffectiveReservation, stableJson, validateOwnerJurisdictionPolicyTruth, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
+import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskLeaseFor, finiteTaskTerminalReservationMatchesOutcome, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, observeLiveFiniteTaskEffectiveReservation, optionalCodexReviewPolicyValid, readJson, redact, resolveFiniteTaskEffectiveReservation, stableJson, validateOwnerJurisdictionPolicyTruth, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, sha64, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
-import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
+import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_V2_MARKER,
@@ -533,8 +533,15 @@ export function observePreAdmissionEngineeringSeed({ preAdmissionPr, taskArtifac
 }
 
 const trustedEngineeringScopeObservations = new WeakSet();
-function observeEngineeringScope(lease, currentHead, currentProtectedMain = null) {
-  const observation = observeCandidateScopeFromGit(currentProtectedMain ?? lease?.admittedBase, currentHead, ROOT);
+function observeEngineeringScope(lease, currentHead, currentProtectedMain = null, effectiveReservationResolution = null) {
+  let observation = observeCandidateScopeFromGit(currentProtectedMain ?? lease?.admittedBase, currentHead, ROOT);
+  const implementation = effectiveReservationResolution?.scopePartitions?.implementation;
+  const aggregate = effectiveReservationResolution?.scopePartitions?.aggregate;
+  if (observation && implementation && aggregate
+    && stableJson(observation.paths) === stableJson(aggregate.actualPaths)
+    && observation.changedLines === aggregate.canonicalChangedLines) {
+    observation = deriveTrustedImplementationScopeObservation(observation, effectiveReservationResolution);
+  }
   if (observation) trustedEngineeringScopeObservations.add(observation);
   return observation;
 }
@@ -1007,15 +1014,13 @@ function collectFiniteTaskCandidate(lease, facts) {
   };
 }
 
-function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease) {
+export function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease) {
   const effectiveResolution = facts.finiteTaskEffectiveReservationResolution;
   const terminalOutcome = truth?.finiteTaskRuntime?.terminalOutcome;
   const amendedTerminalProjection = binding.phase === "TERMINAL"
-    && terminalOutcome?.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1"
+    && ["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalOutcome?.classification)
     && finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, lease)
-    && effectiveResolution?.baseLeaseHash === terminalOutcome?.baseLeaseHash
-    && effectiveResolution?.effectiveReservation?.reservationHash === terminalOutcome?.effectiveReservation?.reservationHash
-    && stableJson(effectiveResolution?.amendmentReceipt) === stableJson(terminalOutcome?.amendmentReceipt);
+    && finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome, reservationResolution: effectiveResolution });
   const reservationProjection = effectiveResolution ? {
     reservationStatus: effectiveResolution.status,
     baseLeaseHash: effectiveResolution.baseLeaseHash,
@@ -1023,6 +1028,14 @@ function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease)
     effectiveReservation: effectiveResolution.effectiveReservation,
     amendmentsConsumed: effectiveResolution.amendmentsConsumed,
     amendmentReceipt: effectiveResolution.amendmentReceipt,
+    ...(effectiveResolution.status === "AMENDED_WITH_TEST_ADAPTATION" ? {
+      scopeBase: effectiveResolution.scopeBase,
+      aggregateReservation: effectiveResolution.aggregateReservation,
+      testAdaptationReservation: effectiveResolution.testAdaptationReservation,
+      scopePartitions: effectiveResolution.scopePartitions,
+      testAdaptationsConsumed: effectiveResolution.testAdaptationsConsumed,
+      testAdaptationReceipt: effectiveResolution.testAdaptationReceipt
+    } : {}),
     authority: effectiveResolution.authority
   } : null;
   if (binding.phase === "TERMINAL" && (lease.taskState === "MERGED_VERIFIED" || amendedTerminalProjection)) {
@@ -1067,7 +1080,13 @@ function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease)
     };
   }
   const candidate = collectFiniteTaskCandidate(lease, facts);
-  const evaluated = evaluateFiniteTaskCandidate({ lease, registry: truth.finiteTaskLeases, candidate });
+  const candidateLease = effectiveResolution?.effectiveLease ?? lease;
+  const evaluated = evaluateFiniteTaskCandidate({
+    lease: candidateLease,
+    registry: truth.finiteTaskLeases,
+    candidate,
+    effectiveReservationResolution: effectiveResolution
+  });
   const findings = [...evaluated.findings];
   if (candidate?.head !== identity.head) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_HEAD_MISMATCH");
   if (candidate?.tree !== identity.tree) findings.push("ACTIVE_IMPLEMENTATION_LOCAL_TREE_MISMATCH");
@@ -1110,8 +1129,7 @@ function resolveStructuredImplementation(truth, identity, facts, binding) {
     featureId: binding.featureId
   });
   if (baseFiniteLease) {
-    const effectiveLease = facts.finiteTaskEffectiveReservationResolution?.effectiveLease ?? baseFiniteLease;
-    return resolveFiniteTaskImplementation(truth, identity, facts, binding, effectiveLease);
+    return resolveFiniteTaskImplementation(truth, identity, facts, binding, baseFiniteLease);
   }
   const findings = [];
   const open = truth?.openImplementationPrs ?? [];
@@ -1309,6 +1327,7 @@ export function activeTask(facts = {}) {
   if (baseFiniteTaskLease) {
     const terminalLease = resolution.binding?.phase === "TERMINAL"
       || finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, baseFiniteTaskLease);
+    const terminalOutcome = truth?.finiteTaskRuntime?.terminalOutcome;
     finiteTaskCandidate ??= terminalLease
       ? {
           ...(truth?.finiteTaskRuntime?.candidateObservation ?? {}),
@@ -1316,7 +1335,13 @@ export function activeTask(facts = {}) {
           branch: baseFiniteTaskLease.implementationBranch,
           prState: truth?.finiteTaskRuntime?.candidateObservation?.prState ?? "merged",
           head: identity.head,
-          tree: identity.tree
+          tree: identity.tree,
+          ...(terminalOutcome?.schemaVersion === 2
+            && Array.isArray(terminalOutcome?.scopePartitions?.aggregate?.actualPaths)
+            && Number.isInteger(terminalOutcome?.scopePartitions?.aggregate?.canonicalChangedLines) ? {
+              changedPaths: structuredClone(terminalOutcome.scopePartitions.aggregate.actualPaths),
+              changedLines: terminalOutcome.scopePartitions.aggregate.canonicalChangedLines
+            } : {})
         }
       : collectFiniteTaskCandidate(baseFiniteTaskLease, { ...facts, currentTruth: truth, identity });
     const suppliedObservation = facts.finiteTaskEffectiveReservationObservation;
@@ -1386,7 +1411,7 @@ export function activeTask(facts = {}) {
   let engineeringPacket = engineeringArtifactInput.packet;
   engineeringPacket ??= exactArtifact?.artifact ?? null;
   const engineeringCertificate = engineeringArtifactInput.certificate ?? facts.engineeringCertificate ?? engineeringPacket?.certificate ?? engineeringPacket?.sections?.L_COMPLETENESS_CERTIFICATE;
-  const engineeringScopeObservation = terminalHistoricalLease ? null : observeEngineeringScope(engineeringLease, synchronizedImplementationHead, identity.originMainHead);
+  const engineeringScopeObservation = terminalHistoricalLease ? null : observeEngineeringScope(engineeringLease, synchronizedImplementationHead, identity.originMainHead, finiteTaskEffectiveReservationResolution);
   const closureArtifactHash = exactArtifact?.taskArtifactHash ?? exactArtifact?.artifactHash ?? null;
   const implementationIdentity = engineeringLease ? createImplementationIdentityObservation({
     repository: "Chillywood2025/chillywood-mobile",

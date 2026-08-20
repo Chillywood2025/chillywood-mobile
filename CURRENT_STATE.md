@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `36d1434429072c203ae213bcb0393bf0ffed51c0` / tree `d59dc9f8ea6b25d4866dced3f96227dfedefbc5a`.
+- Protected authority checkpoint: `1d0d74764473da5a22ac075b58045af7982004b0` / tree `5cd7cba9e0721e657256f454c10569795c5f8d6a`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
 - Latest merged implementation: PR #212, `50b5f0498a59961278bb5afbca443c6e35cd5bb6`; merge `fe775c12b0857aa50d986d24179ae9588049b6a1`.
@@ -62,6 +62,11 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 - Contract `ASSURANCE_RECEIPT_LIFECYCLE_V2`; Owner task authorization survives exact in-scope descendants: `true`.
 - Final-source attestation is required during development/self-host/review/Phase 1: `false`/`false`/`false`/`false`; it is issued after review and Phase 1 and required for merge. Historical invalid attestations are non-blocking when exactly one valid current attestation exists.
+
+## Finite-task test-adaptation overlay
+
+- Capability `FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1` permits at most one immutable Owner receipt for one exact pre-existing fixture path and `500` fixture-only canonical changed lines.
+- The implementation reservation remains independent; budget pooling, wildcard paths, product mutation, provider mutation, database deployment, build, submission, OTA, and public-release authority remain forbidden.
 
 ## Open implementation PRs
 
