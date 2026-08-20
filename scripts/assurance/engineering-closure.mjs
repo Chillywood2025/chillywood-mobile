@@ -4343,6 +4343,30 @@ export function verifyFiniteTaskTerminalTruthAuthority({
   const baseLease = (truthRecord?.finiteTaskLeases?.tasks ?? []).find(({ leaseId }) => leaseId === terminalEvidence?.leaseId);
   const priorBaseLease = (priorTruth?.finiteTaskLeases?.tasks ?? []).find(({ leaseId }) => leaseId === terminalEvidence?.leaseId);
   const binding = truthRecord?.activeTaskBinding;
+  const priorBinding = priorTruth?.activeTaskBinding;
+  const canonicalFiniteLeaseId = priorBaseLease?.leaseId ?? null;
+  const canonicalFeatureId = priorBaseLease?.featureId ?? null;
+  const lifecycleFinalSourceSubject = terminalTransition?.lifecycle?.finalSourceSubject ?? terminalTransition?.lifecycle?.finalSource?.subject;
+  let canonicalFeatureRegistered = false;
+  try {
+    canonicalFeatureRegistered = (readJson(root, "config/assurance/feature-registry-v1.json")?.features ?? [])
+      .some(({ featureId }) => featureId === canonicalFeatureId);
+  } catch {}
+  const terminalFeatureIdentity = Boolean(canonicalFiniteLeaseId
+    && canonicalFeatureId
+    && canonicalFeatureRegistered
+    && baseLease?.leaseId === canonicalFiniteLeaseId
+    && baseLease?.featureId === canonicalFeatureId
+    && terminalEvidence?.taskId === canonicalFiniteLeaseId
+    && terminalEvidence?.leaseId === canonicalFiniteLeaseId
+    && priorBinding?.featureId === canonicalFeatureId
+    && binding?.featureId === canonicalFeatureId
+    && lifecycleFinalSourceSubject?.featureId === canonicalFeatureId
+    && (terminalEvidence?.schemaVersion !== 2 || (
+      terminalEvidence?.finiteTaskPrRiskAuthority?.primaryFeatureId === canonicalFeatureId
+      && terminalEvidence?.finalSourceReceipt?.subject?.featureId === canonicalFeatureId
+      && terminalTransition?.lifecycle?.finiteTaskPrRiskAuthority?.primaryFeatureId === canonicalFeatureId
+    )));
   const latest = truthRecord?.latestMergedImplementationPr;
   const canonicalCurrent = truthRecord ? renderCurrentState(truthRecord) : null;
   const canonicalNext = truthRecord ? renderNextTask(truthRecord) : null;
@@ -4354,6 +4378,7 @@ export function verifyFiniteTaskTerminalTruthAuthority({
     exactPaths: stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_PATHS) && observed.netChangedLines <= 1200,
     transition: finiteTaskPostMergeTransitionAuthorityValid(terminalTransition) && terminalEvidence?.mergeSha === identity?.baseSha,
     immutableBaseLease: Boolean(baseLease && priorBaseLease && stableJson(baseLease) === stableJson(priorBaseLease) && hashValue(baseLease) === terminalEvidence?.baseLeaseHash),
+    terminalFeatureIdentity,
     terminalProjection: stableJson(truthRecord?.finiteTaskRuntime?.terminalOutcome) === stableJson(terminalEvidence)
       && stableJson(truthRecord?.finiteTaskLeases?.completedLeaseOutcomes ?? []) === stableJson([...(priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []), terminalEvidence])
       && binding?.phase === "TERMINAL"
@@ -4378,7 +4403,7 @@ export function verifyFiniteTaskTerminalTruthAuthority({
     authorityClosed: Object.values(ownerSubject?.authority ?? {}).every((value) => value === false)
       && Object.values(terminalEvidence?.authority ?? {}).every((value) => value === false),
   };
-  const authorizationKeys = ["identity", "ownerBinding", "ownerCardinality", "ancestry", "exactPaths", "transition", "immutableBaseLease", "terminalProjection", "generatedTruth", "singleUse", "authorityClosed"];
+  const authorizationKeys = ["identity", "ownerBinding", "ownerCardinality", "ancestry", "exactPaths", "transition", "immutableBaseLease", "terminalFeatureIdentity", "terminalProjection", "generatedTruth", "singleUse", "authorityClosed"];
   const authorizationOk = authorizationKeys.every((key) => checks[key] === true);
   const mergeEligible = authorizationOk && checks.review && checks.phase1 && checks.finalSource;
   return {
@@ -4392,7 +4417,9 @@ export function verifyFiniteTaskTerminalTruthAuthority({
     branch: identity?.branch,
     currentHead: identity?.headSha,
     currentTree: tree,
-    featureId: terminalEvidence?.taskId ?? null,
+    featureId: canonicalFeatureId,
+    primaryFeatureId: canonicalFeatureId,
+    finiteLeaseId: canonicalFiniteLeaseId,
     objectiveDomains: [],
     supportingDomains: ["CI-test-infrastructure"],
     bindingId: `finite-task-terminal-truth-pr-${identity?.pr}`,
