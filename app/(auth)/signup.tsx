@@ -75,10 +75,10 @@ function getSignupErrorMessage(error: unknown) {
 
 export default function Signup() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ redirectTo?: string }>();
+  const params = useLocalSearchParams<{ redirectId?: string }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
-  const redirectTo = String(params.redirectTo ?? "").trim() || "/(tabs)";
+  const redirectId = String(params.redirectId ?? "").trim();
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [usernameAvailability, setUsernameAvailability] = useState<UsernameAvailability>({
@@ -127,7 +127,7 @@ export default function Signup() {
             resetSignupForm();
             router.replace({
               pathname: "/(auth)/login",
-              params: { redirectTo },
+              params: redirectId ? { redirectId } : {},
             });
           },
         },
@@ -286,7 +286,7 @@ export default function Signup() {
           });
           Alert.alert(
             "Signup Error",
-            "Your account was created, but Chi'llywood could not store the required 18+ and legal acceptance. Sign in and contact support if this continues.",
+            "Your account was created, but current policy acceptance was not verified. Sign in and try again.",
           );
           return;
         }
@@ -301,14 +301,13 @@ export default function Signup() {
       }
 
       if (data.session?.user) {
-        router.replace(redirectTo as Parameters<typeof router.replace>[0]);
         return;
       }
 
       showSignupConfirmationSuccess();
     } catch (error) {
       reportRuntimeError("auth-signup", error, {
-        redirectTo,
+        hasRedirect: !!redirectId,
       });
       trackEvent("auth_sign_up_failure", {
         reason: "runtime_error",
@@ -523,7 +522,7 @@ export default function Signup() {
 
         <View style={styles.row}>
           <Text style={styles.muted}>Already have an account?</Text>
-          <Link href={{ pathname: "/(auth)/login", params: { redirectTo } }} style={styles.link}>
+          <Link href={{ pathname: "/(auth)/login", params: redirectId ? { redirectId } : {} }} style={styles.link}>
             Sign in
           </Link>
         </View>

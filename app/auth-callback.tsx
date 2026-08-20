@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Linking,
   ActivityIndicator,
@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
+import { clearExactLocalAuthSession, readCurrentAccountSessionAuthority, type LockedLocalAuthClient } from "../_lib/accountSessionAuthority";
+import { consumeApplicationAuthInput, parseApplicationLink } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
 import { supabase } from "../_lib/supabase";
 
@@ -42,27 +44,10 @@ type AuthCallbackState = {
   type: string;
 };
 
-const isDefined = (value: string) => value.trim().length > 0;
-
-const mergeAuthCallbackState = (primary: AuthCallbackState, secondary?: AuthCallbackState | null) => {
-  if (!secondary) return primary;
-  return {
-    code: isDefined(secondary.code) ? secondary.code : primary.code,
-    token: isDefined(secondary.token) ? secondary.token : primary.token,
-    tokenHash: isDefined(secondary.tokenHash) ? secondary.tokenHash : primary.tokenHash,
-    accessToken: isDefined(secondary.accessToken) ? secondary.accessToken : primary.accessToken,
-    refreshToken: isDefined(secondary.refreshToken) ? secondary.refreshToken : primary.refreshToken,
-    error: isDefined(secondary.error) ? secondary.error : primary.error,
-    errorCode: isDefined(secondary.errorCode) ? secondary.errorCode : primary.errorCode,
-    errorDescription: isDefined(secondary.errorDescription) ? secondary.errorDescription : primary.errorDescription,
-    email: isDefined(secondary.email) ? secondary.email : primary.email,
-    flow: isDefined(secondary.flow) ? secondary.flow : primary.flow,
-    type: isDefined(secondary.type) ? secondary.type : primary.type,
-  };
-};
+const hasAuthCallbackState = (state: AuthCallbackState) => Object.values(state).some((value) => value.trim().length > 0);
 
 const firstParam = (value?: string | string[] | null) => {
-  const normalized = Array.isArray(value) ? value[0] : value;
+  const normalized = Array.isArray(value) ? (value.length === 1 ? value[0] : "__invalid_duplicate__") : value;
   return String(normalized ?? "").trim();
 };
 
@@ -84,7 +69,9 @@ const parseAuthCallbackUrl = (url: string | null) => {
   if (!url) return null;
 
   try {
-    const parsedUrl = new URL(url);
+    const link = parseApplicationLink(url);
+    if (!link || (link.kind !== "auth_callback" && link.kind !== "password_reset")) return null;
+    const parsedUrl = new URL(link.route, "https://chillywoodstream.com");
     const params = new URLSearchParams(parsedUrl.search);
     const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
 
@@ -112,6 +99,7 @@ export default function AuthCallbackScreen() {
   const [message, setMessage] = useState("Opening your Chi'llywood email verification...");
   const [urlState, setUrlState] = useState<AuthCallbackState | null>(null);
   const [urlHydrated, setUrlHydrated] = useState(false);
+  const processingStartedRef = useRef(false);
 
   const routeState = useMemo<AuthCallbackState>(() => ({
     code: firstParam(params.code),
@@ -127,7 +115,7 @@ export default function AuthCallbackScreen() {
     type: firstParam(params.type),
   }), [params]);
 
-  const callbackState = useMemo(() => mergeAuthCallbackState(routeState, urlState), [routeState, urlState]);
+  const callbackState = useMemo(() => hasAuthCallbackState(routeState) ? routeState : urlState ?? routeState, [routeState, urlState]);
 
   const hydrateUrlState = useCallback(async () => {
     try {
@@ -213,7 +201,7 @@ export default function AuthCallbackScreen() {
     let active = true;
 
     const finishCallback = async () => {
-      if (!urlHydrated) return;
+      if (!urlHydrated || processingStartedRef.current) return;
 
       try {
         if (isRecoveryCallback) {
@@ -228,11 +216,31 @@ export default function AuthCallbackScreen() {
 
           if (hasRecoveryLinkData) {
             const targetRoute = recoveryRouteQuery ? `/reset-password?${recoveryRouteQuery}` : "/reset-password";
+            if (parseApplicationLink(targetRoute)?.kind !== "password_reset") {
+              finishWithFailure("This recovery link is malformed. Request a fresh link.", "malformed_recovery_link");
+              return;
+            }
+            processingStartedRef.current = true;
             router.replace(targetRoute as Parameters<typeof router.replace>[0]);
             if (!active) return;
             setChecking(false);
             return;
           }
+        }
+
+        const callbackRoute = recoveryRouteQuery ? `/auth-callback?${recoveryRouteQuery}` : "/auth-callback";
+        if (!consumeApplicationAuthInput(callbackRoute, "auth_callback")) {
+          finishWithFailure("This verification link is malformed or was already used.", "invalid_or_replayed_link");
+          return;
+        }
+        processingStartedRef.current = true;
+
+        if (callbackState.error || callbackState.errorCode) {
+          finishWithFailure(
+            callbackState.errorDescription || "This email link could not be verified. Try signing in or request a fresh email.",
+            callbackState.errorCode || callbackState.error || "unknown",
+          );
+          return;
         }
 
         if (callbackState.accessToken && callbackState.refreshToken && !callbackState.tokenHash) {
@@ -248,14 +256,6 @@ export default function AuthCallbackScreen() {
             );
             return;
           }
-        }
-
-        if (callbackState.error || callbackState.errorCode) {
-          finishWithFailure(
-            callbackState.errorDescription || "This email link could not be verified. Try signing in or request a fresh email.",
-            callbackState.errorCode || callbackState.error || "unknown",
-          );
-          return;
         }
 
         const hasVerificationCredential = !!(
@@ -308,7 +308,6 @@ export default function AuthCallbackScreen() {
           });
           return;
         } else if (!hasVerificationCredential) {
-          await supabase.auth.signOut().catch(() => null);
           if (!active) return;
           setTitle("Go to login");
           setMessage("Use this screen after confirming your email. Sign in to continue.");
@@ -316,7 +315,16 @@ export default function AuthCallbackScreen() {
           return;
         }
 
-        await supabase.auth.signOut().catch(() => null);
+        const { data: currentAuth } = await supabase.auth.getSession();
+        const capturedSession = currentAuth.session;
+        const verifiedAuthority = await readCurrentAccountSessionAuthority();
+        if (!capturedSession?.access_token || !verifiedAuthority || verifiedAuthority.restoreOnly
+          || capturedSession.user.id !== verifiedAuthority.userId
+          || !await clearExactLocalAuthSession(supabase.auth as unknown as LockedLocalAuthClient,
+            verifiedAuthority.userId, capturedSession.access_token)) {
+          finishWithFailure("The verified account session changed before completion. Sign in again.", "stale_session");
+          return;
+        }
         if (!active) return;
 
         finishWithAuthSuccess();

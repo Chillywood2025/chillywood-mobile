@@ -19267,6 +19267,9 @@ export type Database = {
           platform: string
           provider: string
           revoked_at: string | null
+          ownership_operation_key: string | null
+          ownership_state: string
+          session_generation: string | null
           token: string
           token_fingerprint: string
           token_hash: string
@@ -19286,6 +19289,9 @@ export type Database = {
           platform: string
           provider: string
           revoked_at?: string | null
+          ownership_operation_key?: string | null
+          ownership_state?: string
+          session_generation?: string | null
           token: string
           token_fingerprint: string
           token_hash: string
@@ -19305,6 +19311,9 @@ export type Database = {
           platform?: string
           provider?: string
           revoked_at?: string | null
+          ownership_operation_key?: string | null
+          ownership_state?: string
+          session_generation?: string | null
           token?: string
           token_fingerprint?: string
           token_hash?: string
@@ -20531,6 +20540,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      wave1_accept_legal_documents: {
+        Args: { p_acceptances: Json; p_expected_account_id: string; p_expected_user_id: string; p_market: string; p_session_generation: string; p_capability?: string }
+        Returns: Json
+      }
+      wave1_creator_eligibility_readback: { Args: never; Returns: Json }
+      wave1_entitlement_authority_readback: { Args: { p_entitlement_key: string }; Returns: Json }
+      wave1_legal_requirements_readback: { Args: { p_capability?: string }; Returns: Json }
+      wave1_push_ownership_readback: {
+        Args: { p_install_id: string; p_platform: string; p_provider: string }
+        Returns: Json
+      }
+      wave1_register_push_token: {
+        Args: { p_app_version: string; p_build_version: string; p_expected_account_id: string; p_expected_user_id: string; p_install_id: string; p_metadata: Json; p_operation_key: string; p_permission_status: string; p_platform: string; p_provider: string; p_revocation_credential_hash: string; p_session_generation: string; p_token: string }
+        Returns: Json
+      }
+      wave1_revoke_push_ownership: {
+        Args: { p_expected_account_id: string; p_expected_user_id: string; p_install_id: string; p_operation_key: string; p_platform: string; p_reason: string; p_revocation_credential_hash: string; p_session_generation: string }
+        Returns: Json
+      }
+      wave1_session_authority_readback: { Args: never; Returns: Json }
       account_access_status_readback: {
         Args: { p_user_id: string }
         Returns: Json

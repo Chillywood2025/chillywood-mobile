@@ -14,8 +14,6 @@ type AccountAccessStatusRpc = PromiseLike<{
 }>;
 
 const toText = (value: unknown) => String(value ?? "").trim();
-const toBoolean = (value: unknown) => value === true;
-
 export async function readAccountAccessStatus(userId: string): Promise<AccountAccessStatusReadback> {
   const normalizedUserId = toText(userId);
   if (!normalizedUserId) {
@@ -33,12 +31,20 @@ export async function readAccountAccessStatus(userId: string): Promise<AccountAc
   if (error) {
     throw new Error(error.message ?? "account_access_status_unavailable");
   }
+  if (
+    !data
+    || typeof data.restricted !== "boolean"
+    || typeof data.scheduledDeletion !== "boolean"
+    || typeof data.authSuspended !== "boolean"
+  ) throw new Error("account_access_status_malformed");
+  const bannedUntil = toText(data.bannedUntil);
+  if (bannedUntil && !Number.isFinite(Date.parse(bannedUntil))) throw new Error("account_access_status_malformed");
 
   return {
     userIdSuffix: toText(data?.userIdSuffix) || null,
-    restricted: toBoolean(data?.restricted),
-    scheduledDeletion: toBoolean(data?.scheduledDeletion),
-    authSuspended: toBoolean(data?.authSuspended),
-    bannedUntil: toText(data?.bannedUntil) || null,
+    restricted: data.restricted,
+    scheduledDeletion: data.scheduledDeletion,
+    authSuspended: data.authSuspended,
+    bannedUntil: bannedUntil || null,
   };
 }

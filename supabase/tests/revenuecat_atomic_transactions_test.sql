@@ -11,6 +11,80 @@ values
   ('bbbbbbbb-1111-1111-1111-111111111111', false, false)
 on conflict (id) do nothing;
 
+create temporary table revenuecat_creator_authority_fixture as
+select row_number() over (order by candidate_number)::integer as fixture_index, creator_id
+from (
+  select
+    candidate_number,
+    md5('revenuecat-atomic-creator:' || candidate_number::text)::uuid as creator_id
+  from generate_series(1, 1000) candidate_number
+) candidates
+where mod(hashtextextended('chillywood-wave1-us-rollout-v1:' || creator_id::text, 20260814), 100) = 0
+order by candidate_number
+limit 3;
+
+insert into auth.users (id, is_sso_user, is_anonymous)
+select creator_id, false, false
+from pg_temp.revenuecat_creator_authority_fixture;
+
+do $$
+declare
+  creator_fixture record;
+  eligibility_result jsonb;
+begin
+  for creator_fixture in
+    select fixture_index, creator_id
+    from pg_temp.revenuecat_creator_authority_fixture
+    order by fixture_index
+  loop
+    select public.wave1_evaluate_creator_eligibility(
+      creator_fixture.creator_id,
+      jsonb_build_object(
+        'accountStatus', 'ACTIVE',
+        'age18Plus', true,
+        'legalAccepted', true,
+        'creatorRole', true,
+        'moderationState', 'CLEAR',
+        'market', 'UNITED_STATES',
+        'rolloutEligible', false,
+        'platformCapability', true,
+        'providerEligible', true,
+        'kycComplete', true,
+        'taxComplete', true,
+        'sanctionsClear', true,
+        'payoutEligible', true,
+        'inputVersions', jsonb_build_object('evaluationSequence', 1)
+      ),
+      'revenuecat-atomic-fixture:' || creator_fixture.fixture_index::text,
+      'local_pgtap'
+    ) into eligibility_result;
+    if eligibility_result->>'state' <> 'VERIFIED' then
+      raise exception 'revenuecat_creator_fixture_not_verified';
+    end if;
+  end loop;
+end;
+$$;
+
+insert into public.wave1_legal_acceptances (
+  user_id, subject_hash, document_key, document_version, market,
+  role_key, capability, session_generation, authority_source
+)
+select
+  creator.creator_id, public.wave1_sha256(creator.creator_id::text),
+  document.document_key, document.version, document.market,
+  'member', document.capability, 'revenuecat-atomic-fixture', 'service_reconciliation'
+from pg_temp.revenuecat_creator_authority_fixture creator
+cross join public.wave1_legal_document_versions document
+where document.active
+  and document.market = 'UNITED_STATES'
+  and (document.document_key, document.capability) in (
+    ('terms', 'account'),
+    ('privacy', 'account'),
+    ('community_guidelines', 'account'),
+    ('creator_terms', 'creator'),
+    ('money_terms', 'creator_money')
+  );
+
 update public.platform_money_kill_switches
 set state = case
   when key in ('revenuecat_app_store_enabled', 'provider_webhooks_enabled', 'tips_enabled', 'watch_party_tickets_enabled') then 'sandbox_only'
@@ -238,7 +312,7 @@ select
   '60000000-0000-0000-0000-000000000001', '66666666-6666-6666-6666-666666666666',
   mapping.product_id, product.product_key, product.product_type, mapping.provider,
   mapping.provider_product_id, 'creator_tip', '65000000-0000-0000-0000-000000000001',
-  '65555555-5555-5555-5555-555555555555', 'sandbox', 'pending',
+  (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'tip-intent-atomic-test',
   now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping
@@ -269,7 +343,7 @@ select
   '61000000-0000-0000-0000-000000000001', 'bbbbbbbb-1111-1111-1111-111111111111',
   mapping.product_id, product.product_key, product.product_type, mapping.provider,
   mapping.provider_product_id, 'creator_tip', '65100000-0000-0000-0000-000000000001',
-  '65555555-5555-5555-5555-555555555555', 'sandbox', 'pending',
+  (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'tip-intent-localized-storefront-test',
   now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping
@@ -308,7 +382,7 @@ select
   '70000000-0000-0000-0000-000000000001', '77777777-7777-7777-7777-777777777777',
   mapping.product_id, product.product_key, product.product_type, mapping.provider,
   mapping.provider_product_id, 'watch_party_live', '75000000-0000-0000-0000-000000000001',
-  '75555555-5555-5555-5555-555555555555', 'sandbox', 'pending',
+  (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 2), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'seat-intent-atomic-test',
   now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping
@@ -349,7 +423,7 @@ select
   '90000000-0000-0000-0000-000000000001', '99999999-9999-9999-9999-999999999999',
   mapping.product_id, product.product_key, product.product_type, mapping.provider,
   mapping.provider_product_id, 'watch_party_live', '95000000-0000-0000-0000-000000000001',
-  '95555555-5555-5555-5555-555555555555', 'sandbox', 'pending',
+  (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 3), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'seat-failure-intent-test',
   now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping

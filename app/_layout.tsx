@@ -1,13 +1,23 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
+import { restoreScheduledAccountDeletion } from "../_lib/accountDeletionRequests";
+import {
+  legalRequirementsAreCurrent,
+  readAccountLegalRequirements,
+  recordAccountLegalAcceptance,
+  sameLegalAuthorityBinding,
+  type LegalRequirementsReadback,
+} from "../_lib/accountLegalAcceptance";
 import {
   APPLICATION_LEGAL_PATHS,
+  consumeRegisteredAuthRedirect,
   isCreatorReplayApplicationLink,
   parseApplicationLink,
+  registerAuthRedirect,
   resolveApplicationRouteByKind,
 } from "../_lib/appLinks";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -28,6 +38,7 @@ import { bootstrapFirebasePerformance } from "../_lib/firebasePerformance";
 import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/firebaseRemoteConfig";
 import { bootstrapLiveKitFoundation } from "../_lib/livekit/bootstrap";
 import { reportRuntimeError } from "../_lib/logger";
+import { getLegalDocument } from "../_lib/legalPolicies";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import {
   readLatestRingingChillyChatCallInviteForCallee,
@@ -66,6 +77,7 @@ import {
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
+import { supabase } from "../_lib/supabase";
 import {
   completeIosNativeCallAnswer,
   hasIosNativeCallPresentation,
@@ -266,11 +278,12 @@ function RouteAnalyticsBridge() {
   }, [params, pathname]);
 
   useEffect(() => {
+    let active = true;
     const refreshPushIfAllowed = async () => {
       const userId = String(user?.id ?? "").trim();
       if (!isSignedIn || !userId) return;
       const preferences = await readNotificationPreferences(userId).catch(() => null);
-      if (preferences?.pushEnabled === false) return;
+      if (!active || preferences?.pushEnabled === false) return;
       await refreshPushRegistrationIfGranted().catch(() => null);
     };
 
@@ -287,6 +300,7 @@ function RouteAnalyticsBridge() {
       void refreshPushIfAllowed();
     });
     return () => {
+      active = false;
       subscription.remove();
       appStateSubscription.remove();
     };
@@ -1315,11 +1329,104 @@ function RootNavigator() {
   );
 }
 
-function AuthBootScreen() {
+function AuthBootScreen({ message = "Checking your session…" }: { message?: string }) {
   return (
     <View style={styles.authBootScreen}>
       <ActivityIndicator color="#DC143C" />
-      <Text style={styles.authBootText}>Checking your session…</Text>
+      <Text style={styles.authBootText}>{message}</Text>
+    </View>
+  );
+}
+
+function AccountRestoreOnlyScreen() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const restore = async () => {
+    if (busy) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await restoreScheduledAccountDeletion();
+      if (!result.restored) throw new Error("account_restore_not_confirmed");
+      await supabase.auth.refreshSession();
+    } catch {
+      setError("The server did not confirm restoration. This account remains limited; try again.");
+    } finally { setBusy(false); }
+  };
+  return (
+    <View style={styles.legalGateScreen}>
+      <View style={styles.legalGateCard}>
+        <Text style={styles.legalGateKicker}>ACCOUNT DELETION SCHEDULED</Text>
+        <Text style={styles.legalGateTitle}>Restore or sign out</Text>
+        <Text style={styles.legalGateBody}>Private features and notifications remain off. Restore this account before continuing.</Text>
+        {error ? <Text style={styles.legalGateError}>{error}</Text> : null}
+        <TouchableOpacity style={styles.legalGateButton} onPress={() => { void restore(); }} disabled={busy}>
+          <Text style={styles.legalGateButtonText}>{busy ? "Restoring…" : "Restore account"}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }}>
+          <Text style={styles.legalGateSecondaryText}>Sign out</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function LegalAcceptanceScreen({ readback, onAccepted, onRetry }: {
+  readback: LegalRequirementsReadback | null; onAccepted: (value: LegalRequirementsReadback) => void; onRetry: () => void;
+}) {
+  const router = useRouter();
+  const { authority } = useSession();
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const accept = async () => {
+    if (!authority || !confirmed || busy) return;
+    setBusy(true); setError(null);
+    const result = await recordAccountLegalAcceptance(supabase, authority.userId, "account", readback).catch(() => null);
+    setBusy(false);
+    if (!result?.ok) { setError("Chi'llywood could not verify this acceptance. Nothing was unlocked; try again."); return; }
+    setConfirmed(false); onAccepted(result.readback);
+  };
+
+  return (
+    <View style={styles.legalGateScreen}>
+      <View style={styles.legalGateCard}>
+        <Text style={styles.legalGateKicker}>ACCOUNT REQUIREMENT</Text>
+        <Text style={styles.legalGateTitle}>Review current policies</Text>
+        <Text style={styles.legalGateBody}>Acceptance is server-recorded for this exact account, version, U.S. market, and session.</Text>
+        {readback ? readback.requirements.map((requirement) => {
+          const document = getLegalDocument(requirement.documentKey);
+          return (
+            <TouchableOpacity key={requirement.documentKey} style={styles.legalGatePolicy} accessibilityRole="link"
+              onPress={() => document && router.push(document.path as Parameters<typeof router.push>[0])}>
+              <Text style={styles.legalGatePolicyTitle}>{document?.title ?? requirement.documentKey}</Text>
+              <Text style={styles.legalGatePolicyVersion}>Version {requirement.version} · Review</Text>
+            </TouchableOpacity>
+          );
+        }) : (
+          <Text style={styles.legalGateError}>Required policy versions are unavailable. Protected use remains locked.</Text>
+        )}
+        {readback ? (
+          <TouchableOpacity style={styles.legalGateConfirm} onPress={() => setConfirmed((value) => !value)}
+            accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}>
+            <Text style={styles.legalGateCheck}>{confirmed ? "✓" : ""}</Text>
+            <Text style={styles.legalGateConfirmText}>I reviewed and accept every policy version listed above.</Text>
+          </TouchableOpacity>
+        ) : null}
+        {error ? <Text style={styles.legalGateError}>{error}</Text> : null}
+        <TouchableOpacity style={[styles.legalGateButton, (!readback || !confirmed || busy) && styles.legalGateButtonDisabled]}
+          disabled={!readback || !confirmed || busy} onPress={() => { void accept(); }} accessibilityRole="button">
+          <Text style={styles.legalGateButtonText}>{busy ? "Verifying…" : "Accept and continue"}</Text>
+        </TouchableOpacity>
+        {!readback ? (
+          <TouchableOpacity style={styles.legalGateSecondary} onPress={onRetry} accessibilityRole="button">
+            <Text style={styles.legalGateSecondaryText}>Retry verification</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }} accessibilityRole="button">
+          <Text style={styles.legalGateSecondaryText}>Sign out</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -1329,16 +1436,63 @@ function AuthRouteGate() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const segments = useSegments();
-  const { isLoading, isPasswordRecoverySession, isSignedIn } = useSession();
+  const { authority, authorityStatus, isLoading, isPasswordRecoverySession, isSignedIn } = useSession();
   const [initialReplayDeepLink, setInitialReplayDeepLink] = useState<boolean | null>(null);
+  const [legalReadback, setLegalReadback] = useState<LegalRequirementsReadback | null>(null);
+  const [legalStatus, setLegalStatus] = useState<"idle" | "checking" | "accepted" | "required" | "error">("idle");
+  const [acceptedLegalVerificationKey, setAcceptedLegalVerificationKey] = useState("");
+  const [legalRetry, setLegalRetry] = useState(0);
+  const authNavigationStartedRef = useRef(false);
 
   const redirectTo = serializeRedirectTarget(pathname, params as Record<string, unknown>);
-  const authRedirectTo = String(params.redirectTo ?? "").trim() || "/";
+  const authRedirectId = String(params.redirectId ?? "").trim();
   const insideAuthGroup = segments[0] === "(auth)";
   const insideTabsGroup = segments[0] === "(tabs)" || pathname === "/";
   const insideResetPassword = pathname === "/reset-password";
   const waitingForInitialReplayDeepLink = !isSignedIn && insideTabsGroup && initialReplayDeepLink === null;
   const allowInitialReplayDeepLink = !isSignedIn && insideTabsGroup && initialReplayDeepLink === true;
+  const legalGateApplicable = isSignedIn
+    && !isPasswordRecoverySession && !isPublicLegalPath(pathname)
+    && !["/auth-callback", "/callback", "/confirm", "/verify", "/reset-password"].includes(pathname)
+    && !pathname.startsWith("/auth/");
+  const legalVerificationKey = authority && legalGateApplicable
+    ? `${authority.userId}:${authority.accountId}:${authority.sessionGeneration}:${pathname}` : "";
+  const legalGateBlocking = legalGateApplicable
+    && (legalStatus !== "accepted" || acceptedLegalVerificationKey !== legalVerificationKey);
+
+  useEffect(() => {
+    if (!legalGateApplicable || !authority) {
+      setLegalReadback(null); setLegalStatus("idle"); setAcceptedLegalVerificationKey("");
+      return;
+    }
+    let active = true;
+    setLegalStatus("checking");
+    void readAccountLegalRequirements(supabase)
+      .then((readback) => {
+        if (!active) return;
+        if (!sameLegalAuthorityBinding(readback, authority)) {
+          setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey(""); return;
+        }
+        const accepted = legalRequirementsAreCurrent(readback, authority);
+        setLegalReadback(readback); setLegalStatus(accepted ? "accepted" : "required");
+        setAcceptedLegalVerificationKey(accepted ? legalVerificationKey : "");
+      })
+      .catch(() => {
+        if (active) { setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey(""); }
+      });
+    return () => { active = false; };
+  }, [authority, legalGateApplicable, legalRetry, legalVerificationKey]);
+
+  useEffect(() => {
+    if (!legalGateApplicable) return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        setLegalStatus("checking"); setAcceptedLegalVerificationKey("");
+        setLegalRetry((value) => value + 1);
+      }
+    });
+    return () => subscription.remove();
+  }, [legalGateApplicable]);
 
   useEffect(() => {
     let active = true;
@@ -1373,32 +1527,49 @@ function AuthRouteGate() {
   }, [router]);
 
   useEffect(() => {
+    if (authorityStatus === "restore_only" || authorityStatus === "restricted" || authorityStatus === "unknown") return;
     if (isLoading) return;
+    if (authorityStatus === "recovery_only") {
+      if (!insideResetPassword) router.replace("/reset-password");
+      return;
+    }
     if (waitingForInitialReplayDeepLink || allowInitialReplayDeepLink) return;
 
     if (!isSignedIn && insideTabsGroup) {
-      router.replace({
-        pathname: "/(auth)/login",
-        params: { redirectTo },
-      });
+      const redirectId = registerAuthRedirect(redirectTo);
+      router.replace({ pathname: "/(auth)/login", params: redirectId ? { redirectId } : {} });
       return;
     }
 
-    if (isSignedIn && isPasswordRecoverySession && !insideResetPassword) {
-      router.replace("/reset-password");
-      return;
-    }
+    if (!isSignedIn) { authNavigationStartedRef.current = false; return; }
 
-    if (isSignedIn && insideAuthGroup) {
-      router.replace(authRedirectTo as Parameters<typeof router.replace>[0]);
+    if (isSignedIn && insideAuthGroup && !legalGateBlocking && authority && !authNavigationStartedRef.current) {
+      authNavigationStartedRef.current = true;
+      const target = consumeRegisteredAuthRedirect(authRedirectId, authority) ?? "/";
+      router.replace(target as Parameters<typeof router.replace>[0]);
     }
-  }, [allowInitialReplayDeepLink, authRedirectTo, insideAuthGroup, insideResetPassword, insideTabsGroup, isLoading, isPasswordRecoverySession, isSignedIn, redirectTo, router, waitingForInitialReplayDeepLink]);
+  }, [allowInitialReplayDeepLink, authRedirectId, authority, authorityStatus, insideAuthGroup, insideResetPassword, insideTabsGroup, isLoading, isPasswordRecoverySession, isSignedIn, legalGateBlocking, redirectTo, router, waitingForInitialReplayDeepLink]);
 
+  if (authorityStatus === "restore_only") return <AccountRestoreOnlyScreen />;
+  if (authorityStatus === "unknown") return <AuthBootScreen message="Protected access remains locked because session authority is unavailable." />;
+  if (authorityStatus === "restricted") return <AuthBootScreen message="This session is restricted and is being signed out safely." />;
+  if (authorityStatus === "recovery_only" && !insideResetPassword) return <AuthBootScreen message="Password recovery must finish before protected access resumes." />;
+  if (legalGateBlocking) {
+    if (legalStatus === "checking" || legalStatus === "idle") return <AuthBootScreen message="Checking current policy requirements…" />;
+    return (
+      <LegalAcceptanceScreen
+        readback={legalStatus === "required" ? legalReadback : null}
+        onAccepted={(next) => {
+          setLegalReadback(next); setLegalStatus("accepted"); setAcceptedLegalVerificationKey(legalVerificationKey);
+        }}
+        onRetry={() => setLegalRetry((value) => value + 1)}
+      />
+    );
+  }
   if (isLoading) return <AuthBootScreen />;
   if (
     waitingForInitialReplayDeepLink
     || (!allowInitialReplayDeepLink && !isSignedIn && insideTabsGroup)
-    || (isSignedIn && isPasswordRecoverySession && !insideResetPassword)
     || (isSignedIn && insideAuthGroup)
   ) {
     return <AuthBootScreen />;
@@ -1527,7 +1698,28 @@ const styles = StyleSheet.create({
     color: "#F4F7FC",
     fontSize: 13,
     fontWeight: "600",
+    maxWidth: 320,
+    textAlign: "center",
   },
+  legalGateScreen: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#05060A", padding: 22 },
+  legalGateCard: { width: "100%", maxWidth: 520, borderRadius: 22, borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)", backgroundColor: "#0C0E14", gap: 12, padding: 22 },
+  legalGateKicker: { color: "#DC143C", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
+  legalGateTitle: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
+  legalGateBody: { color: "#AAB4C8", fontSize: 14, fontWeight: "600", lineHeight: 20 },
+  legalGatePolicy: { borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", padding: 12 },
+  legalGatePolicyTitle: { color: "#F4F7FC", fontSize: 14, fontWeight: "800" },
+  legalGatePolicyVersion: { color: "#8E9AB0", fontSize: 12, fontWeight: "600", marginTop: 3 },
+  legalGateConfirm: { alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 4 },
+  legalGateCheck: { width: 24, height: 24, borderRadius: 6, borderWidth: 1,
+    borderColor: "#DC143C", color: "#FFFFFF", textAlign: "center" },
+  legalGateConfirmText: { color: "#E6EAF2", flex: 1, fontSize: 13, fontWeight: "700", lineHeight: 18 },
+  legalGateError: { color: "#FFB4C1", fontSize: 13, fontWeight: "700", lineHeight: 18 },
+  legalGateButton: { alignItems: "center", backgroundColor: "#DC143C", borderRadius: 12, padding: 14 },
+  legalGateButtonDisabled: { opacity: 0.45 },
+  legalGateButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+  legalGateSecondary: { alignItems: "center", padding: 8 },
+  legalGateSecondaryText: { color: "#C8D0DF", fontSize: 13, fontWeight: "800" },
   incomingCallBannerOverlay: {
     position: "absolute",
     top: 18,

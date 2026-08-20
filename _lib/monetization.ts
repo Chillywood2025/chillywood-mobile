@@ -3,6 +3,13 @@ import type { CustomerInfo, PurchasesOffering, PurchasesPackage, PurchasesOfferi
 import { Platform } from "react-native";
 
 import { trackEvent } from "./analytics";
+import {
+  getCurrentAccountSessionAuthoritySnapshot,
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
+  subscribeToAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
+} from "./accountSessionAuthority";
 import { FEATURE_FLAGS, getAppMonetizationRuntimeFeatures } from "./featureFlags";
 import { debugLog, reportRuntimeError } from "./logger";
 import {
@@ -23,11 +30,11 @@ import {
 } from "./revenuecat";
 import type { Tables, TablesInsert } from "../supabase/database.types";
 import {
-  hasActiveEntitlement as hasActiveBackendEntitlement,
   readCurrentUserEntitlements,
   type PremiumEntitlementDecision,
   type PremiumEntitlementKey,
 } from "./premiumEntitlements";
+import { resolveAlternativeEntitlementAuthority, withAuthorityReadDeadline, type EntitlementAuthorityState } from "./entitlementAuthority";
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
 import { getRuntimeConfig, isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
@@ -58,7 +65,7 @@ export type CreatorPermissionSet = {
   updatedAt: number;
 };
 
-export type ContentAccessReason = "allowed" | "party_pass_required" | "premium_required";
+export type ContentAccessReason = "allowed" | "entitlement_unknown" | "party_pass_required" | "premium_required";
 
 export type ContentAccessDecision = {
   allowed: boolean;
@@ -91,8 +98,10 @@ export type MonetizationTargetDefinition = {
 
 export type MonetizationTargetState = {
   definition: MonetizationTargetDefinition;
-  status: "entitled" | "available" | "unavailable";
+  status: "entitled" | "available" | "unavailable" | "unknown";
   hasEntitlement: boolean;
+  entitlementAuthoritative: boolean;
+  entitlementState: EntitlementAuthorityState;
   offeringAvailable: boolean;
   configuredOfferingId: string;
   resolvedOfferingId: string | null;
@@ -110,6 +119,8 @@ export type MonetizationGateResolution = {
   availableTargetIds: MonetizationTargetId[];
   recommendedPackageId?: string;
   canPurchase: boolean;
+  entitlementAuthorityAvailable: boolean;
+  entitlementState: EntitlementAuthorityState;
   ownerPlatformAccess?: boolean;
   snapshotStatus: "disabled" | "ready" | "store_unavailable" | "partial";
   issues: string[];
@@ -478,6 +489,8 @@ export const createEmptyMonetizationGateResolution = (
   entitledTargetIds: [],
   availableTargetIds: [],
   canPurchase: false,
+  entitlementAuthorityAvailable: false,
+  entitlementState: "UNKNOWN",
   snapshotStatus,
   issues: [...issues],
 });
@@ -492,8 +505,10 @@ const getDefaultMonetizationTargetState = (
   definition: MonetizationTargetDefinition,
 ): MonetizationTargetState => ({
   definition,
-  status: "unavailable",
+  status: "unknown",
   hasEntitlement: false,
+  entitlementAuthoritative: false,
+  entitlementState: "UNKNOWN",
   offeringAvailable: false,
   configuredOfferingId: definition.offeringId,
   resolvedOfferingId: null,
@@ -532,6 +547,7 @@ let cachedMonetizationSnapshot: MonetizationSnapshot = createEmptyMonetizationSn
   { mode: "disabled", apiKey: "", shouldConfigure: false, reason: "RevenueCat has not been configured yet." },
   null,
 );
+let cachedMonetizationAuthority: AccountSessionAuthorityBinding | null = null;
 let lastTrackedMonetizationSnapshotSignature = "";
 
 const monetizationSnapshotListeners = new Set<() => void>();
@@ -634,6 +650,13 @@ const notifyMonetizationSnapshotListeners = () => {
     }
   });
 };
+
+subscribeToAccountSessionAuthority((authority) => {
+  if (sameAccountSessionAuthority(cachedMonetizationAuthority, authority)) return;
+  cachedMonetizationAuthority = null;
+  cachedMonetizationSnapshot = createEmptyMonetizationSnapshot(cachedMonetizationSnapshot.configuration, authority?.userId ?? null);
+  notifyMonetizationSnapshotListeners();
+});
 
 const getOfferingByIdentifier = (
   offerings: PurchasesOfferings | null,
@@ -778,35 +801,42 @@ const buildMonetizationAccessSheetOffer = (options: {
   };
 };
 
-const hasActiveEntitlement = (
-  customerInfo: CustomerInfo | null,
-  entitlementIds: string[],
-): boolean => {
-  if (!customerInfo) return false;
-  return entitlementIds.some((entitlementId) => {
-    const normalizedId = String(entitlementId ?? "").trim();
-    if (!normalizedId) return false;
-    return !!customerInfo.entitlements.active[normalizedId];
-  });
+const resolveTargetEntitlementAuthority = (
+  definition: MonetizationTargetDefinition,
+  decisions: readonly PremiumEntitlementDecision[],
+) => {
+  const decisionsByKey = new Map(decisions.map((decision) => [decision.entitlementKey, decision]));
+  const targetDecisions = definition.entitlementIds.map(
+    (entitlementId) => decisionsByKey.get(entitlementId as PremiumEntitlementKey),
+  )
+    .filter((decision): decision is PremiumEntitlementDecision => !!decision);
+  const entitlement = resolveAlternativeEntitlementAuthority(targetDecisions, definition.entitlementIds.length);
+  return {
+    authoritative: entitlement.authoritative,
+    hasEntitlement: entitlement.grantsProtectedAccess,
+    state: entitlement.state,
+  };
 };
 
 const buildMonetizationTargetState = (
   definition: MonetizationTargetDefinition,
-  customerInfo: CustomerInfo | null,
+  entitlementDecisions: readonly PremiumEntitlementDecision[],
   offerings: PurchasesOfferings | null,
 ): MonetizationTargetState => {
   const offeringResolution = resolveOfferingForTarget(offerings, definition);
   const offering = offeringResolution.offering;
   const recommendedPackage = selectRecommendedPackage(offering);
-  const hasEntitlement = hasActiveEntitlement(customerInfo, definition.entitlementIds);
+  const entitlement = resolveTargetEntitlementAuthority(definition, entitlementDecisions);
   const packageIds = offering?.availablePackages.map((entry) => String(entry.identifier ?? "").trim()).filter(Boolean) ?? [];
   const resolvedOfferingId = String(offering?.identifier ?? "").trim() || null;
 
-  if (hasEntitlement) {
+  if (entitlement.hasEntitlement) {
     return {
       definition,
       status: "entitled",
       hasEntitlement: true,
+      entitlementAuthoritative: true,
+      entitlementState: entitlement.state,
       offeringAvailable: !!offering,
       configuredOfferingId: definition.offeringId,
       resolvedOfferingId,
@@ -817,11 +847,23 @@ const buildMonetizationTargetState = (
     };
   }
 
+  if (!entitlement.authoritative) {
+    return {
+      definition, status: "unknown", hasEntitlement: false,
+      entitlementAuthoritative: false, entitlementState: "UNKNOWN", offeringAvailable: !!offering,
+      configuredOfferingId: definition.offeringId, resolvedOfferingId,
+      offeringResolution: offeringResolution.resolution,
+      packageCount: packageIds.length, availablePackageIds: packageIds,
+    };
+  }
+
   if (offering && packageIds.length > 0) {
     return {
       definition,
       status: "available",
       hasEntitlement: false,
+      entitlementAuthoritative: true,
+      entitlementState: entitlement.state,
       offeringAvailable: true,
       configuredOfferingId: definition.offeringId,
       resolvedOfferingId,
@@ -836,6 +878,8 @@ const buildMonetizationTargetState = (
     definition,
     status: "unavailable",
     hasEntitlement: false,
+    entitlementAuthoritative: true,
+    entitlementState: entitlement.state,
     offeringAvailable: !!offering,
     configuredOfferingId: definition.offeringId,
     resolvedOfferingId,
@@ -859,6 +903,7 @@ const derivePlanFromMonetizationSnapshot = (
     adFree: hasPremium,
     watchPartyPerks,
     updatedAt: snapshot.updatedAt || fallback.updatedAt,
+    accessSource: hasPremium ? "entitlement" : undefined,
   };
 };
 
@@ -904,18 +949,24 @@ const getMonetizationAccessPolicy = (options: {
   };
 };
 
-const buildMonetizationGateResolution = (
+export const buildMonetizationGateResolution = (
   snapshot: MonetizationSnapshot,
   policy: MonetizationAccessPolicy,
 ): MonetizationGateResolution => {
   const entitledTargetIds = policy.qualifyingTargetIds.filter((targetId) => snapshot.targets[targetId]?.hasEntitlement);
+  const gateEntitlement = resolveAlternativeEntitlementAuthority(policy.qualifyingTargetIds.map((targetId) => ({
+    authoritative: snapshot.targets[targetId]?.entitlementAuthoritative === true,
+    grantsProtectedAccess: snapshot.targets[targetId]?.hasEntitlement === true,
+    state: snapshot.targets[targetId]?.entitlementState ?? "UNKNOWN",
+  })), policy.qualifyingTargetIds.length);
   const availableTargetIds = policy.qualifyingTargetIds.filter((targetId) => {
     const target = snapshot.targets[targetId];
-    return !!target?.offeringAvailable && target.packageCount > 0;
+    return target?.status === "available" && target.offeringAvailable && target.packageCount > 0;
   });
-  const purchaseTargetId = [policy.primaryTargetId, ...policy.qualifyingTargetIds]
-    .filter((targetId): targetId is MonetizationTargetId => !!targetId)
-    .find((targetId, index, list) => list.indexOf(targetId) === index && availableTargetIds.includes(targetId));
+  const purchaseTargetId = gateEntitlement.grantsProtectedAccess ? undefined
+    : [policy.primaryTargetId, ...policy.qualifyingTargetIds]
+      .filter((targetId): targetId is MonetizationTargetId => !!targetId)
+      .find((targetId, index, list) => list.indexOf(targetId) === index && availableTargetIds.includes(targetId));
   const selectedTargetState = purchaseTargetId ? snapshot.targets[purchaseTargetId] : null;
 
   return {
@@ -926,59 +977,27 @@ const buildMonetizationGateResolution = (
     availableTargetIds,
     recommendedPackageId: selectedTargetState?.recommendedPackageId,
     canPurchase: !!purchaseTargetId && snapshot.configuration.shouldConfigure && snapshot.canMakePayments,
+    entitlementAuthorityAvailable: gateEntitlement.authoritative,
+    entitlementState: gateEntitlement.state,
     snapshotStatus: snapshot.status,
     issues: [...snapshot.issues],
   };
 };
 
-const getBackendEntitlementKeyForTarget = (
-  targetId: MonetizationTargetId,
-): PremiumEntitlementKey => {
-  switch (targetId) {
-    case "premium_watch_party_access":
-      return "premium_watch_party";
-    case "premium_live_access":
-      return "premium_live";
-    case "paid_title_access":
-      return "paid_content";
-    case "premium_subscription":
-    default:
-      return "premium";
-  }
-};
-
-const buildBackendEntitledTargetIds = (
-  policy: MonetizationAccessPolicy,
-  decisions: readonly PremiumEntitlementDecision[],
+export const setCachedMonetizationSnapshot = (
+  snapshot: MonetizationSnapshot,
+  authority: AccountSessionAuthorityBinding | null,
 ) => {
-  if (!decisions.length || !hasActiveBackendEntitlement(decisions)) return [];
-
-  const activeKeys = new Set(
-    decisions
-      .filter((decision) => decision.isActive)
-      .map((decision) => decision.entitlementKey),
-  );
-
-  return policy.qualifyingTargetIds.filter((targetId) => {
-    const key = getBackendEntitlementKeyForTarget(targetId);
-    return activeKeys.has(key);
-  });
-};
-
-const mergeBackendEntitlementsIntoGate = (
-  monetization: MonetizationGateResolution,
-  backendEntitledTargetIds: readonly MonetizationTargetId[],
-): MonetizationGateResolution => {
-  if (!backendEntitledTargetIds.length) return monetization;
-
-  return {
-    ...monetization,
-    entitledTargetIds: Array.from(new Set([...monetization.entitledTargetIds, ...backendEntitledTargetIds])),
-  };
-};
-
-const setCachedMonetizationSnapshot = (snapshot: MonetizationSnapshot) => {
+  const currentAuthority = getCurrentAccountSessionAuthoritySnapshot();
+  const authorityStillCurrent = authority
+    ? sameAccountSessionAuthority(authority, currentAuthority)
+    : currentAuthority === null;
+  if (!authorityStillCurrent) {
+    const current = createEmptyMonetizationSnapshot(snapshot.configuration, currentAuthority?.userId ?? null);
+    return { ...current, issues: [...current.issues, "Account changed before monetization authority could be committed."] };
+  }
   cachedMonetizationSnapshot = snapshot;
+  cachedMonetizationAuthority = authority;
   notifyMonetizationSnapshotListeners();
   return snapshot;
 };
@@ -1001,16 +1020,15 @@ const trackMonetizationSnapshotResolution = (snapshot: MonetizationSnapshot) => 
 
   trackEvent("monetization_entitlement_resolved", {
     status: snapshot.status,
-    userId: snapshot.userId ?? "anonymous",
-    revenueCatAppUserId: snapshot.revenueCatAppUserId || "none",
+    signedIn: !!snapshot.userId,
+    providerIdentityMatched: !!snapshot.userId && snapshot.revenueCatAppUserId === snapshot.userId,
     isAnonymousCustomer: snapshot.isAnonymousCustomer,
     canMakePayments: snapshot.canMakePayments,
     customerInfoLoaded: snapshot.customerInfoLoaded,
     offeringsLoaded: snapshot.offeringsLoaded,
-    currentOfferingId: snapshot.currentOfferingId ?? "none",
+    currentOfferingPresent: !!snapshot.currentOfferingId,
     availableOfferingCount: snapshot.availableOfferingIds.length,
     activeEntitlementCount: snapshot.activeEntitlementIds.length,
-    activeEntitlements: snapshot.activeEntitlementIds.join(",") || "none",
     issueCount: snapshot.issues.length,
   });
 };
@@ -1020,6 +1038,10 @@ export function getMonetizationCatalog() {
 }
 
 export function getCachedMonetizationSnapshot() {
+  const currentAuthority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!sameAccountSessionAuthority(cachedMonetizationAuthority, currentAuthority)) {
+    return createEmptyMonetizationSnapshot(cachedMonetizationSnapshot.configuration, currentAuthority?.userId ?? null);
+  }
   return cachedMonetizationSnapshot;
 }
 
@@ -1035,47 +1057,70 @@ export async function readMonetizationSnapshot(options?: {
   userId?: string | null;
   purchaseMode?: MonetizationPurchaseMode | null;
 }): Promise<MonetizationSnapshot> {
+  if (options?.userId === null) return createEmptyMonetizationSnapshot(cachedMonetizationSnapshot.configuration, null);
   const requestedUserId = normalizeOptionalIdentity(options?.userId);
-  const signedInUserId = requestedUserId ? "" : normalizeOptionalIdentity(await getSignedInUserId());
-  const userId = requestedUserId || signedInUserId || null;
-  const configuration = configureRevenueCatOnce();
+  const authority = await readCurrentAccountSessionAuthority();
+  const userId = authority?.userId ?? null;
+  let configuration: RevenueCatConfigurationState;
+  try {
+    configuration = configureRevenueCatOnce();
+  } catch {
+    configuration = {
+      mode: "disabled",
+      apiKey: "",
+      shouldConfigure: false,
+      reason: "RevenueCat configuration is unavailable right now.",
+    };
+  }
   const baseSnapshot = createEmptyMonetizationSnapshot(configuration, userId);
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
   const purchaseShellAvailable = isPremiumPurchaseShellAvailableForMode(purchaseMode);
 
-  if (!configuration.shouldConfigure) {
-    const snapshot = setCachedMonetizationSnapshot(baseSnapshot);
+  if (!authority || authority.restoreOnly || (requestedUserId && requestedUserId !== authority.userId)) {
+    const snapshot = { ...baseSnapshot, issues: [...baseSnapshot.issues, "Account entitlement authority is unavailable right now."] };
     trackMonetizationSnapshotResolution(snapshot);
     return snapshot;
   }
 
   try {
-    const identity = await syncRevenueCatCustomerIdentity(userId);
-    const [canMakePayments, customerInfo, offerings] = await Promise.all([
-      purchaseShellAvailable ? canMakeRevenueCatPurchases() : Promise.resolve(false),
-      readRevenueCatCustomerInfo({ refresh: !!options?.forceRefresh }),
-      purchaseShellAvailable ? readRevenueCatOfferings() : Promise.resolve(null),
-    ]);
+    const entitlementDecisions = await readCurrentUserEntitlements(
+      ["premium", "premium_watch_party", "premium_live", "paid_content"],
+      { authority },
+    );
+    const entitlementAuthorityAvailable = entitlementDecisions.length === 4
+      && entitlementDecisions.every((decision) => decision.authoritative);
+    const identity = configuration.shouldConfigure
+      ? await syncRevenueCatCustomerIdentity(authority.userId)
+      : null;
+    const providerIdentityMatched = identity?.matchesSourceUser === true
+      && sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority());
+    const [providerCanMakePayments, customerInfo, offerings] = providerIdentityMatched
+      ? await Promise.all([
+          purchaseShellAvailable ? canMakeRevenueCatPurchases() : Promise.resolve(false),
+          readRevenueCatCustomerInfo({ refresh: !!options?.forceRefresh }),
+          purchaseShellAvailable ? readRevenueCatOfferings() : Promise.resolve(null),
+        ])
+      : [false, null, null] as const;
+    const currentAuthority = await readCurrentAccountSessionAuthority();
+    if (!sameAccountSessionAuthority(authority, currentAuthority)) {
+      return { ...baseSnapshot, issues: [...baseSnapshot.issues, "Account changed while entitlement authority was loading."] };
+    }
+    const canMakePayments = providerCanMakePayments && entitlementAuthorityAvailable;
 
     const issues = [...baseSnapshot.issues];
-    if (!purchaseShellAvailable) {
-      issues.push(PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE);
-    }
+    if (!entitlementAuthorityAvailable) issues.push("Account entitlement status is unavailable right now.");
+    if (configuration.shouldConfigure && !providerIdentityMatched) issues.push("Billing identity is unavailable for the current account.");
+    if (!purchaseShellAvailable) issues.push(PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE);
     if (purchaseShellAvailable && purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE) {
       issues.push(INTERNAL_TESTER_SANDBOX_PURCHASE_COPY);
     }
-    if (purchaseShellAvailable && !canMakePayments) {
-      issues.push("Billing is not currently available on this device/account.");
-    }
-    if (!customerInfo) {
-      issues.push("Account entitlement status is unavailable right now.");
-    }
-    if (purchaseShellAvailable && !offerings) {
-      issues.push("Offer configuration is unavailable right now.");
-    }
+    if (purchaseShellAvailable && !canMakePayments) issues.push("Billing is not currently available on this device/account.");
+    if (purchaseShellAvailable && !offerings) issues.push("Offer configuration is unavailable right now.");
 
     const snapshot: MonetizationSnapshot = {
-      status: !purchaseShellAvailable
+      status: !configuration.shouldConfigure
+        ? "disabled"
+        : !purchaseShellAvailable
         ? "partial"
         : !canMakePayments
         ? "store_unavailable"
@@ -1084,46 +1129,48 @@ export async function readMonetizationSnapshot(options?: {
           : "partial",
       configuration,
       userId,
-      revenueCatAppUserId: identity.appUserId,
-      isAnonymousCustomer: identity.isAnonymous,
+      revenueCatAppUserId: identity?.appUserId ?? "",
+      isAnonymousCustomer: identity?.isAnonymous ?? true,
       canMakePayments,
       customerInfoLoaded: !!customerInfo,
       offeringsLoaded: purchaseShellAvailable && !!offerings,
       currentOfferingId: purchaseShellAvailable ? offerings?.current?.identifier ?? null : null,
       availableOfferingIds: purchaseShellAvailable ? Object.keys(offerings?.all ?? {}) : [],
-      activeEntitlementIds: Object.keys(customerInfo?.entitlements.active ?? {}),
+      activeEntitlementIds: entitlementDecisions.filter((decision) => decision.isActive).map((decision) => decision.entitlementKey),
       activeProductIds: customerInfo?.activeSubscriptions ?? [],
       targets: {
-        premium_subscription: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_subscription, customerInfo, offerings),
-        paid_title_access: buildMonetizationTargetState(MONETIZATION_TARGETS.paid_title_access, customerInfo, offerings),
-        premium_live_access: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_live_access, customerInfo, offerings),
-        premium_watch_party_access: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_watch_party_access, customerInfo, offerings),
+        premium_subscription: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_subscription, entitlementDecisions, offerings),
+        paid_title_access: buildMonetizationTargetState(MONETIZATION_TARGETS.paid_title_access, entitlementDecisions, offerings),
+        premium_live_access: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_live_access, entitlementDecisions, offerings),
+        premium_watch_party_access: buildMonetizationTargetState(MONETIZATION_TARGETS.premium_watch_party_access, entitlementDecisions, offerings),
       },
       issues,
       updatedAt: Date.now(),
     };
 
     debugLog("monetization", "Monetization snapshot refreshed", {
-      activeEntitlements: snapshot.activeEntitlementIds.join(","),
-      appUserId: snapshot.revenueCatAppUserId,
-      availableOfferings: snapshot.availableOfferingIds.join(","),
+      activeEntitlementCount: snapshot.activeEntitlementIds.length,
+      availableOfferingCount: snapshot.availableOfferingIds.length,
+      providerIdentityMatched,
       status: snapshot.status,
-      userId: snapshot.userId,
     });
 
-    const resolvedSnapshot = setCachedMonetizationSnapshot(snapshot);
+    const resolvedSnapshot = setCachedMonetizationSnapshot(snapshot, authority);
     trackMonetizationSnapshotResolution(resolvedSnapshot);
     return resolvedSnapshot;
-  } catch (error) {
-    reportRuntimeError("monetization-snapshot", error, {
-      userId: userId ?? "anonymous",
+  } catch {
+    reportRuntimeError("monetization-snapshot", new Error("Monetization authority refresh failed."), {
+      signedIn: true,
     });
+    if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) {
+      return { ...baseSnapshot, issues: [...baseSnapshot.issues, "Account changed while entitlement authority was loading."] };
+    }
     const fallbackSnapshot = setCachedMonetizationSnapshot({
       ...baseSnapshot,
       status: "partial",
       issues: [...baseSnapshot.issues, "Failed to refresh the monetization snapshot."],
       updatedAt: Date.now(),
-    });
+    }, authority);
     trackMonetizationSnapshotResolution(fallbackSnapshot);
     return fallbackSnapshot;
   }
@@ -1139,12 +1186,19 @@ export async function purchaseMonetizationTarget(
 ): Promise<MonetizationPurchaseOutcome> {
   const target = MONETIZATION_TARGETS[targetId];
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
+  const operationAuthority = await readCurrentAccountSessionAuthority();
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
     purchaseMode,
     userId: options?.userId,
   });
   const targetState = snapshot.targets[targetId];
+
+  if (!operationAuthority || operationAuthority.restoreOnly
+    || !sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
+    return { ok: false, target: targetId, snapshot, customerInfo: null,
+      message: "Account changed while Premium authority was loading. Recheck before continuing." };
+  }
 
   if (!isPremiumPurchaseShellAvailableForMode(purchaseMode)) {
     return {
@@ -1163,6 +1217,16 @@ export async function purchaseMonetizationTarget(
       snapshot,
       customerInfo: null,
       message: snapshot.configuration.reason ?? "Monetization is not configured for this build.",
+    };
+  }
+
+  if (!targetState.entitlementAuthoritative) {
+    return {
+      ok: false,
+      target: targetId,
+      snapshot,
+      customerInfo: null,
+      message: "Account entitlement status is unavailable. Recheck before starting a purchase.",
     };
   }
 
@@ -1203,8 +1267,17 @@ export async function purchaseMonetizationTarget(
     };
   }
 
+  if (!sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
+    return { ok: false, target: targetId, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
+      message: "Account changed before billing could start. Recheck the current account." };
+  }
+
   try {
-    const result = await purchaseRevenueCatPackage(selectedPackage);
+    const result = await purchaseRevenueCatPackage(selectedPackage, { authority: operationAuthority });
+    if (!sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
+      return { ok: false, target: targetId, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
+        message: "Account changed before the purchase result returned. Recheck the current account." };
+    }
     const refreshedSnapshot = await readMonetizationSnapshot({
       forceRefresh: true,
       purchaseMode,
@@ -1220,9 +1293,8 @@ export async function purchaseMonetizationTarget(
       packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
       productId: String(result.productIdentifier ?? "").trim() || undefined,
     };
-  } catch (error) {
-    reportRuntimeError("monetization-purchase", error, {
-      packageId: String(selectedPackage.identifier ?? "").trim() || "unknown",
+  } catch {
+    reportRuntimeError("monetization-purchase", new Error("Monetization purchase failed."), {
       target: targetId,
     });
 
@@ -1242,11 +1314,18 @@ export async function restoreMonetizationAccess(options?: {
   purchaseMode?: MonetizationPurchaseMode | null;
 }): Promise<MonetizationRestoreOutcome> {
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
+  const operationAuthority = await readCurrentAccountSessionAuthority();
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
     purchaseMode,
     userId: options?.userId,
   });
+
+  if (!operationAuthority || operationAuthority.restoreOnly
+    || !sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
+    return { ok: false, snapshot, customerInfo: null,
+      message: "Account changed while restore authority was loading. Recheck before continuing." };
+  }
 
   if (!snapshot.configuration.shouldConfigure) {
     return {
@@ -1258,12 +1337,20 @@ export async function restoreMonetizationAccess(options?: {
   }
 
   try {
-    const customerInfo = await restoreRevenueCatPurchases();
+    const customerInfo = await restoreRevenueCatPurchases({ authority: operationAuthority });
+    if (!sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
+      return { ok: false, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
+        message: "Account changed before the restore result returned. Recheck the current account." };
+    }
     const refreshedSnapshot = await readMonetizationSnapshot({
       forceRefresh: true,
       purchaseMode,
       userId: options?.userId,
     });
+    if (!refreshedSnapshot.targets.premium_subscription.entitlementAuthoritative) {
+      return { ok: false, snapshot: refreshedSnapshot, customerInfo: null,
+        message: "Purchases were restored, but Premium status is unavailable and unverified. Recheck before continuing." };
+    }
 
     return {
       ok: true,
@@ -1271,9 +1358,9 @@ export async function restoreMonetizationAccess(options?: {
       customerInfo,
       message: "Purchases restored.",
     };
-  } catch (error) {
-    reportRuntimeError("monetization-restore", error, {
-      userId: options?.userId ?? "anonymous",
+  } catch {
+    reportRuntimeError("monetization-restore", new Error("Monetization restore failed."), {
+      signedIn: !!operationAuthority,
     });
 
     return {
@@ -1298,6 +1385,15 @@ export function getMonetizationAccessSheetPresentation(options: {
   const appDisplayName = String(options.appDisplayName ?? "Chi'llywood").trim() || "Chi'llywood";
   const gateReason = String(options.gate?.reason ?? "").trim().toLowerCase();
   const primaryTargetId = options.gate?.monetization?.primaryTargetId;
+
+  if (gateReason === "entitlement_unknown") {
+    return {
+      kicker: "PREMIUM STATUS",
+      title: "Premium status unavailable",
+      body: "Your entitlement or Premium status is unavailable and unverified right now. Protected access remains locked until the current account can be verified.",
+      actionLabel: "Check Premium Status",
+    };
+  }
 
   if (primaryTargetId === "paid_title_access") {
     return {
@@ -1366,6 +1462,14 @@ export async function readMonetizationAccessSheetState(options: {
     || targetId === "premium_watch_party_access"
     || targetId === "paid_title_access";
   const purchaseShellAvailable = isPremiumPurchaseShellAvailableForMode(purchaseMode);
+  if (gateReason === "entitlement_unknown") {
+    return {
+      snapshot, presentation, primaryAction: "retry", primaryLabel: "Check Premium Status", primaryDisabled: false,
+      helperKicker: "STATUS UNAVAILABLE",
+      helperBody: "Entitlement authority is unavailable and unverified for the current account. Protected access remains locked.",
+      helperTone: "warning", offer: null, canRestore: false, canManage: false,
+    };
+  }
   const offerings = snapshot.offeringsLoaded && purchaseShellAvailable ? await readRevenueCatOfferings() : null;
   const offer = targetId && targetState
     ? buildMonetizationAccessSheetOffer({
@@ -1535,9 +1639,14 @@ export async function purchaseBlockedAccess(options: {
   };
 }
 
-async function readLocalPlan(): Promise<UserPlan> {
+const localPlanKey = (authority: AccountSessionAuthorityBinding) =>
+  `${USER_PLAN_KEY}:${authority.accountId}:${authority.sessionGeneration}`;
+
+async function readLocalPlan(authority: AccountSessionAuthorityBinding | null): Promise<UserPlan> {
+  if (!authority || authority.restoreOnly) return defaultPlan;
   try {
-    const raw = await AsyncStorage.getItem(USER_PLAN_KEY);
+    const raw = await AsyncStorage.getItem(localPlanKey(authority));
+    if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return defaultPlan;
     if (!raw) return defaultPlan;
     const parsed = JSON.parse(raw) as Partial<UserPlan>;
     const tier: PlanTier = parsed.tier === "premium" ? "premium" : "free";
@@ -1552,28 +1661,33 @@ async function readLocalPlan(): Promise<UserPlan> {
   }
 }
 
-async function saveLocalPlan(plan: UserPlan): Promise<void> {
+async function saveLocalPlan(plan: UserPlan, authority: AccountSessionAuthorityBinding): Promise<void> {
   try {
-    await AsyncStorage.setItem(USER_PLAN_KEY, JSON.stringify(plan));
+    if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return;
+    await AsyncStorage.setItem(localPlanKey(authority), JSON.stringify(plan));
   } catch {
     // ignore storage failures
   }
 }
 
-async function readLegacyUserPlan(): Promise<UserPlan> {
-  const local = await readLocalPlan();
-  const userId = await getSignedInUserId();
+async function readLegacyUserPlan(
+  expectedAuthority?: AccountSessionAuthorityBinding | null,
+): Promise<UserPlan> {
+  const authority = expectedAuthority === undefined ? await readCurrentAccountSessionAuthority() : expectedAuthority;
+  const local = await readLocalPlan(authority);
   if (!FEATURE_FLAGS.monetization.subscriptions) return local;
-  if (!userId) return defaultPlan;
+  if (!authority || authority.restoreOnly) return defaultPlan;
 
   try {
-    const { data, error } = await supabase
+    const result = await withAuthorityReadDeadline(supabase
       .from(SUBSCRIPTIONS_TABLE)
       .select("tier,updated_at")
-      .eq("user_id", userId)
-      .maybeSingle();
+      .eq("user_id", authority.userId)
+      .maybeSingle(), null);
 
-    if (error || !data) return local;
+    if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return defaultPlan;
+    if (!result || result.error || !result.data) return local;
+    const { data } = result;
 
     const tier: PlanTier = data.tier === "premium" ? "premium" : "free";
     const merged: UserPlan = {
@@ -1583,16 +1697,18 @@ async function readLegacyUserPlan(): Promise<UserPlan> {
       updatedAt: new Date(data.updated_at ?? Date.now()).getTime(),
     };
 
-    await saveLocalPlan(merged);
+    await saveLocalPlan(merged, authority);
     return merged;
   } catch {
-    return local;
+    return authority && sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())
+      ? local : defaultPlan;
   }
 }
 
 export async function readUserPlan(): Promise<UserPlan> {
-  const legacy = await readLegacyUserPlan();
-  if (await readOwnerPlatformAccessEnabled()) {
+  const authority = await readCurrentAccountSessionAuthority();
+  if (!authority || authority.restoreOnly) return defaultPlan;
+  if (await readOwnerPlatformAccessEnabled(authority)) {
     return {
       tier: "premium",
       adFree: true,
@@ -1603,21 +1719,22 @@ export async function readUserPlan(): Promise<UserPlan> {
     };
   }
   const runtime = getAppMonetizationRuntimeFeatures();
-  if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return legacy;
-
-  const snapshot = await readMonetizationSnapshot();
-  if (!snapshot.configuration.shouldConfigure || !snapshot.customerInfoLoaded) {
-    return legacy;
+  if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) {
+    return defaultPlan;
   }
 
-  const plan = derivePlanFromMonetizationSnapshot(snapshot, legacy);
-  await saveLocalPlan(plan);
+  const snapshot = await readMonetizationSnapshot({ userId: authority.userId });
+  if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return defaultPlan;
+  const plan = derivePlanFromMonetizationSnapshot(snapshot);
+  if (snapshot.targets.premium_subscription.entitlementAuthoritative) {
+    await saveLocalPlan(plan, authority);
+  }
   return plan;
 }
 
 export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
-  const userId = await getSignedInUserId();
-  if (!userId) {
+  const authority = await readCurrentAccountSessionAuthority();
+  if (!authority || authority.restoreOnly) {
     throw new Error("Sign in is required before changing premium access.");
   }
 
@@ -1632,50 +1749,32 @@ export async function setUserPlan(tier: PlanTier): Promise<UserPlan> {
     updatedAt: Date.now(),
   };
 
-  await saveLocalPlan(next);
+  await saveLocalPlan(next, authority);
   return next;
 }
 
 export async function hasPremiumAccess(): Promise<boolean> {
-  const runtime = getAppMonetizationRuntimeFeatures();
-  if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) return true;
-  if (await readOwnerPlatformAccessEnabled()) return true;
-
-  const snapshot = await readMonetizationSnapshot();
-  if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
-    return snapshot.targets.premium_subscription.hasEntitlement;
-  }
-
-  const entitlements = await readCurrentUserEntitlements(["premium"]);
-  return hasActiveBackendEntitlement(entitlements);
+  const authority = await readCurrentAccountSessionAuthority();
+  if (!authority || authority.restoreOnly) return false;
+  if (await readOwnerPlatformAccessEnabled(authority)) return true;
+  const snapshot = await readMonetizationSnapshot({ userId: authority.userId });
+  return sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())
+    && snapshot.targets.premium_subscription.hasEntitlement;
 }
 
 export async function hasPartyPassAccess(partyId: string): Promise<boolean> {
-  const runtime = getAppMonetizationRuntimeFeatures();
-  if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled) return true;
-  if (await readOwnerPlatformAccessEnabled()) return true;
-
-  const snapshot = await readMonetizationSnapshot();
-  if (snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded) {
-    if (
-      snapshot.targets.premium_subscription.hasEntitlement
-      || snapshot.targets.premium_watch_party_access.hasEntitlement
-    ) {
-      return true;
-    }
-  }
-
-  const entitlements = await readCurrentUserEntitlements(["premium", "premium_watch_party"]);
-  return hasActiveBackendEntitlement(entitlements);
+  void partyId;
+  const authority = await readCurrentAccountSessionAuthority();
+  if (!authority || authority.restoreOnly) return false;
+  if (await readOwnerPlatformAccessEnabled(authority)) return true;
+  const snapshot = await readMonetizationSnapshot({ userId: authority.userId });
+  return sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())
+    && (snapshot.targets.premium_subscription.hasEntitlement
+      || snapshot.targets.premium_watch_party_access.hasEntitlement);
 }
 
 export async function unlockPartyPass(partyId: string): Promise<boolean> {
-  const runtime = getAppMonetizationRuntimeFeatures();
-  if (!FEATURE_FLAGS.monetization.partyPass || !runtime.partyPassEnabled) return true;
   void partyId;
-
-  const userId = await getSignedInUserId();
-  if (!userId) return false;
   return false;
 }
 
@@ -1797,9 +1896,10 @@ export const sanitizeCreatorTitleMonetization = (options: {
   };
 };
 
-async function readOwnerPlatformAccessEnabled() {
-  const memberships = await readMyPlatformRoleMemberships().catch(() => []);
-  return hasPlatformRoleMembership(memberships, ["owner"]);
+async function readOwnerPlatformAccessEnabled(authority: AccountSessionAuthorityBinding) {
+  const memberships = await withAuthorityReadDeadline(readMyPlatformRoleMemberships(), []);
+  return sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())
+    && hasPlatformRoleMembership(memberships, ["owner"]);
 }
 
 export async function resolveMonetizationAccess(options: {
@@ -1812,26 +1912,28 @@ export async function resolveMonetizationAccess(options: {
   const runtime = getAppMonetizationRuntimeFeatures();
   const accessRule = normalizeMonetizationAccessRule(options.accessRule);
   const accessKey = String(options.accessKey ?? "").trim() || undefined;
-  const snapshot = await readMonetizationSnapshot();
-  const fallbackPlan = options.plan ?? await readLegacyUserPlan();
-  const snapshotPlan = snapshot.configuration.shouldConfigure && snapshot.customerInfoLoaded
-    ? derivePlanFromMonetizationSnapshot(snapshot, fallbackPlan)
-    : fallbackPlan;
+  const operationAuthority = await readCurrentAccountSessionAuthority();
+  const snapshot = await readMonetizationSnapshot({ userId: operationAuthority?.userId });
+  const fallbackPlan = options.plan ?? await readLegacyUserPlan(operationAuthority);
+  const snapshotPlan = derivePlanFromMonetizationSnapshot(snapshot, fallbackPlan);
   const policy = getMonetizationAccessPolicy({
     accessRule,
     targetHint: options.targetHint,
   });
-  const backendEntitlements = policy.qualifyingTargetIds.length > 0
-    ? await readCurrentUserEntitlements(
-      Array.from(new Set(policy.qualifyingTargetIds.map(getBackendEntitlementKeyForTarget))),
-    )
-    : [];
-  const backendEntitledTargetIds = buildBackendEntitledTargetIds(policy, backendEntitlements);
-  const entitlementBackedGate = mergeBackendEntitlementsIntoGate(
-    buildMonetizationGateResolution(snapshot, policy),
-    backendEntitledTargetIds,
-  );
-  const ownerPlatformAccess = await readOwnerPlatformAccessEnabled();
+  const entitlementBackedGate = buildMonetizationGateResolution(snapshot, policy);
+  const ownerPlatformAccess = operationAuthority
+    ? await readOwnerPlatformAccessEnabled(operationAuthority)
+    : false;
+  if (!operationAuthority
+    || !sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
+    const monetization = {
+      ...buildMonetizationGateResolution(createEmptyMonetizationSnapshot(snapshot.configuration, null), policy),
+      issues: ["Account entitlement or Premium status is unavailable and unverified."],
+    };
+    return { allowed: accessRule === "open", reason: accessRule === "open" ? "allowed" : "entitlement_unknown",
+      accessRule, requiresPremium: false, requiresPartyPass: false, accessKey,
+      plan: { ...defaultPlan, updatedAt: Date.now() }, monetization };
+  }
   const ownerPlatformAccessCanSatisfyGate = ownerPlatformAccess && !options.strictEntitlementRequired;
   const monetization: MonetizationGateResolution = ownerPlatformAccessCanSatisfyGate
     ? {
@@ -1866,9 +1968,15 @@ export async function resolveMonetizationAccess(options: {
       accessSource: snapshotPlan.accessSource ?? "local_legacy",
     };
 
+  if (accessRule !== "open" && !monetization.entitlementAuthorityAvailable && !ownerPlatformAccessCanSatisfyGate) {
+    return { allowed: false, reason: "entitlement_unknown", accessRule,
+      requiresPremium: false, requiresPartyPass: false, accessKey, plan,
+      monetization: { ...monetization, canPurchase: false } };
+  }
+
   if (accessRule === "premium") {
     if (
-      (!options.strictEntitlementRequired && (
+      (hasTrustedEntitlement && (
         !FEATURE_FLAGS.monetization.subscriptions
         || !runtime.premiumEnabled
       ))
@@ -1901,7 +2009,7 @@ export async function resolveMonetizationAccess(options: {
 
   if (accessRule === "party_pass") {
     if (
-      (!options.strictEntitlementRequired && (
+      (hasTrustedEntitlement && (
         !FEATURE_FLAGS.monetization.partyPass
         || !runtime.partyPassEnabled
       ))

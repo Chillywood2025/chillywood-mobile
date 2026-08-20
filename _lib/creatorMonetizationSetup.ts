@@ -12,6 +12,17 @@ import {
   resolvePaymentRailPolicy,
 } from "./paymentRailPolicy";
 import { SUPABASE_URL, supabase } from "./supabase";
+import {
+  canCreateCreatorMoneyExposure,
+  parseCreatorEligibilityReadback,
+  type CreatorEligibilityDecision,
+} from "./creatorEligibility";
+import {
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
+} from "./accountSessionAuthority";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export type CreatorMonetizationSetupSourceType =
   | "paid_content"
@@ -186,10 +197,44 @@ const STRIPE_MERCH_CHECKOUT_URL = `${SUPABASE_URL.replace(/\/+$/g, "")}/function
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const exactText = (value: unknown) => typeof value === "string" ? value.trim() : "";
+const currentAuthorityRequired = async (expected: AccountSessionAuthorityBinding) => {
+  if (expected.restoreOnly || !sameAccountSessionAuthority(expected, await readCurrentAccountSessionAuthority())) {
+    throw new Error("Account changed while creator money authority was loading.");
+  }
+};
 
 const creatorMonetizationSetupClient = supabase as unknown as {
   rpc: <T = unknown>(fn: string, args?: Record<string, unknown>) => Promise<{ data: T | null; error: unknown }>;
 };
+
+export async function readMyCreatorEligibilityAuthority(): Promise<CreatorEligibilityDecision> {
+  const before = await readCurrentAccountSessionAuthority();
+  if (!before || before.restoreOnly) return parseCreatorEligibilityReadback(null);
+  const result = await withAuthorityReadDeadline<unknown>(
+    creatorMonetizationSetupClient.rpc("wave1_creator_eligibility_readback"), null,
+  );
+  if (!result || typeof result !== "object" || Array.isArray(result)) return parseCreatorEligibilityReadback(null);
+  const { data, error } = result as { data?: unknown; error?: unknown };
+  const after = await readCurrentAccountSessionAuthority();
+  const row = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  if (error || !sameAccountSessionAuthority(before, after) || after?.restoreOnly
+    || exactText(row.userId) !== before.userId || exactText(row.accountId) !== before.accountId
+    || exactText(row.sessionGeneration) !== before.sessionGeneration) {
+    return parseCreatorEligibilityReadback(null);
+  }
+  return parseCreatorEligibilityReadback(data);
+}
+
+export async function assertCreatorMoneyExposureAllowed() {
+  const eligibility = await readMyCreatorEligibilityAuthority();
+  if (!canCreateCreatorMoneyExposure(eligibility)) {
+    throw new Error("Creator money setup is unavailable until server verification is complete.");
+  }
+  return eligibility;
+}
 
 const normalizeConfig = (value: unknown): CreatorMonetizationConfig | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -239,6 +284,7 @@ export async function saveCreatorSandboxMonetizationConfig(input: {
   sourceId: string;
   sourceType: CreatorMonetizationSetupSourceType;
 }) {
+  await assertCreatorMoneyExposureAllowed();
   const tier = getCreatorSandboxTier(input.productKey);
   if (tier.key !== input.productKey) throw new Error("Choose an approved sandbox product tier.");
   if (tier.sourceType !== input.sourceType) throw new Error("Source type does not match the selected product tier.");
@@ -282,6 +328,12 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
   config: CreatorMonetizationConfig;
   userId: string;
 }) {
+  const operationAuthority = await readCurrentAccountSessionAuthority();
+  if (!operationAuthority || operationAuthority.restoreOnly || exactText(input.userId) !== operationAuthority.userId) {
+    throw new Error("Creator purchase authority is unavailable for the current account.");
+  }
+  await assertCreatorMoneyExposureAllowed();
+  await currentAuthorityRequired(operationAuthority);
   const tier = getCreatorSandboxTier(input.config.productKey);
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
@@ -301,7 +353,11 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
   if (!isValidCreatorMonetizationSourceId(input.config.sourceId)) {
     throw new Error("The saved config source is not valid.");
   }
-  if (input.userId) await syncRevenueCatCustomerIdentity(input.userId);
+  const identity = await syncRevenueCatCustomerIdentity(operationAuthority.userId);
+  if (identity.status !== "identified" || !identity.matchesSourceUser) {
+    throw new Error("Billing identity is unavailable for the current account.");
+  }
+  await currentAuthorityRequired(operationAuthority);
 
   const { data: intent, error } = await supabase.rpc("create_money_purchase_intent", {
     p_metadata: {
@@ -318,11 +374,14 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
     p_source_type: input.config.sourceType,
   });
   if (error) throw error;
+  await currentAuthorityRequired(operationAuthority);
 
   const products = await readRevenueCatNonSubscriptionProducts([input.config.providerProductId]);
+  await currentAuthorityRequired(operationAuthority);
   const storeProduct = products.find((entry) => toText(entry.identifier) === input.config.providerProductId);
   if (!storeProduct) throw new Error(`RevenueCat product ${input.config.providerProductId} is not available on this build/account.`);
-  const purchase = await purchaseRevenueCatStoreProduct(storeProduct);
+  const purchase = await purchaseRevenueCatStoreProduct(storeProduct, { authority: operationAuthority });
+  await currentAuthorityRequired(operationAuthority);
   return {
     intentId: toText((intent as { id?: unknown } | null)?.id),
     productId: toText(purchase.productIdentifier) || input.config.providerProductId,

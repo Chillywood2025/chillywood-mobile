@@ -21,6 +21,7 @@ type RuntimeControlledLiveFeature = {
 
 export type PremiumWatchPartyFeatureAccessDecision = Omit<ContentAccessDecision, "reason"> & {
   reason: ContentAccessDecision["reason"] | "feature_disabled";
+  authorityUnavailable?: boolean;
   featureDisabled?: boolean;
   runtimeControlKey?: RuntimeControlledLiveFeature["controlKey"];
   disabledTitle?: string;
@@ -66,11 +67,20 @@ const RUNTIME_CONTROL_DISABLED_COPY: Record<RuntimeControlledLiveFeature["contro
 
 export const isRuntimeControlBlockedAccess = (
   access?: PremiumWatchPartyFeatureAccessDecision | null,
-) => access?.reason === "feature_disabled" || access?.featureDisabled === true;
+) => access?.reason === "feature_disabled"
+  || access?.featureDisabled === true
+  || access?.reason === "entitlement_unknown"
+  || access?.authorityUnavailable === true;
 
 export const getRuntimeControlBlockedCopy = (
   access?: PremiumWatchPartyFeatureAccessDecision | null,
 ) => {
+  if (access?.reason === "entitlement_unknown" || access?.authorityUnavailable) {
+    return {
+      title: "Premium status unavailable",
+      message: "We could not verify Premium for this account. Recheck access before continuing.",
+    };
+  }
   const key = access?.runtimeControlKey;
   const fallback = key ? RUNTIME_CONTROL_DISABLED_COPY[key] : null;
   return {
@@ -124,6 +134,25 @@ const requireRuntimeControlledPremiumAccess = async (
         issues: [
           copy.message,
           ...premiumAccess.monetization.issues.filter((issue) => issue !== copy.message),
+        ],
+      },
+    };
+  }
+
+  if (!premiumAccess.monetization.entitlementAuthorityAvailable) {
+    return {
+      ...premiumAccess,
+      allowed: false,
+      reason: "entitlement_unknown",
+      requiresPremium: false,
+      requiresPartyPass: false,
+      authorityUnavailable: true,
+      monetization: {
+        ...premiumAccess.monetization,
+        canPurchase: false,
+        issues: [
+          "Premium authority is unavailable for the current account.",
+          ...premiumAccess.monetization.issues,
         ],
       },
     };
