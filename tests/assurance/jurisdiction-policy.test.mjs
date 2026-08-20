@@ -34,7 +34,7 @@ import {
   verifyOwnerJurisdictionDecisionV2,
   verifyTaskJurisdictionBindingV2,
 } from "../../scripts/assurance/jurisdiction-policy.mjs";
-import { architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 
 const DOMAINS = Object.freeze([
   "auth-session-password-recovery",
@@ -599,4 +599,74 @@ test("production final-source eligibility readback binds exact review, Phase 1, 
   const final = renderFiniteTaskAdmissionFinalSourceV2({ scope, owner, admissionIdentity: fixture.admissionIdentity, diffHash: reviewScope.diffHash, ownerJurisdiction: finiteTaskFinalSourceOwnerJurisdictionV2(authority), currentAdmission: { bodyHash: admission.bodyHash, commentId: admissionAuthority.commentId, sequence: admission.subject.sequence, subjectHash: admission.subjectHash }, repositoryReview: { bodyHash: hashValue(reviewRaw.body), commentId: reviewRaw.id, disposition: reviewSubject.disposition, subjectHash: hashValue(reviewSubject) }, phase1, prospective: { classification: "PREIMPLEMENTATION_ENGINEERING_CLEAR", externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: 9, required: 9, result: "9/9" }, productMutationAllowedAfterAdmissionMerge: true, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: "CLEAR" } });
   const finalRaw = githubReceipt(5294000000, 233, final.body, "2026-08-14T15:00:00Z"); const args = { allComments: [reviewRaw, finalRaw], paginationComplete: true, identity, tree: fixture.admissionIdentity.tree, scope: reviewScope, admissionAuthority, ownerJurisdictionAuthority: authority, phase1EvidenceResolver: phase1Resolver };
   assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2(args).mergeEligible, true); assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw] }).mergeEligible, false); assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, phase1EvidenceResolver: () => ({ ...phase1, valid: false }) }).mergeEligible, false);
+
+  const staleIdentity = { ...identity, headSha: sha40("6") };
+  const staleTree = sha40("5");
+  const staleReviewSubject = architectureRepositoryReviewSubject({ identity: staleIdentity, tree: staleTree, scope: reviewScope, profile: "FINITE_TASK_ADMISSION_JURISDICTION_V2" });
+  const staleReviewRaw = githubReceipt(5292999998, 233, architectureRepositoryReviewCommentBody(staleReviewSubject), "2026-08-14T13:00:00Z");
+  const staleFinal = renderFiniteTaskAdmissionFinalSourceV2({ scope, owner, admissionIdentity: { ...fixture.admissionIdentity, head: staleIdentity.headSha, tree: staleTree }, diffHash: reviewScope.diffHash, ownerJurisdiction: finiteTaskFinalSourceOwnerJurisdictionV2(authority), currentAdmission: { bodyHash: admission.bodyHash, commentId: admissionAuthority.commentId, sequence: admission.subject.sequence, subjectHash: admission.subjectHash }, repositoryReview: { bodyHash: hashValue(staleReviewRaw.body), commentId: staleReviewRaw.id, disposition: staleReviewSubject.disposition, subjectHash: hashValue(staleReviewSubject) }, phase1: { ...phase1, head: staleIdentity.headSha, tree: staleTree }, prospective: { classification: "PREIMPLEMENTATION_ENGINEERING_CLEAR", externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: 9, required: 9, result: "9/9" }, productMutationAllowedAfterAdmissionMerge: true, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: "CLEAR" } });
+  const staleFinalRaw = githubReceipt(5293999998, 233, staleFinal.body, "2026-08-14T13:30:00Z");
+  const malformedReviewRaw = githubReceipt(5293000002, 233, `${ARCHITECTURE_REPOSITORY_REVIEW_MARKER}\n{}`, "2026-08-14T16:00:00Z");
+  const malformedFinalRaw = githubReceipt(5294000002, 233, `${FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER}\n{}`, "2026-08-14T16:01:00Z");
+  const retainedHistory = [staleFinalRaw, malformedReviewRaw, reviewRaw, staleReviewRaw, malformedFinalRaw, finalRaw];
+  const retained = verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: retainedHistory });
+  assert.equal(retained.mergeEligible, true, retained.findings.join(","));
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [...retainedHistory].reverse() }).commentId, finalRaw.id);
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, paginationComplete: false }).mergeEligible, false);
+
+  const duplicateReviewRaw = { ...reviewRaw, id: 5293000003, node_id: "IC_5293000003", html_url: `https://github.com/${scope.repository}/pull/233#issuecomment-5293000003` };
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw, duplicateReviewRaw, finalRaw] }).mergeEligible, false);
+  const duplicateFinalRaw = { ...finalRaw, id: 5294000003, node_id: "IC_5294000003", html_url: `https://github.com/${scope.repository}/pull/233#issuecomment-5294000003` };
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw, finalRaw, duplicateFinalRaw] }).mergeEligible, false);
+
+  const staleSelectedFinal = renderFiniteTaskAdmissionFinalSourceV2({ scope, owner, admissionIdentity: fixture.admissionIdentity, diffHash: reviewScope.diffHash, ownerJurisdiction: finiteTaskFinalSourceOwnerJurisdictionV2(authority), currentAdmission: { bodyHash: admission.bodyHash, commentId: admissionAuthority.commentId, sequence: admission.subject.sequence, subjectHash: admission.subjectHash }, repositoryReview: { bodyHash: hashValue(staleReviewRaw.body), commentId: staleReviewRaw.id, disposition: staleReviewSubject.disposition, subjectHash: hashValue(staleReviewSubject) }, phase1, prospective: { classification: "PREIMPLEMENTATION_ENGINEERING_CLEAR", externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: 9, required: 9, result: "9/9" }, productMutationAllowedAfterAdmissionMerge: true, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: "CLEAR" } });
+  const staleSelectedFinalRaw = githubReceipt(5294000004, 233, staleSelectedFinal.body, "2026-08-14T16:02:00Z");
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [staleReviewRaw, reviewRaw, staleSelectedFinalRaw] }).mergeEligible, false);
+
+  const finalForIdentity = (id, admissionIdentity, createdAt = "2026-08-14T16:10:00Z") => {
+    const alternatePhase1 = { ...phase1, head: admissionIdentity.head, tree: admissionIdentity.tree };
+    const alternate = renderFiniteTaskAdmissionFinalSourceV2({ scope, owner, admissionIdentity, diffHash: reviewScope.diffHash, ownerJurisdiction: finiteTaskFinalSourceOwnerJurisdictionV2(authority), currentAdmission: { bodyHash: admission.bodyHash, commentId: admissionAuthority.commentId, sequence: admission.subject.sequence, subjectHash: admission.subjectHash }, repositoryReview: { bodyHash: hashValue(reviewRaw.body), commentId: reviewRaw.id, disposition: reviewSubject.disposition, subjectHash: hashValue(reviewSubject) }, phase1: alternatePhase1, prospective: { classification: "PREIMPLEMENTATION_ENGINEERING_CLEAR", externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: 9, required: 9, result: "9/9" }, productMutationAllowedAfterAdmissionMerge: true, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: "CLEAR" } });
+    return githubReceipt(id, 233, alternate.body, createdAt);
+  };
+  const staleBranch = finalForIdentity(5294000010, { ...fixture.admissionIdentity, branch: "codex/historical-admission" });
+  const staleHead = finalForIdentity(5294000011, { ...fixture.admissionIdentity, head: sha40("4") });
+  const staleTreeReceipt = finalForIdentity(5294000012, { ...fixture.admissionIdentity, tree: sha40("3") }, "2026-08-14T17:00:00Z");
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [staleTreeReceipt, staleHead, reviewRaw, staleBranch, finalRaw] }).mergeEligible, true);
+
+  const coherentPayloadMutation = (id, mutate) => {
+    const payload = structuredClone(final.payload);
+    mutate(payload);
+    payload.commentContextHash = typeSeparatedHash(jurisdictionHashDomains.admissionFinalSourceContext, { marker: FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER, owner: payload.owner, pr: payload.pr, repository: payload.repository, task: payload.task, type: "FINITE_TASK_ADMISSION_FINAL_SOURCE_V2" });
+    payload.subjectHash = typeSeparatedHash(jurisdictionHashDomains.admissionFinalSourceSubject, payload.subject);
+    payload.envelopeHash = typeSeparatedHash(jurisdictionHashDomains.admissionFinalSourceEnvelope, { admissionBodyHash: payload.subject.currentAdmission.bodyHash, commentContextHash: payload.commentContextHash, finalHead: payload.subject.admissionIdentity.head, finalTree: payload.subject.admissionIdentity.tree, phase1RunId: payload.subject.phase1.runId, repositoryReviewBodyHash: payload.subject.repositoryReview.bodyHash, subjectHash: payload.subjectHash });
+    const withoutBodyHash = Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "bodyHash"));
+    payload.bodyHash = typeSeparatedHash(jurisdictionHashDomains.admissionFinalSourceBody, withoutBodyHash);
+    return githubReceipt(id, 233, withPayload(FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER, payload), "2026-08-14T17:10:00Z");
+  };
+  const invalidHistorical = [
+    ["edited", { ...finalRaw, id: 5294000020, node_id: "IC_5294000020", html_url: `https://github.com/${scope.repository}/pull/233#issuecomment-5294000020`, updated_at: "2026-08-14T15:00:01Z" }],
+    ["wrong Owner", { ...githubReceipt(5294000021, 233, final.body, "2026-08-14T17:11:00Z"), user: { login: "not-owner" } }],
+    ["wrong association", { ...githubReceipt(5294000022, 233, final.body, "2026-08-14T17:12:00Z"), author_association: "MEMBER" }],
+    ["wrong PR", githubReceipt(5294000023, 232, final.body, "2026-08-14T17:13:00Z")],
+    ["wrong authority", coherentPayloadMutation(5294000024, (payload) => { payload.subject.authority.build = true; })],
+    ["wrong schema", coherentPayloadMutation(5294000025, (payload) => { payload.schemaVersion = 1; })],
+    ["wrong classification", coherentPayloadMutation(5294000026, (payload) => { payload.evidenceClass = "UNRELATED_EVIDENCE"; })],
+  ];
+  for (const [label, historical] of invalidHistorical) {
+    assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw, historical, finalRaw] }).mergeEligible, true, `${label} historical`);
+    assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw, historical] }).mergeEligible, false, `${label} cannot become current`);
+  }
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, raw: staleHead, allComments: [reviewRaw, staleHead, finalRaw] }).mergeEligible, false);
+
+  const synchronizedIdentity = { ...identity, baseSha: sha40("2"), headSha: sha40("4") };
+  const synchronizedTree = sha40("3");
+  const synchronizedReviewSubject = architectureRepositoryReviewSubject({ identity: synchronizedIdentity, tree: synchronizedTree, scope: reviewScope, profile: "FINITE_TASK_ADMISSION_JURISDICTION_V2" });
+  const synchronizedReviewRaw = githubReceipt(5293000030, 233, architectureRepositoryReviewCommentBody(synchronizedReviewSubject), "2026-08-14T18:00:00Z");
+  const synchronizedPhase1 = { ...phase1, head: synchronizedIdentity.headSha, tree: synchronizedTree, runId: 31790000001 };
+  const synchronizedFinal = renderFiniteTaskAdmissionFinalSourceV2({ scope, owner, admissionIdentity: { ...fixture.admissionIdentity, head: synchronizedIdentity.headSha, tree: synchronizedTree }, diffHash: reviewScope.diffHash, ownerJurisdiction: finiteTaskFinalSourceOwnerJurisdictionV2(authority), currentAdmission: { bodyHash: admission.bodyHash, commentId: admissionAuthority.commentId, sequence: admission.subject.sequence, subjectHash: admission.subjectHash }, repositoryReview: { bodyHash: hashValue(synchronizedReviewRaw.body), commentId: synchronizedReviewRaw.id, disposition: synchronizedReviewSubject.disposition, subjectHash: hashValue(synchronizedReviewSubject) }, phase1: synchronizedPhase1, prospective: { classification: "PREIMPLEMENTATION_ENGINEERING_CLEAR", externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: 9, required: 9, result: "9/9" }, productMutationAllowedAfterAdmissionMerge: true, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: "CLEAR" } });
+  const synchronizedFinalRaw = githubReceipt(5294000030, 233, synchronizedFinal.body, "2026-08-14T18:01:00Z");
+  const synchronized = verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, identity: synchronizedIdentity, tree: synchronizedTree, allComments: [reviewRaw, finalRaw, synchronizedReviewRaw, synchronizedFinalRaw], phase1EvidenceResolver: () => ({ ...synchronizedPhase1, valid: true }) });
+  assert.equal(synchronized.mergeEligible, true, synchronized.findings.join(","));
+  assert.equal(synchronized.commentId, synchronizedFinalRaw.id);
+  assert.equal(synchronized.classifications.find(({ commentId }) => commentId === finalRaw.id).status, "HISTORICAL_STALE_FINITE_TASK_ADMISSION_FINAL_SOURCE");
 });

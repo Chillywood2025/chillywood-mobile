@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
+  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_REQUIRED_JOB_NAMES,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
@@ -645,6 +645,49 @@ test("Owner jurisdiction architecture maintenance uses the one bounded assurance
   assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]);
   assert.deepEqual(Object.values(subject.authority), [false, false, false, false, false, false, false, false, false, false]);
 });
+
+test("immutable-evidence lifecycle convergence has one exact closed assurance-only profile", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-immutable-evidence-profile-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd });
+    execFileSync("git", ["config", "user.email", "assurance@example.invalid"], { cwd });
+    execFileSync("git", ["config", "user.name", "Assurance Fixture"], { cwd });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd });
+    const baseSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+    const baseTree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd, encoding: "utf8" }).trim();
+    const record = structuredClone(json("config/assurance/current-truth-v1.json"));
+    record.mainSha = baseSha;
+    record.protectedMainAuthority.checkpointSha = baseSha;
+    record.protectedMainAuthority.checkpointTree = baseTree;
+    fs.mkdirSync(path.join(cwd, "config/assurance"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "config/assurance/current-truth-v1.json"), `${JSON.stringify(record, null, 2)}\n`);
+    fs.writeFileSync(path.join(cwd, "CURRENT_STATE.md"), renderCurrentState(record));
+    fs.writeFileSync(path.join(cwd, "NEXT_TASK.md"), renderNextTask(record));
+    execFileSync("git", ["add", "CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], { cwd });
+    execFileSync("git", ["commit", "-qm", "companion"], { cwd });
+    const headSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+    const tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd, encoding: "utf8" }).trim();
+    const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 243, branch: "codex/immutable-evidence-lifecycle-convergence-v1", headSha, baseSha };
+    const scope = { files: [...IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS], additions: 1600, deletions: 200, netChangedLines: 1400, diffHash: "4".repeat(64) };
+    const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, root: cwd });
+    const raw = taskLocalArchitectureComment({ id: 700015, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+    const result = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, ancestryVerified: true, root: cwd });
+    assert.equal(result.authorizationOk, true, stableJson(result.findings));
+    assert.equal(result.mergeEligible, false);
+    assert.equal(subject.objective, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1);
+    assert.deepEqual(subject.changedPaths, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS);
+    assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1]);
+    assert.deepEqual(subject.budget, { maximumFiles: 8, maximumNetLines: 2000 });
+    assert.equal(subject.reusableByAnotherPr, false);
+    assert.ok(Object.values(subject.authority).every((value) => value === false));
+    const review = architectureRepositoryReviewSubject({ identity, tree, scope, profile: IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 });
+    assert.equal(review.reviewProfile, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1);
+    assert.ok(review.lanes.some((lane) => lane.includes("immutable") || lane.includes("current")));
+    assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, files: [...scope.files, "package.json"].sort() }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, root: cwd }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE/u);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
 const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, objective = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, branch = "codex/finite-task-lease-amendment-control-plane-repair-v1" } = {}) => {
   const paths = [
     "CURRENT_STATE.md",
@@ -787,6 +830,34 @@ test("finite-task terminal truth projection preserves the base lease but synthet
   const final = taskLocalArchitectureComment({ id: 710012, pr: identity.pr, body: finiteTaskTerminalTruthFinalSourceOwnerCommentBody(finalSubject) });
   const common = { raw: owner, allComments: [owner, review, final], paginationComplete: true, identity, tree, scope, terminalTransition: transition, priorTruthHash, priorTruth, truthRecord, currentStateText: renderCurrentState(truthRecord), nextTaskText: renderNextTask(truthRecord), currentMain: mergeSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false, ancestryVerified: true, phase1EvidenceResolver: () => phase1 };
   const verified = verifyFiniteTaskTerminalTruthAuthority(common);
+  assert.equal(verified.checks.review, true);
+  assert.equal(verified.checks.phase1, true);
+  assert.equal(verified.checks.finalSource, true);
+  const invalidateEnvelopeBodyHash = (body) => body.replace(/("bodyHash":")[0-9a-f]{64}"/u, `$1${"0".repeat(64)}"`);
+  const malformedCurrentReview = taskLocalArchitectureComment({ id: 710013, pr: identity.pr, body: invalidateEnvelopeBodyHash(review.body) });
+  const malformedCurrentFinal = taskLocalArchitectureComment({ id: 710014, pr: identity.pr, body: invalidateEnvelopeBodyHash(final.body) });
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, allComments: [owner, malformedCurrentReview, review, malformedCurrentFinal, final] }).checks.finalSource, true);
+  const duplicateReview = taskLocalArchitectureComment({ id: 710015, pr: identity.pr, body: review.body });
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, allComments: [owner, review, duplicateReview, final] }).checks.review, false);
+  const duplicateFinal = taskLocalArchitectureComment({ id: 710016, pr: identity.pr, body: final.body });
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, allComments: [owner, review, final, duplicateFinal] }).checks.finalSource, false);
+
+  const staleIdentity = { ...identity, headSha: "c".repeat(40) };
+  const staleTree = "d".repeat(40);
+  const staleReviewSubject = architectureRepositoryReviewSubject({ identity: staleIdentity, tree: staleTree, scope, profile: FINITE_TASK_TERMINAL_TRUTH_V1 });
+  const staleReview = taskLocalArchitectureComment({ id: 710007, pr: identity.pr, body: architectureRepositoryReviewCommentBody(staleReviewSubject) });
+  const staleRun = { ...run, id: 910007, head_sha: staleIdentity.headSha, pull_requests: [{ number: staleIdentity.pr, head: { sha: staleIdentity.headSha }, base: { sha: staleIdentity.baseSha } }] };
+  const staleJobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 100, name, status: "completed", conclusion: "success", head_sha: staleIdentity.headSha }));
+  const stalePhase1 = verifyPhase1RunEvidence({ run: staleRun, jobs: staleJobs, identity: staleIdentity, tree: staleTree });
+  const staleFinalSubject = finiteTaskTerminalTruthFinalSourceSubject({ identity: staleIdentity, tree: staleTree, scope, ownerRaw: owner, repositoryReviewRaw: staleReview, phase1Evidence: stalePhase1, terminalTransition: transition });
+  const staleFinal = taskLocalArchitectureComment({ id: 710008, pr: identity.pr, body: finiteTaskTerminalTruthFinalSourceOwnerCommentBody(staleFinalSubject) });
+  const olderStaleFinal = taskLocalArchitectureComment({ id: 710006, pr: identity.pr, body: staleFinal.body });
+  const retainedHistory = [staleFinal, malformedCurrentFinal, staleReview, owner, olderStaleFinal, review, final];
+  const retained = verifyFiniteTaskTerminalTruthAuthority({ ...common, allComments: retainedHistory, phase1EvidenceResolver: ({ runId }) => runId === stalePhase1.runId ? stalePhase1 : phase1 });
+  assert.equal(retained.checks.review, true);
+  assert.equal(retained.checks.finalSource, true);
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, allComments: [...retainedHistory].reverse(), phase1EvidenceResolver: ({ runId }) => runId === stalePhase1.runId ? stalePhase1 : phase1 }).checks.finalSource, true);
+  assert.equal(verifyFiniteTaskTerminalTruthAuthority({ ...common, paginationComplete: false }).checks.ownerCardinality, false);
   assert.equal(verified.authorizationOk, false);
   assert.ok(verified.findings.includes("FINITE_TASK_TERMINAL_TRUTH_INVALID:transition"));
   assert.equal(verified.checks.terminalFeatureIdentity, true);
