@@ -66,7 +66,7 @@ const expectedNanoid = Object.freeze({
     "node_modules/postcss",
   ]),
 });
-const expectedUnrelatedPackageGraphSha256 = "b2fb388722dd1df0a9ad59f6cf8660aae05ccd852601d238a195cc1710476204";
+const expectedUnrelatedPackageGraphSha256 = "e769c3faee55749eddc89c38ac35f18f50b92312b358e3d3bea856bf28223d7d";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
   "node_modules/expo/node_modules/balanced-match",
