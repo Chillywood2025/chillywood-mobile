@@ -18,6 +18,46 @@ export const stableValue = (value) => Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]))
     : value;
 export const stableJson = (value, space = 0) => JSON.stringify(stableValue(value), null, space);
+export function selectCurrentImmutableEvidence({ candidates = [], requiredKey, classify } = {}) {
+  const values = Array.isArray(candidates) ? candidates : [];
+  const canonicalRequiredKey = stableJson(requiredKey);
+  const evaluated = values.map((candidate, index) => {
+    try {
+      const result = classify(candidate, index);
+      if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("IMMUTABLE_EVIDENCE_CLASSIFICATION_INVALID");
+      const key = Object.hasOwn(result, "key") ? result.key : null;
+      const valid = result.valid === true;
+      const current = valid && stableJson(key) === canonicalRequiredKey;
+      const disposition = current
+        ? "CURRENT_VALID"
+        : typeof result.disposition === "string" && result.disposition.length > 0
+          ? result.disposition
+          : valid
+            ? "HISTORICAL_VALID_OTHER_KEY"
+            : "MALFORMED_INVALID";
+      const value = Object.hasOwn(result, "value") ? result.value : null;
+      return { index, valid, current, key, value, disposition };
+    } catch {
+      return { index, valid: false, current: false, key: null, value: null, disposition: "MALFORMED_INVALID" };
+    }
+  });
+  const current = evaluated.filter((item) => item.current);
+  const selected = current.length === 1
+    ? Object.fromEntries(Object.entries(current[0]).filter(([key]) => key !== "valid" && key !== "current"))
+    : null;
+  return {
+    ok: current.length === 1,
+    finding: current.length === 0
+      ? "IMMUTABLE_EVIDENCE_CURRENT_MISSING"
+      : current.length > 1
+        ? "IMMUTABLE_EVIDENCE_CURRENT_DUPLICATE"
+        : null,
+    candidateCount: evaluated.length,
+    currentCount: current.length,
+    selected,
+    classifications: evaluated.map(({ value: _value, ...item }) => item),
+  };
+}
 export const normalizeSql = (value) => value.replace(/\r\n/gu, "\n").replace(/[ \t]+\n/gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
 export function canonicalGitText(value) {
   if (typeof value !== "string") throw new TypeError("ASSURANCE_CANONICAL_GIT_TEXT_REQUIRES_STRING");
@@ -1165,58 +1205,86 @@ export function verifyFiniteTaskFinalSourceEligibility({
   lease,
   candidate,
   evidence,
+  evidenceResolver = null,
   effectiveReservationResolution,
   comments = [],
   commentsPaginationComplete = false
 } = {}) {
   const findings = [];
   if (!Array.isArray(comments) || commentsPaginationComplete !== true) findings.push("FINITE_TASK_FINAL_SOURCE_DISCOVERY_INCOMPLETE");
-  const matches = (Array.isArray(comments) ? comments : []).filter(({ body }) => typeof body === "string" && body.includes(finalReceiptMarker));
-  if (matches.length !== 1) findings.push("FINITE_TASK_FINAL_SOURCE_CARDINALITY_INVALID");
-  let verified = null;
-  let normalizedReceipt = null;
-  if (matches.length === 1) {
-    const observation = normalizeIssueComment(matches[0]);
-    let envelope = null;
-    try {
-      envelope = observation.body.startsWith(`${finalReceiptMarker}\n`)
-        ? JSON.parse(observation.body.slice(finalReceiptMarker.length + 1))
-        : null;
-    } catch {}
-    const receipt = {
-      commentId: observation.commentId,
-      author: observation.author,
-      authorAssociation: observation.authorAssociation,
-      subjectHash: envelope?.subjectHash,
-      bodyHash: envelope?.bodyHash,
-      rawBodyHash: sha256(observation.body ?? ""),
-      bodySha256: sha256(observation.body ?? "")
-    };
-    verified = verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation, effectiveReservationResolution });
-    if (!verified.ok) findings.push("FINITE_TASK_FINAL_SOURCE_RECEIPT_INVALID");
-    normalizedReceipt = verified.ok ? {
-      commentId: observation.commentId,
-      createdAt: observation.createdAt,
-      subjectHash: verified.subjectHash,
-      bodyHash: verified.bodyHash,
-      rawBodyHash: verified.rawBodyHash,
-      finalHead: verified.subject.finalHead,
-      finalTree: verified.subject.finalTree,
-      effectiveReservationHash: verified.subject.effectiveReservation?.reservationHash ?? null,
-      amendmentCommentId: verified.subject.amendmentReceipt?.commentId ?? null,
-      ...(verified.subject.schemaVersion === 3 ? {
-        aggregateReservationHash: verified.subject.aggregateReservation?.reservationHash ?? null,
-        testAdaptationCommentId: verified.subject.testAdaptationReceipt?.commentId ?? null
-      } : {})
-    } : null;
-  }
+  const matches = (Array.isArray(comments) ? comments : []).filter(({ body }) => typeof body === "string" && body.startsWith(`${finalReceiptMarker}\n`));
+  const requiredKey = { finalHead: candidate?.head ?? null, finalTree: candidate?.tree ?? null };
+  const selection = selectCurrentImmutableEvidence({
+    candidates: matches,
+    requiredKey,
+    classify: (raw, index) => {
+      const observation = normalizeIssueComment(raw);
+      let envelope;
+      try { envelope = JSON.parse(observation.body.slice(finalReceiptMarker.length + 1)); } catch { return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" }; }
+      if (!envelope || typeof envelope !== "object" || Array.isArray(envelope) || !envelope.subject || typeof envelope.subject !== "object" || Array.isArray(envelope.subject)) {
+        return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" };
+      }
+      const key = { finalHead: envelope.subject.finalHead ?? null, finalTree: envelope.subject.finalTree ?? null };
+      const receipt = {
+        commentId: observation.commentId,
+        author: observation.author,
+        authorAssociation: observation.authorAssociation,
+        subjectHash: envelope?.subjectHash,
+        bodyHash: envelope?.bodyHash,
+        rawBodyHash: sha256(observation.body ?? ""),
+        bodySha256: sha256(observation.body ?? "")
+      };
+      const candidateEvidence = typeof evidenceResolver === "function"
+        ? evidenceResolver({ raw, index, observation, envelope, receipt })
+        : typeof evidence === "function"
+          ? evidence({ raw, index, observation, envelope, receipt })
+          : evidence;
+      const verified = verifyFiniteTaskFinalReceipt({ lease, candidate, evidence: candidateEvidence, receipt, observation, effectiveReservationResolution });
+      return {
+        valid: verified.ok,
+        key,
+        value: { verified, observation, receipt, envelope },
+        disposition: stableJson(key) === stableJson(requiredKey)
+          ? "CURRENT_KEY_INVALID"
+          : "HISTORICAL_STALE_OR_WRONG_CONTEXT",
+      };
+    },
+  });
+  if (!selection.ok) findings.push("FINITE_TASK_FINAL_SOURCE_CARDINALITY_INVALID");
+  if (selection.currentCount === 0 && matches.length > 0) findings.push("FINITE_TASK_FINAL_SOURCE_RECEIPT_INVALID");
+  const selected = selection.selected?.value ?? null;
+  const verified = selected?.verified ?? null;
+  const observation = selected?.observation ?? null;
+  const normalizedReceipt = verified?.ok ? {
+    commentId: observation.commentId,
+    createdAt: observation.createdAt,
+    subjectHash: verified.subjectHash,
+    bodyHash: verified.bodyHash,
+    rawBodyHash: verified.rawBodyHash,
+    finalHead: verified.subject.finalHead,
+    finalTree: verified.subject.finalTree,
+    effectiveReservationHash: verified.subject.effectiveReservation?.reservationHash ?? null,
+    amendmentCommentId: verified.subject.amendmentReceipt?.commentId ?? null,
+    ...(verified.subject.schemaVersion === 3 ? {
+      aggregateReservationHash: verified.subject.aggregateReservation?.reservationHash ?? null,
+      testAdaptationCommentId: verified.subject.testAdaptationReceipt?.commentId ?? null
+    } : {})
+  } : null;
   const unique = [...new Set(findings)].sort();
   return {
     ok: unique.length === 0,
     mergeEligible: unique.length === 0,
     findings: unique,
     receipt: normalizedReceipt,
-    subject: verified?.subject ?? null
+    subject: verified?.subject ?? null,
+    currentReceiptCount: selection.currentCount,
+    receiptClassifications: selection.classifications.map((classification) => ({
+      commentId: matches[classification.index]?.id ?? matches[classification.index]?.commentId ?? null,
+      valid: classification.valid,
+      current: classification.current,
+      key: classification.key,
+      disposition: classification.disposition,
+    })),
   };
 }
 
@@ -2535,9 +2603,11 @@ const finiteTaskTestAdaptationPolicyIdentity = Object.freeze({
 });
 const trustedFiniteTaskLiveObservations = new WeakMap();
 const trustedFiniteTaskResolutionFingerprints = new WeakMap();
+const trustedFiniteTaskResolutionObservations = new WeakMap();
 const trustedFiniteTaskPostMergeCandidates = new WeakMap();
 const trustedFiniteTaskPostMergeTransitions = new WeakMap();
 const trustedFiniteTaskImplementationLifecycles = new WeakMap();
+const trustedFiniteTaskImplementationLifecycleObservations = new WeakMap();
 const finiteTaskImplementationLifecycleFingerprint = (value) => sha256(value);
 export function finiteTaskImplementationLifecycleAuthorityValid(value) {
   return value?.mergeEligible === true
@@ -2547,18 +2617,122 @@ export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: v
   const trustedLive = liveObservation && trustedFiniteTaskLiveObservations.get(liveObservation) === sha256(liveObservation)
     && liveObservation.commentsPaginationComplete === true && liveObservation.commitsPaginationComplete === true
     && liveObservation.requireCompleteDiscovery === true && liveObservation.observationMode === "LIVE_GITHUB_COMPLETE_READBACK";
-  const readEnvelope = (marker) => {
-    const matches = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${marker}\n`));
-    if (matches.length !== 1) return null;
-    const raw = matches[0]; let envelope;
+  const repository = "Chillywood2025/chillywood-mobile";
+  const implementationPr = resolution?.baseLease?.implementationPr;
+  const implementationBranch = resolution?.baseLease?.implementationBranch;
+  const immutableEnvelope = (raw, marker) => {
+    if (!Number.isInteger(raw?.id) || raw.id < 1
+      || raw?.user?.login !== "Chillywood2025"
+      || raw?.author_association !== "OWNER"
+      || typeof raw?.created_at !== "string"
+      || raw.created_at !== raw.updated_at
+      || raw?.issue_url !== `https://api.github.com/repos/${repository}/issues/${implementationPr}`
+      || typeof raw?.body !== "string"
+      || !raw.body.startsWith(`${marker}\n`)) return null;
+    let envelope;
     try { envelope = JSON.parse(raw.body.slice(marker.length + 1)); } catch { return null; }
+    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)
+      || !envelope.subject || typeof envelope.subject !== "object" || Array.isArray(envelope.subject)) return null;
     const body = Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "bodyHash"));
-    return raw.user?.login === "Chillywood2025" && raw.author_association === "OWNER" && raw.created_at === raw.updated_at
-      && envelope.subjectHash === sha256(envelope.subject) && envelope.bodyHash === sha256(body) ? { raw, envelope } : null;
+    return envelope.subjectHash === sha256(envelope.subject) && envelope.bodyHash === sha256(body)
+      ? { raw, envelope }
+      : null;
   };
-  const review = readEnvelope("<!-- chillywood-assurance-repository-review-v1 -->"); const final = readEnvelope(finalReceiptMarker);
+  const reviewMarker = "<!-- chillywood-assurance-repository-review-v1 -->";
+  const reviewRequiredKey = {
+    repository,
+    pr: implementationPr ?? null,
+    branch: implementationBranch ?? null,
+    head: value?.candidateHead ?? null,
+    tree: value?.candidateTree ?? null,
+  };
+  const reviewCandidates = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${reviewMarker}\n`));
+  const reviewSelection = selectCurrentImmutableEvidence({
+    candidates: reviewCandidates,
+    requiredKey: reviewRequiredKey,
+    classify: (raw) => {
+      const parsed = immutableEnvelope(raw, reviewMarker);
+      const subject = parsed?.envelope?.subject;
+      const key = subject ? {
+        repository: subject.repository ?? null,
+        pr: subject.pr ?? null,
+        branch: subject.branch ?? null,
+        head: subject.reviewedHead ?? null,
+        tree: subject.reviewedTree ?? null,
+      } : null;
+      const valid = Boolean(parsed
+        && parsed.envelope.evidenceClass === "REPOSITORY_EXACT_HEAD_REVIEW"
+        && parsed.envelope.type === "REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1"
+        && parsed.envelope.repository === repository
+        && parsed.envelope.pr === implementationPr
+        && subject.repository === repository
+        && subject.pr === implementationPr
+        && subject.branch === implementationBranch
+        && subject.reviewedHead === value?.candidateHead
+        && subject.reviewedTree === value?.candidateTree
+        && parsed.envelope.subjectHash === value?.repositoryReview?.subjectHash
+        && subject.diffHash === value?.repositoryReview?.diffHash
+        && subject.changedPathHash === value?.repositoryReview?.changedPathHash
+        && stableJson(subject.disposition) === stableJson(value?.repositoryReview?.disposition)
+        && (resolution?.status !== "AMENDED_WITH_TEST_ADAPTATION"
+          || stableJson(subject.finiteTaskEffectiveReservation?.finiteTaskPrRiskAuthority) === stableJson(value?.finiteTaskPrRiskAuthority)));
+      return {
+        valid,
+        key,
+        value: parsed,
+        disposition: key && stableJson(key) !== stableJson(reviewRequiredKey)
+          ? "HISTORICAL_STALE_OR_WRONG_CONTEXT"
+          : "CURRENT_KEY_INVALID",
+      };
+    },
+  });
+  const finalRequiredKey = {
+    repository,
+    featureId: resolution?.baseLease?.featureId ?? null,
+    pr: implementationPr ?? null,
+    branch: implementationBranch ?? null,
+    head: value?.candidateHead ?? null,
+    tree: value?.candidateTree ?? null,
+  };
+  const finalCandidates = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${finalReceiptMarker}\n`));
+  const finalSelection = selectCurrentImmutableEvidence({
+    candidates: finalCandidates,
+    requiredKey: finalRequiredKey,
+    classify: (raw) => {
+      const parsed = immutableEnvelope(raw, finalReceiptMarker);
+      const subject = parsed?.envelope?.subject;
+      const key = subject ? {
+        repository: subject.repository ?? null,
+        featureId: subject.featureId ?? null,
+        pr: subject.implementationPr ?? null,
+        branch: subject.implementationBranch ?? null,
+        head: subject.finalHead ?? null,
+        tree: subject.finalTree ?? null,
+      } : null;
+      const valid = Boolean(parsed
+        && stableJson(subject) === stableJson(value?.finalSourceSubject)
+        && subject.repository === repository
+        && subject.featureId === resolution?.baseLease?.featureId
+        && subject.implementationPr === implementationPr
+        && subject.implementationBranch === implementationBranch
+        && subject.finalHead === value?.candidateHead
+        && subject.finalTree === value?.candidateTree);
+      return {
+        valid,
+        key,
+        value: parsed,
+        disposition: key && stableJson(key) !== stableJson(finalRequiredKey)
+          ? "HISTORICAL_STALE_OR_WRONG_CONTEXT"
+          : "CURRENT_KEY_INVALID",
+      };
+    },
+  });
+  const review = reviewSelection.selected?.value ?? null;
+  const final = finalSelection.selected?.value ?? null;
   const phase = value?.phase1Evidence; const { valid: _valid, evidenceHash: _hash, ...phaseBody } = phase ?? {};
   if (trustedLive && finiteTaskEffectiveReservationAuthorityValid(resolution)
+    && trustedFiniteTaskResolutionObservations.get(resolution) === sha256(liveObservation)
+    && reviewSelection.ok && finalSelection.ok
     && value?.ok === true && value?.authorizationOk === true && value?.mergeEligible === true && value?.findings?.length === 0
     && value?.reservationStatus === resolution.status
     && value?.effectiveReservationHash === resolution.effectiveReservation?.reservationHash
@@ -2584,12 +2758,18 @@ export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: v
     && (resolution.status !== "AMENDED_WITH_TEST_ADAPTATION" || value.finalSourceSubject.scopeBase === resolution.scopeBase)
     && value.finalSourceSubject.repositoryReviewHash === value.repositoryReview.subjectHash
     && value.finalSourceSubject.phase1RunId === phase.runId && value.finalSourceSubject.phase1Head === phase.sourceHead
-    && review?.raw.id === value.repositoryReview.commentId && review.envelope.subjectHash === value.repositoryReview.subjectHash
+    && review?.raw.id === value.repositoryReview.commentId && sha256(review.raw.body) === value.repositoryReview.commentBodyHash && review.envelope.subjectHash === value.repositoryReview.subjectHash
     && review.envelope.subject?.reviewedHead === value.candidateHead && review.envelope.subject?.reviewedTree === value.candidateTree
     && (resolution.status !== "AMENDED_WITH_TEST_ADAPTATION"
       || stableJson(review.envelope.subject?.finiteTaskEffectiveReservation?.finiteTaskPrRiskAuthority) === stableJson(value.finiteTaskPrRiskAuthority))
-    && final?.raw.id === value.finalSource.receipt?.commentId && stableJson(final.envelope.subject) === stableJson(value.finalSourceSubject)) {
+    && final?.raw.id === value.finalSource.receipt?.commentId
+    && final.raw.created_at === value.finalSource.receipt?.createdAt
+    && final.envelope.subjectHash === value.finalSource.receipt?.subjectHash
+    && final.envelope.bodyHash === value.finalSource.receipt?.bodyHash
+    && sha256(final.raw.body) === value.finalSource.receipt?.rawBodyHash
+    && stableJson(final.envelope.subject) === stableJson(value.finalSourceSubject)) {
     trustedFiniteTaskImplementationLifecycles.set(value, finiteTaskImplementationLifecycleFingerprint(value));
+    trustedFiniteTaskImplementationLifecycleObservations.set(value, sha256(liveObservation));
   }
   return value;
 }
@@ -2726,6 +2906,7 @@ function finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTra
 }
 export function registerVerifiedFiniteTaskPostMergeTransition({ lease, liveObservation, postMergeTransition } = {}) {
   if (finiteTaskImplementationLifecycleAuthorityValid(postMergeTransition?.lifecycle)
+    && trustedFiniteTaskImplementationLifecycleObservations.get(postMergeTransition.lifecycle) === sha256(liveObservation)
     && finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTransition })) {
     trustedFiniteTaskPostMergeTransitions.set(postMergeTransition, sha256(postMergeTransition));
   }
@@ -3136,19 +3317,67 @@ const finiteTaskOverlayFinalReceiptRecordValid = (receipt, outcome, lease = null
 };
 const finiteTaskOverlayFinalReceiptMatchesLiveObservation = (receipt, liveObservation, implementationPr) => {
   const matches = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${finalReceiptMarker}\n`));
+  const requiredKey = {
+    repository: receipt?.subject?.repository ?? null,
+    featureId: receipt?.subject?.featureId ?? null,
+    pr: receipt?.subject?.implementationPr ?? null,
+    branch: receipt?.subject?.implementationBranch ?? null,
+    head: receipt?.subject?.finalHead ?? null,
+    tree: receipt?.subject?.finalTree ?? null,
+  };
+  const selection = selectCurrentImmutableEvidence({
+    candidates: matches,
+    requiredKey,
+    classify: (raw) => {
+      const observed = normalizeIssueComment(raw);
+      let envelope;
+      try { envelope = JSON.parse(observed.body.slice(finalReceiptMarker.length + 1)); } catch { return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" }; }
+      const subject = envelope?.subject;
+      if (!subject || typeof subject !== "object" || Array.isArray(subject)) return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" };
+      const key = {
+        repository: subject.repository ?? null,
+        featureId: subject.featureId ?? null,
+        pr: subject.implementationPr ?? null,
+        branch: subject.implementationBranch ?? null,
+        head: subject.finalHead ?? null,
+        tree: subject.finalTree ?? null,
+      };
+      const envelopeBody = Object.fromEntries(Object.entries(envelope).filter(([field]) => field !== "bodyHash"));
+      const valid = observed.author === "Chillywood2025"
+        && observed.authorAssociation === "OWNER"
+        && typeof observed.createdAt === "string"
+        && observed.createdAt === observed.updatedAt
+        && observed.issueUrl === `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${implementationPr}`
+        && envelope.subjectHash === sha256(subject)
+        && envelope.bodyHash === sha256(envelopeBody)
+        && stableJson(subject) === stableJson(receipt?.subject)
+        && observed.body === finiteTaskFinalReceiptBody(subject);
+      return {
+        valid,
+        key,
+        value: { observed, envelope },
+        disposition: stableJson(key) === stableJson(requiredKey)
+          ? "CURRENT_KEY_INVALID"
+          : "HISTORICAL_STALE_OR_WRONG_CONTEXT",
+      };
+    },
+  });
   if (trustedFiniteTaskLiveObservations.get(liveObservation) !== sha256(liveObservation)
     || liveObservation?.commentsPaginationComplete !== true
     || liveObservation?.commitsPaginationComplete !== true
     || liveObservation?.requireCompleteDiscovery !== true
     || liveObservation?.observationMode !== "LIVE_GITHUB_COMPLETE_READBACK"
-    || matches.length !== 1) return false;
-  const observed = normalizeIssueComment(matches[0]);
+    || !selection.ok) return false;
+  const { observed, envelope } = selection.selected.value;
   return observed.commentId === receipt?.commentId
     && observed.author === "Chillywood2025"
     && observed.authorAssociation === "OWNER"
     && observed.createdAt === receipt?.createdAt
     && observed.createdAt === observed.updatedAt
     && observed.issueUrl === `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${implementationPr}`
+    && envelope.subjectHash === receipt?.subjectHash
+    && envelope.bodyHash === receipt?.bodyHash
+    && sha256(observed.body) === receipt?.rawBodyHash
     && observed.body === finiteTaskFinalReceiptBody(receipt?.subject);
 };
 function finiteTaskTerminalOutcomeMatchesLease(registry, lease, outcome) {
@@ -3987,9 +4216,11 @@ export function resolveFiniteTaskEffectiveReservation({
     && (maximumAmendments === 0 || trustedLiveObservation);
   if (baseOnlyAuthorityEligible) {
     trustedFiniteTaskResolutionFingerprints.set(result, finiteTaskResolutionAuthorityFingerprint(result));
+    if (trustedLiveObservation) trustedFiniteTaskResolutionObservations.set(result, sha256(observation));
   } else if (amended && trustedLiveObservation && verification?.liveAuthority === true
     && (!adaptationAuthorized || adaptationVerification?.liveAuthority === true)) {
     trustedFiniteTaskResolutionFingerprints.set(result, finiteTaskResolutionAuthorityFingerprint(result));
+    trustedFiniteTaskResolutionObservations.set(result, sha256(observation));
   }
   return result;
 }
