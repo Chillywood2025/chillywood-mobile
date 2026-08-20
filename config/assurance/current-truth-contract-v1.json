@@ -169,6 +169,9 @@
       ,"config/assurance/engineering-evidence-authority-v1.json"
       ,"scripts/assurance/engineering-closure.mjs"
       ,"scripts/assurance/jurisdiction-policy.mjs"
+      ,"config/assurance/pr-scope-policy-v1.json"
+      ,"scripts/assurance/pr-scope-lib.mjs"
+      ,"scripts/assurance/pr-scope.mjs"
     ],
     "activeTaskModelPaths": [
       "config/assurance/feature-registry-v1.json",
@@ -548,6 +551,35 @@
       "post-merge-readback",
       "terminal-truth"
     ],
+    "finiteTaskFeatureRiskProjection": {
+      "schemaVersion": 1,
+      "contractId": "FINITE_TASK_FEATURE_TO_PR_RISK_PROJECTION_V1",
+      "classification": "ACTIVE_FINITE_TASK_PR_RISK_AUTHORITY_V1",
+      "projectionSource": "VERIFIED_IMMUTABLE_FINITE_TASK_AUTHORITY",
+      "policySource": "PROTECTED_PR_SCOPE_POLICY_FINITE_TASK_FEATURE_RISK_PROJECTION",
+      "affectedFeatureRegistrationRequired": true,
+      "primaryFeatureIncludedRequired": true,
+      "currentDiffCreatesAuthority": false,
+      "callerInputCreatesAuthority": false,
+      "wildcardOrUniversalAuthorityAllowed": false,
+      "observedRiskSource": "EXACT_CHANGED_PATHS_UNDER_PROTECTED_PR_SCOPE_POLICY",
+      "unauthorizedObservedHighRiskFailsClosed": true,
+      "pathReservationRequiredIndependently": true,
+      "featureRiskMappings": [
+        {"featureId": "assurance-efficiency-e0", "authorizedPrRiskDomains": ["autonomous-operators"]},
+        {"featureId": "auth-session-password-recovery", "authorizedPrRiskDomains": ["auth"]},
+        {"featureId": "chilly-chat-call-lifecycle", "authorizedPrRiskDomains": ["Chat", "notifications-native-calls"]},
+        {"featureId": "chilly-chat-inbox-thread", "authorizedPrRiskDomains": ["Chat"]},
+        {"featureId": "creator-money-ledger", "authorizedPrRiskDomains": ["money-payouts"]},
+        {"featureId": "livekit-media-transport", "authorizedPrRiskDomains": ["Cognitive", "LiveKit", "database-RLS"]},
+        {"featureId": "moderation-reporting", "authorizedPrRiskDomains": ["database-RLS"]},
+        {"featureId": "notifications-fcm", "authorizedPrRiskDomains": ["notifications-native-calls"]},
+        {"featureId": "payouts-stripe-connect", "authorizedPrRiskDomains": ["money-payouts"]},
+        {"featureId": "revenuecat-premium", "authorizedPrRiskDomains": ["RevenueCat-Premium", "database-RLS"]},
+        {"featureId": "storekit-google-play-billing", "authorizedPrRiskDomains": ["RevenueCat-Premium"]},
+        {"featureId": "supabase-migrations-rls", "authorizedPrRiskDomains": ["database-RLS"]}
+      ]
+    },
     "authority": {
       "providerMutation": false,
       "databaseDeployment": false,

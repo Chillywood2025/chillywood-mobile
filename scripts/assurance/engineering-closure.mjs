@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { canonicalGitText, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
-import { validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
+import { deriveFiniteTaskPrRiskAuthority, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER,
@@ -1842,6 +1842,12 @@ export const OWNER_JURISDICTION_ARCHITECTURE_PATHS = Object.freeze([
   "tests/assurance/jurisdiction-policy.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
+export const FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS = Object.freeze([
+  ...OWNER_JURISDICTION_ARCHITECTURE_PATHS,
+  "config/assurance/pr-scope-policy-v1.json",
+  "scripts/assurance/pr-scope-lib.mjs",
+  "scripts/assurance/pr-scope.mjs",
+]);
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 export const FINITE_TASK_ADMISSION_LEASE_STATE = "ACTIVE_IMPLEMENTATION";
 export const finiteTaskAdmissionLeaseStateValid = (lease) => lease?.taskState === FINITE_TASK_ADMISSION_LEASE_STATE;
@@ -2503,7 +2509,7 @@ export const PHASE1_REQUIRED_JOB_NAMES = Object.freeze([
   "Phase 1 / iOS Configuration",
 ]);
 
-const finiteTaskImplementationReviewBinding = (resolution) => {
+const finiteTaskImplementationReviewBinding = (resolution, finiteTaskPrRiskAuthority) => {
   const base = resolution?.baseReservation;
   const effective = resolution?.effectiveReservation;
   const receipt = resolution?.amendmentReceipt;
@@ -2536,6 +2542,7 @@ const finiteTaskImplementationReviewBinding = (resolution) => {
       bodyHash: receipt.bodyHash ?? null,
       rawBodyHash: receipt.rawBodyHash ?? null,
     } : null,
+    finiteTaskPrRiskAuthority,
     ...(resolution?.status === "AMENDED_WITH_TEST_ADAPTATION" ? {
       scopeBase: resolution.scopeBase,
       testAdaptationReservation: summarize(fixture),
@@ -2551,7 +2558,7 @@ const finiteTaskImplementationReviewBinding = (resolution) => {
   };
 };
 
-export function architectureRepositoryReviewSubject({ identity, tree, scope, profile = null, effectiveReservationResolution = null, dependencyAmendmentResolution = null } = {}) {
+export function architectureRepositoryReviewSubject({ identity, tree, scope, profile = null, effectiveReservationResolution = null, dependencyAmendmentResolution = null, root = REPOSITORY_ROOT } = {}) {
   const observed = exactScope(scope);
   const jurisdictionModelReview = identity?.branch === "codex/owner-jurisdiction-canonical-model-v1";
   const jurisdictionAdmissionReview = profile === "FINITE_TASK_ADMISSION_JURISDICTION_V2";
@@ -2560,6 +2567,15 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const finiteTaskTerminalReview = profile === FINITE_TASK_TERMINAL_TRUTH_V1;
   const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
+  const finiteTaskPrRiskAuthority = finiteTaskImplementationReview
+    ? deriveFiniteTaskPrRiskAuthority({
+        effectiveReservationResolution,
+        registry: readJson(root, "config/assurance/feature-registry-v1.json"),
+        policy: readJson(root, "config/assurance/pr-scope-policy-v1.json"),
+        observedChangedPaths: observed.changedPaths,
+        observedCanonicalChangedLines: Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0),
+      })
+    : null;
   return {
     type: "REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1",
     repository: identity?.repository,
@@ -2576,7 +2592,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
     netChangedLines: observed.netChangedLines,
     disposition: { P0: 0, P1: 0, launchImpactingP2: 0 },
     ...((jurisdictionAdmissionReview || amendmentControlRepairReview || testAdaptationOverlayReview || finiteTaskImplementationReview || finiteTaskTerminalReview) ? { reviewProfile: profile } : {}),
-    ...(finiteTaskImplementationReview ? { finiteTaskEffectiveReservation: finiteTaskImplementationReviewBinding(effectiveReservationResolution) } : {}),
+    ...(finiteTaskImplementationReview ? { finiteTaskEffectiveReservation: finiteTaskImplementationReviewBinding(effectiveReservationResolution, finiteTaskPrRiskAuthority) } : {}),
     ...(dependencyAmendment ? { dependencyAmendment } : {}),
     lanes: finiteTaskTerminalReview ? [
       "exact three-path canonical finite-task terminal-truth transition",
@@ -2597,8 +2613,11 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
     ] : testAdaptationOverlayReview ? [
       "generic finite-task test-adaptation receipt, immutable identity, and descendant-only applicability",
       "separate implementation and fixture path/line partitions with aggregate compatibility projection",
+      "finite-task affected-feature identity remains distinct from protected PR-risk projection and observed exact-path risk",
+      "unauthorized observed high-risk domains fail closed independently from implementation and fixture path authorization",
       "test-fixture classification boundaries, exact baseline binding, and product-path exclusion",
       "current-truth, active-task, engineering-closure, PR-scope, review, final-source, merge, and terminal consumers",
+      "boundary-aware shared secret sanitization preserves canonical assurance identifiers while genuine credential shapes remain redacted",
       "positive and adversarial receipt, ancestry, cardinality, pagination, scope, and expiry witnesses",
       ...(dependencyAmendment ? ["generic immutable dependency-baseline amendment, exact patch-only package graph, lock closure, current-source native digest, and historical installed-evidence preservation"] : []),
       ...(dependencyAmendment?.witnessAmendment ? ["immutable dependency-compatibility witness amendment, exact one-line semantic digest rebind, and unchanged package, lock, native digest, and Phase 1 safety checks"] : []),
@@ -2634,11 +2653,11 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
 }
 export const architectureRepositoryReviewCommentBody = (subject) => repositoryEvidenceCommentBody(ARCHITECTURE_REPOSITORY_REVIEW_MARKER, subject.type, subject);
 
-export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile = null, effectiveReservationResolution = null, dependencyAmendmentResolution = null } = {}) {
+export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile = null, effectiveReservationResolution = null, dependencyAmendmentResolution = null, root = REPOSITORY_ROOT } = {}) {
   const normalized = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
   const payload = parseExactOwnerBody(normalized, ARCHITECTURE_REPOSITORY_REVIEW_MARKER);
   const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
-  const expected = architectureRepositoryReviewSubject({ identity, tree, scope, profile, effectiveReservationResolution, dependencyAmendmentResolution });
+  const expected = architectureRepositoryReviewSubject({ identity, tree, scope, profile, effectiveReservationResolution, dependencyAmendmentResolution, root });
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const dependencyAmendmentBound = dependencyAmendmentResolution === null
     || dependencyAmendmentReadyForFinalEvidence(dependencyAmendmentResolution);
@@ -2652,6 +2671,7 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
     && effectiveReservationResolution?.candidateHead === identity?.headSha
     && effectiveReservationResolution?.candidateTree === tree
     && expected.finiteTaskEffectiveReservation?.authorityValid === true
+    && expected.finiteTaskEffectiveReservation?.finiteTaskPrRiskAuthority?.ok === true
     && expected.finiteTaskEffectiveReservation?.baseLeaseHash
     && expected.finiteTaskEffectiveReservation?.baseReservation?.reservationHash
     && expected.finiteTaskEffectiveReservation?.effectiveReservation?.reservationHash
@@ -2679,8 +2699,11 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
     subjectHash: payload?.subjectHash ?? null,
     reviewedHead: payload?.subject?.reviewedHead ?? null,
     reviewedTree: payload?.subject?.reviewedTree ?? null,
+    diffHash: payload?.subject?.diffHash ?? null,
+    changedPathHash: payload?.subject?.changedPathHash ?? null,
     disposition: payload?.subject?.disposition ?? null,
     effectiveReservation: payload?.subject?.finiteTaskEffectiveReservation ?? null,
+    finiteTaskPrRiskAuthority: payload?.subject?.finiteTaskEffectiveReservation?.finiteTaskPrRiskAuthority ?? null,
   };
 }
 
@@ -3757,7 +3780,12 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const amendmentControlRepair = originalSubject?.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
     const testAdaptationOverlay = originalSubject?.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
     const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay;
-    const architecturePaths = ownerJurisdictionProfile ? [...OWNER_JURISDICTION_ARCHITECTURE_PATHS, ...(architectureDependencyAmendmentActive ? architectureDependencyAmendment.effectiveAddedPaths ?? DEPENDENCY_AMENDMENT_ADDED_PATHS : [])] : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
+    const architecturePaths = ownerJurisdictionProfile
+      ? [
+          ...(testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS : OWNER_JURISDICTION_ARCHITECTURE_PATHS),
+          ...(architectureDependencyAmendmentActive ? architectureDependencyAmendment.effectiveAddedPaths ?? DEPENDENCY_AMENDMENT_ADDED_PATHS : []),
+        ]
+      : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
     const maximumFiles = architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
     const maximumNetLines = architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200;
     const expectedCapabilities = amendmentControlRepair
@@ -4658,8 +4686,16 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     const receiptAddedPaths = resolution?.amendmentReceipt?.addedPaths ?? [];
     const competingOwners = (currentTruth?.openImplementationPrs ?? []).filter((entry) => entry?.number !== identity.pr);
     const protectedMain = typedGit(root, ["rev-parse", "origin/main"]).stdout.trim();
+    const finiteTaskPrRiskAuthority = deriveFiniteTaskPrRiskAuthority({
+      effectiveReservationResolution: resolution,
+      registry: readJson(root, "config/assurance/feature-registry-v1.json"),
+      policy: readJson(root, "config/assurance/pr-scope-policy-v1.json"),
+      observedChangedPaths: candidatePaths,
+      observedCanonicalChangedLines: canonicalChangedLines,
+    });
     const localChecks = {
       resolution: finiteTaskEffectiveReservationAuthorityValid(resolution),
+      finiteTaskPrRiskAuthority: finiteTaskPrRiskAuthority.ok === true,
       protectedBase: identity.baseSha === protectedMain && pullRequest?.base?.sha === protectedMain,
       pullIdentity: pullRequest?.number === identity.pr
         && pullRequest?.head?.ref === identity.branch
@@ -4697,6 +4733,7 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
       ? []
       : [...new Set([
           ...(resolution?.findings ?? []),
+          ...(finiteTaskPrRiskAuthority?.findings ?? []),
           ...Object.entries(localChecks).filter(([, value]) => !value).map(([key]) => `ASSURANCE_FINITE_TASK_CONTEXT_INVALID:${key}`),
         ])].sort();
     finiteTaskAuthority = {
@@ -4708,8 +4745,10 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
       currentHead: identity.headSha,
       currentTree: tree,
       featureId: lease.featureId,
-      objectiveDomains: lease.artifactReservation?.allowedDomains ?? [],
+      affectedFeatureIds: finiteTaskPrRiskAuthority.affectedFeatureIds,
+      objectiveDomains: finiteTaskPrRiskAuthority.authorizedPrRiskDomains,
       supportingDomains: ["CI-test-infrastructure"],
+      finiteTaskPrRiskAuthority,
       historicalWaiverPath: null,
       authoritySource: "ACTIVE_FINITE_TASK_LEASE",
       bindingId: `finite-lease-${lease.leaseId}`,
@@ -4902,13 +4941,22 @@ export function verifyFiniteTaskImplementationLifecycle({
   comments = [],
   commentsPaginationComplete = false,
   phase1EvidenceResolver = ({ runId }) => observePhase1RunEvidence({ runId, identity, tree }),
+  root = REPOSITORY_ROOT,
 } = {}) {
   const findings = [];
   const resolution = finiteTaskAuthority?.effectiveReservationResolution;
   const candidate = finiteTaskAuthority?.candidate;
   const lease = finiteTaskAuthority?.baseLease;
+  const finiteTaskPrRiskAuthority = deriveFiniteTaskPrRiskAuthority({
+    effectiveReservationResolution: resolution,
+    registry: readJson(root, "config/assurance/feature-registry-v1.json"),
+    policy: readJson(root, "config/assurance/pr-scope-policy-v1.json"),
+    observedChangedPaths: scope?.files,
+    observedCanonicalChangedLines: Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0),
+  });
   if (finiteTaskAuthority?.ok !== true
     || !finiteTaskEffectiveReservationAuthorityValid(resolution)
+    || finiteTaskPrRiskAuthority.ok !== true
     || resolution?.candidateHead !== identity?.headSha
     || resolution?.candidateTree !== tree
     || candidate?.head !== identity?.headSha
@@ -4922,6 +4970,7 @@ export function verifyFiniteTaskImplementationLifecycle({
     scope,
     profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1,
     effectiveReservationResolution: resolution,
+    root,
   }));
   const validReviews = reviews.filter(({ valid }) => valid);
   if (validReviews.length !== 1) findings.push("FINITE_TASK_LIFECYCLE_EXACT_HEAD_REVIEW_INVALID");
@@ -4942,6 +4991,7 @@ export function verifyFiniteTaskImplementationLifecycle({
     repositoryReviewHash: review?.subjectHash,
     phase1RunId: phase1Evidence?.runId,
     phase1Head: phase1Evidence?.sourceHead,
+    finiteTaskPrRiskAuthority,
     repositoryReview: review,
     phase1Evidence,
   };
@@ -4956,8 +5006,8 @@ export function verifyFiniteTaskImplementationLifecycle({
   if (!finalSource.ok) findings.push(...finalSource.findings);
   const unique = [...new Set(findings)].sort();
   return {
-    ok: finiteTaskAuthority?.ok === true,
-    authorizationOk: finiteTaskAuthority?.ok === true,
+    ok: finiteTaskAuthority?.ok === true && finiteTaskPrRiskAuthority.ok === true,
+    authorizationOk: finiteTaskAuthority?.ok === true && finiteTaskPrRiskAuthority.ok === true,
     mergeEligible: unique.length === 0 && finalSource.mergeEligible === true,
     candidateHead: candidate?.head ?? null,
     candidateTree: candidate?.tree ?? null,
@@ -4974,6 +5024,7 @@ export function verifyFiniteTaskImplementationLifecycle({
       scopePartitions: resolution.scopePartitions,
       testAdaptationReceipt: resolution.testAdaptationReceipt,
     } : {}),
+    finiteTaskPrRiskAuthority,
     repositoryReview: review,
     phase1Evidence,
     finalSource,
@@ -5002,6 +5053,7 @@ export function observeFiniteTaskImplementationLifecycle({
     comments: observedComments?.comments,
     commentsPaginationComplete: observedComments?.complete,
     phase1EvidenceResolver: phase1EvidenceResolver ?? (({ runId }) => observePhase1RunEvidence({ runId, identity, tree, root })),
+    root,
   });
   return authorities === null && commentsObservation === null && phase1EvidenceResolver === undefined
     ? registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle, effectiveReservationResolution: observedAuthorities?.finiteTaskAuthority?.effectiveReservationResolution, liveObservation: finiteTaskAuthorityLiveObservations.get(observedAuthorities?.finiteTaskAuthority) }) : lifecycle;
@@ -5111,6 +5163,7 @@ export function observeFiniteTaskPostMergeTransition({
     comments: observation?.comments,
     commentsPaginationComplete: observation?.commentsPaginationComplete,
     phase1EvidenceResolver: phase1EvidenceResolver ?? (({ runId }) => observePhase1RunEvidence({ runId, identity, tree: sourceTree, root })),
+    root,
   });
   const lifecycle = phase1EvidenceResolver === undefined
     ? registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: lifecycleResult, effectiveReservationResolution: resolution, liveObservation: observation }) : lifecycleResult;
@@ -5129,6 +5182,7 @@ export function observeFiniteTaskPostMergeTransition({
     mergeRef,
     actualMerge: { parents: mergeParts.slice(1), tree: mergeTree },
     effectiveReservationResolution: resolution,
+    finiteTaskPrRiskAuthority: lifecycle.finiteTaskPrRiskAuthority,
   });
   if (!mergeProvenance.ok) findings.push(...mergeProvenance.findings);
   try {
@@ -5157,6 +5211,7 @@ export function observeFiniteTaskPostMergeTransition({
       aggregateReservation: resolution.aggregateReservation,
       scopePartitions: resolution.scopePartitions,
       testAdaptationReceipt: resolution.testAdaptationReceipt,
+      finiteTaskPrRiskAuthority: lifecycle.finiteTaskPrRiskAuthority,
     } : {}),
     finalSourceReceipt: adapted
       ? { ...lifecycle.finalSource.receipt, subject: lifecycle.finalSource.subject }
