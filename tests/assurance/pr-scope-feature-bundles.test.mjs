@@ -5,8 +5,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
-import { deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
-import { args, canonicalGitText, renderCurrentState, renderNextTask, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS } from "../../scripts/assurance/lib.mjs";
+import { classifyPrScopePaths, deriveFiniteTaskPrRiskAuthority, deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
+import { args, canonicalGitText, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
@@ -213,7 +213,49 @@ const pullFixture = ({ pr, branch, head = "a".repeat(40), base = "b".repeat(40),
   },
   readback: { number: pr, repository: "Chillywood2025/chillywood-mobile", baseRef: "main", baseSha: base, headRef: branch, headSha: head, htmlUrl: `https://github.com/Chillywood2025/chillywood-mobile/pull/${pr}`, state: "open" }
 });
-const derive = ({ fixture, truth = { finiteTaskLeases: { tasks: [] } }, ownerAuthority = null, finiteTaskAuthority = null, architectureAuthority = null, terminalTruthAuthority = null, protectedMainRuntime = null, taskPolicy = policy, requestedFeature = null, requestedWaiver = null }) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: taskPolicy, registry, currentTruth: truth, ownerAuthority, finiteTaskAuthority, architectureAuthority, terminalTruthAuthority, protectedMainRuntime, requestedFeature, requestedWaiver });
+const derive = ({ fixture, truth = { finiteTaskLeases: { tasks: [] } }, ownerAuthority = null, finiteTaskAuthority = null, architectureAuthority = null, terminalTruthAuthority = null, protectedMainRuntime = null, taskPolicy = policy, requestedFeature = null, requestedWaiver = null, observedChangedPaths = null, observedCanonicalChangedLines = null }) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: taskPolicy, registry, currentTruth: truth, ownerAuthority, finiteTaskAuthority, architectureAuthority, terminalTruthAuthority, protectedMainRuntime, requestedFeature, requestedWaiver, observedChangedPaths, observedCanonicalChangedLines });
+const trustedFiniteTaskProjectionFixture = () => {
+  const truth = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
+  const finiteTaskRegistry = structuredClone(truth.finiteTaskLeases);
+  const lease = finiteTaskRegistry.tasks.find(({ implementationPr }) => implementationPr === 229);
+  delete lease.amendmentMaximum;
+  const effectiveReservationResolution = resolveFiniteTaskEffectiveReservation({
+    registry: finiteTaskRegistry,
+    lease,
+    comments: [],
+    commentsPaginationComplete: true,
+  });
+  return {
+    lease,
+    effectiveReservationResolution,
+    finiteTaskPrRiskAuthority: deriveFiniteTaskPrRiskAuthority({
+      effectiveReservationResolution,
+      registry,
+      policy,
+      observedChangedPaths: [],
+      observedCanonicalChangedLines: 0,
+    }),
+  };
+};
+const finiteTaskAuthorityFor = (fixture) => {
+  const value = trustedFiniteTaskProjectionFixture();
+  return {
+    ...value,
+    ok: true,
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: fixture.event.number,
+    branch: fixture.event.pull_request.head.ref,
+    currentHead: fixture.event.pull_request.head.sha,
+    type: "ACTIVE_FINITE_TASK_LEASE",
+    authoritySource: "ACTIVE_FINITE_TASK_LEASE",
+    featureId: value.lease.featureId,
+    objectiveDomains: value.lease.artifactReservation.allowedDomains,
+    supportingDomains: ["CI-test-infrastructure"],
+    bindingId: `finite-${fixture.event.number}`,
+    finiteLeaseId: value.lease.leaseId,
+    budget: { maximumFiles: value.effectiveReservationResolution.effectiveReservation.maximumFiles, maximumHandAuthoredNetLines: value.effectiveReservationResolution.effectiveReservation.maximumLines },
+  };
+};
 
 test("policy bundles reference registered features and known high-risk domains", () => {
   assert.deepEqual(validateFeatureDomainBundles({
@@ -221,6 +263,175 @@ test("policy bundles reference registered features and known high-risk domains",
     registeredFeatureIds,
     policyHighRiskDomains
   }), []);
+});
+
+test("finite-task risk policy covers every legacy bundle without changing legacy semantics", () => {
+  const mapped = new Map(policy.finiteTaskFeatureRiskProjection.featureRiskMappings.map((entry) => [entry.featureId, entry.authorizedPrRiskDomains]));
+  for (const bundle of policy.featureDomainBundles) assert.deepEqual(mapped.get(bundle.featureId), bundle.allowedHighRiskDomains);
+});
+
+test("trusted finite-task authority preserves the nine affected features and projects risk separately", () => {
+  const value = trustedFiniteTaskProjectionFixture();
+  assert.equal(value.effectiveReservationResolution.ok, true, stableJson(value.effectiveReservationResolution.findings));
+  assert.equal(value.finiteTaskPrRiskAuthority.ok, true, stableJson(value.finiteTaskPrRiskAuthority.findings));
+  assert.equal(value.finiteTaskPrRiskAuthority.primaryFeatureId, "auth-session-password-recovery");
+  assert.deepEqual(value.finiteTaskPrRiskAuthority.affectedFeatureIds, [
+    "auth-session-password-recovery",
+    "chilly-chat-inbox-thread",
+    "creator-money-ledger",
+    "moderation-reporting",
+    "notifications-fcm",
+    "payouts-stripe-connect",
+    "revenuecat-premium",
+    "storekit-google-play-billing",
+    "supabase-migrations-rls",
+  ]);
+  assert.deepEqual(value.finiteTaskPrRiskAuthority.authorizedPrRiskDomains, ["Chat", "RevenueCat-Premium", "auth", "database-RLS", "money-payouts", "notifications-native-calls"]);
+  assert.deepEqual(value.finiteTaskPrRiskAuthority.observedPrRiskDomains, []);
+  assert.deepEqual(value.finiteTaskPrRiskAuthority.coverage, { required: 9, registered: 9, mapped: 9, result: "9/9", unique: true, complete: true, primaryIncluded: true });
+  assert.equal(value.finiteTaskPrRiskAuthority.pathReservationRequiredIndependently, true);
+  assert.equal(value.finiteTaskPrRiskAuthority.implementationPartition.maximumFiles, 30);
+  assert.equal(value.finiteTaskPrRiskAuthority.testAdaptationPartition, null);
+  assert.equal(value.finiteTaskPrRiskAuthority.aggregateCompatibilityProjection.maximumFiles, 30);
+});
+
+test("ordinary finite-task scope observes risk from exact reserved paths without requiring a test-adaptation partition", () => {
+  const fixture = pullFixture({ pr: 903, branch: "codex/finite-descendant" });
+  const finiteTaskAuthority = finiteTaskAuthorityFor(fixture);
+  const result = derive({
+    fixture,
+    finiteTaskAuthority,
+    observedChangedPaths: ["app/(auth)/login.tsx"],
+    observedCanonicalChangedLines: 12,
+  });
+  assert.equal(result.ok, true, stableJson(result.findings));
+  assert.deepEqual(result.finiteTaskPrRiskAuthority.observedPrRiskDomains, ["auth"]);
+  assert.equal(result.finiteTaskPrRiskAuthority.implementationPartition.actualPathCount, 1);
+  assert.equal(result.finiteTaskPrRiskAuthority.implementationPartition.canonicalChangedLines, 12);
+  assert.equal(result.finiteTaskPrRiskAuthority.testAdaptationPartition, null);
+  assert.deepEqual(result.finiteTaskPrRiskAuthority.aggregateCompatibilityProjection, result.finiteTaskPrRiskAuthority.implementationPartition);
+});
+
+test("ordinary finite-task scope cannot project risk from a path outside the trusted reservation", () => {
+  const fixture = pullFixture({ pr: 903, branch: "codex/finite-descendant" });
+  const result = derive({
+    fixture,
+    finiteTaskAuthority: finiteTaskAuthorityFor(fixture),
+    observedChangedPaths: ["ops/unreserved-risk-path.ts"],
+    observedCanonicalChangedLines: 1,
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("ASSURANCE_FINITE_TASK_PR_RISK_PATH_RESERVATION_MISMATCH"), stableJson(result.findings));
+});
+
+test("shared path classifier supports protected star patterns without expanding the filesystem", () => {
+  assert.deepEqual(classifyPrScopePaths([
+    "supabase/functions/user-auth-hook/index.ts",
+    "supabase/functions/revenuecat-webhook/index.ts",
+    "CURRENT_STATE.md",
+  ], policy), [
+    { file: "supabase/functions/user-auth-hook/index.ts", domains: ["auth"] },
+    { file: "supabase/functions/revenuecat-webhook/index.ts", domains: ["RevenueCat-Premium"] },
+    { file: "CURRENT_STATE.md", domains: ["documentation-metadata"] },
+  ]);
+});
+
+const rehashFiniteTaskRiskAuthority = (authority, changes) => {
+  const { ok: ignoredOk, findings: ignoredFindings, projectionHash: ignoredHash, ...subject } = authority;
+  void ignoredOk; void ignoredFindings; void ignoredHash;
+  const changed = { ...subject, ...changes };
+  return { ok: true, findings: [], ...changed, projectionHash: sha256(changed) };
+};
+
+test("finite-task projection requires an exact path and line observation without trusted partitions", () => {
+  const { effectiveReservationResolution } = trustedFiniteTaskProjectionFixture();
+  const result = deriveFiniteTaskPrRiskAuthority({ effectiveReservationResolution, registry, policy });
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("ASSURANCE_FINITE_TASK_PR_RISK_PATH_OBSERVATION_REQUIRED"));
+});
+
+test("finite-task evaluation authorizes exact observed risk without legacy mixed or omitted findings", () => {
+  const base = trustedFiniteTaskProjectionFixture().finiteTaskPrRiskAuthority;
+  const observed = ["RevenueCat-Premium", "auth", "database-RLS"];
+  const authority = rehashFiniteTaskRiskAuthority(base, { observedPrRiskDomains: observed });
+  const result = evaluateHighRiskScope({
+    highRiskDomains: observed,
+    objectiveDomains: authority.authorizedPrRiskDomains,
+    featureId: authority.primaryFeatureId,
+    featureDomainBundles: policy.featureDomainBundles,
+    registeredFeatureIds,
+    policyHighRiskDomains,
+    finiteTaskPrRiskAuthority: authority,
+  });
+  assert.equal(result.relatedHighRiskScopeAuthorized, true, stableJson(result.findings));
+  assert.deepEqual(result.observedPrRiskDomains, observed);
+  assert.equal(finding(result, "ASSURANCE_MIXED_HIGH_RISK_SCOPE"), undefined);
+  assert.equal(finding(result, "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN"), undefined);
+});
+
+test("finite-task evaluation fails closed for observed risk outside frozen feature projection", () => {
+  const base = trustedFiniteTaskProjectionFixture().finiteTaskPrRiskAuthority;
+  const observed = ["auth", "release-OTA"];
+  const authority = rehashFiniteTaskRiskAuthority(base, { observedPrRiskDomains: observed });
+  const result = evaluateHighRiskScope({
+    highRiskDomains: observed,
+    objectiveDomains: authority.authorizedPrRiskDomains,
+    featureId: authority.primaryFeatureId,
+    featureDomainBundles: policy.featureDomainBundles,
+    registeredFeatureIds,
+    policyHighRiskDomains,
+    finiteTaskPrRiskAuthority: authority,
+  });
+  assert.equal(result.relatedHighRiskScopeAuthorized, false);
+  assert.deepEqual(finding(result, "ASSURANCE_FINITE_TASK_PR_RISK_SCOPE_UNAUTHORIZED").domains, ["release-OTA"]);
+});
+
+test("finite-task evaluation rejects forged observed-risk mutation by projection hash", () => {
+  const authority = structuredClone(trustedFiniteTaskProjectionFixture().finiteTaskPrRiskAuthority);
+  authority.observedPrRiskDomains = ["auth"];
+  const result = evaluateHighRiskScope({
+    highRiskDomains: ["auth"],
+    objectiveDomains: authority.authorizedPrRiskDomains,
+    featureId: authority.primaryFeatureId,
+    featureDomainBundles: policy.featureDomainBundles,
+    registeredFeatureIds,
+    policyHighRiskDomains,
+    finiteTaskPrRiskAuthority: authority,
+  });
+  assert.equal(result.relatedHighRiskScopeAuthorized, false);
+  assert.ok(finding(result, "ASSURANCE_FINITE_TASK_PR_RISK_AUTHORITY_INVALID").reasons.includes("ASSURANCE_FINITE_TASK_PR_RISK_PROJECTION_HASH_INVALID"));
+});
+
+test("finite-task evaluation rejects a coherently rehashed malformed authority record", () => {
+  const base = trustedFiniteTaskProjectionFixture().finiteTaskPrRiskAuthority;
+  const authority = rehashFiniteTaskRiskAuthority(base, { classification: "CALLER_FORGED_FINITE_TASK_AUTHORITY" });
+  const result = evaluateHighRiskScope({
+    highRiskDomains: [],
+    objectiveDomains: authority.authorizedPrRiskDomains,
+    featureId: authority.primaryFeatureId,
+    featureDomainBundles: policy.featureDomainBundles,
+    registeredFeatureIds,
+    policyHighRiskDomains,
+    finiteTaskPrRiskAuthority: authority,
+  });
+  assert.equal(result.relatedHighRiskScopeAuthorized, false);
+  assert.ok(finding(result, "ASSURANCE_FINITE_TASK_PR_RISK_AUTHORITY_INVALID").reasons.includes("ASSURANCE_FINITE_TASK_PR_RISK_AUTHORITY_RECORD_INVALID"));
+});
+
+test("finite-task projection rejects a universal union across affected-feature mappings", () => {
+  const value = trustedFiniteTaskProjectionFixture();
+  const hostile = structuredClone(policy);
+  const primary = hostile.finiteTaskFeatureRiskProjection.featureRiskMappings.find(({ featureId }) => featureId === "auth-session-password-recovery");
+  primary.authorizedPrRiskDomains = [...policyHighRiskDomains];
+  const result = deriveFiniteTaskPrRiskAuthority({
+    effectiveReservationResolution: value.effectiveReservationResolution,
+    registry,
+    policy: hostile,
+    observedChangedPaths: [],
+    observedCanonicalChangedLines: 0,
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("ASSURANCE_FINITE_TASK_PR_RISK_UNIVERSAL_AUTHORITY_FORBIDDEN"));
 });
 
 test("policy validation rejects a universal high-risk bundle", () => {
@@ -670,12 +881,20 @@ test("general 36-40: arbitrary and spoofed PRs plus injected feature or waiver r
 });
 test("general 43: a new finite task resolves without a static PR entry", () => {
   const fixture = pullFixture({ pr: 903, branch: "codex/finite-descendant" });
-  const finiteTaskAuthority = { ok: true, repository: "Chillywood2025/chillywood-mobile", pr: 903, branch: fixture.event.pull_request.head.ref, currentHead: fixture.event.pull_request.head.sha, type: "ACTIVE_FINITE_TASK_LEASE", authoritySource: "ACTIVE_FINITE_TASK_LEASE", featureId: "chilly-chat-call-lifecycle", objectiveDomains: ["Chat", "notifications-native-calls"], supportingDomains: ["CI-test-infrastructure"], bindingId: "finite-903", finiteLeaseId: "lease-903", budget: { maximumFiles: 30, maximumHandAuthoredNetLines: 3600 } };
-  const result = derive({ fixture, finiteTaskAuthority });
+  const finiteTaskAuthority = finiteTaskAuthorityFor(fixture);
+  const result = derive({
+    fixture,
+    finiteTaskAuthority,
+    observedChangedPaths: [],
+    observedCanonicalChangedLines: 0,
+  });
+  assert.equal(result.ok, true, stableJson(result.findings));
   assert.equal(result.source, "ACTIVE_FINITE_TASK_LEASE");
   assert.deepEqual(result.budget, finiteTaskAuthority.budget);
+  assert.deepEqual(result.affectedFeatureIds, finiteTaskAuthority.finiteTaskPrRiskAuthority.affectedFeatureIds);
+  assert.deepEqual(result.objectiveDomains, finiteTaskAuthority.finiteTaskPrRiskAuthority.authorizedPrRiskDomains);
 });
-test("general 43a: a validated independent partition exposes only its aggregate PR-scope presentation budget", () => {
+test("general 43a: a caller-constructed adapted partition cannot impersonate trusted effective authority", () => {
   const fixture = pullFixture({ pr: 904, branch: "codex/finite-amended-descendant" });
   const baseReservation = { allowedPaths: ["_lib/session.tsx"], pathGlobs: ["_lib/session.tsx"], maximumFiles: 30, maximumLines: 3600, eligiblePathCount: 30, reservationHash: "a".repeat(64) };
   const effectiveReservation = { allowedPaths: ["_lib/accessEntitlements.ts", "_lib/roomRules.ts", "_lib/session.tsx"], pathGlobs: ["_lib/accessEntitlements.ts", "_lib/roomRules.ts", "_lib/session.tsx"], maximumFiles: 32, maximumLines: 4500, eligiblePathCount: 32, reservationHash: "b".repeat(64) };
@@ -710,7 +929,8 @@ test("general 43a: a validated independent partition exposes only its aggregate 
     testAdaptationReceipt: { id: 700031, subjectHash: "2".repeat(64), bodyHash: "3".repeat(64), rawBodyHash: "4".repeat(64) },
   };
   const result = derive({ fixture, finiteTaskAuthority });
-  assert.equal(result.ok, true, stableJson(result.findings));
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("ASSURANCE_FINITE_TASK_PR_RISK_RESOLUTION_UNVERIFIED"));
   assert.deepEqual(result.budget, { maximumFiles: 33, maximumHandAuthoredNetLines: 5000 });
   assert.equal(finiteTaskAuthority.baseReservation.maximumFiles, 30);
   assert.equal(finiteTaskAuthority.effectiveReservationHash, effectiveReservation.reservationHash);

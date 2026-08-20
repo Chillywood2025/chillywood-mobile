@@ -7,6 +7,7 @@ import {
   emit,
   evaluateFiniteTaskLeaseRuntime,
   evaluateProtectedMainAdvancement,
+  finiteTaskPrRiskAuthorityMatchesResolution,
   finiteTaskLeaseFor,
   git,
   implementationRemoteRef,
@@ -186,6 +187,7 @@ if (mode) {
   const remoteMain = git(["rev-parse", "origin/main"]);
   const head = git(["rev-parse", "HEAD"]);
   const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
+  const prScopePolicy = readJson("config/assurance/pr-scope-policy-v1.json");
   const now = options.now ? new Date(options.now) : new Date();
   const observedImplementationRefs = {};
   const implementationEntries = Array.isArray(record.openImplementationPrs) ? record.openImplementationPrs : [];
@@ -309,6 +311,21 @@ if (mode) {
   const architectureDependencyBaselinePolicyFindings = stableJson(currentTruthContract.architectureDependencyBaselineAmendmentPolicy) === stableJson(architectureDependencyBaselinePolicyV1)
     ? []
     : [{ id: "ASSURANCE_ARCHITECTURE_DEPENDENCY_BASELINE_POLICY_INVALID", status: "BLOCKED_INTERNAL" }];
+  const finiteTaskPrRiskProjectionPolicyFindings = stableJson(currentTruthContract.finiteTaskTestAdaptationOverlayPolicy?.finiteTaskFeatureRiskProjection)
+    === stableJson(prScopePolicy.finiteTaskFeatureRiskProjection)
+    ? []
+    : [{ id: "ASSURANCE_FINITE_TASK_PR_RISK_PROJECTION_POLICY_INVALID", status: "BLOCKED_INTERNAL" }];
+  const finiteTaskPrRiskAuthority = finiteTaskFinalSourceEligibility?.finiteTaskPrRiskAuthority ?? null;
+  const finiteTaskPrRiskAuthorityRequired = finiteTaskFinalSourceEligibility?.authorizationOk === true;
+  const finiteTaskPrRiskAuthorityValid = !finiteTaskPrRiskAuthorityRequired || (
+    finiteTaskPrRiskAuthorityMatchesResolution(
+      finiteTaskPrRiskAuthority,
+      finiteTaskRuntime?.effectiveReservationResolution
+    )
+  );
+  const finiteTaskPrRiskAuthorityFindings = finiteTaskPrRiskAuthorityValid
+    ? []
+    : [{ id: "ASSURANCE_FINITE_TASK_PR_RISK_AUTHORITY_INVALID", status: "BLOCKED_INTERNAL" }];
   const taskContextArchitectureFindings = [];
   if (record.engineeringDoctrine?.status === "ACTIVE") {
     const architecture = record.taskContextArchitecture;
@@ -343,7 +360,7 @@ if (mode) {
       || Object.values(architecture.authority).some((value) => value !== false)
       || !mergeAncestor) taskContextArchitectureFindings.push({ id: "ASSURANCE_TYPED_TASK_CONTEXT_TERMINAL_TRUTH_INVALID", status: "BLOCKED_INTERNAL" });
   }
-  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...ownerJurisdictionPolicyFindings, ...architectureDependencyBaselinePolicyFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
+  const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...ownerJurisdictionPolicyFindings, ...architectureDependencyBaselinePolicyFindings, ...finiteTaskPrRiskProjectionPolicyFindings, ...finiteTaskPrRiskAuthorityFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({
@@ -407,6 +424,7 @@ if (mode) {
         testAdaptationReceipt: finiteTaskRuntime.effectiveReservationResolution.testAdaptationReceipt
       } : {}),
       authority: finiteTaskRuntime.effectiveReservationResolution?.authority ?? null,
+      finiteTaskPrRiskAuthority,
       finalSourceEligibility: finiteTaskFinalSourceEligibility,
       postMergeTransition: finiteTaskPostMergeTransition,
       findings: finiteTaskRuntime.findings

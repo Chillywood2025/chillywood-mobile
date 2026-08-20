@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCandidate, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskLeaseFor, finiteTaskTerminalReservationMatchesOutcome, isValidGitBranchName, lateReviewAllowedOwners, lateReviewSuccessorCorrectionOwner, observeLiveFiniteTaskEffectiveReservation, optionalCodexReviewPolicyValid, readJson, redact, resolveFiniteTaskEffectiveReservation, stableJson, validateOwnerJurisdictionPolicyTruth, validateProofTierStatuses, validateTerminalTaskEvidence } from "./lib.mjs";
 import { git, packet, privateArtifactDirectory, sha256, sha40, sha64, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
+import { deriveFiniteTaskPrRiskAuthority } from "./pr-scope-lib.mjs";
 import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -591,11 +592,7 @@ export function admittedFiniteTaskCommandRule({ contractCommand, featureId, engi
 }
 
 export function redactActiveTaskPacket(value) {
-  const safe = redact(value);
-  if (value?.ownerJurisdictionPolicy?.policySource?.referenceScope === "TASK_BOUND_COMPOSITE" && safe?.ownerJurisdictionPolicy?.policySource) {
-    safe.ownerJurisdictionPolicy.policySource.referenceScope = "TASK_BOUND_COMPOSITE";
-  }
-  return safe;
+  return redact(value);
 }
 
 export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, phase = "IMPLEMENTATION", lease, baseLease = lease, effectiveReservationResolution = null, closurePacket, certificate, taskArtifactBytes = null, sourcePushed = false, samePr = true, branch, currentMain, currentHead, implementationPr, implementationMerged = false, bootstrapExpired = false, sourceChanging = true, readOnlyDiagnostic = false, scopeObservation, taskIdentityObservation, implementationIdentity, ownerJurisdictionAuthority } = {}) {
@@ -1323,6 +1320,7 @@ export function activeTask(facts = {}) {
   if (lateReviewBlocksCurrentBranch) return { ok: false, findings: ["LATE_REVIEW_SUCCESSOR_BLOCKED"] };
 
   let finiteTaskEffectiveReservationResolution = null;
+  let finiteTaskPrRiskAuthority = null;
   let finiteTaskCandidate = facts.finiteTaskCandidateObservation ?? derivedFiniteTaskCandidate;
   if (baseFiniteTaskLease) {
     const terminalLease = resolution.binding?.phase === "TERMINAL"
@@ -1379,6 +1377,14 @@ export function activeTask(facts = {}) {
         ])].sort()
       };
     }
+    finiteTaskPrRiskAuthority = deriveFiniteTaskPrRiskAuthority({
+      effectiveReservationResolution: finiteTaskEffectiveReservationResolution,
+      registry,
+      policy: readJson("config/assurance/pr-scope-policy-v1.json"),
+      observedChangedPaths: finiteTaskCandidate?.changedPaths,
+      observedCanonicalChangedLines: finiteTaskCandidate?.changedLines,
+    });
+    if (!finiteTaskPrRiskAuthority.ok) return { ok: false, findings: finiteTaskPrRiskAuthority.findings };
   }
 
   const implementation = resolveImplementation(truth, identity, {
@@ -1522,6 +1528,7 @@ export function activeTask(facts = {}) {
   built.packet.engineeringClosure = engineeringPacket ? {
     closureArtifactPath: engineeringLease?.artifactReservation?.closureArtifactPath ?? null,
     allowedDomains: engineeringLease?.artifactReservation?.allowedDomains ?? [],
+    finiteTaskPrRiskAuthority,
     packetHash: sha256(stableJson(engineeringPacket)),
     certificateHash: sha256(stableJson(engineeringCertificate ?? null)),
     gate: engineeringAuthority.classification,

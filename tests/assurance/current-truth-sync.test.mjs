@@ -44,6 +44,8 @@ assert.equal(verify({ changedPaths: [...requiredChangedPaths, "app/index.tsx"] }
 const truthContract = JSON.parse((await import("node:fs")).readFileSync("config/assurance/current-truth-contract-v1.json", "utf8"));
 const truthRecord = JSON.parse((await import("node:fs")).readFileSync("config/assurance/current-truth-v1.json", "utf8"));
 const schemas = JSON.parse((await import("node:fs")).readFileSync("config/assurance/schemas-v1.json", "utf8"));
+const prScopePolicy = JSON.parse((await import("node:fs")).readFileSync("config/assurance/pr-scope-policy-v1.json", "utf8"));
+const featureRegistry = JSON.parse((await import("node:fs")).readFileSync("config/assurance/feature-registry-v1.json", "utf8"));
 assert.equal(validateEngineeringDoctrineTruth({}, truthContract, { currentMain: "8bf6459c3ae1cec62e26a1694f03063e4291b9f8", implementationMerged: false }).length, 0);
 assert.equal(validateEngineeringDoctrineTruth({}, truthContract).some(({ id }) => id === "ASSURANCE_ENGINEERING_DOCTRINE_MISSING"), true);
 assert.equal(validateEngineeringDoctrineTruth({}, truthContract, { currentMain: "f".repeat(40), implementationMerged: true }).some(({ id }) => id === "ASSURANCE_ENGINEERING_DOCTRINE_MISSING"), true);
@@ -167,6 +169,14 @@ assert.deepEqual(schemas.$defs.ownerJurisdictionPolicyCapability.const, truthCon
 assert.deepEqual(truthContract.ownerJurisdictionPolicyCapability.inheritanceAllowlist, [...STANDING_POLICY_INHERITANCE_ALLOWLIST]);
 assert.deepEqual(truthContract.ownerJurisdictionPolicyCapability.inheritanceDenylist, [...STANDING_POLICY_INHERITANCE_DENYLIST]);
 assert.equal(truthContract.rollingProtectedMain.authorityControlPaths.includes("scripts/assurance/jurisdiction-policy.mjs"), true);
+assert.deepEqual(
+  [
+    "config/assurance/pr-scope-policy-v1.json",
+    "scripts/assurance/pr-scope-lib.mjs",
+    "scripts/assurance/pr-scope.mjs",
+  ].filter((file) => !truthContract.rollingProtectedMain.authorityControlPaths.includes(file)),
+  []
+);
 assert.equal(schemas.$defs.ownerJurisdictionPolicyBinding.additionalProperties, false);
 assert.deepEqual(schemas.$defs.ownerJurisdictionPolicyBinding.properties.policySource.properties.decisionVersion.enum, ["OWNER_JURISDICTION_DECISION_V2", "OWNER_JURISDICTION_POLICY_CHAIN_DECISION_V2"]);
 assert.equal(schemas.$defs.ownerJurisdictionPolicyBinding.properties.coverage.properties.coveredDomainIds.minItems, undefined);
@@ -240,6 +250,38 @@ assert.deepEqual(overlayContract.canonicalConsumerSet, [
   "post-merge-readback",
   "terminal-truth",
 ]);
+const projectionPolicy = overlayContract.finiteTaskFeatureRiskProjection;
+assert.deepEqual(projectionPolicy, prScopePolicy.finiteTaskFeatureRiskProjection);
+assert.equal(projectionPolicy.contractId, "FINITE_TASK_FEATURE_TO_PR_RISK_PROJECTION_V1");
+assert.equal(projectionPolicy.classification, "ACTIVE_FINITE_TASK_PR_RISK_AUTHORITY_V1");
+assert.equal(projectionPolicy.projectionSource, "VERIFIED_IMMUTABLE_FINITE_TASK_AUTHORITY");
+assert.equal(projectionPolicy.policySource, "PROTECTED_PR_SCOPE_POLICY_FINITE_TASK_FEATURE_RISK_PROJECTION");
+assert.equal(projectionPolicy.currentDiffCreatesAuthority, false);
+assert.equal(projectionPolicy.callerInputCreatesAuthority, false);
+assert.equal(projectionPolicy.wildcardOrUniversalAuthorityAllowed, false);
+assert.equal(projectionPolicy.unauthorizedObservedHighRiskFailsClosed, true);
+assert.equal(projectionPolicy.pathReservationRequiredIndependently, true);
+const registeredFeatureIds = new Set(featureRegistry.features.map(({ featureId }) => featureId));
+const highRiskDomainIds = new Set(prScopePolicy.domains.filter(({ risk }) => risk === "high").map(({ id }) => id));
+const mappedFeatureIds = projectionPolicy.featureRiskMappings.map(({ featureId }) => featureId);
+assert.equal(new Set(mappedFeatureIds).size, mappedFeatureIds.length);
+assert.equal(projectionPolicy.featureRiskMappings.every(({ featureId, authorizedPrRiskDomains }) => registeredFeatureIds.has(featureId)
+  && authorizedPrRiskDomains.length > 0
+  && authorizedPrRiskDomains.length < highRiskDomainIds.size
+  && authorizedPrRiskDomains.every((domain) => domain !== "*" && highRiskDomainIds.has(domain))), true);
+assert.equal(new Set(projectionPolicy.featureRiskMappings.flatMap(({ authorizedPrRiskDomains }) => authorizedPrRiskDomains)).size < highRiskDomainIds.size, true);
+assert.deepEqual(schemas.$defs.currentTruthContract.properties.finiteTaskTestAdaptationOverlayPolicy.const, overlayContract);
+assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.additionalProperties, false);
+assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.properties.classification.const, projectionPolicy.classification);
+assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.properties.projectionSource.const, projectionPolicy.projectionSource);
+assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.properties.currentDiffCreatesAuthority.const, false);
+assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.properties.unauthorizedObservedPrRiskDomains.maxItems, 0);
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.properties.finiteTaskPrRiskAuthority.$ref, "#/$defs/finiteTaskPrRiskAuthority");
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].then.required.includes("finiteTaskPrRiskAuthority"), true);
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.not.anyOf.some(({ required }) => required?.includes("finiteTaskPrRiskAuthority")), true);
+const malformedProjectionPolicy = structuredClone(projectionPolicy);
+malformedProjectionPolicy.currentDiffCreatesAuthority = true;
+assert.notDeepEqual(malformedProjectionPolicy, prScopePolicy.finiteTaskFeatureRiskProjection);
 const invalidOverlayRegistry = structuredClone(truthRecord.finiteTaskLeases);
 invalidOverlayRegistry.testAdaptationPolicy.maximumFiles = 2;
 assert.equal(validateFiniteTaskLeaseRegistry(invalidOverlayRegistry).includes("FINITE_TASK_TEST_ADAPTATION_POLICY_MALFORMED"), true);
@@ -317,6 +359,12 @@ assert.match(currentTruthSource, /aggregateReservation: finiteTaskRuntime\.effec
 assert.match(currentTruthSource, /testAdaptationReservation: finiteTaskRuntime\.effectiveReservationResolution\.testAdaptationReservation/u);
 assert.match(currentTruthSource, /scopePartitions: finiteTaskRuntime\.effectiveReservationResolution\.scopePartitions/u);
 assert.match(currentTruthSource, /testAdaptationReceipt: finiteTaskRuntime\.effectiveReservationResolution\.testAdaptationReceipt/u);
+assert.match(currentTruthSource, /stableJson\(currentTruthContract\.finiteTaskTestAdaptationOverlayPolicy\?\.finiteTaskFeatureRiskProjection\)/u);
+assert.match(currentTruthSource, /stableJson\(prScopePolicy\.finiteTaskFeatureRiskProjection\)/u);
+assert.match(currentTruthSource, /finiteTaskFinalSourceEligibility\?\.finiteTaskPrRiskAuthority/u);
+assert.match(currentTruthSource, /finiteTaskPrRiskAuthorityMatchesResolution\(/u);
+assert.match(currentTruthSource, /ASSURANCE_FINITE_TASK_PR_RISK_PROJECTION_POLICY_INVALID/u);
+assert.match(currentTruthSource, /ASSURANCE_FINITE_TASK_PR_RISK_AUTHORITY_INVALID/u);
 assert.match(currentTruthSource, /stableJson\(currentTruthContract\.architectureDependencyBaselineAmendmentPolicy\) === stableJson\(architectureDependencyBaselinePolicyV1\)/u);
 assert.match(currentTruthSource, /ASSURANCE_ARCHITECTURE_DEPENDENCY_BASELINE_POLICY_INVALID/u);
 

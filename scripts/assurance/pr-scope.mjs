@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 
 import { args, emit, evaluateProtectedMainAdvancement, git, readJson } from "./lib.mjs";
 import { canonicalGitDiffArgs, canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
-import { deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
+import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
 const options = args();
 const policy = readJson("config/assurance/pr-scope-policy-v1.json");
@@ -13,11 +13,6 @@ const currentTruth = readJson("config/assurance/current-truth-v1.json");
 const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
 const protectedMainRuntime = evaluateProtectedMainAdvancement({ record: currentTruth, contract: currentTruthContract });
 
-const instruction = (file) => /(^|\/)AGENTS\.md$/u.test(file) || ["CURRENT_STATE.md", "NEXT_TASK.md"].includes(file);
-const classify = (files) => files.map((file) => ({
-  file,
-  domains: instruction(file) ? ["documentation-metadata"] : policy.domains.filter(({ paths }) => paths.some((prefix) => file === prefix || file.startsWith(prefix))).map(({ id }) => id)
-}));
 const readGitScope = (base, head) => {
   const range = `${base}...${head}`;
   const files = git(["diff", "--name-only", range]).split(/\r?\n/gu).filter(Boolean).sort();
@@ -98,13 +93,15 @@ if (!event.pull_request) {
     protectedMainRuntime,
     ...typedAuthorities,
     requestedFeature: options.feature ?? null,
-    requestedWaiver: options.waiver ?? null
+    requestedWaiver: options.waiver ?? null,
+    observedChangedPaths: scope.files,
+    observedCanonicalChangedLines: scope.additions + scope.deletions,
   });
   const findings = context.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   if (!tree) {
     findings.push({ id: "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE", status: "BLOCKED_INTERNAL" });
   }
-  const classified = classify(scope.files);
+  const classified = classifyPrScopePaths(scope.files, policy);
   const domains = [...new Set(classified.flatMap(({ domains: values }) => values))].sort();
   const highRisk = policy.domains.filter(({ id, risk }) => risk === "high" && domains.includes(id)).map(({ id }) => id);
   const waiver = context.ok && context.historicalWaiverPath ? readJson(context.historicalWaiverPath) : null;
@@ -122,7 +119,8 @@ if (!event.pull_request) {
     featureDomainBundles: policy.featureDomainBundles ?? [],
     registeredFeatureIds: registry.features.map(({ featureId }) => featureId),
     policyHighRiskDomains: policy.domains.filter(({ risk }) => risk === "high").map(({ id }) => id),
-    waiver
+    waiver,
+    finiteTaskPrRiskAuthority: context.finiteTaskPrRiskAuthority
   });
   findings.push(...scopeEvaluation.findings);
   if (waiver && (waiver.secondHighRiskDomain || !waiver.reviewer || waiver.newTimeboxHours > 8)) findings.push({ id: "ASSURANCE_SCOPE_WAIVER_INVALID", status: "BLOCKED_INTERNAL" });
@@ -137,9 +135,14 @@ if (!event.pull_request) {
     netChangedLines: scope.netChangedLines,
     domains,
     highRiskDomains: highRisk,
+    primaryFeatureId: context.primaryFeatureId,
+    affectedFeatureIds: context.affectedFeatureIds ?? [],
+    authorizedPrRiskDomains: scopeEvaluation.authorizedPrRiskDomains ?? [],
+    observedPrRiskDomains: scopeEvaluation.observedPrRiskDomains ?? highRisk,
     objectiveDomains: context.objectiveDomains ?? [],
     supportingDomains: context.supportingDomains ?? [],
     featureId: context.featureId,
+    finiteTaskPrRiskAuthority: context.finiteTaskPrRiskAuthority,
     featureDomainDecision: scopeEvaluation,
     budget,
     waiver: waiver ? waiver.contractId : null,

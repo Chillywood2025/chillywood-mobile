@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
+  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
@@ -446,7 +446,7 @@ const withVerificationClosureFiles = (files, callback) => {
 };
 test("verification dependency closure includes the exact current direct verifiers", () => {
   const closure = deriveVerificationDependencyClosure();
-  assert.deepEqual(closure.includedPaths, ["tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
+  assert.deepEqual(closure.includedPaths, ["tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
   assert.equal(verifyVerificationDependencyClosure(closure).ok, true);
 });
 test("verification dependency closure excludes an unrelated test and generic-word reference", () => withVerificationClosureFiles({
@@ -657,6 +657,11 @@ const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AM
     "tests/assurance/current-truth-sync.test.mjs",
     "tests/assurance/engineering-doctrine.test.mjs",
     "tests/assurance/pr-scope-feature-bundles.test.mjs",
+    ...(objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 ? [
+      "config/assurance/pr-scope-policy-v1.json",
+      "scripts/assurance/pr-scope-lib.mjs",
+      "scripts/assurance/pr-scope.mjs",
+    ] : []),
   ].sort();
   const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch, headSha: "1".repeat(40), baseSha: "2".repeat(40) };
   const originalTree = "3".repeat(40);
@@ -820,6 +825,8 @@ test("finite-task test-adaptation overlay uses the exact generic closed-authorit
   assert.equal(fixture.reviewSubject.reviewProfile, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1);
   assert.ok(fixture.reviewSubject.lanes.some((lane) => lane.includes("separate implementation and fixture")));
   assert.ok(fixture.reviewSubject.lanes.some((lane) => lane.includes("baseline binding")));
+  assert.ok(fixture.reviewSubject.lanes.some((lane) => lane.includes("affected-feature identity")));
+  assert.ok(fixture.reviewSubject.lanes.some((lane) => lane.includes("sanitization")));
   assert.equal(policy.maximumFiles, 1);
   assert.equal(policy.maximumChangedLines, 500);
   assert.deepEqual(policy.fixtureRoots, ["supabase/tests/"]);
@@ -829,9 +836,32 @@ test("finite-task test-adaptation overlay uses the exact generic closed-authorit
   assert.equal(contract.implementationPartitionSource, "VERIFIED_LIVE_EFFECTIVE_AMENDMENT_RESERVATION");
   assert.equal(contract.fixtureClass.assertionContract, "EXACTLY_ONE_EXECUTABLE_PGTAP_PLAN_DECLARATION_PRESERVED");
   assert.equal(contract.partitionAccounting.budgetPoolingAllowed, false);
+  assert.ok(fixture.paths.every((file) => FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS.includes(file)));
+  assert.ok(["config/assurance/pr-scope-policy-v1.json", "scripts/assurance/pr-scope-lib.mjs", "scripts/assurance/pr-scope.mjs"].every((file) => fixture.paths.includes(file)));
   assert.doesNotMatch(stableJson(policy), /revenuecat_atomic_transactions_test|pre-release-identity-entitlement-authority-v1|"implementationPr":229/u);
   assert.ok(Object.values(fixture.originalSubject.authority).every((value) => value === false));
   assert.equal(verifyArchitectureMaintenanceAuthority(fixture.args).mergeEligible, true);
+});
+
+test("finite-task test-adaptation PR-scope consumers do not broaden historical or amendment authority", () => {
+  const overlay = amendmentControlLifecycleFixture({
+    objective: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
+    reviewProfile: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
+    branch: "codex/finite-task-test-adaptation-overlay-v1"
+  });
+  const amendment = amendmentControlLifecycleFixture();
+  const expandedScope = { ...amendment.originalScope, files: overlay.paths };
+  const expandedSubject = architectureMaintenanceSubject({
+    identity: amendment.originalIdentity,
+    tree: amendment.originalTree,
+    scope: expandedScope,
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1,
+  });
+  const expandedRaw = taskLocalArchitectureComment({ id: 700030, pr: amendment.originalIdentity.pr, body: architectureMaintenanceOwnerCommentBody(expandedSubject) });
+  const result = verifyArchitectureMaintenanceAuthority({ raw: expandedRaw, allComments: [expandedRaw], paginationComplete: true, identity: amendment.originalIdentity, tree: amendment.originalTree, scope: expandedScope, ancestryVerified: true });
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:exactPaths"));
 });
 
 test("finite-task test-adaptation final source rejects a review without the overlay profile", () => {
