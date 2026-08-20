@@ -3927,6 +3927,8 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
     const maximumFiles = immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
     const maximumNetLines = immutableEvidenceLifecycleConvergence ? 2000 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200;
+    const originalMaximumFiles = immutableEvidenceLifecycleConvergence ? 8 : ownerJurisdictionProfile ? 15 : 12;
+    const originalMaximumNetLines = immutableEvidenceLifecycleConvergence ? 2000 : ownerJurisdictionProfile ? 3500 : 3200;
     const expectedCapabilities = amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
       : testAdaptationOverlay
@@ -4018,7 +4020,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       currentTruthCompanion: companionValid,
       body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
-      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === maximumFiles && originalSubject?.budget?.maximumNetLines === maximumNetLines,
+      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === originalMaximumFiles && originalSubject?.budget?.maximumNetLines === originalMaximumNetLines,
       ancestry,
       cardinality: paginationComplete && suppliedOriginalIsSoleDiscoveredAuthority && successorMatches.length === 0 && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
       dependencyAmendment: immutableEvidenceLifecycleConvergence
