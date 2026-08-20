@@ -446,7 +446,7 @@ const withVerificationClosureFiles = (files, callback) => {
 };
 test("verification dependency closure includes the exact current direct verifiers", () => {
   const closure = deriveVerificationDependencyClosure();
-  assert.deepEqual(closure.includedPaths, ["tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
+  assert.deepEqual(closure.includedPaths, ["tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
   assert.equal(verifyVerificationDependencyClosure(closure).ok, true);
 });
 test("verification dependency closure excludes an unrelated test and generic-word reference", () => withVerificationClosureFiles({
