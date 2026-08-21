@@ -46,7 +46,7 @@ export type PaymentRailPolicyInput = {
   unlocksDigitalAccess?: boolean;
 };
 
-export const PAYMENT_RAIL_POLICY_VERSION = "2026-08-21-ios-parity-v1";
+export const PAYMENT_RAIL_POLICY_VERSION = "2026-05-15";
 export const PREMIUM_PAYMENT_RAIL = "google_play_revenuecat";
 export const ANDROID_DIGITAL_CREATOR_CONTENT_STRIPE_ENABLED = false;
 export const TIPS_MUST_NOT_UNLOCK_DIGITAL_BENEFITS = true;
