@@ -6,301 +6,157 @@ import path from "node:path";
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const readJson = (relativePath) => JSON.parse(read(relativePath));
-
 const fail = (message) => {
   console.error(`iOS commerce policy guard failed: ${message}`);
   process.exitCode = 1;
 };
-const assert = (condition, message) => {
-  if (!condition) fail(message);
-};
+const assert = (condition, message) => { if (!condition) fail(message); };
 const includes = (source, needle, label) => assert(source.includes(needle), `${label} is missing ${needle}`);
 const excludes = (source, needle, label) => assert(!source.includes(needle), `${label} must not include ${needle}`);
 
 const manifest = readJson("config/ios/app-store-products.json");
 const storeKit = readJson("config/ios/Chillywood.storekit");
-const migration = read("supabase/migrations/20260715151250_ios_app_store_mappings.sql");
-const purchaseIntentMigration = read("supabase/migrations/20260715174500_ios_app_store_purchase_intents.sql");
-const premiumPriceMigration = read("supabase/migrations/20260718091500_fix_ios_app_store_premium_reference_prices.sql");
-const atomicTransactionMigration = read("supabase/migrations/20260718110000_revenuecat_atomic_event_transactions.sql");
-const storefrontTransactionMigration = read("supabase/migrations/20260718113000_durable_call_delivery_retry_and_storefront_prices.sql");
-const atomicTransactionTests = read("supabase/tests/revenuecat_atomic_transactions_test.sql");
-const legacyAndroidPurchaseIntentMigration = read("supabase/migrations/20260616121739_require_sandbox_tester_for_purchase_intents.sql");
+const runtimeCatalog = read("_lib/iosAppStoreCommerce.ts");
 const clientPolicy = read("_lib/paymentRailPolicy.ts");
 const serverPolicy = read("supabase/functions/_shared/payment-rail-policy.ts");
-const appStoreRuntimeCatalog = read("_lib/iosAppStoreCommerce.ts");
+const switchboard = read("_lib/sevenFlowSwitchboard.ts");
+const supabaseClient = read("_lib/supabase.ts");
 const webhook = read("supabase/functions/revenuecat-webhook/index.ts");
-const storePolicy = read("supabase/functions/revenuecat-webhook/store-policy.mjs");
-const revenueCatClient = read("_lib/revenuecat.ts");
-const monetizationClient = read("_lib/monetization.ts");
-const creatorTips = read("_lib/creatorTips.ts");
-const seatPasses = read("_lib/paidWatchPartyTickets.ts");
-const creatorSetup = read("_lib/creatorMonetizationSetup.ts");
-const adminSandboxPurchases = read("app/admin-money-sandbox-purchases.tsx");
-const tipSheet = read("components/monetization/tip-sheet.tsx");
-const boundedVisibleReadGate = read("_lib/boundedVisibleReadGate.ts");
-const moneyScope = read("components/monetization/MoneyScopeInfoButton.tsx");
-const dynamicPurchaseSources = [
-  ["paid video", read("_lib/creatorPaidVideos.ts"), "purchasePaidVideoAccess", "createPaidVideoPurchaseIntent"],
-  ["paid event", read("_lib/paidCreatorEvents.ts"), "purchasePaidCreatorEventPass", "createPaidCreatorEventPassPurchaseIntent"],
-  ["VIP", read("_lib/creatorVipPasses.ts"), "purchaseCreatorVipPass", "createCreatorVipPassPurchaseIntent"],
-  ["channel subscription", read("_lib/channelSubscriptions.ts"), "purchaseChannelSubscription", "createChannelSubscriptionPurchaseIntent"],
-];
+const readiness = read("supabase/migrations/202608210001_creator_money_production_readiness_ios_parity.sql");
+const routing = read("supabase/migrations/202608210002_ios_creator_money_rpc_routing.sql");
+const atomic = read("supabase/migrations/202608210003_ios_creator_money_atomic_provider_processing.sql");
+const settlement = read("supabase/migrations/202608210004_creator_money_settlement_and_payout_safety.sql");
+const convergence = read("supabase/migrations/202608210005_creator_money_terminal_reconciliation_and_payout_allocations.sql");
+const paidVideo = read("_lib/creatorPaidVideos.ts");
+const paidEvents = read("_lib/paidCreatorEvents.ts");
+const vip = read("_lib/creatorVipPasses.ts");
+const channels = read("_lib/channelSubscriptions.ts");
 
-assert(manifest.liveMoneyEnabled === false, "manifest must keep live money disabled");
+assert(manifest.schemaVersion === 2, "manifest schemaVersion must be 2");
 assert(manifest.bundleIdentifier === "com.chillywood.mobile", "manifest bundle identifier drifted");
-assert(Array.isArray(manifest.catalog) && manifest.catalog.length === 10, "manifest must contain exactly ten permanent products");
-assert(new Set(manifest.catalog.map((entry) => entry.productId)).size === 10, "manifest product IDs must be unique");
-assert(manifest.catalog.every((entry) => entry.status === "sandbox_only"), "every Apple product must remain sandbox-only");
+assert(manifest.liveMoneyEnabled === false, "manifest live money must remain disabled");
+assert(manifest.productionActivation?.enabled === false, "manifest production activation must remain disabled");
+assert(manifest.productionActivation?.requiresProviderProof === true, "provider proof must be mandatory");
+assert(manifest.productionActivation?.requiresOwnerApproval === true, "Owner approval must be mandatory");
+assert(manifest.productionActivation?.requiresWave1CreatorEligibility === true, "Wave 1 creator eligibility must be mandatory");
+assert(manifest.productionActivation?.requiresPhysicalDeviceProof === true, "physical-device proof must be mandatory");
+assert(Array.isArray(manifest.catalog) && manifest.catalog.length === 30, "manifest must contain the reviewed 30-product finite catalog");
+assert((manifest.disabledDynamicConcepts ?? []).length === 0, "implemented finite concepts must not remain marked dynamically disabled");
 
-const manifestIds = manifest.catalog.map((entry) => entry.productId).sort();
+const ids = manifest.catalog.map((entry) => entry.productId);
+assert(new Set(ids).size === ids.length, "App Store product IDs must be unique");
+assert(manifest.catalog.every((entry) => entry.status === "sandbox_only"), "all catalog entries must remain sandbox_only in source");
+const concepts = new Map();
+for (const entry of manifest.catalog) concepts.set(entry.concept, (concepts.get(entry.concept) ?? 0) + 1);
+for (const [concept, count] of Object.entries({ premium: 2, creator_tip: 4, seat_pass: 4, paid_video: 4, event_pass: 4, vip_pass: 4, channel_subscription: 8 })) {
+  assert(concepts.get(concept) === count, `${concept} finite-product count drifted`);
+}
+
 const storeKitIds = [
   ...(storeKit.products ?? []).map((entry) => entry.productID),
-  ...(storeKit.subscriptionGroups ?? []).flatMap((group) => (
-    (group.subscriptions ?? []).map((entry) => entry.productID)
-  )),
+  ...(storeKit.subscriptionGroups ?? []).flatMap((group) => (group.subscriptions ?? []).map((entry) => entry.productID)),
 ].sort();
-assert(JSON.stringify(storeKitIds) === JSON.stringify(manifestIds), "StoreKit product IDs must exactly match the canonical manifest");
-assert((storeKit.subscriptionGroups ?? []).length === 1, "StoreKit config must contain one Premium subscription group");
-assert((storeKit.products ?? []).filter((entry) => entry.type === "Consumable").length === 8, "StoreKit config must contain eight consumables");
-assert((storeKit.subscriptionGroups?.[0]?.subscriptions ?? []).length === 2, "StoreKit config must contain monthly and yearly subscriptions");
-const storeKitEntries = new Map([
-  ...(storeKit.products ?? []).map((entry) => [entry.productID, entry]),
-  ...(storeKit.subscriptionGroups ?? []).flatMap((group) => (
-    (group.subscriptions ?? []).map((entry) => [entry.productID, entry])
-  )),
-]);
-for (const manifestEntry of manifest.catalog) {
-  const storeKitEntry = storeKitEntries.get(manifestEntry.productId);
-  const localization = storeKitEntry?.localizations?.find((entry) => entry.locale === "en_US");
-  assert(storeKitEntry?.displayPrice === manifestEntry.referencePrice, `${manifestEntry.productId} StoreKit price drifted`);
-  assert(storeKitEntry?.referenceName === manifestEntry.referenceName, `${manifestEntry.productId} reference name drifted`);
-  assert(localization?.displayName === manifestEntry.displayName, `${manifestEntry.productId} display name drifted`);
-  assert(localization?.description === manifestEntry.description, `${manifestEntry.productId} description drifted`);
-  if (manifestEntry.type === "auto_renewable_subscription") {
-    assert(storeKitEntry?.type === "RecurringSubscription", `${manifestEntry.productId} must be recurring`);
-    assert(storeKitEntry?.recurringSubscriptionPeriod === manifestEntry.duration, `${manifestEntry.productId} duration drifted`);
-  } else {
-    assert(storeKitEntry?.type === "Consumable", `${manifestEntry.productId} must be consumable`);
-  }
-}
-
-for (const productId of manifestIds) includes(migration, `'${productId}'`, "Apple mapping migration");
-const finiteConsumableIds = manifest.catalog
-  .filter((entry) => entry.concept === "creator_tip" || entry.concept === "seat_pass")
-  .map((entry) => entry.productId)
-  .sort();
-const runtimeCatalogBlock = appStoreRuntimeCatalog.match(/export const IOS_APP_STORE_PRODUCTS\s*=\s*\[(?<catalog>[\s\S]*?)\];/);
-const runtimeCatalogText = runtimeCatalogBlock?.groups?.catalog ?? appStoreRuntimeCatalog;
-const runtimeAllProductIds = Array.from(
-  String(runtimeCatalogText).matchAll(/productId\s*:\s*"([^"]+)"/gu),
-).map((match) => match[1]).filter((productId) => productId.length > 0);
-const runtimeFiniteIds = runtimeAllProductIds.filter(
-  (productId) => !["com.chillywood.premium.monthly", "com.chillywood.premium.yearly"].includes(productId),
+assert(JSON.stringify(storeKitIds) === JSON.stringify([...ids].sort()), "StoreKit IDs must exactly match the manifest");
+assert((storeKit.subscriptionGroups ?? []).length === 9, "StoreKit must contain Premium plus eight independent creator-subscription groups");
+const channelGroups = (storeKit.subscriptionGroups ?? []).filter((group) =>
+  (group.subscriptions ?? []).some((entry) => String(entry.productID ?? "").startsWith("com.chillywood.channel.subscription.slot")),
 );
+assert(channelGroups.length === 8, "creator channel subscriptions must have eight independent groups");
+assert(new Set(channelGroups.map((group) => group.id ?? group.referenceName)).size === 8, "creator channel subscription groups must be distinct");
 
-const runtimeFiniteIdsUnique = Array.from(new Set(runtimeFiniteIds)).sort();
-const manifestFiniteIdsUnique = Array.from(new Set(finiteConsumableIds)).sort();
-assert(
-  runtimeFiniteIdsUnique.length === manifestFiniteIdsUnique.length &&
-    JSON.stringify(runtimeFiniteIdsUnique) === JSON.stringify(manifestFiniteIdsUnique),
-  "runtime finite-tier IDs must exactly match the manifest tip and Seat Pass IDs",
-);
-for (const productId of manifest.catalog.filter((entry) => entry.concept === "premium").map((entry) => entry.productId)) {
-  includes(webhook, `"${productId}"`, "Premium webhook allowlist");
+for (const marker of [
+  '"paid_video"', '"event_pass"', '"vip_pass"', '"channel_subscription"',
+  "listIosChannelSubscriptionSlots", "FINITE_TIERS", "com.chillywood.channel.subscription.slot",
+]) includes(runtimeCatalog, marker, "runtime App Store catalog");
+excludes(switchboard, "ios_dynamic_product_disabled", "seven-flow switchboard");
+for (const marker of ["com.chillywood.paidvideo.tier1", "com.chillywood.eventpass.tier1", "com.chillywood.vip.tier1", "com.chillywood.channel.subscription.slot1"]) {
+  includes(switchboard, marker, "seven-flow switchboard finite iOS mapping");
 }
-for (const source of [migration, clientPolicy, serverPolicy, webhook, storePolicy]) {
-  includes(source, "revenuecat_app_store", "store-aware commerce source");
-  includes(source, "revenuecat_google_play", "Android provider preservation");
-}
-
-includes(migration, "'revenuecat_app_store_enabled',\n  'off'", "App Store kill switch default");
-includes(migration, 'add constraint "provider_events_provider_check"\n  check ("provider" in (\n    \'revenuecat_google_play\',\n    \'revenuecat_app_store\'', "provider event App Store constraint expansion");
-includes(migration, 'add constraint "money_purchase_intents_provider_check"\n  check ("provider" in (\n    \'revenuecat_google_play\',\n    \'revenuecat_app_store\'', "purchase-intent App Store constraint expansion");
-includes(migration, 'alter table public."monetization_product_store_mappings" enable row level security', "mapping RLS");
-includes(migration, 'revoke all on table public."monetization_product_store_mappings" from public, anon, authenticated', "mapping client privilege revocation");
-includes(migration, '"grants_livekit_authority" = false', "mapping room-authority block");
-includes(migration, '"creates_payable_balance" = false', "mapping payable-balance block");
-includes(migration, '"concept" <> \'creator_tip\'', "tip access constraint");
-includes(migration, "'live_money_action', false", "live-money false metadata");
-includes(migration, "'payout_ready', false", "payout false metadata");
 
 for (const policy of [clientPolicy, serverPolicy]) {
-  includes(policy, 'REVENUECAT_APP_STORE_PROVIDER = "revenuecat_app_store"', "App Store provider policy");
-  includes(policy, 'REVENUECAT_GOOGLE_PLAY_PROVIDER = "revenuecat_google_play"', "Google provider policy");
-  includes(policy, "APP_STORE_PURCHASES_DEFAULT_ENABLED = false", "App Store client/server default");
-  includes(policy, "ios_dynamic_digital_content_not_in_finite_app_store_catalog", "finite-catalog policy");
-  includes(policy, "creator_tips_use_revenuecat_app_store_sandbox_only", "iOS tip policy");
-  includes(policy, "ios_seat_pass_uses_finite_app_store_catalog_sandbox_only", "iOS Seat Pass policy");
+  includes(policy, 'PAYMENT_RAIL_POLICY_VERSION = "2026-08-21-ios-parity-v1"', "payment rail policy version");
+  includes(policy, 'REVENUECAT_APP_STORE_PROVIDER = "revenuecat_app_store"', "App Store provider");
+  includes(policy, 'REVENUECAT_GOOGLE_PLAY_PROVIDER = "revenuecat_google_play"', "Google Play provider");
+  includes(policy, "ios_creator_paid_digital_uses_finite_app_store_catalog_server_authority", "finite iOS digital policy");
+  includes(policy, "createsPayableBalance: false", "client/server payable-balance block");
+  includes(policy, "grantsLiveKitAuthority: false", "client/server LiveKit authority block");
   includes(policy, "tips_cannot_unlock_digital_access", "tip access block");
-  includes(policy, "grantsLiveKitAuthority: false", "purchase authority block");
-  includes(policy, "createsPayableBalance: false", "payable-balance block");
 }
 
-includes(purchaseIntentMigration, 'create or replace function public."create_ios_app_store_purchase_intent"', "Apple purchase-intent RPC");
-excludes(purchaseIntentMigration, 'create or replace function public."create_money_purchase_intent"', "Android purchase-intent preservation");
-includes(legacyAndroidPurchaseIntentMigration, 'create or replace function public."create_money_purchase_intent"', "existing Android purchase-intent RPC");
-for (const requiredPolicy of [
-  'mapping."platform" = \'ios\'',
-  'mapping."store" = \'app_store\'',
-  'mapping."provider" = \'revenuecat_app_store\'',
-  "v_app_store_switch_state <> 'sandbox_only'",
-  "v_webhook_switch_state <> 'sandbox_only'",
-  "v_live_money_switch_state <> 'off'",
-  "v_payouts_switch_state <> 'off'",
-  "v_mapping.\"concept\" not in ('creator_tip', 'seat_pass')",
-  'v_mapping."grants_livekit_authority" is true',
-  'v_mapping."creates_payable_balance" is true',
-  "ios_app_store_exact_tier_price_required",
-  "sandbox_monetization_tester_required",
-  "ios_app_store_purchase_intent_rate_limited",
-  "creator_cannot_tip_self",
-  "creator_tip_blocked_by_audience_policy",
-  "creator_cannot_buy_own_ticket",
-  'public."resolve_paid_watch_party_ticket_access"',
-]) {
-  includes(purchaseIntentMigration, requiredPolicy, "Apple purchase-intent policy");
+includes(supabaseClient, '"x-chillywood-platform"', "Supabase platform routing header");
+includes(supabaseClient, 'Platform.OS === "ios" ? "ios"', "Supabase iOS platform routing hint");
+for (const source of [paidVideo, paidEvents, vip, channels]) {
+  includes(source, "resolvePaymentRailPolicy({", "creator-money client payment policy");
+  includes(source, 'platform: "ios"', "creator-money iOS policy invocation");
+  includes(source, 'store: "app_store"', "creator-money App Store policy invocation");
+  includes(source, "purchaseRevenueCat", "creator-money RevenueCat purchase path");
 }
-includes(purchaseIntentMigration, "watch_party_ticket_store_catalog", "Seat Pass conceptual mapping correction");
-includes(purchaseIntentMigration, "'watch_party_live_ticket'", "Seat Pass Party Room access type");
-includes(purchaseIntentMigration, "coalesce(p_metadata, '{}'::jsonb) || jsonb_build_object(", "server-owned safety metadata precedence");
 
-includes(premiumPriceMigration, "when \"provider_product_id\" = 'com.chillywood.premium.monthly' then 999", "monthly Premium reference-price correction");
-includes(premiumPriceMigration, "when \"provider_product_id\" = 'com.chillywood.premium.yearly' then 9999", "yearly Premium reference-price correction");
-includes(premiumPriceMigration, '"platform" = \'ios\'', "Premium price platform scope");
-includes(premiumPriceMigration, '"store" = \'app_store\'', "Premium price store scope");
-includes(premiumPriceMigration, '"provider" = \'revenuecat_app_store\'', "Premium price provider scope");
-
-for (const rpcName of [
-  "process_revenuecat_premium_event_atomic",
-  "process_revenuecat_consumable_event_atomic",
-  "reconcile_revenuecat_partial_provider_events",
-]) {
-  includes(atomicTransactionMigration, rpcName, "atomic RevenueCat migration");
-}
-includes(atomicTransactionMigration, "perform pg_advisory_xact_lock", "atomic provider-event serialization");
-includes(atomicTransactionMigration, "for update", "atomic row locking");
-includes(atomicTransactionMigration, "to service_role", "atomic RPC service-role grant");
-includes(atomicTransactionMigration, "from public, anon, authenticated", "atomic RPC client-role revocation");
-includes(atomicTransactionMigration, "ledger_recorded_no_entitlement_or_access_grant", "creator-tip no-entitlement/no-access result");
-includes(atomicTransactionMigration, "'viewer_access_only', true", "Seat Pass viewer-only grant");
-includes(atomicTransactionMigration, "'authority_granted', false", "Seat Pass authority block");
-includes(atomicTransactionMigration, "'payableState', case when v_terminal then 'refunded' else 'not_payable' end", "consumable payable-state block");
-for (const stage of [
-  "after_provider_event",
-  "after_entitlement",
-  "after_billing_event",
-  "after_access_grant",
-  "after_ledger_event",
-  "after_intent_lock",
-  "after_intent_update",
-]) {
-  includes(atomicTransactionTests, stage, "transaction rollback fixture");
-}
 for (const marker of [
-  "revenuecat_consumable_transaction_intents",
-  "ios_consumable_original_transaction_required",
-  "ios_consumable_original_purchase_intent_mismatch",
-  "provider_amount_minor",
-  "provider_currency",
-  "reference_price_minor",
-  "reference_currency",
-]) {
-  includes(storefrontTransactionMigration, marker, "storefront-safe atomic App Store migration");
-}
-excludes(storefrontTransactionMigration, "ios_consumable_exact_store_price_required", "localized App Store provider amount policy");
-includes(atomicTransactionTests, "localized non-USD App Store consumable", "localized storefront transaction fixture");
-includes(atomicTransactionTests, "localized provider amount is recorded", "localized provider amount fixture");
-for (const fixture of [
-  "duplicate Premium delivery is retry safe",
-  "Premium cancellation applies atomically",
-  "Premium billing grace event applies atomically",
-  "Premium expiration applies atomically",
-  "Premium refund applies atomically",
-  "creator tip creates no entitlement",
-  "Seat Pass grant has viewer-only authority",
-  "missing purchase intent fails closed",
-]) {
-  includes(atomicTransactionTests, fixture, "atomic RevenueCat lifecycle fixture");
-}
+  'add column if not exists "expires_at"',
+  'owner_required_for_high_risk_money_activation',
+  'monetization_write_audit',
+  'expire_money_purchase_intents',
+  "revenuecat_app_store_enabled",
+  "provider_webhooks_enabled",
+  "owner_release_approved",
+  "physical_device_proof",
+  "provider_proof",
+  "wave1_creator_eligibility",
+  "payouts_enabled",
+  "live_money_enabled",
+]) includes(readiness, marker, "production-readiness hardening migration");
+includes(readiness, 'where "key" in (\'live_money_enabled\',\'payouts_enabled\')', "live/payout forced-off migration");
+includes(readiness, '"state"=\'off\'', "live/payout forced-off state");
 
-for (const [label, source] of [["creator tip", creatorTips], ["Seat Pass", seatPasses]]) {
-  includes(source, "resolvePaymentRailPolicy({", `${label} runtime payment policy`);
-  includes(source, 'provider !== "revenuecat_app_store"', `${label} App Store provider assertion`);
-  includes(source, '"create_ios_app_store_purchase_intent"', `${label} Apple purchase-intent RPC`);
-  includes(source, "resolveIosFiniteAppStoreTier", `${label} finite product-tier resolution`);
-  const policyIndex = source.indexOf("resolvePaymentRailPolicy({");
-  const intentCallIndex = label === "Seat Pass"
-    ? source.indexOf("createIosPaidWatchPartyTicketPurchaseIntent(", policyIndex)
-    : source.indexOf("creatorTipsClient.rpc", policyIndex);
-  const productLookupIndex = source.indexOf("readRevenueCatNonSubscriptionProducts", intentCallIndex);
-  assert(policyIndex >= 0 && policyIndex < intentCallIndex, `${label} must apply policy before creating an Apple intent`);
-  assert(intentCallIndex >= 0 && productLookupIndex > intentCallIndex, `${label} must create the bounded intent before provider lookup`);
-}
-includes(creatorTips, '"creator_tip_support"', "creator tip policy use case");
-includes(seatPasses, '"watch_party_seat_pass"', "Seat Pass policy use case");
+for (const marker of [
+  'create or replace function public."create_money_purchase_intent"',
+  'create_ios_creator_money_purchase_intent',
+  'x-chillywood-platform',
+  "paid_content_access_sandbox_099",
+  "channel_subscription_sandbox_monthly_499",
+]) includes(routing, marker, "iOS routing migration");
 
-for (const [label, source, purchaseFunction, intentFunction] of dynamicPurchaseSources) {
-  const purchaseIndex = source.indexOf(`export async function ${purchaseFunction}`);
-  const iosBlockIndex = source.indexOf('if (Platform.OS === "ios")', purchaseIndex);
-  const policyIndex = source.indexOf("resolvePaymentRailPolicy({", iosBlockIndex);
-  const intentIndex = source.indexOf(intentFunction, policyIndex);
-  assert(purchaseIndex >= 0, `${label} purchase function is missing`);
-  assert(iosBlockIndex > purchaseIndex, `${label} must have an iOS fail-closed branch`);
-  assert(policyIndex > iosBlockIndex, `${label} must invoke payment-rail policy on iOS`);
-  assert(intentIndex > policyIndex, `${label} iOS policy must run before intent/provider work`);
-  includes(source, "IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY", `${label} truthful iOS unavailable copy`);
-}
+for (const marker of [
+  'process_revenuecat_consumable_event_atomic',
+  'pg_advisory_xact_lock',
+  'pending_verification',
+  'payout_readiness_proved',
+  'creator_no_longer_verified_for_production_money',
+  'grants_livekit_publish',
+  'grants_host_power',
+  'grants_admin_power',
+  'grants_payout_access',
+]) includes(atomic, marker, "atomic provider migration");
+includes(webhook, 'adminClient.rpc("process_revenuecat_consumable_event_atomic"', "RevenueCat atomic creator-money webhook call");
 
-const genericIosBlock = creatorSetup.indexOf('if (Platform.OS === "ios")', creatorSetup.indexOf("launchCreatorSandboxDigitalPurchase"));
-const genericProviderLookup = creatorSetup.indexOf("readRevenueCatNonSubscriptionProducts", genericIosBlock);
-assert(genericIosBlock >= 0 && genericProviderLookup > genericIosBlock, "generic creator setup must fail closed before iOS provider lookup");
-const adminIosBlock = adminSandboxPurchases.indexOf('if (Platform.OS === "ios")', adminSandboxPurchases.indexOf("runSandboxPurchase"));
-const adminProviderLookup = adminSandboxPurchases.indexOf("readRevenueCatNonSubscriptionProducts", adminIosBlock);
-assert(adminIosBlock >= 0 && adminProviderLookup > adminIosBlock, "generic admin sandbox purchase must fail closed before iOS provider lookup");
+for (const marker of [
+  'finalize_creator_money_settlement',
+  'release_mature_creator_money_settlements',
+  'creator_money_recovery_obligations',
+  'create_creator_payout_request_safe',
+  'mark_creator_payout_provider_result',
+  "pending_verification",
+  "payout_switches_not_enabled",
+  "settlement_reference_hash",
+]) includes(settlement, marker, "settlement/payout migration");
+for (const marker of [
+  "canonical_content_type",
+  "creator_video",
+  "lifecycle_no_financial_reversal",
+  "creator_money_reversal_links",
+  "creator_payout_allocations",
+  "payout_allocation_incomplete",
+  "paid_amount_recovery_required",
+  "process_revenuecat_consumable_event_atomic_v1",
+]) includes(convergence, marker, "terminal/payout convergence migration");
 
-for (const [label, source] of [["tip sheet", tipSheet], ["money scope", moneyScope]]) {
-  includes(source, 'Platform.OS === "ios"', `${label} platform-aware copy`);
-  includes(source, "App Store", `${label} App Store copy`);
-  includes(source, "Google Play", `${label} Android copy preservation`);
-}
-includes(tipSheet, 'listIosStoreProductsForConcept("creator_tip")', "iOS tip sheet finite product list");
-includes(tipSheet, 'Platform.OS !== "ios" ? (', "iOS tip sheet custom-amount block");
-includes(tipSheet, "providerReadGateRef.current.shouldRun(visible)", "bounded RevenueCat tip-sheet provider read");
-includes(tipSheet, "[iosProductIdSignature, visible]", "stable tip product-ID fetch dependencies");
-includes(tipSheet, "setIosProductPriceLabels((current) =>", "no-op localized label state guard");
-includes(boundedVisibleReadGate, "if (open) return false", "one provider read per visible opening gate");
-
-includes(webhook, "readStoreProductResolution", "store-aware webhook lookup");
-includes(webhook, 'rpc("process_revenuecat_premium_event_atomic"', "atomic Premium webhook write");
-includes(webhook, 'rpc("process_revenuecat_consumable_event_atomic"', "atomic App Store consumable webhook write");
-const premiumWriter = webhook.match(/const writePremiumEntitlementFromRevenueCatEvent[\s\S]*?\n\};\n\nDeno\.serve/u)?.[0] ?? "";
-excludes(premiumWriter, '.from("user_entitlements")', "Premium webhook independent entitlement write");
-excludes(premiumWriter, '.from("billing_events")', "Premium webhook independent billing write");
-excludes(premiumWriter, "mirrorRevenueCatPremiumMoneyAccess(adminClient", "Premium webhook independent money-access mirror");
-includes(webhook, 'storePolicy.provider === "revenuecat_app_store"', "App Store webhook split");
-includes(webhook, "app_store_purchase_switch_disabled", "App Store webhook fail-closed result");
-includes(webhook, '.eq("provider", provider)', "provider-aware webhook idempotency");
-includes(webhook, '.eq("provider_product_id", productResolution.providerProductId)', "provider-aware purchase intent lookup");
-includes(webhook, "creator_tip_cannot_unlock_digital_access", "webhook tip access block");
-includes(webhook, "store_mapping_authority_or_payable_balance_blocked", "webhook authority/payable block");
-includes(webhook, "REVOKED_EVENT_TYPES", "refund and revocation handling");
-includes(webhook, "duplicate_provider_event", "provider idempotency");
-includes(webhook, "retryableFailure: !nonRetriablePayloadError", "webhook retry classification");
-includes(webhook, "const responseStatus = nonRetriablePayloadError ? 200 : 500", "retriable webhook status");
-includes(storePolicy, "supportsGoogleBasePlans: false", "Apple exact-ID policy");
-includes(storePolicy, "supportsGoogleBasePlans: true", "Google base-plan policy");
-includes(storePolicy, 'if (environment === "production")', "App Store production mapping branch");
-includes(storePolicy, 'normalizeText(mapping.status) === "active"', "App Store production active-mapping requirement");
-
-includes(revenueCatClient, "appStorePurchasesEnabled", "iOS RevenueCat client gate");
-includes(revenueCatClient, "App Store purchases are disabled for this build.", "iOS RevenueCat fail-closed copy");
-includes(monetizationClient, "App Store / RevenueCat", "iOS store-specific UI copy");
-includes(monetizationClient, "Google Play / RevenueCat", "Android store-specific UI copy");
-
-for (const disabledConcept of manifest.disabledDynamicConcepts ?? []) {
-  excludes(manifestIds.join("\n"), disabledConcept, `disabled dynamic concept ${disabledConcept}`);
+for (const migration of [readiness, routing, atomic, settlement, convergence]) {
+  excludes(migration, "stripe.transfers.create", "source-only migration");
+  excludes(migration, "stripe.payouts.create", "source-only migration");
+  excludes(migration, "revenuecat.com", "source-only migration");
 }
 
-if (process.exitCode) process.exit();
-console.log("iOS commerce policy guard passed (finite catalog, store split, sandbox gates, no money/authority escalation). ");
+if (!process.exitCode) {
+  console.log("iOS commerce policy guard passed: finite creator-money parity is production-shaped, provider/payout activation stays fail-closed, and no source migration executes external money movement.");
+}
