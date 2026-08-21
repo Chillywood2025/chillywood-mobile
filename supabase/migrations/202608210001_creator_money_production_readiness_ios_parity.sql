@@ -66,15 +66,9 @@ set "status" = 'expired', "updated_at" = timezone('utc'::text, now()),
     "metadata" = coalesce("metadata", '{}'::jsonb) || jsonb_build_object('expired_by','trusted_server_maintenance','expired_cleanup_v1',true)
 where "status" = 'pending' and "expires_at" <= timezone('utc'::text, now());
 
-do $$
-begin
-  if exists (select 1 from pg_extension where extname = 'pg_cron') then
-    if not exists (select 1 from cron.job where jobname = 'expire-money-purchase-intents') then
-      execute $cron$select cron.schedule('expire-money-purchase-intents','*/5 * * * *','select public."expire_money_purchase_intents"();')$cron$;
-    end if;
-  end if;
-exception when undefined_table or invalid_schema_name then null;
-end $$;
+-- Recurring expiry remains a privileged maintenance action owned by the existing
+-- registered money/operator control plane. This feature migration deliberately
+-- does not create an unregistered database scheduler.
 
 alter table public."monetization_product_store_mappings" drop constraint if exists "monetization_store_mappings_concept_check";
 alter table public."monetization_product_store_mappings" add constraint "monetization_store_mappings_concept_check"
