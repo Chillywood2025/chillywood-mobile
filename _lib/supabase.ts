@@ -19,6 +19,7 @@ export const SUPABASE_ANON_KEY = runtimeConfig.supabaseAnonKey || DEFAULT_SUPABA
 
 const isBrowser = typeof window !== "undefined";
 const isWeb = Platform.OS === "web";
+const CLIENT_PLATFORM_HEADER = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : Platform.OS;
 
 const webStorage = {
   getItem: (key: string) => Promise.resolve(isBrowser ? window.localStorage.getItem(key) : null),
@@ -70,7 +71,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     // money authority, access, or eligibility; it only selects the platform-
     // appropriate provider rail after authenticated server-side checks.
     headers: {
-      "x-chillywood-platform": Platform.OS,
+      "x-chillywood-platform": CLIENT_PLATFORM_HEADER,
     },
   },
 });
