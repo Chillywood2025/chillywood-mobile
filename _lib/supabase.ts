@@ -10,7 +10,7 @@ import { getRuntimeConfig } from "./runtimeConfig";
 
 const DEFAULT_SUPABASE_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co";
 const DEFAULT_SUPABASE_FUNCTIONS_URL = "https://network-proof.chillywoodstream.com";
-const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJta2toaWhmYm1zbm5tY3Frb2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNjE1ODUsImV4cCI6MjA4NjczNzU4NX0.j45qJsnaZelO4fND2LGOwH66cb7qHr1LY0t31Ck-TcQ";
+const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImJta2toaWhmYm1zbm5tY3Frb2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNjE1ODUsImV4cCI6MjA4NjczNzU4NX0.j45qJsnaZelO4fND2LGOwH66cb7qHr1LY0t31Ck-TcQ";
 const runtimeConfig = getRuntimeConfig();
 
 export const SUPABASE_URL = runtimeConfig.supabaseUrl || DEFAULT_SUPABASE_URL;
@@ -66,6 +66,12 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
   },
   global: {
     fetch: functionRoutingFetch,
+    // Routing evidence only. Server RPCs never trust this header for identity,
+    // money authority, access, or eligibility; it only selects the platform-
+    // appropriate provider rail after authenticated server-side checks.
+    headers: {
+      "x-chillywood-platform": Platform.OS,
+    },
   },
 });
 
