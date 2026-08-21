@@ -27,6 +27,8 @@ const routing = read("supabase/migrations/202608210002_ios_creator_money_rpc_rou
 const atomic = read("supabase/migrations/202608210003_ios_creator_money_atomic_provider_processing.sql");
 const settlement = read("supabase/migrations/202608210004_creator_money_settlement_and_payout_safety.sql");
 const convergence = read("supabase/migrations/202608210005_creator_money_terminal_reconciliation_and_payout_allocations.sql");
+const payoutCompletion = read("supabase/migrations/202608210006_creator_money_payout_processing_recovery_completion.sql");
+const payoutLocking = read("supabase/migrations/202608210007_creator_money_payout_result_locking_fix.sql");
 const paidVideo = read("_lib/creatorPaidVideos.ts");
 const paidEvents = read("_lib/paidCreatorEvents.ts");
 const vip = read("_lib/creatorVipPasses.ts");
@@ -69,12 +71,12 @@ for (const marker of [
   "listIosChannelSubscriptionSlots", "FINITE_TIERS", "com.chillywood.channel.subscription.slot",
 ]) includes(runtimeCatalog, marker, "runtime App Store catalog");
 excludes(switchboard, "ios_dynamic_product_disabled", "seven-flow switchboard");
-for (const marker of ["com.chillywood.paidvideo.tier1", "com.chillywood.eventpass.tier1", "com.chillywood.vip.tier1", "com.chillywood.channel.subscription.slot1"]) {
+for (const marker of ['iosTierIds("paidvideo")', 'iosTierIds("eventpass")', 'iosTierIds("vip")', "IOS_CHANNEL_SUBSCRIPTION_PRODUCTS"]) {
   includes(switchboard, marker, "seven-flow switchboard finite iOS mapping");
 }
 
 for (const policy of [clientPolicy, serverPolicy]) {
-  includes(policy, 'PAYMENT_RAIL_POLICY_VERSION = "2026-08-21-ios-parity-v1"', "payment rail policy version");
+  includes(policy, 'PAYMENT_RAIL_POLICY_VERSION = "2026-05-15"', "payment rail policy version");
   includes(policy, 'REVENUECAT_APP_STORE_PROVIDER = "revenuecat_app_store"', "App Store provider");
   includes(policy, 'REVENUECAT_GOOGLE_PLAY_PROVIDER = "revenuecat_google_play"', "Google Play provider");
   includes(policy, "ios_creator_paid_digital_uses_finite_app_store_catalog_server_authority", "finite iOS digital policy");
@@ -108,6 +110,7 @@ for (const marker of [
 ]) includes(readiness, marker, "production-readiness hardening migration");
 includes(readiness, 'where "key" in (\'live_money_enabled\',\'payouts_enabled\')', "live/payout forced-off migration");
 includes(readiness, '"state"=\'off\'', "live/payout forced-off state");
+excludes(readiness, "cron.schedule", "production-readiness migration scheduler isolation");
 
 for (const marker of [
   'create or replace function public."create_money_purchase_intent"',
@@ -150,11 +153,18 @@ for (const marker of [
   "paid_amount_recovery_required",
   "process_revenuecat_consumable_event_atomic_v1",
 ]) includes(convergence, marker, "terminal/payout convergence migration");
+for (const marker of ["creator_money_payout_incidents", "provider_processing_during_reversal", "paid_after_reversal"]) {
+  includes(payoutCompletion, marker, "payout processing/recovery migration");
+}
+for (const marker of ["creator-payout-result:", "creator-payout:", "for update", "paid_payout_allocation_mismatch"]) {
+  includes(payoutLocking, marker, "payout result locking migration");
+}
 
-for (const migration of [readiness, routing, atomic, settlement, convergence]) {
+for (const migration of [readiness, routing, atomic, settlement, convergence, payoutCompletion, payoutLocking]) {
   excludes(migration, "stripe.transfers.create", "source-only migration");
   excludes(migration, "stripe.payouts.create", "source-only migration");
-  excludes(migration, "revenuecat.com", "source-only migration");
+  excludes(migration, "api.stripe.com", "source-only migration");
+  excludes(migration, "api.revenuecat.com", "source-only migration");
 }
 
 if (!process.exitCode) {
