@@ -16,6 +16,7 @@ const atomic = read("supabase/migrations/202608210003_ios_creator_money_atomic_p
 const settlement = read("supabase/migrations/202608210004_creator_money_settlement_and_payout_safety.sql");
 const convergence = read("supabase/migrations/202608210005_creator_money_terminal_reconciliation_and_payout_allocations.sql");
 const payoutCompletion = read("supabase/migrations/202608210006_creator_money_payout_processing_recovery_completion.sql");
+const payoutLocking = read("supabase/migrations/202608210007_creator_money_payout_result_locking_fix.sql");
 
 const conceptCount = (concept) => manifest.catalog.filter((entry) => entry.concept === concept).length;
 
@@ -59,7 +60,7 @@ test("runtime and server policies route iOS creator digital money through finite
     assert.match(runtimeCatalog, new RegExp(marker));
   }
   for (const policy of [clientPolicy, serverPolicy]) {
-    assert.match(policy, /2026-08-21-ios-parity-v1/);
+    assert.match(policy, /PAYMENT_RAIL_POLICY_VERSION = "2026-05-15"/);
     assert.match(policy, /ios_creator_paid_digital_uses_finite_app_store_catalog_server_authority/);
     assert.match(policy, /createsPayableBalance: false/);
     assert.match(policy, /grantsLiveKitAuthority: false/);
@@ -99,11 +100,14 @@ test("refund, reversal, partial payout, in-flight payout, and post-payout recove
   assert.match(payoutCompletion, /paid_after_reversal/);
   assert.match(payoutCompletion, /creator_money_recovery_obligations/);
   assert.match(payoutCompletion, /payable_state"='paid/);
+  assert.match(payoutLocking, /creator-payout-result:/);
+  assert.match(payoutLocking, /creator-payout:/);
+  assert.match(payoutLocking, /paid_payout_allocation_mismatch/);
 });
 
 test("source-only readiness migrations contain no outbound provider money movement", () => {
-  const source = [readiness, routing, atomic, settlement, convergence, payoutCompletion].join("\n");
-  for (const forbidden of ["stripe.transfers.create", "stripe.payouts.create", "api.stripe.com", "api.revenuecat.com"] ) {
+  const source = [readiness, routing, atomic, settlement, convergence, payoutCompletion, payoutLocking].join("\n");
+  for (const forbidden of ["stripe.transfers.create", "stripe.payouts.create", "api.stripe.com", "api.revenuecat.com"]) {
     assert.equal(source.includes(forbidden), false, forbidden);
   }
 });
