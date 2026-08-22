@@ -27,7 +27,7 @@ const readPull = (repository, pr) => {
   if (result.status !== 0) return null;
   try {
     const pull = JSON.parse(result.stdout);
-    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRef: pull.head?.ref, headSha: pull.head?.sha, htmlUrl: pull.html_url, state: pull.state };
+    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRef: pull.head?.ref, headSha: pull.head?.sha, htmlUrl: pull.html_url, state: pull.state, draft: pull.draft === true };
   } catch {
     return null;
   }
@@ -72,6 +72,7 @@ if (!event.pull_request) {
   const pr = event.number;
   const readback = readPull(repository, pr);
   const validatedIdentity = validatePullRequestEventIdentity(event, readback);
+  const sourceReadiness = event.pull_request?.draft === true && readback?.draft === true;
   const base = validatedIdentity.identity?.baseSha ?? event.pull_request?.base?.sha;
   const head = validatedIdentity.identity?.headSha ?? event.pull_request?.head?.sha;
   let scope = { files: [], additions: 0, deletions: 0, netChangedLines: 0 };
@@ -97,7 +98,19 @@ if (!event.pull_request) {
     observedChangedPaths: scope.files,
     observedCanonicalChangedLines: scope.additions + scope.deletions,
   });
-  const findings = context.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  const admissionOnlyFindingIds = new Set([
+    "ASSURANCE_TASK_CONTEXT_UNBOUND",
+    "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+    "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+    "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+    "ASSURANCE_PR_LINE_BUDGET_EXCEEDED",
+  ]);
+  const findings = context.findings
+    .filter((id) => !(sourceReadiness && admissionOnlyFindingIds.has(id)))
+    .map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  const deferredAdmissionFindings = sourceReadiness
+    ? context.findings.filter((id) => admissionOnlyFindingIds.has(id))
+    : [];
   if (!tree) {
     findings.push({ id: "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE", status: "BLOCKED_INTERNAL" });
   }
@@ -110,8 +123,14 @@ if (!event.pull_request) {
     : waiver
       ? { files: waiver.fileBudget.waivedMaximum, lines: waiver.lineBudget.waivedMaximum, source: waiver.contractId }
       : { files: policy.defaultBudget.changedFiles, lines: policy.defaultBudget.netChangedLines, source: "pr-scope-policy-v1" };
-  if (scope.files.length > budget.files) findings.push({ id: "ASSURANCE_PR_FILE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.files.length, maximum: budget.files });
-  if (Math.max(0, scope.additions - scope.deletions) > budget.lines) findings.push({ id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.additions - scope.deletions, maximum: budget.lines });
+  if (scope.files.length > budget.files) {
+    const finding = { id: "ASSURANCE_PR_FILE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.files.length, maximum: budget.files };
+    if (sourceReadiness) deferredAdmissionFindings.push(finding.id); else findings.push(finding);
+  }
+  if (Math.max(0, scope.additions - scope.deletions) > budget.lines) {
+    const finding = { id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.additions - scope.deletions, maximum: budget.lines };
+    if (sourceReadiness) deferredAdmissionFindings.push(finding.id); else findings.push(finding);
+  }
   const scopeEvaluation = evaluateHighRiskScope({
     highRiskDomains: highRisk,
     objectiveDomains: context.objectiveDomains ?? [],
@@ -122,10 +141,17 @@ if (!event.pull_request) {
     waiver,
     finiteTaskPrRiskAuthority: context.finiteTaskPrRiskAuthority
   });
-  findings.push(...scopeEvaluation.findings);
+  for (const finding of scopeEvaluation.findings) {
+    if (sourceReadiness && admissionOnlyFindingIds.has(finding.id)) deferredAdmissionFindings.push(finding.id);
+    else findings.push(finding);
+  }
   if (waiver && (waiver.secondHighRiskDomain || !waiver.reviewer || waiver.newTimeboxHours > 8)) findings.push({ id: "ASSURANCE_SCOPE_WAIVER_INVALID", status: "BLOCKED_INTERNAL" });
+  const uniqueDeferredAdmissionFindings = [...new Set(deferredAdmissionFindings)].sort();
   emit("assurance:pr-scope", findings.length === 0, {
-    mode: "GITHUB_EVENT_TASK_CONTEXT",
+    mode: sourceReadiness ? "GITHUB_EVENT_SOURCE_READINESS" : "GITHUB_EVENT_TASK_CONTEXT",
+    sourceReadiness,
+    mergeAuthorityGranted: !sourceReadiness && findings.length === 0,
+    deferredAdmissionFindings: uniqueDeferredAdmissionFindings,
     base,
     head,
     taskContext: context,
@@ -148,5 +174,5 @@ if (!event.pull_request) {
     waiver: waiver ? waiver.contractId : null,
     classified,
     findings
-  }, [`PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
+  }, [`PR scope: ${findings.length ? "FAIL" : "PASS"} — ${sourceReadiness ? "source-readiness" : "merge-authority"}, ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
 }
