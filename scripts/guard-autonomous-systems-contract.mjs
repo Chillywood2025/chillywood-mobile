@@ -11,7 +11,6 @@ const result = spawnSync(process.execPath, [core.pathname], {
 
 if (result.stdout) process.stdout.write(result.stdout);
 if (result.stderr) process.stderr.write(result.stderr);
-
 if (result.status === 0) process.exit(0);
 
 let event = null;
@@ -23,10 +22,13 @@ try {
   event = null;
 }
 
+// GITHUB_EVENT_PATH is GitHub-owned immutable event input. Draft is the only
+// lifecycle state that may defer final admission; all ready/non-PR contexts
+// preserve the core guard's strict result.
 const sourceReadiness = event?.pull_request?.draft === true
-  && event?.pull_request?.state === "open"
-  && event?.repository?.full_name === event?.pull_request?.base?.repo?.full_name
-  && event?.pull_request?.head?.repo?.full_name === event?.repository?.full_name;
+  && typeof event?.number === "number"
+  && typeof event?.repository?.full_name === "string"
+  && event?.repository?.full_name === event?.pull_request?.base?.repo?.full_name;
 
 let payload = null;
 try {
