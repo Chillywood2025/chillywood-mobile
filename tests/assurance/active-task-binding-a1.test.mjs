@@ -2657,6 +2657,7 @@ test("finite test-adaptation active-task scope: only a trusted layered resolutio
 
 test("A1 terminal repair receipt: exact preliminary receipt round-trips only as the history-bound stale predecessor of one final receipt", () => {
   const priorTruth = structuredClone(canonicalTruth);
+  priorTruth.taskContextArchitecture.terminalVerifierRepair.history = structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY);
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 731, branch: "codex/generic-terminal-verifier-repair-v2", baseSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb", headSha: "b".repeat(40) };
   const preliminaryIdentity = { ...identity, headSha: "a".repeat(40) };
   const predecessor = { valid: true, protectedBaseAncestor: true, pr: 243, mergeSha: "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76", firstParent: "406a776a697c3a786fd37911b6e2160906fb9121", sourceHead: "5e44d1fd2a84f51b322eb40ca147c0882d1d664f", sourceTree: "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc" };

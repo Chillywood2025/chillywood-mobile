@@ -1777,7 +1777,7 @@
     "mergeSha": "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76",
     "mergeTree": "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc",
     "authorityCommentId": 5362647294,
-    "authorityBodyHash": "72dfc5ab449289e6cb158cd115fbd645324b1869dc7310a898ac42f83aa848e7",
+    "authorityBodyHash": "a2b650cc14e0350f6461b33de028028011dc0dfe93c2185a265d0171070dbe25",
     "authoritySubjectHash": "cb22fae3ea5b5646a24107c02618e2c87a5af98fa2345ded9804329ae378e05f",
     "repositoryReviewCommentId": 5362828091,
     "repositoryReview": {"P0":0,"P1":0,"launchImpactingP2":0},
@@ -1929,6 +1929,89 @@
               "publicRelease": false
             },
             "instanceId": "700c55c7821fed21f7d2d6a98b92778d78a37e759d4bdc35d1dc639f21cb6184"
+          },
+          {
+            "schemaVersion": 1,
+            "ordinal": 2,
+            "classification": "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+            "repository": "Chillywood2025/chillywood-mobile",
+            "pullRequest": 246,
+            "branch": "codex/terminal-verifier-durable-provenance-successor-v2",
+            "protectedBase": "5e595e684f4dcc9454eee5065066e1b48d20e3eb",
+            "priorCurrentTruthHash": "ff4736c6ab404de7c9790ef71732716ef809c4bdbaeb13bfcb2a9e763be385e9",
+            "priorInstanceId": "700c55c7821fed21f7d2d6a98b92778d78a37e759d4bdc35d1dc639f21cb6184",
+            "predecessor": {
+              "pullRequest": 243,
+              "mergeSha": "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76",
+              "firstParent": "406a776a697c3a786fd37911b6e2160906fb9121",
+              "sourceHead": "5e44d1fd2a84f51b322eb40ca147c0882d1d664f",
+              "sourceTree": "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc",
+              "authorityCommentId": 5362647294,
+              "authoritySubjectHash": "cb22fae3ea5b5646a24107c02618e2c87a5af98fa2345ded9804329ae378e05f",
+              "authorityBodyHash": "a2b650cc14e0350f6461b33de028028011dc0dfe93c2185a265d0171070dbe25"
+            },
+            "receiptBindings": {
+              "historicalTerminalReceipt": {
+                "commentId": 5394525054,
+                "subjectHash": "b630eb11bbbbeb7aa85c55e865b92ca3e5f4a863db4cbd1f36ea1208921bc00f",
+                "commentBodyHash": "104cac2aa4f22cd259529e0b44d5668372a85d726be4c2a75f50b6feab2fee62",
+                "disposition": "HISTORICAL_STALE_TERMINAL_RECEIPT"
+              },
+              "predecessorReceipts": [
+                {
+                  "commentId": 5362647294,
+                  "subjectHash": "cb22fae3ea5b5646a24107c02618e2c87a5af98fa2345ded9804329ae378e05f",
+                  "commentBodyHash": "a2b650cc14e0350f6461b33de028028011dc0dfe93c2185a265d0171070dbe25",
+                  "disposition": "OWNER_ARCHITECTURE_AUTHORITY"
+                },
+                {
+                  "commentId": 5363013036,
+                  "subjectHash": "26b84b5d86b91de4c9a684d3c13ee6c67ada191b21a1ebf76681d1c074209560",
+                  "commentBodyHash": "89d896ce61c81cdd92c842aa107f3cf0a728f07281c4a14a630ca725438852dc",
+                  "diffHash": "9bffa69ea0ea10c950522200edfe47ca07fae98dc8eeaac319c387f00109b56b",
+                  "disposition": "CANONICAL_CURRENT"
+                }
+              ]
+            },
+            "pendingTransitionPolicyId": "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+            "pendingTransitions": [
+              {
+                "pr": 243,
+                "mergeSha": "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76",
+                "status": "CONSUMED_BY_THIS_TERMINAL_TRUTH"
+              }
+            ],
+            "expectedNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
+            "profile": {
+              "schemaVersion": 2,
+              "profileId": "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE_V2",
+              "changedPaths": [
+                "CURRENT_STATE.md",
+                "NEXT_TASK.md",
+                "config/assurance/current-truth-v1.json",
+                "scripts/assurance/engineering-closure.mjs",
+                "scripts/assurance/lib.mjs",
+                "scripts/assurance/pr-scope.mjs",
+                "tests/assurance/active-task-binding-a1.test.mjs",
+                "tests/assurance/engineering-doctrine.test.mjs",
+                "tests/assurance/pr-scope-feature-bundles.test.mjs"
+              ],
+              "changedPathHash": "3352912101c40daae9381b626d135c7c78bdd13250b0bd6a285859ac0936bf7d",
+              "maximumFiles": 9,
+              "maximumNetLines": 1800
+            },
+            "singleUse": true,
+            "authority": {
+              "product": false,
+              "nativeProduct": false,
+              "database": false,
+              "providerMutation": false,
+              "build": false,
+              "submission": false,
+              "ota": false,
+              "publicRelease": false
+            },
+            "instanceId": "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"
           }
         ]
       }
