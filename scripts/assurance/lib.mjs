@@ -2445,14 +2445,15 @@ function embeddedRollingAuthorityBound(commit, checkpoint, gitCommand) {
 
 function parseProtectedPullRequestMergeSubject(subject) {
   const patterns = [
-    ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge pull request #([1-9][0-9]*) from [^/\s]+\/(.+)$/u],
-    ["GITHUB_TITLE_WITH_PR_SUFFIX", /^\S(?:.*\S)? \(#([1-9][0-9]*)\)$/u]
+    ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge pull request #([1-9][0-9]*) from [^/\s]+\/(.+)$/u, "GITHUB_CLASSIC_MERGE_PULL_REQUEST"],
+    ["GITHUB_TITLE_WITH_PR_SUFFIX", /^\S(?:.*\S)? \(#([1-9][0-9]*)\)$/u, "GITHUB_TITLE_WITH_PR_SUFFIX"],
+    ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge PR #([1-9][0-9]*): \S(?:.*\S)?$/u, "GITHUB_MERGE_PR_TITLE"]
   ];
-  for (const [format, pattern] of patterns) {
+  for (const [format, pattern, variant] of patterns) {
     const match = pattern.exec(subject ?? "");
-    if (match) return { ok: true, format, prNumber: Number(match[1]), sourceBranch: match[2] ?? null };
+    if (match) return { ok: true, format, variant, prNumber: Number(match[1]), sourceBranch: match[2] ?? null };
   }
-  return { ok: false, format: null, prNumber: null, sourceBranch: null };
+  return { ok: false, format: null, variant: null, prNumber: null, sourceBranch: null };
 }
 
 const closedPendingAuthority = (authority) => stableJson(authority) === stableJson({
@@ -2591,7 +2592,33 @@ function exactGitBlobSha256(ref, gitCommand) {
   return candidates.length === 1 ? sha256(candidates[0]) : null;
 }
 
-function embeddedTerminalVerifierRepairConsumption(observation, pending, priorInstances, gitCommand) {
+const historicalProtectedTerminalRepairMergeEvidence = Object.freeze({
+  repository: "Chillywood2025/chillywood-mobile", pullRequest: 246, branch: "codex/terminal-verifier-durable-provenance-successor-v2",
+  protectedBase: "5e595e684f4dcc9454eee5065066e1b48d20e3eb", sourceHead: "da41288c5caad40a7b33892e0c0120a369cca1bb", sourceTree: "cee9c69c6a4bfffd152e02881174cc5f27216bce",
+  mergeSha: "8aa74d0442eb9797900005d3c2dca9709b43c0c8", mergeTree: "cee9c69c6a4bfffd152e02881174cc5f27216bce", diffHash: "cdf5fbcb1ea081a797000ba4f3c9ec4579aac718dde2f4c9db9f92d05f11e5cb",
+  finalReceipt: { commentId: 5396710897, createdAt: "2026-08-24T14:32:32Z", updatedAt: "2026-08-24T14:32:32Z", rawBodyHash: "156acf394f5ce4503dd4a945136b4f783bb94a8638f1aaa6ed1e87b15ed25969", payloadBodyHash: "1e8120dec3df545127ec3601b54d78441cf9aae99cc8d9279d5929fa1a98e20d", subjectHash: "0ef10e9b89baf050fd384179d2ab8b8d3c4e8512d57134a65d3c03e4512ef40a" },
+});
+const protectedTerminalRepairMergeEvidence = (instanceId) => instanceId === "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"
+  ? historicalProtectedTerminalRepairMergeEvidence : null;
+
+export function validateTerminalVerifierRepairProtectedMerge({ observation, instance: current, gitCommand = git } = {}) {
+  try {
+    const evidence = protectedTerminalRepairMergeEvidence(current?.instanceId);
+    const parents = gitCommand(["show", "-s", "--format=%P", observation.commit]).split(/\s+/u).filter(Boolean);
+    const tree = gitCommand(["rev-parse", `${observation.commit}^{tree}`]);
+    const sourceTree = gitCommand(["rev-parse", `${evidence.sourceHead}^{tree}`]);
+    const mergeTree = gitCommand(["merge-tree", "--write-tree", evidence.protectedBase, evidence.sourceHead]).split(/\r?\n/gu)[0];
+    const sourcePaths = gitCommand(["diff", "--name-only", `${evidence.protectedBase}...${evidence.sourceHead}`]).split(/\r?\n/gu).filter(Boolean).sort();
+    const diffHash = sha256(canonicalGitText(gitCommand(["diff", "--full-index", "--binary", "--no-ext-diff", `${evidence.protectedBase}...${evidence.sourceHead}`])));
+    return evidence.repository === current.repository && evidence.pullRequest === current.pullRequest && evidence.branch === current.branch && evidence.protectedBase === current.protectedBase
+      && evidence.finalReceipt.createdAt === evidence.finalReceipt.updatedAt && hash64Pattern.test(evidence.finalReceipt.rawBodyHash) && hash64Pattern.test(evidence.finalReceipt.payloadBodyHash) && hash64Pattern.test(evidence.finalReceipt.subjectHash)
+      && observation.commit === evidence.mergeSha && stableJson(observation.parents) === stableJson([evidence.protectedBase, evidence.sourceHead]) && observation.tree === evidence.mergeTree
+      && stableJson(parents) === stableJson(observation.parents) && tree === evidence.mergeTree && sourceTree === evidence.sourceTree && mergeTree === evidence.mergeTree
+      && stableJson(sourcePaths) === stableJson(current.profile.changedPaths) && stableJson(sourcePaths) === stableJson([...(observation.changedPaths ?? [])].sort()) && diffHash === evidence.diffHash;
+  } catch { return false; }
+}
+
+function embeddedTerminalVerifierRepairConsumption(observation, pending, priorInstances, gitCommand, projectedInstance = null) {
   try {
     const embedded = JSON.parse(gitCommand(["show", `${observation.commit}:config/assurance/current-truth-v1.json`]));
     const architecture = embedded?.taskContextArchitecture;
@@ -2630,13 +2657,20 @@ function embeddedTerminalVerifierRepairConsumption(observation, pending, priorIn
     if (!priorCurrentTruthHash) return { ok: false, current: null, instances: priorInstances, historical: false };
     const expectedConsumed = pending.map(({ pullRequest, mergeSha }) => ({ pr: pullRequest, mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }));
     const expectedNextTask = pending[0]?.expectedTerminalNextTask;
+    const projectedBinding = projectedInstance?.pullRequest === parsed.prNumber
+      && projectedInstance?.protectedBase === observation.parents[0]
+      ? projectedInstance
+      : null;
+    const expectedEmbeddedConsumed = projectedBinding
+      ? [priorInstances[0]?.pendingTransitions?.[0], ...expectedConsumed].filter(Boolean)
+      : expectedConsumed;
     const history = evaluateTerminalVerifierRepairHistory({
       repair,
       expectedPriorInstances: priorInstances,
       expectedCurrent: {
         repository: "Chillywood2025/chillywood-mobile",
         pullRequest: parsed.prNumber,
-        branch: parsed.sourceBranch,
+        branch: parsed.sourceBranch ?? projectedBinding?.branch,
         protectedBase: observation.parents[0],
         priorCurrentTruthHash,
         pendingTransitions: expectedConsumed,
@@ -2644,6 +2678,7 @@ function embeddedTerminalVerifierRepairConsumption(observation, pending, priorIn
       },
     });
     const current = history.current;
+    const protectedSourceBound = validateTerminalVerifierRepairProtectedMerge({ observation, instance: current, gitCommand });
     const canonicalReceipt = current?.receiptBindings?.predecessorReceipts?.find(({ disposition }) => disposition === "CANONICAL_CURRENT");
     const instanceBound = current?.predecessor?.pullRequest === architecture?.architecturePr
       && current?.predecessor?.mergeSha === architecture?.mergeSha
@@ -2656,11 +2691,13 @@ function embeddedTerminalVerifierRepairConsumption(observation, pending, priorIn
       && Boolean(canonicalReceipt);
     const ok = parsed.ok
       && history.ok
+      && (!projectedBinding || stableJson(current) === stableJson(projectedBinding))
+      && protectedSourceBound
       && instanceBound
       && architecture?.pendingTransitionPolicyId === "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1"
       && architecture?.pendingTransitionCountAfterSynchronization === 0
       && architecture?.terminalTransitionConsumed === true
-      && stableJson(consumed) === stableJson(expectedConsumed)
+      && stableJson(consumed) === stableJson(expectedEmbeddedConsumed)
       && embedded?.engineeringDoctrine?.status === "ACTIVE"
       && embedded?.engineeringDoctrine?.nextPermittedAction === expectedNextTask
       && stableJson(architecture?.authority) === stableJson({ providerMutation: false, build: false, submission: false, ota: false, publicRelease: false });
@@ -2789,6 +2826,13 @@ export function evaluateProtectedMainAdvancement({
     const classifications = [...new Set(pathClassifications.map(({ classification }) => classification))].sort();
     const parsedMergeSubject = parseProtectedPullRequestMergeSubject(observation.subject);
     const subjectFormatAllowed = policy.ordinaryAdvancement?.acceptedMergeSubjectFormats?.includes(parsedMergeSubject.format);
+    const observedRepairPaths = [...(observation.changedPaths ?? [])].sort();
+    const projectedRepairReplay = parsedMergeSubject.variant === "GITHUB_MERGE_PR_TITLE"
+      && repairHistoryInstances.length + 1 === projectedRepair?.ordinal
+      && parsedMergeSubject.prNumber === projectedRepair?.pullRequest
+      && observation.parents?.[0] === projectedRepair?.protectedBase
+      && gitShaPattern.test(observation.parents?.[1] ?? "")
+      && stableJson(observedRepairPaths) === stableJson(projectedRepair?.profile?.changedPaths);
     const normalPrMerge = observation.parents?.length === policy.ordinaryAdvancement?.parentCount
       && observation.parents[0] === prior
       && parsedMergeSubject.ok
@@ -2798,13 +2842,20 @@ export function evaluateProtectedMainAdvancement({
     if (!normalPrMerge) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
     const authorityChanged = classifications.includes(protectedMainClasses.authority);
     const terminalChanged = classifications.includes(protectedMainClasses.terminal) && !authorityChanged;
-    const observedRepairPaths = [...(observation.changedPaths ?? [])].sort();
     const terminalRepairScope = [
       HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
       TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
     ].some((paths) => stableJson(observedRepairPaths) === stableJson(paths));
+    const projectedPending = projectedRepairReplay ? [{
+      pullRequest: projectedRepair.predecessor.pullRequest,
+      mergeSha: projectedRepair.predecessor.mergeSha,
+      firstParent: projectedRepair.predecessor.firstParent,
+      sourceHead: projectedRepair.predecessor.sourceHead,
+      sourceTree: projectedRepair.predecessor.sourceTree,
+      expectedTerminalNextTask: projectedRepair.expectedNextTask,
+    }] : pendingTransitions;
     const terminalRepairConsumption = normalPrMerge && authorityChanged && terminalRepairScope
-      ? embeddedTerminalVerifierRepairConsumption(observation, pendingTransitions, repairHistoryInstances, gitCommand)
+      ? embeddedTerminalVerifierRepairConsumption(observation, projectedPending, repairHistoryInstances, gitCommand, projectedRepairReplay ? projectedRepair : null)
       : { ok: false, current: null, instances: repairHistoryInstances, historical: false };
     const terminalRepairChanged = terminalRepairConsumption.ok;
     const companionPresent = (policy.authorityRequiredCompanionPaths ?? []).every((file) => (observation.changedPaths ?? []).includes(file));

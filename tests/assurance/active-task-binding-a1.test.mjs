@@ -69,6 +69,7 @@ import {
   transitionFiniteTaskState,
   validateFiniteTaskLeaseRegistry,
   validateEngineeringDoctrineTruth,
+  validateTerminalVerifierRepairProtectedMerge,
   validateProofTierStatuses,
   validateTerminalTaskEvidence,
   verifyCommittedClaimEvidence,
@@ -4997,7 +4998,7 @@ function syntheticRollingEvaluation(count, {
       commit,
       parents,
       tree: digest(`rolling-tree-${count}-${index}`).slice(0, 40),
-      subject: subject ?? `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
+      subject: Array.isArray(subject) ? subject[index] : subject ?? `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
       changedPaths: changedPaths ?? [changedPath]
     };
     if (authorityUpdateBound !== undefined) observation.authorityUpdateBound = authorityUpdateBound;
@@ -5222,10 +5223,47 @@ test("rolling main matrix 27: classic GitHub merge subject remains accepted", ()
 });
 
 test("rolling main matrix 28: malformed or unregistered merge subjects fail closed", () => {
-  for (const subject of ["direct push", "Title (#0)", "Title #221", " (#221)", "Title (#221) trailing"]) {
+  for (const subject of ["direct push", "Title (#0)", "Title #221", " (#221)", "Title (#221) trailing", "Merge PR #0: title", "Merge PR #246:", "Merge PR #246 title"]) {
     const result = syntheticRollingEvaluation(1, { subject });
     assert.equal(result.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true, subject);
   }
+});
+
+test("rolling main matrix 29: exact projected repair accepts GitHub Merge PR title and consumes only its bound predecessor", () => {
+  const record = structuredClone(canonicalTruth);
+  const observedProtectedMainSha = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
+  const repairInstance = record.taskContextArchitecture.terminalVerifierRepair.history.instances.at(-1);
+  const exactObservation = { commit: observedProtectedMainSha, parents: ["5e595e684f4dcc9454eee5065066e1b48d20e3eb", "da41288c5caad40a7b33892e0c0120a369cca1bb"], tree: "cee9c69c6a4bfffd152e02881174cc5f27216bce", subject: "Merge PR #246: Repair durable terminal-verifier provenance", changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS] };
+  assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance }), true);
+  for (const [label, mutate] of [
+    ["replacement merge", (candidate) => { candidate.observation.commit = candidate.observation.parents[1]; }],
+    ["wrong source parent", (candidate) => { candidate.observation.parents[1] = "0".repeat(40); }],
+    ["wrong execution tree", (candidate) => { candidate.observation.tree = "0".repeat(40); }],
+  ]) {
+    const candidate = { observation: structuredClone(exactObservation) }; mutate(candidate);
+    assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: candidate.observation, instance: repairInstance }), false, label);
+  }
+  const runGit = (argv) => spawnSync("git", argv, { encoding: "utf8" }).stdout.trim();
+  for (const [label, command] of [["wrong source diff", "diff"], ["arbitrary merge tree", "merge-tree"]]) {
+    assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance, gitCommand: (argv) => argv[0] === command && (command === "merge-tree" || argv.includes("--full-index")) ? "0".repeat(40) : runGit(argv) }), false, label);
+  }
+  const originalMapGet = Map.prototype.get; try { Map.prototype.get = () => ({ ...repairInstance, sourceHead: "0".repeat(40) }); assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance }), true, "prototype mutation cannot replace lexical protected-merge evidence"); } finally { Map.prototype.get = originalMapGet; }
+  const exact = evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha, candidateHead: "6c724deca7969dc72aaf1ae24b69a150a6cfbaca", finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }, candidateContainsObservedMain: true });
+  assert.equal(exact.findings.length, 0, exact.findings.join(","));
+  assert.deepEqual([exact.pendingTransitionCount, exact.pendingTransitionConsumptionCount, exact.terminalVerifierRepairHistory.length], [0, 1, 2]);
+  assert.deepEqual([exact.advancementClassifications[0].pullRequestNumber, exact.advancementClassifications[0].mergeSubjectFormat, exact.advancementClassifications[0].terminalVerifierRepair], [246, "GITHUB_CLASSIC_MERGE_PULL_REQUEST", true]);
+  const observation = { ...exactObservation, subject: "Merge PR #247: Repair durable terminal-verifier provenance" };
+  const wrongPr = evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha, finiteTaskRuntime: { sourceOnlyEligible: true }, advancementObservations: [observation], checkpointTreeObservation: record.protectedMainAuthority.checkpointTree, checkpointIsAncestor: true, candidateContainsObservedMain: true });
+  assert.ok(wrongPr.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"));
+  const withoutProjection = structuredClone(record); withoutProjection.taskContextArchitecture.terminalVerifierRepair.history.instances.pop();
+  const unbound = evaluateProtectedMainAdvancement({ record: withoutProjection, contract: currentTruthContract, observedProtectedMainSha, finiteTaskRuntime: { sourceOnlyEligible: true }, advancementObservations: [{ ...observation, subject: "Merge PR #246: Repair durable terminal-verifier provenance" }], checkpointTreeObservation: withoutProjection.protectedMainAuthority.checkpointTree, checkpointIsAncestor: true, candidateContainsObservedMain: true });
+  assert.ok(unbound.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"));
+});
+
+test("rolling main matrix 30: consecutive GitHub Merge PR title variants remain ordinary protected advancement", () => {
+  const exact = syntheticRollingEvaluation(2, { subject: ["Merge PR #300: First assurance correction", "Merge PR #301: Second assurance correction"] });
+  assert.equal(exact.findings.length, 0, exact.findings.join(","));
+  assert.deepEqual(exact.advancementClassifications.map(({ pullRequestNumber, mergeSubjectFormat, terminalVerifierRepair }) => [pullRequestNumber, mergeSubjectFormat, terminalVerifierRepair]), [[300, "GITHUB_CLASSIC_MERGE_PULL_REQUEST", false], [301, "GITHUB_CLASSIC_MERGE_PULL_REQUEST", false]]);
 });
 
 const recoveryPaths = [...TYPED_CONTEXT_ARCHITECTURE_PATHS].sort();

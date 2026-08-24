@@ -979,7 +979,8 @@ test("terminal verifier repair history accepts one independently bound append an
   assert.equal(!replayResult.ok && replayResult.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_DUPLICATE_OR_REPLAY"), true);
   const duplicate = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord([...instances, structuredClone(current)]) });
   assert.equal(!duplicate.ok && duplicate.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_DUPLICATE_OR_REPLAY"), true);
-  const second = genericTerminalRepairInstance({ ordinal: 3, pullRequest: 802, protectedBase: "d".repeat(40), priorCurrentTruthHash: "e".repeat(64), priorInstanceId: current.instanceId, predecessorPullRequest: 803, predecessorMerge: "f".repeat(40), authorityCommentId: 7000000804, historicalTerminalReceiptId: 7000000805 });
+  const second = genericTerminalRepairInstance({ ordinal: 3, pullRequest: 802, protectedBase: "d".repeat(40), priorCurrentTruthHash: "e".repeat(64), priorInstanceId: current.instanceId, predecessorPullRequest: 803, predecessorMerge: "f".repeat(40), authorityCommentId: 7000000804, historicalTerminalReceiptId: 7000000805, authoritySubjectHash: "b".repeat(64), authorityBodyHash: "c".repeat(64), historicalSubjectHash: "d".repeat(64), historicalBodyHash: "e".repeat(64), predecessorDiffHash: "f".repeat(64) });
+  assert.equal(evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord([...instances, second]) }).ok, true, "multiple independently bound historical repair instances remain append-only valid");
   const ambiguous = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord([...instances, second]), expectedPriorInstances: [instances[0]], expectedCurrent });
   assert.equal(!ambiguous.ok && ambiguous.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_NOT_SINGLE_APPEND"), true);
   const wrongBase = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord(instances), expectedPriorInstances: [instances[0]], expectedCurrent: { ...expectedCurrent, protectedBase: "0".repeat(40) } });
@@ -1052,11 +1053,11 @@ const protectedMainMultiRepairEvaluation = ({ mutateCheckpointHistory = () => {}
   });
 };
 
-test("protected-main history accepts independently bound repair instances and rejects a replayed append", () => {
+test("protected-main repair history rejects synthetic consumption without complete live source authority", () => {
   const exact = protectedMainMultiRepairEvaluation();
-  assert.equal(exact.findings.length, 0, exact.findings.join(","));
-  assert.deepEqual([exact.protectedAdvancementCount, exact.pendingTransitionConsumptionCount, exact.terminalVerifierRepairHistory.length, new Set(exact.terminalVerifierRepairHistory.map(({ instanceId }) => instanceId)).size, exact.advancementClassifications.filter(({ terminalVerifierRepair }) => terminalVerifierRepair).length], [5, 2, 3, 3, 2]);
-  assert.equal(protectedMainMultiRepairEvaluation({ preprojectFirst: true }).findings.length, 0, "the prospectively embedded current instance must be consumed exactly once at its merge");
+  assert.ok(exact.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(exact));
+  assert.equal(exact.advancementClassifications.filter(({ terminalVerifierRepair }) => terminalVerifierRepair).length, 0);
+  assert.ok(protectedMainMultiRepairEvaluation({ preprojectFirst: true }).findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), "embedded self-assertion cannot replace live source authority");
   const replay = protectedMainMultiRepairEvaluation({ mutateSecondHistory: (instances) => { instances[2] = structuredClone(instances[1]); } });
   assert.ok(replay.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(replay));
   const unresolved = protectedMainMultiRepairEvaluation({ stopAfterIntervening: true });
