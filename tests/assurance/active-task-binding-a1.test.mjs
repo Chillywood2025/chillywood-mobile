@@ -130,7 +130,7 @@ const preAdmissionFixture = () => {
 const preAdmissionMutation = (mutate) => { const facts = preAdmissionFixture(); mutate(facts); return evaluatePreAdmissionEngineeringSeed(facts); };
 test("pre-admission 01: exact governed seed passes without product authority", () => { const result = evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()); assert.equal(result.ok, true); assert.equal(result.packet.classification, OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1); assert.equal(result.packet.productSourceMutationAllowed, false); });
 test("pre-admission 02: terminal history does not block explicit seed mode", () => { const facts = preAdmissionFixture(); facts.currentTruth.activeTaskBinding = canonicalTruth.activeTaskBinding; assert.equal(evaluatePreAdmissionEngineeringSeed(facts).ok, true); });
-test("pre-admission 03: normal active-task terminal history remains unchanged", () => { assert.equal(canonicalTruth.activeTaskBinding.implementationPr, 212); assert.deepEqual(validateStructuredBinding(canonicalTruth.activeTaskBinding, gateCatalog, registry, canonicalTruth.openImplementationPrs, canonicalTruth.latestMergedImplementationPr), []); });
+test("pre-admission 03: normal active-task terminal history remains unchanged", () => { assert.equal(canonicalTruth.activeTaskBinding.implementationPr, 229); assert.deepEqual(validateStructuredBinding(canonicalTruth.activeTaskBinding, gateCatalog, registry, canonicalTruth.openImplementationPrs, canonicalTruth.latestMergedImplementationPr), []); });
 test("pre-admission 04: normal feature conflict stays denied", () => assert.deepEqual(activeTask({ currentTruth: canonicalTruth, truthCheck: { ok: true }, registry, featureId: "auth-session-password-recovery" }).findings, ["FEATURE_OVERRIDE_CONFLICT"]));
 test("pre-admission 05: feature derives from Owner and artifact", () => assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet.featureId, "auth-session-password-recovery"));
 test("pre-admission 06: caller feature is rejected", () => assert.equal(preAdmissionMutation((facts) => { facts.callerFeature = "auth-session-password-recovery"; }).ok, false));
@@ -2672,14 +2672,8 @@ test("A1 terminal repair receipt: exact preliminary receipt round-trips only as 
   const preliminaryScope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500, diffHash: "7".repeat(64) };
   const finalScope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 650, diffHash: "8".repeat(64) };
   const rawComment = (id, body) => ({ id, node_id: `IC_terminal_repair_${id}`, user: { login: "Chillywood2025" }, author_association: "OWNER", body, created_at: "2026-08-24T12:00:00Z", updated_at: "2026-08-24T12:00:00Z", issue_url: `https://api.github.com/repos/${identity.repository}/issues/${identity.pr}`, html_url: `https://github.com/${identity.repository}/pull/${identity.pr}#issuecomment-${id}` });
-  const preliminarySubject = terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: preliminaryScope, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true });
-  const preliminaryBody = terminalTruthSuccessorVerifierRepairOwnerCommentBody(preliminarySubject);
-  const preliminaryPayload = JSON.parse(preliminaryBody.slice(preliminaryBody.indexOf("\n") + 1));
-  const preliminaryRaw = rawComment(9000000731, preliminaryBody);
-  assert.equal(preliminarySubject.receiptStage, "PRELIMINARY_HISTORY_BINDING");
-  assert.equal(Object.hasOwn(preliminarySubject, "originalTerminalReceipt"), false);
-  assert.equal(Object.hasOwn(preliminarySubject, "terminalVerifierRepairInstanceId"), false);
-  assert.deepEqual(JSON.parse(stableJson(preliminarySubject)), preliminarySubject);
+  const preliminarySubject = terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: preliminaryScope, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true }); const preliminaryBody = terminalTruthSuccessorVerifierRepairOwnerCommentBody(preliminarySubject); const preliminaryPayload = JSON.parse(preliminaryBody.slice(preliminaryBody.indexOf("\n") + 1)); const preliminaryRaw = rawComment(9000000731, preliminaryBody);
+  assert.equal(preliminarySubject.receiptStage, "PRELIMINARY_HISTORY_BINDING"); assert.equal(Object.hasOwn(preliminarySubject, "originalTerminalReceipt"), false); assert.equal(Object.hasOwn(preliminarySubject, "terminalVerifierRepairInstanceId"), false); assert.deepEqual(JSON.parse(stableJson(preliminarySubject)), preliminarySubject);
 
   const closedAuthority = { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false };
   const repairInstance = createTerminalVerifierRepairInstance({
@@ -2699,9 +2693,7 @@ test("A1 terminal repair receipt: exact preliminary receipt round-trips only as 
     expectedNextTask: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE", profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE,
     singleUse: true, authority: closedAuthority,
   });
-  const truthRecord = structuredClone(priorTruth);
-  truthRecord.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" };
-  truthRecord.openImplementationPrs = [];
+  const truthRecord = structuredClone(priorTruth); truthRecord.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" }; truthRecord.openImplementationPrs = [];
   truthRecord.taskContextArchitecture = {
     ...truthRecord.taskContextArchitecture,
     architecturePr: predecessor.pr, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, mergeSha: predecessor.mergeSha,
@@ -2714,10 +2706,7 @@ test("A1 terminal repair receipt: exact preliminary receipt round-trips only as 
     terminalVerifierRepair: { ...truthRecord.taskContextArchitecture.terminalVerifierRepair, history: { schemaVersion: 1, policyId: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, instances: [...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY.instances, repairInstance] } },
     authority: closedAuthority,
   };
-  const finalSubject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: preliminaryRaw, terminalVerifierRepairInstanceId: repairInstance.instanceId, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false });
-  const finalRaw = rawComment(9000000732, terminalTruthSuccessorVerifierRepairOwnerCommentBody(finalSubject));
-  const args = { raw: preliminaryRaw, allComments: [preliminaryRaw, finalRaw], paginationComplete: true, identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: renderCurrentState(truthRecord), nextTaskText: renderNextTask(truthRecord), currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false };
-  const exact = verifyTerminalTruthSuccessorAuthority(args);
+  const finalSubject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: preliminaryRaw, terminalVerifierRepairInstanceId: repairInstance.instanceId, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false }); const finalRaw = rawComment(9000000732, terminalTruthSuccessorVerifierRepairOwnerCommentBody(finalSubject)); const args = { raw: preliminaryRaw, allComments: [preliminaryRaw, finalRaw], paginationComplete: true, identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: renderCurrentState(truthRecord), nextTaskText: renderNextTask(truthRecord), currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false }; const exact = verifyTerminalTruthSuccessorAuthority(args);
   assert.equal(exact.ok, true, exact.findings.join(","));
   assert.deepEqual(finalSubject.pendingTransitions.map(({ pr }) => pr), [predecessor.pr], "ordinal-2 receipt consumption remains PR243-only");
   assert.deepEqual(truthRecord.taskContextArchitecture.pendingTransitions.map(({ pr }) => pr), [226, predecessor.pr], "top-level compatibility history remains exactly PR226 then PR243");
@@ -5330,6 +5319,7 @@ function pendingTransitionEvaluation({ recovery = false, terminal = false, repai
               canonicalPredecessorReceipt: 5280109323,
               rawPredecessorDiffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
               canonicalPredecessorDiffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+              history: structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY),
               singleUse: true,
               authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
             } } : {}),
@@ -5386,12 +5376,12 @@ test("pending transition 18: exact three-file successor consumes PR 226 and PR 2
   assert.equal(result.pendingTransitionConsumptionCount, 1);
   assert.equal(result.findings.length, 0);
 });
-test("combined terminal verifier repair consumes both pending transitions without creating a third", () => {
+test("fabricated combined terminal verifier repair cannot consume historical pending transitions", () => {
   const result = pendingTransitionEvaluation({ recovery: true, repair: true });
-  assert.equal(result.pendingTransitionCount, 0, result.findings.join(","));
-  assert.equal(result.pendingTransitionConsumptionCount, 1);
-  assert.equal(result.findings.length, 0);
-  assert.equal(result.advancementClassifications.at(-1).terminalVerifierRepair, true);
+  assert.equal(result.pendingTransitionCount, 2, result.findings.join(","));
+  assert.equal(result.pendingTransitionConsumptionCount, 0);
+  assert.deepEqual(result.findings, ["CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED", "CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"]);
+  assert.equal(result.advancementClassifications.at(-1).terminalVerifierRepair, false);
   assert.equal(result.providerDependentEligible, false);
   assert.equal(result.buildEligible, false);
   assert.equal(result.submissionEligible, false);

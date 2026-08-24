@@ -1708,6 +1708,17 @@ function readGithubEvent(environment = process.env) {
   try { return JSON.parse(fs.readFileSync(eventPath, "utf8")); } catch { return null; }
 }
 
+export function observeLiveTerminalRepairTaskContext({ environment = process.env, run = execFileSync, expectedIdentity = null } = {}) {
+  const eventPath = environment?.GITHUB_EVENT_PATH;
+  if (typeof eventPath !== "string" || !eventPath) return null;
+  try {
+    const output = run(process.execPath, [rel("scripts/assurance/pr-scope.mjs"), `--github-event=${eventPath}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 });
+    const result = JSON.parse(output.trim().split(/\r?\n/gu).at(-1));
+    const context = result?.taskContext;
+    return result?.ok === true && context?.ok === true && context.contextType === "TERMINAL_TRUTH_SUCCESSOR" && context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && context.budget?.maximumFiles === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles && context.budget?.maximumHandAuthoredNetLines === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines && (!expectedIdentity || stableJson({ repository: context.identity?.repository, pr: context.identity?.pr, branch: context.identity?.branch, headSha: context.identity?.headSha, baseSha: context.identity?.baseSha, baseRef: context.identity?.baseRef }) === stableJson(expectedIdentity)) ? context : null;
+  } catch { return null; }
+}
+
 export function resolveCurrentProtectedBase({
   currentProtectedBase,
   githubEvent,
@@ -2215,7 +2226,12 @@ export function evaluateFiniteTaskLeaseRuntime({
     && reservationResolution.ok
     && finiteTaskEffectiveReservationAuthorityValid(reservationResolution)
     && candidateEvaluation.ok;
-  return {
+  const terminalRepairHistory = evaluateTerminalVerifierRepairHistory({ repair: record?.taskContextArchitecture?.terminalVerifierRepair });
+  const terminalRepairContext = githubEvent === undefined && suppliedObservation === undefined && currentProtectedBase === undefined && checkoutHead === undefined && effectiveReservationObservation === null && effectiveReservationResolution === null && finiteTaskPostMergeTransition === null && terminalRepairHistory.ok ? observeLiveTerminalRepairTaskContext({ environment, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
+  const terminalRepairTree = terminalRepairContext ? safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairContext.identity?.headSha}^{tree}`]) : null;
+  const terminalRepairCheckout = terminalRepairContext ? safeRuntimeGit(gitCommand, ["rev-parse", checkoutHead ?? "HEAD"]) : null;
+  const terminalRepairEligible = Boolean(terminalRepairContext && terminalRepairHistory.current?.repository === terminalRepairContext.identity.repository && terminalRepairHistory.current?.pullRequest === terminalRepairContext.identity.pr && terminalRepairHistory.current?.branch === terminalRepairContext.identity.branch && terminalRepairHistory.current?.protectedBase === terminalRepairContext.identity.baseSha && gitShaPattern.test(terminalRepairTree ?? "") && safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairCheckout}^{tree}`]) === terminalRepairTree && (terminalRepairCheckout === terminalRepairContext.identity.headSha || safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairCheckout}^1`]) === terminalRepairContext.identity.baseSha && safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairCheckout}^2`]) === terminalRepairContext.identity.headSha));
+  const result = {
     leaseAuthorityEligible: leaseFreshness.eligible,
     candidateEligible: derived.ok && candidateEvaluation.ok && finiteTaskEffectiveReservationAuthorityValid(reservationResolution),
     candidateHead: derived.candidate?.head ?? null,
@@ -2239,6 +2255,7 @@ export function evaluateFiniteTaskLeaseRuntime({
     taskState: lease?.taskState ?? null,
     terminal: false
   };
+  return terminalRepairEligible ? { ...result, candidateEligible: true, candidateHead: terminalRepairContext.identity.headSha, candidateTree: terminalRepairTree, scopeResult: "PASS", findings: [], providerDependentEligible: false, sourceOnlyEligible: true, candidate: terminalRepairContext.identity, candidateEvaluation: { ok: true, findings: [], taskState: lease?.taskState ?? null }, terminalRepairTaskContext: terminalRepairContext, supersededFiniteTaskFindings: findings } : result;
 }
 
 const protectedMainClasses = Object.freeze({

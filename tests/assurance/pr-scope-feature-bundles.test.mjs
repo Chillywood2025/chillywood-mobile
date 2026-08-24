@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { classifyPrScopePaths, deriveFiniteTaskPrRiskAuthority, deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
-import { args, canonicalGitText, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "../../scripts/assurance/lib.mjs";
+import { args, canonicalGitText, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveTerminalRepairTaskContext, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
@@ -966,9 +966,7 @@ const terminalRepairHistoryRecord = (instances) => ({
 });
 
 test("terminal verifier repair profile is exactly nine paths and 1800 net lines while PR 228 remains the exact eight-path seed", () => {
-  assert.equal(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, 9);
-  assert.equal(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles, 9);
-  assert.equal(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines, 1800);
+  assert.deepEqual([TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines], [9, 9, 1800]);
   assert.ok(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.includes("tests/assurance/engineering-doctrine.test.mjs"));
   assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, 8);
   assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.includes("tests/assurance/engineering-doctrine.test.mjs"), false);
@@ -979,6 +977,14 @@ test("terminal verifier repair profile is exactly nine paths and 1800 net lines 
   assert.equal(evaluateTerminalVerifierRepairHistory({ repair: { history: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY } }).ok, true);
   assert.match(fs.readFileSync(`${root}/scripts/assurance/lib.mjs`, "utf8"), /if \(added === "-" && deleted === "-"\) return null;[\s\S]*return additions \+ deletions;/u);
   assert.match(fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8"), /ASSURANCE_GIT_DIFF_BINARY_SCOPE_UNREADABLE[\s\S]*scope\.additions \+ scope\.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE\.maximumNetLines/u);
+});
+
+test("terminal repair runtime context reuses only exact canonical PR-scope success", () => {
+  const taskContext = { ok: true, contextType: "TERMINAL_TRUTH_SUCCESSOR", authoritySource: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1", budget: { maximumFiles: 9, maximumHandAuthoredNetLines: 1800 }, identity: { pr: 246, headSha: "a".repeat(40) } };
+  const observe = (value, expectedIdentity = null) => observeLiveTerminalRepairTaskContext({ environment: { GITHUB_EVENT_PATH: "/exact-event.json" }, run: () => `${stableJson(value)}\n`, expectedIdentity });
+  assert.deepEqual(observe({ ok: true, taskContext }), taskContext);
+  assert.equal(observe({ ok: true, taskContext: { ...taskContext, budget: { maximumFiles: 9, maximumHandAuthoredNetLines: 1801 } } }), null);
+  assert.equal(observe({ ok: true, taskContext }, { repository: undefined, pr: 999, branch: undefined, headSha: taskContext.identity.headSha, baseSha: undefined, baseRef: undefined }), null);
 });
 
 test("terminal verifier repair history accepts one independently bound append and rejects replay, duplicate, and ambiguous histories", () => {
