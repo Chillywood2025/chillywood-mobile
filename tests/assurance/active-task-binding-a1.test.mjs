@@ -69,6 +69,7 @@ import {
   transitionFiniteTaskState,
   validateFiniteTaskLeaseRegistry,
   validateEngineeringDoctrineTruth,
+  validateTerminalVerifierRepairProtectedMerge,
   validateProofTierStatuses,
   validateTerminalTaskEvidence,
   verifyCommittedClaimEvidence,
@@ -1960,6 +1961,8 @@ test("GitHub PR source/execution classifier permanently separates authority from
   const movedBase = "2".repeat(40); const movedMerge = "3".repeat(40); const movedTree = "4".repeat(40); const movedPull = clonePull(); Object.assign(movedPull, { merge_commit_sha: movedMerge }); movedPull.base.sha = movedBase; const movedEvent = cloneEvent(); Object.assign(movedEvent.pull_request, movedPull); const movedIdentity = { repository: historicalRepository, pr: 214, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: movedBase }; const movedEnvironment = { ...historicalEnvironment, GITHUB_SHA: movedMerge };
   const moved = historicalExecutionIdentity({ event: movedEvent, live: movedPull, identity: movedIdentity, environment: movedEnvironment, checkout: movedMerge, parents: [movedBase, f252Head], mergeTree: movedTree, expectedTree: movedTree }); const stale = historicalExecutionIdentity({ event: movedEvent, live: movedPull, identity: movedIdentity, environment: historicalEnvironment, parents: [protectedMain, f252Head], mergeTree: f252Tree, expectedTree: movedTree }); const readyEvent = cloneEvent(); readyEvent.action = "ready_for_review"; const staleReady = cloneEvent(); staleReady.action = "ready_for_review"; staleReady.pull_request.draft = true;
   assert.deepEqual([moved.ok, moved.authoritativeSource.headSha, moved.execution.sha, stale.ok, historicalExecutionIdentity({ event: readyEvent }).ok, historicalExecutionIdentity({ event: staleReady, live: staleReady.pull_request }).ok], [true, f252Head, movedMerge, false, true, false]);
+  const headOnly = historicalExecutionIdentity({ checkout: f252Head, environment: { ...historicalEnvironment, GITHUB_REF: pr214Lease.implementationBranch, GITHUB_SHA: "0".repeat(40) }, parents: [], expectedTree: "" }); const editedEvent = cloneEvent(); editedEvent.action = "edited";
+  assert.deepEqual([headOnly.ok, headOnly.eventType, historicalExecutionIdentity({ event: editedEvent }).ok], [true, "PULL_REQUEST_HEAD_CHECKOUT", true]);
 });
 
 test("finite runtime matrix 24: edited Owner maintenance comment fails", () => {
@@ -1991,8 +1994,8 @@ const wave1Lease = finiteTaskLeaseFor(canonicalTruth.finiteTaskLeases, {
   implementationBranch: "codex/pre-release-identity-entitlement-authority-v1",
   featureId: "auth-session-password-recovery"
 });
-const wave1BoundBase = "1".repeat(40);
-const wave1BoundBaseTree = "2".repeat(40);
+const wave1BoundBase = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
+const wave1BoundBaseTree = "cee9c69c6a4bfffd152e02881174cc5f27216bce";
 const wave1BoundStart = "3".repeat(40);
 const wave1BoundStartTree = "4".repeat(40);
 const wave1Descendant = "5".repeat(40);
@@ -2429,7 +2432,7 @@ function wave1CurrentValidLifecycleFixture({
     profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1,
     effectiveReservationResolution: initialResolution,
   });
-  const phaseBody = { runId: 900201, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900201, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSubject = finiteTaskFinalReceiptSubject({
     schemaVersion: 3,
@@ -3131,7 +3134,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
   });
   const finiteTaskPrRiskAuthority = reviewSubject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority;
   assert.equal(finiteTaskPrRiskAuthority.ok, true, stableJson(finiteTaskPrRiskAuthority.findings));
-  const phaseBody = { runId: 900101, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900101, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSubject = finiteTaskFinalReceiptSubject({
     schemaVersion: 3,
@@ -3292,7 +3295,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     assert.equal(result.ok, false, label);
   }
 
-  const postMergeSha = "7".repeat(40);
+  const postMergeSha = "5e595e684f4dcc9454eee5065066e1b48d20e3eb";
   const closedPull = {
     state: "closed",
     merged: true,
@@ -4130,6 +4133,11 @@ test("finite lifecycle: amendment-capable tasks require supplied live final-sour
   const legacy = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord });
   assert.equal(legacy.liveFinalEvidenceRequired, false);
   assert.equal(legacy.mergeEligible, true);
+  const controlRuntime = { ...shared.finiteTaskRuntime, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", candidateKind: "ASSURANCE_CONTROL_SOURCE_ONLY", terminal: false, mergeAuthorityGranted: false, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, sourceOnlyEligible: true, providerDependentEligible: false, candidateEvaluation: { evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", sourceOnly: true, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false } };
+  const control = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord, finiteTaskRuntime: controlRuntime });
+  assert.equal(control.mergeEligible, false); assert.equal(control.candidateBaseStatus, "ASSURANCE_CONTROL_SOURCE_ONLY"); assert.equal(control.nextRequiredAction, "CONTINUE_ASSURANCE_CONTROL_SOURCE_VALIDATION");
+  assert.deepEqual([control.providerDependentEligible, control.buildEligible, control.submissionEligible, control.otaEligible, control.publicReleaseEligible], [false, false, false, false, false]);
+  for (const forged of [{ ...controlRuntime, evaluationType: null }, { ...controlRuntime, mergeAuthorityGranted: true }, { ...controlRuntime, productAuthorityGranted: true }, { ...controlRuntime, providerAuthorityGranted: true }, { ...controlRuntime, finiteTaskAuthorityGranted: true }, { ...controlRuntime, terminalAuthorityGranted: true }, { ...controlRuntime, providerDependentEligible: true }, { ...controlRuntime, candidateKind: "ACTIVE_FINITE_TASK" }, { ...controlRuntime, candidateEvaluation: { ...controlRuntime.candidateEvaluation, mergeAuthorityGranted: true } }]) { const denied = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord, finiteTaskRuntime: forged }); assert.deepEqual([denied.mergeEligible, denied.providerDependentEligible, denied.sourceOnlyEligible], [false, false, false]); assert.ok(denied.findings.includes("ASSURANCE_CONTROL_SOURCE_ONLY_RUNTIME_INVALID")); }
 });
 test("finite lifecycle: verified post-merge evidence requires exactly one finite-task terminal truth", () => {
   const record = historicalRollingRecord();
@@ -4553,7 +4561,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence =
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 229, branch: wave1Lease.implementationBranch, baseSha: wave1BoundBase, headSha: candidate.head };
   const scope = { files: candidate.changedPaths, additions: 2250, deletions: 2250, netChangedLines: 0, diffHash: "a".repeat(64) };
   const reviewSubject = architectureRepositoryReviewSubject({ identity, tree: candidate.tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
-  const phaseBody = { runId: 900060, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900060, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSourceSubject = finiteTaskFinalReceiptSubject({
     schemaVersion: 2,
@@ -4992,7 +5000,7 @@ function syntheticRollingEvaluation(count, {
       commit,
       parents,
       tree: digest(`rolling-tree-${count}-${index}`).slice(0, 40),
-      subject: subject ?? `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
+      subject: Array.isArray(subject) ? subject[index] : subject ?? `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
       changedPaths: changedPaths ?? [changedPath]
     };
     if (authorityUpdateBound !== undefined) observation.authorityUpdateBound = authorityUpdateBound;
@@ -5217,10 +5225,29 @@ test("rolling main matrix 27: classic GitHub merge subject remains accepted", ()
 });
 
 test("rolling main matrix 28: malformed or unregistered merge subjects fail closed", () => {
-  for (const subject of ["direct push", "Title (#0)", "Title #221", " (#221)", "Title (#221) trailing"]) {
+  for (const subject of ["direct push", "Title (#0)", "Title #221", " (#221)", "Title (#221) trailing", "Merge PR #0: title", "Merge PR #246:", "Merge PR #246 title"]) {
     const result = syntheticRollingEvaluation(1, { subject });
     assert.equal(result.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true, subject);
   }
+});
+
+test("rolling main matrix 29: exact projected repair accepts GitHub Merge PR title only with frozen source proof", () => {
+  const record = structuredClone(canonicalTruth); const observedProtectedMainSha = "8aa74d0442eb9797900005d3c2dca9709b43c0c8"; const repairInstance = record.taskContextArchitecture.terminalVerifierRepair.history.instances.at(-1);
+  const exactObservation = { commit: observedProtectedMainSha, parents: ["5e595e684f4dcc9454eee5065066e1b48d20e3eb", "da41288c5caad40a7b33892e0c0120a369cca1bb"], tree: "cee9c69c6a4bfffd152e02881174cc5f27216bce", subject: "Merge PR #246: Repair durable terminal-verifier provenance", changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS] };
+  assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance }), true);
+  for (const [label, mutate] of [["replacement merge", (value) => { value.commit = value.parents[1]; }], ["wrong source parent", (value) => { value.parents[1] = "0".repeat(40); }], ["wrong execution tree", (value) => { value.tree = "0".repeat(40); }]]) { const observation = structuredClone(exactObservation); mutate(observation); assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation, instance: repairInstance }), false, label); }
+  const runGit = (argv) => spawnSync("git", argv, { encoding: "utf8" }).stdout.trim();
+  for (const [label, command] of [["wrong source diff", "diff"], ["arbitrary merge tree", "merge-tree"]]) assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance, gitCommand: (argv) => argv[0] === command && (command === "merge-tree" || argv.includes("--full-index")) ? "0".repeat(40) : runGit(argv) }), false, label);
+  const originalMapGet = Map.prototype.get; try { Map.prototype.get = () => ({ ...repairInstance, sourceHead: "0".repeat(40) }); assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance }), true); } finally { Map.prototype.get = originalMapGet; }
+  const exact = evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha, candidateHead: "6c724deca7969dc72aaf1ae24b69a150a6cfbaca", finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }, candidateContainsObservedMain: true });
+  assert.equal(exact.findings.length, 0, exact.findings.join(",")); assert.deepEqual([exact.pendingTransitionCount, exact.pendingTransitionConsumptionCount, exact.terminalVerifierRepairHistory.length], [0, 1, 2]);
+  const wrongPr = evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha, finiteTaskRuntime: { sourceOnlyEligible: true }, advancementObservations: [{ ...exactObservation, subject: "Merge PR #247: wrong repair" }], checkpointTreeObservation: record.protectedMainAuthority.checkpointTree, checkpointIsAncestor: true, candidateContainsObservedMain: true });
+  assert.ok(wrongPr.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"));
+});
+
+test("rolling main matrix 30: consecutive GitHub Merge PR title variants remain ordinary advancement", () => {
+  const exact = syntheticRollingEvaluation(2, { subject: ["Merge PR #300: First assurance correction", "Merge PR #301: Second assurance correction"] });
+  assert.equal(exact.findings.length, 0, exact.findings.join(",")); assert.deepEqual(exact.advancementClassifications.map(({ pullRequestNumber, mergeSubjectFormat, terminalVerifierRepair }) => [pullRequestNumber, mergeSubjectFormat, terminalVerifierRepair]), [[300, "GITHUB_CLASSIC_MERGE_PULL_REQUEST", false], [301, "GITHUB_CLASSIC_MERGE_PULL_REQUEST", false]]);
 });
 
 const recoveryPaths = [...TYPED_CONTEXT_ARCHITECTURE_PATHS].sort();
