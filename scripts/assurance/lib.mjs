@@ -1211,12 +1211,8 @@ export function evaluateFiniteTaskCandidate({ lease, registry, candidate, effect
   if (candidate.seedIsAncestor !== true) findings.push("FINITE_TASK_NON_DESCENDANT_HEAD");
   if (candidate.baseIsAncestor !== true) findings.push("FINITE_TASK_ADMITTED_BASE_MISSING");
   if (candidate.observationSource === "GITHUB_PULL_REQUEST_EVENT") {
-    if (!Array.isArray(candidate.mergeRefParents) || candidate.mergeRefParents.length !== 2) findings.push("FINITE_TASK_MERGE_REF_MALFORMED");
-    else {
-      if (candidate.mergeRefParents[0] !== candidate.currentProtectedBase || candidate.eventBase !== candidate.currentProtectedBase) findings.push("FINITE_TASK_MERGE_REF_WRONG_FIRST_PARENT");
-      if (candidate.mergeRefParents[1] !== candidate.head) findings.push("FINITE_TASK_MERGE_REF_WRONG_SECOND_PARENT");
-    }
-    if (candidate.mergeRefSourceTree !== candidate.tree) findings.push("FINITE_TASK_MERGE_REF_WRONG_SOURCE_TREE");
+    const execution = candidate.executionIdentity;
+    if (!githubExecutionIdentityValid(execution) || execution.repository !== "Chillywood2025/chillywood-mobile" || execution.pr !== candidate.pr || execution.authoritativeSource?.ref !== candidate.branch || execution.authoritativeSource?.headSha !== candidate.head || execution.authoritativeSource?.headTree !== candidate.tree || execution.authoritativeSource?.baseSha !== candidate.currentProtectedBase || candidate.eventBase !== candidate.currentProtectedBase) findings.push("FINITE_TASK_GITHUB_EXECUTION_IDENTITY_INVALID");
   } else if (candidate.observationSource !== undefined
     && candidate.observationSource !== "LOCAL_REMOTE_IMPLEMENTATION_BRANCH"
     && !(candidate.observationSource === "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE" && verifiedPostMergeSource)) {
@@ -1708,14 +1704,33 @@ function readGithubEvent(environment = process.env) {
   try { return JSON.parse(fs.readFileSync(eventPath, "utf8")); } catch { return null; }
 }
 
+const trustedGitHubExecutionIdentities = new WeakMap();
+const registerGitHubExecutionIdentity = (value) => { trustedGitHubExecutionIdentities.set(value, sha256(value)); return value; };
+export const githubExecutionIdentityValid = (value) => value?.relationship?.valid === true && trustedGitHubExecutionIdentities.get(value) === sha256(value);
+export function classifyGitHubExecutionIdentity({ event, livePullRequest, authoritativeSourceIdentity, checkoutHead, gitCommand = git, environment = process.env } = {}) {
+  const eventName = environment?.GITHUB_EVENT_NAME; const eventPull = event?.pull_request; const rawLive = livePullRequest ?? {}; const live = rawLive?.base?.repo ? { repository: rawLive.base.repo.full_name, pr: rawLive.number, ref: rawLive.head?.ref, headSha: rawLive.head?.sha, headRepository: rawLive.head?.repo?.full_name, baseRef: rawLive.base?.ref, baseSha: rawLive.base?.sha, baseRepository: rawLive.base?.repo?.full_name, mergeSha: rawLive.merge_commit_sha, draft: rawLive.draft, state: rawLive.state } : { repository: rawLive.repository, pr: rawLive.number, ref: rawLive.headRef, headSha: rawLive.headSha, headRepository: rawLive.headRepository, baseRef: rawLive.baseRef, baseSha: rawLive.baseSha, baseRepository: rawLive.baseRepository, mergeSha: rawLive.mergeCommitSha, draft: rawLive.draft, state: rawLive.state };
+  const supplied = authoritativeSourceIdentity ?? {}; const repository = event?.repository?.full_name; const pr = event?.number; const actualCheckout = safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]); const requestedCheckout = checkoutHead ?? actualCheckout; const checkoutTree = gitShaPattern.test(actualCheckout ?? "") ? safeRuntimeGit(gitCommand, ["rev-parse", `${actualCheckout}^{tree}`]) : null; const checkoutParents = gitShaPattern.test(actualCheckout ?? "") ? (safeRuntimeGit(gitCommand, ["show", "-s", "--format=%P", actualCheckout], "") ?? "").split(/\s+/u).filter(Boolean) : [];
+  if (eventName !== "pull_request" || !eventPull) {
+    const push = eventName === "push" && environment?.GITHUB_ACTIONS === "true" && !eventPull && repository === "Chillywood2025/chillywood-mobile" && event?.ref === environment?.GITHUB_REF && event?.after === actualCheckout && requestedCheckout === actualCheckout && environment?.GITHUB_SHA === actualCheckout && gitShaPattern.test(checkoutTree ?? ""); const eventType = eventName === "push" ? "PUSH" : eventName === "workflow_dispatch" ? "WORKFLOW_DISPATCH" : "OTHER_UNSUPPORTED"; const findings = push ? [] : [eventType === "PUSH" ? "GITHUB_EXECUTION_PUSH_IDENTITY_INVALID" : "GITHUB_EXECUTION_EVENT_UNSUPPORTED"];
+    return registerGitHubExecutionIdentity({ ok: push, eventType, repository, pr: null, action: event?.action ?? null, draft: null, authoritativeSource: push ? { ref: event.ref, headSha: event.after, headTree: checkoutTree, baseRef: null, baseSha: event.before } : null, execution: { ref: environment?.GITHUB_REF ?? null, sha: actualCheckout ?? null, tree: checkoutTree, parents: checkoutParents }, relationship: { type: push ? "EXACT_PUSH_COMMIT" : "UNSUPPORTED", valid: push, findings } });
+  }
+  const source = { ref: supplied.branch, headSha: supplied.headSha, headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${supplied.headSha}^{tree}`]), baseRef: supplied.baseRef, baseSha: supplied.baseSha }; const supportedAction = ["opened", "synchronize", "reopened", "ready_for_review", "converted_to_draft"].includes(event.action);
+  const sourceExact = repository === "Chillywood2025/chillywood-mobile" && Number.isInteger(pr) && pr > 0 && supplied.repository === repository && supplied.pr === pr && eventPull.number === pr && eventPull.state === "open" && supportedAction && (event.action !== "ready_for_review" || eventPull.draft === false) && (event.action !== "converted_to_draft" || eventPull.draft === true) && typeof eventPull.draft === "boolean" && eventPull.head?.ref === source.ref && eventPull.head?.sha === source.headSha && eventPull.head?.repo?.full_name === repository && eventPull.base?.ref === source.baseRef && eventPull.base?.sha === source.baseSha && eventPull.base?.repo?.full_name === repository && live.repository === repository && live.pr === pr && live.ref === source.ref && live.headSha === source.headSha && live.headRepository === repository && live.baseRef === source.baseRef && live.baseSha === source.baseSha && live.baseRepository === repository && live.draft === eventPull.draft && live.state === "open" && gitShaPattern.test(source.headTree ?? "");
+  const mergeSha = live.mergeSha; const mergeParents = gitShaPattern.test(mergeSha ?? "") ? (safeRuntimeGit(gitCommand, ["show", "-s", "--format=%P", mergeSha], "") ?? "").split(/\s+/u).filter(Boolean) : []; const mergeTree = gitShaPattern.test(mergeSha ?? "") ? safeRuntimeGit(gitCommand, ["rev-parse", `${mergeSha}^{tree}`]) : null; const expectedMergeTree = safeRuntimeGit(gitCommand, ["merge-tree", "--write-tree", source.baseSha, source.headSha]);
+  const actionsContext = environment?.GITHUB_ACTIONS === "true" && eventName === "pull_request" && environment?.GITHUB_REF === `refs/pull/${pr}/merge` && environment?.GITHUB_SHA === mergeSha && live.mergeSha === eventPull.merge_commit_sha; const mergeProof = actionsContext && mergeParents.length === 2 && mergeParents[0] === source.baseSha && mergeParents[1] === source.headSha && gitShaPattern.test(expectedMergeTree ?? "") && mergeTree === expectedMergeTree;
+  const sourceCheckout = actualCheckout === source.headSha && checkoutTree === source.headTree; const mergeCheckout = actualCheckout === mergeSha && checkoutTree === expectedMergeTree && stableJson(checkoutParents) === stableJson(mergeParents); const relationshipValid = sourceExact && requestedCheckout === actualCheckout && mergeProof && (sourceCheckout || mergeCheckout); const eventType = sourceCheckout ? "PULL_REQUEST_HEAD_CHECKOUT" : "PULL_REQUEST_MERGE_REF";
+  const findings = relationshipValid ? [] : [!sourceExact ? "GITHUB_EXECUTION_SOURCE_IDENTITY_INVALID" : !actionsContext ? "GITHUB_EXECUTION_CONTEXT_INVALID" : !mergeProof ? "GITHUB_EXECUTION_SYNTHETIC_MERGE_INVALID" : "GITHUB_EXECUTION_CHECKOUT_INVALID"];
+  return registerGitHubExecutionIdentity({ ok: relationshipValid, eventType, repository, pr, action: event.action, draft: eventPull.draft, authoritativeSource: source, execution: { ref: sourceCheckout ? source.ref : environment?.GITHUB_REF ?? null, sha: actualCheckout ?? null, tree: checkoutTree, parents: checkoutParents }, mergeRef: { ref: environment?.GITHUB_REF ?? null, sha: mergeSha ?? null, tree: mergeTree, parents: mergeParents }, relationship: { type: sourceCheckout ? "EXACT_AUTHORIZED_SOURCE_HEAD" : "EXACT_GITHUB_PULL_REQUEST_MERGE", valid: relationshipValid, findings } });
+}
+
 export function observeLiveTerminalRepairTaskContext({ environment = process.env, run = execFileSync, expectedIdentity = null } = {}) {
   const eventPath = environment?.GITHUB_EVENT_PATH;
   if (typeof eventPath !== "string" || !eventPath) return null;
   try {
     const output = run(process.execPath, [rel("scripts/assurance/pr-scope.mjs"), `--github-event=${eventPath}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 });
     const result = JSON.parse(output.trim().split(/\r?\n/gu).at(-1));
-    const context = result?.taskContext;
-    return result?.ok === true && context?.ok === true && context.contextType === "TERMINAL_TRUTH_SUCCESSOR" && context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && context.budget?.maximumFiles === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles && context.budget?.maximumHandAuthoredNetLines === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines && (!expectedIdentity || stableJson({ repository: context.identity?.repository, pr: context.identity?.pr, branch: context.identity?.branch, headSha: context.identity?.headSha, baseSha: context.identity?.baseSha, baseRef: context.identity?.baseRef }) === stableJson(expectedIdentity)) ? context : null;
+    const context = result?.taskContext; const child = result?.executionIdentity; const executionIdentity = classifyGitHubExecutionIdentity({ event: readGithubEvent(environment), livePullRequest: { repository: child?.repository, number: child?.pr, headRef: child?.authoritativeSource?.ref, headSha: child?.authoritativeSource?.headSha, headRepository: child?.repository, baseRef: child?.authoritativeSource?.baseRef, baseSha: child?.authoritativeSource?.baseSha, baseRepository: child?.repository, mergeCommitSha: child?.mergeRef?.sha, draft: child?.draft, state: "open" }, authoritativeSourceIdentity: context?.identity, environment });
+    return result?.ok === true && context?.ok === true && githubExecutionIdentityValid(executionIdentity) && context.contextType === "TERMINAL_TRUTH_SUCCESSOR" && context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && context.budget?.maximumFiles === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles && context.budget?.maximumHandAuthoredNetLines === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines && (!expectedIdentity || stableJson({ repository: context.identity?.repository, pr: context.identity?.pr, branch: context.identity?.branch, headSha: context.identity?.headSha, baseSha: context.identity?.baseSha, baseRef: context.identity?.baseRef }) === stableJson(expectedIdentity)) ? { ...context, executionIdentity } : null;
   } catch { return null; }
 }
 
@@ -1873,12 +1888,7 @@ export function deriveFiniteTaskCandidateObservation({
       scopeBase: identity.scopeBase ?? protectedBase,
       recordedObservationHead: identity.recordedObservationHead ?? null
     };
-    if (matchingPullRequestEvent && identity.observationSource === "GITHUB_PULL_REQUEST_EVENT") {
-      const mergeHead = checkoutHead ?? environment?.GITHUB_SHA ?? "HEAD";
-      candidate.mergeRefParents = gitCommand(["show", "-s", "--format=%P", mergeHead]).split(/\s+/u).filter(Boolean);
-      candidate.mergeRefSourceTree = gitCommand(["rev-parse", `${candidate.mergeRefParents[1] ?? "missing"}^{tree}`]);
-      candidate.eventBase = identity.eventBase;
-    }
+    if (matchingPullRequestEvent && identity.observationSource === "GITHUB_PULL_REQUEST_EVENT") { candidate.executionIdentity = classifyGitHubExecutionIdentity({ event, livePullRequest: effectiveReservationObservation?.pullRequest, authoritativeSourceIdentity: { repository: event?.repository?.full_name, pr: eventNumber, branch: identity.branch, headSha: identity.head, baseRef: eventPr?.base?.ref, baseSha: identity.eventBase }, checkoutHead, gitCommand, environment }); candidate.eventBase = identity.eventBase; }
     if (identity.observationSource === "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE") {
       trustedFiniteTaskPostMergeCandidates.set(candidate, finiteTaskPostMergeCandidateFingerprint(candidate));
     }
@@ -2016,7 +2026,7 @@ export function evaluateFiniteTaskLeaseRuntime({
       envelopeHash: record.ownerJurisdictionPolicyBinding.policySource.envelopeHash
     } : undefined
   };
-  const reservationObservation = effectiveReservationObservation ?? (lease?.amendmentMaximum?.maximumAmendments > 0
+  const reservationObservation = effectiveReservationObservation ?? (lease?.amendmentMaximum?.maximumAmendments > 0 || event?.pull_request?.number === lease?.implementationPr
     ? observeLiveFiniteTaskEffectiveReservation({ pr: lease.implementationPr, authorityEvidence: declaredAuthorityEvidence })
     : null);
   const authorityEvidence = reservationObservation?.authorityEvidence ?? declaredAuthorityEvidence;
@@ -2227,10 +2237,9 @@ export function evaluateFiniteTaskLeaseRuntime({
     && finiteTaskEffectiveReservationAuthorityValid(reservationResolution)
     && candidateEvaluation.ok;
   const terminalRepairHistory = evaluateTerminalVerifierRepairHistory({ repair: record?.taskContextArchitecture?.terminalVerifierRepair });
-  const terminalRepairContext = githubEvent === undefined && suppliedObservation === undefined && currentProtectedBase === undefined && checkoutHead === undefined && effectiveReservationObservation === null && effectiveReservationResolution === null && finiteTaskPostMergeTransition === null && terminalRepairHistory.ok ? observeLiveTerminalRepairTaskContext({ environment, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
-  const terminalRepairTree = terminalRepairContext ? safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairContext.identity?.headSha}^{tree}`]) : null;
-  const terminalRepairCheckout = terminalRepairContext ? safeRuntimeGit(gitCommand, ["rev-parse", checkoutHead ?? "HEAD"]) : null;
-  const terminalRepairEligible = Boolean(terminalRepairContext && terminalRepairHistory.current?.repository === terminalRepairContext.identity.repository && terminalRepairHistory.current?.pullRequest === terminalRepairContext.identity.pr && terminalRepairHistory.current?.branch === terminalRepairContext.identity.branch && terminalRepairHistory.current?.protectedBase === terminalRepairContext.identity.baseSha && gitShaPattern.test(terminalRepairTree ?? "") && safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairCheckout}^{tree}`]) === terminalRepairTree && (terminalRepairCheckout === terminalRepairContext.identity.headSha || safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairCheckout}^1`]) === terminalRepairContext.identity.baseSha && safeRuntimeGit(gitCommand, ["rev-parse", `${terminalRepairCheckout}^2`]) === terminalRepairContext.identity.headSha));
+  const terminalRepairContext = githubEvent === undefined && suppliedObservation === undefined && effectiveReservationResolution === null && terminalRepairHistory.ok && (checkoutHead === undefined || checkoutHead === safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"])) ? observeLiveTerminalRepairTaskContext({ environment, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
+  const terminalRepairTree = terminalRepairContext?.executionIdentity?.authoritativeSource?.headTree ?? null;
+  const terminalRepairEligible = Boolean(terminalRepairContext && githubExecutionIdentityValid(terminalRepairContext.executionIdentity) && terminalRepairHistory.current?.repository === terminalRepairContext.identity.repository && terminalRepairHistory.current?.pullRequest === terminalRepairContext.identity.pr && terminalRepairHistory.current?.branch === terminalRepairContext.identity.branch && terminalRepairHistory.current?.protectedBase === terminalRepairContext.identity.baseSha && terminalRepairContext.executionIdentity.authoritativeSource.headSha === terminalRepairContext.identity.headSha);
   const result = {
     leaseAuthorityEligible: leaseFreshness.eligible,
     candidateEligible: derived.ok && candidateEvaluation.ok && finiteTaskEffectiveReservationAuthorityValid(reservationResolution),
@@ -3448,6 +3457,7 @@ function readCompleteGitHubApiPages(endpoint) {
 }
 const decodeGitHubHtml = (value) => value.replace(/&#x([0-9a-f]+);/giu, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/&#(\d+);/gu, (_, decimal) => String.fromCodePoint(Number(decimal))).replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&#39;", "'").replaceAll("&amp;", "&");
 const finiteTaskGitValue = (args) => { try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); } catch { return null; } };
+const finiteTaskRemoteRef = (ref) => { try { const rows = execFileSync("git", ["ls-remote", "--refs", "https://github.com/Chillywood2025/chillywood-mobile.git", ref], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim().split(/\r?\n/gu).filter(Boolean); return rows.length === 1 && rows[0] === `${rows[0].slice(0, 40)}\t${ref}` && gitShaPattern.test(rows[0].slice(0, 40)) ? rows[0].slice(0, 40) : null; } catch { return null; } };
 export function observePublicGitHubPullRequest({ repository = "Chillywood2025/chillywood-mobile", pr } = {}) {
   const invalid = { comments: [], commentsPaginationComplete: false, commits: [], commitsPaginationComplete: false, pullRequest: null };
   if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
@@ -3461,7 +3471,7 @@ export function observePublicGitHubPullRequest({ repository = "Chillywood2025/ch
   if (pull?.number !== pr || pull.headRepositoryOwnerLogin !== "Chillywood2025" || pull.headRepositoryName !== "chillywood-mobile") return invalid;
   let mergeCommitSha = null;
   let baseSha = finiteTaskGitValue(["rev-parse", `origin/${pull.baseBranch}`]);
-  if (["OPEN", "DRAFT"].includes(pull.state) && finiteTaskGitValue(["show-ref", "--verify", "--hash", `refs/remotes/origin/${pull.headBranch}`]) !== pull.headSha) return invalid;
+  if (["OPEN", "DRAFT"].includes(pull.state)) { if (finiteTaskRemoteRef(`refs/heads/${pull.headBranch}`) !== pull.headSha || !gitShaPattern.test(mergeCommitSha = finiteTaskRemoteRef(`refs/pull/${pr}/merge`) ?? "")) return invalid; }
   if (pull.state === "MERGED") for (const candidate of new Set([...html.matchAll(/href="\/Chillywood2025\/chillywood-mobile\/commit\/([0-9a-f]{40})"/gu)].map((match) => match[1]))) {
     const parents = finiteTaskGitValue(["rev-list", "--parents", "-n", "1", candidate])?.split(/\s+/u) ?? [];
     if (parents.length === 3 && parents[2] === pull.headSha) { [mergeCommitSha, baseSha] = [candidate, parents[1]]; break; }

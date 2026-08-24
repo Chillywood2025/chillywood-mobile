@@ -23,6 +23,7 @@ import {
 } from "../../scripts/assurance/active-task.mjs";
 import {
   ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE,
+  classifyGitHubExecutionIdentity,
   controlMaintenanceAuthorizationCommentBody,
   controlMaintenanceAuthorizationSubject,
   createTerminalVerifierRepairInstance,
@@ -1737,11 +1738,15 @@ const f252Tree = "7174d34d2a8552874a74e5094dc172a5b5bec756";
 const e768Head = "e76831f2edb2c17e9b827587594573bfef7c6fef";
 const e768Tree = "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3";
 const protectedMain = "68d2f2b745425296fae2753e8a0cba9cc1137067";
-const historicalSyntheticMergeHead = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+const historicalSyntheticMergeHead = "b".repeat(40);
+const historicalRepository = "Chillywood2025/chillywood-mobile";
+const historicalPullRequest = { number: 214, state: "open", draft: false, merge_commit_sha: historicalSyntheticMergeHead, head: { ref: pr214Lease.implementationBranch, sha: f252Head, repo: { full_name: historicalRepository } }, base: { ref: "main", sha: protectedMain, repo: { full_name: historicalRepository } } };
+const historicalEvent = { action: "synchronize", number: 214, repository: { full_name: historicalRepository }, pull_request: { ...historicalPullRequest, html_url: `https://github.com/${historicalRepository}/pull/214` } };
+const historicalEnvironment = { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_REF: "refs/pull/214/merge", GITHUB_SHA: historicalSyntheticMergeHead };
 const historicalRuntimeGit = (args) => {
-  if (args[0] === "show" && args[1] === "-s" && args[2] === "--format=%P" && args[3] === historicalSyntheticMergeHead) {
-    return `${protectedMain} ${f252Head}`;
-  }
+  if (args[0] === "rev-parse" && args[1] === "HEAD") return historicalSyntheticMergeHead;
+  if (args[0] === "rev-parse" && args[1] === `${historicalSyntheticMergeHead}^{tree}` || args[0] === "merge-tree") return f252Tree;
+  if (args[0] === "show" && args[1] === "-s" && args[2] === "--format=%P" && args[3] === historicalSyntheticMergeHead) return `${protectedMain} ${f252Head}`;
   const result = spawnSync("git", args, { encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr);
   return result.stdout.trim();
@@ -1751,26 +1756,20 @@ const runtimeAtF252 = (now = new Date("2026-08-11T22:00:00Z")) => evaluateFinite
   contract: currentTruthContract,
   now,
   currentProtectedBase: protectedMain,
-  githubEvent: {
-    number: 214,
-    pull_request: {
-      number: 214,
-      state: "open",
-      head: { ref: pr214Lease.implementationBranch, sha: f252Head },
-      base: { sha: protectedMain }
-    }
-  },
+  githubEvent: historicalEvent,
   checkoutHead: historicalSyntheticMergeHead,
-  gitCommand: historicalRuntimeGit
+  gitCommand: historicalRuntimeGit,
+  environment: historicalEnvironment,
+  effectiveReservationObservation: { comments: [], commentsPaginationComplete: true, pullRequest: historicalPullRequest, commits: [], commitsPaginationComplete: true, requireCompleteDiscovery: false, observationMode: "SYNTHETIC_NO_WRITE" }
 });
+const historicalExecutionIdentity = ({ event = historicalEvent, live = historicalPullRequest, environment = historicalEnvironment, checkout = historicalSyntheticMergeHead, parents = [live.base.sha, live.head.sha], mergeTree = f252Tree, expectedTree = f252Tree, sourceTree = f252Tree, identity = { repository: historicalRepository, pr: 214, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: protectedMain } } = {}) => classifyGitHubExecutionIdentity({ event, livePullRequest: live, authoritativeSourceIdentity: identity, checkoutHead: checkout, environment, gitCommand: (args) => args[0] === "rev-parse" && args[1] === "HEAD" ? checkout : args[0] === "rev-parse" && args[1] === `${identity.headSha}^{tree}` ? sourceTree : args[0] === "rev-parse" && args[1] === `${live.merge_commit_sha}^{tree}` ? mergeTree : args[0] === "rev-parse" ? mergeTree : args[0] === "show" ? parents.join(" ") : args[0] === "merge-tree" ? expectedTree : "" });
 const pullRequestCandidate = (overrides = {}) => finiteCandidate(pr214Lease, 400, {
   head: f252Head,
   tree: f252Tree,
   observationSource: "GITHUB_PULL_REQUEST_EVENT",
   currentProtectedBase: protectedMain,
   eventBase: protectedMain,
-  mergeRefParents: [protectedMain, f252Head],
-  mergeRefSourceTree: f252Tree,
+  executionIdentity: historicalExecutionIdentity(),
   ...overrides
 });
 const maintenancePaths = currentTruthContract.synchronizationMerge.terminalControlMaintenance.allowedChangedPaths;
@@ -1948,24 +1947,19 @@ test("finite runtime matrix 18: closed PR fails", () => {
   assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 18, { prState: "closed" }) }).findings.includes("FINITE_TASK_PR_NOT_OPEN"), true);
 });
 
-test("finite runtime matrix 19: malformed merge ref fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain] }) }).findings.includes("FINITE_TASK_MERGE_REF_MALFORMED"), true);
+test("finite runtime matrix 19-23: malformed, wrong-parent, wrong-tree, and octopus executions fail through the shared identity model", () => {
+  for (const executionIdentity of [historicalExecutionIdentity({ parents: [protectedMain] }), historicalExecutionIdentity({ parents: ["a".repeat(40), f252Head] }), historicalExecutionIdentity({ parents: [protectedMain, "a".repeat(40)] }), historicalExecutionIdentity({ mergeTree: "a".repeat(40) }), historicalExecutionIdentity({ parents: [protectedMain, f252Head, "a".repeat(40)] })]) assert.ok(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ executionIdentity }) }).findings.includes("FINITE_TASK_GITHUB_EXECUTION_IDENTITY_INVALID"));
 });
 
-test("finite runtime matrix 20: wrong merge-ref first parent fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: ["a".repeat(40), f252Head] }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_FIRST_PARENT"), true);
-});
-
-test("finite runtime matrix 21: wrong merge-ref second parent fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain, "a".repeat(40)] }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_SECOND_PARENT"), true);
-});
-
-test("finite runtime matrix 22: wrong merge-ref source tree fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefSourceTree: "a".repeat(40) }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_SOURCE_TREE"), true);
-});
-
-test("finite runtime matrix 23: octopus merge ref fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain, f252Head, "a".repeat(40)] }) }).findings.includes("FINITE_TASK_MERGE_REF_MALFORMED"), true);
+test("GitHub PR source/execution classifier permanently separates authority from exact merge-ref execution", () => {
+  const cloneEvent = () => structuredClone(historicalEvent); const clonePull = () => structuredClone(historicalPullRequest); const exactHead = historicalExecutionIdentity({ checkout: f252Head }); const exactMerge = historicalExecutionIdentity();
+  assert.deepEqual([exactHead.ok, exactHead.eventType, exactMerge.ok, exactMerge.eventType, exactMerge.authoritativeSource.headSha === f252Head, exactMerge.execution.sha !== f252Head], [true, "PULL_REQUEST_HEAD_CHECKOUT", true, "PULL_REQUEST_MERGE_REF", true, true]);
+  const wrongHead = cloneEvent(); wrongHead.pull_request.head.sha = "c".repeat(40); const wrongBase = cloneEvent(); wrongBase.pull_request.base.sha = "d".repeat(40); const wrongLiveHead = clonePull(); wrongLiveHead.head.sha = "e".repeat(40); const wrongLiveBase = clonePull(); wrongLiveBase.base.sha = "f".repeat(40); const wrongPr = cloneEvent(); wrongPr.number = wrongPr.pull_request.number = 215; const wrongRepo = cloneEvent(); wrongRepo.repository.full_name = "attacker/repository"; const wrongDraft = clonePull(); wrongDraft.draft = true; const otherEvent = cloneEvent(); otherEvent.number = otherEvent.pull_request.number = 215; const otherPull = clonePull(); otherPull.number = 215; const otherExecution = historicalExecutionIdentity({ event: otherEvent, live: otherPull, identity: { repository: historicalRepository, pr: 215, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: protectedMain } });
+  const invalid = [historicalExecutionIdentity({ parents: [protectedMain, "0".repeat(40)] }), historicalExecutionIdentity({ checkout: "1".repeat(40) }), historicalExecutionIdentity({ event: wrongHead }), historicalExecutionIdentity({ event: wrongBase }), historicalExecutionIdentity({ live: wrongLiveHead }), historicalExecutionIdentity({ live: wrongLiveBase }), historicalExecutionIdentity({ event: wrongPr }), historicalExecutionIdentity({ event: wrongRepo }), historicalExecutionIdentity({ live: wrongDraft }), historicalExecutionIdentity({ environment: { ...historicalEnvironment, GITHUB_REF: "refs/pull/999/merge" } }), historicalExecutionIdentity({ environment: { ...historicalEnvironment, GITHUB_ACTIONS: "false" } }), historicalExecutionIdentity({ environment: { ...historicalEnvironment, GITHUB_EVENT_NAME: "workflow_dispatch" } })];
+  assert.equal(invalid.every(({ ok }) => !ok) && evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ executionIdentity: otherExecution }) }).findings.includes("FINITE_TASK_GITHUB_EXECUTION_IDENTITY_INVALID"), true);
+  const movedBase = "2".repeat(40); const movedMerge = "3".repeat(40); const movedTree = "4".repeat(40); const movedPull = clonePull(); Object.assign(movedPull, { merge_commit_sha: movedMerge }); movedPull.base.sha = movedBase; const movedEvent = cloneEvent(); Object.assign(movedEvent.pull_request, movedPull); const movedIdentity = { repository: historicalRepository, pr: 214, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: movedBase }; const movedEnvironment = { ...historicalEnvironment, GITHUB_SHA: movedMerge };
+  const moved = historicalExecutionIdentity({ event: movedEvent, live: movedPull, identity: movedIdentity, environment: movedEnvironment, checkout: movedMerge, parents: [movedBase, f252Head], mergeTree: movedTree, expectedTree: movedTree }); const stale = historicalExecutionIdentity({ event: movedEvent, live: movedPull, identity: movedIdentity, environment: historicalEnvironment, parents: [movedBase, f252Head], mergeTree: movedTree, expectedTree: movedTree }); const readyEvent = cloneEvent(); readyEvent.action = "ready_for_review"; const staleReady = cloneEvent(); staleReady.action = "ready_for_review"; staleReady.pull_request.draft = true;
+  assert.deepEqual([moved.ok, moved.authoritativeSource.headSha, moved.execution.sha, stale.ok, historicalExecutionIdentity({ event: readyEvent }).ok, historicalExecutionIdentity({ event: staleReady, live: staleReady.pull_request }).ok], [true, f252Head, movedMerge, false, true, false]);
 });
 
 test("finite runtime matrix 24: edited Owner maintenance comment fails", () => {
@@ -4913,7 +4907,7 @@ test("finite runtime matrix 29: source-only Autonomous All-Platform contract pas
 
 test("finite runtime matrix 30: source-only Autonomous iOS contract passes for f252", () => {
   const result = runtimeAtF252();
-  assert.equal(result.sourceOnlyEligible && result.candidateTree === f252Tree, true);
+  assert.equal(result.sourceOnlyEligible && result.candidateTree === f252Tree, true, stableJson(result));
 });
 
 test("finite runtime matrix 31: provider-dependent work remains denied", () => {
@@ -4925,7 +4919,7 @@ test("unrelated repository-source expiry does not invalidate finite lease author
   assert.equal(runtime.claimFreshness.ok, false, "the unrelated S0 claim is stale at this time");
   assert.equal(runtime.leaseAuthorityEligible, true);
   assert.equal(runtime.candidateEligible, true);
-  assert.equal(runtime.sourceOnlyEligible, true);
+  assert.equal(runtime.sourceOnlyEligible, true, stableJson(runtime));
   assert.equal(runtime.providerDependentEligible, false);
 });
 
@@ -5497,14 +5491,16 @@ test("engineering closure inherits one exact typed terminal context from GitHub 
   const sourceTree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).stdout.trim();
   const baseSha = spawnSync("git", ["rev-parse", "origin/main"], { encoding: "utf8" }).stdout.trim();
   const branch = spawnSync("git", ["branch", "--show-current"], { encoding: "utf8" }).stdout.trim();
-  const event = { repository: { full_name: "Chillywood2025/chillywood-mobile" }, number: 228, pull_request: { number: 228, state: "open", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/228", base: { ref: "main", sha: baseSha }, head: { ref: branch, sha: sourceHead } } };
-  const readback = { number: 228, repository: event.repository.full_name, baseRef: "main", baseSha, headRef: branch, headSha: sourceHead, htmlUrl: event.pull_request.html_url, state: "open" };
+  const mergeSha = "f".repeat(40); const repository = "Chillywood2025/chillywood-mobile";
+  const event = { action: "reopened", repository: { full_name: repository }, number: 228, pull_request: { number: 228, state: "open", draft: false, merge_commit_sha: mergeSha, html_url: `https://github.com/${repository}/pull/228`, base: { ref: "main", sha: baseSha, repo: { full_name: repository } }, head: { ref: branch, sha: sourceHead, repo: { full_name: repository } } } };
+  const readback = { number: 228, repository, baseRepository: repository, baseRef: "main", baseSha, headRepository: repository, headRef: branch, headSha: sourceHead, mergeCommitSha: mergeSha, draft: false, htmlUrl: event.pull_request.html_url, state: "open" };
   const taskContext = { ok: true, type: "TERMINAL_TRUTH_SUCCESSOR", authoritySource: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" };
-  const input = { event, localIdentity: { branch, head: sourceHead, tree: sourceTree, base: baseSha }, scope: { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500 }, currentTruth: canonicalTruth, readPull: () => readback, sourceAncestryVerified: true };
+  const input = { event, environment: { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_REF: "refs/pull/228/merge", GITHUB_SHA: mergeSha }, gitCommand: (argv) => argv[0] === "rev-parse" && argv[1] === "HEAD" ? sourceHead : argv[0] === "rev-parse" ? sourceTree : argv[0] === "show" ? `${baseSha} ${sourceHead}` : argv[0] === "merge-tree" ? sourceTree : "", localIdentity: { branch, head: sourceHead, tree: sourceTree, base: baseSha }, scope: { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500 }, currentTruth: canonicalTruth, readPull: () => readback, sourceAncestryVerified: true };
   const exact = resolveEngineeringClosureTaskContext({ ...input, observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
+  const exactMerge = resolveEngineeringClosureTaskContext({ ...input, gitCommand: (argv) => argv[0] === "rev-parse" && argv[1] === "HEAD" ? mergeSha : argv[0] === "rev-parse" ? sourceTree : argv[0] === "show" ? `${baseSha} ${sourceHead}` : argv[0] === "merge-tree" ? sourceTree : "", localIdentity: { branch: "", head: mergeSha, tree: sourceTree, base: baseSha }, observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
   const wrongReadback = resolveEngineeringClosureTaskContext({ ...input, readPull: () => ({ ...readback, headSha: "0".repeat(40) }), observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
   const ambiguous = resolveEngineeringClosureTaskContext({ ...input, observeAuthorities: () => ({ architectureAuthority: { ok: true }, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
-  assert.equal(exact.ok, true);
+  assert.equal(exact.ok && exactMerge.ok, true);
   assert.equal(exact.taskContext.authoritySource, "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1");
   assert.deepEqual(wrongReadback.findings, ["ENGINEERING_CLOSURE_ASSURANCE_PR_EVENT_READBACK_MISMATCH"]);
   assert.deepEqual(ambiguous.findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS"]);
@@ -5568,6 +5564,7 @@ function terminalD2aTruth() {
   const sourceTree = "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0";
   const mergeSha = "fe775c12b0857aa50d986d24179ae9588049b6a1";
   Object.assign(value.activeTaskBinding, {
+    implementationPr: 212,
     currentImplementationHead: sourceHead,
     currentImplementationTree: sourceTree,
     phase: "TERMINAL",

@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { canonicalGitText, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, classifyGitHubExecutionIdentity, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { deriveFiniteTaskPrRiskAuthority, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -1198,6 +1198,8 @@ export function resolveEngineeringClosureTaskContext({
   readPull = null,
   observeAuthorities = observeTypedTaskAuthorities,
   sourceAncestryVerified = null,
+  environment = process.env,
+  gitCommand = (args) => gitText(root, args),
 } = {}) {
   let trustedEvent = event;
   try {
@@ -1222,22 +1224,21 @@ export function resolveEngineeringClosureTaskContext({
   const validated = validatePullRequestEventIdentity(trustedEvent, readback);
   if (!validated.ok) return { ok: false, taskContext: null, findings: validated.findings.map((finding) => `ENGINEERING_CLOSURE_${finding}`) };
   const identity = validated.identity;
-  const sourceTree = gitText(root, ["rev-parse", `${identity.headSha}^{tree}`]);
+  const executionIdentity = classifyGitHubExecutionIdentity({ event: trustedEvent, livePullRequest: pullReadback, authoritativeSourceIdentity: identity, checkoutHead: localIdentity.head, gitCommand, environment });
+  const sourceTree = executionIdentity.authoritativeSource?.headTree;
+  const sourceScope = executionIdentity.eventType === "PULL_REQUEST_HEAD_CHECKOUT" ? scope : gitScope(root, identity.baseSha, identity.headSha);
   const ancestry = sourceAncestryVerified ?? typedGit(root, ["merge-base", "--is-ancestor", identity.headSha, localIdentity.head]).status === 0;
-  const localParents = typedGit(root, ["rev-list", "--parents", "-n", "1", localIdentity.head]).stdout.trim().split(/\s+/u).slice(1);
-  const exactSourceCheckout = localIdentity.head === identity.headSha;
-  const exactPullRequestMergeCheckout = localParents.length === 2
-    && localParents[0] === identity.baseSha
-    && localParents[1] === identity.headSha;
   const localMatches = localIdentity.base === identity.baseSha
     && ancestry
-    && ((exactSourceCheckout && sourceTree === localIdentity.tree) || exactPullRequestMergeCheckout)
+    && executionIdentity.relationship.valid === true
+    && executionIdentity.execution.sha === localIdentity.head
+    && executionIdentity.execution.tree === localIdentity.tree
     && (!localIdentity.branch || localIdentity.branch === identity.branch);
-  if (!localMatches || !scope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
-  const authorities = observeAuthorities({ identity, tree: sourceTree, scope, currentTruth, root });
+  if (!localMatches || !sourceScope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
+  const authorities = observeAuthorities({ identity, tree: sourceTree, scope: sourceScope, currentTruth, root });
   const eligible = [authorities.architectureAuthority, authorities.terminalTruthAuthority, authorities.finiteTaskAuthority, authorities.finiteTaskAdmissionAuthority].filter((authority) => authority?.ok === true);
   if (eligible.length !== 1) return { ok: false, taskContext: null, findings: [eligible.length > 1 ? "ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS" : "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
-  return { ok: true, taskContext: eligible[0], findings: [] };
+  return { ok: true, taskContext: eligible[0], executionIdentity, findings: [] };
 }
 
 const resolveJsonPointer = (document, pointer) => {
@@ -5070,7 +5071,7 @@ export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSy
   const endpoint = args.at(-1);
   const paginated = args.includes("--paginate") && args.includes("--slurp");
   const pathname = typeof endpoint === "string" ? endpoint.split("?", 1)[0] : "";
-  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/(?:files|commits))?)?|issues\/[1-9]\d*\/comments|commits\/[0-9a-f]{40}\/pulls)$/u.test(pathname);
+  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/(?:files|commits))?)?|issues\/[1-9]\d*\/comments|commits\/[0-9a-f]{40}\/pulls|actions\/runs\/[1-9]\d*(?:\/jobs)?)$/u.test(pathname);
   if (!allowedPath || /(?:\.\.|%2e|%2f|#)/iu.test(endpoint)) return authenticated;
   const pages = [];
   for (let page = 1; page <= 20; page += 1) {
