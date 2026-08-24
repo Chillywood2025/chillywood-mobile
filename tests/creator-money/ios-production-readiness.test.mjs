@@ -17,6 +17,15 @@ const settlement = read("supabase/migrations/202608210004_creator_money_settleme
 const convergence = read("supabase/migrations/202608210005_creator_money_terminal_reconciliation_and_payout_allocations.sql");
 const payoutCompletion = read("supabase/migrations/202608210006_creator_money_payout_processing_recovery_completion.sql");
 const payoutLocking = read("supabase/migrations/202608210007_creator_money_payout_result_locking_fix.sql");
+const paidVideo = read("_lib/creatorPaidVideos.ts");
+const paidEvents = read("_lib/paidCreatorEvents.ts");
+const vipPasses = read("_lib/creatorVipPasses.ts");
+const seatPasses = read("_lib/paidWatchPartyTickets.ts");
+const channelSubscriptions = read("_lib/channelSubscriptions.ts");
+const creatorMonetizationGuard = read("scripts/guard-creator-monetization-policy.mjs");
+const premiumEntitlements = read("_lib/premiumEntitlements.ts");
+const entitlementAuthority = read("_lib/entitlementAuthority.ts");
+const wave1AuthorityMigration = read("supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql");
 
 const conceptCount = (concept) => manifest.catalog.filter((entry) => entry.concept === concept).length;
 
@@ -42,10 +51,12 @@ test("finite iOS creator-money catalog is complete and activation stays off", ()
 });
 
 test("StoreKit configuration exactly matches the canonical finite catalog", () => {
-  const ids = [
-    ...(storeKit.products ?? []).map((entry) => entry.productID),
-    ...(storeKit.subscriptionGroups ?? []).flatMap((group) => (group.subscriptions ?? []).map((entry) => entry.productID)),
+  const records = [
+    ...(storeKit.products ?? []).map((entry) => ({ entry, group: null })),
+    ...(storeKit.subscriptionGroups ?? []).flatMap((group) =>
+      (group.subscriptions ?? []).map((entry) => ({ entry, group }))),
   ];
+  const ids = records.map(({ entry }) => entry.productID);
   assert.deepEqual(ids.sort(), manifest.catalog.map((entry) => entry.productId).sort());
   assert.equal((storeKit.subscriptionGroups ?? []).length, 9);
   const creatorGroups = (storeKit.subscriptionGroups ?? []).filter((group) =>
@@ -53,6 +64,58 @@ test("StoreKit configuration exactly matches the canonical finite catalog", () =
   );
   assert.equal(creatorGroups.length, 8);
   assert.equal(new Set(creatorGroups.map((group) => group.id)).size, 8);
+
+  const byId = new Map(records.map((record) => [record.entry.productID, record]));
+  for (const manifestEntry of manifest.catalog) {
+    const local = byId.get(manifestEntry.productId);
+    assert.ok(local, manifestEntry.productId);
+    const expectedType = manifestEntry.type === "consumable" ? "Consumable" : "RecurringSubscription";
+    assert.equal(local.entry.type, expectedType, `${manifestEntry.productId} type`);
+    if (manifestEntry.type === "auto_renewable_subscription") {
+      const expectedGroupId = `group-${manifestEntry.subscriptionGroup}`;
+      assert.equal(local.entry.recurringSubscriptionPeriod, manifestEntry.duration, `${manifestEntry.productId} duration`);
+      assert.equal(local.group?.id, expectedGroupId, `${manifestEntry.productId} group ID`);
+      assert.equal(local.group?.name, manifestEntry.subscriptionGroup, `${manifestEntry.productId} group name`);
+      assert.equal(local.entry.subscriptionGroupID, expectedGroupId, `${manifestEntry.productId} group binding`);
+    } else {
+      assert.equal(local.group, null, `${manifestEntry.productId} consumable group`);
+      assert.equal(local.entry.recurringSubscriptionPeriod, undefined, `${manifestEntry.productId} consumable duration`);
+      assert.equal(local.entry.subscriptionGroupID, undefined, `${manifestEntry.productId} consumable group binding`);
+    }
+  }
+});
+
+test("RevenueCat purchase selection fails closed on mismatched iOS product identity", () => {
+  for (const source of [paidVideo, paidEvents, vipPasses, seatPasses]) {
+    assert.doesNotMatch(source, /\?\?\s*products\[0\]/u);
+    assert.match(source, /products\.find\(\(entry\) => String\(entry\.identifier \?\? ""\)\.trim\(\) === productId\) \?\? null/u);
+  }
+  assert.match(channelSubscriptions, /return normalized \? \[normalized\] : \[\];/u);
+  const candidateBuilder = channelSubscriptions.match(
+    /const buildSubscriptionProductIdentifierCandidates = \(productId: string\) => \{[\s\S]*?\n\};/u,
+  )?.[0] ?? "";
+  assert.doesNotMatch(candidateBuilder, /withoutBasePlan|:monthly/u,
+    "the client cannot derive a different Google Play base-plan SKU after exact server readback");
+  assert.doesNotMatch(candidateBuilder, /\bCHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_ID\b/u,
+    "a different global sandbox SKU cannot satisfy an exact Android purchase intent");
+  assert.doesNotMatch(candidateBuilder, /\bCHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_BASE_PLAN_ID\b/u,
+    "a different global sandbox base-plan SKU cannot satisfy an exact Android purchase intent");
+  assert.match(channelSubscriptions, /if \(!periodEnd\) return false;/u,
+    "missing subscription expiry remains fail closed in client readback");
+});
+
+test("Premium policy guard follows authoritative RPC revocation and UNKNOWN semantics", () => {
+  assert.match(creatorMonetizationGuard, /ENTITLEMENT_AUTHORITY_READBACK_RPC = "wave1_entitlement_authority_readback"/u);
+  assert.match(creatorMonetizationGuard, /authoritative: false, grantsProtectedAccess: false/u);
+  assert.match(creatorMonetizationGuard, /decision\.state === "ACTIVE" \|\| decision\.state === "GRACE"/u);
+  assert.doesNotMatch(creatorMonetizationGuard, /assertIncludes\(premiumEntitlements, "revoked_at"/u);
+  assert.match(premiumEntitlements, /normalizeEntitlementAuthorityReadback/u);
+  assert.doesNotMatch(premiumEntitlements, /\.from\(USER_ENTITLEMENTS_TABLE\)/u);
+  assert.doesNotMatch(premiumEntitlements, /\.from\(["']user_entitlements["']\)/u);
+  assert.match(entitlementAuthority, /authoritative: false, grantsProtectedAccess: false/u);
+  assert.match(entitlementAuthority, /decision\?\.authoritative === true/u);
+  assert.match(wave1AuthorityMigration, /v_row\."revoked_at" is not null or v_row\."status" = 'revoked' then 'REVOKED'/u);
+  assert.match(wave1AuthorityMigration, /'grantsProtectedAccess', v_state in \('ACTIVE', 'GRACE'\)/u);
 });
 
 test("runtime and server policies route iOS creator digital money through finite App Store authority", () => {

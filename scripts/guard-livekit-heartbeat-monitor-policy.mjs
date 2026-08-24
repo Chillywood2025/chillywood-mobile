@@ -19,6 +19,7 @@ const assertNotIncludes = (source, needle, label) => {
 };
 
 const monitor = read("supabase/functions/livekit-heartbeat-monitor/index.ts");
+const seatEnforcement = read("supabase/functions/_shared/livekit-seat-session-enforcement.ts");
 const heartbeat = read("ops/livekit-registry/heartbeat-livekit.sh");
 const service = read("ops/livekit-registry/systemd/livekit-heartbeat-monitor.service");
 const timer = read("ops/livekit-registry/systemd/livekit-heartbeat-monitor.timer");
@@ -29,15 +30,37 @@ const config = read("supabase/config.toml");
 [
   "LIVEKIT_HEARTBEAT_MONITOR_SECRET",
   "RoomServiceClient",
-  "listRooms",
-  "listParticipants",
   "checkHttpReachable",
   "recordHealthCheckedHeartbeat",
   "livekit_server_heartbeats",
   "livekit_servers",
   "health_checked_heartbeat",
   "public_endpoint_unreachable",
+  "countLiveKitStateWithPaidSeatEnforcement",
+  "resolve_watch_party_livekit_viewer_authority",
+  "livekit_room_assignments",
+  "watch_party_rooms",
+  "communication_rooms",
+  "readRoomAuthorityScope",
+  "p_session_generation",
 ].forEach((needle) => assertIncludes(monitor, needle, "monitor function"));
+
+[
+  "listRooms()",
+  "listParticipants(roomName)",
+  "removeParticipant(",
+  "authority_lookup_failed",
+  "authority_malformed",
+  "enforcementCause",
+  "participant_removal_failed",
+  "if (removed) continue",
+  "!authority.allowed",
+  "enforceWatchPartyAuthority",
+  "roomScopeLookupFailed",
+  "resolveRoomAuthorityScopeFromEvidence",
+  "readLiveKitParticipantSessionGeneration",
+  "sessionGeneration",
+].forEach((needle) => assertIncludes(seatEnforcement, needle, "paid Seat active-session enforcement"));
 
 [
   "X-LiveKit-Heartbeat-Monitor-Token",

@@ -664,6 +664,49 @@ function createLockedCreatorVideo(
   };
 }
 
+function createPaidContentLockedCreatorVideo(
+  videoId: string,
+  access: CreatorContentAccessResolution,
+): CreatorVideo {
+  const purchaseRequired = access.resolverStatus === "resolved"
+    && access.allowed === false
+    && access.reason === "purchase_required"
+    && access.requiresPurchase === true;
+  const now = new Date().toISOString();
+
+  return {
+    id: videoId,
+    ownerId: purchaseRequired ? access.creatorId ?? "" : "",
+    title: purchaseRequired ? "Paid creator video" : "Creator video unavailable",
+    description: purchaseRequired
+      ? "Purchase access must be verified before this creator video can play."
+      : "Playback remains blocked until paid-content access can be verified.",
+    visibility: "public",
+    moderationStatus: "clean",
+    moderationReason: null,
+    moderatedAt: null,
+    moderatedBy: null,
+    playbackUrl: "",
+    thumbnailUrl: "",
+    storageProvider: "supabase",
+    storageBucket: "",
+    storageObjectKey: "",
+    storagePath: "",
+    thumbStoragePath: "",
+    mimeType: "",
+    fileSizeBytes: null,
+    playbackResolution: createUnavailableVodPlaybackResolution(videoId, access.reason),
+    playbackQualityLabel: null,
+    playbackDelivery: null,
+    paidContentAccess: access,
+    visibilityAccess: null,
+    renditionStatuses: [],
+    publicClipMetadata: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export async function readCreatorVideoForPlayer(videoId: string): Promise<CreatorVideo | null> {
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return null;
@@ -671,6 +714,18 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   const visibilityAccess = await resolveCreatorVideoVisibilityAccess(normalizedVideoId).catch(() => null);
   if (visibilityAccess && !visibilityAccess.allowed) {
     return createLockedCreatorVideo(normalizedVideoId, visibilityAccess);
+  }
+
+  // Resolve paid-content authority before selecting the full video row. The
+  // database independently enforces this same decision on video/storage and
+  // playback reads, while this ordering prevents a non-purchaser from using a
+  // visibility-only row read as a path to protected source metadata.
+  const paidContentAccess = await resolveCreatorContentAccess({
+    contentType: "creator_video",
+    contentId: normalizedVideoId,
+  });
+  if (paidContentAccess.resolverStatus !== "resolved" || paidContentAccess.allowed !== true) {
+    return createPaidContentLockedCreatorVideo(normalizedVideoId, paidContentAccess);
   }
 
   const { data, error } = await supabase
@@ -714,21 +769,6 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
       viewerUserId: viewerUserId || null,
       ownerUserId: parsedWithAccess.ownerId,
     });
-  }
-
-  const paidContentAccess = await resolveCreatorContentAccess({
-    contentType: "creator_video",
-    contentId: parsedWithAccess.id,
-  });
-  if (paidContentAccess.resolverStatus === "resolved" && !paidContentAccess.allowed) {
-    return {
-      ...parsedWithAccess,
-      playbackUrl: "",
-      playbackResolution: createUnavailableVodPlaybackResolution(parsedWithAccess.id, paidContentAccess.reason),
-      playbackQualityLabel: null,
-      playbackDelivery: null,
-      paidContentAccess,
-    };
   }
 
   const playbackResolution = await resolveSignedVideoPlaybackSource({

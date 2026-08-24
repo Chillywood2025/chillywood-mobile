@@ -79,6 +79,28 @@ assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[5]).grantsLiv
 assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[5]).createsPayableBalance, false);
 assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[6]).allowed, false);
 
+const runtimeProducts = JSON.parse(JSON.stringify(appStoreRuntimeCatalog.IOS_APP_STORE_PRODUCTS));
+assert.equal(runtimeProducts.length, 30, "runtime App Store catalog must contain exactly 30 products");
+const runtimeById = new Map(runtimeProducts.map((entry) => [entry.productId, entry]));
+assert.equal(runtimeById.size, runtimeProducts.length, "runtime App Store product IDs must be unique");
+assert.deepEqual(new Set(runtimeById.keys()), new Set(manifest.catalog.map((entry) => entry.productId)),
+  "runtime App Store IDs must exactly match the permanent manifest");
+const nullable = (value) => value == null ? null : value;
+for (const manifestEntry of manifest.catalog) {
+  const runtimeEntry = runtimeById.get(manifestEntry.productId);
+  assert.ok(runtimeEntry, `${manifestEntry.productId} must exist in the runtime App Store catalog`);
+  assert.equal(runtimeEntry.concept, manifestEntry.concept, `${manifestEntry.productId} runtime concept drifted`);
+  assert.equal(runtimeEntry.productType, manifestEntry.type, `${manifestEntry.productId} runtime product type drifted`);
+  assert.equal(runtimeEntry.referencePrice, manifestEntry.referencePrice, `${manifestEntry.productId} runtime reference price drifted`);
+  assert.equal(runtimeEntry.referencePriceMinor, Math.round(Number(manifestEntry.referencePrice) * 100), `${manifestEntry.productId} runtime minor-unit price drifted`);
+  assert.equal(nullable(runtimeEntry.subscriptionPeriod), nullable(manifestEntry.duration), `${manifestEntry.productId} runtime duration drifted`);
+  assert.equal(nullable(runtimeEntry.subscriptionGroup), nullable(manifestEntry.subscriptionGroup), `${manifestEntry.productId} runtime subscription group drifted`);
+  assert.equal(nullable(runtimeEntry.entitlement), nullable(manifestEntry.entitlement), `${manifestEntry.productId} runtime entitlement mapping drifted`);
+  assert.equal(nullable(runtimeEntry.offering), nullable(manifestEntry.offering), `${manifestEntry.productId} runtime offering mapping drifted`);
+  assert.equal(nullable(runtimeEntry.package), nullable(manifestEntry.package), `${manifestEntry.productId} runtime package mapping drifted`);
+  assert.equal(nullable(runtimeEntry.slotNumber), nullable(manifestEntry.slot), `${manifestEntry.productId} runtime channel slot drifted`);
+}
+
 const runtimeTierIds = new Set(appStoreRuntimeCatalog.IOS_FINITE_APP_STORE_TIERS.map((entry) => entry.productId));
 const finiteConcepts = new Set(["creator_tip", "seat_pass", "paid_video", "event_pass", "vip_pass"]);
 const manifestFiniteTierIds = new Set(manifest.catalog.filter((entry) => finiteConcepts.has(entry.concept)).map((entry) => entry.productId));
@@ -137,15 +159,30 @@ const localIds = new Set([
 ]);
 assert.deepEqual(localIds, manifestIds, "local StoreKit configuration must mirror the permanent manifest");
 const localEntries = new Map([
-  ...storeKit.products.map((entry) => [entry.productID, entry]),
-  ...storeKit.subscriptionGroups.flatMap((group) => group.subscriptions.map((entry) => [entry.productID, entry])),
+  ...storeKit.products.map((entry) => [entry.productID, { entry, group: null }]),
+  ...storeKit.subscriptionGroups.flatMap((group) =>
+    group.subscriptions.map((entry) => [entry.productID, { entry, group }])),
 ]);
 for (const manifestEntry of manifest.catalog) {
-  const localEntry = localEntries.get(manifestEntry.productId);
-  assert.equal(localEntry?.displayPrice, manifestEntry.referencePrice);
-  assert.equal(localEntry?.referenceName, manifestEntry.referenceName);
-  assert.equal(localEntry?.localizations?.[0]?.displayName, manifestEntry.displayName);
-  assert.equal(localEntry?.localizations?.[0]?.description, manifestEntry.description);
+  const local = localEntries.get(manifestEntry.productId);
+  assert.ok(local, `${manifestEntry.productId} must exist in StoreKit`);
+  const expectedType = manifestEntry.type === "consumable" ? "Consumable" : "RecurringSubscription";
+  assert.equal(local.entry.type, expectedType, `${manifestEntry.productId} StoreKit type drifted`);
+  assert.equal(local.entry.displayPrice, manifestEntry.referencePrice);
+  assert.equal(local.entry.referenceName, manifestEntry.referenceName);
+  assert.equal(local.entry.localizations?.[0]?.displayName, manifestEntry.displayName);
+  assert.equal(local.entry.localizations?.[0]?.description, manifestEntry.description);
+  if (manifestEntry.type === "auto_renewable_subscription") {
+    const expectedGroupId = `group-${manifestEntry.subscriptionGroup}`;
+    assert.equal(local.entry.recurringSubscriptionPeriod, manifestEntry.duration, `${manifestEntry.productId} StoreKit duration drifted`);
+    assert.equal(local.group?.id, expectedGroupId, `${manifestEntry.productId} StoreKit group ID drifted`);
+    assert.equal(local.group?.name, manifestEntry.subscriptionGroup, `${manifestEntry.productId} StoreKit group name drifted`);
+    assert.equal(local.entry.subscriptionGroupID, expectedGroupId, `${manifestEntry.productId} StoreKit group binding drifted`);
+  } else {
+    assert.equal(local.group, null, `${manifestEntry.productId} consumable must not be grouped as a subscription`);
+    assert.equal(local.entry.recurringSubscriptionPeriod, undefined, `${manifestEntry.productId} consumable must not have a duration`);
+    assert.equal(local.entry.subscriptionGroupID, undefined, `${manifestEntry.productId} consumable must not have a subscription group`);
+  }
 }
 assert.equal(manifest.liveMoneyEnabled, false);
 assert.equal(manifest.productionActivation.enabled, false);

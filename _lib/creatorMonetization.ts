@@ -178,22 +178,119 @@ const toCents = (value: unknown) => {
   return Math.max(0, Math.trunc(normalized));
 };
 
-const normalizeCreatorContentAccessResolution = (
+const CREATOR_CONTENT_ACCESS_ALLOWED_REASONS = new Set([
+  "owner",
+  "free_content",
+  "purchase_grant",
+  "sandbox_grant",
+  "active_grant",
+]);
+const CREATOR_CONTENT_ACCESS_DENIED_REASONS = new Set([
+  "content_unavailable",
+  "unsupported_content_type",
+]);
+const CREATOR_CONTENT_ACCESS_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+const unavailableCreatorContentAccessResolution = (
+  reason: "resolver_unavailable" | "resolver_malformed",
+): CreatorContentAccessResolution => ({
+  allowed: false,
+  reason,
+  requiresPurchase: false,
+  priceCents: null,
+  currency: null,
+  creatorId: null,
+  resolverStatus: "unavailable",
+});
+
+export const normalizeCreatorContentAccessResolution = (
   payload: unknown,
-  fallbackReason = "resolver_unavailable",
 ): CreatorContentAccessResolution => {
-  const body = payload && typeof payload === "object" && !Array.isArray(payload)
-    ? payload as Record<string, unknown>
-    : {};
-  const reason = toText(body.reason) || fallbackReason;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return unavailableCreatorContentAccessResolution("resolver_malformed");
+  }
+
+  const body = payload as Record<string, unknown>;
+  if (typeof body.allowed !== "boolean" || typeof body.reason !== "string" || body.reason.trim() !== body.reason) {
+    return unavailableCreatorContentAccessResolution("resolver_malformed");
+  }
+
+  const reason = body.reason;
+  if (body.allowed) {
+    if (!CREATOR_CONTENT_ACCESS_ALLOWED_REASONS.has(reason) || body.requiresPurchase !== false) {
+      return unavailableCreatorContentAccessResolution("resolver_malformed");
+    }
+    return {
+      allowed: true,
+      reason,
+      requiresPurchase: false,
+      priceCents: null,
+      currency: null,
+      creatorId: null,
+      resolverStatus: "resolved",
+    };
+  }
+
+  if (reason === "purchase_required") {
+    const provider = typeof body.provider === "string" && body.provider === body.provider.trim()
+      ? body.provider
+      : "";
+    const providerProductId = typeof body.providerProductId === "string"
+      && body.providerProductId === body.providerProductId.trim()
+      && body.providerProductId.length <= 512
+      && !/[\u0000-\u001f\u007f]/u.test(body.providerProductId)
+      ? body.providerProductId
+      : "";
+    const providerProductKey = typeof body.providerProductKey === "string"
+      && body.providerProductKey === body.providerProductKey.trim()
+      && body.providerProductKey.length <= 512
+      && !/[\u0000-\u001f\u007f]/u.test(body.providerProductKey)
+      ? body.providerProductKey
+      : "";
+    const offerStatus = typeof body.offerStatus === "string" && body.offerStatus === body.offerStatus.trim()
+      ? body.offerStatus
+      : "";
+    if (
+      body.requiresPurchase !== true
+      || typeof body.priceCents !== "number"
+      || !Number.isSafeInteger(body.priceCents)
+      || body.priceCents <= 0
+      || typeof body.currency !== "string"
+      || !/^[a-z]{3}$/.test(body.currency)
+      || typeof body.creatorId !== "string"
+      || !CREATOR_CONTENT_ACCESS_UUID_PATTERN.test(body.creatorId)
+      || (provider !== "revenuecat_app_store" && provider !== "revenuecat_google_play")
+      || !providerProductId
+      || !providerProductKey
+      || (offerStatus !== "sandbox" && offerStatus !== "active")
+    ) {
+      return unavailableCreatorContentAccessResolution("resolver_malformed");
+    }
+    return {
+      allowed: false,
+      reason,
+      requiresPurchase: true,
+      priceCents: body.priceCents,
+      currency: body.currency,
+      creatorId: body.creatorId,
+      resolverStatus: "resolved",
+    };
+  }
+
+  if (
+    !CREATOR_CONTENT_ACCESS_DENIED_REASONS.has(reason)
+    || (body.requiresPurchase !== undefined && body.requiresPurchase !== false)
+  ) {
+    return unavailableCreatorContentAccessResolution("resolver_malformed");
+  }
   return {
-    allowed: body.allowed === true,
+    allowed: false,
     reason,
-    requiresPurchase: body.requiresPurchase === true || reason === "purchase_required",
-    priceCents: body.priceCents == null ? null : toCents(body.priceCents),
-    currency: toText(body.currency) || null,
-    creatorId: toText(body.creatorId) || null,
-    resolverStatus: fallbackReason === "resolver_unavailable" ? "unavailable" : "resolved",
+    requiresPurchase: false,
+    priceCents: null,
+    currency: null,
+    creatorId: null,
+    resolverStatus: "resolved",
   };
 };
 
@@ -391,17 +488,9 @@ export async function resolveCreatorContentAccess(options: {
       p_content_id: options.contentId,
     });
     if (error) throw error;
-    return normalizeCreatorContentAccessResolution(data, "resolved");
+    return normalizeCreatorContentAccessResolution(data);
   } catch {
-    return {
-      allowed: true,
-      reason: "resolver_unavailable",
-      requiresPurchase: false,
-      priceCents: null,
-      currency: null,
-      creatorId: null,
-      resolverStatus: "unavailable",
-    };
+    return unavailableCreatorContentAccessResolution("resolver_unavailable");
   }
 }
 

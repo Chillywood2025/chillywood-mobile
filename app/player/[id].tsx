@@ -7051,9 +7051,17 @@ export default function PlayerScreen() {
   });
   const playerSurfacePresentation = getPlayerSurfacePresentation(playerSurfaceMode);
   const creatorVideoPaidContentLocked = isCreatorVideoPlayback
+    && !!creatorVideo
+    && creatorVideo.visibilityAccess?.allowed !== false
+    && (
+      creatorVideo.paidContentAccess?.resolverStatus !== "resolved"
+      || creatorVideo.paidContentAccess?.allowed !== true
+    );
+  const creatorVideoPaidContentPurchaseRequired = creatorVideoPaidContentLocked
     && creatorVideo?.paidContentAccess?.resolverStatus === "resolved"
-    && creatorVideo.paidContentAccess.requiresPurchase
-    && !creatorVideo.paidContentAccess.allowed;
+    && creatorVideo.paidContentAccess.allowed === false
+    && creatorVideo.paidContentAccess.reason === "purchase_required"
+    && creatorVideo.paidContentAccess.requiresPurchase === true;
   const creatorVideoVisibilityLocked = isCreatorVideoPlayback
     && creatorVideo?.visibilityAccess?.allowed === false;
   const creatorVideoVisibilityLockedTitle = creatorVideoVisibilityLocked
@@ -7072,7 +7080,7 @@ export default function PlayerScreen() {
           ? "This creator video is unavailable for this account."
           : "This creator video is private or unavailable."
     : "";
-  const creatorVideoPaidContentPriceLabel = creatorVideoPaidContentLocked
+  const creatorVideoPaidContentPriceLabel = creatorVideoPaidContentPurchaseRequired
     && creatorVideo?.paidContentAccess?.priceCents
     ? formatMonetizationCurrency(
       creatorVideo.paidContentAccess.priceCents,
@@ -7100,6 +7108,15 @@ export default function PlayerScreen() {
       return;
     }
     const access = creatorVideo.paidContentAccess;
+    if (
+      access?.resolverStatus !== "resolved"
+      || access.allowed !== false
+      || access.reason !== "purchase_required"
+      || access.requiresPurchase !== true
+    ) {
+      setPaidVideoUnlockMessage("Playback stays locked until paid-content access can be verified.");
+      return;
+    }
     const amountCents = access?.priceCents ?? 0;
     const creatorId = access?.creatorId ?? creatorVideo.ownerId;
     if (!creatorId || amountCents <= 0) {
@@ -10006,40 +10023,51 @@ export default function PlayerScreen() {
                     <Text style={styles.paidVideoLockTitle} numberOfLines={2}>
                       {creatorVideo?.title ?? "Paid creator video"}
                     </Text>
-                    <MoneyStatusChip label="Locked" tone="premium" />
+                    <MoneyStatusChip
+                      label={creatorVideoPaidContentPurchaseRequired ? "Locked" : "Access unavailable"}
+                      tone="premium"
+                    />
                   </View>
                   {creatorVideoPaidContentPriceLabel ? (
                     <Text style={styles.paidVideoLockPrice}>{creatorVideoPaidContentPriceLabel}</Text>
                   ) : null}
-                  <MoneyScopeStrip
-                    includes="Playback access to this creator video only."
-                    excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party Seat Passes, event passes, rooms, and other creator videos stay separate."
-                  />
-                  <MoneyScopeInfoButton scope="paid_creator_video" label="What does this unlock?" compact />
-                  <TouchableOpacity
-                    style={[
-                      styles.playerAccessPrimaryBtn,
-                      styles.paidVideoUnlockPrimaryButton,
-                      paidVideoUnlockBusy && styles.secondaryBtnDisabled,
-                    ]}
-                    activeOpacity={0.86}
-                    disabled={paidVideoUnlockBusy}
-                    onPress={() => {
-                      void handlePaidVideoUnlock();
-                    }}
-                    testID="tester-paid-video-unlock-button"
-                    accessibilityRole="button"
-                    accessibilityLabel="Unlock paid creator video"
-                    accessibilityState={{ disabled: paidVideoUnlockBusy, busy: paidVideoUnlockBusy }}
-                  >
-                    {paidVideoUnlockBusy ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={styles.playerAccessPrimaryText}>
-                        Unlock Video
-                      </Text>
-                    )}
-                  </TouchableOpacity>
+                  {creatorVideoPaidContentPurchaseRequired ? (
+                    <>
+                      <MoneyScopeStrip
+                        includes="Playback access to this creator video only."
+                        excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party Seat Passes, event passes, rooms, and other creator videos stay separate."
+                      />
+                      <MoneyScopeInfoButton scope="paid_creator_video" label="What does this unlock?" compact />
+                      <TouchableOpacity
+                        style={[
+                          styles.playerAccessPrimaryBtn,
+                          styles.paidVideoUnlockPrimaryButton,
+                          paidVideoUnlockBusy && styles.secondaryBtnDisabled,
+                        ]}
+                        activeOpacity={0.86}
+                        disabled={paidVideoUnlockBusy}
+                        onPress={() => {
+                          void handlePaidVideoUnlock();
+                        }}
+                        testID="tester-paid-video-unlock-button"
+                        accessibilityRole="button"
+                        accessibilityLabel="Unlock paid creator video"
+                        accessibilityState={{ disabled: paidVideoUnlockBusy, busy: paidVideoUnlockBusy }}
+                      >
+                        {paidVideoUnlockBusy ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Text style={styles.playerAccessPrimaryText}>
+                            Unlock Video
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <Text style={styles.videoLoadingSubtext}>
+                      Playback remains blocked until paid-content access can be verified.
+                    </Text>
+                  )}
                   {paidVideoUnlockMessage ? (
                     <Text style={styles.videoLoadingSubtext} testID="paid-video-purchase-success-receipt">{paidVideoUnlockMessage}</Text>
                   ) : null}
@@ -10112,8 +10140,10 @@ export default function PlayerScreen() {
                   </Text>
                   {isCreatorVideoPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
-                      {creatorVideoPaidContentLocked
+                      {creatorVideoPaidContentPurchaseRequired
                         ? `Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. This purchase unlocks this creator video only. It does not include Premium, subscriptions, VIP, live rooms, Watch-Party Seat Passes, or other creator content.`
+                        : creatorVideoPaidContentLocked
+                          ? "Playback is blocked because paid-content access could not be verified."
                         : creatorVideoVisibilityLocked
                           ? creatorVideoVisibilityLockedBody
                         : playbackLoadError
@@ -10121,7 +10151,7 @@ export default function PlayerScreen() {
                         : "This upload does not have a playable source yet."}
                     </Text>
                   ) : null}
-                  {creatorVideoPaidContentLocked ? (
+                  {creatorVideoPaidContentPurchaseRequired ? (
                     <Text style={styles.videoLoadingSubtext}>
                       Unlocking this video does not include Chi’llywood Premium, subscriptions, VIP, rooms, events, or other creator videos.
                     </Text>

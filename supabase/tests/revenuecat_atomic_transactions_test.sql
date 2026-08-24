@@ -27,6 +27,10 @@ insert into auth.users (id, is_sso_user, is_anonymous)
 select creator_id, false, false
 from pg_temp.revenuecat_creator_authority_fixture;
 
+insert into auth.sessions (id, user_id)
+select md5('revenuecat-atomic-session:' || creator_id::text)::uuid, creator_id
+from pg_temp.revenuecat_creator_authority_fixture;
+
 do $$
 declare
   creator_fixture record;
@@ -72,7 +76,9 @@ insert into public.wave1_legal_acceptances (
 select
   creator.creator_id, public.wave1_sha256(creator.creator_id::text),
   document.document_key, document.version, document.market,
-  'member', document.capability, 'revenuecat-atomic-fixture', 'service_reconciliation'
+  'member', document.capability,
+  md5('revenuecat-atomic-session:' || creator.creator_id::text)::uuid::text,
+  'service_reconciliation'
 from pg_temp.revenuecat_creator_authority_fixture creator
 cross join public.wave1_legal_document_versions document
 where document.active
@@ -85,6 +91,36 @@ where document.active
     ('money_terms', 'creator_money')
   );
 
+insert into auth.sessions (id,user_id)
+select md5('revenuecat-buyer-session:'||buyer.id::text)::uuid,buyer.id
+from auth.users buyer
+where buyer.id in (
+  '66666666-6666-6666-6666-666666666666',
+  '77777777-7777-7777-7777-777777777777',
+  '99999999-9999-9999-9999-999999999999',
+  'bbbbbbbb-1111-1111-1111-111111111111'
+)
+on conflict (id) do nothing;
+
+insert into public.wave1_legal_acceptances (
+  user_id,subject_hash,document_key,document_version,market,
+  role_key,capability,session_generation,authority_source
+)
+select buyer.id,public.wave1_sha256(buyer.id::text),document.document_key,
+  document.version,document.market,'member',document.capability,
+  md5('revenuecat-buyer-session:'||buyer.id::text)::uuid::text,
+  'service_reconciliation'
+from auth.users buyer
+cross join public.wave1_legal_document_versions document
+where buyer.id in (
+    '66666666-6666-6666-6666-666666666666',
+    '77777777-7777-7777-7777-777777777777',
+    '99999999-9999-9999-9999-999999999999',
+    'bbbbbbbb-1111-1111-1111-111111111111'
+  )
+  and document.active and document.market='UNITED_STATES'
+  and document.capability='account';
+
 update public.platform_money_kill_switches
 set state = case
   when key in ('revenuecat_app_store_enabled', 'provider_webhooks_enabled', 'tips_enabled', 'watch_party_tickets_enabled') then 'sandbox_only'
@@ -95,6 +131,46 @@ where key in (
   'revenuecat_app_store_enabled', 'provider_webhooks_enabled', 'tips_enabled',
   'watch_party_tickets_enabled', 'live_money_enabled', 'payouts_enabled'
 );
+
+insert into public.creator_tip_settings (
+  creator_id, tips_enabled, provider_environment, status,
+  min_amount_cents, max_amount_cents, currency
+)
+select creator_id, true, 'test', 'active', 100, 50000, 'usd'
+from pg_temp.revenuecat_creator_authority_fixture
+where fixture_index = 1;
+
+insert into public.watch_party_rooms (
+  party_id, title_id, host_user_id, room_type, join_policy,
+  content_access_rule, is_active
+)
+select
+  case fixture_index
+    when 2 then '75000000-0000-0000-0000-000000000001'
+    else '95000000-0000-0000-0000-000000000001'
+  end,
+  'revenuecat-atomic-seat-title', creator_id, 'title', 'open', 'party_pass', true
+from pg_temp.revenuecat_creator_authority_fixture
+where fixture_index in (2, 3);
+
+insert into public.paid_watch_party_offers (
+  id, party_id, creator_id, host_id, title, price_cents, currency,
+  status, provider, provider_product_id, metadata
+)
+select
+  case fixture_index
+    when 2 then '75000000-0000-0000-0000-000000000001'::uuid
+    else '95000000-0000-0000-0000-000000000001'::uuid
+  end,
+  case fixture_index
+    when 2 then '75000000-0000-0000-0000-000000000001'
+    else '95000000-0000-0000-0000-000000000001'
+  end,
+  creator_id, creator_id, 'Atomic Seat Pass', 99, 'usd',
+  'sandbox', 'revenuecat_google_play', 'watch_party_ticket_sandbox_099',
+  jsonb_build_object('sandbox_only', true, 'not_payable', true)
+from pg_temp.revenuecat_creator_authority_fixture
+where fixture_index in (2, 3);
 
 create function pg_temp.apply_premium(
   p_event_id text,
@@ -130,7 +206,7 @@ create function pg_temp.apply_consumable(
   p_failpoint text default null,
   p_amount_minor integer default null,
   p_currency text default null,
-  p_original_transaction_id text default 'sandbox-original-transaction'
+  p_original_transaction_id text default null
 )
 returns jsonb
 language plpgsql
@@ -144,7 +220,8 @@ begin
       p_event_id, p_event_type, p_user_id, mapping.provider_product_id,
       'sandbox', timezone('utc'::text, now()), null,
       coalesce(p_amount_minor, mapping.reference_price_minor), coalesce(p_currency, mapping.reference_currency),
-      'sha256-normalized-consumable-test', p_original_transaction_id
+      repeat('a', 64),
+      coalesce(p_original_transaction_id, 'sandbox-original:' || p_user_id::text || ':' || p_provider_product_id)
     ) into v_result
     from public.monetization_product_store_mappings mapping
     where mapping.provider = 'revenuecat_app_store'
@@ -155,7 +232,9 @@ begin
       p_event_id, p_event_type, p_user_id, mapping.provider_product_id,
       'sandbox', timezone('utc'::text, now()), null,
       coalesce(p_amount_minor, mapping.reference_price_minor), coalesce(p_currency, mapping.reference_currency),
-      'sha256-normalized-consumable-test', p_original_transaction_id, p_failpoint
+      'sha256-normalized-consumable-test',
+      coalesce(p_original_transaction_id, 'sandbox-original:' || p_user_id::text || ':' || p_provider_product_id),
+      p_failpoint
     ) into v_result
     from public.monetization_product_store_mappings mapping
     where mapping.provider = 'revenuecat_app_store'
@@ -306,7 +385,7 @@ select ok(pg_temp.premium_failure_rolled_back('after_ledger_event'), 'Premium le
 insert into public.money_purchase_intents (
   id, user_id, product_id, product_key, product_type, provider, provider_product_id,
   source_type, source_id, creator_id, environment, status, amount_minor, currency,
-  idempotency_key, expires_at, metadata
+  idempotency_key, expires_at, session_generation, metadata
 )
 select
   '60000000-0000-0000-0000-000000000001', '66666666-6666-6666-6666-666666666666',
@@ -314,7 +393,8 @@ select
   mapping.provider_product_id, 'creator_tip', '65000000-0000-0000-0000-000000000001',
   (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'tip-intent-atomic-test',
-  now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
+  now() + interval '15 minutes',md5('revenuecat-buyer-session:66666666-6666-6666-6666-666666666666')::uuid::text,
+  jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping
 join public.monetization_products product on product.id = mapping.product_id
 where mapping.provider_product_id = 'com.chillywood.tip.tier1';
@@ -337,7 +417,7 @@ select is((select count(*)::integer from public.money_access_ledger_events where
 insert into public.money_purchase_intents (
   id, user_id, product_id, product_key, product_type, provider, provider_product_id,
   source_type, source_id, creator_id, environment, status, amount_minor, currency,
-  idempotency_key, expires_at, metadata
+  idempotency_key, expires_at, session_generation, metadata
 )
 select
   '61000000-0000-0000-0000-000000000001', 'bbbbbbbb-1111-1111-1111-111111111111',
@@ -345,7 +425,8 @@ select
   mapping.provider_product_id, 'creator_tip', '65100000-0000-0000-0000-000000000001',
   (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'tip-intent-localized-storefront-test',
-  now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
+  now() + interval '15 minutes',md5('revenuecat-buyer-session:bbbbbbbb-1111-1111-1111-111111111111')::uuid::text,
+  jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping
 join public.monetization_products product on product.id = mapping.product_id
 where mapping.provider_product_id = 'com.chillywood.tip.tier1';
@@ -354,7 +435,7 @@ select lives_ok(
   $$select public.process_revenuecat_consumable_event_atomic(
     'tip-localized-eur-1', 'INITIAL_PURCHASE', 'bbbbbbbb-1111-1111-1111-111111111111',
     'com.chillywood.tip.tier1', 'sandbox', now(), null, 129, 'eur',
-    'sha256-localized-consumable-test', 'localized-eur-original-transaction'
+    repeat('b', 64), 'localized-eur-original-transaction'
   )$$,
   'localized non-USD App Store consumable is accepted by permanent product and exact intent identity'
 );
@@ -376,7 +457,7 @@ select ok(
 insert into public.money_purchase_intents (
   id, user_id, product_id, product_key, product_type, provider, provider_product_id,
   source_type, source_id, creator_id, environment, status, amount_minor, currency,
-  idempotency_key, expires_at, metadata
+  idempotency_key, expires_at, session_generation, metadata
 )
 select
   '70000000-0000-0000-0000-000000000001', '77777777-7777-7777-7777-777777777777',
@@ -384,7 +465,8 @@ select
   mapping.provider_product_id, 'watch_party_live', '75000000-0000-0000-0000-000000000001',
   (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 2), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'seat-intent-atomic-test',
-  now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
+  now() + interval '15 minutes',md5('revenuecat-buyer-session:77777777-7777-7777-7777-777777777777')::uuid::text,
+  jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping
 join public.monetization_products product on product.id = mapping.product_id
 where mapping.provider_product_id = 'com.chillywood.seatpass.tier1';
@@ -417,7 +499,7 @@ select is((select count(*)::integer from public.access_grants where user_id = 'a
 insert into public.money_purchase_intents (
   id, user_id, product_id, product_key, product_type, provider, provider_product_id,
   source_type, source_id, creator_id, environment, status, amount_minor, currency,
-  idempotency_key, expires_at, metadata
+  idempotency_key, expires_at, session_generation, metadata
 )
 select
   '90000000-0000-0000-0000-000000000001', '99999999-9999-9999-9999-999999999999',
@@ -425,7 +507,8 @@ select
   mapping.provider_product_id, 'watch_party_live', '95000000-0000-0000-0000-000000000001',
   (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 3), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'seat-failure-intent-test',
-  now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
+  now() + interval '15 minutes',md5('revenuecat-buyer-session:99999999-9999-9999-9999-999999999999')::uuid::text,
+  jsonb_build_object('sandbox_only', true, 'not_payable', true)
 from public.monetization_product_store_mappings mapping
 join public.monetization_products product on product.id = mapping.product_id
 where mapping.provider_product_id = 'com.chillywood.seatpass.tier1';

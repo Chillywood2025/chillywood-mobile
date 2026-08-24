@@ -1,7 +1,9 @@
 name: Phase 1 CI
+run-name: "phase1 pr=${{ github.event.pull_request.number }} action=${{ github.event.action }} draft=${{ github.event.pull_request.draft }}"
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   push:
     branches:
       - main
@@ -98,6 +100,12 @@ jobs:
           npm run proof:money-flow-control
           npm run proof:money-operator-write-scope
           npm run proof:livekit-autonomous-operator
+          npm run guard:livekit-heartbeat-monitor-policy
+          node --test supabase/functions/_shared/livekit-seat-token-authority.test.mjs
+          deno test --no-lock \
+            supabase/functions/_shared/livekit-session-generation_test.ts \
+            supabase/functions/_shared/livekit-seat-session-enforcement_test.ts \
+            supabase/functions/_shared/livekit-seat-token-authority_test.ts
           npm run proof:owner-command-operator
           npm run proof:owner-command-routing
           npm run proof:owner-command-approval-gates
@@ -118,6 +126,8 @@ jobs:
           deno check --node-modules-dir=auto --no-lock supabase/functions/owner-command-operator/index.ts
           deno check --node-modules-dir=auto --no-lock supabase/functions/autonomous-approval-request/index.ts
           deno check --node-modules-dir=auto --no-lock supabase/functions/user-report-intake/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/livekit-token/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/livekit-heartbeat-monitor/index.ts
 
   autonomous-systems-ios-contract:
     name: Phase 1 / Autonomous Systems iOS Contract

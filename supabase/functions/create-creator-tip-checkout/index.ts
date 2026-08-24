@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 import {
   authenticateRequest,
@@ -63,6 +64,12 @@ type PayoutAccountRow = {
   status?: string | null;
 };
 
+type BuyerSessionAuthority = {
+  userId: string;
+  accountId: string;
+  sessionGeneration: string;
+};
+
 const allowedWebOrigins = new Set([
   "https://chillywoodstream.com",
   "https://www.chillywoodstream.com",
@@ -85,6 +92,47 @@ const normalizeUuid = (value: unknown) => {
     ? text
     : null;
 };
+
+const normalizeBuyerSessionAuthority = (
+  value: unknown,
+  expectedUserId: string,
+): BuyerSessionAuthority | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const userId = normalizeUuid(row.userId);
+  const accountId = normalizeUuid(row.accountId);
+  const sessionGeneration = normalizeUuid(row.sessionGeneration);
+  if (
+    row.authoritative !== true
+    || row.state !== "ACTIVE"
+    || row.restoreOnly !== false
+    || !userId
+    || userId !== expectedUserId
+    || accountId !== userId
+    || !sessionGeneration
+  ) return null;
+  return { userId, accountId, sessionGeneration };
+};
+
+const readBuyerSessionAuthority = async (
+  client: SupabaseClientLike,
+  expectedUserId: string,
+) => {
+  try {
+    const { data, error } = await client.rpc("wave1_session_authority_readback");
+    return error ? null : normalizeBuyerSessionAuthority(data, expectedUserId);
+  } catch {
+    return null;
+  }
+};
+
+const sameBuyerSessionAuthority = (
+  left: BuyerSessionAuthority,
+  right: BuyerSessionAuthority | null,
+) => !!right
+  && left.userId === right.userId
+  && left.accountId === right.accountId
+  && left.sessionGeneration === right.sessionGeneration;
 
 const sanitizePrivateNote = (value: unknown) => {
   const note = toText(value)
@@ -232,7 +280,7 @@ const syncSettingsFromPayout = async (
   return data as TipSettingsRow;
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "method_not_allowed", message: "Use POST for tip checkout requests." });
@@ -247,6 +295,11 @@ Deno.serve(async (req) => {
     const authResult = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
     if ("error" in authResult) return authResult.error;
     currentUser = authResult.user;
+    const authorization = toText(req.headers.get("Authorization"));
+    const buyerAuthorityClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: authorization } },
+    });
 
     const adminConfig = createAdminClient();
     if (!adminConfig.configured) {
@@ -257,8 +310,23 @@ Deno.serve(async (req) => {
     }
     adminClient = adminConfig.client;
 
+    const buyerAuthority = await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id);
+    if (!buyerAuthority) {
+      return jsonResponse(403, {
+        error: "buyer_authority_required",
+        checkoutCreated: false,
+        liveMoneyAction: false,
+        message: "An active unrestricted account session is required before starting a tip.",
+      });
+    }
+
     const parsed = await parseJsonPayload<TipCheckoutPayload>(req);
-    if ("error" in parsed) return parsed.error;
+    if ("error" in parsed) {
+      return parsed.error ?? jsonResponse(400, {
+        error: "invalid_body",
+        message: "Request body could not be verified.",
+      });
+    }
 
     const creatorId = normalizeUuid(parsed.value.creator_id ?? parsed.value.creatorId);
     const amountCents = toAmountCents(parsed.value.amount_cents ?? parsed.value.amountCents);
@@ -332,6 +400,8 @@ Deno.serve(async (req) => {
     const { data: tipRow, error: tipError } = await adminClient
       .from("creator_tip_transactions")
       .insert({
+        buyer_account_id: buyerAuthority.accountId,
+        buyer_session_generation: buyerAuthority.sessionGeneration,
         creator_id: creatorId,
         creator_net_cents: amountCents,
         currency,
@@ -339,6 +409,7 @@ Deno.serve(async (req) => {
         message_private: privateNote,
         metadata: {
           access_granted: false,
+          buyer_authority_bound: true,
           checkout_created_by: FUNCTION_NAME,
           live_money_action: false,
           no_badge: true,
@@ -373,6 +444,30 @@ Deno.serve(async (req) => {
     const successUrl = safeRedirectUrl(parsed.value.return_url ?? parsed.value.returnUrl, DEFAULT_SUCCESS_URL, tipId);
     const cancelUrl = safeRedirectUrl(parsed.value.cancel_url ?? parsed.value.cancelUrl, DEFAULT_CANCEL_URL, tipId);
     const productName = `Tip ${creatorDisplayName}`;
+
+    const currentBuyerAuthority = await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id);
+    if (!sameBuyerSessionAuthority(buyerAuthority, currentBuyerAuthority)) {
+      const { error: authorityUpdateError } = await adminClient
+        .from("creator_tip_transactions")
+        .update({
+          failed_at: new Date().toISOString(),
+          payment_status: "failed",
+          status: "failed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", tipId)
+        .eq("sender_id", currentUser.id)
+        .eq("status", "pending");
+      if (authorityUpdateError) {
+        throw new Error(`Tip buyer authority failure update failed: ${authorityUpdateError.message}`);
+      }
+      return jsonResponse(403, {
+        error: "buyer_authority_changed",
+        checkoutCreated: false,
+        liveMoneyAction: false,
+        message: "Your account session changed before checkout. Nothing was charged.",
+      });
+    }
 
     const session = await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {
       body: {

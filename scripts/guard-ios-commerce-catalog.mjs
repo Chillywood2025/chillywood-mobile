@@ -58,10 +58,34 @@ for (const entry of manifest.catalog) {
 const expectedCounts = { premium: 2, creator_tip: 4, seat_pass: 4, paid_video: 4, event_pass: 4, vip_pass: 4, channel_subscription: 8 };
 for (const [concept, count] of Object.entries(expectedCounts)) if ((conceptCounts.get(concept) ?? 0) !== count) fail(`${concept} must have ${count} finite products`);
 
-const storeKitEntries = [...(storeKit.products ?? []), ...(storeKit.subscriptionGroups ?? []).flatMap((group) => group.subscriptions ?? [])];
-const storeKitIds = storeKitEntries.map((entry) => entry.productID).sort();
+const storeKitEntries = [
+  ...(storeKit.products ?? []).map((entry) => ({ entry, group: null })),
+  ...(storeKit.subscriptionGroups ?? []).flatMap((group) =>
+    (group.subscriptions ?? []).map((entry) => ({ entry, group }))),
+];
+const storeKitIds = storeKitEntries.map(({ entry }) => entry.productID).sort();
 const manifestIds = [...ids].sort();
 if (JSON.stringify(storeKitIds) !== JSON.stringify(manifestIds)) fail("StoreKit IDs must exactly match the canonical manifest");
+
+const storeKitById = new Map(storeKitEntries.map((record) => [record.entry.productID, record]));
+for (const manifestEntry of manifest.catalog) {
+  const local = storeKitById.get(manifestEntry.productId);
+  if (!local) {
+    fail(`${manifestEntry.productId} is missing from StoreKit`);
+    continue;
+  }
+  const expectedType = manifestEntry.type === "consumable" ? "Consumable" : "RecurringSubscription";
+  if (local.entry.type !== expectedType) fail(`${manifestEntry.productId} StoreKit type must be ${expectedType}`);
+  if (manifestEntry.type === "auto_renewable_subscription") {
+    const expectedGroupId = `group-${manifestEntry.subscriptionGroup}`;
+    if (local.entry.recurringSubscriptionPeriod !== manifestEntry.duration) fail(`${manifestEntry.productId} StoreKit duration must be ${manifestEntry.duration}`);
+    if (local.group?.id !== expectedGroupId || local.group?.name !== manifestEntry.subscriptionGroup || local.entry.subscriptionGroupID !== expectedGroupId) {
+      fail(`${manifestEntry.productId} StoreKit subscription group must exactly match ${manifestEntry.subscriptionGroup}`);
+    }
+  } else if (local.group !== null || local.entry.recurringSubscriptionPeriod != null || local.entry.subscriptionGroupID != null) {
+    fail(`${manifestEntry.productId} consumable must not carry subscription duration or group authority`);
+  }
+}
 
 const channelGroups = (storeKit.subscriptionGroups ?? []).filter((group) => (group.subscriptions ?? []).some((entry) => String(entry.productID ?? "").startsWith("com.chillywood.channel.subscription.slot")));
 if (channelGroups.length !== 8) fail("StoreKit must contain eight independent channel subscription groups");

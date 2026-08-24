@@ -1,0 +1,324 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const checkout = readFileSync("supabase/functions/create-creator-tip-checkout/index.ts", "utf8");
+const webhook = readFileSync("supabase/functions/stripe-tip-webhook/index.ts", "utf8");
+const wave1 = readFileSync(
+  "supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql",
+  "utf8",
+);
+const successor = readFileSync(
+  "supabase/migrations/20260824034109_creator_money_authority_integrity_closeout.sql",
+  "utf8",
+);
+
+const sliceBetween = (source, start, end) => {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  assert.ok(startIndex >= 0, start);
+  assert.ok(endIndex > startIndex, end);
+  return source.slice(startIndex, endIndex);
+};
+
+const loadBuyerAuthorityNormalizer = () => {
+  const uuidSource = sliceBetween(checkout, "const normalizeUuid", "const normalizeBuyerSessionAuthority")
+    .replace("value: unknown", "value");
+  const normalizerSource = sliceBetween(checkout, "const normalizeBuyerSessionAuthority", "const readBuyerSessionAuthority")
+    .replace("value: unknown", "value")
+    .replace("expectedUserId: string", "expectedUserId")
+    .replace("): BuyerSessionAuthority | null =>", ") =>")
+    .replace("value as Record<string, unknown>", "value");
+  return Function(
+    `"use strict"; const toText = (value) => String(value ?? "").trim(); ${uuidSource}; ${normalizerSource}; return normalizeBuyerSessionAuthority;`,
+  )();
+};
+
+const loadSameBuyerAuthority = () => {
+  const source = sliceBetween(checkout, "const sameBuyerSessionAuthority", "const sanitizePrivateNote")
+    .replace("left: BuyerSessionAuthority", "left")
+    .replace("right: BuyerSessionAuthority | null", "right");
+  return Function(`"use strict"; ${source}; return sameBuyerSessionAuthority;`)();
+};
+
+const loadStripeTipIdentityMatchers = () => {
+  const uuidSource = sliceBetween(webhook, "const normalizeUuid", "const normalizeMetadata")
+    .replace("value: unknown", "value");
+  const paymentIntentSource = sliceBetween(
+    webhook,
+    "const paymentIntentFromObject",
+    "const checkoutSessionFromObject",
+  ).replace("object: StripeObject | null", "object");
+  const completionSource = sliceBetween(
+    webhook,
+    "const providerCompletionMatchesTip",
+    "const providerRemovalOrFailureMatchesTip",
+  )
+    .replace("eventType: string", "eventType")
+    .replace("object: StripeObject | null", "object")
+    .replace("tip: TipTransactionRow", "tip");
+  const removalSource = sliceBetween(
+    webhook,
+    "const providerRemovalOrFailureMatchesTip",
+    "const tipEventTypeForStripeEvent",
+  )
+    .replace("eventType: string", "eventType")
+    .replace("object: StripeObject | null", "object")
+    .replace("tip: TipTransactionRow", "tip");
+  return Function(
+    `"use strict"; const toText = (value) => typeof value === "string" ? value.trim() : String(value ?? "").trim(); ${uuidSource}; ${paymentIntentSource}; ${completionSource}; ${removalSource}; return { providerCompletionMatchesTip, providerRemovalOrFailureMatchesTip };`,
+  )();
+};
+
+const userId = "11111111-1111-4111-8111-111111111111";
+const sessionGeneration = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const validAuthority = {
+  authoritative: true,
+  userId,
+  accountId: userId,
+  sessionGeneration,
+  state: "ACTIVE",
+  restoreOnly: false,
+};
+
+test("tip checkout accepts only an exact active non-restore buyer session binding", () => {
+  const normalize = loadBuyerAuthorityNormalizer();
+  assert.deepEqual(normalize(validAuthority, userId), {
+    userId,
+    accountId: userId,
+    sessionGeneration,
+  });
+  for (const malformed of [
+    { ...validAuthority, authoritative: false },
+    { ...validAuthority, state: "TERMINATED" },
+    { ...validAuthority, restoreOnly: true },
+    { ...validAuthority, userId: "22222222-2222-4222-8222-222222222222" },
+    { ...validAuthority, accountId: "22222222-2222-4222-8222-222222222222" },
+    { ...validAuthority, sessionGeneration: "stale-or-malformed" },
+    { ...validAuthority, sessionGeneration: null },
+    {},
+  ]) assert.equal(normalize(malformed, userId), null);
+});
+
+test("tip checkout rejects a session-generation change immediately before Stripe", () => {
+  const sameAuthority = loadSameBuyerAuthority();
+  const binding = { userId, accountId: userId, sessionGeneration };
+  assert.equal(sameAuthority(binding, { ...binding }), true);
+  assert.equal(sameAuthority(binding, {
+    ...binding,
+    sessionGeneration: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  }), false);
+  assert.equal(sameAuthority(binding, null), false);
+});
+
+test("authoritative buyer readback precedes transaction creation and is revalidated before Stripe mutation", () => {
+  const handler = sliceBetween(checkout, "Deno.serve", "} catch (error)");
+  const firstAuthority = handler.indexOf("const buyerAuthority = await readBuyerSessionAuthority");
+  const transactionInsert = handler.indexOf('.from("creator_tip_transactions")\n      .insert');
+  const secondAuthority = handler.indexOf("const currentBuyerAuthority = await readBuyerSessionAuthority");
+  const stripeMutation = handler.indexOf("const session = await stripeRequest");
+  assert.ok(firstAuthority >= 0);
+  assert.ok(transactionInsert > firstAuthority);
+  assert.ok(secondAuthority > transactionInsert);
+  assert.ok(stripeMutation > secondAuthority);
+  assert.match(handler, /if \(!sameBuyerSessionAuthority\(buyerAuthority, currentBuyerAuthority\)\)/u);
+  assert.match(handler, /payment_status: "failed"[\s\S]+status: "failed"/u);
+  assert.match(handler, /error: "buyer_authority_changed"/u);
+  assert.match(handler, /checkoutCreated: false/u);
+  const insert = sliceBetween(
+    handler,
+    '.from("creator_tip_transactions")\n      .insert',
+    '.select("id,idempotency_key")',
+  );
+  assert.match(insert, /buyer_account_id: buyerAuthority\.accountId/u);
+  assert.match(insert, /buyer_session_generation: buyerAuthority\.sessionGeneration/u);
+  assert.match(insert, /buyer_authority_bound: true/u);
+});
+
+test("buyer authority RPC is user-scoped and fails closed on error or malformed readback", () => {
+  const reader = sliceBetween(checkout, "const readBuyerSessionAuthority", "const sameBuyerSessionAuthority");
+  assert.match(reader, /client\.rpc\("wave1_session_authority_readback"\)/u);
+  assert.match(reader, /return error \? null : normalizeBuyerSessionAuthority/u);
+  assert.match(reader, /catch \{[\s\S]+return null/u);
+
+  const clientSetup = sliceBetween(checkout, "const authorization =", "const adminConfig =");
+  assert.match(clientSetup, /createClient\(supabaseUrl, supabaseAnonKey/u);
+  assert.match(clientSetup, /Authorization: authorization/u);
+  assert.doesNotMatch(clientSetup, /serviceRole/u);
+});
+
+test("server readback binds auth subject, live session generation, restriction, and restore-only state", () => {
+  const authorityRpc = sliceBetween(
+    wave1,
+    'create or replace function public."wave1_session_authority_readback"()',
+    'create or replace function public."wave1_legal_requirements_readback"',
+  );
+  assert.match(authorityRpc, /v_user uuid := auth\.uid\(\)/u);
+  assert.match(authorityRpc, /v_generation text := nullif\(auth\.jwt\(\)->>'session_id', ''\)/u);
+  assert.match(authorityRpc, /from auth\.sessions where id::text = v_generation and user_id = v_user/u);
+  assert.match(authorityRpc, /public\."is_account_access_restricted"\(v_user::text\)/u);
+  assert.match(authorityRpc, /public\."is_account_deletion_scheduled"\(v_user::text\)/u);
+  assert.match(authorityRpc, /'state', v_state, 'restoreOnly', v_scheduled/u);
+});
+
+test("tip rows and service readback are durably bound to the exact initiating session", () => {
+  const binding = sliceBetween(
+    successor,
+    'alter table public."creator_tip_transactions"\n  add column if not exists "buyer_account_id"',
+    'create or replace function public."wave1_current_caller_authority_internal"()',
+  );
+  assert.match(binding, /add column if not exists "buyer_session_generation" uuid/u);
+  assert.match(binding, /"buyer_account_id"="sender_id"/u);
+  assert.match(binding, /creator_tip_buyer_session_authority_internal/u);
+  assert.match(binding, /money_purchase_intent_session_authorized_internal/u);
+  assert.match(binding, /public\."is_account_access_restricted"/u);
+  assert.match(binding, /grant execute on function public\."creator_tip_buyer_session_authority"\(uuid,uuid\)\n  to service_role/u);
+  assert.doesNotMatch(binding, /to authenticated/u);
+});
+
+test("provider completion rechecks the exact persisted buyer session and fails closed on malformed readback", () => {
+  const reader = sliceBetween(
+    webhook,
+    "const readTipBuyerSessionAuthority",
+    "const tipEventTypeForStripeEvent",
+  );
+  assert.match(reader, /normalizeUuid\(tip\.sender_id\)/u);
+  assert.match(reader, /normalizeUuid\(tip\.buyer_session_generation\)/u);
+  assert.match(reader, /normalizeUuid\(tip\.buyer_account_id\) !== userId/u);
+  assert.match(reader, /adminClient\.rpc\("creator_tip_buyer_session_authority"/u);
+  assert.match(reader, /p_session_generation: sessionGeneration/u);
+  assert.match(reader, /p_user_id: userId/u);
+  assert.match(reader, /tip_buyer_session_authority_malformed/u);
+  assert.match(reader, /tip_buyer_session_authority_read_failed/u);
+
+  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  const authorityRead = projector.indexOf("await readTipBuyerSessionAuthority");
+  const providerUpdate = projector.indexOf('.from("creator_tip_transactions")\n    .update');
+  assert.ok(authorityRead >= 0);
+  assert.ok(providerUpdate > authorityRead);
+});
+
+test("a captured payment with stale buyer authority remains a provider fact but cannot become payable", () => {
+  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  assert.match(projector, /buyerSessionCurrent = buyerAuthority\?\.authorized === true/u);
+  assert.match(projector, /completionAuthorityValid = buyerSessionCurrent[\s\S]+&& providerCompletionExact[\s\S]+&& !compensationAlreadyRequired/u);
+  assert.match(projector, /creator_net_cents: completionAuthorityValid \? amount : 0/u);
+  assert.match(projector, /payment_status: "succeeded"/u);
+  assert.match(projector, /payout_status: "not_payable"/u);
+  assert.match(projector, /status: "paid"/u);
+  assert.match(projector, /authority_granted: false/u);
+  assert.match(projector, /completionCompensationRequired = completionEvent && !terminalState[\s\S]+\? !completionAuthorityValid/u);
+  assert.match(projector, /compensation_required: completionCompensationRequired/u);
+  assert.match(projector, /payout_eligible: false/u);
+  assert.match(projector, /tip_payment_recorded_compensation_required/u);
+  assert.match(projector, /access_granted: false/u);
+});
+
+test("provider completion is exact-bound to the Stripe object, buyer, creator, amount, and currency", () => {
+  const matcher = sliceBetween(
+    webhook,
+    "const providerCompletionMatchesTip",
+    "const tipEventTypeForStripeEvent",
+  );
+  assert.match(matcher, /providerObjectId === toText\(tip\.provider_checkout_session_id\)/u);
+  assert.match(matcher, /providerObjectId === toText\(tip\.provider_payment_intent_id\)/u);
+  assert.match(matcher, /Number\.isSafeInteger\(amount\)/u);
+  assert.match(matcher, /amount === tip\.tip_amount_cents/u);
+  assert.match(matcher, /currency === toText\(tip\.currency\)\.toLowerCase\(\)/u);
+  assert.match(matcher, /metadataSenderId === senderId/u);
+  assert.match(matcher, /metadataCreatorId === creatorId/u);
+  assert.match(matcher, /metadataTipId === tipId/u);
+  assert.match(matcher, /!toText\(tip\.provider_payment_intent_id\)[\s\S]+providerObjectId === toText\(tip\.provider_payment_intent_id\)/u);
+  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  assert.match(projector, /provider_completion_exact/u);
+});
+
+test("cross-user, cross-creator, cross-object, amount, and currency substitutions fail the executable Stripe matcher", () => {
+  const { providerCompletionMatchesTip, providerRemovalOrFailureMatchesTip } = loadStripeTipIdentityMatchers();
+  const tip = {
+    id: "33333333-3333-4333-8333-333333333333",
+    sender_id: userId,
+    creator_id: "22222222-2222-4222-8222-222222222222",
+    provider_checkout_session_id: "cs_test_exact",
+    provider_payment_intent_id: null,
+    tip_amount_cents: 499,
+    currency: "usd",
+  };
+  const metadata = {
+    chillywood_tip_id: tip.id,
+    fan_user_id: tip.sender_id,
+    creator_user_id: tip.creator_id,
+  };
+  const checkout = {
+    id: "cs_test_exact",
+    payment_intent: "pi_test_exact",
+    amount_total: 499,
+    currency: "usd",
+    metadata,
+  };
+  assert.equal(providerCompletionMatchesTip("checkout.session.completed", checkout, tip), true);
+  const paymentIntent = {
+    id: "pi_test_exact",
+    amount: 499,
+    currency: "usd",
+    metadata,
+  };
+  assert.equal(providerCompletionMatchesTip("payment_intent.succeeded", paymentIntent, tip), true);
+  for (const malformed of [
+    { ...checkout, id: "cs_test_other" },
+    { ...checkout, amount_total: 500 },
+    { ...checkout, currency: "eur" },
+    { ...checkout, metadata: { ...metadata, fan_user_id: tip.creator_id } },
+    { ...checkout, metadata: { ...metadata, creator_user_id: tip.sender_id } },
+    { ...checkout, metadata: { ...metadata, chillywood_tip_id: userId } },
+  ]) assert.equal(providerCompletionMatchesTip("checkout.session.completed", malformed, tip), false);
+  assert.equal(providerCompletionMatchesTip(
+    "payment_intent.succeeded",
+    paymentIntent,
+    { ...tip, provider_payment_intent_id: "pi_test_other" },
+  ), false);
+
+  const boundTip = { ...tip, provider_payment_intent_id: "pi_test_exact" };
+  assert.equal(providerRemovalOrFailureMatchesTip(
+    "charge.refunded",
+    { id: "ch_test_exact", payment_intent: "pi_test_exact" },
+    boundTip,
+  ), true);
+  assert.equal(providerRemovalOrFailureMatchesTip(
+    "charge.refunded",
+    { id: "ch_test_other", payment_intent: "pi_test_other" },
+    boundTip,
+  ), false);
+});
+
+test("mismatched provider lifecycle identity is recorded but cannot mutate a tip binding or terminal state", () => {
+  const lifecycleMatcher = sliceBetween(
+    webhook,
+    "const providerRemovalOrFailureMatchesTip",
+    "const tipEventTypeForStripeEvent",
+  );
+  assert.match(lifecycleMatcher, /object\.id\) === toText\(tip\.provider_checkout_session_id\)/u);
+  assert.match(lifecycleMatcher, /object\.id\) === toText\(tip\.provider_payment_intent_id\)/u);
+  assert.match(lifecycleMatcher, /paymentIntentFromObject\(object\) === toText\(tip\.provider_payment_intent_id\)/u);
+
+  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  const mismatchGuard = projector.indexOf("if (!providerLifecycleExact)");
+  const transactionUpdate = projector.indexOf('.from("creator_tip_transactions")\n    .update');
+  assert.ok(mismatchGuard >= 0);
+  assert.ok(transactionUpdate > mismatchGuard);
+  assert.match(projector, /event_type: "webhook_ignored"/u);
+  assert.match(projector, /tip_provider_lifecycle_identity_mismatch/u);
+  assert.match(projector, /provider_payment_intent_id: completionEvent && providerCompletionExact && paymentIntentId/u);
+  assert.doesNotMatch(projector, /provider_checkout_session_id:/u);
+});
+
+test("completion compensation is sticky and existing transaction metadata is preserved", () => {
+  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  assert.match(projector, /const existingMetadata = normalizeMetadata\(tip\.metadata\)/u);
+  assert.match(projector, /compensationAlreadyRequired = existingMetadata\.compensation_required === true/u);
+  assert.match(projector, /tip_buyer_session_previously_invalid/u);
+  assert.match(projector, /metadata: \{\n      \.\.\.existingMetadata/u);
+  assert.match(projector, /terminalState = tip\.status === "refunded" \|\| tip\.status === "disputed"/u);
+  assert.match(projector, /return terminalState \? \{[\s\S]+payout_status: "reversed"/u);
+  assert.match(projector, /tip_terminal_state_preserved/u);
+});

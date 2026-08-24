@@ -3,6 +3,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { RoomServiceClient } from "npm:livekit-server-sdk@2";
 import { writeLiveKitRoutingAudit } from "../_shared/livekit-routing.ts";
+import {
+  countLiveKitStateWithPaidSeatEnforcement,
+  resolveRoomAuthorityScopeFromEvidence,
+} from "../_shared/livekit-seat-session-enforcement.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -87,30 +91,87 @@ const checkHttpReachable = async (url: string, timeoutMs: number) => {
 
 const countLiveKitState = async (
   roomService: RoomServiceClient,
+  adminClient: SupabaseClientLike,
+  serverRowId: string,
 ) => {
-  const rooms = await roomService.listRooms();
-  let currentParticipants = 0;
-  let currentPublishers = 0;
+  return await countLiveKitStateWithPaidSeatEnforcement({
+    audit: async (event) => {
+      await writeLiveKitRoutingAudit(adminClient, {
+        actorUserId: event.participantIdentity,
+        appRoomId: event.roomName,
+        eventType: event.outcome === "participant_removed" ? "heartbeat_received" : "assignment_failed",
+        livekitRoomName: event.roomName,
+        metadata: {
+          enforcement_cause: event.enforcementCause,
+          paid_seat_session_enforcement: true,
+          retry_on_next_monitor: event.retryOnNextMonitor,
+        },
+        reason: `paid_seat_session_${event.outcome}`,
+        serverRowId,
+      });
+    },
+    readRoomAuthorityScope: async (roomName) => {
+      const assignment = await adminClient
+        .from("livekit_room_assignments")
+        .select("room_type")
+        .eq("assigned_server_id", serverRowId)
+        .eq("livekit_room_name", roomName)
+        .in("assignment_status", ["assigned", "active"])
+        .limit(2);
+      if (assignment.error) {
+        throw new Error(`LiveKit room assignment lookup failed: ${assignment.error.message}`);
+      }
 
-  for (const room of rooms) {
-    const roomName = toText((room as { name?: unknown }).name);
-    if (!roomName) continue;
+      const assignmentTypes = Array.from(new Set(
+        ((assignment.data ?? []) as JsonObject[])
+          .map((row) => toText(row.room_type).toLowerCase())
+          .filter(Boolean),
+      ));
+      if (assignmentTypes.length > 1) {
+        throw new Error("LiveKit room assignment authority is ambiguous");
+      }
+      if (assignmentTypes[0] === "proof" || assignmentTypes[0] === "other") {
+        return "other";
+      }
 
-    const participants = await roomService.listParticipants(roomName);
-    currentParticipants += participants.length;
-    currentPublishers += participants.filter((participant) => {
-      const tracks = Array.isArray((participant as { tracks?: unknown }).tracks)
-        ? (participant as { tracks: unknown[] }).tracks
-        : [];
-      return tracks.length > 0;
-    }).length;
-  }
-
-  return {
-    currentParticipants,
-    currentPublishers,
-    currentRooms: rooms.length,
-  };
+      const [watchPartyRoom, communicationRoom] = await Promise.all([
+        adminClient
+          .from("watch_party_rooms")
+          .select("party_id")
+          .eq("party_id", roomName)
+          .maybeSingle(),
+        adminClient
+          .from("communication_rooms")
+          .select("room_id")
+          .eq("room_id", roomName)
+          .maybeSingle(),
+      ]);
+      if (watchPartyRoom.error || communicationRoom.error) {
+        throw new Error("LiveKit room source classification lookup failed");
+      }
+      const scope = resolveRoomAuthorityScopeFromEvidence({
+        assignmentTypes,
+        communicationRoomExists: !!communicationRoom.data,
+        watchPartyRoomExists: !!watchPartyRoom.data,
+      });
+      if (!scope) {
+        throw new Error("LiveKit room source classification is missing or ambiguous");
+      }
+      return scope;
+    },
+    readViewerAuthority: async (roomName, participantIdentity, sessionGeneration) => {
+      const authority = await adminClient.rpc("resolve_watch_party_livekit_viewer_authority", {
+        p_party_id: roomName,
+        p_session_generation: sessionGeneration,
+        p_user_id: participantIdentity,
+      });
+      if (authority.error) {
+        throw new Error(`Seat viewer authority lookup failed: ${authority.error.message}`);
+      }
+      return authority.data;
+    },
+    roomService,
+  });
 };
 
 const recordHealthCheckedHeartbeat = async (
@@ -264,7 +325,7 @@ Deno.serve(async (req) => {
     }
 
     const roomService = new RoomServiceClient(apiUrl, livekitApiKey, livekitApiSecret);
-    const counts = await countLiveKitState(roomService);
+    const counts = await countLiveKitState(roomService, adminClient, toText(serverRow.id));
     const updatedServer = await recordHealthCheckedHeartbeat(adminClient, {
       apiUrl,
       counts,

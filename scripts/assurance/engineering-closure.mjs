@@ -2806,10 +2806,168 @@ const selectCurrentArchitectureRepositoryReview = ({ comments = [], identity, tr
   };
 };
 
-export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {}) {
+const githubTimestampMillis = (value) => {
+  if (typeof value !== "string" || value.length === 0) return null;
+  const millis = Date.parse(value);
+  return Number.isFinite(millis) ? millis : null;
+};
+
+export const phase1WorkflowRequiresLifecycleBinding = (source) => {
+  if (typeof source !== "string") return false;
+  const lines = source.replace(/\r\n?/gu, "\n").split("\n").map((line) => line.replace(/\s+#.*$/u, ""));
+  const pullIndex = lines.findIndex((line) => /^\s{2}pull_request:\s*$/u.test(line));
+  if (pullIndex < 0) return false;
+  const block = [];
+  for (let index = pullIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim() && (line.match(/^\s*/u)?.[0].length ?? 0) <= 2) break;
+    block.push(line);
+  }
+  const typesIndex = block.findIndex((line) => /^\s{4}types:\s*/u.test(line));
+  if (typesIndex < 0) return false;
+  const inline = block[typesIndex].replace(/^\s{4}types:\s*/u, "");
+  const values = /^\[[^\]]*\]$/u.test(inline.trim()) ? inline.match(/[a-z_]+/gu) ?? [] : [];
+  if (values.length === 0) {
+    for (const line of block.slice(typesIndex + 1)) {
+      if (line.trim() && (line.match(/^\s*/u)?.[0].length ?? 0) <= 4) break;
+      values.push(...(line.match(/[a-z_]+/gu) ?? []));
+    }
+  }
+  const required = ["opened", "synchronize", "reopened", "ready_for_review", "converted_to_draft"];
+  const uniqueValues = [...new Set(values)];
+  return uniqueValues.length === required.length
+    && values.length === uniqueValues.length
+    && required.every((value) => uniqueValues.includes(value));
+};
+
+const PHASE1_RUN_DISPLAY_TITLE_PATTERN = /^phase1 pr=([1-9]\d*) action=(opened|synchronize|reopened|ready_for_review|converted_to_draft) draft=(true|false)$/u;
+
+export const phase1WorkflowHasRunDisplayProvenance = (source) => {
+  if (typeof source !== "string") return false;
+  const expected = 'run-name: "phase1 pr=${{ github.event.pull_request.number }} action=${{ github.event.action }} draft=${{ github.event.pull_request.draft }}"';
+  const runNames = source.replace(/\r\n?/gu, "\n").split("\n").filter((line) => /^run-name:/u.test(line));
+  return runNames.length === 1 && runNames[0] === expected;
+};
+
+export const phase1WorkflowProvidesLifecycleRunProvenance = (source) => (
+  phase1WorkflowRequiresLifecycleBinding(source)
+  && phase1WorkflowHasRunDisplayProvenance(source)
+);
+
+const phase1RunDisplayProvenance = (run, identity) => {
+  const match = typeof run?.display_title === "string"
+    ? PHASE1_RUN_DISPLAY_TITLE_PATTERN.exec(run.display_title)
+    : null;
+  if (!match || Number(match[1]) !== identity?.pr) return null;
+  return { action: match[2], draft: match[3] === "true" };
+};
+
+export const phase1LifecyclePolicyRequired = ({
+  headWorkflowSource,
+  baseWorkflowSource,
+  headWorkflowReadable = true,
+  baseWorkflowReadable = true,
+} = {}) => headWorkflowReadable !== true
+  || baseWorkflowReadable !== true
+  || phase1WorkflowRequiresLifecycleBinding(headWorkflowSource)
+  || phase1WorkflowRequiresLifecycleBinding(baseWorkflowSource);
+
+export function verifyPhase1PullRequestLifecycle({ run, pullRequest, lifecycleEvents = [], lifecyclePaginationComplete = false, lifecyclePolicyRequired = true, lifecycleDisplayProvenanceConfigured = true, identity } = {}) {
+  const runCreatedAtMillis = githubTimestampMillis(run?.created_at);
+  const pullCreatedAtMillis = githubTimestampMillis(pullRequest?.created_at);
+  const mergedAtMillis = githubTimestampMillis(pullRequest?.merged_at);
+  const merged = pullRequest?.state === "closed" && mergedAtMillis !== null;
+  const pullIdentityValid = Boolean(pullRequest
+    && pullRequest.number === identity?.pr
+    && pullRequest.base?.repo?.full_name === identity?.repository
+    && pullRequest.head?.repo?.full_name === identity?.repository
+    && pullRequest.head?.ref === identity?.branch
+    && pullRequest.head?.sha === identity?.headSha
+    && (merged || pullRequest.base?.sha === identity?.baseSha));
+  if (!pullIdentityValid) return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_IDENTITY_INVALID", epochEvent: null, epochAt: null };
+  if (lifecyclePaginationComplete !== true || !Array.isArray(lifecycleEvents)) {
+    return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_DISCOVERY_INCOMPLETE", epochEvent: null, epochAt: null };
+  }
+  if (pullRequest.draft !== false) {
+    return { valid: false, reason: "PHASE1_PULL_REQUEST_CURRENTLY_DRAFT", epochEvent: null, epochAt: null };
+  }
+  if (pullRequest.state !== "open" && !merged) {
+    return { valid: false, reason: "PHASE1_PULL_REQUEST_NOT_OPEN_OR_MERGED", epochEvent: null, epochAt: null };
+  }
+  if (runCreatedAtMillis === null || pullCreatedAtMillis === null || (merged && runCreatedAtMillis > mergedAtMillis)) {
+    return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_TIMESTAMP_INVALID", epochEvent: null, epochAt: null };
+  }
+  const displayProvenance = phase1RunDisplayProvenance(run, identity);
+  if (lifecyclePolicyRequired !== false
+    && (lifecycleDisplayProvenanceConfigured !== true || !displayProvenance || displayProvenance.draft)) {
+    return { valid: false, reason: "PHASE1_RUN_LIFECYCLE_DISPLAY_PROVENANCE_INVALID", epochEvent: null, epochAt: null };
+  }
+
+  const relevantNames = new Set(["convert_to_draft", "ready_for_review", "reopened"]);
+  const relevant = lifecycleEvents
+    .filter((event) => relevantNames.has(event?.event))
+    .map((event) => ({ event: event.event, createdAt: event.created_at, millis: githubTimestampMillis(event.created_at) }));
+  if (relevant.some(({ millis }) => millis === null)) {
+    return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_TIMESTAMP_INVALID", epochEvent: null, epochAt: null };
+  }
+  const readinessTransitions = relevant.filter(({ event }) => event !== "reopened").sort((left, right) => left.millis - right.millis);
+  const readinessByTimestamp = new Map();
+  for (const transition of readinessTransitions) {
+    const names = readinessByTimestamp.get(transition.millis) ?? new Set();
+    names.add(transition.event);
+    readinessByTimestamp.set(transition.millis, names);
+  }
+  if ([...readinessByTimestamp.values()].some((names) => names.size > 1)) {
+    return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_TIMESTAMP_AMBIGUOUS", epochEvent: null, epochAt: null };
+  }
+  const latestReadiness = readinessTransitions.at(-1) ?? null;
+  const legacyMergedEvidence = merged && lifecyclePolicyRequired === false;
+  if (!legacyMergedEvidence && latestReadiness?.event === "convert_to_draft") {
+    return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_STATE_INCONSISTENT", epochEvent: null, epochAt: null };
+  }
+  const reopened = relevant.filter(({ event }) => event === "reopened").sort((left, right) => left.millis - right.millis).at(-1) ?? null;
+  const openedEpoch = {
+    event: legacyMergedEvidence ? "legacy_merged_historical" : "opened_ready",
+    createdAt: pullRequest.created_at,
+    millis: pullCreatedAtMillis,
+  };
+  const epoch = legacyMergedEvidence
+    ? openedEpoch
+    : [openedEpoch, latestReadiness, reopened].filter(Boolean).sort((left, right) => left.millis - right.millis).at(-1);
+  // GitHub REST lifecycle timestamps have one-second precision. Equality is
+  // authoritative only when the immutable run display title proves the exact
+  // ready-state action that opened the current epoch; a same-second draft run
+  // therefore cannot be reused after ready_for_review.
+  const expectedEqualAction = epoch.event === "opened_ready" ? "opened"
+    : epoch.event === "ready_for_review" ? "ready_for_review"
+    : epoch.event === "reopened" ? "reopened"
+    : null;
+  const readyStateAction = displayProvenance
+    && ["opened", "synchronize", "reopened", "ready_for_review"].includes(displayProvenance.action);
+  const legacyMergedEvidenceValid = epoch.event === "legacy_merged_historical" && lifecyclePolicyRequired === false;
+  const valid = legacyMergedEvidenceValid
+    ? runCreatedAtMillis >= epoch.millis
+    : runCreatedAtMillis > epoch.millis
+      ? readyStateAction === true
+      : runCreatedAtMillis === epoch.millis
+        && readyStateAction === true
+        && displayProvenance?.action === expectedEqualAction;
+  return {
+    valid,
+    reason: valid ? null : "PHASE1_RUN_PREDATES_CURRENT_READY_LIFECYCLE",
+    epochEvent: epoch.event,
+    epochAt: epoch.createdAt,
+  };
+}
+
+export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, pullRequest, lifecycleEvents, lifecyclePaginationComplete, lifecyclePolicyRequired, lifecycleDisplayProvenanceConfigured } = {}) {
   const requiredJobs = jobs.filter(({ name }) => PHASE1_REQUIRED_JOB_NAMES.includes(name));
   const names = requiredJobs.map(({ name }) => name).sort();
   const uniqueNames = [...new Set(names)];
+  const lifecycleSupplied = pullRequest !== undefined || lifecycleEvents !== undefined || lifecyclePaginationComplete !== undefined;
+  const lifecycle = lifecycleSupplied
+    ? verifyPhase1PullRequestLifecycle({ run, pullRequest, lifecycleEvents, lifecyclePaginationComplete, lifecyclePolicyRequired, lifecycleDisplayProvenanceConfigured, identity })
+    : null;
   const valid = Boolean(run
     && run.name === "Phase 1 CI"
     && run.event === "pull_request"
@@ -2824,7 +2982,8 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {})
     && requiredJobs.length === PHASE1_REQUIRED_JOB_NAMES.length
     && uniqueNames.length === requiredJobs.length
     && stableJson(uniqueNames) === stableJson([...PHASE1_REQUIRED_JOB_NAMES])
-    && requiredJobs.every(({ status, conclusion, head_sha }) => status === "completed" && conclusion === "success" && head_sha === identity?.headSha));
+    && requiredJobs.every(({ status, conclusion, head_sha }) => status === "completed" && conclusion === "success" && head_sha === identity?.headSha)
+    && (!lifecycleSupplied || lifecycle?.valid === true));
   const body = {
     classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1",
     repository: identity?.repository,
@@ -4835,7 +4994,7 @@ export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSy
   const endpoint = args.at(-1);
   const paginated = args.includes("--paginate") && args.includes("--slurp");
   const pathname = typeof endpoint === "string" ? endpoint.split("?", 1)[0] : "";
-  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/(?:files|commits))?)?|issues\/[1-9]\d*\/comments|commits\/[0-9a-f]{40}\/pulls)$/u.test(pathname);
+  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/(?:files|commits))?)?|issues\/[1-9]\d*\/(?:comments|timeline)|commits\/[0-9a-f]{40}\/pulls)$/u.test(pathname);
   if (!allowedPath || /(?:\.\.|%2e|%2f|#)/iu.test(endpoint)) return authenticated;
   const pages = [];
   for (let page = 1; page <= 20; page += 1) {
@@ -4868,7 +5027,37 @@ export function observePhase1RunEvidence({ runId, identity, tree, root = REPOSIT
   const run = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}`]), null);
   const jobsPayload = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}/jobs?per_page=100`]), null);
   const jobs = Array.isArray(jobsPayload?.jobs) && jobsPayload.total_count === jobsPayload.jobs.length ? jobsPayload.jobs : [];
-  return verifyPhase1RunEvidence({ run, jobs, identity, tree });
+  const pullRequest = parsedResponse(typedGh(root, [`repos/${identity.repository}/pulls/${identity.pr}`]), null);
+  const lifecycle = paginatedArray(root, `repos/${identity.repository}/issues/${identity.pr}/timeline?per_page=100`);
+  const workflowAtHead = typedGit(root, ["show", `${identity.headSha}:.github/workflows/phase1-ci.yml`]);
+  const workflowAtBase = typedGit(root, ["show", `${identity.baseSha}:.github/workflows/phase1-ci.yml`]);
+  // The policy carrier activates itself from its head. Once merged, protected
+  // bases retain activation even if a later PR tries to delete or obfuscate the
+  // trigger declaration. Only history whose head and protected base both
+  // verifiably predate activation receives merged-only compatibility.
+  const lifecyclePolicyRequired = phase1LifecyclePolicyRequired({
+    headWorkflowSource: workflowAtHead.stdout,
+    baseWorkflowSource: workflowAtBase.stdout,
+    headWorkflowReadable: workflowAtHead.status === 0,
+    baseWorkflowReadable: workflowAtBase.status === 0,
+  });
+  // The protected base durably activates the lifecycle policy, but cannot
+  // substitute for current-head provenance. Policy-bound evidence is valid
+  // only when the exact head workflow still triggers every lifecycle edge and
+  // derives its display title from the immutable GitHub event fields.
+  const lifecycleDisplayProvenanceConfigured = workflowAtHead.status === 0
+    && phase1WorkflowProvidesLifecycleRunProvenance(workflowAtHead.stdout);
+  return verifyPhase1RunEvidence({
+    run,
+    jobs,
+    identity,
+    tree,
+    pullRequest,
+    lifecycleEvents: lifecycle.values,
+    lifecyclePaginationComplete: lifecycle.complete,
+    lifecyclePolicyRequired,
+    lifecycleDisplayProvenanceConfigured,
+  });
 }
 export const observeFiniteTaskGitScope = (root, base, head) => {
   const pathsRun = typedGit(root, ["diff", "--name-only", `${base}...${head}`]);

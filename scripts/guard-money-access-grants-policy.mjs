@@ -24,6 +24,7 @@ const purchaseIntentMigration = read("supabase/migrations/20260603190000_money_p
 const creatorSetupMigration = read("supabase/migrations/20260605000610_creator_monetization_in_app_setup_flows.sql");
 const creatorSetupBoundMigration = read("supabase/migrations/20260605002000_bound_creator_monetization_setup_access.sql");
 const failurePathsMigration = read("supabase/migrations/20260604015548_money_failure_paths_event_pass.sql");
+const integrityCloseoutMigration = read("supabase/migrations/20260824034109_creator_money_authority_integrity_closeout.sql");
 const moneyAccess = read("_lib/moneyAccessGrants.ts");
 const creatorSetup = read("_lib/creatorMonetizationSetup.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
@@ -211,19 +212,24 @@ assertIncludes(failurePathsMigration, "v_event.\"status\" in ('draft', 'ended', 
 assertIncludes(failurePathsMigration, "'canPublish', false", "event pass never grants LiveKit publish");
 assertIncludes(failurePathsMigration, "'host_or_admin_preview_route_policy_still_applies'", "event host/admin preview does not grant route authority");
 
-assertIncludes(revenueCatWebhook, "mirrorRevenueCatPremiumMoneyAccess", "RevenueCat money access mirror");
-assertIncludes(revenueCatWebhook, "mirrorRevenueCatDynamicMoneyAccess", "RevenueCat dynamic money access mirror");
-assertIncludes(revenueCatWebhook, ".from(\"provider_events\")", "RevenueCat provider event mirror");
-assertIncludes(revenueCatWebhook, ".from(\"access_grants\")", "RevenueCat access grant mirror");
-assertIncludes(revenueCatWebhook, ".from(\"money_access_ledger_events\")", "RevenueCat money access ledger mirror");
-assertIncludes(revenueCatWebhook, ".from(\"money_purchase_intents\")", "RevenueCat purchase intent matching");
-assertIncludes(revenueCatWebhook, "purchase_intent_missing_or_expired", "RevenueCat missing intent blocks access");
-assertIncludes(revenueCatWebhook, "duplicate_provider_event", "RevenueCat duplicate event idempotency");
-assertIncludes(revenueCatWebhook, "product_not_sandbox_enabled", "RevenueCat dynamic products sandbox-only");
-assertIncludes(revenueCatWebhook, "production_or_setup_event_blocked", "RevenueCat production/setup dynamic events blocked");
-assertIncludes(revenueCatWebhook, "provider_payload_stored: false", "RevenueCat mirror stores no raw provider payload");
+assertIncludes(revenueCatWebhook, '.rpc("process_revenuecat_premium_event_atomic"', "RevenueCat Premium atomic projector");
+assertIncludes(revenueCatWebhook, '.rpc("process_revenuecat_app_store_event_atomic"', "RevenueCat App Store creator-money atomic projector");
+assertIncludes(revenueCatWebhook, '.rpc("process_revenuecat_google_play_event_atomic"', "RevenueCat Google Play creator-money atomic projector");
+assertIncludes(revenueCatWebhook, '.rpc("process_revenuecat_terminal_event_atomic"', "RevenueCat cross-domain terminal atomic projector");
+assertIncludes(revenueCatWebhook, '.rpc("reserve_revenuecat_webhook_ingress_event"', "RevenueCat immutable ingress reservation");
+assertNotIncludes(revenueCatWebhook, "mirrorRevenueCatPremiumMoneyAccess", "legacy Premium Edge authority projector");
+assertNotIncludes(revenueCatWebhook, "mirrorRevenueCatDynamicMoneyAccess", "legacy dynamic Edge authority projector");
+assertNotIncludes(revenueCatWebhook, "syncChannelSubscriptionLifecycle", "legacy channel lifecycle Edge projector");
+assertIncludes(integrityCloseoutMigration, 'create or replace function public."process_revenuecat_premium_event_atomic"', "Premium atomic SQL projector");
+assertIncludes(integrityCloseoutMigration, 'create or replace function public."process_revenuecat_app_store_event_atomic"', "App Store creator-money atomic SQL projector");
+assertIncludes(integrityCloseoutMigration, 'create or replace function public."process_revenuecat_google_play_event_atomic"', "Google Play creator-money atomic SQL projector");
+assertIncludes(integrityCloseoutMigration, 'create or replace function public."process_revenuecat_terminal_event_atomic"', "cross-domain terminal atomic SQL projector");
 assertIncludes(revenueCatWebhook, "payableState: \"not_payable\"", "RevenueCat mirror keeps sandbox not payable");
-assertIncludes(revenueCatWebhook, "moneyAccessMirrored: true", "RevenueCat webhook response mirrors money access");
+assertIncludes(
+  revenueCatWebhook,
+  "moneyAccessMirrored: !entitlementWrite.staleEvent && !entitlementWrite.ignoredEvent",
+  "RevenueCat webhook mirrors money access only when the authoritative event is not stale",
+);
 assertIncludes(revenueCatWebhook, "liveMoneyAction: false", "RevenueCat webhook live money false");
 assertNotIncludes(revenueCatWebhook, "checkout_session", "RevenueCat webhook must not create checkout sessions");
 assertNotIncludes(revenueCatWebhook, "payout_created", "RevenueCat webhook must not create payouts");

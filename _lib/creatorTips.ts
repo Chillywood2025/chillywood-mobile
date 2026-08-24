@@ -2,10 +2,14 @@ import { Platform } from "react-native";
 
 import { supabase } from "./supabase";
 import {
+  prepareCreatorMoneyPurchaseSubject,
+  revalidateCreatorMoneyPurchaseSubject,
+  validateCreatorMoneyPurchaseIntent,
+} from "./creatorMoneyPurchaseAuthority";
+import {
   getRevenueCatProductionReadiness,
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
-  syncRevenueCatCustomerIdentity,
 } from "./revenuecat";
 import {
   findIosStoreProductByStableKey,
@@ -102,6 +106,8 @@ export type CreatorTipGooglePlayPurchaseResult = CreatorTipStorePurchaseResult;
 
 const CREATOR_TIP_SANDBOX_PRODUCT_KEY = "creator_tip_sandbox_099";
 const CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID = "cw_creator_tip_sandbox_099";
+const CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR = 99;
+const CREATOR_TIP_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -165,20 +171,82 @@ const toTipSettings = (row: Record<string, unknown>): CreatorTipSettings => ({
   updatedAt: toText(row.updated_at) || null,
 });
 
-const normalizePublicTipStatus = (payload: unknown): CreatorTipPublicStatus => {
+const unavailablePublicTipStatus = (reason: string): CreatorTipPublicStatus => ({
+  canTip: false,
+  status: "unknown",
+  reason,
+  creatorId: null,
+  currency: "usd",
+  suggestedAmountsCents: [],
+  defaultAmountCents: null,
+  minAmountCents: 0,
+  maxAmountCents: 0,
+  providerEnvironment: "unknown",
+  testMode: true,
+  liveMoneyEnabled: false,
+  policyCopy: "Tips remain unavailable until exact creator and provider authority can be verified.",
+});
+
+export const normalizePublicTipStatus = (
+  payload: unknown,
+  expectedCreatorId: string,
+): CreatorTipPublicStatus => {
   const row = payload && typeof payload === "object" && !Array.isArray(payload)
     ? payload as Record<string, unknown>
     : {};
+  const creatorId = typeof row.creatorId === "string" && row.creatorId === row.creatorId.trim()
+    ? row.creatorId
+    : "";
+  const minAmountCents = typeof row.minAmountCents === "number" && Number.isSafeInteger(row.minAmountCents)
+    ? row.minAmountCents
+    : 0;
+  const maxAmountCents = typeof row.maxAmountCents === "number" && Number.isSafeInteger(row.maxAmountCents)
+    ? row.maxAmountCents
+    : 0;
+  const suggestedAmountsCents = Array.isArray(row.suggestedAmountsCents)
+    && row.suggestedAmountsCents.length >= 1
+    && row.suggestedAmountsCents.length <= 6
+    && row.suggestedAmountsCents.every((amount) => (
+      typeof amount === "number"
+      && Number.isSafeInteger(amount)
+      && amount >= minAmountCents
+      && amount <= maxAmountCents
+    ))
+    ? row.suggestedAmountsCents as number[]
+    : [];
+  const defaultAmountCents = row.defaultAmountCents === null
+    ? null
+    : typeof row.defaultAmountCents === "number" && Number.isSafeInteger(row.defaultAmountCents)
+      ? row.defaultAmountCents
+      : 0;
+  const exactReady = row.canTip === true
+    && row.reason === "ready"
+    && row.status === "active"
+    && CREATOR_TIP_UUID_PATTERN.test(expectedCreatorId)
+    && creatorId === expectedCreatorId
+    && row.currency === "usd"
+    && minAmountCents >= 100
+    && maxAmountCents >= minAmountCents
+    && maxAmountCents <= 50000
+    && suggestedAmountsCents.length > 0
+    && (defaultAmountCents === null
+      || (defaultAmountCents >= minAmountCents && defaultAmountCents <= maxAmountCents))
+    && row.providerEnvironment === "test"
+    && row.testMode === true
+    && row.liveMoneyEnabled === false;
+  if (row.canTip === true && !exactReady) {
+    return unavailablePublicTipStatus("malformed_tip_authority");
+  }
   return {
-    canTip: row.canTip === true,
+    canTip: exactReady,
     status: (toText(row.status) || "unknown") as CreatorTipPublicStatus["status"],
     reason: toText(row.reason) || "tips_unavailable",
-    creatorId: toText(row.creatorId) || null,
+    creatorId: CREATOR_TIP_UUID_PATTERN.test(creatorId) && creatorId === expectedCreatorId ? creatorId : null,
     currency: toText(row.currency) || "usd",
-    suggestedAmountsCents: toNumberArray(row.suggestedAmountsCents, [100, 300, 500, 1000]),
-    defaultAmountCents: row.defaultAmountCents == null ? null : toNumber(row.defaultAmountCents),
-    minAmountCents: toNumber(row.minAmountCents, 100),
-    maxAmountCents: toNumber(row.maxAmountCents, 50000),
+    suggestedAmountsCents,
+    defaultAmountCents: defaultAmountCents || null,
+    minAmountCents,
+    maxAmountCents,
     providerEnvironment: (toText(row.providerEnvironment) || "test") as CreatorTipPublicStatus["providerEnvironment"],
     testMode: row.testMode !== false,
     liveMoneyEnabled: row.liveMoneyEnabled === true,
@@ -238,7 +306,7 @@ export async function saveMyCreatorTipSettings(input: {
 export async function readCreatorTipPublicStatus(creatorId: string): Promise<CreatorTipPublicStatus> {
   const { data, error } = await creatorTipsClient.rpc("get_creator_tip_public_status", { p_creator_id: creatorId });
   if (error) throw error;
-  return normalizePublicTipStatus(data);
+  return normalizePublicTipStatus(data, creatorId);
 }
 
 export async function listMyCreatorTipTransactions(limit = 25): Promise<CreatorTipTransaction[]> {
@@ -323,17 +391,31 @@ export async function purchaseCreatorTipWithStore(input: {
   sourceSurface?: string;
 }): Promise<CreatorTipStorePurchaseResult> {
   const creatorId = toText(input.creatorId);
-  const userId = toText(input.userId);
-  const legacyIosTipProduct = Platform.OS === "ios"
-    ? resolveIosFiniteAppStoreTier("creator_tip", input.amountCents)
+  const requestedUserId = toText(input.userId);
+  const amountCents = typeof input.amountCents === "number"
+    && Number.isSafeInteger(input.amountCents)
+    && input.amountCents > 0
+    ? input.amountCents
+    : 0;
+  const currency = toText(input.currency).toLowerCase() || "usd";
+  const requestedIosStableKey = toText(input.iosStoreProductKey);
+  const amountMatchedIosTier = Platform.OS === "ios"
+    ? resolveIosFiniteAppStoreTier("creator_tip", amountCents)
     : null;
-  const legacyIosProductId = legacyIosTipProduct?.productId ?? null;
   const iosTipProduct = Platform.OS === "ios"
-    ? findIosStoreProductByStableKey(input.iosStoreProductKey) ??
-      (legacyIosProductId ? findIosStoreProductByProductId(legacyIosProductId) : null)
+    ? requestedIosStableKey
+      ? findIosStoreProductByStableKey(requestedIosStableKey)
+      : amountMatchedIosTier
+        ? findIosStoreProductByProductId(amountMatchedIosTier.productId)
+        : null
     : null;
-  const productId = iosTipProduct?.productId ?? legacyIosProductId ?? CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID;
-  if (!creatorId || !userId) {
+  const productId = iosTipProduct?.productId ?? CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID;
+  if (
+    !CREATOR_TIP_UUID_PATTERN.test(creatorId)
+    || !CREATOR_TIP_UUID_PATTERN.test(requestedUserId)
+    || !amountCents
+    || currency !== "usd"
+  ) {
     return {
       ok: false,
       intentId: null,
@@ -343,7 +425,13 @@ export async function purchaseCreatorTipWithStore(input: {
   }
 
   if (Platform.OS === "ios") {
-    if (!iosTipProduct || iosTipProduct.concept !== "creator_tip") {
+    if (
+      !iosTipProduct
+      || iosTipProduct.concept !== "creator_tip"
+      || iosTipProduct.productType !== "consumable"
+      || iosTipProduct.referencePriceMinor !== amountCents
+      || amountMatchedIosTier?.productId !== iosTipProduct.productId
+    ) {
       return {
         ok: false,
         intentId: null,
@@ -371,9 +459,27 @@ export async function purchaseCreatorTipWithStore(input: {
         message: "App Store sandbox tips are disabled for this build. Nothing was charged.",
       };
     }
+  } else if (amountCents !== CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR) {
+    return {
+      ok: false,
+      intentId: null,
+      productId,
+      message: "This sandbox tip amount does not match the configured store tier. Nothing was charged.",
+    };
   }
 
-  await syncRevenueCatCustomerIdentity(userId);
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  if (
+    !purchaseSubject
+    || purchaseSubject.userId !== requestedUserId
+  ) {
+    return {
+      ok: false,
+      intentId: null,
+      productId,
+      message: "Sign in again before sending a sandbox tip.",
+    };
+  }
 
   const intentRpc = Platform.OS === "ios"
     ? "create_ios_app_store_purchase_intent"
@@ -381,7 +487,7 @@ export async function purchaseCreatorTipWithStore(input: {
   const intentArgs = Platform.OS === "ios"
     ? {
         p_metadata: {
-          amount_minor: String(iosTipProduct?.referencePriceMinor ?? 0),
+          amount_minor: String(amountCents),
           creator_id: creatorId,
           currency: "usd",
           no_access_grant: true,
@@ -397,9 +503,9 @@ export async function purchaseCreatorTipWithStore(input: {
       }
     : {
         p_metadata: {
-          amount_minor: String(Math.max(0, Math.trunc(input.amountCents))),
+          amount_minor: String(amountCents),
           creator_id: creatorId,
-          currency: toText(input.currency) || "usd",
+          currency,
           no_access_grant: true,
           no_live_payout: true,
           not_payable: true,
@@ -411,7 +517,7 @@ export async function purchaseCreatorTipWithStore(input: {
         p_source_id: creatorId,
         p_source_type: "creator_tip",
       };
-  const { data: intent, error } = await creatorTipsClient.rpc<{ id?: unknown }>(intentRpc, intentArgs);
+  const { data: intent, error } = await creatorTipsClient.rpc<Record<string, unknown>>(intentRpc, intentArgs);
   if (error) {
     return {
       ok: false,
@@ -420,13 +526,34 @@ export async function purchaseCreatorTipWithStore(input: {
       message: "Sandbox tip could not be started right now.",
     };
   }
+  const validatedIntent = validateCreatorMoneyPurchaseIntent(intent, {
+    userId: purchaseSubject.userId,
+    sourceType: "creator_tip",
+    sourceId: creatorId,
+    creatorId,
+    provider: Platform.OS === "ios" ? "revenuecat_app_store" : "revenuecat_google_play",
+    providerProductId: productId,
+    environment: "sandbox",
+    status: "pending",
+    amountMinor: amountCents,
+    currency: "usd",
+  });
+  if (!validatedIntent) {
+    return {
+      ok: false,
+      intentId: null,
+      productId,
+      message: "Sandbox tip authority could not be verified. Nothing was charged.",
+    };
+  }
+  const intentId = validatedIntent.id;
 
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
   const storeProduct = products.find((entry) => toText(entry.identifier) === productId);
   if (!storeProduct) {
     return {
       ok: false,
-      intentId: toText(intent?.id) || null,
+      intentId,
       productId,
       message: Platform.OS === "ios"
         ? "App Store sandbox tip product is not available on this device yet."
@@ -434,13 +561,22 @@ export async function purchaseCreatorTipWithStore(input: {
     };
   }
 
+  if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    return {
+      ok: false,
+      intentId,
+      productId,
+      message: "Your session changed before checkout. Nothing was charged.",
+    };
+  }
+
   let purchase;
   try {
-    purchase = await purchaseRevenueCatStoreProduct(storeProduct);
+    purchase = await purchaseRevenueCatStoreProduct(storeProduct, { authority: purchaseSubject.authority });
   } catch (error) {
     return {
       ok: false,
-      intentId: toText(intent?.id) || null,
+      intentId,
       productId,
       message: isRevenueCatUserCancellation(error)
         ? "Tip canceled. Nothing changed."
@@ -449,11 +585,19 @@ export async function purchaseCreatorTipWithStore(input: {
           : "Google Play tip could not be completed. Try again later.",
     };
   }
+  if (toText(purchase.productIdentifier) !== productId) {
+    return {
+      ok: false,
+      intentId,
+      productId,
+      message: "The store response did not match the verified tip intent. No tip credit was claimed.",
+    };
+  }
   return {
     ok: true,
-    intentId: toText(intent?.id) || null,
-    productId: toText(purchase.productIdentifier) || productId,
-    message: "Sandbox tip complete.",
+    intentId,
+    productId,
+    message: "Sandbox tip purchase received. Creator credit waits for verified provider reconciliation.",
   };
 }
 

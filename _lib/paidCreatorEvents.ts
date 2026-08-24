@@ -1,6 +1,12 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  prepareCreatorMoneyPurchaseSubject,
+  revalidateCreatorMoneyPurchaseSubject,
+  validateCreatorMoneyPurchaseIntent,
+  type CreatorMoneyPurchaseIntentExpectation,
+} from "./creatorMoneyPurchaseAuthority";
+import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
@@ -181,24 +187,129 @@ const parseTransaction = (row: Record<string, unknown>): PaidCreatorEventTransac
   };
 };
 
-const normalizeAccess = (value: unknown): PaidCreatorEventAccess => {
+const ACCESS_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const accessText = (value: unknown) => (
+  typeof value === "string" && value === value.trim() ? value : ""
+);
+const isAccessProvider = (value: string) => (
+  value === "revenuecat_app_store" || value === "revenuecat_google_play"
+);
+const unavailableEventAccess = (reason = "malformed_access_response"): PaidCreatorEventAccess => ({
+  allowed: false,
+  reason,
+  requiresPurchase: false,
+  passId: null,
+  priceCents: null,
+  currency: null,
+  creatorId: null,
+  provider: null,
+  providerProductId: null,
+  providerProductKey: null,
+  offer: null,
+});
+
+const parseAuthoritativeEventOffer = (
+  value: unknown,
+  expectedCreatorEventId: string,
+): PaidCreatorEventOffer | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const offer = parseOffer(row);
+  if (!offer) return null;
+  const provider = accessText(row.provider);
+  const status = accessText(row.status);
+  return ACCESS_UUID_PATTERN.test(accessText(row.id))
+    && ACCESS_UUID_PATTERN.test(accessText(row.creatorEventId))
+    && accessText(row.creatorEventId) === expectedCreatorEventId
+    && ACCESS_UUID_PATTERN.test(accessText(row.creatorId))
+    && typeof row.priceCents === "number"
+    && Number.isSafeInteger(row.priceCents)
+    && row.priceCents > 0
+    && /^[a-z]{3}$/.test(accessText(row.currency))
+    && isAccessProvider(provider)
+    && !!accessText(row.providerProductId)
+    && !!accessText(row.providerProductKey)
+    && ["sandbox", "active", "paused", "sold_out"].includes(status)
+    ? offer
+    : null;
+};
+
+const normalizeAccess = (value: unknown, expectedCreatorEventId: string): PaidCreatorEventAccess => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return unavailableEventAccess();
   const row = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-  const offer = row.offer && typeof row.offer === "object" && !Array.isArray(row.offer)
-    ? parseOffer(row.offer as Record<string, unknown>)
-    : null;
+  const reason = accessText(row.reason);
+  if (typeof row.allowed !== "boolean" || typeof row.requiresPurchase !== "boolean" || !reason) {
+    return unavailableEventAccess();
+  }
+  const offer = row.offer === null || row.offer === undefined
+    ? null
+    : parseAuthoritativeEventOffer(row.offer, expectedCreatorEventId);
+
+  if (row.allowed) {
+    if (row.requiresPurchase) return unavailableEventAccess();
+    if (reason === "free_event" && row.offer == null && accessText(row.passId) === "") {
+      return { ...unavailableEventAccess(reason), allowed: true };
+    }
+    if (
+      reason === "creator_or_admin"
+      && row.previewAuthority === true
+      && offer
+      && accessText(row.passId) === ""
+    ) {
+      return { ...unavailableEventAccess(reason), allowed: true, creatorId: offer.creatorId, offer };
+    }
+    if (reason === "event_pass_confirmed" && offer && ACCESS_UUID_PATTERN.test(accessText(row.passId))) {
+      return {
+        allowed: true,
+        reason,
+        requiresPurchase: false,
+        passId: accessText(row.passId),
+        priceCents: offer.priceCents,
+        currency: offer.currency,
+        creatorId: offer.creatorId,
+        provider: offer.provider,
+        providerProductId: offer.providerProductId,
+        providerProductKey: offer.providerProductKey,
+        offer,
+      };
+    }
+    return unavailableEventAccess();
+  }
+
+  if (reason !== "event_pass_required") return unavailableEventAccess(reason);
+  const priceCents = row.priceCents;
+  const currency = accessText(row.currency);
+  const creatorId = accessText(row.creatorId);
+  const provider = accessText(row.provider);
+  const providerProductId = accessText(row.providerProductId);
+  const providerProductKey = accessText(row.providerProductKey);
+  if (
+    row.requiresPurchase !== true
+    || !offer
+    || (offer.status !== "sandbox" && offer.status !== "active")
+    || typeof priceCents !== "number"
+    || !Number.isSafeInteger(priceCents)
+    || priceCents <= 0
+    || priceCents !== offer.priceCents
+    || currency !== offer.currency
+    || creatorId !== offer.creatorId
+    || provider !== offer.provider
+    || providerProductId !== offer.providerProductId
+    || providerProductKey !== offer.providerProductKey
+  ) return unavailableEventAccess();
   return {
-    allowed: row.allowed === true,
-    reason: toText(row.reason) || "unknown",
-    requiresPurchase: row.requiresPurchase === true || toText(row.reason) === "event_pass_required",
-    passId: toText(row.passId) || null,
-    priceCents: row.priceCents == null ? offer?.priceCents ?? null : toCents(row.priceCents),
-    currency: toText(row.currency) || offer?.currency || null,
-    creatorId: toText(row.creatorId) || offer?.creatorId || null,
-    provider: toText(row.provider) || offer?.provider || null,
-    providerProductId: toText(row.providerProductId) || offer?.providerProductId || null,
-    providerProductKey: toText(row.providerProductKey) || offer?.providerProductKey || null,
+    allowed: false,
+    reason,
+    requiresPurchase: true,
+    passId: null,
+    priceCents,
+    currency,
+    creatorId,
+    provider,
+    providerProductId,
+    providerProductKey,
     offer,
   };
 };
@@ -281,21 +392,32 @@ export async function resolvePaidCreatorEventPassAccess(creatorEventId: string):
       offer: null,
     };
   }
-  return normalizeAccess(data);
+  return normalizeAccess(data, creatorEventId);
 }
 
-export async function createPaidCreatorEventPassPurchaseIntent(offerId: string) {
+export async function createPaidCreatorEventPassPurchaseIntent(
+  offerId: string,
+  expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+) {
   const { data, error } = await rpcClient.rpc("create_paid_creator_event_pass_purchase_intent", {
     p_event_id: offerId,
   });
   if (error) throw new Error("Event pass checkout is not available right now.");
-  const row = data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : {};
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Event pass checkout authority could not be verified.");
+  }
+  const row = data as Record<string, unknown>;
+  if (typeof row.alreadyPurchased !== "boolean") {
+    throw new Error("Event pass checkout authority could not be verified.");
+  }
+  const validated = validateCreatorMoneyPurchaseIntent(data, {
+    ...expected,
+    status: row.alreadyPurchased ? "consumed" : "pending",
+  });
+  if (!validated) throw new Error("Event pass checkout authority could not be verified.");
   return {
-    id: toText(row.id),
-    providerProductId: toText(row.providerProductId) || PAID_CREATOR_EVENT_SANDBOX_PROVIDER_PRODUCT_ID,
-    alreadyPurchased: row.alreadyPurchased === true,
+    ...validated,
+    alreadyPurchased: row.alreadyPurchased,
   };
 }
 
@@ -321,6 +443,13 @@ export async function purchasePaidCreatorEventPass(input: {
   if (!access.requiresPurchase || !access.offer?.id) {
     return { ok: false, message: "This event pass is not available right now.", access };
   }
+  if (
+    !access.creatorId
+    || (access.provider !== "revenuecat_app_store" && access.provider !== "revenuecat_google_play")
+    || !access.providerProductId
+    || typeof access.priceCents !== "number"
+    || !access.currency
+  ) return { ok: false, message: "This event pass is not available right now.", access };
 
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
@@ -336,7 +465,25 @@ export async function purchasePaidCreatorEventPass(input: {
     }
   }
 
-  const intent = await createPaidCreatorEventPassPurchaseIntent(access.offer.id);
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  if (!purchaseSubject) {
+    return {
+      ok: false,
+      message: "Sign in again before starting Event Pass checkout. Nothing was charged.",
+      access,
+    };
+  }
+  const intent = await createPaidCreatorEventPassPurchaseIntent(access.offer.id, {
+    userId: purchaseSubject.userId,
+    sourceType: "event",
+    sourceId: input.creatorEventId,
+    creatorId: access.creatorId,
+    provider: access.provider,
+    providerProductId: access.providerProductId,
+    environment: access.offer.status === "active" ? "production" : "sandbox",
+    amountMinor: access.priceCents,
+    currency: access.currency,
+  });
   if (intent.alreadyPurchased) {
     const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId);
     return {
@@ -347,9 +494,9 @@ export async function purchasePaidCreatorEventPass(input: {
     };
   }
 
-  const productId = intent.providerProductId || access.providerProductId || PAID_CREATOR_EVENT_SANDBOX_PROVIDER_PRODUCT_ID;
+  const productId = access.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
-  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? products[0] ?? null;
+  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
   if (!product) {
     return {
       ok: false,
@@ -369,8 +516,18 @@ export async function purchasePaidCreatorEventPass(input: {
     source_surface: input.sourceSurface,
   });
 
+  if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    return {
+      ok: false,
+      message: "Your session changed before Event Pass checkout. Nothing was charged.",
+      access,
+      intentId: intent.id,
+      productId,
+    };
+  }
+
   try {
-    await purchaseRevenueCatStoreProduct(product);
+    await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
     const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId);
     if (verifiedAccess.allowed) {

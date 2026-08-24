@@ -31,8 +31,10 @@ const sandboxTesterGrantMigration = read("supabase/migrations/20260616034235_tig
 const sandboxChannelVipSourceMigration = read("supabase/migrations/20260616120810_support_channel_vip_sandbox_config.sql");
 const sandboxChannelVipConstraintMigration = read("supabase/migrations/20260616120924_allow_channel_vip_config_product_types.sql");
 const sandboxIntentTesterMigration = read("supabase/migrations/20260616121739_require_sandbox_tester_for_purchase_intents.sql");
+const wave1AuthorityMigration = read("supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql");
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
+const entitlementAuthority = read("_lib/entitlementAuthority.ts");
 const channelSettings = read("app/channel-settings.tsx");
 const creatorTips = read("_lib/creatorTips.ts");
 const creatorSetupRoute = read("app/creator-monetization-setup.tsx");
@@ -153,8 +155,23 @@ assertIncludes(monetization, "offeringId: \"premium\"", "RevenueCat premium offe
 assertIncludes(monetization, "entitlementIds: [\"premium\"]", "RevenueCat premium entitlement");
 assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell closed by default");
 assertIncludes(monetization, "isPremiumPurchaseShellAvailable", "Premium purchase shell availability guard");
-assertIncludes(premiumEntitlements, "entitlement_key", "backed entitlement helper");
-assertIncludes(premiumEntitlements, "revoked_at", "revoked entitlement blocking");
+assertIncludes(premiumEntitlements, 'ENTITLEMENT_AUTHORITY_READBACK_RPC = "wave1_entitlement_authority_readback"', "authoritative Premium entitlement RPC");
+assertIncludes(premiumEntitlements, "normalizeEntitlementAuthorityReadback", "authoritative Premium entitlement normalization");
+assertIncludes(premiumEntitlements, "entitlementGrantsProtectedAccess", "authoritative Premium access decision");
+assertIncludes(premiumEntitlements, 'unknownDecision(key, "query_failed", authority)', "Premium query failure UNKNOWN fallback");
+assertIncludes(premiumEntitlements, 'unknownDecision(key, "stale_generation", authority)', "Premium stale-session UNKNOWN fallback");
+assertNotIncludes(premiumEntitlements, ".from(USER_ENTITLEMENTS_TABLE)", "direct client Premium entitlement table authority");
+assertNotIncludes(premiumEntitlements, '.from("user_entitlements")', "direct client Premium entitlement table authority");
+assertNotIncludes(premiumEntitlements, ".from('user_entitlements')", "direct client Premium entitlement table authority");
+assertIncludes(entitlementAuthority, '"authoritative_revoked"', "authoritative revoked decision");
+assertIncludes(entitlementAuthority, '"authoritative_refunded"', "authoritative refunded decision");
+assertIncludes(entitlementAuthority, "authoritative: false, grantsProtectedAccess: false", "UNKNOWN access denial");
+assertIncludes(entitlementAuthority, "decision?.authoritative === true", "authoritative access requirement");
+assertIncludes(entitlementAuthority, 'decision.state === "ACTIVE" || decision.state === "GRACE"', "ACTIVE/GRACE-only access grant");
+assertIncludes(wave1AuthorityMigration, 'create or replace function public."wave1_entitlement_authority_readback"', "server entitlement authority RPC");
+assertIncludes(wave1AuthorityMigration, 'v_row."metadata"->>\'revenuecat_event_type\' = \'REFUND\' then \'REFUNDED\'', "provider refund blocking");
+assertIncludes(wave1AuthorityMigration, 'v_row."revoked_at" is not null or v_row."status" = \'revoked\' then \'REVOKED\'', "provider revocation blocking");
+assertIncludes(wave1AuthorityMigration, "'grantsProtectedAccess', v_state in ('ACTIVE', 'GRACE')", "server ACTIVE/GRACE-only access grant");
 
 assertIncludes(creatorTips, "purchaseCreatorTipWithStore", "platform-neutral creator tip helper");
 assertIncludes(creatorTips, "purchaseCreatorTipWithGooglePlay = purchaseCreatorTipWithStore", "legacy Android creator tip alias");

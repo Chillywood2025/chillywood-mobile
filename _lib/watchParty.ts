@@ -23,6 +23,10 @@ import {
   ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS,
 } from "./performancePolicy";
 import {
+  resolvePaidWatchPartyTicketAccess,
+  type PaidWatchPartyTicketAccess,
+} from "./paidWatchPartyTickets";
+import {
   buildRoomCapabilities,
   deriveWatchPartyStageRole,
   evaluateRoomAccess,
@@ -173,6 +177,7 @@ type MembershipUpsertOptions = {
   markJoinedAt?: boolean;
   markLeftAt?: boolean;
   preserveHostAuthority?: boolean;
+  exactTicketViewerUserId?: string;
 };
 
 type WatchPartyRoomCreateOptions = {
@@ -475,9 +480,123 @@ async function getAuthBackedUserId(): Promise<string | null> {
   return null;
 }
 
+async function getServerVerifiedUserId(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return null;
+    const userId = String(data?.user?.id ?? "").trim();
+    return userId && looksLikeUuid(userId) ? userId : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getWritablePartyUserId(): Promise<string | null> {
   return getAuthBackedUserId();
 }
+
+type PartyRoomSessionAdmission =
+  | { source: "premium" }
+  | { source: "room_host" }
+  | { source: "exact_paid_ticket"; userId: string };
+
+type TitleRoomSeatResolution =
+  | { status: "room_host"; userId: string }
+  | { status: "exact_paid_ticket"; userId: string }
+  | { status: "free_room"; userId: string }
+  | { status: "blocked" };
+
+export const paidWatchPartyTicketAllowsExactRoomViewerAccess = (
+  access: PaidWatchPartyTicketAccess | null | undefined,
+  partyId: string,
+) => {
+  const expectedPartyId = String(partyId ?? "").trim().toUpperCase();
+  const boundPartyId = String(access?.offer?.partyId ?? "").trim().toUpperCase();
+  const now = Date.now();
+  const startsAt = access?.offer?.startsAt ? Date.parse(access.offer.startsAt) : null;
+  const endsAt = access?.offer?.endsAt ? Date.parse(access.offer.endsAt) : null;
+  return !!expectedPartyId
+    && access?.allowed === true
+    && access.reason === "ticket_confirmed"
+    && access.requiresPurchase === false
+    && UUID_REGEX.test(String(access.ticketId ?? "").trim())
+    && UUID_REGEX.test(String(access.offer?.id ?? "").trim())
+    && UUID_REGEX.test(String(access.offer?.creatorId ?? "").trim())
+    && UUID_REGEX.test(String(access.offer?.hostId ?? "").trim())
+    && boundPartyId === expectedPartyId
+    && access.creatorId === access.offer?.creatorId
+    && typeof access.priceCents === "number"
+    && Number.isSafeInteger(access.priceCents)
+    && (access.priceCents ?? 0) > 0
+    && access.priceCents === access.offer?.priceCents
+    && /^[a-z]{3}$/.test(String(access.currency ?? ""))
+    && access.currency === access.offer?.currency
+    && (access.provider === "revenuecat_app_store" || access.provider === "revenuecat_google_play")
+    && access.provider === access.offer?.provider
+    && !!String(access.providerProductId ?? "")
+    && access.providerProductId === access.offer?.providerProductId
+    && !!String(access.providerProductKey ?? "")
+    && access.providerProductKey === access.offer?.providerProductKey
+    && ["sandbox", "active", "sold_out"].includes(String(access.offer?.status ?? ""))
+    && (startsAt === null || (Number.isFinite(startsAt) && startsAt <= now))
+    && (endsAt === null || (Number.isFinite(endsAt) && endsAt > now));
+};
+
+export const paidWatchPartyResolutionIsExactFreeRoom = (
+  access: PaidWatchPartyTicketAccess | null | undefined,
+) => access?.allowed === true
+  && access.reason === "free_room"
+  && access.requiresPurchase === false
+  && access.ticketId === null
+  && access.priceCents === null
+  && access.currency === null
+  && access.creatorId === null
+  && access.provider === null
+  && access.providerProductId === null
+  && access.providerProductKey === null
+  && access.offer === null;
+
+const resolveTitleRoomSeatAccess = async (
+  room: WatchPartyState,
+  expectedUserId?: string | null,
+): Promise<TitleRoomSeatResolution> => {
+  if (room.roomType !== "title") return { status: "blocked" };
+
+  const userIdBeforeRead = await getServerVerifiedUserId();
+  const normalizedExpectedUserId = String(expectedUserId ?? "").trim();
+  if (!userIdBeforeRead || (normalizedExpectedUserId && userIdBeforeRead !== normalizedExpectedUserId)) {
+    return { status: "blocked" };
+  }
+  if (userIdBeforeRead === String(room.hostUserId ?? "").trim()) {
+    return { status: "room_host", userId: userIdBeforeRead };
+  }
+  const ticketAccess = await resolvePaidWatchPartyTicketAccess(room.partyId).catch(() => null);
+  const userIdAfterRead = await getServerVerifiedUserId();
+  if (userIdAfterRead !== userIdBeforeRead) return { status: "blocked" };
+  if (paidWatchPartyTicketAllowsExactRoomViewerAccess(ticketAccess, room.partyId)) {
+    return { status: "exact_paid_ticket", userId: userIdBeforeRead };
+  }
+  if (paidWatchPartyResolutionIsExactFreeRoom(ticketAccess)) {
+    return { status: "free_room", userId: userIdBeforeRead };
+  }
+  return { status: "blocked" };
+};
+
+const resolvePartyRoomSessionAdmission = async (
+  room: WatchPartyState,
+): Promise<PartyRoomSessionAdmission | null> => {
+  if (room.roomType === "title") {
+    const seatAccess = await resolveTitleRoomSeatAccess(room);
+    if (seatAccess.status === "room_host") return { source: "room_host" };
+    if (seatAccess.status === "exact_paid_ticket") {
+      return { source: "exact_paid_ticket", userId: seatAccess.userId };
+    }
+    if (seatAccess.status !== "free_room") return null;
+  }
+
+  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
+  return premiumAccess?.allowed ? { source: "premium" } : null;
+};
 
 export async function getSafePartyUserId(): Promise<string> {
   const authBackedId = await getAuthBackedUserId();
@@ -757,8 +876,12 @@ async function resolveWritableUserId(explicitUserId?: string): Promise<string | 
 }
 
 async function upsertMembership(options: MembershipUpsertOptions): Promise<WatchPartyRoomMembership | null> {
-  const writableUserId = await resolveWritableUserId(options.userId);
+  const exactTicketViewerUserId = String(options.exactTicketViewerUserId ?? "").trim();
+  const writableUserId = exactTicketViewerUserId
+    ? await getServerVerifiedUserId()
+    : await resolveWritableUserId(options.userId);
   if (!writableUserId) return null;
+  if (exactTicketViewerUserId && exactTicketViewerUserId !== writableUserId) return null;
 
   const now = new Date().toISOString();
   const partyId = String(options.partyId ?? "").trim().toUpperCase();
@@ -769,11 +892,17 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
 
   const isLeaving = options.markLeftAt === true;
   const isRoomHost = writableUserId === room.hostUserId;
-  const existingMembershipRow = options.preserveHostAuthority
+  if (exactTicketViewerUserId && isRoomHost) return null;
+  const exactTicketViewerOnly = !!exactTicketViewerUserId;
+  const existingMembershipRow = options.preserveHostAuthority || exactTicketViewerOnly
     ? await fetchPartyMembershipRow(partyId, writableUserId)
     : null;
   const existingMembership = existingMembershipRow ? rowToMembership(existingMembershipRow) : null;
-  const shouldPreserveHostAuthority = !!options.preserveHostAuthority && !!existingMembership && !isRoomHost && !isLeaving;
+  const shouldPreserveHostAuthority = !exactTicketViewerOnly && !!options.preserveHostAuthority
+    && !!existingMembership && !isRoomHost && !isLeaving;
+  const shouldPreserveRemovedState = !!existingMembership && !isRoomHost && !isLeaving
+    && existingMembership.membershipState === "removed"
+    && (!!options.preserveHostAuthority || exactTicketViewerOnly);
   const preservedStageRole = existingMembership?.stageRole === "host" ? "listener" : existingMembership?.stageRole;
   const preservedCanSpeak = existingMembership?.stageRole === "host" || existingMembership?.role === "host"
     ? false
@@ -781,27 +910,31 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
   const role: WatchPartyRole = isRoomHost ? "host" : "viewer";
   const canSpeak = isRoomHost && !isLeaving
     ? true
-    : shouldPreserveHostAuthority
-      ? preservedCanSpeak
-      : typeof options.canSpeak === "boolean"
-        ? options.canSpeak
-        : false;
+    : exactTicketViewerOnly
+      ? false
+      : shouldPreserveHostAuthority
+        ? preservedCanSpeak
+        : typeof options.canSpeak === "boolean"
+          ? options.canSpeak
+          : false;
   const stageRole = isRoomHost && !isLeaving
     ? "host"
-    : shouldPreserveHostAuthority
-      ? (preservedStageRole ?? "listener")
-      : options.stageRole ?? deriveWatchPartyStageRole({
-        role,
-        canSpeak,
-      });
+    : exactTicketViewerOnly
+      ? "listener"
+      : shouldPreserveHostAuthority
+        ? (preservedStageRole ?? "listener")
+        : options.stageRole ?? deriveWatchPartyStageRole({
+          role,
+          canSpeak,
+        });
   const isMuted = shouldPreserveHostAuthority ? existingMembership.isMuted : !!options.isMuted;
   const requestedMembershipState = options.membershipState ?? "active";
-  const membershipState = shouldPreserveHostAuthority && existingMembership.membershipState === "removed"
+  const membershipState = shouldPreserveRemovedState
     ? "removed"
     : requestedMembershipState;
   const leftAt = options.markLeftAt
     ? now
-    : shouldPreserveHostAuthority && existingMembership.membershipState === "removed"
+    : shouldPreserveRemovedState
       ? existingMembership.leftAt ?? null
       : null;
   const canPublishMedia = canWatchPartyMembershipPublishMedia({
@@ -1225,26 +1358,62 @@ export async function evaluatePartyRoomAccess(options: {
     membership = memberships.find((entry) => entry.userId === safeUserId) ?? null;
   }
 
-  return evaluateRoomAccess({
+  const baseDecision = await evaluateRoomAccess({
     partyId: room.partyId,
     room,
     membership: membership ? { ...membership, userId: safeUserId } : null,
     hasWritableIdentity: !!writableUserId,
   });
+  if (room.roomType !== "title") return baseDecision;
+  if (
+    baseDecision.reason === "identity_required"
+    || baseDecision.reason === "removed"
+    || baseDecision.reason === "room_locked"
+  ) {
+    return baseDecision;
+  }
+
+  const seatAccess = await resolveTitleRoomSeatAccess(room, writableUserId);
+  if (seatAccess.status === "free_room") return baseDecision;
+  if (
+    (seatAccess.status !== "exact_paid_ticket" && seatAccess.status !== "room_host")
+    || seatAccess.userId !== safeUserId
+  ) {
+    return {
+      ...baseDecision,
+      canJoin: false,
+      reason: "party_pass_required",
+      monetization: createEmptyMonetizationGateResolution(),
+    };
+  }
+  return {
+    ...baseDecision,
+    canJoin: true,
+    reason: "allowed",
+    monetization: createEmptyMonetizationGateResolution(),
+  };
 }
 
 export async function joinPartyRoomSession(options: MembershipUpsertOptions): Promise<WatchPartyRoomMembership | null> {
   const room = await getPartyRoom(options.partyId).catch(() => null);
   if (!room) return null;
-  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
-  if (!premiumAccess?.allowed) return null;
+  const admission = await resolvePartyRoomSessionAdmission(room);
+  if (!admission) return null;
+  const exactTicketViewerUserId = admission.source === "exact_paid_ticket" ? admission.userId : undefined;
 
   const membership = await upsertMembership({
     ...options,
+    userId: exactTicketViewerUserId ?? options.userId,
+    role: exactTicketViewerUserId ? "viewer" : options.role,
+    stageRole: exactTicketViewerUserId ? "listener" : options.stageRole,
+    canSpeak: exactTicketViewerUserId ? false : options.canSpeak,
+    cameraEnabled: exactTicketViewerUserId ? false : options.cameraEnabled,
+    micEnabled: exactTicketViewerUserId ? false : options.micEnabled,
     membershipState: "active",
     markJoinedAt: true,
     markLeftAt: false,
     preserveHostAuthority: true,
+    exactTicketViewerUserId,
   });
   if (membership) void touchActivePartyRoomHeartbeat(room, membership.userId);
   return membership;
@@ -1253,15 +1422,23 @@ export async function joinPartyRoomSession(options: MembershipUpsertOptions): Pr
 export async function touchPartyRoomSession(options: MembershipUpsertOptions): Promise<WatchPartyRoomMembership | null> {
   const room = await getPartyRoom(options.partyId).catch(() => null);
   if (!room) return null;
-  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
-  if (!premiumAccess?.allowed) return null;
+  const admission = await resolvePartyRoomSessionAdmission(room);
+  if (!admission) return null;
+  const exactTicketViewerUserId = admission.source === "exact_paid_ticket" ? admission.userId : undefined;
 
   const membership = await upsertMembership({
     ...options,
+    userId: exactTicketViewerUserId ?? options.userId,
+    role: exactTicketViewerUserId ? "viewer" : options.role,
+    stageRole: exactTicketViewerUserId ? "listener" : options.stageRole,
+    canSpeak: exactTicketViewerUserId ? false : options.canSpeak,
+    cameraEnabled: exactTicketViewerUserId ? false : options.cameraEnabled,
+    micEnabled: exactTicketViewerUserId ? false : options.micEnabled,
     membershipState: options.membershipState ?? "active",
     markJoinedAt: false,
     markLeftAt: false,
     preserveHostAuthority: true,
+    exactTicketViewerUserId,
   });
   if (membership) void touchActivePartyRoomHeartbeat(room, membership.userId);
   return membership;

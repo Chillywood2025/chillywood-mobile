@@ -1,6 +1,12 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  prepareCreatorMoneyPurchaseSubject,
+  revalidateCreatorMoneyPurchaseSubject,
+  validateCreatorMoneyPurchaseIntent,
+  type CreatorMoneyPurchaseIntentExpectation,
+} from "./creatorMoneyPurchaseAuthority";
+import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
@@ -156,24 +162,124 @@ const parseTransaction = (row: Record<string, unknown>): CreatorVipTransaction |
   };
 };
 
-const normalizeAccess = (value: unknown): CreatorVipPassAccess => {
+const ACCESS_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const accessText = (value: unknown) => (
+  typeof value === "string" && value === value.trim() ? value : ""
+);
+const isAccessProvider = (value: string) => (
+  value === "revenuecat_app_store" || value === "revenuecat_google_play"
+);
+const unavailableVipAccess = (reason = "malformed_access_response"): CreatorVipPassAccess => ({
+  allowed: false,
+  reason,
+  requiresPurchase: false,
+  vipPassId: null,
+  priceCents: null,
+  currency: null,
+  creatorId: null,
+  provider: null,
+  providerProductId: null,
+  providerProductKey: null,
+  offer: null,
+});
+
+const parseAuthoritativeVipOffer = (
+  value: unknown,
+  expectedCreatorId: string,
+): CreatorVipPassOffer | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const offer = parseOffer(row);
+  if (!offer) return null;
+  const provider = accessText(row.provider);
+  return ACCESS_UUID_PATTERN.test(accessText(row.id))
+    && ACCESS_UUID_PATTERN.test(accessText(row.creatorId))
+    && accessText(row.creatorId) === expectedCreatorId
+    && accessText(row.passType) === "one_time"
+    && typeof row.priceCents === "number"
+    && Number.isSafeInteger(row.priceCents)
+    && row.priceCents > 0
+    && /^[a-z]{3}$/.test(accessText(row.currency))
+    && isAccessProvider(provider)
+    && !!accessText(row.providerProductId)
+    && !!accessText(row.providerProductKey)
+    && ["sandbox", "active", "paused"].includes(accessText(row.status))
+    ? offer
+    : null;
+};
+
+const normalizeAccess = (value: unknown, expectedCreatorId: string): CreatorVipPassAccess => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return unavailableVipAccess();
   const row = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-  const offer = row.offer && typeof row.offer === "object" && !Array.isArray(row.offer)
-    ? parseOffer(row.offer as Record<string, unknown>)
-    : null;
+  const reason = accessText(row.reason);
+  if (typeof row.allowed !== "boolean" || typeof row.requiresPurchase !== "boolean" || !reason) {
+    return unavailableVipAccess();
+  }
+  const offer = row.offer === null || row.offer === undefined
+    ? null
+    : parseAuthoritativeVipOffer(row.offer, expectedCreatorId);
+
+  if (row.allowed) {
+    if (row.requiresPurchase || !offer) return unavailableVipAccess();
+    if (
+      reason === "creator_or_admin"
+      && row.previewAuthority === true
+      && accessText(row.vipPassId) === ""
+    ) {
+      return { ...unavailableVipAccess(reason), allowed: true, creatorId: offer.creatorId, offer };
+    }
+    if (reason === "vip_active" && ACCESS_UUID_PATTERN.test(accessText(row.vipPassId))) {
+      return {
+        allowed: true,
+        reason,
+        requiresPurchase: false,
+        vipPassId: accessText(row.vipPassId),
+        priceCents: offer.priceCents,
+        currency: offer.currency,
+        creatorId: offer.creatorId,
+        provider: offer.provider,
+        providerProductId: offer.providerProductId,
+        providerProductKey: offer.providerProductKey,
+        offer,
+      };
+    }
+    return unavailableVipAccess();
+  }
+
+  if (reason !== "vip_required") return unavailableVipAccess(reason);
+  const priceCents = row.priceCents;
+  const currency = accessText(row.currency);
+  const creatorId = accessText(row.creatorId);
+  const provider = accessText(row.provider);
+  const providerProductId = accessText(row.providerProductId);
+  const providerProductKey = accessText(row.providerProductKey);
+  if (
+    row.requiresPurchase !== true
+    || !offer
+    || (offer.status !== "sandbox" && offer.status !== "active")
+    || typeof priceCents !== "number"
+    || !Number.isSafeInteger(priceCents)
+    || priceCents <= 0
+    || priceCents !== offer.priceCents
+    || currency !== offer.currency
+    || creatorId !== offer.creatorId
+    || provider !== offer.provider
+    || providerProductId !== offer.providerProductId
+    || providerProductKey !== offer.providerProductKey
+  ) return unavailableVipAccess();
   return {
-    allowed: row.allowed === true,
-    reason: toText(row.reason) || "unknown",
-    requiresPurchase: row.requiresPurchase === true || toText(row.reason) === "vip_required",
-    vipPassId: toText(row.vipPassId) || null,
-    priceCents: row.priceCents == null ? offer?.priceCents ?? null : toCents(row.priceCents),
-    currency: toText(row.currency) || offer?.currency || null,
-    creatorId: toText(row.creatorId) || offer?.creatorId || null,
-    provider: toText(row.provider) || offer?.provider || null,
-    providerProductId: toText(row.providerProductId) || offer?.providerProductId || null,
-    providerProductKey: toText(row.providerProductKey) || offer?.providerProductKey || null,
+    allowed: false,
+    reason,
+    requiresPurchase: true,
+    vipPassId: null,
+    priceCents,
+    currency,
+    creatorId,
+    provider,
+    providerProductId,
+    providerProductKey,
     offer,
   };
 };
@@ -252,21 +358,32 @@ export async function resolveCreatorVipPassAccess(creatorId: string): Promise<Cr
       offer: null,
     };
   }
-  return normalizeAccess(data);
+  return normalizeAccess(data, creatorId);
 }
 
-export async function createCreatorVipPassPurchaseIntent(offerId: string) {
+export async function createCreatorVipPassPurchaseIntent(
+  offerId: string,
+  expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+) {
   const { data, error } = await rpcClient.rpc("create_creator_vip_pass_purchase_intent", {
     p_offer_id: offerId,
   });
   if (error) throw new Error("VIP Pass checkout is not available right now.");
-  const row = data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : {};
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("VIP Pass checkout authority could not be verified.");
+  }
+  const row = data as Record<string, unknown>;
+  if (typeof row.alreadyPurchased !== "boolean") {
+    throw new Error("VIP Pass checkout authority could not be verified.");
+  }
+  const validated = validateCreatorMoneyPurchaseIntent(data, {
+    ...expected,
+    status: row.alreadyPurchased ? "consumed" : "pending",
+  });
+  if (!validated) throw new Error("VIP Pass checkout authority could not be verified.");
   return {
-    id: toText(row.id),
-    providerProductId: toText(row.providerProductId) || VIP_PASS_SANDBOX_PROVIDER_PRODUCT_ID,
-    alreadyPurchased: row.alreadyPurchased === true,
+    ...validated,
+    alreadyPurchased: row.alreadyPurchased,
   };
 }
 
@@ -292,6 +409,13 @@ export async function purchaseCreatorVipPass(input: {
   if (!access.requiresPurchase || !access.offer?.id) {
     return { ok: false, message: "VIP is not available for this creator right now.", access };
   }
+  if (
+    !access.creatorId
+    || (access.provider !== "revenuecat_app_store" && access.provider !== "revenuecat_google_play")
+    || !access.providerProductId
+    || typeof access.priceCents !== "number"
+    || !access.currency
+  ) return { ok: false, message: "VIP is not available for this creator right now.", access };
 
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
@@ -307,7 +431,25 @@ export async function purchaseCreatorVipPass(input: {
     }
   }
 
-  const intent = await createCreatorVipPassPurchaseIntent(access.offer.id);
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  if (!purchaseSubject) {
+    return {
+      ok: false,
+      message: "Sign in again before starting VIP Pass checkout. Nothing was charged.",
+      access,
+    };
+  }
+  const intent = await createCreatorVipPassPurchaseIntent(access.offer.id, {
+    userId: purchaseSubject.userId,
+    sourceType: "vip_pass",
+    sourceId: access.offer.id,
+    creatorId: access.creatorId,
+    provider: access.provider,
+    providerProductId: access.providerProductId,
+    environment: access.offer.status === "active" ? "production" : "sandbox",
+    amountMinor: access.priceCents,
+    currency: access.currency,
+  });
   if (intent.alreadyPurchased) {
     const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId);
     return {
@@ -318,9 +460,9 @@ export async function purchaseCreatorVipPass(input: {
     };
   }
 
-  const productId = intent.providerProductId || access.providerProductId || VIP_PASS_SANDBOX_PROVIDER_PRODUCT_ID;
+  const productId = access.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
-  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? products[0] ?? null;
+  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
   if (!product) {
     return {
       ok: false,
@@ -340,8 +482,18 @@ export async function purchaseCreatorVipPass(input: {
     source_surface: input.sourceSurface,
   });
 
+  if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    return {
+      ok: false,
+      message: "Your session changed before VIP Pass checkout. Nothing was charged.",
+      access,
+      intentId: intent.id,
+      productId,
+    };
+  }
+
   try {
-    await purchaseRevenueCatStoreProduct(product);
+    await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
     const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId);
     if (verifiedAccess.allowed) {

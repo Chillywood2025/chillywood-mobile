@@ -32,6 +32,7 @@ const payoutLocking = read("supabase/migrations/202608210007_creator_money_payou
 const paidVideo = read("_lib/creatorPaidVideos.ts");
 const paidEvents = read("_lib/paidCreatorEvents.ts");
 const vip = read("_lib/creatorVipPasses.ts");
+const seatPasses = read("_lib/paidWatchPartyTickets.ts");
 const channels = read("_lib/channelSubscriptions.ts");
 
 assert(manifest.schemaVersion === 2, "manifest schemaVersion must be 2");
@@ -54,10 +55,12 @@ for (const [concept, count] of Object.entries({ premium: 2, creator_tip: 4, seat
   assert(concepts.get(concept) === count, `${concept} finite-product count drifted`);
 }
 
-const storeKitIds = [
-  ...(storeKit.products ?? []).map((entry) => entry.productID),
-  ...(storeKit.subscriptionGroups ?? []).flatMap((group) => (group.subscriptions ?? []).map((entry) => entry.productID)),
-].sort();
+const storeKitEntries = [
+  ...(storeKit.products ?? []).map((entry) => ({ entry, group: null })),
+  ...(storeKit.subscriptionGroups ?? []).flatMap((group) =>
+    (group.subscriptions ?? []).map((entry) => ({ entry, group }))),
+];
+const storeKitIds = storeKitEntries.map(({ entry }) => entry.productID).sort();
 assert(JSON.stringify(storeKitIds) === JSON.stringify([...ids].sort()), "StoreKit IDs must exactly match the manifest");
 assert((storeKit.subscriptionGroups ?? []).length === 9, "StoreKit must contain Premium plus eight independent creator-subscription groups");
 const channelGroups = (storeKit.subscriptionGroups ?? []).filter((group) =>
@@ -65,6 +68,26 @@ const channelGroups = (storeKit.subscriptionGroups ?? []).filter((group) =>
 );
 assert(channelGroups.length === 8, "creator channel subscriptions must have eight independent groups");
 assert(new Set(channelGroups.map((group) => group.id ?? group.referenceName)).size === 8, "creator channel subscription groups must be distinct");
+
+const storeKitById = new Map(storeKitEntries.map((record) => [record.entry.productID, record]));
+for (const manifestEntry of manifest.catalog) {
+  const local = storeKitById.get(manifestEntry.productId);
+  assert(!!local, `${manifestEntry.productId} must exist in StoreKit`);
+  if (!local) continue;
+  const expectedType = manifestEntry.type === "consumable" ? "Consumable" : "RecurringSubscription";
+  assert(local.entry.type === expectedType, `${manifestEntry.productId} StoreKit type must be ${expectedType}`);
+  if (manifestEntry.type === "auto_renewable_subscription") {
+    const expectedGroupId = `group-${manifestEntry.subscriptionGroup}`;
+    assert(local.entry.recurringSubscriptionPeriod === manifestEntry.duration, `${manifestEntry.productId} StoreKit duration drifted`);
+    assert(local.group?.id === expectedGroupId, `${manifestEntry.productId} StoreKit group ID drifted`);
+    assert(local.group?.name === manifestEntry.subscriptionGroup, `${manifestEntry.productId} StoreKit group name drifted`);
+    assert(local.entry.subscriptionGroupID === expectedGroupId, `${manifestEntry.productId} StoreKit product group binding drifted`);
+  } else {
+    assert(local.group === null, `${manifestEntry.productId} consumable must not be inside a subscription group`);
+    assert(local.entry.recurringSubscriptionPeriod == null, `${manifestEntry.productId} consumable must not carry a duration`);
+    assert(local.entry.subscriptionGroupID == null, `${manifestEntry.productId} consumable must not carry a group binding`);
+  }
+}
 
 for (const marker of [
   '"paid_video"', '"event_pass"', '"vip_pass"', '"channel_subscription"',
@@ -93,6 +116,12 @@ for (const source of [paidVideo, paidEvents, vip, channels]) {
   includes(source, 'store: "app_store"', "creator-money App Store policy invocation");
   includes(source, "purchaseRevenueCat", "creator-money RevenueCat purchase path");
 }
+for (const source of [paidVideo, paidEvents, vip, seatPasses]) {
+  includes(source, 'products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;', "RevenueCat exact-product purchase authority");
+  excludes(source, "products[", "RevenueCat positional-product fallback");
+}
+includes(channels, "return normalized ? [normalized] : [];", "exact channel subscription product matching");
+excludes(channels, "withoutBasePlan", "client-derived Google Play base-plan fallback");
 
 for (const marker of [
   'add column if not exists "expires_at"',
@@ -131,7 +160,12 @@ for (const marker of [
   'grants_admin_power',
   'grants_payout_access',
 ]) includes(atomic, marker, "atomic provider migration");
-includes(webhook, 'adminClient.rpc("process_revenuecat_consumable_event_atomic"', "RevenueCat atomic creator-money webhook call");
+for (const marker of [
+  'adminClient.rpc("process_revenuecat_app_store_event_atomic"',
+  'adminClient.rpc("process_revenuecat_google_play_event_atomic"',
+  'adminClient.rpc("process_revenuecat_terminal_event_atomic"',
+]) includes(webhook, marker, "RevenueCat store-exact atomic creator-money webhook call");
+excludes(webhook, 'adminClient.rpc("process_revenuecat_consumable_event_provider_internal"', "RevenueCat internal projector isolation");
 
 for (const marker of [
   'finalize_creator_money_settlement',
