@@ -64,7 +64,7 @@ export function canonicalGitText(value) {
   return value.replace(/\r\n?|\n/gu, "\n").trim();
 }
 
-export const TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS = Object.freeze([
+export const HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS = Object.freeze([
   "CURRENT_STATE.md",
   "NEXT_TASK.md",
   "config/assurance/current-truth-v1.json",
@@ -74,6 +74,327 @@ export const TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS = Object.freeze([
   "tests/assurance/active-task-binding-a1.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
+
+export const TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS = Object.freeze([
+  ...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.slice(0, -1),
+  "tests/assurance/engineering-doctrine.test.mjs",
+  HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.at(-1),
+]);
+
+export const TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE = Object.freeze({
+  schemaVersion: 2,
+  profileId: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE_V2",
+  changedPaths: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
+  changedPathHash: sha256(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS),
+  maximumFiles: 9,
+  maximumNetLines: 1800,
+});
+
+export const TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID = "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_V1";
+export const TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION = "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1";
+
+const historicalTerminalVerifierRepairProfile = Object.freeze({
+  schemaVersion: 1,
+  profileId: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE_V1",
+  changedPaths: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
+  changedPathHash: sha256(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS),
+  maximumFiles: 8,
+  maximumNetLines: 1800,
+});
+
+const terminalVerifierRepairClosedAuthority = Object.freeze({
+  product: false,
+  nativeProduct: false,
+  database: false,
+  providerMutation: false,
+  build: false,
+  submission: false,
+  ota: false,
+  publicRelease: false,
+});
+
+const terminalVerifierRepairProfileSubject = (profile) => ({
+  schemaVersion: profile?.schemaVersion,
+  profileId: profile?.profileId,
+  changedPaths: Array.isArray(profile?.changedPaths) ? [...profile.changedPaths] : profile?.changedPaths,
+  changedPathHash: profile?.changedPathHash,
+  maximumFiles: profile?.maximumFiles,
+  maximumNetLines: profile?.maximumNetLines,
+});
+
+const terminalVerifierRepairReceiptSubject = (receipt) => ({
+  commentId: receipt?.commentId,
+  subjectHash: receipt?.subjectHash,
+  commentBodyHash: receipt?.commentBodyHash,
+  ...(receipt?.diffHash === undefined ? {} : { diffHash: receipt.diffHash }),
+  disposition: receipt?.disposition,
+});
+
+export function terminalVerifierRepairInstanceSubject(value = {}) {
+  const predecessor = value?.predecessor ?? {};
+  const receipts = value?.receiptBindings ?? {};
+  return {
+    schemaVersion: value?.schemaVersion,
+    ordinal: value?.ordinal,
+    classification: value?.classification,
+    repository: value?.repository,
+    pullRequest: value?.pullRequest,
+    branch: value?.branch,
+    protectedBase: value?.protectedBase,
+    priorCurrentTruthHash: value?.priorCurrentTruthHash,
+    priorInstanceId: value?.priorInstanceId ?? null,
+    predecessor: {
+      pullRequest: predecessor?.pullRequest,
+      mergeSha: predecessor?.mergeSha,
+      firstParent: predecessor?.firstParent,
+      sourceHead: predecessor?.sourceHead,
+      sourceTree: predecessor?.sourceTree,
+      authorityCommentId: predecessor?.authorityCommentId,
+      authoritySubjectHash: predecessor?.authoritySubjectHash,
+      authorityBodyHash: predecessor?.authorityBodyHash,
+    },
+    receiptBindings: {
+      historicalTerminalReceipt: terminalVerifierRepairReceiptSubject(receipts?.historicalTerminalReceipt),
+      predecessorReceipts: Array.isArray(receipts?.predecessorReceipts)
+        ? receipts.predecessorReceipts.map(terminalVerifierRepairReceiptSubject).sort((left, right) => left.commentId - right.commentId)
+        : receipts?.predecessorReceipts,
+    },
+    pendingTransitionPolicyId: value?.pendingTransitionPolicyId,
+    pendingTransitions: Array.isArray(value?.pendingTransitions)
+      ? value.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))
+      : value?.pendingTransitions,
+    expectedNextTask: value?.expectedNextTask,
+    profile: terminalVerifierRepairProfileSubject(value?.profile),
+    singleUse: value?.singleUse,
+    authority: Object.fromEntries(Object.keys(terminalVerifierRepairClosedAuthority).map((key) => [key, value?.authority?.[key]])),
+  };
+}
+
+export function createTerminalVerifierRepairInstance(value = {}) {
+  const subject = terminalVerifierRepairInstanceSubject(value);
+  return { ...subject, instanceId: sha256(subject) };
+}
+
+const hash64Pattern = /^[0-9a-f]{64}$/u;
+const sha40Pattern = /^[0-9a-f]{40}$/u;
+const positiveInteger = (value) => Number.isInteger(value) && value > 0;
+
+function terminalVerifierRepairReceiptValid(receipt, { diffRequired = false } = {}) {
+  return positiveInteger(receipt?.commentId)
+    && hash64Pattern.test(receipt?.subjectHash ?? "")
+    && hash64Pattern.test(receipt?.commentBodyHash ?? "")
+    && typeof receipt?.disposition === "string"
+    && receipt.disposition.length > 0
+    && (!diffRequired || hash64Pattern.test(receipt?.diffHash ?? ""));
+}
+
+function terminalVerifierRepairInstanceValid(instance, index, previous) {
+  const subject = terminalVerifierRepairInstanceSubject(instance);
+  const canonical = createTerminalVerifierRepairInstance(subject);
+  const receipts = subject.receiptBindings;
+  const predecessorReceipts = receipts?.predecessorReceipts;
+  const canonicalReceipts = Array.isArray(predecessorReceipts)
+    ? predecessorReceipts.filter(({ disposition }) => disposition === "CANONICAL_CURRENT")
+    : [];
+  const architectureAuthorityReceipts = Array.isArray(predecessorReceipts)
+    ? predecessorReceipts.filter(({ disposition }) => disposition === "OWNER_ARCHITECTURE_AUTHORITY")
+    : [];
+  const receiptIds = Array.isArray(predecessorReceipts)
+    ? [receipts.historicalTerminalReceipt?.commentId, ...predecessorReceipts.map(({ commentId }) => commentId)]
+    : [];
+  const receiptEvidenceKeys = Array.isArray(predecessorReceipts)
+    ? [receipts.historicalTerminalReceipt, ...predecessorReceipts].map(({ subjectHash, commentBodyHash }) => `${subjectHash}:${commentBodyHash}`)
+    : [];
+  const pending = subject.pendingTransitions;
+  const lastPending = Array.isArray(pending) ? pending.at(-1) : null;
+  const profile = subject.profile;
+  const currentProfile = stableJson(profile) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE);
+  const historicalProfile = stableJson(profile) === stableJson(historicalTerminalVerifierRepairProfile);
+  return stableJson(instance) === stableJson(canonical)
+    && subject.schemaVersion === 1
+    && subject.ordinal === index + 1
+    && subject.classification === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION
+    && subject.repository === "Chillywood2025/chillywood-mobile"
+    && positiveInteger(subject.pullRequest)
+    && typeof subject.branch === "string"
+    && /^codex\/[a-z0-9][a-z0-9._/-]*$/u.test(subject.branch)
+    && sha40Pattern.test(subject.protectedBase ?? "")
+    && hash64Pattern.test(subject.priorCurrentTruthHash ?? "")
+    && subject.priorInstanceId === (previous?.instanceId ?? null)
+    && positiveInteger(subject.predecessor?.pullRequest)
+    && sha40Pattern.test(subject.predecessor?.mergeSha ?? "")
+    && sha40Pattern.test(subject.predecessor?.firstParent ?? "")
+    && sha40Pattern.test(subject.predecessor?.sourceHead ?? "")
+    && sha40Pattern.test(subject.predecessor?.sourceTree ?? "")
+    && positiveInteger(subject.predecessor?.authorityCommentId)
+    && hash64Pattern.test(subject.predecessor?.authoritySubjectHash ?? "")
+    && hash64Pattern.test(subject.predecessor?.authorityBodyHash ?? "")
+    && terminalVerifierRepairReceiptValid(receipts?.historicalTerminalReceipt)
+    && receipts.historicalTerminalReceipt.disposition === "HISTORICAL_STALE_TERMINAL_RECEIPT"
+    && Array.isArray(predecessorReceipts)
+    && predecessorReceipts.length > 0
+    && predecessorReceipts.every((receipt) => terminalVerifierRepairReceiptValid(receipt, { diffRequired: receipt.disposition !== "OWNER_ARCHITECTURE_AUTHORITY" }))
+    && predecessorReceipts.every(({ disposition }) => ["CANONICAL_CURRENT", "HISTORICAL_REJECTED", "OWNER_ARCHITECTURE_AUTHORITY"].includes(disposition))
+    && canonicalReceipts.length === 1
+    && (index === 0
+      ? architectureAuthorityReceipts.length === 0
+        && predecessorReceipts.length === 2
+        && canonicalReceipts[0].commentId === subject.predecessor.authorityCommentId
+        && canonicalReceipts[0].subjectHash === subject.predecessor.authoritySubjectHash
+        && canonicalReceipts[0].commentBodyHash === subject.predecessor.authorityBodyHash
+      : architectureAuthorityReceipts.length === 1
+        && predecessorReceipts.length === 2
+        && architectureAuthorityReceipts[0].diffHash === undefined
+        && architectureAuthorityReceipts[0].commentId === subject.predecessor.authorityCommentId
+        && architectureAuthorityReceipts[0].subjectHash === subject.predecessor.authoritySubjectHash
+        && architectureAuthorityReceipts[0].commentBodyHash === subject.predecessor.authorityBodyHash)
+    && new Set(receiptIds).size === receiptIds.length
+    && new Set(receiptEvidenceKeys).size === receiptEvidenceKeys.length
+    && subject.pendingTransitionPolicyId === "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1"
+    && Array.isArray(pending)
+    && pending.length === (index === 0 ? 2 : 1)
+    && pending.every(({ pr, mergeSha, status }) => positiveInteger(pr) && sha40Pattern.test(mergeSha ?? "") && status === "CONSUMED_BY_THIS_TERMINAL_TRUTH")
+    && new Set(pending.map(({ mergeSha }) => mergeSha)).size === pending.length
+    && lastPending?.pr === subject.predecessor.pullRequest
+    && lastPending?.mergeSha === subject.predecessor.mergeSha
+    && typeof subject.expectedNextTask === "string"
+    && subject.expectedNextTask.length > 0
+    && (index === 0 ? historicalProfile : currentProfile)
+    && profile.changedPaths.length === profile.maximumFiles
+    && profile.changedPathHash === sha256(profile.changedPaths)
+    && profile.maximumNetLines === 1800
+    && subject.singleUse === true
+    && stableJson(subject.authority) === stableJson(terminalVerifierRepairClosedAuthority);
+}
+
+export function evaluateTerminalVerifierRepairHistory({ repair, expectedCurrent, expectedPriorInstances } = {}) {
+  const history = repair?.history;
+  const instances = history?.instances;
+  const findings = [];
+  if (history?.schemaVersion !== 1
+    || history?.policyId !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID
+    || stableJson(history?.profile) !== stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE)
+    || !Array.isArray(instances)
+    || instances.length === 0
+    || stableJson(history) !== stableJson({ schemaVersion: 1, policyId: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, instances })) {
+    findings.push("TERMINAL_VERIFIER_REPAIR_HISTORY_MALFORMED");
+  }
+  if (Array.isArray(instances)) {
+    for (let index = 0; index < instances.length; index += 1) {
+      if (!terminalVerifierRepairInstanceValid(instances[index], index, instances[index - 1])) findings.push("TERMINAL_VERIFIER_REPAIR_HISTORY_INSTANCE_INVALID");
+    }
+    if (instances[0] && stableJson(instances[0]) !== stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE)) {
+      findings.push("TERMINAL_VERIFIER_REPAIR_HISTORY_HISTORICAL_SEED_INVALID");
+    }
+    for (const selector of [
+      ({ instanceId }) => instanceId,
+      ({ pullRequest }) => pullRequest,
+      ({ predecessor }) => `${predecessor?.pullRequest}:${predecessor?.mergeSha}`,
+      ({ protectedBase, priorCurrentTruthHash }) => `${protectedBase}:${priorCurrentTruthHash}`,
+      ({ receiptBindings }) => receiptBindings?.historicalTerminalReceipt?.commentId,
+      ({ receiptBindings }) => `${receiptBindings?.historicalTerminalReceipt?.subjectHash}:${receiptBindings?.historicalTerminalReceipt?.commentBodyHash}`,
+    ]) {
+      const values = instances.map(selector);
+      if (new Set(values).size !== values.length) findings.push("TERMINAL_VERIFIER_REPAIR_HISTORY_DUPLICATE_OR_REPLAY");
+    }
+    const allReceiptIds = instances.flatMap(({ receiptBindings }) => [receiptBindings?.historicalTerminalReceipt?.commentId, ...(receiptBindings?.predecessorReceipts ?? []).map(({ commentId }) => commentId)]);
+    const allReceiptEvidence = instances.flatMap(({ receiptBindings }) => [receiptBindings?.historicalTerminalReceipt, ...(receiptBindings?.predecessorReceipts ?? [])])
+      .map((receipt) => `${receipt?.subjectHash}:${receipt?.commentBodyHash}`);
+    if (new Set(allReceiptIds).size !== allReceiptIds.length
+      || new Set(allReceiptEvidence).size !== allReceiptEvidence.length) {
+      findings.push("TERMINAL_VERIFIER_REPAIR_HISTORY_DUPLICATE_OR_REPLAY");
+    }
+  }
+  if (expectedPriorInstances !== undefined) {
+    const prefix = Array.isArray(instances) ? instances.slice(0, -1) : null;
+    if (!Array.isArray(expectedPriorInstances)
+      || !Array.isArray(instances)
+      || instances.length !== expectedPriorInstances.length + 1
+      || stableJson(prefix) !== stableJson(expectedPriorInstances)) {
+      findings.push("TERMINAL_VERIFIER_REPAIR_HISTORY_NOT_SINGLE_APPEND");
+    }
+  }
+  const current = Array.isArray(instances) ? instances.at(-1) : null;
+  if (expectedCurrent !== undefined) {
+    const expectedPending = Array.isArray(expectedCurrent?.pendingTransitions)
+      ? expectedCurrent.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))
+      : null;
+    if (!current
+      || current.repository !== expectedCurrent?.repository
+      || current.pullRequest !== expectedCurrent?.pullRequest
+      || current.branch !== expectedCurrent?.branch
+      || current.protectedBase !== expectedCurrent?.protectedBase
+      || current.priorCurrentTruthHash !== expectedCurrent?.priorCurrentTruthHash
+      || stableJson(current.pendingTransitions) !== stableJson(expectedPending)
+      || current.expectedNextTask !== expectedCurrent?.expectedNextTask
+      || stableJson(current.profile) !== stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE)) {
+      findings.push("TERMINAL_VERIFIER_REPAIR_HISTORY_CURRENT_BINDING_INVALID");
+    }
+  }
+  return { ok: findings.length === 0, findings: [...new Set(findings)].sort(), current, instances: Array.isArray(instances) ? instances : [] };
+}
+
+export const HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE = Object.freeze(createTerminalVerifierRepairInstance({
+  schemaVersion: 1,
+  ordinal: 1,
+  classification: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
+  repository: "Chillywood2025/chillywood-mobile",
+  pullRequest: 228,
+  branch: "codex/post-whole-app-engineering-doctrine-truth",
+  protectedBase: "5506f1c2c227c0d3383131db7f818fef1aae2541",
+  priorCurrentTruthHash: "035c23f3a5508e9e047cbed60a1826b00ebbe508c2b43b17c074f5de2adf85bc",
+  priorInstanceId: null,
+  predecessor: {
+    pullRequest: 227,
+    mergeSha: "5506f1c2c227c0d3383131db7f818fef1aae2541",
+    firstParent: "c1f9ec1f71cc8bc4448afd2327c4341cac309573",
+    sourceHead: "cb4be9ff1e4a956d73cffc1de6902538b79a918c",
+    sourceTree: "b8e7f4b47cd838496adcd398744426dc80ff9461",
+    authorityCommentId: 5280109323,
+    authoritySubjectHash: "866da37ef99aea7452e77e0071225dfbea143d3e170f66e401210ca7085098f5",
+    authorityBodyHash: "08aa4e3239ca36cd07e5d2535b351e97f894b5021b1f20a9b20c7335229b92e9",
+  },
+  receiptBindings: {
+    historicalTerminalReceipt: {
+      commentId: 5280368893,
+      subjectHash: "99b739eeff1e8ebba285e17fde60528cfb4ecb96983f8a8b01f96b4cfd865c9e",
+      commentBodyHash: "6e0633e07079c68dffbf79539d55a7fd1906454c3b2ffd5a45d463108808bc05",
+      disposition: "HISTORICAL_STALE_TERMINAL_RECEIPT",
+    },
+    predecessorReceipts: [
+      {
+        commentId: 5277679438,
+        subjectHash: "672a9d1b7fce76a44941df9c1386044bda7645e36ab33ee49a6af4bcd662afc8",
+        commentBodyHash: "c2683c3003039d837971d0cf8c1e78b054d229e9142dd79a5799de336ed4b689",
+        diffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
+        disposition: "HISTORICAL_REJECTED",
+      },
+      {
+        commentId: 5280109323,
+        subjectHash: "866da37ef99aea7452e77e0071225dfbea143d3e170f66e401210ca7085098f5",
+        commentBodyHash: "08aa4e3239ca36cd07e5d2535b351e97f894b5021b1f20a9b20c7335229b92e9",
+        diffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+        disposition: "CANONICAL_CURRENT",
+      },
+    ],
+  },
+  pendingTransitionPolicyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+  pendingTransitions: [
+    { pr: 226, mergeSha: "c1f9ec1f71cc8bc4448afd2327c4341cac309573", status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    { pr: 227, mergeSha: "5506f1c2c227c0d3383131db7f818fef1aae2541", status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+  ],
+  expectedNextTask: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
+  profile: historicalTerminalVerifierRepairProfile,
+  singleUse: true,
+  authority: terminalVerifierRepairClosedAuthority,
+}));
+
+export const HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY = Object.freeze({
+  schemaVersion: 1,
+  policyId: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID,
+  profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE,
+  instances: Object.freeze([HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE]),
+});
 
 export function args(argv = process.argv.slice(2)) {
   const result = {};
@@ -2064,14 +2385,14 @@ function embeddedRollingAuthorityBound(commit, checkpoint, gitCommand) {
 
 function parseProtectedPullRequestMergeSubject(subject) {
   const patterns = [
-    ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge pull request #([1-9][0-9]*) from [^/\s]+\/.+$/u],
+    ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge pull request #([1-9][0-9]*) from [^/\s]+\/(.+)$/u],
     ["GITHUB_TITLE_WITH_PR_SUFFIX", /^\S(?:.*\S)? \(#([1-9][0-9]*)\)$/u]
   ];
   for (const [format, pattern] of patterns) {
     const match = pattern.exec(subject ?? "");
-    if (match) return { ok: true, format, prNumber: Number(match[1]) };
+    if (match) return { ok: true, format, prNumber: Number(match[1]), sourceBranch: match[2] ?? null };
   }
-  return { ok: false, format: null, prNumber: null };
+  return { ok: false, format: null, prNumber: null, sourceBranch: null };
 }
 
 const closedPendingAuthority = (authority) => stableJson(authority) === stableJson({
@@ -2140,7 +2461,9 @@ function genericPendingMaintenanceTransition(observation, authorityChanged, gitC
     && closedPendingAuthority(value?.authority);
   return valid ? {
     transitionId: "PENDING_TERMINAL_TRUTH_TRANSITION_V1",
+    pullRequest: parseProtectedPullRequestMergeSubject(observation.subject).prNumber,
     mergeSha: observation.commit,
+    firstParent: observation.parents[0],
     sourceHead: observation.parents[1],
     sourceTree,
     expectedTerminalNextTask: value.expectedTerminalNextTask,
@@ -2166,37 +2489,124 @@ function embeddedTerminalTransitionConsumption(observation, pending, gitCommand)
   }
 }
 
-function embeddedTerminalVerifierRepairConsumption(observation, pending, gitCommand) {
+function legacyTerminalVerifierRepairProjectionExact(repair) {
+  return repair?.classification === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION
+    && repair?.historicalTerminalReceipt === 5280368893
+    && repair?.rejectedPredecessorReceipt === 5277679438
+    && repair?.canonicalPredecessorReceipt === 5280109323
+    && repair?.rawPredecessorDiffHash === "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b"
+    && repair?.canonicalPredecessorDiffHash === "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea"
+    && stableJson(repair?.changedVerifierPaths) === stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.slice(3))
+    && repair?.singleUse === true
+    && closedPendingAuthority(repair?.authority);
+}
+
+function terminalVerifierRepairNetLines(observation, gitCommand) {
+  if (Number.isInteger(observation?.netChangedLines) && observation.netChangedLines >= 0) return observation.netChangedLines;
+  try {
+    const lines = gitCommand(["diff", "--numstat", observation.parents[0], observation.commit]).split(/\r?\n/gu).filter(Boolean);
+    if (!lines.length && (observation?.changedPaths?.length ?? 0) > 0) return null;
+    let additions = 0;
+    let deletions = 0;
+    for (const line of lines) {
+      const [added, deleted] = line.split("\t", 3);
+      if (added === "-" && deleted === "-") continue;
+      if (!/^\d+$/u.test(added ?? "") || !/^\d+$/u.test(deleted ?? "")) return null;
+      additions += Number(added);
+      deletions += Number(deleted);
+    }
+    return Math.max(0, additions - deletions);
+  } catch {
+    return null;
+  }
+}
+
+function exactGitBlobSha256(ref, gitCommand) {
+  const canonical = gitCommand(["show", ref]);
+  const objectId = gitCommand(["rev-parse", ref]);
+  const sizeText = gitCommand(["cat-file", "-s", objectId]);
+  if (!sha40Pattern.test(objectId ?? "") || !/^\d+$/u.test(sizeText ?? "")) return null;
+  const size = Number(sizeText);
+  const candidates = [canonical, `${canonical}\n`].filter((value, index, values) => values.indexOf(value) === index && Buffer.byteLength(value, "utf8") === size);
+  return candidates.length === 1 ? sha256(candidates[0]) : null;
+}
+
+function embeddedTerminalVerifierRepairConsumption(observation, pending, priorInstances, gitCommand) {
   try {
     const embedded = JSON.parse(gitCommand(["show", `${observation.commit}:config/assurance/current-truth-v1.json`]));
     const architecture = embedded?.taskContextArchitecture;
     const repair = architecture?.terminalVerifierRepair;
     const consumed = architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }));
-    const expectedConsumed = pending.length
-      ? pending.map(({ mergeSha }, index) => ({ pr: index === 0 ? 226 : 227, mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }))
-      : [
-          { pr: 226, mergeSha: "c1f9ec1f71cc8bc4448afd2327c4341cac309573", status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
-          { pr: 227, mergeSha: "5506f1c2c227c0d3383131db7f818fef1aae2541", status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
-        ];
-    return parseProtectedPullRequestMergeSubject(observation.subject).prNumber === 228
-      && stableJson([...(observation.changedPaths ?? [])].sort()) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS)
-      && repair?.classification === "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1"
-      && repair?.historicalTerminalReceipt === 5280368893
-      && repair?.rejectedPredecessorReceipt === 5277679438
-      && repair?.canonicalPredecessorReceipt === 5280109323
-      && repair?.rawPredecessorDiffHash === "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b"
-      && repair?.canonicalPredecessorDiffHash === "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea"
-      && repair?.singleUse === true
-      && closedPendingAuthority(repair?.authority)
+    const parsed = parseProtectedPullRequestMergeSubject(observation.subject);
+    const changedPaths = [...(observation.changedPaths ?? [])].sort();
+    const historical = observation.commit === "35ba9d852f0136141ee863ed44d58ed450192033"
+      && stableJson(observation.parents) === stableJson(["5506f1c2c227c0d3383131db7f818fef1aae2541", "a265eb7cfecd05e6021c3dbd82d517252e3da8bc"])
+      && observation.tree === "f4d581596f146190d3799e3efe76aa10c7fda9c5"
+      && parsed.prNumber === 228
+      && parsed.sourceBranch === HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.branch
+      && stableJson(changedPaths) === stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS)
+      && legacyTerminalVerifierRepairProjectionExact(repair)
+      && priorInstances.length === 0
+      && architecture?.pendingTransitionPolicyId === "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1"
+      && architecture?.pendingTransitionCountAfterSynchronization === 0
+      && architecture?.terminalTransitionConsumed === true
+      && stableJson(consumed) === stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.pendingTransitions)
+      && embedded?.engineeringDoctrine?.status === "ACTIVE"
+      && embedded?.engineeringDoctrine?.nextPermittedAction === HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.expectedNextTask
+      && stableJson(architecture?.authority) === stableJson({ providerMutation: false, build: false, submission: false, ota: false, publicRelease: false });
+    if (historical) {
+      return { ok: true, current: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, instances: [HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE], historical: true };
+    }
+    const netChangedLines = terminalVerifierRepairNetLines(observation, gitCommand);
+    if (stableJson(changedPaths) !== stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS)
+      || pending.length === 0
+      || !legacyTerminalVerifierRepairProjectionExact(repair)
+      || netChangedLines === null
+      || netChangedLines > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines) {
+      return { ok: false, current: null, instances: priorInstances, historical: false };
+    }
+    const parentTruthRef = `${observation.parents[0]}:config/assurance/current-truth-v1.json`;
+    const priorCurrentTruthHash = exactGitBlobSha256(parentTruthRef, gitCommand);
+    if (!priorCurrentTruthHash) return { ok: false, current: null, instances: priorInstances, historical: false };
+    const expectedConsumed = pending.map(({ pullRequest, mergeSha }) => ({ pr: pullRequest, mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }));
+    const expectedNextTask = pending[0]?.expectedTerminalNextTask;
+    const history = evaluateTerminalVerifierRepairHistory({
+      repair,
+      expectedPriorInstances: priorInstances,
+      expectedCurrent: {
+        repository: "Chillywood2025/chillywood-mobile",
+        pullRequest: parsed.prNumber,
+        branch: parsed.sourceBranch,
+        protectedBase: observation.parents[0],
+        priorCurrentTruthHash,
+        pendingTransitions: expectedConsumed,
+        expectedNextTask,
+      },
+    });
+    const current = history.current;
+    const canonicalReceipt = current?.receiptBindings?.predecessorReceipts?.find(({ disposition }) => disposition === "CANONICAL_CURRENT");
+    const instanceBound = current?.predecessor?.pullRequest === architecture?.architecturePr
+      && current?.predecessor?.mergeSha === architecture?.mergeSha
+      && current?.predecessor?.firstParent === pending.at(-1)?.firstParent
+      && current?.predecessor?.sourceHead === architecture?.sourceHead
+      && current?.predecessor?.sourceTree === architecture?.sourceTree
+      && current?.predecessor?.authorityCommentId === architecture?.authorityCommentId
+      && current?.predecessor?.authoritySubjectHash === architecture?.authoritySubjectHash
+      && current?.predecessor?.authorityBodyHash === architecture?.authorityBodyHash
+      && Boolean(canonicalReceipt);
+    const ok = parsed.ok
+      && history.ok
+      && instanceBound
       && architecture?.pendingTransitionPolicyId === "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1"
       && architecture?.pendingTransitionCountAfterSynchronization === 0
       && architecture?.terminalTransitionConsumed === true
       && stableJson(consumed) === stableJson(expectedConsumed)
       && embedded?.engineeringDoctrine?.status === "ACTIVE"
-      && embedded?.engineeringDoctrine?.nextPermittedAction === "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE"
+      && embedded?.engineeringDoctrine?.nextPermittedAction === expectedNextTask
       && stableJson(architecture?.authority) === stableJson({ providerMutation: false, build: false, submission: false, ota: false, publicRelease: false });
+    return { ok, current: ok ? current : null, instances: ok ? history.instances : priorInstances, historical: false };
   } catch {
-    return false;
+    return { ok: false, current: null, instances: priorInstances, historical: false };
   }
 }
 
@@ -2296,6 +2706,19 @@ export function evaluateProtectedMainAdvancement({
   const advancements = [];
   const pendingTransitions = [];
   let pendingConsumptionCount = 0;
+  const checkpointRepair = record?.taskContextArchitecture?.terminalVerifierRepair;
+  let repairHistoryInstances = [];
+  if (checkpointRepair?.history) {
+    const checkpointHistory = evaluateTerminalVerifierRepairHistory({ repair: checkpointRepair });
+    if (checkpointHistory.ok) repairHistoryInstances = checkpointHistory.instances;
+    else findings.push("CURRENT_TRUTH_TERMINAL_VERIFIER_REPAIR_HISTORY_INVALID");
+  } else if (checkpointRepair) {
+    if (legacyTerminalVerifierRepairProjectionExact(checkpointRepair)) {
+      repairHistoryInstances = [HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE];
+    } else {
+      findings.push("CURRENT_TRUTH_TERMINAL_VERIFIER_REPAIR_HISTORY_INVALID");
+    }
+  }
   for (const observation of observations) {
     const pathClassifications = classifyProtectedMainPaths(observation.changedPaths ?? [], policy, activeLeasePaths);
     const classifications = [...new Set(pathClassifications.map(({ classification }) => classification))].sort();
@@ -2310,13 +2733,20 @@ export function evaluateProtectedMainAdvancement({
     if (!normalPrMerge) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
     const authorityChanged = classifications.includes(protectedMainClasses.authority);
     const terminalChanged = classifications.includes(protectedMainClasses.terminal) && !authorityChanged;
-    const terminalRepairScope = stableJson([...(observation.changedPaths ?? [])].sort()) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
-    const terminalRepairChanged = normalPrMerge && authorityChanged && embeddedTerminalVerifierRepairConsumption(observation, pendingTransitions, gitCommand);
+    const observedRepairPaths = [...(observation.changedPaths ?? [])].sort();
+    const terminalRepairScope = [
+      HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
+      TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
+    ].some((paths) => stableJson(observedRepairPaths) === stableJson(paths));
+    const terminalRepairConsumption = normalPrMerge && authorityChanged && terminalRepairScope
+      ? embeddedTerminalVerifierRepairConsumption(observation, pendingTransitions, repairHistoryInstances, gitCommand)
+      : { ok: false, current: null, instances: repairHistoryInstances, historical: false };
+    const terminalRepairChanged = terminalRepairConsumption.ok;
     const companionPresent = (policy.authorityRequiredCompanionPaths ?? []).every((file) => (observation.changedPaths ?? []).includes(file));
     const authorityBound = observation.authorityUpdateBound === true
       || (observation.authorityUpdateBound !== false && authorityChanged && embeddedRollingAuthorityBound(observation.commit, checkpointSha, gitCommand));
     const historicalPending = normalPrMerge && authorityChanged && historicalPendingDoctrineTransition(observation, parsedMergeSubject, pendingTransitionPolicy?.historical)
-      ? { transitionId: pendingTransitionPolicy.historical.transitionId, mergeSha: observation.commit, sourceHead: observation.parents[1], sourceTree: observation.tree, expectedTerminalNextTask: pendingTransitionPolicy.historical.expectedTerminalNextTask, authoritySource: "HISTORICAL_EXACT_OWNER_DOCTRINE_AUTHORITY", historical: true }
+      ? { transitionId: pendingTransitionPolicy.historical.transitionId, pullRequest: parsedMergeSubject.prNumber, mergeSha: observation.commit, firstParent: observation.parents[0], sourceHead: observation.parents[1], sourceTree: observation.tree, expectedTerminalNextTask: pendingTransitionPolicy.historical.expectedTerminalNextTask, authoritySource: "HISTORICAL_EXACT_OWNER_DOCTRINE_AUTHORITY", historical: true }
       : null;
     const genericPending = normalPrMerge && !historicalPending
       ? genericPendingMaintenanceTransition(observation, authorityChanged, gitCommand)
@@ -2347,14 +2777,16 @@ export function evaluateProtectedMainAdvancement({
         || (exactTerminalRepairPaths && terminalRepairChanged)) {
         pendingTransitions.splice(0);
         pendingConsumptionCount += 1;
+        if (terminalRepairChanged) repairHistoryInstances = terminalRepairConsumption.instances;
       }
       else findings.push("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID");
-    } else if ((terminalSynchronization || terminalRepairScope) && pendingConsumptionCount > 0) {
+    } else if (terminalRepairScope && !terminalRepairChanged) {
+      findings.push("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID");
+    } else if (terminalSynchronization && pendingConsumptionCount > 0) {
       findings.push("CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID");
     } else if (terminalRepairChanged && pendingTransitions.length === 0) {
       pendingConsumptionCount += 1;
-    } else if (pendingTransitions.length && !pendingCandidate) {
-      findings.push("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED");
+      repairHistoryInstances = terminalRepairConsumption.instances;
     }
     advancements.push({
       mergeSha: observation.commit,
@@ -2371,11 +2803,13 @@ export function evaluateProtectedMainAdvancement({
       authorityBound: authorityChanged ? authorityBound : null,
       pendingTerminalTruth: Boolean(pendingCandidate),
       terminalVerifierRepair: terminalRepairChanged,
+      terminalVerifierRepairInstanceId: terminalRepairConsumption.current?.instanceId ?? null,
       pendingTransitionId: pendingCandidate?.transitionId ?? null
     });
     prior = observation.commit;
   }
   if (observations.length && prior !== observedSha) findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID");
+  if (pendingTransitions.length > 0) findings.push("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED");
   const activeTaskInputsInvalidated = [...new Set(advancements.flatMap(({ pathClassifications }) => pathClassifications
     .filter(({ classification }) => classification === protectedMainClasses.input)
     .map(({ path: file }) => file)))].sort();
@@ -2479,6 +2913,7 @@ export function evaluateProtectedMainAdvancement({
     pendingTransitionCount: pendingTransitions.length + (verifiedAmendedTerminal ? 1 : 0),
     pendingTransitionConsumptionCount: pendingConsumptionCount,
     pendingTransitions,
+    terminalVerifierRepairHistory: repairHistoryInstances,
     terminalSuccessorRequired: verifiedAmendedTerminal || pendingTransitions.length > 0,
     currentTruthStatus: verifiedAmendedTerminal
       ? "PENDING_FINITE_TASK_TERMINAL_TRUTH"

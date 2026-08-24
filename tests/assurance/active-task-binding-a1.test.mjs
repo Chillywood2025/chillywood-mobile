@@ -74,7 +74,7 @@ import {
   verifyFiniteTaskTestAdaptationReceipt,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -6227,4 +6227,150 @@ test("active-task frozen artifact 08: packet edge summaries cannot contradict in
   }, 799103);
   assert.equal(result.clear, false);
   assert.ok(result.findings.includes("PREIMPLEMENTATION_TASK_LOCAL_EDGE_CLOSURE_INCOMPLETE"));
+});
+
+test("A1 Phase 1 evidence survives post-merge association loss only through complete unique exact GitHub provenance", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "phase1-durable-provenance-"));
+  const fakeGitHub = path.join(temporary, "gh");
+  const callsPath = path.join(temporary, "calls.jsonl");
+  fs.writeFileSync(fakeGitHub, `#!/usr/bin/env node
+const fs = require("node:fs");
+const fixture = JSON.parse(process.env.A1_PHASE1_GITHUB_FIXTURE);
+const endpoint = process.argv.at(-1);
+fs.appendFileSync(fixture.callsPath, JSON.stringify({ endpoint, args: process.argv.slice(2) }) + "\\n");
+if (endpoint.includes("/actions/runs/") && endpoint.endsWith("/jobs?per_page=100")) {
+  process.stdout.write(JSON.stringify({ total_count: fixture.jobsComplete === false ? fixture.jobs.length + 1 : fixture.jobs.length, jobs: fixture.jobs }));
+} else if (endpoint.includes("/actions/runs/")) {
+  process.stdout.write(JSON.stringify(fixture.run));
+} else if (/\\/pulls\\/[1-9]\\d*$/u.test(endpoint)) {
+  process.stdout.write(JSON.stringify(fixture.directPullRequest ?? null));
+} else if (/\\/commits\\/[0-9a-f]{40}\\/pulls\\?per_page=100$/u.test(endpoint)) {
+  process.stdout.write(JSON.stringify(fixture.commitAssociationPaginationComplete === false ? { incomplete: true } : [fixture.commitAssociatedPullRequests]));
+} else {
+  process.stderr.write("unexpected endpoint: " + endpoint);
+  process.exitCode = 1;
+}
+`);
+  fs.chmodSync(fakeGitHub, 0o755);
+  const originalPath = process.env.PATH;
+  const originalFixture = process.env.A1_PHASE1_GITHUB_FIXTURE;
+  const identity = {
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: 731,
+    branch: "codex/generic-phase1-durable-provenance-v1",
+    baseRef: "main",
+    baseSha: "b".repeat(40),
+    headSha: "a".repeat(40),
+  };
+  const tree = "c".repeat(40);
+  const runId = 910731;
+  const exactPullRequest = {
+    number: identity.pr,
+    head: { ref: identity.branch, sha: identity.headSha, repo: { full_name: identity.repository } },
+    base: { ref: identity.baseRef, sha: identity.baseSha, repo: { full_name: identity.repository } },
+  };
+  const successfulRun = {
+    id: runId,
+    run_attempt: 1,
+    name: "Phase 1 CI",
+    path: ".github/workflows/phase1-ci.yml",
+    event: "pull_request",
+    status: "completed",
+    conclusion: "success",
+    repository: { full_name: identity.repository },
+    head_sha: identity.headSha,
+    head_branch: identity.branch,
+    pull_requests: [],
+  };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: identity.headSha }));
+  const baselineFixture = {
+    callsPath,
+    run: successfulRun,
+    jobs,
+    jobsComplete: true,
+    directPullRequest: exactPullRequest,
+    commitAssociationPaginationComplete: true,
+    commitAssociatedPullRequests: [exactPullRequest],
+  };
+  const observe = ({ fixtureOverrides = {}, identityOverrides = {}, observedRunId = runId } = {}) => {
+    const fixture = structuredClone(baselineFixture);
+    Object.assign(fixture, structuredClone(fixtureOverrides));
+    process.env.A1_PHASE1_GITHUB_FIXTURE = JSON.stringify(fixture);
+    return observePhase1RunEvidence({ runId: observedRunId, identity: { ...identity, ...identityOverrides }, tree, root: process.cwd() });
+  };
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+
+    const durable = observe();
+    assert.equal(durable.valid, true, "empty run.pull_requests must recover from the exact direct PR and complete unique commit association");
+
+    const directRun = {
+      ...Object.fromEntries(Object.entries(successfulRun).filter(([key]) => !["path", "repository"].includes(key))),
+      pull_requests: [{ number: identity.pr, head: { sha: identity.headSha }, base: { sha: identity.baseSha } }],
+    };
+    const direct = verifyPhase1RunEvidence({ run: directRun, jobs, identity, tree });
+    const historicalBody = {
+      classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1",
+      repository: identity.repository,
+      pr: identity.pr,
+      branch: identity.branch,
+      runId,
+      runAttempt: 1,
+      sourceHead: identity.headSha,
+      sourceTree: tree,
+      status: "completed",
+      conclusion: "success",
+      requiredJobs: PHASE1_REQUIRED_JOB_NAMES.length,
+      passedJobs: PHASE1_REQUIRED_JOB_NAMES.length,
+      jobNames: [...PHASE1_REQUIRED_JOB_NAMES],
+      result: "PASS_13_OF_13",
+    };
+    assert.deepEqual(direct, { ...historicalBody, valid: true, evidenceHash: hashValue(historicalBody) }, "ordinary one-linked-PR evidence must retain its historical authoritative result and hash");
+    assert.deepEqual(durable, direct, "durable recovery substitutes only the exact linked PR before canonical evidence hashing");
+
+    assert.equal(observe({ fixtureOverrides: { commitAssociatedPullRequests: [] } }).valid, false, "zero commit-associated PRs must fail closed");
+    const wrongPr = { ...exactPullRequest, number: identity.pr + 1 };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongPr, commitAssociatedPullRequests: [wrongPr] } }).valid, false, "wrong PR must fail closed");
+    const wrongHead = { ...exactPullRequest, head: { ...exactPullRequest.head, sha: "d".repeat(40) } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongHead, commitAssociatedPullRequests: [wrongHead] } }).valid, false, "wrong head must fail closed");
+    const wrongBase = { ...exactPullRequest, base: { ...exactPullRequest.base, sha: "e".repeat(40) } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongBase, commitAssociatedPullRequests: [wrongBase] } }).valid, false, "wrong base must fail closed");
+    const wrongBranch = { ...exactPullRequest, head: { ...exactPullRequest.head, ref: "codex/unrelated-branch" } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongBranch, commitAssociatedPullRequests: [wrongBranch] } }).valid, false, "wrong branch must fail closed");
+    const unrelatedPullRequest = { ...exactPullRequest, number: identity.pr + 2 };
+    assert.equal(observe({ fixtureOverrides: { commitAssociatedPullRequests: [exactPullRequest, unrelatedPullRequest] } }).valid, false, "multiple commit-associated candidates, including an unrelated PR for the same commit, must fail closed");
+    assert.equal(observe({ fixtureOverrides: { commitAssociationPaginationComplete: false } }).valid, false, "incomplete commit-to-pulls pagination must fail closed");
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: null } }).valid, false, "an incomplete exact-PR read must fail closed");
+    assert.equal(observe({ fixtureOverrides: { commitAssociatedPullRequests: [wrongBranch] } }).valid, false, "direct PR and commit association disagreement must fail closed");
+    const wrongRepository = { ...exactPullRequest, head: { ...exactPullRequest.head, repo: { full_name: "Chillywood2025/unrelated" } } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongRepository, commitAssociatedPullRequests: [wrongRepository] } }).valid, false, "wrong repository must fail closed");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, event: "workflow_dispatch" } } }).valid, false, "a non-pull_request event must fail closed");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, conclusion: "failure" } } }).valid, false, "an unsuccessful run must fail closed");
+    assert.equal(observe({ identityOverrides: { pr: identity.pr + 1 } }).valid, false, "one PR's run must not authorize another PR");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, id: runId + 1 } } }).valid, false, "the fetched run ID must equal the receipt-bound run ID");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, repository: { full_name: "Chillywood2025/unrelated" } } } }).valid, false, "the live workflow run repository must match the expected repository");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, path: ".github/workflows/unrelated.yml" } } }).valid, false, "the live workflow run must come from the canonical Phase 1 workflow path");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, pull_requests: [directRun.pull_requests[0], { number: identity.pr + 1 }] } } }).valid, false, "multiple direct run associations must not enter durable recovery");
+    assert.equal(verifyPhase1RunEvidence({
+      run: successfulRun,
+      jobs,
+      identity,
+      tree,
+      durablePullRequestProvenance: {
+        directPullRequestReadComplete: true,
+        directPullRequest: exactPullRequest,
+        commitAssociationPaginationComplete: true,
+        commitAssociatedPullRequests: [exactPullRequest],
+      },
+    }).valid, false, "caller-supplied provenance that was not gathered by the live observer must not be trusted");
+
+    const endpoints = fs.readFileSync(callsPath, "utf8").trim().split("\n").map((line) => JSON.parse(line).endpoint);
+    assert.equal(endpoints.some((endpoint) => endpoint === `repos/${identity.repository}/pulls/${identity.pr}`), true);
+    assert.equal(endpoints.some((endpoint) => endpoint === `repos/${identity.repository}/commits/${identity.headSha}/pulls?per_page=100`), true);
+  } finally {
+    process.env.PATH = originalPath;
+    if (originalFixture === undefined) delete process.env.A1_PHASE1_GITHUB_FIXTURE;
+    else process.env.A1_PHASE1_GITHUB_FIXTURE = originalFixture;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
 });

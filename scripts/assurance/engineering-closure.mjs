@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { canonicalGitText, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { deriveFiniteTaskPrRiskAuthority, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -2806,21 +2806,70 @@ const selectCurrentArchitectureRepositoryReview = ({ comments = [], identity, tr
   };
 };
 
-export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree } = {}) {
+const phase1PullRequestProvenance = (pullRequest) => ({
+  repository: pullRequest?.base?.repo?.full_name ?? null,
+  headRepository: pullRequest?.head?.repo?.full_name ?? null,
+  pr: pullRequest?.number ?? null,
+  branch: pullRequest?.head?.ref ?? null,
+  headSha: pullRequest?.head?.sha ?? null,
+  baseRef: pullRequest?.base?.ref ?? null,
+  baseSha: pullRequest?.base?.sha ?? null,
+});
+
+const exactDurablePhase1PullRequest = (pullRequest, identity) => {
+  const provenance = phase1PullRequestProvenance(pullRequest);
+  return provenance.repository === identity?.repository
+    && provenance.headRepository === identity?.repository
+    && provenance.pr === identity?.pr
+    && provenance.branch === identity?.branch
+    && provenance.headSha === identity?.headSha
+    && provenance.baseSha === identity?.baseSha
+    && (identity?.baseRef === undefined || provenance.baseRef === identity.baseRef);
+};
+
+const trustedDurablePhase1PullRequestProvenance = new WeakSet();
+
+const resolvePhase1LinkedPullRequest = ({ run, identity, durablePullRequestProvenance } = {}) => {
+  if (!Array.isArray(run?.pull_requests)) return null;
+  if (run.pull_requests.length === 1) return run.pull_requests[0];
+  if (run.pull_requests.length !== 0) return null;
+  const directPullRequest = durablePullRequestProvenance?.directPullRequest;
+  const commitAssociatedPullRequests = durablePullRequestProvenance?.commitAssociatedPullRequests;
+  if (!trustedDurablePhase1PullRequestProvenance.has(durablePullRequestProvenance)
+    || durablePullRequestProvenance?.directPullRequestReadComplete !== true
+    || durablePullRequestProvenance?.commitAssociationPaginationComplete !== true
+    || !Array.isArray(commitAssociatedPullRequests)
+    || commitAssociatedPullRequests.length !== 1
+    || !exactDurablePhase1PullRequest(directPullRequest, identity)
+    || !exactDurablePhase1PullRequest(commitAssociatedPullRequests[0], identity)
+    || stableJson(phase1PullRequestProvenance(directPullRequest)) !== stableJson(phase1PullRequestProvenance(commitAssociatedPullRequests[0]))) return null;
+  return {
+    number: directPullRequest.number,
+    head: { sha: directPullRequest.head.sha },
+    base: { sha: directPullRequest.base.sha },
+  };
+};
+
+export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, expectedRunId, durablePullRequestProvenance } = {}) {
   const requiredJobs = jobs.filter(({ name }) => PHASE1_REQUIRED_JOB_NAMES.includes(name));
   const names = requiredJobs.map(({ name }) => name).sort();
   const uniqueNames = [...new Set(names)];
+  const linkedPullRequest = resolvePhase1LinkedPullRequest({ run, identity, durablePullRequestProvenance });
   const valid = Boolean(run
     && run.name === "Phase 1 CI"
     && run.event === "pull_request"
     && run.status === "completed"
     && run.conclusion === "success"
+    && (expectedRunId === undefined || (Number.isInteger(expectedRunId)
+      && expectedRunId > 0
+      && run.id === expectedRunId
+      && run.repository?.full_name === identity?.repository
+      && run.path === ".github/workflows/phase1-ci.yml"))
     && run.head_sha === identity?.headSha
     && run.head_branch === identity?.branch
-    && run.pull_requests?.length === 1
-    && run.pull_requests[0]?.number === identity?.pr
-    && run.pull_requests[0]?.head?.sha === identity?.headSha
-    && run.pull_requests[0]?.base?.sha === identity?.baseSha
+    && linkedPullRequest?.number === identity?.pr
+    && linkedPullRequest?.head?.sha === identity?.headSha
+    && linkedPullRequest?.base?.sha === identity?.baseSha
     && requiredJobs.length === PHASE1_REQUIRED_JOB_NAMES.length
     && uniqueNames.length === requiredJobs.length
     && stableJson(uniqueNames) === stableJson([...PHASE1_REQUIRED_JOB_NAMES])
@@ -4703,21 +4752,23 @@ export function terminalTruthSuccessorSubject({ identity, tree, scope, predecess
 }
 export const terminalTruthSuccessorOwnerCommentBody = (subject) => ownerCommentBody(TERMINAL_TRUTH_SUCCESSOR_MARKER, subject.type, subject);
 
-const TERMINAL_REPAIR_CLASSIFICATION = "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1";
 const TERMINAL_REPAIR_HISTORICAL_COMMENT_ID = 5280368893;
 const REJECTED_PREDECESSOR_RECEIPT = Object.freeze({
   commentId: 5277679438,
   diffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
   disposition: "HISTORICAL_REJECTED_CANONICALIZATION",
 });
+const TERMINAL_REPAIR_CLOSED_AUTHORITY = Object.freeze({ product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false });
+const historicalTerminalVerifierRepairProfile = Object.freeze({ maximumFiles: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, maximumNetLines: 1800 });
 
-export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw } = {}) {
+export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw, terminalVerifierRepairInstanceId, repairProfile = TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair = identity?.pr === 228 && repairProfile.maximumFiles === HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, TERMINAL_TRUTH_SUCCESSOR_MARKER);
   const observed = exactScope(scope);
+  const canonicalPredecessorAuthority = historicalRepair ? predecessorAuthority : predecessorAuthority?.canonicalFinalSourceReceipt;
   return {
     type: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1",
-    classification: TERMINAL_REPAIR_CLASSIFICATION,
+    classification: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
     repository: identity?.repository,
     pr: identity?.pr,
     branch: identity?.branch,
@@ -4725,8 +4776,8 @@ export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, sc
     tree,
     baseMerge: identity?.baseSha,
     originalTerminalReceipt: { commentId: original?.id, subjectHash: originalPayload?.subjectHash, bodyHash: originalPayload?.bodyHash },
-    canonicalPredecessorReceipt: { commentId: predecessorAuthority?.commentId, subjectHash: predecessorAuthority?.subjectHash, bodyHash: predecessorAuthority?.commentBodyHash },
-    rejectedPredecessorReceipt: { ...REJECTED_PREDECESSOR_RECEIPT },
+    canonicalPredecessorReceipt: { commentId: canonicalPredecessorAuthority?.commentId, subjectHash: canonicalPredecessorAuthority?.subjectHash, bodyHash: canonicalPredecessorAuthority?.commentBodyHash },
+    ...(historicalRepair ? { rejectedPredecessorReceipt: { ...REJECTED_PREDECESSOR_RECEIPT } } : {}),
     predecessorPr: predecessor?.pr,
     predecessorSourceHead: predecessor?.sourceHead,
     predecessorSourceTree: predecessor?.sourceTree,
@@ -4734,7 +4785,7 @@ export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, sc
     doctrinePr: 226,
     doctrineMerge: TYPED_CONTEXT_DOCTRINE_MERGE,
     pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId,
-    pendingTransitions: [
+    pendingTransitions: consumedPendingTransitions ?? [
       { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, sourceHead: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead, sourceTree: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceTree, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
       { pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, sourceHead: predecessor?.sourceHead, sourceTree: predecessor?.sourceTree, authorityCommentId: predecessorAuthority?.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
     ],
@@ -4744,26 +4795,81 @@ export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, sc
     changedPathHash: observed.changedPathHash,
     diffHash: scope?.diffHash ?? null,
     netChangedLines: observed.netChangedLines,
-    budget: { maximumFiles: 8, maximumNetLines: 1800 },
+    budget: { maximumFiles: repairProfile.maximumFiles, maximumNetLines: repairProfile.maximumNetLines },
     expectedDoctrineStatus: "ACTIVE",
     expectedNextTask: TYPED_CONTEXT_NEXT_TASK,
-    authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false },
+    authority: { ...TERMINAL_REPAIR_CLOSED_AUTHORITY },
     ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
     immutableCommentRequired: true,
     createdAtEqualsUpdatedAtRequired: true,
     singleUse: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
+    ...(terminalVerifierRepairInstanceId === undefined ? {} : { terminalVerifierRepairInstanceId }),
   };
 }
 export const terminalTruthSuccessorVerifierRepairOwnerCommentBody = (subject) => ownerCommentBody(TERMINAL_TRUTH_SUCCESSOR_MARKER, subject.type, subject);
 
-export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, currentMain, openTerminalSuccessorCount = 1, transitionPreviouslyConsumed = false } = {}) {
+const legacyTerminalVerifierRepairRecordValid = (repairRecord) => repairRecord?.classification === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION
+  && repairRecord?.historicalTerminalReceipt === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID
+  && repairRecord?.rejectedPredecessorReceipt === REJECTED_PREDECESSOR_RECEIPT.commentId
+  && repairRecord?.canonicalPredecessorReceipt === 5280109323
+  && repairRecord?.rawPredecessorDiffHash === REJECTED_PREDECESSOR_RECEIPT.diffHash
+  && repairRecord?.canonicalPredecessorDiffHash === "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea"
+  && stableJson(repairRecord?.changedVerifierPaths) === stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.filter((file) => !TERMINAL_TRUTH_PATHS.includes(file)))
+  && repairRecord?.singleUse === true
+  && stableJson(repairRecord?.authority) === stableJson(TERMINAL_REPAIR_CLOSED_AUTHORITY);
+
+const priorTerminalVerifierRepairInstances = (priorTruth) => {
+  const repairRecord = priorTruth?.taskContextArchitecture?.terminalVerifierRepair;
+  if (repairRecord?.history) {
+    const evaluated = evaluateTerminalVerifierRepairHistory({ repair: repairRecord });
+    return evaluated.ok ? evaluated.instances : null;
+  }
+  return legacyTerminalVerifierRepairRecordValid(repairRecord)
+    ? [...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY.instances]
+    : null;
+};
+
+export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText, nextTaskText, currentMain, openTerminalSuccessorCount = 1, transitionPreviouslyConsumed = false } = {}) {
   const matches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
   const observed = exactScope(scope);
-  const repairMode = stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
-  const originalRaw = matches.find(({ id }) => id === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID);
+  const historicalRepairMode = identity?.pr === 228 && stableJson(observed.changedPaths) === stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
+  const currentRepairMode = stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
+  const repairMode = historicalRepairMode || currentRepairMode;
+  const architecture = truthRecord?.taskContextArchitecture;
+  const doctrine = truthRecord?.engineeringDoctrine;
+  const repairRecord = architecture?.terminalVerifierRepair;
+  const expectedRepairPendingTransitions = currentRepairMode && !historicalRepairMode
+    ? [{ pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }]
+    : [
+      { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    ];
+  const expectedPriorInstances = currentRepairMode && !historicalRepairMode ? priorTerminalVerifierRepairInstances(priorTruth) : null;
+  const repairHistory = currentRepairMode && !historicalRepairMode && expectedPriorInstances
+    ? evaluateTerminalVerifierRepairHistory({
+      repair: repairRecord,
+      expectedPriorInstances,
+      expectedCurrent: {
+        repository: identity?.repository,
+        pullRequest: identity?.pr,
+        branch: identity?.branch,
+        protectedBase: identity?.baseSha,
+        priorCurrentTruthHash: priorTruthHash,
+        pendingTransitions: expectedRepairPendingTransitions,
+        expectedNextTask: TYPED_CONTEXT_NEXT_TASK,
+      },
+    })
+    : { ok: false, current: null, instances: [] };
+  const repairInstance = repairHistory.ok ? repairHistory.current : null;
+  const originalReceiptId = repairInstance?.receiptBindings?.historicalTerminalReceipt?.commentId ?? (historicalRepairMode ? TERMINAL_REPAIR_HISTORICAL_COMMENT_ID : null);
+  const originalRaw = matches.find(({ id }) => id === originalReceiptId);
+  const repairProfile = historicalRepairMode ? historicalTerminalVerifierRepairProfile : TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE;
+  const consumedPendingTransitions = currentRepairMode && !historicalRepairMode
+    ? [{ pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, sourceHead: predecessor?.sourceHead, sourceTree: predecessor?.sourceTree, authorityCommentId: predecessorAuthority?.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }]
+    : undefined;
   const subject = repairMode
-    ? terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw })
+    ? terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw, terminalVerifierRepairInstanceId: repairInstance?.instanceId, repairProfile, consumedPendingTransitions, historicalRepair: historicalRepairMode })
     : terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash });
   const expectedBody = repairMode ? terminalTruthSuccessorVerifierRepairOwnerCommentBody(subject) : terminalTruthSuccessorOwnerCommentBody(subject);
   const requiredReceiptKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, head: identity?.headSha, tree, type: subject.type, subjectHash: hashValue(subject) };
@@ -4797,29 +4903,68 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
     status: classification.disposition,
   }));
   const current = receiptSelection.selected?.value ?? null;
-  const architecture = truthRecord?.taskContextArchitecture;
-  const doctrine = truthRecord?.engineeringDoctrine;
   const canonicalCurrent = truthRecord ? renderCurrentState(truthRecord) : null;
   const canonicalNext = truthRecord ? renderNextTask(truthRecord) : null;
-  const repairRecord = architecture?.terminalVerifierRepair;
-  const repairRecordValid = !repairMode || (repairRecord?.classification === TERMINAL_REPAIR_CLASSIFICATION
-    && repairRecord?.historicalTerminalReceipt === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID
-    && repairRecord?.rejectedPredecessorReceipt === REJECTED_PREDECESSOR_RECEIPT.commentId
-    && repairRecord?.canonicalPredecessorReceipt === 5280109323
-    && repairRecord?.rawPredecessorDiffHash === REJECTED_PREDECESSOR_RECEIPT.diffHash
-    && repairRecord?.canonicalPredecessorDiffHash === "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea"
-    && stableJson(repairRecord?.changedVerifierPaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.filter((file) => !TERMINAL_TRUTH_PATHS.includes(file)))
-    && repairRecord?.singleUse === true
-    && stableJson(repairRecord?.authority) === stableJson(subject.authority));
-  const expectedPaths = repairMode ? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS;
-  const maximumLines = repairMode ? 1800 : 1200;
+  const originalNormalized = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalReceiptId });
+  const originalPayload = parseExactOwnerBody(originalNormalized, TERMINAL_TRUTH_SUCCESSOR_MARKER);
+  const historicalReceiptBinding = repairInstance?.receiptBindings?.historicalTerminalReceipt;
+  const canonicalPredecessorReceipt = repairInstance?.receiptBindings?.predecessorReceipts?.find(({ disposition }) => disposition === "CANONICAL_CURRENT");
+  const ownerArchitecturePredecessorReceipt = repairInstance?.receiptBindings?.predecessorReceipts?.find(({ disposition }) => disposition === "OWNER_ARCHITECTURE_AUTHORITY");
+  const liveCanonicalPredecessorReceipt = predecessorAuthority?.canonicalFinalSourceReceipt;
+  const currentRepairRecordValid = Boolean(repairHistory.ok
+    && repairInstance
+    && legacyTerminalVerifierRepairRecordValid(repairRecord)
+    && subject.terminalVerifierRepairInstanceId === repairInstance.instanceId
+    && originalNormalized?.id === historicalReceiptBinding?.commentId
+    && originalPayload?.subjectHash === historicalReceiptBinding?.subjectHash
+    && originalNormalized?.bodyHash === historicalReceiptBinding?.commentBodyHash
+    && historicalReceiptBinding?.disposition === "HISTORICAL_STALE_TERMINAL_RECEIPT"
+    && repairInstance.predecessor?.pullRequest === predecessor?.pr
+    && repairInstance.predecessor?.mergeSha === predecessor?.mergeSha
+    && repairInstance.predecessor?.firstParent === predecessor?.firstParent
+    && repairInstance.predecessor?.sourceHead === predecessor?.sourceHead
+    && repairInstance.predecessor?.sourceTree === predecessor?.sourceTree
+    && repairInstance.predecessor?.authorityCommentId === predecessorAuthority?.commentId
+    && repairInstance.predecessor?.authoritySubjectHash === predecessorAuthority?.subjectHash
+    && repairInstance.predecessor?.authorityBodyHash === predecessorAuthority?.commentBodyHash
+    && ownerArchitecturePredecessorReceipt?.commentId === predecessorAuthority?.commentId
+    && ownerArchitecturePredecessorReceipt?.subjectHash === predecessorAuthority?.subjectHash
+    && ownerArchitecturePredecessorReceipt?.commentBodyHash === predecessorAuthority?.commentBodyHash
+    && ownerArchitecturePredecessorReceipt?.diffHash === undefined
+    && canonicalPredecessorReceipt?.commentId === liveCanonicalPredecessorReceipt?.commentId
+    && canonicalPredecessorReceipt?.subjectHash === liveCanonicalPredecessorReceipt?.subjectHash
+    && canonicalPredecessorReceipt?.commentBodyHash === liveCanonicalPredecessorReceipt?.commentBodyHash
+    && canonicalPredecessorReceipt?.diffHash === liveCanonicalPredecessorReceipt?.diffHash
+    && architecture?.authorityCommentId === predecessorAuthority?.commentId
+    && architecture?.authoritySubjectHash === predecessorAuthority?.subjectHash
+    && architecture?.authorityBodyHash === predecessorAuthority?.commentBodyHash
+    && stableJson(repairInstance.authority) === stableJson(subject.authority));
+  const repairRecordValid = !repairMode
+    || (historicalRepairMode ? legacyTerminalVerifierRepairRecordValid(repairRecord) : currentRepairRecordValid);
+  const expectedPaths = historicalRepairMode
+    ? HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS
+    : repairMode ? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS;
+  const maximumLines = repairMode ? repairProfile.maximumNetLines : 1200;
   const checks = {
     identity: Boolean(current?.normalized) && identity?.baseSha === currentMain,
     body: current?.normalized?.body === expectedBody,
     hashes: current?.payload?.subjectHash === hashValue(subject) && current?.payload?.bodyHash === hashValue(Object.fromEntries(Object.entries(current?.payload ?? {}).filter(([key]) => key !== "bodyHash"))),
-    singleComment: paginationComplete && receiptSelection.currentCount === 1 && (!repairMode || receipts.some(({ normalized, status }) => normalized?.id === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID && status === "HISTORICAL_STALE_TERMINAL_RECEIPT")),
+    singleComment: paginationComplete && receiptSelection.currentCount === 1 && (!repairMode || receipts.some(({ normalized, status }) => normalized?.id === originalReceiptId && status === "HISTORICAL_STALE_TERMINAL_RECEIPT")),
     exactPaths: stableJson(observed.changedPaths) === stableJson(expectedPaths) && observed.netChangedLines <= maximumLines,
-    predecessor: predecessor?.valid === true && predecessor?.mergeSha === identity?.baseSha && predecessor?.firstParent === TYPED_CONTEXT_DOCTRINE_MERGE && predecessor?.sourceHead === predecessorAuthority?.subject?.currentHead && predecessor?.sourceTree === predecessorAuthority?.subject?.currentTree && predecessorAuthority?.ok === true && predecessorAuthority?.subject?.terminalTruthRequired === true,
+    predecessor: predecessor?.valid === true
+      && (currentRepairMode && !historicalRepairMode
+        ? predecessor?.protectedBaseAncestor === true
+          && predecessor?.sourceHead === predecessorAuthority?.currentHead
+          && predecessor?.sourceTree === predecessorAuthority?.currentTree
+          && predecessorAuthority?.authorizationOk === true
+          && predecessorAuthority?.mergeEligible === true
+          && Number.isInteger(predecessorAuthority?.currentFinalSourceReceiptId)
+        : predecessor?.mergeSha === identity?.baseSha
+          && predecessor?.firstParent === TYPED_CONTEXT_DOCTRINE_MERGE
+          && predecessor?.sourceHead === predecessorAuthority?.subject?.currentHead
+          && predecessor?.sourceTree === predecessorAuthority?.subject?.currentTree
+          && predecessorAuthority?.subject?.terminalTruthRequired === true)
+      && predecessorAuthority?.ok === true,
     generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && architecture?.pendingTransitionPolicyId === PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId && architecture?.pendingTransitionCountAfterSynchronization === 0 && stableJson(architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) === stableJson(subject.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext && repairRecordValid,
     authorityClosed: Object.values(subject.authority ?? {}).every((value) => value === false) && architecture?.authority?.build === false && architecture?.authority?.submission === false && architecture?.authority?.ota === false && architecture?.authority?.publicRelease === false,
     singleUse: openTerminalSuccessorCount === 1 && transitionPreviouslyConsumed === false,
@@ -4868,7 +5013,24 @@ export function observePhase1RunEvidence({ runId, identity, tree, root = REPOSIT
   const run = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}`]), null);
   const jobsPayload = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}/jobs?per_page=100`]), null);
   const jobs = Array.isArray(jobsPayload?.jobs) && jobsPayload.total_count === jobsPayload.jobs.length ? jobsPayload.jobs : [];
-  return verifyPhase1RunEvidence({ run, jobs, identity, tree });
+  let durablePullRequestProvenance = null;
+  if (run?.event === "pull_request"
+    && Array.isArray(run.pull_requests)
+    && run.pull_requests.length === 0
+    && run.head_sha === identity?.headSha
+    && /^[0-9a-f]{40}$/u.test(run.head_sha ?? "")) {
+    const directResponse = typedGh(root, [`repos/${identity.repository}/pulls/${identity.pr}`]);
+    const directPullRequest = parsedResponse(directResponse, null);
+    const commitAssociation = paginatedArray(root, `repos/${identity.repository}/commits/${run.head_sha}/pulls?per_page=100`);
+    durablePullRequestProvenance = {
+      directPullRequestReadComplete: directResponse.status === 0 && directPullRequest !== null && !Array.isArray(directPullRequest),
+      directPullRequest,
+      commitAssociationPaginationComplete: commitAssociation.complete,
+      commitAssociatedPullRequests: commitAssociation.values,
+    };
+    trustedDurablePhase1PullRequestProvenance.add(durablePullRequestProvenance);
+  }
+  return verifyPhase1RunEvidence({ run, jobs, identity, tree, expectedRunId: runId, durablePullRequestProvenance });
 }
 export const observeFiniteTaskGitScope = (root, base, head) => {
   const pathsRun = typedGit(root, ["diff", "--name-only", `${base}...${head}`]);
@@ -5141,11 +5303,27 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
   if (!admissionCommentPresent && [TERMINAL_TRUTH_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS].some((paths) => stableJson(terminalScopePaths) === stableJson(paths))) {
     const currentMainRun = typedGit(root, ["rev-parse", "origin/main"]);
     const currentMain = currentMainRun.status === 0 ? currentMainRun.stdout.trim() : null;
-    const parentRun = typedGit(root, ["rev-list", "--parents", "-n", "1", identity.baseSha]);
+    const truthRecord = readJson(root, "config/assurance/current-truth-v1.json");
+    const currentRepairScope = stableJson(terminalScopePaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
+    const embeddedRepairInstance = currentRepairScope ? truthRecord?.taskContextArchitecture?.terminalVerifierRepair?.history?.instances?.at(-1) : null;
+    const embeddedPredecessorPr = Number.isInteger(embeddedRepairInstance?.predecessor?.pullRequest) && embeddedRepairInstance.predecessor.pullRequest > 0 ? embeddedRepairInstance.predecessor.pullRequest : null;
+    const embeddedPredecessorMerge = /^[0-9a-f]{40}$/u.test(embeddedRepairInstance?.predecessor?.mergeSha ?? "") ? embeddedRepairInstance.predecessor.mergeSha : null;
+    const predecessorMerge = currentRepairScope ? embeddedPredecessorMerge : identity.baseSha;
+    const parentRun = predecessorMerge ? typedGit(root, ["rev-list", "--parents", "-n", "1", predecessorMerge]) : { status: 1, stdout: "" };
     const parentParts = parentRun.stdout.trim().split(/\s+/u);
-    const associatedRead = paginatedArray(root, `repos/${identity.repository}/commits/${identity.baseSha}/pulls?per_page=100`);
+    const associatedRead = predecessorMerge ? paginatedArray(root, `repos/${identity.repository}/commits/${predecessorMerge}/pulls?per_page=100`) : { complete: false, values: [] };
     const associated = associatedRead.values;
-    const predecessorPull = associatedRead.complete && associated.length === 1 ? associated[0] : null;
+    const associatedPredecessorPull = associatedRead.complete && associated.length === 1 ? associated[0] : null;
+    const directPredecessorResponse = currentRepairScope && embeddedPredecessorPr
+      ? typedGh(root, [`repos/${identity.repository}/pulls/${embeddedPredecessorPr}`])
+      : null;
+    const directPredecessorPull = directPredecessorResponse ? parsedResponse(directPredecessorResponse, null) : null;
+    const directPredecessorExact = !currentRepairScope || Boolean(directPredecessorResponse?.status === 0
+      && directPredecessorPull
+      && !Array.isArray(directPredecessorPull)
+      && directPredecessorPull.number === embeddedPredecessorPr
+      && stableJson(phase1PullRequestProvenance(directPredecessorPull)) === stableJson(phase1PullRequestProvenance(associatedPredecessorPull)));
+    const predecessorPull = currentRepairScope ? directPredecessorPull : associatedPredecessorPull;
     const predecessorPr = predecessorPull?.number;
     const firstParent = parentParts.length === 3 ? parentParts[1] : null;
     const sourceHead = parentParts.length === 3 ? parentParts[2] : null;
@@ -5154,20 +5332,46 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     const predecessorIdentity = predecessorPull ? { repository: identity.repository, pr: predecessorPr, branch: predecessorPull.head?.ref, baseSha: predecessorPull.base?.sha, headSha: predecessorPull.head?.sha } : null;
     const predecessorComments = predecessorPr ? paginatedIssueComments(root, identity.repository, predecessorPr) : { complete: false, comments: [] };
     const predecessorRaw = predecessorComments.comments.find((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
-    const predecessorAuthority = predecessorIdentity && predecessorScope ? verifyArchitectureMaintenanceAuthority({ raw: predecessorRaw, allComments: predecessorComments.comments, paginationComplete: predecessorComments.complete, identity: predecessorIdentity, tree: sourceTreeRun.stdout.trim(), scope: predecessorScope, noCompetingDomainOwner: true }) : { ok: false };
+    let predecessorAuthority = predecessorIdentity && predecessorScope ? verifyArchitectureMaintenanceAuthority({ raw: predecessorRaw, allComments: predecessorComments.comments, paginationComplete: predecessorComments.complete, identity: predecessorIdentity, tree: sourceTreeRun.stdout.trim(), scope: predecessorScope, noCompetingDomainOwner: true }) : { ok: false };
+    if (currentRepairScope && Number.isInteger(predecessorAuthority?.currentFinalSourceReceiptId)) {
+      const finalSourceRaw = predecessorComments.comments.find(({ id }) => id === predecessorAuthority.currentFinalSourceReceiptId);
+      const finalSourceNormalized = normalizeGitHubCommentIdentity(finalSourceRaw, { repository: identity.repository, pr: predecessorPr, commentId: predecessorAuthority.currentFinalSourceReceiptId });
+      const finalSourcePayload = parseExactOwnerBody(finalSourceNormalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
+      predecessorAuthority = {
+        ...predecessorAuthority,
+        canonicalFinalSourceReceipt: finalSourceNormalized && finalSourcePayload ? {
+          commentId: finalSourceNormalized.id,
+          subjectHash: finalSourcePayload.subjectHash,
+          commentBodyHash: finalSourceNormalized.bodyHash,
+          diffHash: finalSourcePayload.subject?.diffHash ?? null,
+        } : null,
+      };
+    }
+    const protectedBaseAncestorRun = predecessorMerge ? typedGit(root, ["merge-base", "--is-ancestor", predecessorMerge, identity.baseSha]) : { status: 1 };
     const predecessor = {
-      valid: parentParts.length === 3 && associatedRead.complete && associated.length === 1 && predecessorPull?.merged_at && predecessorPull?.merge_commit_sha === identity.baseSha && predecessorPull?.base?.ref === "main" && predecessorPull?.head?.sha === sourceHead && predecessorPull?.base?.sha === firstParent && sourceTreeRun.status === 0,
+      valid: parentParts.length === 3
+        && associatedRead.complete
+        && associated.length === 1
+        && directPredecessorExact
+        && predecessorPull?.merged_at
+        && predecessorPull?.merge_commit_sha === predecessorMerge
+        && predecessorPull?.base?.ref === "main"
+        && predecessorPull?.base?.repo?.full_name === identity.repository
+        && predecessorPull?.head?.repo?.full_name === identity.repository
+        && predecessorPull?.head?.sha === sourceHead
+        && predecessorPull?.base?.sha === firstParent
+        && sourceTreeRun.status === 0,
       pr: predecessorPr,
-      mergeSha: identity.baseSha,
+      mergeSha: predecessorMerge,
       firstParent,
       sourceHead,
       sourceTree: sourceTreeRun.stdout.trim(),
+      protectedBaseAncestor: protectedBaseAncestorRun.status === 0,
     };
     const priorTruthRun = typedGit(root, ["show", `${identity.baseSha}:config/assurance/current-truth-v1.json`]);
     const priorTruthHash = priorTruthRun.status === 0 ? hashValue(priorTruthRun.stdout) : null;
     let priorTruth = null;
     try { priorTruth = priorTruthRun.status === 0 ? JSON.parse(priorTruthRun.stdout) : null; } catch {}
-    const truthRecord = readJson(root, "config/assurance/current-truth-v1.json");
     const openPullsRead = paginatedArray(root, `repos/${identity.repository}/pulls?state=open&base=main&per_page=100`);
     const openPulls = openPullsRead.values;
     let openTerminalSuccessorCount = 0;
@@ -5186,7 +5390,7 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
       const terminalTransition = observeFiniteTaskPostMergeTransition({ record: priorTruth, currentProtectedMain: identity.baseSha, root });
       terminalTruthAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: finiteTerminalRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, terminalTransition, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: (priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []).some(({ mergeSha }) => mergeSha === identity.baseSha), root });
     } else {
-      terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.taskContextArchitecture?.mergeSha === identity.baseSha });
+      terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.taskContextArchitecture?.mergeSha === identity.baseSha });
     }
   }
   return { architectureAuthority, terminalTruthAuthority, finiteTaskAuthority, finiteTaskAdmissionAuthority };

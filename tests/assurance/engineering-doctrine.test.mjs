@@ -171,7 +171,19 @@ const controls = [
   ["37 Provider Codex Review remains optional advisory", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(truth.reviewPolicy.classification, "OPTIONAL_ADVISORY"); assert.equal(truth.reviewPolicy.blocksMerge, false); }],
   ["38 all 13 Phase 1 checks remain required", () => { assert.equal(json("config/assurance/current-truth-contract-v1.json").reviewPolicy.requiredPhase1Checks, 13); assert.equal(json("config/assurance/engineering-doctrine-v1.json").mergeEligibility.requiredPhase1Checks, 13); }],
   ["39 build release authority remains false", () => { const authority = json("config/assurance/engineering-doctrine-v1.json").authority; assert.deepEqual(Object.values(authority), [false, false, false, false, false, false, false, false, false, 0]); }],
-  ["40 D2A terminal history remains intact when a later finite task is current", () => { const truth = json("config/assurance/current-truth-v1.json"); const latest = truth.latestMergedImplementationPr; const d2aLease = truth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 212); assert.deepEqual({ number: latest.number, state: latest.state, head: latest.head, mergeSha: latest.mergeSha }, { number: 212, state: "merged", head: "50b5f0498a59961278bb5afbca443c6e35cd5bb6", mergeSha: "fe775c12b0857aa50d986d24179ae9588049b6a1" }); assert.equal(d2aLease?.leaseId, "d2a-release-critical-pr-212-v1"); assert.equal(d2aLease?.taskState, "MERGED_VERIFIED"); if (truth.activeTaskBinding.implementationPr === 212) { assert.equal(truth.activeTaskBinding.phase, "TERMINAL"); assert.equal(truth.activeTaskBinding.completionScope, "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE"); } else { const currentLease = truth.finiteTaskLeases.tasks.filter(({ implementationPr, taskState }) => implementationPr === truth.activeTaskBinding.implementationPr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState)); assert.equal(currentLease.length, 1); } }]
+  ["40 D2A terminal history remains intact when a later finite task is current", () => {
+    const truth = json("config/assurance/current-truth-v1.json");
+    const latest = truth.latestMergedImplementationPr;
+    const d2aLease = truth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 212);
+    const currentLeases = truth.finiteTaskLeases.tasks.filter(({ implementationPr, taskState }) => implementationPr === truth.activeTaskBinding.implementationPr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
+    assert.deepEqual({ number: latest.number, state: latest.state, head: latest.head, mergeSha: latest.mergeSha }, { number: 229, state: "merged", head: "698871780a7610f677fdec1929d85389594d080a", mergeSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb" });
+    assert.equal(truth.activeTaskBinding.implementationPr, 229);
+    assert.equal(d2aLease?.leaseId, "d2a-release-critical-pr-212-v1");
+    assert.equal(d2aLease?.taskState, "MERGED_VERIFIED");
+    assert.notEqual(d2aLease?.implementationPr, latest.number);
+    assert.equal(currentLeases.length, 1);
+    assert.equal(currentLeases[0]?.implementationPr, latest.number);
+  }]
 ];
 
 assert.equal(controls.length, 40);
@@ -781,7 +793,33 @@ test("finite-task implementation exact-head review binds the effective reservati
 });
 
 test("finite-task terminal truth projection preserves the base lease but synthetic transition authority fails closed", () => {
-  const priorTruth = json("config/assurance/current-truth-v1.json");
+  const priorTruth = structuredClone(json("config/assurance/current-truth-v1.json"));
+  const terminalLeaseId = "pre-release-identity-entitlement-authority-v1";
+  priorTruth.finiteTaskLeases.completedLeaseOutcomes = (priorTruth.finiteTaskLeases.completedLeaseOutcomes ?? [])
+    .filter(({ leaseId }) => leaseId !== terminalLeaseId);
+  delete priorTruth.finiteTaskRuntime.terminalOutcome;
+  priorTruth.activeTaskBinding.phase = "PREIMPLEMENTATION_ENGINEERING_CLEAR";
+  priorTruth.activeTaskBinding.executionState = "PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED";
+  priorTruth.activeTaskBinding.productSourceMutationAllowed = true;
+  delete priorTruth.activeTaskBinding.completionScope;
+  delete priorTruth.activeTaskBinding.proofTierStatuses;
+  delete priorTruth.activeTaskBinding.proofTierApplicabilityHash;
+  delete priorTruth.activeTaskBinding.terminalEvidence;
+  priorTruth.latestMergedImplementationPr = {
+    number: 229,
+    state: "merged",
+    head: "698871780a7610f677fdec1929d85389594d080a",
+    mergeSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb",
+    mergeTree: "e89be3a2987952152560ebb46bdffcf0ea094028",
+    title: priorTruth.latestMergedImplementationPr.number === 229 ? priorTruth.latestMergedImplementationPr.title : "Wave 1 implementation carrier"
+  };
+  priorTruth.openImplementationPrs = (priorTruth.openImplementationPrs ?? []).filter(({ number }) => number !== 229);
+  assert.equal(priorTruth.finiteTaskLeases.completedLeaseOutcomes.some(({ leaseId }) => leaseId === terminalLeaseId), false);
+  assert.notEqual(priorTruth.activeTaskBinding.phase, "TERMINAL");
+  assert.equal(priorTruth.activeTaskBinding.terminalEvidence, undefined);
+  assert.equal(priorTruth.finiteTaskRuntime.terminalOutcome, undefined);
+  assert.equal(priorTruth.latestMergedImplementationPr.number, 229);
+  assert.equal(priorTruth.openImplementationPrs.some(({ number }) => number === 229), false);
   const lease = finiteTaskLeaseFor(priorTruth.finiteTaskLeases, { implementationPr: 229, implementationBranch: "codex/pre-release-identity-entitlement-authority-v1", featureId: "auth-session-password-recovery" });
   const baseReservation = finiteTaskReservationProjection(lease);
   const effectivePaths = [...lease.allowedPaths, "_lib/accessEntitlements.ts", "_lib/roomRules.ts"].sort();
@@ -814,7 +852,19 @@ test("finite-task terminal truth projection preserves the base lease but synthet
   const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
   const transition = { applicable: true, ok: true, terminalEvidence, lifecycle: { finalSourceSubject: { featureId: lease.featureId } }, findings: [] };
   const feature = json("config/assurance/feature-registry-v1.json").features.find(({ featureId }) => featureId === lease.featureId);
+  const historicalOutcomes = structuredClone(priorTruth.finiteTaskLeases.completedLeaseOutcomes);
   const truthRecord = projectFiniteTaskTerminalTruth({ record: priorTruth, terminalEvidence, proofTierApplicabilityHash: hashValue(feature.proofTierApplicability), implementationTitle: "Wave 1" });
+  const firstProjectionOutcomes = [...historicalOutcomes, terminalEvidence];
+  assert.deepEqual(truthRecord.finiteTaskLeases.completedLeaseOutcomes, firstProjectionOutcomes);
+  const exactReplay = projectFiniteTaskTerminalTruth({ record: truthRecord, terminalEvidence, proofTierApplicabilityHash: hashValue(feature.proofTierApplicability), implementationTitle: "Wave 1" });
+  assert.deepEqual(exactReplay.finiteTaskLeases.completedLeaseOutcomes, firstProjectionOutcomes);
+  const conflictingBase = { ...terminalBase, nextTask: `${terminalBase.nextTask}:conflicting-evidence` };
+  const conflictingEvidence = { ...conflictingBase, evidenceHash: hashValue(conflictingBase) };
+  assert.throws(
+    () => projectFiniteTaskTerminalTruth({ record: truthRecord, terminalEvidence: conflictingEvidence, proofTierApplicabilityHash: hashValue(feature.proofTierApplicability), implementationTitle: "Wave 1" }),
+    /FINITE_TASK_TERMINAL_PROJECTION_CONFLICT/u
+  );
+  assert.deepEqual(truthRecord.finiteTaskLeases.completedLeaseOutcomes, firstProjectionOutcomes);
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseSha: mergeSha, headSha: "9".repeat(40) };
   const tree = "a".repeat(40);
   const scope = { files: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], additions: 40, deletions: 10, netChangedLines: 30, diffHash: "b".repeat(64) };

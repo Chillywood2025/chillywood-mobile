@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { classifyPrScopePaths, deriveFiniteTaskPrRiskAuthority, deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
-import { args, canonicalGitText, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS } from "../../scripts/assurance/lib.mjs";
+import { args, canonicalGitText, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
+const currentTruthContract = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-contract-v1.json`, "utf8"));
 const registry = JSON.parse(fs.readFileSync(`${root}/config/assurance/feature-registry-v1.json`, "utf8"));
 const registeredFeatureIds = registry.features.map(({ featureId }) => featureId);
 const policyHighRiskDomains = policy.domains.filter(({ risk }) => risk === "high").map(({ id }) => id);
@@ -796,7 +797,7 @@ const terminalRepairFixture = () => {
   const oldRaw = rawOwnerComment({ id: 5280368893, pr: 228, body: terminalTruthSuccessorOwnerCommentBody(oldSubject) });
   const identity = { ...oldIdentity, headSha: "c".repeat(40) };
   const tree = "d".repeat(40);
-  const scope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 1500, diffHash: "e".repeat(64) };
+  const scope = { files: [...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 1500, diffHash: "e".repeat(64) };
   const truthRecord = structuredClone(base.truthRecord);
   truthRecord.taskContextArchitecture.architecturePr = 227;
   truthRecord.taskContextArchitecture.sourceHead = predecessor.sourceHead;
@@ -811,13 +812,13 @@ const terminalRepairFixture = () => {
     canonicalPredecessorReceipt: 5280109323,
     rawPredecessorDiffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
     canonicalPredecessorDiffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
-    changedVerifierPaths: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.filter((file) => !oldScope.files.includes(file)),
+    changedVerifierPaths: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.filter((file) => !oldScope.files.includes(file)),
     singleUse: true,
     authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false },
   };
   const currentStateText = renderCurrentState(truthRecord);
   const nextTaskText = renderNextTask(truthRecord);
-  const subject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: oldRaw });
+  const subject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: oldRaw, repairProfile: { maximumFiles: 8, maximumNetLines: 1800 } });
   const currentRaw = rawOwnerComment({ id: 6000000228, pr: 228, body: terminalTruthSuccessorVerifierRepairOwnerCommentBody(subject) });
   const args = { raw: oldRaw, allComments: [oldRaw, currentRaw], paginationComplete: true, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false };
   return { args, oldRaw, currentRaw, subject, authority: verifyTerminalTruthSuccessorAuthority(args) };
@@ -835,7 +836,7 @@ test("terminal verifier repair revisions retain one stale receipt and one canoni
 test("terminal verifier repair current-valid matrix retains invalid and synchronized history without caller selection", () => {
   const value = terminalRepairFixture();
   const repairRaw = (id, { identity = value.args.identity, tree = value.args.tree, mutateSubject = () => {}, raw = {} } = {}) => {
-    const subject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope: value.args.scope, predecessor: value.args.predecessor, predecessorAuthority: value.args.predecessorAuthority, priorTruthHash: value.args.priorTruthHash, originalRaw: value.oldRaw });
+    const subject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope: value.args.scope, predecessor: value.args.predecessor, predecessorAuthority: value.args.predecessorAuthority, priorTruthHash: value.args.priorTruthHash, originalRaw: value.oldRaw, repairProfile: { maximumFiles: 8, maximumNetLines: 1800 } });
     mutateSubject(subject);
     return { ...rawOwnerComment({ id, pr: value.args.identity.pr, body: terminalTruthSuccessorVerifierRepairOwnerCommentBody(subject) }), ...raw };
   };
@@ -891,6 +892,258 @@ test("terminal verifier repair scope rejects expansion, product, dependency, wor
     assert.equal(verifyTerminalTruthSuccessorAuthority(value.args).ok, false);
   }
   assert.equal(terminalFixture().authority.ok, true);
+});
+
+const terminalRepairClosedAuthority = { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false };
+const genericTerminalRepairInstance = ({
+  ordinal = 2,
+  pullRequest = 801,
+  branch = "codex/generic-terminal-verifier-repair",
+  protectedBase = "1".repeat(40),
+  priorCurrentTruthHash = "2".repeat(64),
+  priorInstanceId = HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.instanceId,
+  predecessorPullRequest = 800,
+  predecessorMerge = "3".repeat(40),
+  predecessorFirstParent = "0".repeat(40),
+  sourceHead = "4".repeat(40),
+  sourceTree = "5".repeat(40),
+  authorityCommentId = 7000000800,
+  historicalTerminalReceiptId = 7000000801,
+  canonicalFinalSourceCommentId = authorityCommentId + 10000,
+  authoritySubjectHash = "6".repeat(64),
+  authorityBodyHash = "7".repeat(64),
+  historicalSubjectHash = "8".repeat(64),
+  historicalBodyHash = "9".repeat(64),
+  finalSourceSubjectHash = sha256({ kind: "terminal-verifier-repair-final-source-subject", canonicalFinalSourceCommentId }),
+  finalSourceBodyHash = sha256({ kind: "terminal-verifier-repair-final-source-body", canonicalFinalSourceCommentId }),
+  predecessorDiffHash = "a".repeat(64),
+} = {}) => createTerminalVerifierRepairInstance({
+  schemaVersion: 1,
+  ordinal,
+  classification: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
+  repository: "Chillywood2025/chillywood-mobile",
+  pullRequest,
+  branch,
+  protectedBase,
+  priorCurrentTruthHash,
+  priorInstanceId,
+  predecessor: {
+    pullRequest: predecessorPullRequest,
+    mergeSha: predecessorMerge,
+    firstParent: predecessorFirstParent,
+    sourceHead,
+    sourceTree,
+    authorityCommentId,
+    authoritySubjectHash,
+    authorityBodyHash,
+  },
+  receiptBindings: {
+    historicalTerminalReceipt: { commentId: historicalTerminalReceiptId, subjectHash: historicalSubjectHash, commentBodyHash: historicalBodyHash, disposition: "HISTORICAL_STALE_TERMINAL_RECEIPT" },
+    predecessorReceipts: [
+      { commentId: authorityCommentId, subjectHash: authoritySubjectHash, commentBodyHash: authorityBodyHash, disposition: "OWNER_ARCHITECTURE_AUTHORITY" },
+      { commentId: canonicalFinalSourceCommentId, subjectHash: finalSourceSubjectHash, commentBodyHash: finalSourceBodyHash, diffHash: predecessorDiffHash, disposition: "CANONICAL_CURRENT" },
+    ],
+  },
+  pendingTransitionPolicyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+  pendingTransitions: [{ pr: predecessorPullRequest, mergeSha: predecessorMerge, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }],
+  expectedNextTask: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
+  profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE,
+  singleUse: true,
+  authority: terminalRepairClosedAuthority,
+});
+
+const terminalRepairHistoryRecord = (instances) => ({
+  classification: "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+  historicalTerminalReceipt: 5280368893,
+  rejectedPredecessorReceipt: 5277679438,
+  canonicalPredecessorReceipt: 5280109323,
+  rawPredecessorDiffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
+  canonicalPredecessorDiffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+  changedVerifierPaths: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.slice(3),
+  singleUse: true,
+  authority: terminalRepairClosedAuthority,
+  history: { schemaVersion: 1, policyId: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, instances },
+});
+
+test("terminal verifier repair profile is exactly nine paths and 1800 net lines while PR 228 remains the exact eight-path seed", () => {
+  assert.equal(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, 9);
+  assert.equal(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles, 9);
+  assert.equal(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines, 1800);
+  assert.ok(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.includes("tests/assurance/engineering-doctrine.test.mjs"));
+  assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, 8);
+  assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.includes("tests/assurance/engineering-doctrine.test.mjs"), false);
+  assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.pullRequest, 228);
+  assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.priorCurrentTruthHash, "035c23f3a5508e9e047cbed60a1826b00ebbe508c2b43b17c074f5de2adf85bc");
+  assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.receiptBindings.historicalTerminalReceipt.commentId, 5280368893);
+  assert.deepEqual(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.receiptBindings.predecessorReceipts.map(({ commentId }) => commentId), [5277679438, 5280109323]);
+  assert.equal(evaluateTerminalVerifierRepairHistory({ repair: { history: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY } }).ok, true);
+});
+
+test("terminal verifier repair history accepts one independently bound append and rejects replay, duplicate, and ambiguous histories", () => {
+  const current = genericTerminalRepairInstance();
+  const instances = [HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, current];
+  const expectedCurrent = {
+    repository: current.repository,
+    pullRequest: current.pullRequest,
+    branch: current.branch,
+    protectedBase: current.protectedBase,
+    priorCurrentTruthHash: current.priorCurrentTruthHash,
+    pendingTransitions: current.pendingTransitions,
+    expectedNextTask: current.expectedNextTask,
+  };
+  const exact = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord(instances), expectedPriorInstances: [instances[0]], expectedCurrent });
+  assert.equal(exact.ok, true, exact.findings.join(","));
+  const replay = genericTerminalRepairInstance({ ordinal: 3, protectedBase: "b".repeat(40), priorCurrentTruthHash: "c".repeat(64), priorInstanceId: current.instanceId, authorityCommentId: 7000000802, historicalTerminalReceiptId: 7000000803 });
+  const replayResult = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord([...instances, replay]) });
+  assert.equal(replayResult.ok, false);
+  assert.ok(replayResult.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_DUPLICATE_OR_REPLAY"));
+  const duplicate = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord([...instances, structuredClone(current)]) });
+  assert.equal(duplicate.ok, false);
+  assert.ok(duplicate.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_DUPLICATE_OR_REPLAY"));
+  const second = genericTerminalRepairInstance({ ordinal: 3, pullRequest: 802, protectedBase: "d".repeat(40), priorCurrentTruthHash: "e".repeat(64), priorInstanceId: current.instanceId, predecessorPullRequest: 803, predecessorMerge: "f".repeat(40), authorityCommentId: 7000000804, historicalTerminalReceiptId: 7000000805 });
+  const ambiguous = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord([...instances, second]), expectedPriorInstances: [instances[0]], expectedCurrent });
+  assert.equal(ambiguous.ok, false);
+  assert.ok(ambiguous.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_NOT_SINGLE_APPEND"));
+  const wrongBase = evaluateTerminalVerifierRepairHistory({ repair: terminalRepairHistoryRecord(instances), expectedPriorInstances: [instances[0]], expectedCurrent: { ...expectedCurrent, protectedBase: "0".repeat(40) } });
+  assert.equal(wrongBase.ok, false);
+  assert.ok(wrongBase.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_CURRENT_BINDING_INVALID"));
+});
+
+const protectedMainMultiRepairEvaluation = ({ mutateSecondHistory = () => {}, stopAfterIntervening = false } = {}) => {
+  const record = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
+  const checkpoint = "1".repeat(40);
+  const checkpointTree = "2".repeat(40);
+  record.mainSha = checkpoint;
+  record.protectedMainAuthority.checkpointSha = checkpoint;
+  record.protectedMainAuthority.checkpointTree = checkpointTree;
+  record.taskContextArchitecture.terminalVerifierRepair = terminalRepairHistoryRecord([HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE]);
+  const maintenance = structuredClone(policy.ownerArchitectureMaintenance.pendingTerminalTruthTransition);
+  const maintenancePaths = [...maintenance.allowedChangedPaths];
+  const pendingOne = { commit: "3".repeat(40), source: "4".repeat(40), tree: "5".repeat(40), pr: 811 };
+  const interveningOne = { commit: "0".repeat(40), source: "f".repeat(40), tree: "1".repeat(40), pr: 815 };
+  const repairOne = { commit: "6".repeat(40), source: "7".repeat(40), tree: "8".repeat(40), pr: 812 };
+  const pendingTwo = { commit: "9".repeat(40), source: "a".repeat(40), tree: "b".repeat(40), pr: 813 };
+  const repairTwo = { commit: "c".repeat(40), source: "d".repeat(40), tree: "e".repeat(40), pr: 814 };
+  const parentTruthOne = structuredClone(record);
+  parentTruthOne.syntheticInterveningImplementation = { pullRequest: interveningOne.pr };
+  const first = genericTerminalRepairInstance({
+    pullRequest: repairOne.pr,
+    branch: "codex/repair-one",
+    protectedBase: interveningOne.commit,
+    priorCurrentTruthHash: sha256(`${JSON.stringify(parentTruthOne)}\n`),
+    predecessorPullRequest: pendingOne.pr,
+    predecessorMerge: pendingOne.commit,
+    predecessorFirstParent: checkpoint,
+    sourceHead: pendingOne.source,
+    sourceTree: pendingOne.tree,
+    authorityCommentId: 7000000811,
+    historicalTerminalReceiptId: 7000000812,
+  });
+  const terminalTruth = ({ parent, pending, repair, instances, authoritySubjectHash, authorityBodyHash, authorityCommentId }) => {
+    const truth = structuredClone(parent);
+    truth.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: maintenance.expectedTerminalNextTask };
+    truth.taskContextArchitecture = {
+      architecturePr: pending.pr,
+      sourceHead: pending.source,
+      sourceTree: pending.tree,
+      mergeSha: pending.commit,
+      authorityCommentId,
+      authoritySubjectHash,
+      authorityBodyHash,
+      pendingTransitionPolicyId: "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+      pendingTransitionCountAfterSynchronization: 0,
+      terminalTransitionConsumed: true,
+      pendingTransitions: [{ pr: pending.pr, mergeSha: pending.commit, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }],
+      terminalVerifierRepair: terminalRepairHistoryRecord(instances),
+      authority: { providerMutation: false, build: false, submission: false, ota: false, publicRelease: false },
+    };
+    truth.mainSha = checkpoint;
+    truth.protectedMainAuthority = { ...record.protectedMainAuthority, checkpointSha: checkpoint, checkpointTree };
+    return truth;
+  };
+  const truthOne = terminalTruth({ parent: parentTruthOne, pending: pendingOne, repair: repairOne, instances: [HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, first], authorityCommentId: 7000000811, authoritySubjectHash: "6".repeat(64), authorityBodyHash: "7".repeat(64) });
+  const parentTruthTwo = structuredClone(truthOne);
+  const second = genericTerminalRepairInstance({
+    ordinal: 3,
+    pullRequest: repairTwo.pr,
+    branch: "codex/repair-two",
+    protectedBase: pendingTwo.commit,
+    priorCurrentTruthHash: sha256(`${JSON.stringify(parentTruthTwo)}\n`),
+    priorInstanceId: first.instanceId,
+    predecessorPullRequest: pendingTwo.pr,
+    predecessorMerge: pendingTwo.commit,
+    predecessorFirstParent: repairOne.commit,
+    sourceHead: pendingTwo.source,
+    sourceTree: pendingTwo.tree,
+    authorityCommentId: 7000000813,
+    historicalTerminalReceiptId: 7000000814,
+    authoritySubjectHash: "b".repeat(64),
+    authorityBodyHash: "c".repeat(64),
+    historicalSubjectHash: "d".repeat(64),
+    historicalBodyHash: "e".repeat(64),
+    predecessorDiffHash: "f".repeat(64),
+  });
+  const secondInstances = [HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, first, second];
+  mutateSecondHistory(secondInstances);
+  const truthTwo = terminalTruth({ parent: parentTruthTwo, pending: pendingTwo, repair: repairTwo, instances: secondInstances, authorityCommentId: 7000000813, authoritySubjectHash: "b".repeat(64), authorityBodyHash: "c".repeat(64) });
+  const observations = [
+    { commit: pendingOne.commit, parents: [checkpoint, pendingOne.source], tree: pendingOne.tree, sourceTree: pendingOne.tree, subject: `Merge pull request #${pendingOne.pr} from Chillywood2025/codex/pending-one`, changedPaths: maintenancePaths },
+    { commit: interveningOne.commit, parents: [pendingOne.commit, interveningOne.source], tree: interveningOne.tree, subject: `Merge pull request #${interveningOne.pr} from Chillywood2025/codex/intervening-implementation`, changedPaths: ["_lib/accessEntitlements.ts"] },
+    { commit: repairOne.commit, parents: [interveningOne.commit, repairOne.source], tree: repairOne.tree, subject: `Merge pull request #${repairOne.pr} from Chillywood2025/codex/repair-one`, changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500 },
+    { commit: pendingTwo.commit, parents: [repairOne.commit, pendingTwo.source], tree: pendingTwo.tree, sourceTree: pendingTwo.tree, subject: `Merge pull request #${pendingTwo.pr} from Chillywood2025/codex/pending-two`, changedPaths: maintenancePaths },
+    { commit: repairTwo.commit, parents: [pendingTwo.commit, repairTwo.source], tree: repairTwo.tree, subject: `Merge pull request #${repairTwo.pr} from Chillywood2025/codex/repair-two`, changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 600 },
+  ];
+  const truthByCommit = new Map([[pendingOne.commit, record], [interveningOne.commit, parentTruthOne], [repairOne.commit, truthOne], [pendingTwo.commit, parentTruthTwo], [repairTwo.commit, truthTwo]]);
+  const truthBlobs = new Map([...truthByCommit].map(([commit, truth]) => {
+    const ref = `${commit}:config/assurance/current-truth-v1.json`;
+    const text = JSON.stringify(truth);
+    const objectId = sha256(ref).slice(0, 40);
+    return [ref, { objectId, text, size: Buffer.byteLength(`${text}\n`, "utf8") }];
+  }));
+  const truthBlobById = new Map([...truthBlobs.values()].map((value) => [value.objectId, value]));
+  const maintenanceSources = new Set([pendingOne.source, pendingTwo.source]);
+  return evaluateProtectedMainAdvancement({
+    record,
+    contract: currentTruthContract,
+    observedProtectedMainSha: stopAfterIntervening ? interveningOne.commit : repairTwo.commit,
+    candidateHead: "f".repeat(40),
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: true },
+    advancementObservations: stopAfterIntervening ? observations.slice(0, 2) : observations,
+    checkpointTreeObservation: checkpointTree,
+    checkpointIsAncestor: true,
+    candidateContainsObservedMain: true,
+    gitCommand: (argv) => {
+      if (argv[0] === "rev-parse") {
+        if (truthBlobs.has(argv[1])) return truthBlobs.get(argv[1]).objectId;
+        if (argv[1] === `${interveningOne.commit}^{tree}`) return interveningOne.tree;
+        return argv[1] === `${repairTwo.commit}^{tree}` ? repairTwo.tree : checkpointTree;
+      }
+      if (argv[0] === "cat-file" && argv[1] === "-s" && truthBlobById.has(argv[2])) return String(truthBlobById.get(argv[2]).size);
+      if (argv[0] === "merge-base") return "";
+      if (argv[0] === "diff") return "";
+      if (argv[0] !== "show") return "";
+      const [commit, file] = String(argv[1]).split(":", 2);
+      if (file === "config/assurance/pr-scope-policy-v1.json" && maintenanceSources.has(commit)) return JSON.stringify({ ownerArchitectureMaintenance: { pendingTerminalTruthTransition: maintenance } });
+      if (file === "config/assurance/current-truth-v1.json" && truthByCommit.has(commit)) return truthBlobs.get(`${commit}:${file}`).text;
+      return "";
+    },
+  });
+};
+
+test("protected-main history accepts independently bound repair instances and rejects a replayed append", () => {
+  const exact = protectedMainMultiRepairEvaluation();
+  assert.equal(exact.findings.length, 0, exact.findings.join(","));
+  assert.equal(exact.protectedAdvancementCount, 5);
+  assert.equal(exact.pendingTransitionConsumptionCount, 2);
+  assert.equal(exact.terminalVerifierRepairHistory.length, 3);
+  assert.equal(new Set(exact.terminalVerifierRepairHistory.map(({ instanceId }) => instanceId)).size, 3);
+  assert.equal(exact.advancementClassifications.filter(({ terminalVerifierRepair }) => terminalVerifierRepair).length, 2);
+  const replay = protectedMainMultiRepairEvaluation({ mutateSecondHistory: (instances) => { instances[2] = structuredClone(instances[1]); } });
+  assert.ok(replay.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(replay));
+  const unresolved = protectedMainMultiRepairEvaluation({ stopAfterIntervening: true });
+  assert.ok(unresolved.findings.includes("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED"), stableJson(unresolved));
+  assert.equal(unresolved.pendingTransitionCount, 1);
+  assert.equal(unresolved.nextRequiredAction, "CREATE_EXACT_TERMINAL_TRUTH_SUCCESSOR");
 });
 
 test("canonical Git diff identity is newline-independent and shared by both authority callers", () => {
