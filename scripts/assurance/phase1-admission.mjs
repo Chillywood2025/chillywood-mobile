@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 export const PHASE1_ADMISSION_CHECK_NAME = "Phase 1 / Admission Decision";
 export const PHASE1_ADMISSION_PRODUCER = "PROTECTED_MAIN_PHASE1_ADMISSION_V1";
 export const PHASE1_PUBLISHER_APP = Object.freeze({
-  name: "Chillywood Phase 1 Admission Publisher",
-  slug: "chillywood-phase1-admission-publisher",
+  name: "Chillywood Phase1 Admission App",
+  slug: "chillywood-phase1-admission-app",
 });
 
 export const PHASE1_REQUIRED_LANES = Object.freeze([
