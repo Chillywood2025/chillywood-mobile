@@ -9467,10 +9467,10 @@ create policy "creator_videos_storage_select_premium_renditions"
         )
     )
   );
-comment on policy "creator_videos_storage_select_visibility_access" on storage."objects" is
-  'Creator-video storage is source authority: paid rows require exact canonical per-item access in addition to visibility/moderation/scan checks.';
-comment on policy "creator_videos_storage_select_premium_renditions" on storage."objects" is
-  'Premium rendition quality never substitutes for a paid-video purchase; both finite Premium and exact per-item paid authority are required when the video has a paid offer.';
+-- storage.objects is owned by Supabase's storage administration role, so the
+-- migration role cannot attach COMMENT metadata to its policies. The policies
+-- above remain the enforced source authority: paid rows require exact per-item
+-- access, and finite Premium never substitutes for a paid-video purchase.
 
 -- Sandbox access is authority-bearing even though it is nonpayable. Historical
 -- beta/tester helpers accepted mutable email possession and caller-selected

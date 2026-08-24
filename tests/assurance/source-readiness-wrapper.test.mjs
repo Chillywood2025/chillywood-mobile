@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const workflow = readFileSync(path.join(root, ".github/workflows/phase1-ci.yml"), "utf8");
 const wrapperPath = path.join(root, "scripts/guard-autonomous-systems-contract.mjs");
+const prScopePath = path.join(root, "scripts/assurance/pr-scope.mjs");
 const repository = "Chillywood2025/chillywood-mobile";
 
 const allowedFailure = {
@@ -110,6 +111,106 @@ const runStubbedWrapper = ({
   }
 };
 
+const withPrScopeGitFixture = (callback) => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "chillywood-pr-scope-diff-"));
+  try {
+    const commonDirValue = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: root,
+      encoding: "utf8",
+    }).trim();
+    const commonDir = path.resolve(root, commonDirValue);
+    const objectDirectory = path.join(fixtureRoot, "objects");
+    const indexPath = path.join(fixtureRoot, "index");
+    const binDirectory = path.join(fixtureRoot, "bin");
+    mkdirSync(objectDirectory, { recursive: true });
+    mkdirSync(binDirectory, { recursive: true });
+    const gitEnv = {
+      ...process.env,
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: path.join(commonDir, "objects"),
+      GIT_AUTHOR_EMAIL: "pr-scope@example.invalid",
+      GIT_AUTHOR_NAME: "PR Scope Test",
+      GIT_COMMITTER_EMAIL: "pr-scope@example.invalid",
+      GIT_COMMITTER_NAME: "PR Scope Test",
+      GIT_INDEX_FILE: indexPath,
+      GIT_OBJECT_DIRECTORY: objectDirectory,
+    };
+    const fixtureGit = (gitArgs, options = {}) => execFileSync("git", gitArgs, {
+      cwd: root,
+      encoding: "utf8",
+      env: gitEnv,
+      maxBuffer: 4 * 1024 * 1024,
+      ...options,
+    }).trim();
+    const baseSha = fixtureGit(["rev-parse", "HEAD"]);
+    fixtureGit(["read-tree", baseSha]);
+    const largeSource = `${"x".repeat(1200 * 1024)}\n`;
+    const blob = fixtureGit(["hash-object", "-w", "--stdin"], { input: largeSource });
+    fixtureGit([
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      `100644,${blob},__assurance_pr_scope_large_diff__.txt`,
+    ]);
+    const tree = fixtureGit(["write-tree"]);
+    const headSha = fixtureGit(["commit-tree", tree, "-p", baseSha], {
+      input: "large exact diff fixture\n",
+    });
+    const range = `${baseSha}...${headSha}`;
+    const exactDiff = execFileSync("git", [
+      "diff", "--full-index", "--binary", "--no-ext-diff", range,
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      env: gitEnv,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    writeFileSync(
+      path.join(binDirectory, "gh"),
+      "#!/bin/sh\nprintf '%s\\n' \"$CHILLYWOOD_FAKE_GH_RESPONSE\"\n",
+      { mode: 0o755 },
+    );
+    const runPrScope = (head = headSha) => {
+      const pr = 9901;
+      const branch = "codex/pr-scope-large-diff-fixture";
+      const htmlUrl = `https://github.com/${repository}/pull/${pr}`;
+      const eventPath = path.join(fixtureRoot, "event.json");
+      writeFileSync(eventPath, JSON.stringify({
+        number: pr,
+        repository: { full_name: repository },
+        pull_request: {
+          draft: true,
+          number: pr,
+          html_url: htmlUrl,
+          base: { ref: "main", sha: baseSha },
+          head: { ref: branch, sha: head },
+        },
+      }));
+      const readback = {
+        number: pr,
+        html_url: htmlUrl,
+        state: "open",
+        draft: true,
+        base: { ref: "main", sha: baseSha, repo: { full_name: repository } },
+        head: { ref: branch, sha: head },
+      };
+      const result = spawnSync(process.execPath, [prScopePath, `--github-event=${eventPath}`], {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...gitEnv,
+          CHILLYWOOD_FAKE_GH_RESPONSE: JSON.stringify(readback),
+          PATH: `${binDirectory}:${process.env.PATH}`,
+        },
+        maxBuffer: 4 * 1024 * 1024,
+      });
+      return { result, output: JSON.parse(result.stdout) };
+    };
+    return callback({ exactDiff, headSha, runPrScope });
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+};
+
 test("Phase 1 runs on both directions of the draft/ready lifecycle", () => {
   assert.match(workflow,
     /pull_request:\s*\n\s*types: \[opened, synchronize, reopened, ready_for_review, converted_to_draft\]/u);
@@ -172,4 +273,24 @@ test("draft source readiness never defers semantic fixture-integrity failure wit
     testMutation: "weaken-same-count",
   });
   assert.equal(result.status, 1);
+});
+
+test("PR scope reads an exact canonical diff larger than the Node default buffer", () => {
+  withPrScopeGitFixture(({ exactDiff, headSha, runPrScope }) => {
+    assert.ok(Buffer.byteLength(exactDiff) > 1024 * 1024);
+    const { output } = runPrScope();
+    assert.equal(output.head, headSha);
+    assert.equal(output.changedFiles, 1);
+    assert.equal(output.additions, 1);
+    assert.equal(output.findings.some(({ id }) => id === "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE"), false);
+  });
+});
+
+test("PR scope keeps genuine exact-diff Git errors fail closed", () => {
+  withPrScopeGitFixture(({ runPrScope }) => {
+    const { result, output } = runPrScope("f".repeat(40));
+    assert.equal(result.status, 1);
+    assert.equal(output.changedFiles, 0);
+    assert.equal(output.findings.some(({ id }) => id === "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE"), true);
+  });
 });

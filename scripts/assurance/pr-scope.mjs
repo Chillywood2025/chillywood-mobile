@@ -12,6 +12,7 @@ const registry = readJson("config/assurance/feature-registry-v1.json");
 const currentTruth = readJson("config/assurance/current-truth-v1.json");
 const currentTruthContract = readJson("config/assurance/current-truth-contract-v1.json");
 const protectedMainRuntime = evaluateProtectedMainAdvancement({ record: currentTruth, contract: currentTruthContract });
+const PR_SCOPE_CANONICAL_DIFF_MAX_BUFFER = 32 * 1024 * 1024;
 
 const readGitScope = (base, head) => {
   const range = `${base}...${head}`;
@@ -19,7 +20,9 @@ const readGitScope = (base, head) => {
   const numstat = git(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean);
   const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
   const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
-  const diff = git(canonicalGitDiffArgs(`${base}...${head}`));
+  const diff = git(canonicalGitDiffArgs(`${base}...${head}`), {
+    maxBuffer: PR_SCOPE_CANONICAL_DIFF_MAX_BUFFER,
+  });
   return { files, additions, deletions, diffHash: canonicalGitDiffHash(diff) };
 };
 const readPull = (repository, pr) => {
