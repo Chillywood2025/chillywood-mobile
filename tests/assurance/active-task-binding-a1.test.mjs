@@ -81,7 +81,7 @@ import {
   verifyFiniteTaskTestAdaptationReceipt,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -3292,7 +3292,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     assert.equal(result.ok, false, label);
   }
 
-  const postMergeSha = "7".repeat(40);
+  const postMergeSha = "5e595e684f4dcc9454eee5065066e1b48d20e3eb";
   const closedPull = {
     state: "closed",
     merged: true,
@@ -3416,7 +3416,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
   assert.deepEqual(validateTerminalTaskEvidence(projected.activeTaskBinding, projected.latestMergedImplementationPr), []);
   assert.equal(finiteTaskLeaseEffectivelyTerminal(projected.finiteTaskLeases, wave1Lease), true);
   assert.equal(projected.engineeringDoctrine.nextPermittedAction, "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE");
-  const terminalIdentity = { repository: terminalEvidence.repository, pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseSha: terminalEvidence.mergeSha, headSha: "9".repeat(40) };
+  const terminalIdentity = { repository: terminalEvidence.repository, pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseRef: "main", baseSha: terminalEvidence.mergeSha, headSha: "9".repeat(40) };
   const terminalTree = "a".repeat(40);
   const terminalScope = { files: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], additions: 40, deletions: 10, netChangedLines: 30, diffHash: "b".repeat(64) };
   const priorTruthHash = hashValue(stableJson(canonicalTruth));
@@ -4470,7 +4470,7 @@ test("finite amendment resolver: frozen admission Owner approval and jurisdictio
 });
 
 function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence = () => [] } = {}) {
-  const mergeSha = "7".repeat(40);
+  const mergeSha = "5e595e684f4dcc9454eee5065066e1b48d20e3eb";
   const candidate = wave1Candidate({
     prState: "closed",
     diffHash: "a".repeat(64),
@@ -4702,7 +4702,7 @@ test("finite post-merge and terminal runtime retain stale review/final history w
   const terminalEvidence = fixture.transition.terminalEvidence;
   const feature = registry.features.find(({ featureId }) => featureId === wave1Lease.featureId);
   const terminalTruth = projectFiniteTaskTerminalTruth({ record: canonicalTruth, terminalEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)), implementationTitle: "Wave 1 immutable-evidence convergence" });
-  const terminalIdentity = { repository: terminalEvidence.repository, pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseSha: terminalEvidence.mergeSha, headSha: "9".repeat(40) };
+  const terminalIdentity = { repository: terminalEvidence.repository, pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseRef: "main", baseSha: terminalEvidence.mergeSha, headSha: "9".repeat(40) };
   const terminalTree = "a".repeat(40);
   const terminalScope = { files: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], additions: 40, deletions: 10, netChangedLines: 30, diffHash: "b".repeat(64) };
   const priorTruthHash = hashValue(stableJson(canonicalTruth));
@@ -5484,6 +5484,15 @@ test("doctrine baseline/current delta controls 39-48: modes, reports, callers, a
   const source = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
   const controls = [architecture.mode === "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE", bootstrap.mode === "DOCTRINE_BOOTSTRAP_SELF_HOST", product.mode === "PRODUCT_DOMAIN_TASK", terminal.mode === "TERMINAL_TRUTH_SUCCESSOR", !injected.ok, new Set(reports.map(({ currentTaskReportHash }) => currentTaskReportHash)).size === 1, reports[0].classification === "CURRENT_ENGINEERING_TASK_REPORT_V1", Object.values(reports[0].authority).every((value) => value === false), !source.includes("WHOLE_APP_DOMAIN_GRAPH_STALE"), !source.includes("WHOLE_APP_DOCTRINE_REPORT_STALE")];
   assert.equal(controls.length, 10); assert.equal(controls.every(Boolean), true);
+});
+
+test("terminal task context preserves historical implementation identity across exact protected-main advancement", () => {
+  const historicalImplementationMerge = "5e595e684f4dcc9454eee5065066e1b48d20e3eb";
+  const correctedProtectedMain = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
+  const advancement = verifyFiniteTaskTerminalBaseAdvancement({ repository: "Chillywood2025/chillywood-mobile", baseRef: "main", historicalImplementationMerge, currentProtectedBase: correctedProtectedMain, expectedCurrentProtectedBase: correctedProtectedMain });
+  assert.equal(advancement.ok, true, stableJson(advancement.findings));
+  assert.equal(advancement.relationship, "FIRST_PARENT_ANCESTOR");
+  assert.equal(deriveEngineeringClosureExecutionMode({ taskContext: { ok: true, type: "TERMINAL_TRUTH_SUCCESSOR" }, changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"] }).mode, "TERMINAL_TRUTH_SUCCESSOR");
 });
 
 test("engineering closure inherits one exact typed terminal context from GitHub event readback", () => {

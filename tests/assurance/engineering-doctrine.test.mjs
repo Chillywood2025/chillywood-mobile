@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_REQUIRED_JOB_NAMES,
+  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_REQUIRED_JOB_NAMES,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
@@ -23,7 +23,7 @@ import {
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
   verifyArchitectureDependencyAmendment, verifyArchitectureDependencyWitnessAmendment, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
-  verifyFiniteTaskTerminalTruthAuthority, verifyPhase1RunEvidence,
+  selectFiniteTaskTerminalTruthOwnerReceipts, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyPhase1RunEvidence,
   verifyTaskLocalGoverningEdgeClosure, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
@@ -1426,4 +1426,113 @@ test("receipt lifecycle V2 regression matrix 35/35", async (t) => {
   ];
   assert.equal(cases.length, 35);
   for (const [name, assertion] of cases) await t.test(name, assertion);
+});
+
+const terminalLifecycleGitFixture = () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "terminal-receipt-lifecycle-"));
+  fixtureGit(cwd, "init", "-q"); fixtureGit(cwd, "config", "user.name", "Fixture"); fixtureGit(cwd, "config", "user.email", "fixture@example.test");
+  fixtureWrite(cwd, "config/assurance/current-truth-v1.json", "{\"state\":\"before\"}\n"); fixtureWrite(cwd, "CURRENT_STATE.md", "before\n"); fixtureWrite(cwd, "NEXT_TASK.md", "before\n");
+  const before = fixtureCommit(cwd, "before implementation");
+  fixtureWrite(cwd, "implementation.txt", "verified implementation\n"); const implementationMerge = fixtureCommit(cwd, "implementation merge");
+  fixtureGit(cwd, "branch", "protected-main", implementationMerge);
+  const terminalBranch = ({ name, base, label }) => {
+    fixtureGit(cwd, "switch", "-qc", name, base);
+    fixtureWrite(cwd, "CURRENT_STATE.md", `${label}\n`); fixtureWrite(cwd, "NEXT_TASK.md", `${label}\n`); fixtureWrite(cwd, "config/assurance/current-truth-v1.json", `{\"state\":\"${label}\"}\n`);
+    return fixtureCommit(cwd, label);
+  };
+  const historicalHead = terminalBranch({ name: "terminal-history-one", base: implementationMerge, label: "terminal-one" });
+  fixtureGit(cwd, "switch", "-q", "protected-main"); fixtureWrite(cwd, "assurance-one.txt", "one\n"); const advancedOne = fixtureCommit(cwd, "assurance advance one");
+  fixtureGit(cwd, "switch", "-q", "terminal-history-one"); fixtureGit(cwd, "merge", "-q", "--no-edit", advancedOne);
+  fixtureWrite(cwd, "CURRENT_STATE.md", "terminal-two\n"); fixtureWrite(cwd, "NEXT_TASK.md", "terminal-two\n"); fixtureWrite(cwd, "config/assurance/current-truth-v1.json", "{\"state\":\"terminal-two\"}\n"); const secondHistoricalHead = fixtureCommit(cwd, "terminal-two");
+  fixtureGit(cwd, "switch", "-q", "protected-main"); fixtureWrite(cwd, "assurance-two.txt", "two\n"); const currentBase = fixtureCommit(cwd, "assurance advance two");
+  fixtureGit(cwd, "switch", "-q", "terminal-history-one"); fixtureGit(cwd, "merge", "-q", "--no-edit", currentBase);
+  fixtureWrite(cwd, "CURRENT_STATE.md", "terminal-current\n"); fixtureWrite(cwd, "NEXT_TASK.md", "terminal-current\n"); fixtureWrite(cwd, "config/assurance/current-truth-v1.json", "{\"state\":\"terminal-current\"}\n"); const currentHead = fixtureCommit(cwd, "terminal-current");
+  const forkedHistoricalHead = terminalBranch({ name: "discarded-terminal-fork", base: implementationMerge, label: "discarded-terminal" });
+  fixtureGit(cwd, "switch", "-qc", "unrelated", before); fixtureWrite(cwd, "unrelated.txt", "unrelated\n"); const unrelated = fixtureCommit(cwd, "unrelated");
+  const repository = "Chillywood2025/chillywood-mobile"; const pr = 999; const branch = "codex/finite-task-terminal-truth-v1";
+  const evidenceBody = { schemaVersion: 1, classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", repository, taskId: "task-v1", leaseId: "task-v1", implementationPr: 800, implementationBranch: "codex/task-v1", mergeSha: implementationMerge, nextTask: "NEXT", authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false } };
+  const terminalEvidence = { ...evidenceBody, evidenceHash: hashValue(evidenceBody) }; const terminalTransition = { terminalEvidence };
+  const identity = { repository, pr, branch, baseRef: "main", baseSha: currentBase, headSha: currentHead };
+  const receipt = ({ id, base, head }) => {
+    const tree = fixtureTree(cwd, head); const scope = fixtureScope(cwd, base, head); const prior = execFileSync("git", ["show", `${base}:config/assurance/current-truth-v1.json`], { cwd, encoding: "utf8" });
+    const subject = finiteTaskTerminalTruthSubject({ identity: { ...identity, baseSha: base, headSha: head }, tree, scope, terminalTransition, priorTruthHash: hashValue(prior) });
+    return { raw: taskLocalArchitectureComment({ id, pr, body: finiteTaskTerminalTruthOwnerCommentBody(subject) }), subject, tree, scope };
+  };
+  const historical = receipt({ id: 880001, base: implementationMerge, head: historicalHead });
+  const historicalTwo = receipt({ id: 880002, base: advancedOne, head: secondHistoricalHead });
+  const current = receipt({ id: 880003, base: currentBase, head: currentHead });
+  const args = { paginationComplete: true, identity, tree: current.tree, scope: current.scope, terminalTransition, priorTruthHash: current.subject.priorCurrentTruthHash, root: cwd };
+  const discarded = receipt({ id: 880011, base: implementationMerge, head: forkedHistoricalHead });
+  return { cwd, cleanup: () => fs.rmSync(cwd, { recursive: true, force: true }), before, implementationMerge, advancedOne, currentBase, unrelated, terminalEvidence, terminalTransition, identity, historical, historicalTwo, current, discarded, args, receipt };
+};
+
+test("finite terminal base advancement is exact first-parent protected-main ancestry", () => {
+  const fixture = terminalLifecycleGitFixture();
+  try {
+    const evaluate = (overrides = {}) => verifyFiniteTaskTerminalBaseAdvancement({ repository: fixture.identity.repository, baseRef: "main", historicalImplementationMerge: fixture.implementationMerge, currentProtectedBase: fixture.currentBase, expectedCurrentProtectedBase: fixture.currentBase, root: fixture.cwd, ...overrides });
+    assert.equal(evaluate({ currentProtectedBase: fixture.implementationMerge, expectedCurrentProtectedBase: fixture.implementationMerge }).ok, true);
+    assert.equal(evaluate().ok, true);
+    assert.equal(evaluate({ currentProtectedBase: fixture.unrelated, expectedCurrentProtectedBase: fixture.unrelated }).ok, false);
+    assert.equal(evaluate({ currentProtectedBase: fixture.before, expectedCurrentProtectedBase: fixture.before }).ok, false);
+    assert.equal(evaluate({ repository: "wrong/repository" }).ok, false);
+    assert.equal(evaluate({ baseRef: "release" }).ok, false);
+    assert.equal(evaluate({ historicalImplementationMerge: "f".repeat(40) }).ok, false);
+    assert.equal(evaluate({ root: path.join(fixture.cwd, "missing") }).ok, false);
+    const liveRelation = verifyFiniteTaskTerminalBaseAdvancement({ repository: "Chillywood2025/chillywood-mobile", baseRef: "main", historicalImplementationMerge: "5e595e684f4dcc9454eee5065066e1b48d20e3eb", currentProtectedBase: "8aa74d0442eb9797900005d3c2dca9709b43c0c8", expectedCurrentProtectedBase: "8aa74d0442eb9797900005d3c2dca9709b43c0c8", root: new URL(".", root) });
+    assert.equal(liveRelation.ok, true, stableJson(liveRelation.findings));
+  } finally { fixture.cleanup(); }
+});
+
+test("finite terminal Owner receipts select one current state from immutable append-only history", async (t) => {
+  const fixture = terminalLifecycleGitFixture(); t.after(fixture.cleanup);
+  const select = (comments, overrides = {}) => selectFiniteTaskTerminalTruthOwnerReceipts({ ...fixture.args, comments, ...overrides });
+  const recanonicalize = (subject, id) => taskLocalArchitectureComment({ id, pr: fixture.identity.pr, body: finiteTaskTerminalTruthOwnerCommentBody(subject) });
+  const cases = [
+    ["one current, no history", () => assert.equal(select([fixture.current.raw]).ok, true)],
+    ["one historical plus current", () => { const value = select([fixture.historical.raw, fixture.current.raw]); assert.equal(value.ok, true); assert.deepEqual(value.classifications.map(({ status }) => status).sort(), ["CURRENT_VALID", "HISTORICAL_VALID"]); }],
+    ["two historical plus current", () => assert.equal(select([fixture.historical.raw, fixture.historicalTwo.raw, fixture.current.raw]).ok, true)],
+    ["historical alone cannot authorize current", () => assert.equal(select([fixture.historical.raw]).ok, false)],
+    ["duplicate current fails", () => { const duplicate = { ...fixture.current.raw, id: 880004, node_id: "IC_880004", html_url: `https://github.com/${fixture.identity.repository}/pull/${fixture.identity.pr}#issuecomment-880004` }; assert.equal(select([fixture.current.raw, duplicate]).ok, false); }],
+    ["edited historical fails", () => { const edited = { ...fixture.historical.raw, body: fixture.historical.raw.body.replace('"singleUse":true', '"singleUse":false') }; assert.equal(select([edited, fixture.current.raw]).ok, false); }],
+    ["edited current fails", () => { const edited = { ...fixture.current.raw, body: fixture.current.raw.body.replace('"singleUse":true', '"singleUse":false') }; assert.equal(select([edited]).ok, false); }],
+    ["wrong current head fails", () => { const subject = { ...fixture.current.subject, startingHead: "0".repeat(40) }; assert.equal(select([recanonicalize(subject, 880005)]).ok, false); }],
+    ["wrong current tree fails", () => { const subject = { ...fixture.current.subject, startingTree: "0".repeat(40) }; assert.equal(select([recanonicalize(subject, 880006)]).ok, false); }],
+    ["wrong current base fails", () => { const subject = { ...fixture.current.subject, protectedBase: fixture.unrelated }; assert.equal(select([recanonicalize(subject, 880007)]).ok, false); }],
+    ["wrong implementation merge fails", () => { const evidenceBody = { ...fixture.terminalEvidence, mergeSha: fixture.unrelated }; delete evidenceBody.evidenceHash; const evidence = { ...evidenceBody, evidenceHash: hashValue(evidenceBody) }; const subject = { ...fixture.current.subject, implementationTerminalEvidence: evidence, implementationTerminalEvidenceHash: evidence.evidenceHash }; assert.equal(select([recanonicalize(subject, 880008)]).ok, false); }],
+    ["wrong task and lease fail", () => { const evidenceBody = { ...fixture.terminalEvidence, taskId: "other", leaseId: "other" }; delete evidenceBody.evidenceHash; const evidence = { ...evidenceBody, evidenceHash: hashValue(evidenceBody) }; const subject = { ...fixture.current.subject, implementationTerminalEvidence: evidence, implementationTerminalEvidenceHash: evidence.evidenceHash }; assert.equal(select([recanonicalize(subject, 880009)]).ok, false); }],
+    ["unrelated authority fails", () => { const subject = structuredClone(fixture.current.subject); subject.authority.product = true; assert.equal(select([recanonicalize(subject, 880010)]).ok, false); }],
+    ["incomplete pagination fails", () => assert.equal(select([fixture.current.raw], { paginationComplete: false }).ok, false)],
+    ["discarded fork history fails", () => assert.equal(select([fixture.discarded.raw, fixture.current.raw]).ok, false)],
+    ["comment order is irrelevant", () => assert.equal(select([fixture.current.raw, fixture.historicalTwo.raw, fixture.historical.raw]).current.normalized.id, fixture.current.raw.id)],
+  ];
+  for (const [name, assertion] of cases) await t.test(name, assertion);
+});
+
+test("Authorization D uses the exact five-path strict 900-changed-line Owner profile", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "authorization-d-profile-"));
+  try {
+    fixtureGit(cwd, "init", "-q"); fixtureGit(cwd, "config", "user.name", "Fixture"); fixtureGit(cwd, "config", "user.email", "fixture@example.test");
+    const initialRecord = structuredClone(json("config/assurance/current-truth-v1.json"));
+    fixtureJson(cwd, "config/assurance/current-truth-v1.json", initialRecord); fixtureWrite(cwd, "CURRENT_STATE.md", renderCurrentState(initialRecord)); fixtureWrite(cwd, "NEXT_TASK.md", renderNextTask(initialRecord));
+    const base = fixtureCommit(cwd, "protected base"); const baseTree = fixtureTree(cwd, base);
+    const record = structuredClone(initialRecord); record.mainSha = base; record.protectedMainAuthority.checkpointSha = base; record.protectedMainAuthority.checkpointTree = baseTree; record.receiptLifecyclePolicy.finiteTaskTerminalTruth = structuredClone(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1);
+    fixtureJson(cwd, "config/assurance/current-truth-v1.json", record); fixtureWrite(cwd, "CURRENT_STATE.md", renderCurrentState(record)); fixtureWrite(cwd, "NEXT_TASK.md", renderNextTask(record));
+    const head = fixtureCommit(cwd, "authorization D source"); const tree = fixtureTree(cwd, head);
+    const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 247, branch: "codex/finite-terminal-truth-receipt-lifecycle-base-advancement-v1", baseRef: "main", baseSha: base, headSha: head };
+    const scope = { files: [...FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS], additions: 400, deletions: 400, netChangedLines: 0, diffHash: "a".repeat(64) };
+    const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd });
+    assert.deepEqual(subject.budget, { maximumFiles: 5, maximumChangedLines: 900 });
+    assert.deepEqual(subject.currentTruthCompanion.requiredChangedPaths, ["config/assurance/current-truth-v1.json"]);
+    assert.equal(subject.currentTruthCompanion.bindingMode, "EMBEDDED_ROLLING_PROTECTED_MAIN_FIRST_PARENT_ANCESTRY");
+    const raw = taskLocalArchitectureComment({ id: 880020, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+    const verified = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd });
+    assert.equal(verified.authorizationOk, true, stableJson(verified.findings));
+    assert.deepEqual(verified.budget, { maximumFiles: 5, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 });
+    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity: { ...identity, headSha: base }, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
+    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree: "0".repeat(40), scope, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
+    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope: { ...scope, additions: 399, deletions: 401 }, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
+    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope: { ...scope, diffHash: "b".repeat(64) }, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
+    assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, additions: 451, deletions: 450 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd }), /SCOPE_INVALID/u);
+    assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, files: [...scope.files, "sixth"] }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd }), /SCOPE_INVALID/u);
+  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
 });

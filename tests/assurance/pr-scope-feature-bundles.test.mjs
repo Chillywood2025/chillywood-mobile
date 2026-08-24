@@ -4,7 +4,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { classifyPrScopePaths, deriveFiniteTaskPrRiskAuthority, deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
 import { args, canonicalGitText, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveTerminalRepairTaskContext, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "../../scripts/assurance/lib.mjs";
 
@@ -641,6 +641,31 @@ test("architecture 13: no static policy entry is required", () => {
   assert.equal(result.ok, true);
   assert.equal(result.source, "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE");
   assert.equal(policy.historicalExactTaskBindings.some(({ pr }) => pr === value.identity.pr), false);
+});
+
+test("finite terminal receipt-lifecycle correction propagates its exact five-file 900-line reservation", () => {
+  const fixture = pullFixture({ pr: 990, branch: "codex/finite-terminal-receipt-lifecycle", head: "9".repeat(40) });
+  const architectureAuthority = {
+    ok: true,
+    type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE",
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: fixture.readback.number,
+    branch: fixture.readback.headRef,
+    currentHead: fixture.readback.headSha,
+    featureId: "assurance-efficiency-e0",
+    objectiveDomains: [],
+    supportingDomains: ["CI-test-infrastructure"],
+    historicalWaiverPath: null,
+    authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
+    bindingId: "finite-terminal-receipt-lifecycle-correction",
+    budget: { maximumFiles: 5, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 },
+    subject: { objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, changedPaths: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS },
+  };
+  const result = derive({ fixture, architectureAuthority, observedChangedPaths: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS, observedCanonicalChangedLines: 900 });
+  assert.equal(result.ok, true, result.findings.join(","));
+  assert.equal(result.source, "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE");
+  assert.deepEqual(result.budget, { maximumFiles: 5, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 });
+  assert.equal(derive({ fixture, architectureAuthority: { ...architectureAuthority, currentHead: "8".repeat(40) } }).ok, false);
 });
 
 const architectureSuccessorFixture = () => {

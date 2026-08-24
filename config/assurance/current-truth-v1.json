@@ -1602,6 +1602,15 @@
     "historicalInvalidAttestationsNonBlocking": true,
     "appendOnlyEvidenceCorrectionAllowed": true,
     "sourceChangeInvalidatesAttestationNotOwnerAuthority": true,
+    "finiteTaskTerminalTruth": {
+      "policyId": "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION",
+      "historicalImplementationIdentityImmutable": true,
+      "protectedBaseAdvancement": "EXACT_PROTECTED_MAIN_FIRST_PARENT_ANCESTRY",
+      "historicalValidReceiptCardinality": "ZERO_OR_MORE",
+      "currentValidReceiptCardinality": "EXACTLY_ONE",
+      "totalMarkerCardinalityRequired": false,
+      "conflictingTerminalOutcomeAllowed": false
+    },
     "authority": {
       "productMutation": false,
       "providerMutation": false,
