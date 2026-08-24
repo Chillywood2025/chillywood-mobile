@@ -1788,6 +1788,7 @@
     "pendingTransitionPolicyId": "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
     "pendingTransitionCountAfterSynchronization": 0,
     "pendingTransitions": [
+      {"pr":226,"mergeSha":"c1f9ec1f71cc8bc4448afd2327c4341cac309573","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"},
       {"pr":243,"mergeSha":"f74a6d53948a37fc35ef3dbb87e3741ede5c8d76","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"}
     ],
     "expectedNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",

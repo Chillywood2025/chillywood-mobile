@@ -5029,6 +5029,12 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
     ? HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS
     : repairMode ? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS;
   const maximumLines = repairMode ? repairProfile.maximumNetLines : 1200;
+  const expectedArchitecturePendingTransitions = currentRepairMode && !historicalRepairMode
+    ? [
+      { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    ]
+    : subject.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }));
   const checks = {
     identity: Boolean(current?.normalized) && identity?.baseSha === currentMain,
     body: current?.normalized?.body === expectedBody,
@@ -5049,7 +5055,7 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
           && predecessor?.sourceTree === predecessorAuthority?.subject?.currentTree
           && predecessorAuthority?.subject?.terminalTruthRequired === true)
       && predecessorAuthority?.ok === true,
-    generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && architecture?.pendingTransitionPolicyId === PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId && architecture?.pendingTransitionCountAfterSynchronization === 0 && stableJson(architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) === stableJson(subject.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext && repairRecordValid,
+    generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && architecture?.pendingTransitionPolicyId === PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId && architecture?.pendingTransitionCountAfterSynchronization === 0 && stableJson(architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) === stableJson(expectedArchitecturePendingTransitions) && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext && repairRecordValid,
     authorityClosed: Object.values(subject.authority ?? {}).every((value) => value === false) && architecture?.authority?.build === false && architecture?.authority?.submission === false && architecture?.authority?.ota === false && architecture?.authority?.publicRelease === false,
     singleUse: openTerminalSuccessorCount === 1 && transitionPreviouslyConsumed === false,
   };

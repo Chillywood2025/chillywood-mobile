@@ -2706,7 +2706,10 @@ test("A1 terminal repair receipt: exact preliminary receipt round-trips only as 
     architecturePr: predecessor.pr, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, mergeSha: predecessor.mergeSha,
     authorityCommentId: predecessorAuthority.commentId, authoritySubjectHash: predecessorAuthority.subjectHash, authorityBodyHash: predecessorAuthority.commentBodyHash,
     terminalTransitionConsumed: true, pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId, pendingTransitionCountAfterSynchronization: 0,
-    pendingTransitions: [{ pr: predecessor.pr, mergeSha: predecessor.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }],
+    pendingTransitions: [
+      { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor.pr, mergeSha: predecessor.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    ],
     terminalVerifierRepair: { ...truthRecord.taskContextArchitecture.terminalVerifierRepair, history: { schemaVersion: 1, policyId: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, instances: [...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY.instances, repairInstance] } },
     authority: closedAuthority,
   };
@@ -2715,9 +2718,27 @@ test("A1 terminal repair receipt: exact preliminary receipt round-trips only as 
   const args = { raw: preliminaryRaw, allComments: [preliminaryRaw, finalRaw], paginationComplete: true, identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: renderCurrentState(truthRecord), nextTaskText: renderNextTask(truthRecord), currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false };
   const exact = verifyTerminalTruthSuccessorAuthority(args);
   assert.equal(exact.ok, true, exact.findings.join(","));
+  assert.deepEqual(finalSubject.pendingTransitions.map(({ pr }) => pr), [predecessor.pr], "ordinal-2 receipt consumption remains PR243-only");
+  assert.deepEqual(truthRecord.taskContextArchitecture.pendingTransitions.map(({ pr }) => pr), [226, predecessor.pr], "top-level compatibility history remains exactly PR226 then PR243");
   assert.deepEqual(exact.historicalTerminalReceiptIds, [preliminaryRaw.id]);
   assert.equal(exact.currentTerminalReceiptId, finalRaw.id);
   assert.equal(verifyTerminalTruthSuccessorAuthority({ ...args, allComments: [preliminaryRaw] }).ok, false, "the preliminary receipt cannot authorize without one exact current final receipt");
+  const verifyTopLevelMutation = (mutate) => {
+    const candidate = structuredClone(args);
+    mutate(candidate.truthRecord.taskContextArchitecture.pendingTransitions);
+    candidate.currentStateText = renderCurrentState(candidate.truthRecord);
+    candidate.nextTaskText = renderNextTask(candidate.truthRecord);
+    return verifyTerminalTruthSuccessorAuthority(candidate);
+  };
+  for (const [label, mutate] of [
+    ["missing", (pending) => { pending.shift(); }],
+    ["wrong", (pending) => { pending[0].mergeSha = "0".repeat(40); }],
+    ["extra", (pending) => { pending.push({ pr: 244, mergeSha: "9".repeat(40), status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }); }],
+  ]) {
+    const invalid = verifyTopLevelMutation(mutate);
+    assert.equal(invalid.ok, false, `${label} top-level compatibility history must fail closed`);
+    assert.ok(invalid.findings.includes("TERMINAL_TRUTH_SUCCESSOR_INVALID:generatedTruth"), label);
+  }
   assert.throws(() => terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: { ...preliminaryScope, files: preliminaryScope.files.slice(1) }, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true }), /ASSURANCE_TERMINAL_REPAIR_PRELIMINARY_RECEIPT_INVALID/u);
 });
 

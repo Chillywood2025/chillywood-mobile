@@ -34,7 +34,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 ## Typed task-context architecture
 
 - Contract `TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1`; architecture PR #243, source `5e44d1fd2a84f51b322eb40ca147c0882d1d664f` / `e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc`, merge `f74a6d53948a37fc35ef3dbb87e3741ede5c8d76`.
-- Pending terminal transitions: PR #243=`CONSUMED_BY_THIS_TERMINAL_TRUTH`; count after synchronization `0`.
+- Pending terminal transitions: PR #226=`CONSUMED_BY_THIS_TERMINAL_TRUTH`, PR #243=`CONSUMED_BY_THIS_TERMINAL_TRUTH`; count after synchronization `0`.
 - Product, provider, build, submission, OTA, and public-release authority remain closed.
 
 ## Pre-admission engineering seed capability
