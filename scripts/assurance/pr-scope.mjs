@@ -17,6 +17,7 @@ const readGitScope = (base, head) => {
   const range = `${base}...${head}`;
   const files = git(["diff", "--name-only", range]).split(/\r?\n/gu).filter(Boolean).sort();
   const numstat = git(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean);
+  if (numstat.some((line) => line.split("\t", 2).some((value) => value === "-"))) throw new Error("ASSURANCE_GIT_DIFF_BINARY_SCOPE_UNREADABLE");
   const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
   const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
   const diff = git(canonicalGitDiffArgs(`${base}...${head}`));
@@ -113,7 +114,7 @@ if (!event.pull_request) {
   if (context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1"
     && (stableJson(scope.files) !== stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS)
       || scope.files.length !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles
-      || scope.netChangedLines > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines
+      || scope.additions + scope.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines
       || budget.files !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles
       || budget.lines !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines)) {
     findings.push({ id: "ASSURANCE_TERMINAL_VERIFIER_REPAIR_PROFILE_INVALID", status: "BLOCKED_INTERNAL" });

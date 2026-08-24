@@ -977,6 +977,8 @@ test("terminal verifier repair profile is exactly nine paths and 1800 net lines 
   assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.receiptBindings.historicalTerminalReceipt.commentId, 5280368893);
   assert.deepEqual(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.receiptBindings.predecessorReceipts.map(({ commentId }) => commentId), [5277679438, 5280109323]);
   assert.equal(evaluateTerminalVerifierRepairHistory({ repair: { history: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY } }).ok, true);
+  assert.match(fs.readFileSync(`${root}/scripts/assurance/lib.mjs`, "utf8"), /if \(added === "-" && deleted === "-"\) return null;[\s\S]*return additions \+ deletions;/u);
+  assert.match(fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8"), /ASSURANCE_GIT_DIFF_BINARY_SCOPE_UNREADABLE[\s\S]*scope\.additions \+ scope\.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE\.maximumNetLines/u);
 });
 
 test("terminal verifier repair history accepts one independently bound append and rejects replay, duplicate, and ambiguous histories", () => {
@@ -1036,7 +1038,7 @@ test("NEXT_TASK renders validated terminal-verifier repair history as single-use
   assert.doesNotMatch(renderNextTask(malformed), /Terminal-verifier repair history/u);
 });
 
-const protectedMainMultiRepairEvaluation = ({ mutateSecondHistory = () => {}, stopAfterIntervening = false } = {}) => {
+const protectedMainMultiRepairEvaluation = ({ mutateCheckpointHistory = () => {}, mutateSecondHistory = () => {}, preprojectFirst = false, stopAfterIntervening = false } = {}) => {
   const record = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
   const checkpoint = "1".repeat(40);
   const checkpointTree = "2".repeat(40);
@@ -1044,6 +1046,7 @@ const protectedMainMultiRepairEvaluation = ({ mutateSecondHistory = () => {}, st
   record.protectedMainAuthority.checkpointSha = checkpoint;
   record.protectedMainAuthority.checkpointTree = checkpointTree;
   record.taskContextArchitecture.terminalVerifierRepair = terminalRepairHistoryRecord([HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE]);
+  mutateCheckpointHistory(record.taskContextArchitecture.terminalVerifierRepair.history.instances);
   const maintenance = structuredClone(policy.ownerArchitectureMaintenance.pendingTerminalTruthTransition);
   const maintenancePaths = [...maintenance.allowedChangedPaths];
   const pendingOne = { commit: "3".repeat(40), source: "4".repeat(40), tree: "5".repeat(40), pr: 811 };
@@ -1066,6 +1069,7 @@ const protectedMainMultiRepairEvaluation = ({ mutateSecondHistory = () => {}, st
     authorityCommentId: 7000000811,
     historicalTerminalReceiptId: 7000000812,
   });
+  if (preprojectFirst) record.taskContextArchitecture.terminalVerifierRepair = terminalRepairHistoryRecord([HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, first]);
   const terminalTruth = ({ parent, pending, repair, instances, authoritySubjectHash, authorityBodyHash, authorityCommentId }) => {
     const truth = structuredClone(parent);
     truth.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: maintenance.expectedTerminalNextTask };
@@ -1165,12 +1169,16 @@ test("protected-main history accepts independently bound repair instances and re
   assert.equal(exact.terminalVerifierRepairHistory.length, 3);
   assert.equal(new Set(exact.terminalVerifierRepairHistory.map(({ instanceId }) => instanceId)).size, 3);
   assert.equal(exact.advancementClassifications.filter(({ terminalVerifierRepair }) => terminalVerifierRepair).length, 2);
+  assert.equal(protectedMainMultiRepairEvaluation({ preprojectFirst: true }).findings.length, 0, "the prospectively embedded current instance must be consumed exactly once at its merge");
   const replay = protectedMainMultiRepairEvaluation({ mutateSecondHistory: (instances) => { instances[2] = structuredClone(instances[1]); } });
   assert.ok(replay.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(replay));
   const unresolved = protectedMainMultiRepairEvaluation({ stopAfterIntervening: true });
   assert.ok(unresolved.findings.includes("CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED"), stableJson(unresolved));
   assert.equal(unresolved.pendingTransitionCount, 1);
   assert.equal(unresolved.nextRequiredAction, "CREATE_EXACT_TERMINAL_TRUTH_SUCCESSOR");
+  const malformedCheckpoint = protectedMainMultiRepairEvaluation({ stopAfterIntervening: true, mutateCheckpointHistory: (instances) => { instances[0] = { ...instances[0], instanceId: "0".repeat(64) }; } });
+  assert.ok(malformedCheckpoint.findings.includes("CURRENT_TRUTH_TERMINAL_VERIFIER_REPAIR_HISTORY_INVALID"), stableJson(malformedCheckpoint));
+  assert.equal(malformedCheckpoint.authorityControlEligible, false);
 });
 
 test("canonical Git diff identity is newline-independent and shared by both authority callers", () => {

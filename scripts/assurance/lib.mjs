@@ -2510,12 +2510,12 @@ function terminalVerifierRepairNetLines(observation, gitCommand) {
     let deletions = 0;
     for (const line of lines) {
       const [added, deleted] = line.split("\t", 3);
-      if (added === "-" && deleted === "-") continue;
+      if (added === "-" && deleted === "-") return null;
       if (!/^\d+$/u.test(added ?? "") || !/^\d+$/u.test(deleted ?? "")) return null;
       additions += Number(added);
       deletions += Number(deleted);
     }
-    return Math.max(0, additions - deletions);
+    return additions + deletions;
   } catch {
     return null;
   }
@@ -2719,6 +2719,11 @@ export function evaluateProtectedMainAdvancement({
       findings.push("CURRENT_TRUTH_TERMINAL_VERIFIER_REPAIR_HISTORY_INVALID");
     }
   }
+  const projectedRepair = repairHistoryInstances.at(-1);
+  if (repairHistoryInstances.length > 1 && observations.some((observation) => observation.parents?.[0] === projectedRepair?.protectedBase
+    && parseProtectedPullRequestMergeSubject(observation.subject).prNumber === projectedRepair?.pullRequest)) {
+    repairHistoryInstances = repairHistoryInstances.slice(0, -1);
+  }
   for (const observation of observations) {
     const pathClassifications = classifyProtectedMainPaths(observation.changedPaths ?? [], policy, activeLeasePaths);
     const classifications = [...new Set(pathClassifications.map(({ classification }) => classification))].sort();
@@ -2838,6 +2843,7 @@ export function evaluateProtectedMainAdvancement({
   }
   const authorityControlEligible = !findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT")
     && !findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID")
+    && !findings.includes("CURRENT_TRUTH_TERMINAL_VERIFIER_REPAIR_HISTORY_INVALID")
     && !findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_CHAIN_OVERFLOW")
     && !findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID")
     && !findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID")
