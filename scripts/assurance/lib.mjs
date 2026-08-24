@@ -6460,7 +6460,14 @@ export function renderNextTask(record) {
     ? [record.preAdmissionEngineeringSeedCapability.nextAction]
     : record.engineeringDoctrine?.status === "ACTIVE" ? [record.engineeringDoctrine.nextPermittedAction] : record.assuranceProgram.nextActions;
   const actions = nextActions.map((entry, index) => `${index + 1}. ${entry}`).join("\n");
-  return `# NEXT TASK\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n${actions}\n\nOrdinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.\n\nDo not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.\n\n${record.assuranceProgram.prohibitions.join("\n")}\n`;
+  const repair = record?.taskContextArchitecture?.terminalVerifierRepair;
+  const repairHistory = repair?.history && legacyTerminalVerifierRepairProjectionExact(repair)
+    ? evaluateTerminalVerifierRepairHistory({ repair })
+    : null;
+  const repairHistoryLine = repairHistory?.ok
+    ? `\n\nTerminal-verifier repair history retains \`${repairHistory.instances.length}\` independently bound single-use instance${repairHistory.instances.length === 1 ? "" : "s"}. No historical instance or receipt is reusable, and this history grants no merge authority.`
+    : "";
+  return `# NEXT TASK\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n${actions}\n\nOrdinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.${repairHistoryLine}\n\nDo not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.\n\n${record.assuranceProgram.prohibitions.join("\n")}\n`;
 }
 
 export function projectFiniteTaskTerminalTruth({ record, terminalEvidence, proofTierApplicabilityHash, implementationTitle = null } = {}) {

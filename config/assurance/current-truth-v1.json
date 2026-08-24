@@ -19,14 +19,14 @@
   "protectedMainAuthority": {
     "schemaVersion": 1,
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
-    "checkpointSha": "406a776a697c3a786fd37911b6e2160906fb9121",
-    "checkpointTree": "49afd9bd5c4644106cb3b1f4d93e551f773ac2c3",
+    "checkpointSha": "5e595e684f4dcc9454eee5065066e1b48d20e3eb",
+    "checkpointTree": "e89be3a2987952152560ebb46bdffcf0ea094028",
     "allowProtectedAdvancement": true,
     "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
-  "mainSha": "406a776a697c3a786fd37911b6e2160906fb9121",
-  "latestMergedImplementationPr": {"number": 212, "state": "merged", "head": "50b5f0498a59961278bb5afbca443c6e35cd5bb6", "mergeSha": "fe775c12b0857aa50d986d24179ae9588049b6a1", "title": "Complete Android native lifecycle and release-critical media proof"},
+  "mainSha": "5e595e684f4dcc9454eee5065066e1b48d20e3eb",
+  "latestMergedImplementationPr": {"number": 229, "state": "merged", "head": "698871780a7610f677fdec1929d85389594d080a", "mergeSha": "5e595e684f4dcc9454eee5065066e1b48d20e3eb", "mergeTree": "e89be3a2987952152560ebb46bdffcf0ea094028", "title": "Close pre-release identity, legal, eligibility, and entitlement authority"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "HISTORICAL_ONLY_PR_50_DOES_NOT_CONTAIN_FINAL_D2B_D2A"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "HISTORICAL_ONLY_PR_50_NOT_EXACT_FINAL_MAIN"},
   "remoteMigrationHead": "20260730161737",
@@ -836,11 +836,11 @@
     "candidateObservation": {
       "pr": 229,
       "branch": "codex/pre-release-identity-entitlement-authority-v1",
-      "prState": "open",
-      "head": "14e6d3a05bc4110712f88de11c76968cb610dae1",
-      "tree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
-      "classification": "PREIMPLEMENTATION_ENGINEERING_CLEAR_OBSERVATION",
-      "observedAt": "2026-08-14T18:43:16Z"
+      "prState": "merged",
+      "head": "698871780a7610f677fdec1929d85389594d080a",
+      "tree": "e89be3a2987952152560ebb46bdffcf0ea094028",
+      "classification": "NON_AUTHORITATIVE_READ_ONLY_OBSERVATION",
+      "observedAt": "2026-08-20T23:39:13Z"
     },
     "finalEvidence": {
       "ownerReceipt": false,
@@ -882,8 +882,8 @@
     "implementationBindingId": "pre-release-identity-entitlement-authority-v1",
     "immutableSourceHead": "6c135fa4f09b41687f5f9607d92e237b4d400ad6",
     "immutableSourceTree": "35abbae7d5ea1429ce768f72052602a6f63af6ca",
-    "currentImplementationHead": "14e6d3a05bc4110712f88de11c76968cb610dae1",
-    "currentImplementationTree": "99527a910dbc83e18a05087c78d18ce8f6b46f94",
+    "currentImplementationHead": "698871780a7610f677fdec1929d85389594d080a",
+    "currentImplementationTree": "e89be3a2987952152560ebb46bdffcf0ea094028",
     "phase": "PREIMPLEMENTATION_ENGINEERING_CLEAR",
     "executionState": "PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED",
     "requiredFreshnessClasses": [
@@ -1199,16 +1199,7 @@
       "tombstoneHash": "842c2a2559a1d09f50320ff1d78c61cb46ad5e3f4d2af424db50d1b4bdc3b0e5"
     }
   ],
-  "openImplementationPrs": [
-    {
-      "number": 229,
-      "branch": "codex/pre-release-identity-entitlement-authority-v1",
-      "head": "14e6d3a05bc4110712f88de11c76968cb610dae1",
-      "state": "open-draft-current",
-      "disposition": "implementation",
-      "featureId": "auth-session-password-recovery"
-    }
-  ],
+  "openImplementationPrs": [],
   "closedImplementationPrDispositions": [
     {"number": 52, "branch": "codex/cognitive-level01-livekit-sentinel-live-activation", "head": "2b7f9fa491180cb1f2b9a883c07b317eb39ae43a", "state": "closed-unmerged", "disposition": "superseded-after-15-path-34-hunk-zero-unresolved-source-coverage-branch-retained"}
   ],
@@ -1780,25 +1771,24 @@
   },
   "taskContextArchitecture": {
     "contractId": "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1",
-    "architecturePr": 227,
-    "sourceHead": "cb4be9ff1e4a956d73cffc1de6902538b79a918c",
-    "sourceTree": "b8e7f4b47cd838496adcd398744426dc80ff9461",
-    "mergeSha": "5506f1c2c227c0d3383131db7f818fef1aae2541",
-    "mergeTree": "b8e7f4b47cd838496adcd398744426dc80ff9461",
-    "authorityCommentId": 5280109323,
-    "authorityBodyHash": "08aa4e3239ca36cd07e5d2535b351e97f894b5021b1f20a9b20c7335229b92e9",
-    "authoritySubjectHash": "866da37ef99aea7452e77e0071225dfbea143d3e170f66e401210ca7085098f5",
-    "repositoryReviewCommentId": 5280125375,
+    "architecturePr": 243,
+    "sourceHead": "5e44d1fd2a84f51b322eb40ca147c0882d1d664f",
+    "sourceTree": "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc",
+    "mergeSha": "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76",
+    "mergeTree": "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc",
+    "authorityCommentId": 5362647294,
+    "authorityBodyHash": "72dfc5ab449289e6cb158cd115fbd645324b1869dc7310a898ac42f83aa848e7",
+    "authoritySubjectHash": "cb22fae3ea5b5646a24107c02618e2c87a5af98fa2345ded9804329ae378e05f",
+    "repositoryReviewCommentId": 5362828091,
     "repositoryReview": {"P0":0,"P1":0,"launchImpactingP2":0},
-    "phase1": {"runId":31680297873,"attempt":2,"result":"PASS_13_OF_13"},
+    "phase1": {"runId":32424350259,"attempt":1,"result":"PASS_13_OF_13"},
     "doctrinePr": 226,
     "doctrineMerge": "c1f9ec1f71cc8bc4448afd2327c4341cac309573",
     "terminalTransitionConsumed": true,
     "pendingTransitionPolicyId": "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
     "pendingTransitionCountAfterSynchronization": 0,
     "pendingTransitions": [
-      {"pr":226,"mergeSha":"c1f9ec1f71cc8bc4448afd2327c4341cac309573","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"},
-      {"pr":227,"mergeSha":"5506f1c2c227c0d3383131db7f818fef1aae2541","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"}
+      {"pr":243,"mergeSha":"f74a6d53948a37fc35ef3dbb87e3741ede5c8d76","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"}
     ],
     "expectedNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
     "verificationDependencyClosureHash": "0188cbb076efaa1940f2dc2c701d3830cda0f68b5151847b50c24e819c1b878a",
@@ -1828,7 +1818,119 @@
       "canonicalPredecessorDiffHash": "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
       "changedVerifierPaths": ["scripts/assurance/engineering-closure.mjs","scripts/assurance/lib.mjs","scripts/assurance/pr-scope.mjs","tests/assurance/active-task-binding-a1.test.mjs","tests/assurance/pr-scope-feature-bundles.test.mjs"],
       "singleUse": true,
-      "authority": {"product":false,"nativeProduct":false,"database":false,"providerMutation":false,"build":false,"submission":false,"ota":false,"publicRelease":false}
+      "authority": {"product":false,"nativeProduct":false,"database":false,"providerMutation":false,"build":false,"submission":false,"ota":false,"publicRelease":false},
+      "history": {
+        "schemaVersion": 1,
+        "policyId": "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_V1",
+        "profile": {
+          "schemaVersion": 2,
+          "profileId": "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE_V2",
+          "changedPaths": [
+            "CURRENT_STATE.md",
+            "NEXT_TASK.md",
+            "config/assurance/current-truth-v1.json",
+            "scripts/assurance/engineering-closure.mjs",
+            "scripts/assurance/lib.mjs",
+            "scripts/assurance/pr-scope.mjs",
+            "tests/assurance/active-task-binding-a1.test.mjs",
+            "tests/assurance/engineering-doctrine.test.mjs",
+            "tests/assurance/pr-scope-feature-bundles.test.mjs"
+          ],
+          "changedPathHash": "3352912101c40daae9381b626d135c7c78bdd13250b0bd6a285859ac0936bf7d",
+          "maximumFiles": 9,
+          "maximumNetLines": 1800
+        },
+        "instances": [
+          {
+            "schemaVersion": 1,
+            "ordinal": 1,
+            "classification": "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+            "repository": "Chillywood2025/chillywood-mobile",
+            "pullRequest": 228,
+            "branch": "codex/post-whole-app-engineering-doctrine-truth",
+            "protectedBase": "5506f1c2c227c0d3383131db7f818fef1aae2541",
+            "priorCurrentTruthHash": "035c23f3a5508e9e047cbed60a1826b00ebbe508c2b43b17c074f5de2adf85bc",
+            "priorInstanceId": null,
+            "predecessor": {
+              "pullRequest": 227,
+              "mergeSha": "5506f1c2c227c0d3383131db7f818fef1aae2541",
+              "firstParent": "c1f9ec1f71cc8bc4448afd2327c4341cac309573",
+              "sourceHead": "cb4be9ff1e4a956d73cffc1de6902538b79a918c",
+              "sourceTree": "b8e7f4b47cd838496adcd398744426dc80ff9461",
+              "authorityCommentId": 5280109323,
+              "authoritySubjectHash": "866da37ef99aea7452e77e0071225dfbea143d3e170f66e401210ca7085098f5",
+              "authorityBodyHash": "08aa4e3239ca36cd07e5d2535b351e97f894b5021b1f20a9b20c7335229b92e9"
+            },
+            "receiptBindings": {
+              "historicalTerminalReceipt": {
+                "commentId": 5280368893,
+                "subjectHash": "99b739eeff1e8ebba285e17fde60528cfb4ecb96983f8a8b01f96b4cfd865c9e",
+                "commentBodyHash": "6e0633e07079c68dffbf79539d55a7fd1906454c3b2ffd5a45d463108808bc05",
+                "disposition": "HISTORICAL_STALE_TERMINAL_RECEIPT"
+              },
+              "predecessorReceipts": [
+                {
+                  "commentId": 5277679438,
+                  "subjectHash": "672a9d1b7fce76a44941df9c1386044bda7645e36ab33ee49a6af4bcd662afc8",
+                  "commentBodyHash": "c2683c3003039d837971d0cf8c1e78b054d229e9142dd79a5799de336ed4b689",
+                  "diffHash": "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
+                  "disposition": "HISTORICAL_REJECTED"
+                },
+                {
+                  "commentId": 5280109323,
+                  "subjectHash": "866da37ef99aea7452e77e0071225dfbea143d3e170f66e401210ca7085098f5",
+                  "commentBodyHash": "08aa4e3239ca36cd07e5d2535b351e97f894b5021b1f20a9b20c7335229b92e9",
+                  "diffHash": "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+                  "disposition": "CANONICAL_CURRENT"
+                }
+              ]
+            },
+            "pendingTransitionPolicyId": "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+            "pendingTransitions": [
+              {
+                "pr": 226,
+                "mergeSha": "c1f9ec1f71cc8bc4448afd2327c4341cac309573",
+                "status": "CONSUMED_BY_THIS_TERMINAL_TRUTH"
+              },
+              {
+                "pr": 227,
+                "mergeSha": "5506f1c2c227c0d3383131db7f818fef1aae2541",
+                "status": "CONSUMED_BY_THIS_TERMINAL_TRUTH"
+              }
+            ],
+            "expectedNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
+            "profile": {
+              "schemaVersion": 1,
+              "profileId": "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE_V1",
+              "changedPaths": [
+                "CURRENT_STATE.md",
+                "NEXT_TASK.md",
+                "config/assurance/current-truth-v1.json",
+                "scripts/assurance/engineering-closure.mjs",
+                "scripts/assurance/lib.mjs",
+                "scripts/assurance/pr-scope.mjs",
+                "tests/assurance/active-task-binding-a1.test.mjs",
+                "tests/assurance/pr-scope-feature-bundles.test.mjs"
+              ],
+              "changedPathHash": "2bb58b1aaf65d686f35bfa7357e38e5c9185c395b6e9ba877539705e635b882f",
+              "maximumFiles": 8,
+              "maximumNetLines": 1800
+            },
+            "singleUse": true,
+            "authority": {
+              "product": false,
+              "nativeProduct": false,
+              "database": false,
+              "providerMutation": false,
+              "build": false,
+              "submission": false,
+              "ota": false,
+              "publicRelease": false
+            },
+            "instanceId": "700c55c7821fed21f7d2d6a98b92778d78a37e759d4bdc35d1dc639f21cb6184"
+          }
+        ]
+      }
     },
     "authority": {"providerMutation":false,"build":false,"submission":false,"ota":false,"publicRelease":false}
   },

@@ -1009,6 +1009,33 @@ test("terminal verifier repair history accepts one independently bound append an
   assert.ok(wrongBase.findings.includes("TERMINAL_VERIFIER_REPAIR_HISTORY_CURRENT_BINDING_INVALID"));
 });
 
+test("NEXT_TASK renders validated terminal-verifier repair history as single-use and non-authoritative", () => {
+  const baseline = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
+  delete baseline.taskContextArchitecture.terminalVerifierRepair.history;
+  assert.doesNotMatch(renderNextTask(baseline), /Terminal-verifier repair history/u);
+
+  const oneInstance = structuredClone(baseline);
+  oneInstance.taskContextArchitecture.terminalVerifierRepair = terminalRepairHistoryRecord([
+    HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE,
+  ]);
+  assert.match(
+    renderNextTask(oneInstance),
+    /Terminal-verifier repair history retains `1` independently bound single-use instance\. No historical instance or receipt is reusable, and this history grants no merge authority\./u,
+  );
+
+  const current = genericTerminalRepairInstance();
+  const twoInstances = structuredClone(baseline);
+  twoInstances.taskContextArchitecture.terminalVerifierRepair = terminalRepairHistoryRecord([
+    HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE,
+    current,
+  ]);
+  assert.match(renderNextTask(twoInstances), /retains `2` independently bound single-use instances/u);
+
+  const malformed = structuredClone(twoInstances);
+  malformed.taskContextArchitecture.terminalVerifierRepair.history.instances[1].instanceId = "0".repeat(64);
+  assert.doesNotMatch(renderNextTask(malformed), /Terminal-verifier repair history/u);
+});
+
 const protectedMainMultiRepairEvaluation = ({ mutateSecondHistory = () => {}, stopAfterIntervening = false } = {}) => {
   const record = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
   const checkpoint = "1".repeat(40);

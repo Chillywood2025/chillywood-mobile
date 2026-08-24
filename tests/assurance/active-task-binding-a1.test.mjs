@@ -25,6 +25,7 @@ import {
   ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE,
   controlMaintenanceAuthorizationCommentBody,
   controlMaintenanceAuthorizationSubject,
+  createTerminalVerifierRepairInstance,
   detectAssuranceRecursion,
   deriveFiniteTaskCandidateObservation,
   evaluateFiniteTaskCandidate,
@@ -37,6 +38,8 @@ import {
   finiteTaskImplementationLifecycleAuthorityValid,
   finiteTaskPostMergeTransitionAuthorityValid,
   finiteTaskTerminalReservationMatchesOutcome,
+  HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY,
+  HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE,
   finiteTaskTestAdaptationCommentBody,
   finiteTaskTestAdaptationSubject,
   finiteTaskLeaseEffectivelyTerminal,
@@ -56,7 +59,10 @@ import {
   resolveFiniteTaskCurrentTruthCandidateLease,
   resolveFiniteTaskEffectiveReservation,
   stableJson,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID,
   TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE,
   taskLeaseAmendmentCommentBody,
   taskLeaseAmendmentSubject,
   transitionFiniteTaskState,
@@ -74,7 +80,7 @@ import {
   verifyFiniteTaskTestAdaptationReceipt,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -2647,6 +2653,72 @@ test("finite test-adaptation active-task scope: only a trusted layered resolutio
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
+});
+
+test("A1 terminal repair receipt: exact preliminary receipt round-trips only as the history-bound stale predecessor of one final receipt", () => {
+  const priorTruth = structuredClone(canonicalTruth);
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 731, branch: "codex/generic-terminal-verifier-repair-v2", baseSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb", headSha: "b".repeat(40) };
+  const preliminaryIdentity = { ...identity, headSha: "a".repeat(40) };
+  const predecessor = { valid: true, protectedBaseAncestor: true, pr: 243, mergeSha: "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76", firstParent: "406a776a697c3a786fd37911b6e2160906fb9121", sourceHead: "5e44d1fd2a84f51b322eb40ca147c0882d1d664f", sourceTree: "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc" };
+  const predecessorAuthority = {
+    ok: true, authorizationOk: true, mergeEligible: true,
+    commentId: 5362647294, subjectHash: "1".repeat(64), commentBodyHash: "2".repeat(64),
+    currentHead: predecessor.sourceHead, currentTree: predecessor.sourceTree, currentFinalSourceReceiptId: 5363013036,
+    canonicalFinalSourceReceipt: { commentId: 5363013036, subjectHash: "3".repeat(64), commentBodyHash: "4".repeat(64), diffHash: "5".repeat(64) },
+  };
+  const consumedPendingTransitions = [{ pr: predecessor.pr, mergeSha: predecessor.mergeSha, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, authorityCommentId: predecessorAuthority.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }];
+  const priorTruthHash = "6".repeat(64);
+  const preliminaryScope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500, diffHash: "7".repeat(64) };
+  const finalScope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 650, diffHash: "8".repeat(64) };
+  const rawComment = (id, body) => ({ id, node_id: `IC_terminal_repair_${id}`, user: { login: "Chillywood2025" }, author_association: "OWNER", body, created_at: "2026-08-24T12:00:00Z", updated_at: "2026-08-24T12:00:00Z", issue_url: `https://api.github.com/repos/${identity.repository}/issues/${identity.pr}`, html_url: `https://github.com/${identity.repository}/pull/${identity.pr}#issuecomment-${id}` });
+  const preliminarySubject = terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: preliminaryScope, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true });
+  const preliminaryBody = terminalTruthSuccessorVerifierRepairOwnerCommentBody(preliminarySubject);
+  const preliminaryPayload = JSON.parse(preliminaryBody.slice(preliminaryBody.indexOf("\n") + 1));
+  const preliminaryRaw = rawComment(9000000731, preliminaryBody);
+  assert.equal(preliminarySubject.receiptStage, "PRELIMINARY_HISTORY_BINDING");
+  assert.equal(Object.hasOwn(preliminarySubject, "originalTerminalReceipt"), false);
+  assert.equal(Object.hasOwn(preliminarySubject, "terminalVerifierRepairInstanceId"), false);
+  assert.deepEqual(JSON.parse(stableJson(preliminarySubject)), preliminarySubject);
+
+  const closedAuthority = { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false };
+  const repairInstance = createTerminalVerifierRepairInstance({
+    schemaVersion: 1, ordinal: 2, classification: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
+    repository: identity.repository, pullRequest: identity.pr, branch: identity.branch, protectedBase: identity.baseSha,
+    priorCurrentTruthHash: priorTruthHash, priorInstanceId: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.instanceId,
+    predecessor: { pullRequest: predecessor.pr, mergeSha: predecessor.mergeSha, firstParent: predecessor.firstParent, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, authorityCommentId: predecessorAuthority.commentId, authoritySubjectHash: predecessorAuthority.subjectHash, authorityBodyHash: predecessorAuthority.commentBodyHash },
+    receiptBindings: {
+      historicalTerminalReceipt: { commentId: preliminaryRaw.id, subjectHash: preliminaryPayload.subjectHash, commentBodyHash: hashValue(preliminaryBody), disposition: "HISTORICAL_STALE_TERMINAL_RECEIPT" },
+      predecessorReceipts: [
+        { commentId: predecessorAuthority.commentId, subjectHash: predecessorAuthority.subjectHash, commentBodyHash: predecessorAuthority.commentBodyHash, disposition: "OWNER_ARCHITECTURE_AUTHORITY" },
+        { commentId: predecessorAuthority.canonicalFinalSourceReceipt.commentId, subjectHash: predecessorAuthority.canonicalFinalSourceReceipt.subjectHash, commentBodyHash: predecessorAuthority.canonicalFinalSourceReceipt.commentBodyHash, diffHash: predecessorAuthority.canonicalFinalSourceReceipt.diffHash, disposition: "CANONICAL_CURRENT" },
+      ],
+    },
+    pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId,
+    pendingTransitions: [{ pr: predecessor.pr, mergeSha: predecessor.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }],
+    expectedNextTask: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE", profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE,
+    singleUse: true, authority: closedAuthority,
+  });
+  const truthRecord = structuredClone(priorTruth);
+  truthRecord.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" };
+  truthRecord.openImplementationPrs = [];
+  truthRecord.taskContextArchitecture = {
+    ...truthRecord.taskContextArchitecture,
+    architecturePr: predecessor.pr, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, mergeSha: predecessor.mergeSha,
+    authorityCommentId: predecessorAuthority.commentId, authoritySubjectHash: predecessorAuthority.subjectHash, authorityBodyHash: predecessorAuthority.commentBodyHash,
+    terminalTransitionConsumed: true, pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId, pendingTransitionCountAfterSynchronization: 0,
+    pendingTransitions: [{ pr: predecessor.pr, mergeSha: predecessor.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }],
+    terminalVerifierRepair: { ...truthRecord.taskContextArchitecture.terminalVerifierRepair, history: { schemaVersion: 1, policyId: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, instances: [...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY.instances, repairInstance] } },
+    authority: closedAuthority,
+  };
+  const finalSubject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: preliminaryRaw, terminalVerifierRepairInstanceId: repairInstance.instanceId, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false });
+  const finalRaw = rawComment(9000000732, terminalTruthSuccessorVerifierRepairOwnerCommentBody(finalSubject));
+  const args = { raw: preliminaryRaw, allComments: [preliminaryRaw, finalRaw], paginationComplete: true, identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: renderCurrentState(truthRecord), nextTaskText: renderNextTask(truthRecord), currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false };
+  const exact = verifyTerminalTruthSuccessorAuthority(args);
+  assert.equal(exact.ok, true, exact.findings.join(","));
+  assert.deepEqual(exact.historicalTerminalReceiptIds, [preliminaryRaw.id]);
+  assert.equal(exact.currentTerminalReceiptId, finalRaw.id);
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...args, allComments: [preliminaryRaw] }).ok, false, "the preliminary receipt cannot authorize without one exact current final receipt");
+  assert.throws(() => terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: { ...preliminaryScope, files: preliminaryScope.files.slice(1) }, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true }), /ASSURANCE_TERMINAL_REPAIR_PRELIMINARY_RECEIPT_INVALID/u);
 });
 
 test("finite test-adaptation resolver: implementation and fixture line ceilings cannot pool", () => {
