@@ -2,11 +2,11 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `406a776a697c3a786fd37911b6e2160906fb9121` / tree `49afd9bd5c4644106cb3b1f4d93e551f773ac2c3`.
+- Protected authority checkpoint: `5e595e684f4dcc9454eee5065066e1b48d20e3eb` / tree `e89be3a2987952152560ebb46bdffcf0ea094028`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
-- Latest merged implementation: PR #212, `50b5f0498a59961278bb5afbca443c6e35cd5bb6`; merge `fe775c12b0857aa50d986d24179ae9588049b6a1`.
-- Structured task-lease binding: feature `auth-session-password-recovery`, PR #229, admitted seed `6c135fa4f09b41687f5f9607d92e237b4d400ad6` / `35abbae7d5ea1429ce768f72052602a6f63af6ca`, phase `PREIMPLEMENTATION_ENGINEERING_CLEAR`, execution `PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED`. Current candidate `14e6d3a05bc4110712f88de11c76968cb610dae1` / `99527a910dbc83e18a05087c78d18ce8f6b46f94` is a non-authoritative read-only observation; final receipt, review, Phase 1, and merge provenance bind the frozen final head.
+- Latest merged implementation: PR #229, `698871780a7610f677fdec1929d85389594d080a`; merge `5e595e684f4dcc9454eee5065066e1b48d20e3eb`.
+- Structured task-lease binding: feature `auth-session-password-recovery`, PR #229, admitted seed `6c135fa4f09b41687f5f9607d92e237b4d400ad6` / `35abbae7d5ea1429ce768f72052602a6f63af6ca`, phase `PREIMPLEMENTATION_ENGINEERING_CLEAR`, execution `PRE_RELEASE_WAVE_1_IMPLEMENTATION_AUTHORIZED`. Current candidate `698871780a7610f677fdec1929d85389594d080a` / `e89be3a2987952152560ebb46bdffcf0ea094028` is a non-authoritative read-only observation; final receipt, review, Phase 1, and merge provenance bind the frozen final head.
 - Finite task lease: `ASSURANCE_FINITE_TASK_LEASE_V1`, admitted seed `6c135fa4f09b41687f5f9607d92e237b4d400ad6` / `35abbae7d5ea1429ce768f72052602a6f63af6ca`, protected admission PR #233, state `ACTIVE_IMPLEMENTATION`; descendant heads do not require another admission, source binding, or merge-provenance PR.
 - Review policy: provider Codex Review is `OPTIONAL_ADVISORY`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all 13 Phase 1 checks and repository-owned exact-head review remain required.
 - Assurance program display text: WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131, CURRENT-TRUTH-SYNCHRONIZATION-PR-132, CURRENT-TRUTH-SYNCHRONIZATION-PR-135, PR-B1-LIVEKIT-SOURCE-BINDING-PR-70, CURRENT-TRUTH-SYNCHRONIZATION-PR-137, PR-B2-REVENUECAT-TRANSFER-PR-69, CURRENT-TRUTH-SYNCHRONIZATION-PR-139, CURRENT-TRUTH-SYNCHRONIZATION-PR-140, PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75, CURRENT-TRUTH-SYNCHRONIZATION-PR-142, PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION, PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143, CURRENT-TRUTH-SYNCHRONIZATION-PR-151, CURRENT-TRUTH-SYNCHRONIZATION-PR-156, CURRENT-TRUTH-SYNCHRONIZATION-PR-161, CURRENT-TRUTH-SYNCHRONIZATION-PR-162, PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152, BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170, D2B-CURRENT-TRUTH-BINDING-PR-169, D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181, PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164, E0-CURRENT-TRUTH-BINDING-PR-190, PR-E0-ASSURANCE-EFFICIENCY-PR-185, D2A-MICROPHONE-CORRECTION-PR-194, ASSURANCE-CONTROL-A1-PR-201, ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205, ASSURANCE-CONTROL-RULESET-READBACK-PR-207, ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208, CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206, LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210, FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218, PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214, BRACE-EXPANSION-VERSION-LINE-CORRECTION-PR-220, FINITE-TASK-TERMINAL-HANDOFF-PR-223, PR-D2A-NATIVE-LIFECYCLE-PR-212, TERMINAL-PROTECTED-BASE-RESOLUTION-PR-225, WHOLE-APP-ENGINEERING-DOCTRINE-PR-226, TYPED-TASK-CONTEXT-TERMINAL-SUCCESSOR-PR-227.
@@ -33,8 +33,8 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 ## Typed task-context architecture
 
-- Contract `TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1`; architecture PR #227, source `cb4be9ff1e4a956d73cffc1de6902538b79a918c` / `b8e7f4b47cd838496adcd398744426dc80ff9461`, merge `5506f1c2c227c0d3383131db7f818fef1aae2541`.
-- Pending terminal transitions: PR #226=`CONSUMED_BY_THIS_TERMINAL_TRUTH`, PR #227=`CONSUMED_BY_THIS_TERMINAL_TRUTH`; count after synchronization `0`.
+- Contract `TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1`; architecture PR #243, source `5e44d1fd2a84f51b322eb40ca147c0882d1d664f` / `e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc`, merge `f74a6d53948a37fc35ef3dbb87e3741ede5c8d76`.
+- Pending terminal transitions: PR #226=`CONSUMED_BY_THIS_TERMINAL_TRUTH`, PR #243=`CONSUMED_BY_THIS_TERMINAL_TRUTH`; count after synchronization `0`.
 - Product, provider, build, submission, OTA, and public-release authority remain closed.
 
 ## Pre-admission engineering seed capability
@@ -70,7 +70,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 ## Open implementation PRs
 
-- PR #229 at `14e6d3a05bc4110712f88de11c76968cb610dae1`: open-draft-current; implementation.
+- None.
 
 ## Open review-only PRs
 

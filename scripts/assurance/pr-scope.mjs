@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
-import { args, emit, evaluateProtectedMainAdvancement, git, readJson } from "./lib.mjs";
+import { args, classifyGitHubExecutionIdentity, emit, evaluateProtectedMainAdvancement, git, readJson, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "./lib.mjs";
 import { canonicalGitDiffArgs, canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
@@ -17,17 +17,19 @@ const readGitScope = (base, head) => {
   const range = `${base}...${head}`;
   const files = git(["diff", "--name-only", range]).split(/\r?\n/gu).filter(Boolean).sort();
   const numstat = git(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean);
+  if (numstat.some((line) => line.split("\t", 2).some((value) => value === "-"))) throw new Error("ASSURANCE_GIT_DIFF_BINARY_SCOPE_UNREADABLE");
   const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
   const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
   const diff = git(canonicalGitDiffArgs(`${base}...${head}`));
   return { files, additions, deletions, diffHash: canonicalGitDiffHash(diff) };
 };
 const readPull = (repository, pr) => {
-  const result = spawnSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], { encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return null;
+  const options = { encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 }; const authenticated = spawnSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], options); const result = authenticated.status === 0 ? authenticated : spawnSync("curl", ["--fail", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", "--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28", "--header", "User-Agent: chillywood-assurance-readonly", `https://api.github.com/repos/${repository}/pulls/${pr}`], options);
   if (result.status !== 0) return null;
   try {
     const pull = JSON.parse(result.stdout);
-    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRef: pull.head?.ref, headSha: pull.head?.sha, htmlUrl: pull.html_url, state: pull.state };
+    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRepository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRepository: pull.head?.repo?.full_name, headRef: pull.head?.ref, headSha: pull.head?.sha, mergeCommitSha: pull.merge_commit_sha, draft: pull.draft, htmlUrl: pull.html_url, state: pull.state };
   } catch {
     return null;
   }
@@ -72,6 +74,7 @@ if (!event.pull_request) {
   const pr = event.number;
   const readback = readPull(repository, pr);
   const validatedIdentity = validatePullRequestEventIdentity(event, readback);
+  const executionIdentity = validatedIdentity.ok ? classifyGitHubExecutionIdentity({ event, livePullRequest: readback, authoritativeSourceIdentity: validatedIdentity.identity }) : null;
   const base = validatedIdentity.identity?.baseSha ?? event.pull_request?.base?.sha;
   const head = validatedIdentity.identity?.headSha ?? event.pull_request?.head?.sha;
   let scope = { files: [], additions: 0, deletions: 0, netChangedLines: 0 };
@@ -98,6 +101,7 @@ if (!event.pull_request) {
     observedCanonicalChangedLines: scope.additions + scope.deletions,
   });
   const findings = context.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
+  if (executionIdentity?.relationship?.valid !== true) findings.push({ id: "ASSURANCE_GITHUB_EXECUTION_IDENTITY_INVALID", status: "BLOCKED_INTERNAL", reasons: executionIdentity?.relationship?.findings ?? [] });
   if (!tree) {
     findings.push({ id: "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE", status: "BLOCKED_INTERNAL" });
   }
@@ -110,6 +114,9 @@ if (!event.pull_request) {
     : waiver
       ? { files: waiver.fileBudget.waivedMaximum, lines: waiver.lineBudget.waivedMaximum, source: waiver.contractId }
       : { files: policy.defaultBudget.changedFiles, lines: policy.defaultBudget.netChangedLines, source: "pr-scope-policy-v1" };
+  if (context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && (stableJson(scope.files) !== stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS) || scope.files.length !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles || scope.additions + scope.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines || budget.files !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles || budget.lines !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines)) {
+    findings.push({ id: "ASSURANCE_TERMINAL_VERIFIER_REPAIR_PROFILE_INVALID", status: "BLOCKED_INTERNAL" });
+  }
   if (scope.files.length > budget.files) findings.push({ id: "ASSURANCE_PR_FILE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.files.length, maximum: budget.files });
   if (Math.max(0, scope.additions - scope.deletions) > budget.lines) findings.push({ id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.additions - scope.deletions, maximum: budget.lines });
   const scopeEvaluation = evaluateHighRiskScope({
@@ -147,6 +154,7 @@ if (!event.pull_request) {
     budget,
     waiver: waiver ? waiver.contractId : null,
     classified,
+    executionIdentity,
     findings
   }, [`PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
 }
