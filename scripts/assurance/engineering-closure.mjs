@@ -1864,6 +1864,7 @@ export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRE
 export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS = Object.freeze([
   "config/assurance/current-truth-v1.json",
   "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
   "tests/assurance/active-task-binding-a1.test.mjs",
   "tests/assurance/engineering-doctrine.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
@@ -1877,6 +1878,7 @@ export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1 = Object.fre
   totalMarkerCardinalityRequired: false,
   conflictingTerminalOutcomeAllowed: false,
 });
+const HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY = Object.freeze({ commentId: 5397695980, subjectHash: "eceeb6e43b48fef39d465b3b28da0c3d4fbf57ebc08e641ef3e833eb01386da3", payloadBodyHash: "67c61953eeb4f3d9262b15f2fe3bcfa31ccfbb0069bb3b31e6af5bc03350a9b1", commentBodyHash: "780147af11f258d1beae6c69a200007197197c15531470dd47d543ed2b0b93df", head: "c107ba8824f935b20a44f2e56dd5ec827e1da709", tree: "05ab290d1d0e92ccbaa15321f541e0976346a6d3", changedPathHash: "90027eeff4efe02ed341cf19739d955b979904835c63c6513f3aa14221737d9f" });
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 export const FINITE_TASK_ADMISSION_LEASE_STATE = "ACTIVE_IMPLEMENTATION";
 export const finiteTaskAdmissionLeaseStateValid = (lease) => lease?.taskState === FINITE_TASK_ADMISSION_LEASE_STATE;
@@ -2946,7 +2948,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     deletions: Number(scope?.deletions ?? 0),
     netChangedLines: observed.netChangedLines,
     ...(terminalReceiptLifecycleCorrection ? { canonicalChangedLines: Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0), diffHash: scope?.diffHash ?? null } : {}),
-    budget: terminalReceiptLifecycleCorrection ? { maximumFiles: 5, maximumChangedLines: 900 } : immutableEvidenceLifecycleConvergence ? { maximumFiles: 8, maximumNetLines: 2000 } : { maximumFiles: 15, maximumNetLines: 3500 },
+    budget: terminalReceiptLifecycleCorrection ? { maximumFiles: 6, maximumChangedLines: 900 } : immutableEvidenceLifecycleConvergence ? { maximumFiles: 8, maximumNetLines: 2000 } : { maximumFiles: 15, maximumNetLines: 3500 },
     featureId: "assurance-efficiency-e0",
     objectiveDomains: [],
     supportingDomains: ["CI-test-infrastructure"],
@@ -3110,6 +3112,13 @@ export function architectureMaintenanceSuccessorSubject({ identity, tree, scope,
   const originalSubject = originalPayload?.subject ?? {};
   const observed = exactScope(scope);
   const addedPaths = observed.changedPaths.filter((file) => !(originalSubject.changedPaths ?? []).includes(file));
+  const terminalReceiptLifecycleCorrection = originalSubject.objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
+  if (terminalReceiptLifecycleCorrection) {
+    const historicalExact = original?.id === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentId && original?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentBodyHash && originalPayload?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.payloadBodyHash && originalPayload?.subjectHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.subjectHash && originalSubject.currentHead === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.head && originalSubject.currentTree === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.tree && originalSubject.changedPathHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.changedPathHash;
+    const changedLines = Number(scope?.additions) + Number(scope?.deletions);
+    if (!historicalExact || stableJson(observed.changedPaths) !== stableJson(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS) || stableJson(addedPaths) !== stableJson(["scripts/assurance/lib.mjs"]) || identity?.repository !== originalSubject.repository || identity?.pr !== originalSubject.pr || identity?.branch !== originalSubject.branch || identity?.baseSha !== originalSubject.protectedBase || !/^[0-9a-f]{40}$/u.test(identity?.headSha ?? "") || !/^[0-9a-f]{40}$/u.test(tree ?? "") || !Number.isSafeInteger(Number(scope?.additions)) || Number(scope.additions) < 0 || !Number.isSafeInteger(Number(scope?.deletions)) || Number(scope.deletions) < 0 || changedLines > 900 || !/^[0-9a-f]{64}$/u.test(scope?.diffHash ?? "")) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_SCOPE_INVALID");
+    return { type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_V1", classification: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, repository: identity.repository, pr: identity.pr, branch: identity.branch, protectedBase: identity.baseSha, originalCommentId: original.id, originalSubjectHash: originalPayload.subjectHash, originalBodyHash: original.bodyHash, originalHead: originalSubject.currentHead, originalTree: originalSubject.currentTree, originalChangedPaths: originalSubject.changedPaths, originalChangedPathHash: originalSubject.changedPathHash, originalBudget: originalSubject.budget, currentHead: identity.headSha, currentTree: tree, changedPaths: observed.changedPaths, changedPathHash: observed.changedPathHash, addedPaths, additions: Number(scope.additions), deletions: Number(scope.deletions), canonicalChangedLines: changedLines, diffHash: scope.diffHash, budget: { maximumFiles: 6, maximumChangedLines: 900 }, objective: originalSubject.objective, capabilities: originalSubject.capabilities, reason: "add the shared assurance-control runtime observer required by the finite terminal receipt lifecycle correction", authority: originalSubject.authority, ownerIdentity: { login: "Chillywood2025", association: "OWNER" }, immutableCommentRequired: true, createdAtEqualsUpdatedAtRequired: true, expiresOn: `PR_${identity.pr}_MERGE`, reusableByAnotherPr: false };
+  }
   return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_V1",
     repository: identity?.repository,
@@ -3162,6 +3171,9 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
   const testAdaptationOverlay = originalSubject.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
   const immutableEvidenceLifecycleConvergence = originalSubject.objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
   const terminalReceiptLifecycleCorrection = originalSubject.objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
+  const lifecycleSuccessor = terminalReceiptLifecycleCorrection ? normalizeGitHubCommentIdentity(historicalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: historicalRaw?.id }) : null;
+  const lifecycleSuccessorPayload = parseExactOwnerBody(lifecycleSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
+  const lifecycleAuthority = lifecycleSuccessorPayload?.subject?.originalCommentId === original?.id ? { receipt: lifecycleSuccessor, payload: lifecycleSuccessorPayload, subject: lifecycleSuccessorPayload.subject } : { receipt: original, payload: originalPayload, subject: originalSubject };
   if ([
     "install generic source-grounded task-local governing-edge closure for pre-admission engineering packets",
     "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
@@ -3191,11 +3203,11 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       pr: identity?.pr,
       branch: identity?.branch,
       protectedBase: identity?.baseSha,
-      originalCommentId: original?.id,
-      originalSubjectHash: originalPayload?.subjectHash,
-      originalBodyHash: original?.bodyHash,
-      originalHead: originalSubject.currentHead,
-      originalTree: originalSubject.currentTree,
+      originalCommentId: lifecycleAuthority.receipt?.id,
+      originalSubjectHash: lifecycleAuthority.payload?.subjectHash,
+      originalBodyHash: lifecycleAuthority.receipt?.bodyHash,
+      originalHead: lifecycleAuthority.subject.currentHead,
+      originalTree: lifecycleAuthority.subject.currentTree,
       currentHead: identity?.headSha,
       currentTree: tree,
       finalHead: identity?.headSha,
@@ -3206,7 +3218,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       additions: Number(scope?.additions ?? 0),
       deletions: Number(scope?.deletions ?? 0),
       netChangedLines: observed.netChangedLines,
-      budget: dependencyAmendment?.finalBudget ?? originalSubject.budget,
+      budget: dependencyAmendment?.finalBudget ?? lifecycleAuthority.subject.budget,
       objective: originalSubject.objective,
       capabilities: originalSubject.capabilities,
       receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
@@ -3937,6 +3949,13 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const originalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
   const suppliedOriginalIsSoleDiscoveredAuthority = originalMatches.length === 1 && originalMatches[0]?.id === raw?.id;
   const successorMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER}\n`));
+  const normalizedTerminalSuccessor = terminalReceiptLifecycleCorrection && successorMatches.length === 1 ? normalizeGitHubCommentIdentity(successorMatches[0], { repository: identity?.repository, pr: identity?.pr, commentId: successorMatches[0]?.id }) : null;
+  const terminalSuccessorPayload = parseExactOwnerBody(normalizedTerminalSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
+  const historicalTerminalAuthorityValid = terminalReceiptLifecycleCorrection && normalizedOriginal?.id === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentId && normalizedOriginal?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentBodyHash && originalPayload?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.payloadBodyHash && originalPayload?.subjectHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.subjectHash && originalSubject?.currentHead === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.head && originalSubject?.currentTree === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.tree && originalSubject?.changedPathHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.changedPathHash && normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject);
+  let expectedTerminalSuccessor = null;
+  try { expectedTerminalSuccessor = terminalReceiptLifecycleCorrection ? architectureMaintenanceSuccessorSubject({ identity, tree, scope, originalRaw: raw }) : null; } catch {}
+  const terminalSuccessorValid = Boolean(normalizedTerminalSuccessor && expectedTerminalSuccessor && terminalSuccessorPayload?.subjectHash === hashValue(terminalSuccessorPayload.subject) && terminalSuccessorPayload?.bodyHash === hashValue(Object.fromEntries(Object.entries(terminalSuccessorPayload).filter(([key]) => key !== "bodyHash"))) && normalizedTerminalSuccessor.body === architectureMaintenanceSuccessorOwnerCommentBody(terminalSuccessorPayload.subject) && stableJson(terminalSuccessorPayload.subject) === stableJson(expectedTerminalSuccessor) && terminalSuccessorPayload.subject.originalHead !== terminalSuccessorPayload.subject.currentHead && gitAncestor(root, terminalSuccessorPayload.subject.originalHead, terminalSuccessorPayload.subject.currentHead));
+  const effectiveTerminalAuthority = terminalSuccessorValid ? { normalized: normalizedTerminalSuccessor, payload: terminalSuccessorPayload, subject: terminalSuccessorPayload.subject } : { normalized: normalizedOriginal, payload: originalPayload, subject: originalSubject };
   const finalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
   const dependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER}\n`));
   const architectureDependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER}\n`));
@@ -4010,7 +4029,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           ...(architectureDependencyAmendmentActive ? architectureDependencyAmendment.effectiveAddedPaths ?? DEPENDENCY_AMENDMENT_ADDED_PATHS : []),
         ]
       : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
-    const maximumFiles = terminalReceiptLifecycleCorrection ? 5 : immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
+    const maximumFiles = terminalReceiptLifecycleCorrection ? 6 : immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
     const maximumNetLines = terminalReceiptLifecycleCorrection ? 900 : immutableEvidenceLifecycleConvergence ? 2000 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200;
     const originalMaximumFiles = terminalReceiptLifecycleCorrection ? 5 : immutableEvidenceLifecycleConvergence ? 8 : ownerJurisdictionProfile ? 15 : 12;
     const originalMaximumNetLines = terminalReceiptLifecycleCorrection ? 900 : immutableEvidenceLifecycleConvergence ? 2000 : ownerJurisdictionProfile ? 3500 : 3200;
@@ -4028,7 +4047,8 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const payloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
     const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : null;
     const reviewSelection = selectCurrentArchitectureRepositoryReview({ comments: allComments, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution: architectureDependencyAmendmentActive ? architectureDependencyAmendment : null, root });
-    const requiredFinalKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, finalHead: identity?.headSha, finalTree: tree, objective: originalSubject?.objective, originalCommentId: normalizedOriginal?.id ?? null };
+    const currentAuthorityCommentId = terminalReceiptLifecycleCorrection && terminalSuccessorValid ? normalizedTerminalSuccessor.id : normalizedOriginal?.id ?? null;
+    const requiredFinalKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, finalHead: identity?.headSha, finalTree: tree, objective: originalSubject?.objective, originalCommentId: currentAuthorityCommentId };
     const finalSelection = selectCurrentImmutableEvidence({
       candidates: finalMatches,
       requiredKey: requiredFinalKey,
@@ -4067,6 +4087,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           tree,
           scope,
           originalRaw: raw,
+          historicalRaw: terminalReceiptLifecycleCorrection ? normalizedTerminalSuccessor : null,
           historicalAttestationRaws: claimedHistoricalRaws,
           historicalRepositoryReviewRaws: claimedHistoricalReviewRaws,
           repositoryReviewRaw: reviewSelection.raw,
@@ -4087,7 +4108,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     });
     const currentFinal = finalSelection.selected?.value ?? null;
     const ancestry = ancestryVerified ?? (originalSubject?.currentHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.currentHead, identity?.headSha]).status === 0);
-    const canonicalOriginalSubject = architectureMaintenanceSubject({
+    const canonicalOriginalSubject = terminalReceiptLifecycleCorrection ? (historicalTerminalAuthorityValid ? originalSubject : null) : architectureMaintenanceSubject({
       identity: { repository: originalSubject?.repository, pr: originalSubject?.pr, branch: originalSubject?.branch, baseRef: identity?.baseRef, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead },
       tree: originalSubject?.currentTree,
       scope: { files: originalSubject?.changedPaths, additions: originalSubject?.additions, deletions: originalSubject?.deletions, netChangedLines: originalSubject?.netChangedLines, diffHash: originalSubject?.diffHash },
@@ -4095,7 +4116,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : null,
       root,
     });
-    const canonicalProfile = stableJson(originalSubject) === stableJson(canonicalOriginalSubject);
+    const canonicalProfile = stableJson(originalSubject) === stableJson(canonicalOriginalSubject) && (!terminalReceiptLifecycleCorrection || terminalSuccessorValid);
     const assuranceOnlyNonDomainMaintenance = canonicalProfile
       && Array.isArray(originalSubject?.objectiveDomains)
       && originalSubject.objectiveDomains.length === 0
@@ -4107,15 +4128,15 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       currentTruthCompanion: companionValid,
       body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
-      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === originalMaximumFiles && (terminalReceiptLifecycleCorrection ? originalSubject?.budget?.maximumChangedLines === 900 && !Object.hasOwn(originalSubject?.budget ?? {}, "maximumNetLines") && originalSubject?.currentHead === identity?.headSha && originalSubject?.currentTree === tree && originalSubject?.additions === Number(scope?.additions ?? 0) && originalSubject?.deletions === Number(scope?.deletions ?? 0) && originalSubject?.canonicalChangedLines === Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) && originalSubject?.diffHash === scope?.diffHash : originalSubject?.budget?.maximumNetLines === originalMaximumNetLines),
-      ancestry: terminalReceiptLifecycleCorrection ? originalSubject?.currentHead === identity?.headSha && originalSubject?.currentTree === tree : ancestry,
-      cardinality: paginationComplete && suppliedOriginalIsSoleDiscoveredAuthority && successorMatches.length === 0 && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
+      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === originalMaximumFiles && (terminalReceiptLifecycleCorrection ? terminalSuccessorValid && effectiveTerminalAuthority.subject?.budget?.maximumFiles === maximumFiles && effectiveTerminalAuthority.subject?.budget?.maximumChangedLines === 900 && effectiveTerminalAuthority.subject?.currentHead === identity?.headSha && effectiveTerminalAuthority.subject?.currentTree === tree && effectiveTerminalAuthority.subject?.additions === Number(scope?.additions ?? 0) && effectiveTerminalAuthority.subject?.deletions === Number(scope?.deletions ?? 0) && effectiveTerminalAuthority.subject?.canonicalChangedLines === Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) && effectiveTerminalAuthority.subject?.diffHash === scope?.diffHash : originalSubject?.budget?.maximumNetLines === originalMaximumNetLines),
+      ancestry: terminalReceiptLifecycleCorrection ? terminalSuccessorValid : ancestry,
+      cardinality: paginationComplete && suppliedOriginalIsSoleDiscoveredAuthority && successorMatches.length === (terminalReceiptLifecycleCorrection ? 1 : 0) && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
       dependencyAmendment: immutableEvidenceLifecycleConvergence
         ? architectureDependencyAmendmentMatches.length === 0 && architectureDependencyWitnessAmendmentMatches.length === 0
         : architectureDependencyAmendmentMatches.length === 0
         ? architectureDependencyWitnessAmendmentMatches.length === 0
         : architectureDependencyAmendmentActive,
-      exactPaths: (immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection ? stableJson(observed.changedPaths) === stableJson(architecturePaths) : observed.changedPaths.every((file) => architecturePaths.includes(file))) && (architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
+      exactPaths: (immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection ? stableJson(observed.changedPaths) === stableJson(architecturePaths) : observed.changedPaths.every((file) => architecturePaths.includes(file))) && (terminalReceiptLifecycleCorrection ? terminalSuccessorValid : architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
       budget: observed.changedPaths.length <= maximumFiles && (terminalReceiptLifecycleCorrection ? Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) <= 900 : observed.netChangedLines <= maximumNetLines),
       authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && (noCompetingDomainOwner || assuranceOnlyNonDomainMaintenance),
       capability: canonicalProfile
@@ -4149,10 +4170,10 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
       bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`,
       budget: terminalReceiptLifecycleCorrection ? { maximumFiles, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 } : { maximumFiles, maximumHandAuthoredNetLines: maximumNetLines },
-      commentId: normalizedOriginal?.id ?? null,
-      commentBodyHash: normalizedOriginal?.bodyHash ?? null,
-      subjectHash: originalPayload?.subjectHash ?? null,
-      subject: originalSubject,
+      commentId: effectiveTerminalAuthority.normalized?.id ?? null,
+      commentBodyHash: effectiveTerminalAuthority.normalized?.bodyHash ?? null,
+      subjectHash: effectiveTerminalAuthority.payload?.subjectHash ?? null,
+      subject: effectiveTerminalAuthority.subject,
       originalCommentId: normalizedOriginal?.id ?? null,
       originalBodyHash: normalizedOriginal?.bodyHash ?? null,
       originalSubjectHash: originalPayload?.subjectHash ?? null,

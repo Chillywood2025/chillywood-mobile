@@ -1734,6 +1734,36 @@ export function observeLiveTerminalRepairTaskContext({ environment = process.env
   } catch { return null; }
 }
 
+export const ASSURANCE_CONTROL_SOURCE_ONLY_PATHS = Object.freeze(["config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
+const trustedAssuranceControlTaskContexts = new WeakMap();
+const registerAssuranceControlTaskContext = (value) => { trustedAssuranceControlTaskContexts.set(value, sha256(value)); return value; };
+export const assuranceControlTaskContextValid = (value) => trustedAssuranceControlTaskContexts.get(value) === sha256(value);
+export function validateUntrustedAssuranceControlTaskContextObservation({ result, expectedIdentity = null, githubEvent, gitCommand = git, environment = process.env } = {}) {
+  try {
+    const context = result?.taskContext; const child = result?.executionIdentity; const event = githubEvent ?? readGithubEvent(environment);
+    const executionIdentity = classifyGitHubExecutionIdentity({ event, livePullRequest: { repository: child?.repository, number: child?.pr, headRef: child?.authoritativeSource?.ref, headSha: child?.authoritativeSource?.headSha, headRepository: child?.repository, baseRef: child?.authoritativeSource?.baseRef, baseSha: child?.authoritativeSource?.baseSha, baseRepository: child?.repository, mergeCommitSha: child?.mergeRef?.sha, draft: child?.draft, state: "open" }, authoritativeSourceIdentity: context?.identity, environment, gitCommand });
+    const budget = context?.budget; const identity = { repository: context?.identity?.repository, pr: context?.identity?.pr, branch: context?.identity?.branch, headSha: context?.identity?.headSha, headTree: executionIdentity?.authoritativeSource?.headTree, baseSha: context?.identity?.baseSha, baseRef: context?.identity?.baseRef };
+    const empty = (value) => Array.isArray(value) && value.length === 0; const additions = result?.additions; const deletions = result?.deletions; const changedPaths = Array.isArray(result?.classified) ? result.classified.map(({ file }) => file).sort() : null;
+    const exact = result?.ok === true && result?.mode === "GITHUB_EVENT_TASK_CONTEXT" && context?.ok === true && empty(context?.findings) && empty(result?.findings) && githubExecutionIdentityValid(executionIdentity) && stableJson(child) === stableJson(executionIdentity)
+      && context.contextType === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" && context.source === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" && context.authoritySource === "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE"
+      && result.head === identity.headSha && result.base === identity.baseSha && context.featureId === "assurance-efficiency-e0" && context.primaryFeatureId === "assurance-efficiency-e0" && result.featureId === context.featureId && result.primaryFeatureId === context.primaryFeatureId && empty(context.affectedFeatureIds) && empty(context.objectiveDomains) && empty(context.authorizedPrRiskDomains) && empty(result.highRiskDomains) && empty(result.authorizedPrRiskDomains) && empty(result.observedPrRiskDomains) && empty(result.objectiveDomains)
+      && stableJson(context.supportingDomains) === stableJson(["CI-test-infrastructure"]) && context.finiteTaskPrRiskAuthority === null && context.finiteLeaseId === null && context.historicalWaiverPath === null && result.waiver === null && context.bindingId === `owner-architecture-maintenance-pr-${context.identity?.pr}`
+      && budget?.maximumFiles === 6 && budget?.maximumChangedLines === 900 && budget?.maximumHandAuthoredNetLines === 900 && result?.budget?.files === 6 && result?.budget?.lines === 900 && result?.budget?.source === context.authoritySource && result.changedFiles === 6 && stableJson(changedPaths) === stableJson(ASSURANCE_CONTROL_SOURCE_ONLY_PATHS)
+      && Number.isSafeInteger(additions) && additions >= 0 && Number.isSafeInteger(deletions) && deletions >= 0 && additions + deletions <= 900
+      && (!expectedIdentity || stableJson(identity) === stableJson(expectedIdentity));
+    return exact ? { ok: true, findings: [], source: context.source, contextType: context.contextType, identity: { repository: identity.repository, pr: identity.pr, branch: identity.branch, headSha: identity.headSha, baseSha: identity.baseSha, baseRef: identity.baseRef }, featureId: context.featureId, primaryFeatureId: context.primaryFeatureId, affectedFeatureIds: [], objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], authorizedPrRiskDomains: [], finiteTaskPrRiskAuthority: null, historicalWaiverPath: null, bindingId: context.bindingId, finiteLeaseId: null, budget: { maximumFiles: 6, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 }, authoritySource: context.authoritySource, executionIdentity, sourceTree: identity.headTree, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false } : null;
+  } catch { return null; }
+}
+export function observeLiveAssuranceControlTaskContext({ environment = process.env, expectedIdentity = null, gitCommand = git } = {}) {
+  const eventPath = environment?.GITHUB_EVENT_PATH;
+  if (typeof eventPath !== "string" || !eventPath) return null;
+  try {
+    const output = execFileSync(process.execPath, [rel("scripts/assurance/pr-scope.mjs"), `--github-event=${eventPath}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 });
+    const context = validateUntrustedAssuranceControlTaskContextObservation({ result: JSON.parse(output.trim().split(/\r?\n/gu).at(-1)), expectedIdentity, githubEvent: readGithubEvent(environment), gitCommand, environment });
+    return context ? registerAssuranceControlTaskContext(context) : null;
+  } catch { return null; }
+}
+
 export function resolveCurrentProtectedBase({
   currentProtectedBase,
   githubEvent,
@@ -2237,9 +2267,12 @@ export function evaluateFiniteTaskLeaseRuntime({
     && finiteTaskEffectiveReservationAuthorityValid(reservationResolution)
     && candidateEvaluation.ok;
   const terminalRepairHistory = evaluateTerminalVerifierRepairHistory({ repair: record?.taskContextArchitecture?.terminalVerifierRepair });
-  const terminalRepairContext = githubEvent === undefined && suppliedObservation === undefined && effectiveReservationResolution === null && terminalRepairHistory.ok && (checkoutHead === undefined || checkoutHead === safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"])) ? observeLiveTerminalRepairTaskContext({ environment, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
+  const liveContextEligible = githubEvent === undefined && suppliedObservation === undefined && effectiveReservationResolution === null && (checkoutHead === undefined || checkoutHead === safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]));
+  const terminalRepairContext = liveContextEligible && terminalRepairHistory.ok ? observeLiveTerminalRepairTaskContext({ environment, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
   const terminalRepairTree = terminalRepairContext?.executionIdentity?.authoritativeSource?.headTree ?? null;
   const terminalRepairEligible = Boolean(terminalRepairContext && githubExecutionIdentityValid(terminalRepairContext.executionIdentity) && terminalRepairHistory.current?.repository === terminalRepairContext.identity.repository && terminalRepairHistory.current?.pullRequest === terminalRepairContext.identity.pr && terminalRepairHistory.current?.branch === terminalRepairContext.identity.branch && terminalRepairHistory.current?.protectedBase === terminalRepairContext.identity.baseSha && terminalRepairContext.executionIdentity.authoritativeSource.headSha === terminalRepairContext.identity.headSha);
+  const assuranceControlContext = liveContextEligible ? observeLiveAssuranceControlTaskContext({ environment, gitCommand, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${event?.pull_request?.head?.sha}^{tree}`]), baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
+  const assuranceControlEligible = Boolean(assuranceControlContext && assuranceControlTaskContextValid(assuranceControlContext) && githubExecutionIdentityValid(assuranceControlContext.executionIdentity));
   const result = {
     leaseAuthorityEligible: leaseFreshness.eligible,
     candidateEligible: derived.ok && candidateEvaluation.ok && finiteTaskEffectiveReservationAuthorityValid(reservationResolution),
@@ -2264,7 +2297,8 @@ export function evaluateFiniteTaskLeaseRuntime({
     taskState: lease?.taskState ?? null,
     terminal: false
   };
-  return terminalRepairEligible ? { ...result, candidateEligible: true, candidateHead: terminalRepairContext.identity.headSha, candidateTree: terminalRepairTree, scopeResult: "PASS", findings: [], providerDependentEligible: false, sourceOnlyEligible: true, candidate: terminalRepairContext.identity, candidateEvaluation: { ok: true, findings: [], taskState: lease?.taskState ?? null }, terminalRepairTaskContext: terminalRepairContext, supersededFiniteTaskFindings: findings } : result;
+  if (terminalRepairEligible) return { ...result, candidateEligible: true, candidateHead: terminalRepairContext.identity.headSha, candidateTree: terminalRepairTree, scopeResult: "PASS", findings: [], providerDependentEligible: false, sourceOnlyEligible: true, candidate: terminalRepairContext.identity, candidateEvaluation: { ok: true, findings: [], taskState: lease?.taskState ?? null }, terminalRepairTaskContext: terminalRepairContext, supersededFiniteTaskFindings: findings };
+  return assuranceControlEligible ? { ...result, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", candidateKind: "ASSURANCE_CONTROL_SOURCE_ONLY", candidateEligible: true, candidateHead: assuranceControlContext.identity.headSha, candidateTree: assuranceControlContext.sourceTree, scopeResult: "PASS", findings: [], providerDependentEligible: false, sourceOnlyEligible: true, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false, candidate: { ...assuranceControlContext.identity, tree: assuranceControlContext.sourceTree }, candidateEvaluation: { ok: true, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", sourceOnly: true, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false, findings: [], taskState: lease?.taskState ?? null }, assuranceControlTaskContext: assuranceControlContext, supersededFiniteTaskFindings: findings } : result;
 }
 
 const protectedMainClasses = Object.freeze({
@@ -2855,9 +2889,14 @@ export function evaluateProtectedMainAdvancement({
     }
   }
   const verifiedAmendedTerminal = finiteTaskPostMergeTransitionAuthorityValid(finiteTaskPostMergeTransition);
+  const assuranceControlClaimed = finiteTaskRuntime?.evaluationType === "ASSURANCE_CONTROL_SOURCE_ONLY" || finiteTaskRuntime?.candidateKind === "ASSURANCE_CONTROL_SOURCE_ONLY" || finiteTaskRuntime?.candidateEvaluation?.evaluationType === "ASSURANCE_CONTROL_SOURCE_ONLY" || finiteTaskRuntime?.assuranceControlTaskContext?.evaluationType === "ASSURANCE_CONTROL_SOURCE_ONLY";
+  const assuranceControlSourceOnly = assuranceControlClaimed && finiteTaskRuntime?.evaluationType === "ASSURANCE_CONTROL_SOURCE_ONLY" && finiteTaskRuntime?.candidateKind === "ASSURANCE_CONTROL_SOURCE_ONLY" && finiteTaskRuntime?.sourceOnlyEligible === true && finiteTaskRuntime?.providerDependentEligible === false && finiteTaskRuntime?.productAuthorityGranted === false && finiteTaskRuntime?.providerAuthorityGranted === false && finiteTaskRuntime?.finiteTaskAuthorityGranted === false && finiteTaskRuntime?.terminalAuthorityGranted === false && finiteTaskRuntime?.mergeAuthorityGranted === false && finiteTaskRuntime?.terminal === false && finiteTaskRuntime?.candidateEvaluation?.evaluationType === "ASSURANCE_CONTROL_SOURCE_ONLY" && finiteTaskRuntime?.candidateEvaluation?.sourceOnly === true && finiteTaskRuntime?.candidateEvaluation?.productAuthorityGranted === false && finiteTaskRuntime?.candidateEvaluation?.providerAuthorityGranted === false && finiteTaskRuntime?.candidateEvaluation?.finiteTaskAuthorityGranted === false && finiteTaskRuntime?.candidateEvaluation?.terminalAuthorityGranted === false && finiteTaskRuntime?.candidateEvaluation?.mergeAuthorityGranted === false;
+  if (assuranceControlClaimed && !assuranceControlSourceOnly) findings.push("ASSURANCE_CONTROL_SOURCE_ONLY_RUNTIME_INVALID");
   const terminalTask = finiteTaskRuntime?.terminal === true
     && (finiteTaskRuntime?.taskState === "MERGED_VERIFIED" || finiteTaskRuntime?.terminalProjectionVerified === true);
-  const candidateBaseStatus = verifiedAmendedTerminal
+  const candidateBaseStatus = assuranceControlClaimed
+    ? assuranceControlSourceOnly ? "ASSURANCE_CONTROL_SOURCE_ONLY" : "ASSURANCE_CONTROL_SOURCE_ONLY_INVALID"
+    : verifiedAmendedTerminal
     ? "FINITE_TASK_MERGE_VERIFIED_TERMINAL_TRUTH_REQUIRED"
     : terminalTask
     ? "TERMINAL_MERGED_VERIFIED"
@@ -2879,8 +2918,9 @@ export function evaluateProtectedMainAdvancement({
     && actualCheckpointTree === authority.checkpointTree
     && authorityControlEligible;
   const sourceOnlyEligible = authorityCheckpointEligible
-    && (finiteTaskRuntime?.sourceOnlyEligible ?? true);
+    && (assuranceControlClaimed ? assuranceControlSourceOnly : finiteTaskRuntime?.sourceOnlyEligible ?? true);
   const providerDependentEligible = sourceOnlyEligible
+    && !assuranceControlClaimed
     && pendingTransitions.length === 0
     && pendingConsumptionCount === 0
     && (finiteTaskRuntime?.providerDependentEligible ?? false);
@@ -2906,6 +2946,7 @@ export function evaluateProtectedMainAdvancement({
     findings.push(...(finiteTaskPostMergeTransition?.findings ?? ["FINITE_TASK_POST_MERGE_DISCOVERY_INCOMPLETE"]));
   }
   const mergeEligible = !terminalTask
+    && !assuranceControlClaimed
     && finiteTaskPostMergeTransition?.applicable !== true
     && sourceOnlyEligible
     && candidateCurrent === true
@@ -2930,6 +2971,8 @@ export function evaluateProtectedMainAdvancement({
     candidateBaseStatus,
     nextRequiredAction: verifiedAmendedTerminal
       ? "CREATE_EXACT_FINITE_TASK_TERMINAL_TRUTH"
+      : assuranceControlClaimed
+      ? assuranceControlSourceOnly ? "CONTINUE_ASSURANCE_CONTROL_SOURCE_VALIDATION" : "REPAIR_ASSURANCE_CONTROL_SOURCE_CONTEXT"
       : pendingTransitions.length
       ? "CREATE_EXACT_TERMINAL_TRUTH_SUCCESSOR"
       : terminalTask

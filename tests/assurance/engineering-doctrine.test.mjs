@@ -10,7 +10,7 @@ import {
   ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_REQUIRED_JOB_NAMES,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
-  architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
+  architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject,
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
@@ -1508,31 +1508,25 @@ test("finite terminal Owner receipts select one current state from immutable app
   for (const [name, assertion] of cases) await t.test(name, assertion);
 });
 
-test("Authorization D uses the exact five-path strict 900-changed-line Owner profile", () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "authorization-d-profile-"));
+test("Authorization D preserves its five-path receipt and selects one exact six-path 900-changed-line successor", () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "authorization-d-profile-")); const cwd = path.join(temp, "repo");
   try {
-    fixtureGit(cwd, "init", "-q"); fixtureGit(cwd, "config", "user.name", "Fixture"); fixtureGit(cwd, "config", "user.email", "fixture@example.test");
-    const initialRecord = structuredClone(json("config/assurance/current-truth-v1.json"));
-    fixtureJson(cwd, "config/assurance/current-truth-v1.json", initialRecord); fixtureWrite(cwd, "CURRENT_STATE.md", renderCurrentState(initialRecord)); fixtureWrite(cwd, "NEXT_TASK.md", renderNextTask(initialRecord));
-    const base = fixtureCommit(cwd, "protected base"); const baseTree = fixtureTree(cwd, base);
-    const record = structuredClone(initialRecord); record.mainSha = base; record.protectedMainAuthority.checkpointSha = base; record.protectedMainAuthority.checkpointTree = baseTree; record.receiptLifecyclePolicy.finiteTaskTerminalTruth = structuredClone(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1);
-    fixtureJson(cwd, "config/assurance/current-truth-v1.json", record); fixtureWrite(cwd, "CURRENT_STATE.md", renderCurrentState(record)); fixtureWrite(cwd, "NEXT_TASK.md", renderNextTask(record));
-    const head = fixtureCommit(cwd, "authorization D source"); const tree = fixtureTree(cwd, head);
-    const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 247, branch: "codex/finite-terminal-truth-receipt-lifecycle-base-advancement-v1", baseRef: "main", baseSha: base, headSha: head };
-    const scope = { files: [...FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS], additions: 400, deletions: 400, netChangedLines: 0, diffHash: "a".repeat(64) };
-    const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd });
-    assert.deepEqual(subject.budget, { maximumFiles: 5, maximumChangedLines: 900 });
-    assert.deepEqual(subject.currentTruthCompanion.requiredChangedPaths, ["config/assurance/current-truth-v1.json"]);
-    assert.equal(subject.currentTruthCompanion.bindingMode, "EMBEDDED_ROLLING_PROTECTED_MAIN_FIRST_PARENT_ANCESTRY");
-    const raw = taskLocalArchitectureComment({ id: 880020, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
-    const verified = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd });
+    execFileSync("git", ["clone", "-q", "--shared", root, cwd]); fixtureGit(cwd, "config", "user.name", "Fixture"); fixtureGit(cwd, "config", "user.email", "fixture@example.test"); fixtureGit(cwd, "config", "maintenance.auto", "false"); fixtureGit(cwd, "config", "gc.auto", "0"); fixtureGit(cwd, "checkout", "-q", "c107ba8824f935b20a44f2e56dd5ec827e1da709");
+    const base = "8aa74d0442eb9797900005d3c2dca9709b43c0c8"; const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 247, branch: "codex/finite-terminal-truth-receipt-lifecycle-base-advancement-v1", baseRef: "main", baseSha: base, headSha: "c107ba8824f935b20a44f2e56dd5ec827e1da709" };
+    const scope = { files: [...FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS], additions: 450, deletions: 400, netChangedLines: 50, diffHash: "a".repeat(64) };
+    const original = architectureMaintenanceSubject({ identity: originalIdentity, tree: "05ab290d1d0e92ccbaa15321f541e0976346a6d3", scope: { ...scope, additions: 413, deletions: 67, netChangedLines: 346, diffHash: "ce29b5c772dceb76c372beb54a6d507238b69a2f15f35e0678b919f0222374ea" }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd });
+    original.changedPaths = original.changedPaths.filter((file) => file !== "scripts/assurance/lib.mjs"); original.changedPathHash = "90027eeff4efe02ed341cf19739d955b979904835c63c6513f3aa14221737d9f"; original.budget.maximumFiles = 5;
+    const raw = taskLocalArchitectureComment({ id: 5397695980, pr: 247, body: architectureMaintenanceOwnerCommentBody(original) }); assert.equal(hashValue(original), "eceeb6e43b48fef39d465b3b28da0c3d4fbf57ebc08e641ef3e833eb01386da3");
+    fs.appendFileSync(path.join(cwd, "scripts/assurance/lib.mjs"), "\n// bounded assurance-control observer fixture\n"); const head = fixtureCommit(cwd, "authorization D successor"); const tree = fixtureTree(cwd, head); const identity = { ...originalIdentity, headSha: head };
+    const successorSubject = architectureMaintenanceSuccessorSubject({ identity, tree, scope, originalRaw: raw }); const successor = taskLocalArchitectureComment({ id: 880021, pr: 247, body: architectureMaintenanceSuccessorOwnerCommentBody(successorSubject) });
+    const verified = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw, successor], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true, root: cwd });
     assert.equal(verified.authorizationOk, true, stableJson(verified.findings));
-    assert.deepEqual(verified.budget, { maximumFiles: 5, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 });
-    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity: { ...identity, headSha: base }, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
-    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree: "0".repeat(40), scope, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
-    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope: { ...scope, additions: 399, deletions: 401 }, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
-    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope: { ...scope, diffHash: "b".repeat(64) }, noCompetingDomainOwner: true, ancestryVerified: true, root: cwd }).authorizationOk, false);
+    assert.deepEqual(verified.budget, { maximumFiles: 6, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 }); assert.equal(verified.commentId, successor.id);
+    const finalSubject = architectureFinalSourceSubject({ identity, tree, scope, originalRaw: raw, historicalRaw: successor, root: cwd }); assert.deepEqual([finalSubject.originalCommentId, finalSubject.originalSubjectHash, finalSubject.budget], [successor.id, hashValue(successorSubject), { maximumFiles: 6, maximumChangedLines: 900 }]);
+    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, root: cwd }).authorizationOk, false);
+    assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw, successor, { ...successor, id: 880022 }], paginationComplete: true, identity, tree, scope, root: cwd }).authorizationOk, false);
+    for (const changed of [{ ...successorSubject, currentHead: originalIdentity.headSha }, { ...successorSubject, currentTree: original.currentTree }, { ...successorSubject, protectedBase: "f".repeat(40) }, { ...successorSubject, addedPaths: [] }, { ...successorSubject, budget: { maximumFiles: 7, maximumChangedLines: 900 } }, { ...successorSubject, originalCommentId: 1 }, { ...successorSubject, authority: { ...successorSubject.authority, product: true } }]) { const forged = taskLocalArchitectureComment({ id: successor.id, pr: 247, body: architectureMaintenanceSuccessorOwnerCommentBody(changed) }); assert.equal(verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw, forged], paginationComplete: true, identity, tree, scope, root: cwd }).authorizationOk, false); }
     assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, additions: 451, deletions: 450 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd }), /SCOPE_INVALID/u);
-    assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, files: [...scope.files, "sixth"] }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd }), /SCOPE_INVALID/u);
-  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+    assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, files: [...scope.files, "seventh"] }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, root: cwd }), /SCOPE_INVALID/u);
+  } finally { fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });

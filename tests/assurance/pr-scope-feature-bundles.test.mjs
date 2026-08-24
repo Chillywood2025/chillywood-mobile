@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { classifyPrScopePaths, deriveFiniteTaskPrRiskAuthority, deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
-import { args, canonicalGitText, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveTerminalRepairTaskContext, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "../../scripts/assurance/lib.mjs";
+import { args, ASSURANCE_CONTROL_SOURCE_ONLY_PATHS, assuranceControlTaskContextValid, canonicalGitText, classifyGitHubExecutionIdentity, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveTerminalRepairTaskContext, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateUntrustedAssuranceControlTaskContextObservation } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
@@ -643,7 +643,7 @@ test("architecture 13: no static policy entry is required", () => {
   assert.equal(policy.historicalExactTaskBindings.some(({ pr }) => pr === value.identity.pr), false);
 });
 
-test("finite terminal receipt-lifecycle correction propagates its exact five-file 900-line reservation", () => {
+test("finite terminal receipt-lifecycle correction propagates its exact six-file 900-line reservation", () => {
   const fixture = pullFixture({ pr: 990, branch: "codex/finite-terminal-receipt-lifecycle", head: "9".repeat(40) });
   const architectureAuthority = {
     ok: true,
@@ -657,14 +657,14 @@ test("finite terminal receipt-lifecycle correction propagates its exact five-fil
     supportingDomains: ["CI-test-infrastructure"],
     historicalWaiverPath: null,
     authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
-    bindingId: "finite-terminal-receipt-lifecycle-correction",
-    budget: { maximumFiles: 5, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 },
+    bindingId: `owner-architecture-maintenance-pr-${fixture.readback.number}`,
+    budget: { maximumFiles: 6, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 },
     subject: { objective: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, changedPaths: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS },
   };
   const result = derive({ fixture, architectureAuthority, observedChangedPaths: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS, observedCanonicalChangedLines: 900 });
   assert.equal(result.ok, true, result.findings.join(","));
   assert.equal(result.source, "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE");
-  assert.deepEqual(result.budget, { maximumFiles: 5, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 });
+  assert.deepEqual(result.budget, { maximumFiles: 6, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 });
   assert.equal(derive({ fixture, architectureAuthority: { ...architectureAuthority, currentHead: "8".repeat(40) } }).ok, false);
 });
 
@@ -951,6 +951,21 @@ test("terminal repair runtime context reuses only exact canonical PR-scope succe
   assert.equal(observe({ ok: true, taskContext, executionIdentity }), null);
   assert.equal(observe({ ok: true, taskContext: { ...taskContext, budget: { maximumFiles: 9, maximumHandAuthoredNetLines: 1801 } }, executionIdentity }), null);
   assert.equal(observe({ ok: true, taskContext, executionIdentity }, { repository: undefined, pr: 999, branch: undefined, headSha: taskContext.identity.headSha, baseSha: undefined, baseRef: undefined }), null);
+});
+
+test("assurance-control observer accepts only an exact independently revalidated source-only context", () => {
+  assert.deepEqual(ASSURANCE_CONTROL_SOURCE_ONLY_PATHS, FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS);
+  const head = "a".repeat(40); const base = "b".repeat(40); const merge = "c".repeat(40); const sourceTree = "d".repeat(40); const mergeTree = "e".repeat(40); const repository = "Chillywood2025/chillywood-mobile";
+  const event = { action: "synchronize", number: 247, repository: { full_name: repository }, pull_request: { number: 247, state: "open", draft: false, head: { ref: "codex/control", sha: head, repo: { full_name: repository } }, base: { ref: "main", sha: base, repo: { full_name: repository } } } }; const environment = { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: "/exact-event.json", GITHUB_REF: "refs/pull/247/merge", GITHUB_SHA: merge };
+  const gitCommand = (argv) => argv[0] === "rev-parse" && argv[1] === "HEAD" ? merge : argv[0] === "rev-parse" && argv[1] === `${head}^{tree}` ? sourceTree : argv[0] === "rev-parse" ? mergeTree : argv[0] === "show" ? `${base} ${head}` : argv[0] === "merge-tree" ? mergeTree : "";
+  const identity = { repository, pr: 247, branch: "codex/control", headSha: head, baseRef: "main", baseSha: base }; const executionIdentity = classifyGitHubExecutionIdentity({ event, livePullRequest: { repository, number: 247, headRef: identity.branch, headSha: head, headRepository: repository, baseRef: "main", baseSha: base, baseRepository: repository, draft: false, state: "open" }, authoritativeSourceIdentity: identity, environment, gitCommand });
+  const taskContext = { ok: true, findings: [], source: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", contextType: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE", identity, featureId: "assurance-efficiency-e0", primaryFeatureId: "assurance-efficiency-e0", affectedFeatureIds: [], objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], authorizedPrRiskDomains: [], finiteTaskPrRiskAuthority: null, historicalWaiverPath: null, bindingId: "owner-architecture-maintenance-pr-247", finiteLeaseId: null, budget: { maximumFiles: 6, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 }, authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE" };
+  const result = { ok: true, mode: "GITHUB_EVENT_TASK_CONTEXT", head, base, taskContext, featureId: taskContext.featureId, primaryFeatureId: taskContext.primaryFeatureId, objectiveDomains: [], changedFiles: 6, additions: 450, deletions: 400, classified: ASSURANCE_CONTROL_SOURCE_ONLY_PATHS.map((file) => ({ file })), highRiskDomains: [], authorizedPrRiskDomains: [], observedPrRiskDomains: [], budget: { files: 6, lines: 900, source: taskContext.authoritySource }, waiver: null, findings: [], executionIdentity };
+  const observe = (value) => validateUntrustedAssuranceControlTaskContextObservation({ result: value, environment, githubEvent: event, gitCommand, expectedIdentity: { ...identity, headTree: sourceTree } });
+  const valid = observe({ ...result, taskContext: { ...taskContext, mergeAuthorityGranted: true, authority: { product: true }, identity: { ...identity, productAuthorityGranted: true }, budget: { ...taskContext.budget, providerMutation: true } } }); assert.equal(valid?.evaluationType, "ASSURANCE_CONTROL_SOURCE_ONLY"); assert.deepEqual([valid.productAuthorityGranted, valid.providerAuthorityGranted, valid.finiteTaskAuthorityGranted, valid.terminalAuthorityGranted, valid.mergeAuthorityGranted, valid.identity.productAuthorityGranted, valid.budget.providerMutation, assuranceControlTaskContextValid(valid)], [false, false, false, false, false, undefined, undefined, false]);
+  const badContexts = [{ ...taskContext, source: "ACTIVE_FINITE_TASK_LEASE" }, { ...taskContext, contextType: "ACTIVE_FINITE_TASK_LEASE" }, { ...taskContext, authoritySource: "forged" }, { ...taskContext, featureId: "forged" }, { ...taskContext, primaryFeatureId: "forged" }, { ...taskContext, objectiveDomains: ["money-payouts"] }, { ...taskContext, supportingDomains: [] }, { ...taskContext, finiteTaskPrRiskAuthority: {} }, { ...taskContext, historicalWaiverPath: "waiver" }, { ...taskContext, bindingId: "forged" }, { ...taskContext, finiteLeaseId: "forged" }, { ...taskContext, findings: ["ambiguous"] }, { ...taskContext, budget: { maximumFiles: 5, maximumChangedLines: 899, maximumHandAuthoredNetLines: 899 } }, ...["repository", "pr", "branch", "headSha", "baseSha", "baseRef"].map((key) => ({ ...taskContext, identity: { ...identity, [key]: key === "pr" ? 248 : "f".repeat(40) } }))];
+  for (const value of badContexts) assert.equal(observe({ ...result, taskContext: value }), null);
+  for (const mutation of [{ mode: "OTHER" }, { head: "f".repeat(40) }, { base: "f".repeat(40) }, { budget: { ...result.budget, source: "forged" } }, { changedFiles: 7 }, { classified: result.classified.slice(1) }, { classified: [...result.classified.slice(0, -1), result.classified[0]] }, { executionIdentity: { ...executionIdentity, pr: 248 } }]) assert.equal(observe({ ...result, ...mutation }), null);
 });
 
 test("terminal verifier repair history accepts one independently bound append and rejects replay, duplicate, and ambiguous histories", () => {
