@@ -2740,6 +2740,9 @@ test("A1 terminal repair receipt: exact preliminary receipt round-trips only as 
     assert.equal(invalid.ok, false, `${label} top-level compatibility history must fail closed`);
     assert.ok(invalid.findings.includes("TERMINAL_TRUTH_SUCCESSOR_INVALID:generatedTruth"), label);
   }
+  const observerSource = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
+  assert.match(observerSource, /terminalSuccessorScope = currentRepairScope \? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS/u, "repair and terminal-truth successor cardinality must remain scope-specific");
+  assert.match(observerSource, /paginationComplete: commentsRead\.complete && openPullsRead\.complete && openTerminalSuccessorFilesComplete/u, "incomplete competing-PR file pagination must fail closed");
   assert.throws(() => terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: { ...preliminaryScope, files: preliminaryScope.files.slice(1) }, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true }), /ASSURANCE_TERMINAL_REPAIR_PRELIMINARY_RECEIPT_INVALID/u);
 });
 

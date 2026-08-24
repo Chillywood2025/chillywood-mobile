@@ -5464,12 +5464,15 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     try { priorTruth = priorTruthRun.status === 0 ? JSON.parse(priorTruthRun.stdout) : null; } catch {}
     const openPullsRead = paginatedArray(root, `repos/${identity.repository}/pulls?state=open&base=main&per_page=100`);
     const openPulls = openPullsRead.values;
+    const terminalSuccessorScope = currentRepairScope ? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS;
     let openTerminalSuccessorCount = 0;
+    let openTerminalSuccessorFilesComplete = true;
     for (const pull of openPulls) {
       if (pull?.base?.sha !== identity.baseSha) continue;
       const filesRead = paginatedArray(root, `repos/${identity.repository}/pulls/${pull.number}/files?per_page=100`);
+      if (!filesRead.complete) openTerminalSuccessorFilesComplete = false;
       const names = filesRead.complete ? filesRead.values.map(({ filename }) => filename).sort() : [];
-      if ([TERMINAL_TRUTH_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS].some((paths) => stableJson(names) === stableJson(paths))) openTerminalSuccessorCount += 1;
+      if (stableJson(names) === stableJson(terminalSuccessorScope)) openTerminalSuccessorCount += 1;
     }
     const truthComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
     const finiteTerminalRaw = truthComments.find((item) => {
@@ -5478,9 +5481,9 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     });
     if (finiteTerminalRaw && priorTruth) {
       const terminalTransition = observeFiniteTaskPostMergeTransition({ record: priorTruth, currentProtectedMain: identity.baseSha, root });
-      terminalTruthAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: finiteTerminalRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, terminalTransition, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: (priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []).some(({ mergeSha }) => mergeSha === identity.baseSha), root });
+      terminalTruthAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: finiteTerminalRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete && openTerminalSuccessorFilesComplete, identity, tree, scope, terminalTransition, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: (priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []).some(({ mergeSha }) => mergeSha === identity.baseSha), root });
     } else {
-      terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.taskContextArchitecture?.mergeSha === identity.baseSha });
+      terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete && openTerminalSuccessorFilesComplete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.taskContextArchitecture?.mergeSha === identity.baseSha });
     }
   }
   return { architectureAuthority, terminalTruthAuthority, finiteTaskAuthority, finiteTaskAdmissionAuthority };
