@@ -71,6 +71,10 @@
         "authorizedPrRiskDomains": ["auth"]
       },
       {
+        "featureId": "autonomous-cognitive-governance",
+        "authorizedPrRiskDomains": ["Cognitive", "autonomous-operators", "database-RLS"]
+      },
+      {
         "featureId": "chilly-chat-call-lifecycle",
         "authorizedPrRiskDomains": ["Chat", "notifications-native-calls"]
       },
@@ -79,8 +83,20 @@
         "authorizedPrRiskDomains": ["Chat"]
       },
       {
+        "featureId": "codex-security-scan-reliability-s0",
+        "authorizedPrRiskDomains": ["autonomous-operators"]
+      },
+      {
         "featureId": "creator-money-ledger",
         "authorizedPrRiskDomains": ["money-payouts"]
+      },
+      {
+        "featureId": "eas-build-update-release",
+        "authorizedPrRiskDomains": ["release-OTA"]
+      },
+      {
+        "featureId": "live-stage",
+        "authorizedPrRiskDomains": ["LiveKit", "database-RLS"]
       },
       {
         "featureId": "livekit-media-transport",
@@ -107,6 +123,10 @@
         "authorizedPrRiskDomains": ["media-storage"]
       },
       {
+        "featureId": "pushkit-callkit",
+        "authorizedPrRiskDomains": ["database-RLS", "notifications-native-calls"]
+      },
+      {
         "featureId": "revenuecat-premium",
         "authorizedPrRiskDomains": ["RevenueCat-Premium", "database-RLS"]
       },
@@ -117,6 +137,10 @@
       {
         "featureId": "supabase-migrations-rls",
         "authorizedPrRiskDomains": ["database-RLS"]
+      },
+      {
+        "featureId": "watch-party-live",
+        "authorizedPrRiskDomains": ["LiveKit", "database-RLS", "media-storage"]
       }
     ]
   },
