@@ -1,15 +1,26 @@
 #!/usr/bin/env node
+import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   evaluateFiniteTaskLeaseRuntime,
   evaluateProtectedMainAdvancement,
-  HISTORICAL_PROVIDER_FACT
+  HISTORICAL_PROVIDER_FACT,
+  renderCurrentState,
+  renderNextTask
 } from "./assurance/lib.mjs";
-import { evaluateAutonomousEngineeringRequest } from "./assurance/engineering-closure.mjs";
+import { evaluateAutonomousEngineeringRequest, resolvePhase1SourceAuthorityEligibility } from "./assurance/engineering-closure.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
+const subjectGit = (argv, options = {}) => execFileSync("git", argv, {
+  cwd: root,
+  encoding: "utf8",
+  shell: false,
+  maxBuffer: options.maxBuffer ?? 32 * 1024 * 1024,
+  stdio: ["ignore", "pipe", "pipe"],
+}).trim();
 
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
@@ -38,6 +49,21 @@ const userReportRoutingMigration = read("supabase/migrations/20260718142500_atom
 const userReportFunction = read("supabase/functions/user-report-intake/index.ts");
 const userReportRunbook = read("docs/USER_REPORT_ROUTER_RUNBOOK.md");
 
+if (process.argv.includes("--maintenance-projection-only")) {
+  const findings = [];
+  if (currentState !== renderCurrentState(currentTruth)) findings.push("ASSURANCE_CURRENT_STATE_DISPLAY_PROJECTION_MISMATCH");
+  if (nextTask !== renderNextTask(currentTruth)) findings.push("ASSURANCE_NEXT_TASK_DISPLAY_PROJECTION_MISMATCH");
+  const body = {
+    schemaVersion: 1,
+    classification: "PROTECTED_ASSURANCE_DISPLAY_PROJECTION_V1",
+    findings,
+    proof: { sourceAuthority: false, userCreatorAuthority: false, premiumPaidAccess: false, moneyLedgerPayout: false, rlsAuthModeration: false, providerDatabaseBuildRelease: false, sourceCorrectness: false, assuranceDisplayOnly: true },
+  };
+  const result = { ...body, fingerprint: crypto.createHash("sha256").update(JSON.stringify(body)).digest("hex") };
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+  process.exitCode = findings.length ? 1 : 0;
+} else {
+
 const failures = [];
 const fail = (message) => failures.push(message);
 const includes = (source, needle, label) => {
@@ -46,12 +72,20 @@ const includes = (source, needle, label) => {
 const notIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
 };
-const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract });
+let assuranceControlAuthorityProof = null;
+try {
+  const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+  const pull = event?.pull_request;
+  const identity = { repository: event?.repository?.full_name, pr: pull?.number, headRef: pull?.head?.ref, headSha: pull?.head?.sha, sourceTree: subjectGit(["rev-parse", `${pull?.head?.sha}^{tree}`]), baseRef: pull?.base?.ref, baseSha: pull?.base?.sha };
+  assuranceControlAuthorityProof = resolvePhase1SourceAuthorityEligibility({ repository: identity.repository, identity, root });
+} catch {}
+const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract, gitCommand: subjectGit, assuranceControlAuthorityProof });
 const protectedMainRuntime = evaluateProtectedMainAdvancement({
   record: currentTruth,
   contract: currentTruthContract,
   candidateHead: finiteTaskRuntime.candidateHead,
-  finiteTaskRuntime
+  finiteTaskRuntime,
+  gitCommand: subjectGit
 });
 const claimFreshness = finiteTaskRuntime.claimFreshness;
 const sourceOnlyFreshness = { eligible: protectedMainRuntime.sourceOnlyEligible };
@@ -644,3 +678,4 @@ console.log(JSON.stringify({
   providerDependentEligible: providerDependentFreshness.eligible,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));
+}

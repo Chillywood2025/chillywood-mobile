@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_REQUIRED_JOB_NAMES,
+  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, PHASE1_ADMISSION_RULESET_CUTOVER_V1, PHASE1_REQUIRED_JOB_NAMES, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
   architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
@@ -23,15 +23,16 @@ import {
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
   verifyArchitectureDependencyAmendment, verifyArchitectureDependencyWitnessAmendment, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
-  verifyFiniteTaskTerminalTruthAuthority, verifyPhase1RunEvidence,
+  phase1AdmissionPolicyForBase, phase1AdmissionPublisherProvisioningReadback, phase1AdmissionPublisherProvisioningReadbackValid, PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1, projectPhase1AdmissionFinalSourceEvidence, verifyFiniteTaskTerminalTruthAuthority, verifyPhase1AdmissionEvidenceForMerge, verifyPhase1RunEvidence,
   verifyTaskLocalGoverningEdgeClosure, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { finiteTaskLeaseFor, finiteTaskReservationProjection, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
+const PHASE1_LEGACY_PRE_CUTOVER_BASE = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
 const json = (name) => JSON.parse(fs.readFileSync(new URL(name, root), "utf8"));
 const sourceEvidenceSha = (name) => createHash("sha256").update(fs.readFileSync(new URL(name, root))).digest("hex");
 const semanticEvidence = (name, token, testId = token) => { const text = fs.readFileSync(new URL(name, root), "utf8"); return { enforcingSource: name, enforcingSourceSha256: sourceEvidenceSha(name), line: text.split("\n").findIndex((value) => value.includes(token)) + 1, expectedSemanticToken: token, negativeWitnessTestPath: name, negativeWitnessTestSha256: sourceEvidenceSha(name), negativeWitnessTestId: testId }; };
@@ -169,7 +170,7 @@ const controls = [
   ["35 current-truth generation is deterministic 3 of 3", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(new Set([1, 2, 3].map(() => hashValue([renderCurrentState(truth), renderNextTask(truth)]))).size, 1); }],
   ["36 doctrine bootstrap is local-draft blocked and expires after merge", () => { const task = { classification: "OWNER_AUTHORIZED_DOCTRINE_BOOTSTRAP_V1", branch: bootstrapAuthority.branch, base: bootstrapAuthority.base, featureId: "assurance-efficiency-e0", packet: clearPacket(), certificate, artifactReservation: bootstrapFixture.reservation }; assert.equal(evaluateTaskAdmission(task, { currentMain: task.base, implementationMerged: false, bootstrapExpired: false }).admissible, false); assert.equal(evaluateTaskAdmission(task, { currentMain: task.base, implementationMerged: true, bootstrapExpired: false }).code, "DOCTRINE_BOOTSTRAP_EXPIRED"); assert.equal(evaluateTaskAdmission(task, { currentMain: "1".repeat(40), implementationMerged: false, bootstrapExpired: false }).code, "DOCTRINE_BOOTSTRAP_EXPIRED"); }],
   ["37 Provider Codex Review remains optional advisory", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(truth.reviewPolicy.classification, "OPTIONAL_ADVISORY"); assert.equal(truth.reviewPolicy.blocksMerge, false); }],
-  ["38 all 13 Phase 1 checks remain required", () => { assert.equal(json("config/assurance/current-truth-contract-v1.json").reviewPolicy.requiredPhase1Checks, 13); assert.equal(json("config/assurance/engineering-doctrine-v1.json").mergeEligibility.requiredPhase1Checks, 13); }],
+  ["38 all 13 Phase 1 lanes execute under fail-closed aggregate admission", () => { const merge = json("config/assurance/engineering-doctrine-v1.json").mergeEligibility; assert.equal(json("config/assurance/current-truth-contract-v1.json").reviewPolicy.requiredPhase1Checks, 13); assert.equal(merge.requiredPhase1LaneExecutions, 13); assert.equal(merge.phase1AdmissionRule, "NO_BLOCKING_FINDINGS"); assert.equal(merge.unknownPhase1Finding, "BLOCKING"); assert.equal(merge.draftSourceReadinessGrantsMergeAuthority, false); }],
   ["39 build release authority remains false", () => { const authority = json("config/assurance/engineering-doctrine-v1.json").authority; assert.deepEqual(Object.values(authority), [false, false, false, false, false, false, false, false, false, 0]); }],
   ["40 D2A terminal history remains intact when a later finite task is current", () => {
     const truth = json("config/assurance/current-truth-v1.json");
@@ -700,6 +701,77 @@ test("immutable-evidence lifecycle convergence has one exact closed assurance-on
     fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-only profile", () => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 248, branch: "codex/phase1-risk-based-admission-v1", headSha: "a".repeat(40), baseSha: PHASE1_LEGACY_PRE_CUTOVER_BASE };
+  const tree = "b".repeat(40);
+  const scope = { files: [...PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS], additions: 1500, deletions: 900, netChangedLines: 600, diffHash: "c".repeat(64) };
+  const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_RISK_BASED_ADMISSION_REFORM_V1 });
+  const raw = taskLocalArchitectureComment({ id: 700019, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+  const result = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
+  assert.equal(result.authorizationOk, true, stableJson(result.findings));
+  assert.equal(result.mergeEligible, false);
+  assert.equal(phase1AdmissionPolicyForBase({ identity }), "LEGACY_EXACT_13_OF_13");
+  assert.equal(phase1AdmissionPolicyForBase({ identity: { ...identity, baseSha: "0".repeat(40) } }), "BASE_IDENTITY_UNAVAILABLE");
+  const run = { id: 900248, run_attempt: 1, name: "Phase 1 CI", event: "pull_request", status: "completed", conclusion: "success", head_sha: identity.headSha, head_branch: identity.branch, pull_requests: [{ number: identity.pr, head: { sha: identity.headSha }, base: { sha: identity.baseSha } }] };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: identity.headSha }));
+  const legacyPhase1 = verifyPhase1RunEvidence({ run, jobs, identity, tree });
+  assert.equal(verifyPhase1AdmissionEvidenceForMerge({ phase1Evidence: legacyPhase1, identity, tree }).ok, true);
+  for (const mutation of [{ repository: "attacker/repository" }, { pr: identity.pr + 1 }, { branch: "attacker/branch" }, { baseSha: "0".repeat(40) }]) {
+    assert.equal(verifyPhase1AdmissionEvidenceForMerge({ phase1Evidence: legacyPhase1, identity: { ...identity, ...mutation }, tree }).ok, false);
+  }
+  assert.deepEqual(subject.changedPaths, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS);
+  assert.deepEqual(subject.budget, { maximumFiles: 14, maximumChangedLines: 4200, maximumHandAuthoredNetLines: 4200 });
+  assert.equal(subject.changedPaths.includes("scripts/proof-autonomous-systems-contract.mjs"), true);
+  const proofSource = fs.readFileSync("scripts/proof-autonomous-systems-contract.mjs", "utf8");
+  assert.match(proofSource, /resolvePhase1SourceAuthorityEligibility/u);
+  assert.match(proofSource, /evaluateFiniteTaskLeaseRuntime\(\{[^}]*assuranceControlAuthorityProof/u);
+  const closureSource = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
+  assert.match(closureSource, /import \{[^;]*parseProtectedPullRequestMergeSubject[^;]*\} from "\.\/lib\.mjs";/u);
+  assert.deepEqual(parseProtectedPullRequestMergeSubject("Merge pull request #251 from Chillywood2025/codex/phase1-risk-based-admission-v5"), { ok: true, format: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", variant: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", prNumber: 251, sourceBranch: "codex/phase1-risk-based-admission-v5" });
+  assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", PHASE1_RISK_BASED_ADMISSION_REFORM_V1]);
+  assert.equal(subject.currentTruthCompanionIncluded, false);
+  assert.equal(subject.reusableByAnotherPr, false);
+  assert.equal(subject.admissionPublisherProvisioning.ruleset.id, 18940814);
+  assert.equal(subject.admissionPublisherProvisioning.provisioningReceipt.requiredBeforeRulesetCutover, true);
+  assert.deepEqual(subject.admissionPublisherProvisioning.app.permissions, { checks: "write", contents: "write", environments: "read", metadata: "read", statuses: "write" });
+  assert.deepEqual([subject.admissionPublisherProvisioning.app.registration, subject.admissionPublisherProvisioning.app.presentationFieldsAuthority, subject.admissionPublisherProvisioning.app.webhookEvidence, subject.admissionPublisherProvisioning.app.ownerUiSettingsProjection], ["OWNER_UI_EXACT_GENERIC_REGISTRATION", "NON_AUTHORITATIVE", "JWT_APP_IDENTITY_ANONYMOUS_EXACT_SLUG_404_AND_JWT_DISABLED_HOOK_CONFIG_404", { public: false, callbackUrls: [], requestOauthOnInstall: false, deviceFlow: false, setupUrl: null, setupOnUpdate: false, webhookActive: false, webhookUrl: null, evidence: "IMMUTABLE_OWNER_FINAL_SOURCE_ATTESTATION" }]);
+  assert.deepEqual(subject.admissionPublisherProvisioning.ruleset.soleBypassActor, { actorType: "Integration", actorIdSource: "aggregateCheckIntegrationId", bypassMode: "pull_request" });
+  assert.equal(subject.admissionPublisherProvisioning.aggregate.displayOnlyNeverPassing, true);
+  assert.equal(subject.admissionPublisherProvisioning.ruleset.prestatePutPayloadSha256, "1bf616541bc6a87b7b559374a99e1478fe229087466b998e59c5b1cecfa1cb09");
+  assert.equal(subject.admissionPublisherProvisioning.authorizedProviderMutations.length, 8);
+  assert.ok(Object.values(subject.authority).every((value) => value === false));
+  const provisioning = phase1AdmissionPublisherProvisioningReadback({ appId: 4242, clientId: "Iv1.0123456789abcdef", installationId: 5252, environmentId: 6262, aggregateCheckIntegrationId: 4242, keyFingerprint: "a".repeat(64), jwtAppReadbackHash: "b".repeat(64), webhookConfigHash: "c".repeat(64), secretCreatedAt: "2026-08-24T12:00:00Z", secretUpdatedAt: "2026-08-24T12:00:00Z", observedAt: "2026-08-24T12:00:00Z", rulesetNodeId: "RRS_fixture", rulesetProviderUpdatedAt: "2026-08-24T12:00:00Z", stage1PutPayloadSha256: "d".repeat(64), finalPutPayloadSha256: "e".repeat(64), rollbackPutPayloadSha256: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.ruleset.prestatePutPayloadSha256 });
+  assert.equal(phase1AdmissionPublisherProvisioningReadbackValid(provisioning), true);
+  assert.deepEqual([provisioning.app.key.publicKeySpkiSha256, provisioning.app.jwtSelfReadbackHash, provisioning.app.webhook.active, provisioning.app.webhook.configReadbackHash, provisioning.app.ownerUiSettingsProjection, provisioning.environment.secretMetadata], ["a".repeat(64), "b".repeat(64), false, "c".repeat(64), PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.app.ownerUiSettingsProjection, [{ name: "PHASE1_ADMISSION_APP_PRIVATE_KEY", createdAt: "2026-08-24T12:00:00Z", updatedAt: "2026-08-24T12:00:00Z" }]]);
+  assert.equal(Object.hasOwn(provisioning.app.key, "keyRecordId"), false, "the private-key record ID is not readable and cannot be asserted as provider proof");
+  for (const mutation of [
+    { app: { ...provisioning.app, id: 9999 } },
+    { app: { ...provisioning.app, clientId: "Iv1.substitute" } },
+    { app: { ...provisioning.app, key: { publicKeySpkiSha256: "0".repeat(64) } } },
+    { app: { ...provisioning.app, jwtSelfReadbackHash: "0".repeat(64) } },
+    { app: { ...provisioning.app, webhook: { ...provisioning.app.webhook, configReadbackHash: "0".repeat(64) } } },
+    { app: { ...provisioning.app, ownerUiSettingsProjection: { ...provisioning.app.ownerUiSettingsProjection, callbackUrls: ["https://attacker.invalid/callback"] } } },
+    { installation: { ...provisioning.installation, id: 9999 } },
+    { environment: { ...provisioning.environment, id: 9999 } },
+    { environment: { ...provisioning.environment, variableNames: ["PHASE1_ADMISSION_APP_CLIENT_ID"] } },
+    { environment: { ...provisioning.environment, secretMetadata: [{ ...provisioning.environment.secretMetadata[0], updatedAt: "2026-08-24T12:01:00Z" }] } },
+    { environment: { ...provisioning.environment, deploymentBranches: ["attacker"] } },
+    { aggregate: { ...provisioning.aggregate, integrationId: 9999 } },
+    { ruleset: { ...provisioning.ruleset, stage1PutPayloadSha256: "0".repeat(64) } },
+    { ruleset: { ...provisioning.ruleset, stage: "UNTRUSTED" } },
+  ]) assert.equal(phase1AdmissionPublisherProvisioningReadbackValid({ ...provisioning, ...mutation }), false);
+  assert.equal(PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.r2ImmutableAnchor.completeCommentPaginationRequired, true);
+  const review = architectureRepositoryReviewSubject({ identity, tree, scope, profile: PHASE1_RISK_BASED_ADMISSION_REFORM_V1 });
+  assert.equal(review.reviewProfile, PHASE1_RISK_BASED_ADMISSION_REFORM_V1);
+  assert.ok(review.lanes.some((lane) => lane.includes("unknown") && lane.includes("blocking")));
+  assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, additions: 3301 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_RISK_BASED_ADMISSION_REFORM_V1 }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE/u);
+  assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...scope, files: [...scope.files, "package.json"].sort() }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_RISK_BASED_ADMISSION_REFORM_V1 }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE/u);
+  const r2Scope = { files: [...PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS], additions: 900, deletions: 300, netChangedLines: 600, diffHash: "d".repeat(64) };
+  const r2 = architectureMaintenanceSubject({ identity: { ...identity, pr: 249, branch: "codex/phase1-admission-ruleset-cutover-v1" }, tree, scope: r2Scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_ADMISSION_RULESET_CUTOVER_V1 });
+  assert.deepEqual([r2.changedPaths, r2.budget, r2.capabilities, r2.currentTruthCompanionIncluded, r2.reusableByAnotherPr], [PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, { maximumFiles: 6, maximumChangedLines: 1800, maximumHandAuthoredNetLines: 1800 }, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", PHASE1_ADMISSION_RULESET_CUTOVER_V1], false, false]);
+});
+
 const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, objective = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, branch = "codex/finite-task-lease-amendment-control-plane-repair-v1" } = {}) => {
   const paths = [
     "CURRENT_STATE.md",
@@ -719,7 +791,7 @@ const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AM
       "scripts/assurance/pr-scope.mjs",
     ] : []),
   ].sort();
-  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch, headSha: "1".repeat(40), baseSha: "2".repeat(40) };
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch, headSha: "1".repeat(40), baseSha: PHASE1_LEGACY_PRE_CUTOVER_BASE };
   const originalTree = "3".repeat(40);
   const originalScope = { files: paths, additions: 900, deletions: 100, netChangedLines: 800, diffHash: "4".repeat(64) };
   const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective });
@@ -827,7 +899,7 @@ test("finite-task terminal truth projection preserves the base lease but synthet
   const effectiveReservation = { ...effectiveReservationBase, reservationHash: hashValue(effectiveReservationBase) };
   const sourceHead = "5".repeat(40);
   const sourceTree = "6".repeat(40);
-  const mergeSha = "7".repeat(40);
+  const mergeSha = PHASE1_LEGACY_PRE_CUTOVER_BASE;
   const terminalBase = {
     schemaVersion: 1,
     classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
@@ -1354,7 +1426,7 @@ test("dependency compatibility witness amendment rejects non-exact source and de
 });
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];
-  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: PHASE1_LEGACY_PRE_CUTOVER_BASE };
   const originalTree = "c".repeat(40);
   const originalScope = { files: paths, additions: 10, deletions: 1, netChangedLines: 9, diffHash: "1".repeat(64) };
   const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1" });
@@ -1420,7 +1492,7 @@ test("receipt lifecycle V2 regression matrix 35/35", async (t) => {
     ["30 task-local edge regressions remain clear", () => assert.equal(taskLocalValidResult().classification, "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_CLEAR")],
     ["31 doctrine truth remains clear", () => assert.deepEqual(validateEngineeringDoctrineTruth(json("config/assurance/current-truth-v1.json"), json("config/assurance/current-truth-contract-v1.json")), [])],
     ["32 active-task authority remains fail closed", () => assert.equal(validateEngineeringTaskAuthority({ activeTaskPacket: null }).ok, false)],
-    ["33 all thirteen Phase 1 checks remain required", () => assert.equal(PHASE1_REQUIRED_JOB_NAMES.length, 13)],
+    ["33 all thirteen Phase 1 lanes remain required", () => assert.equal(PHASE1_REQUIRED_JOB_NAMES.length, 13)],
     ["34 Provider Codex Review remains optional", () => assert.equal(json("config/assurance/current-truth-v1.json").reviewPolicy.classification, "OPTIONAL_ADVISORY")],
     ["35 later malformed attestation cannot invalidate current evidence", () => { const f = receiptLifecycleFixture(); const malformed = taskLocalArchitectureComment({ id: 700008, pr: f.identity.pr, body: `${ARCHITECTURE_FINAL_SOURCE_MARKER}\n{}` }); assert.equal(f.evaluate({ allComments: [...f.comments, malformed] }).mergeEligible, true); }],
   ];
