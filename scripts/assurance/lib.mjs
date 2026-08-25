@@ -30,6 +30,7 @@ export function phase1AdmissionEvidenceValid({ evidence, liveEvidence = null, re
     } catch {}
     return preCutover && evidence.classification === "PHASE1_EXACT_HEAD_EVIDENCE_V1"
       && evidence.repository === repository && evidence.pr === pr && evidence.branch === branch
+      && evidence.baseSha === base
       && evidence.sourceHead === head && evidence.sourceTree === tree && suppliedHash === sha256(body);
   }
   const stored = evidence?.evidence ?? evidence?.decision ?? evidence;

@@ -5500,6 +5500,55 @@ test("doctrine baseline/current delta controls 20-38: inventory deltas and depen
   assert.equal(controls.length, 19); assert.equal(controls.every(Boolean), true);
 });
 
+test("doctrine dependency closure distinguishes assurance-policy content from structural model changes", () => {
+  const baseline = validateDoctrineBaselineArtifacts();
+  const currentGraph = generateDomainGraph(undefined, { authoritative: true });
+  const policyOnly = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph, changedPaths: ["config/assurance/engineering-doctrine-v1.json"] });
+  assert.equal(hashValue(structuralGraphSubject(currentGraph)), baseline.baselineStructuralGraphHash);
+  assert.deepEqual(policyOnly.structuralGraphInputs, []);
+  assert.deepEqual(policyOnly.contentOnlyInputs, ["config/assurance/engineering-doctrine-v1.json"]);
+  assert.equal(policyOnly.structuralModelChanged, false);
+  assert.equal(policyOnly.modelRevisionRequired, false);
+
+  const closureTraversalChanged = structuredClone(baseline.graph);
+  closureTraversalChanged.affectedClosurePolicy = { ...closureTraversalChanged.affectedClosurePolicy, stopClassification: "UNAUTHORIZED_CHANGE" };
+  const structural = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: closureTraversalChanged, changedPaths: ["config/assurance/engineering-doctrine-v1.json"] });
+  assert.equal(structural.structuralModelChanged, true);
+  assert.equal(structural.modelRevisionRequired, true);
+  assert.deepEqual(structural.structuralGraphInputs, ["config/assurance/engineering-doctrine-v1.json"]);
+
+  const unattributed = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: closureTraversalChanged, changedPaths: ["CURRENT_STATE.md"] });
+  assert.equal(unattributed.modelRevisionRequired, true);
+  assert.deepEqual(unattributed.structuralGraphInputs, ["UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE"]);
+
+  for (const field of ["contractBindings", "invariants", "requirements", "unresolvedUnknowns"]) {
+    const changed = structuredClone(baseline.graph);
+    changed.nodes[0][field] = [...(changed.nodes[0][field] ?? []), `unauthorized-${field}`];
+    const result = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: changed, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+    assert.equal(result.modelRevisionRequired, true, field);
+  }
+  const unsafeEdge = structuredClone(baseline.graph);
+  unsafeEdge.edges[0].boundedSideEffects = !unsafeEdge.edges[0].boundedSideEffects;
+  assert.equal(deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: unsafeEdge, changedPaths: ["config/assurance/feature-registry-v1.json"] }).modelRevisionRequired, true);
+
+  const inventoryOwnership = structuredClone(baseline.graph);
+  const ownershipGroup = inventoryOwnership.inventory.groups.find(({ members }) => members.length > 0);
+  const ownershipMember = ownershipGroup.members[0];
+  ownershipMember.ownerDomains = [...ownershipMember.ownerDomains, "unauthorized-owner"];
+  const ownershipObservation = deriveCurrentTreeObservation({ baseline, currentGraph: inventoryOwnership, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+  assert.equal(ownershipObservation.taskDelta.changedOwnership.includes(`${ownershipGroup.id}:${ownershipMember.path ?? ownershipMember.id}`), true);
+  assert.equal(ownershipObservation.dependencyClosure.modelRevisionRequired, true);
+  assert.deepEqual(ownershipObservation.dependencyClosure.structuralGraphInputs, ["config/assurance/feature-registry-v1.json"]);
+
+  const sharedContract = structuredClone(baseline.graph);
+  const sharedGroup = sharedContract.inventory.groups.find(({ members }) => members.some(({ sharedDependencyContract }) => sharedDependencyContract));
+  const sharedMember = sharedGroup.members.find(({ sharedDependencyContract }) => sharedDependencyContract);
+  sharedMember.sharedDependencyContract = `${sharedMember.sharedDependencyContract} unauthorized`;
+  const sharedObservation = deriveCurrentTreeObservation({ baseline, currentGraph: sharedContract, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+  assert.equal(sharedObservation.taskDelta.changedOwnership.includes(`${sharedGroup.id}:${sharedMember.path ?? sharedMember.id}`), true);
+  assert.equal(sharedObservation.dependencyClosure.modelRevisionRequired, true);
+});
+
 test("doctrine baseline/current delta controls 39-48: modes, reports, callers, and closed authority remain deterministic", () => {
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 227, branch: "codex/typed-task-context-terminal-successor-v1", head: "d".repeat(40), tree: "e".repeat(40), base: "c1f9ec1f71cc8bc4448afd2327c4341cac309573" };
   const architecture = deriveEngineeringClosureExecutionMode({ identity, changedPaths: TYPED_CONTEXT_ARCHITECTURE_PATHS, pendingTerminalTruth: true });
@@ -6425,6 +6474,7 @@ if (endpoint.includes("/actions/runs/") && endpoint.endsWith("/jobs?per_page=100
       repository: identity.repository,
       pr: identity.pr,
       branch: identity.branch,
+      baseSha: identity.baseSha,
       runId,
       runAttempt: 1,
       sourceHead: identity.headSha,

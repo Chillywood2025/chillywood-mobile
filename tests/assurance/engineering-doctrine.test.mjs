@@ -32,6 +32,7 @@ import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPull
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
+const PHASE1_LEGACY_PRE_CUTOVER_BASE = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
 const json = (name) => JSON.parse(fs.readFileSync(new URL(name, root), "utf8"));
 const sourceEvidenceSha = (name) => createHash("sha256").update(fs.readFileSync(new URL(name, root))).digest("hex");
 const semanticEvidence = (name, token, testId = token) => { const text = fs.readFileSync(new URL(name, root), "utf8"); return { enforcingSource: name, enforcingSourceSha256: sourceEvidenceSha(name), line: text.split("\n").findIndex((value) => value.includes(token)) + 1, expectedSemanticToken: token, negativeWitnessTestPath: name, negativeWitnessTestSha256: sourceEvidenceSha(name), negativeWitnessTestId: testId }; };
@@ -702,7 +703,7 @@ test("immutable-evidence lifecycle convergence has one exact closed assurance-on
 });
 
 test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-only profile", () => {
-  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 248, branch: "codex/phase1-risk-based-admission-v1", headSha: "a".repeat(40), baseSha: "8aa74d0442eb9797900005d3c2dca9709b43c0c8" };
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 248, branch: "codex/phase1-risk-based-admission-v1", headSha: "a".repeat(40), baseSha: PHASE1_LEGACY_PRE_CUTOVER_BASE };
   const tree = "b".repeat(40);
   const scope = { files: [...PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS], additions: 1500, deletions: 900, netChangedLines: 600, diffHash: "c".repeat(64) };
   const subject = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_RISK_BASED_ADMISSION_REFORM_V1 });
@@ -710,6 +711,15 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   const result = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree, scope, ancestryVerified: true });
   assert.equal(result.authorizationOk, true, stableJson(result.findings));
   assert.equal(result.mergeEligible, false);
+  assert.equal(phase1AdmissionPolicyForBase({ identity }), "LEGACY_EXACT_13_OF_13");
+  assert.equal(phase1AdmissionPolicyForBase({ identity: { ...identity, baseSha: "0".repeat(40) } }), "BASE_IDENTITY_UNAVAILABLE");
+  const run = { id: 900248, run_attempt: 1, name: "Phase 1 CI", event: "pull_request", status: "completed", conclusion: "success", head_sha: identity.headSha, head_branch: identity.branch, pull_requests: [{ number: identity.pr, head: { sha: identity.headSha }, base: { sha: identity.baseSha } }] };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: identity.headSha }));
+  const legacyPhase1 = verifyPhase1RunEvidence({ run, jobs, identity, tree });
+  assert.equal(verifyPhase1AdmissionEvidenceForMerge({ phase1Evidence: legacyPhase1, identity, tree }).ok, true);
+  for (const mutation of [{ repository: "attacker/repository" }, { pr: identity.pr + 1 }, { branch: "attacker/branch" }, { baseSha: "0".repeat(40) }]) {
+    assert.equal(verifyPhase1AdmissionEvidenceForMerge({ phase1Evidence: legacyPhase1, identity: { ...identity, ...mutation }, tree }).ok, false);
+  }
   assert.deepEqual(subject.changedPaths, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS);
   assert.deepEqual(subject.budget, { maximumFiles: 14, maximumChangedLines: 4200, maximumHandAuthoredNetLines: 4200 });
   assert.equal(subject.changedPaths.includes("scripts/proof-autonomous-systems-contract.mjs"), true);
@@ -781,7 +791,7 @@ const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AM
       "scripts/assurance/pr-scope.mjs",
     ] : []),
   ].sort();
-  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch, headSha: "1".repeat(40), baseSha: "2".repeat(40) };
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 236, branch, headSha: "1".repeat(40), baseSha: PHASE1_LEGACY_PRE_CUTOVER_BASE };
   const originalTree = "3".repeat(40);
   const originalScope = { files: paths, additions: 900, deletions: 100, netChangedLines: 800, diffHash: "4".repeat(64) };
   const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective });
@@ -889,7 +899,7 @@ test("finite-task terminal truth projection preserves the base lease but synthet
   const effectiveReservation = { ...effectiveReservationBase, reservationHash: hashValue(effectiveReservationBase) };
   const sourceHead = "5".repeat(40);
   const sourceTree = "6".repeat(40);
-  const mergeSha = "7".repeat(40);
+  const mergeSha = PHASE1_LEGACY_PRE_CUTOVER_BASE;
   const terminalBase = {
     schemaVersion: 1,
     classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
@@ -1416,7 +1426,7 @@ test("dependency compatibility witness amendment rejects non-exact source and de
 });
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];
-  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: "b".repeat(40) };
+  const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: PHASE1_LEGACY_PRE_CUTOVER_BASE };
   const originalTree = "c".repeat(40);
   const originalScope = { files: paths, additions: 10, deletions: 1, netChangedLines: 9, diffHash: "1".repeat(64) };
   const originalSubject = architectureMaintenanceSubject({ identity: originalIdentity, tree: originalTree, scope: originalScope, profile: "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1" });

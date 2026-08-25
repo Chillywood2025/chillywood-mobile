@@ -1102,13 +1102,14 @@ const gitRead = (root, args) => spawnSync("git", args, { cwd: root, encoding: nu
 const gitText = (root, args) => { const result = gitRead(root, args); return result.status === 0 ? result.stdout.toString("utf8").trim() : null; };
 const blobAt = (root, ref, name) => { const result = gitRead(root, ["show", `${ref}:${name}`]); return result.status === 0 ? result.stdout : null; };
 const shaBytes = (value) => crypto.createHash("sha256").update(value).digest("hex");
-const memberStructure = ({ id, path: sourcePath, ownerDomains, ownershipStatus, sharedContract }) => ({ id, path: sourcePath, ownerDomains, ownershipStatus, sharedContract: sharedContract ? { path: sharedContract.path, owners: sharedContract.owners, contract: sharedContract.contract } : null });
-const edgeStructure = ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, rollbackBehavior, platformDifferences, negativeContracts = [] }) => ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, rollbackBehavior, platformDifferences, negativeContracts: negativeContracts.map(({ reasonCode, statement, sourcePath, bindingType, selector }) => ({ reasonCode, statement, sourcePath, bindingType, selector })) });
+const memberStructure = ({ id, path: sourcePath, ownerDomains = [], ownershipStatus, sharedDependencyContract }) => ({ id, path: sourcePath, ownerDomains: canonicalSort(ownerDomains), ownershipStatus, sharedDependencyContract: sharedDependencyContract ?? null });
+const edgeStructure = ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, authentication, boundedSideEffects, failureBehavior, ordering, replacementAuthority, retryIdempotency, rollbackBehavior, platformDifferences, negativeContracts = [] }) => ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, authentication, boundedSideEffects, failureBehavior, ordering, replacementAuthority, retryIdempotency, rollbackBehavior, platformDifferences, negativeContracts: negativeContracts.map(({ reasonCode, statement, sourcePath, bindingType, selector, negativeWitnessTestPath, negativeWitnessTestId }) => ({ reasonCode, statement, sourcePath, bindingType, selector, negativeWitnessTestPath, negativeWitnessTestId })) });
 export const structuralGraphSubject = (graph) => ({
   contractId: graph?.contractId,
-  nodes: (graph?.nodes ?? []).map(({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts, cleanup }) => ({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts: transitionContracts?.map(({ sourceContentSha256, sourceLine, ...contract }) => contract), cleanup })),
+  nodes: (graph?.nodes ?? []).map(({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts, cleanup, contractBindings, hooksLibraries, invariants, inventoryAssets, launchDisposition, migrationApplicability, migrations, observability, requirements, securityPrivacyClassification, transitionBindingStatus, unresolvedUnknowns }) => ({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts: transitionContracts?.map(({ sourceContentSha256, sourceLine, ...contract }) => contract), cleanup, contractBindings, hooksLibraries, invariants, inventoryAssets, launchDisposition, migrationApplicability, migrations, observability, requirements, securityPrivacyClassification, transitionBindingStatus, unresolvedUnknowns })),
   edges: (graph?.edges ?? []).map(edgeStructure),
   inventoryClasses: (graph?.inventory?.groups ?? []).map(({ id, classification }) => ({ id, classification })),
+  inventoryOwnership: (graph?.inventory?.groups ?? []).map(({ id, members = [] }) => ({ id, members: members.filter(({ ownerDomains = [], ownershipStatus, sharedDependencyContract }) => ownerDomains.length > 0 || ownershipStatus !== "ORPHAN" || sharedDependencyContract != null).map(memberStructure) })),
   affectedClosurePolicy: graph?.affectedClosurePolicy,
 });
 export const contentSnapshotSubject = (graph) => (graph?.inventory?.groups ?? []).map(({ id, pathHash, contentHash, members }) => ({ id, pathHash, contentHash, members: members.map(({ id: memberId, path: sourcePath, contentSha256, recordSha256 }) => ({ id: memberId, path: sourcePath, contentSha256: contentSha256 ?? null, recordSha256: recordSha256 ?? null })) }));
@@ -1151,12 +1152,14 @@ export function deriveDoctrineArtifactDependencyClosure({ root = REPOSITORY_ROOT
   const structuralPaths = new Set(["config/assurance/feature-registry-v1.json", "config/autonomy/autonomous-components.json", "config/assurance/platform-provider-contracts-v1.json", "config/assurance/engineering-doctrine-v1.json"]);
   const currentSource = fs.readFileSync(path.join(root, "scripts/assurance/engineering-closure.mjs"), "utf8");
   const generatorSemanticChanged = (generatorSemanticHash ?? functionBodyHash(currentSource, "computeDomainGraph")) !== baseline.generatorSourceVersion?.semanticBodyHash;
-  const structuralGraphInputs = changedPaths.filter((name) => structuralPaths.has(name));
-  if (changedPaths.includes("scripts/assurance/engineering-closure.mjs") && generatorSemanticChanged) structuralGraphInputs.push("scripts/assurance/engineering-closure.mjs#computeDomainGraph");
   const currentStructuralGraphHash = hashValue(structuralGraphSubject(currentGraph));
+  const structuralModelChanged = currentStructuralGraphHash !== baseline.baselineStructuralGraphHash;
+  const structuralGraphInputs = structuralModelChanged ? changedPaths.filter((name) => structuralPaths.has(name)) : [];
+  if (changedPaths.includes("scripts/assurance/engineering-closure.mjs") && generatorSemanticChanged) structuralGraphInputs.push("scripts/assurance/engineering-closure.mjs#computeDomainGraph");
+  if (structuralModelChanged && structuralGraphInputs.length === 0) structuralGraphInputs.push("UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE");
   const verificationOnlyInputs = changedPaths.filter((name) => !structuralPaths.has(name) && /^(?:tests\/assurance\/|scripts\/assurance\/|config\/assurance\/pr-scope-policy-v1\.json$)/u.test(name));
-  const body = { classification: "DOCTRINE_ARTIFACT_DEPENDENCY_CLOSURE_V1", structuralGraphInputs: canonicalSort(structuralGraphInputs), currentObservationInputs: canonicalSort([...changedPaths]), contentOnlyInputs: canonicalSort(changedPaths.filter((name) => !structuralPaths.has(name) && !verificationOnlyInputs.includes(name))), doctrineImplementationReportInputs: [], taskReportInputs: canonicalSort([...changedPaths]), verificationOnlyInputs: canonicalSort(verificationOnlyInputs), generatorSemanticChanged, structuralModelChanged: currentStructuralGraphHash !== baseline.baselineStructuralGraphHash };
-  return { ...body, closureHash: hashValue(body), modelRevisionRequired: body.generatorSemanticChanged || body.structuralGraphInputs.length > 0 || body.structuralModelChanged };
+  const body = { classification: "DOCTRINE_ARTIFACT_DEPENDENCY_CLOSURE_V1", structuralGraphInputs: canonicalSort(structuralGraphInputs), currentObservationInputs: canonicalSort([...changedPaths]), contentOnlyInputs: canonicalSort(changedPaths.filter((name) => !structuralGraphInputs.includes(name) && !verificationOnlyInputs.includes(name))), doctrineImplementationReportInputs: [], taskReportInputs: canonicalSort([...changedPaths]), verificationOnlyInputs: canonicalSort(verificationOnlyInputs), generatorSemanticChanged, structuralModelChanged };
+  return { ...body, closureHash: hashValue(body), modelRevisionRequired: body.generatorSemanticChanged || body.structuralModelChanged };
 }
 
 export function deriveCurrentTreeObservation({ root = REPOSITORY_ROOT, identity = {}, changedPaths = [], baseline = validateDoctrineBaselineArtifacts(root), currentGraph = generateDomainGraph(root, { authoritative: true }) } = {}) {
@@ -2980,6 +2983,7 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, expect
     repository: identity?.repository,
     pr: identity?.pr,
     branch: identity?.branch,
+    baseSha: identity?.baseSha,
     runId: Number(run?.id ?? 0),
     runAttempt: Number(run?.run_attempt ?? 0),
     sourceHead: run?.head_sha ?? null,
@@ -3017,6 +3021,10 @@ const verifyPhase1AdmissionEvidence = ({ phase1Evidence, identity, tree, root = 
       && phase1Evidence?.result === "PASS_13_OF_13"
       && phase1Evidence?.requiredJobs === PHASE1_REQUIRED_JOB_NAMES.length
       && phase1Evidence?.passedJobs === PHASE1_REQUIRED_JOB_NAMES.length
+      && phase1Evidence?.repository === identity?.repository
+      && phase1Evidence?.pr === identity?.pr
+      && phase1Evidence?.branch === identity?.branch
+      && phase1Evidence?.baseSha === identity?.baseSha
       && phase1Evidence?.sourceHead === identity?.headSha
       && phase1Evidence?.sourceTree === tree);
     return { ok: valid, policy, evidence: valid ? phase1Evidence : null, findings: valid ? [] : ["PHASE1_LEGACY_EXACT_13_OF_13_INVALID"] };
@@ -3056,6 +3064,10 @@ export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, iden
   const verified = verifyPhase1SourceReadinessEvidence({ phase1Evidence, identity, tree, root });
   if (!verified.ok) return null;
   if (verified.policy === "LEGACY_EXACT_13_OF_13") return {
+    repository: phase1Evidence.repository,
+    pr: phase1Evidence.pr,
+    branch: phase1Evidence.branch,
+    baseSha: phase1Evidence.baseSha,
     runId: phase1Evidence.runId,
     runAttempt: phase1Evidence.runAttempt,
     sourceHead: phase1Evidence.sourceHead,
