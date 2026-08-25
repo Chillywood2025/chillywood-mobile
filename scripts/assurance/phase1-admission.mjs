@@ -69,6 +69,19 @@ const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const WORKFLOW_PATH = ".github/workflows/phase1-ci.yml";
 const WORKFLOW_FILE = "phase1-ci.yml";
 const WORKFLOW_NAME = "Phase 1 CI";
+
+export function selectAuthoritativePhase1WorkflowIdentity({ run, workflow } = {}) {
+  const workflowId = run?.workflow_id;
+  if (!Number.isInteger(workflowId) || workflowId < 1
+    || run?.path !== WORKFLOW_PATH
+    || workflow?.id !== workflowId
+    || workflow?.name !== WORKFLOW_NAME
+    || workflow?.path !== WORKFLOW_PATH
+    || workflow?.state !== "active") {
+    throw new Error("PHASE1_RUN_WORKFLOW_IDENTITY_INVALID");
+  }
+  return Object.freeze({ id: workflowId, name: workflow.name, path: workflow.path, state: workflow.state });
+}
 const CONTEXT_PREFIX = "Phase 1 Context / ";
 const CONTEXT_RE = /^Phase 1 Context \/ (DRAFT_SOURCE_READINESS|READY_MERGE_AUTHORITY) \/ PR-([1-9][0-9]*) \/ BASE-([0-9a-f]{40}) \/ ACT-([a-z_]+) \/ GEN-([0-9TZ:.-]+)$/u;
 const MAINTENANCE_STEP = "Validate non-authoritative assurance display projection";
@@ -457,7 +470,9 @@ export function evaluatePhase1Admission(input = {}) {
     && contextJobs[0]?.run_id === run.id && contextJobs[0]?.head_sha === identity.headSha);
   const runValid = Number.isInteger(run.id) && run.id > 0
     && Number.isInteger(run.runAttempt) && run.runAttempt > 0
+    && Number.isInteger(run.workflowId) && run.workflowId > 0
     && run.name === WORKFLOW_NAME && run.path === WORKFLOW_PATH
+    && run.workflowState === "active"
     && run.event === "pull_request" && run.status === "completed"
     && run.repository === identity.repository && run.pr === identity.pr
     && run.headRef === identity.headRef && run.headSha === identity.headSha
@@ -1101,6 +1116,13 @@ async function latestExactRun(repository, identity, token) {
   return ordered[0];
 }
 
+async function readAuthoritativeRunWorkflowIdentity(repository, run, token) {
+  const workflowId = run?.workflow_id;
+  if (!Number.isInteger(workflowId) || workflowId < 1) throw new Error("PHASE1_RUN_WORKFLOW_IDENTITY_INVALID");
+  const workflow = await githubRequest(`/repos/${repository}/actions/workflows/${workflowId}`, token);
+  return selectAuthoritativePhase1WorkflowIdentity({ run, workflow });
+}
+
 function identityFromPr(repository, pr) {
   if (pr?.base?.repo?.full_name !== repository || pr?.head?.repo?.full_name !== repository
     || pr?.base?.ref !== "main" || !Number.isInteger(pr?.number)
@@ -1121,7 +1143,7 @@ function requireOpenPullRequest(pr) {
   }
 }
 
-async function normalizeRun(run, identity, jobs, durableAssociation) {
+async function normalizeRun(run, identity, jobs, durableAssociation, workflowIdentity) {
   const contexts = (Array.isArray(jobs) ? jobs : []).filter((job) => typeof job?.name === "string" && job.name.startsWith(CONTEXT_PREFIX));
   const context = contexts.length === 1 ? CONTEXT_RE.exec(contexts[0].name) : null;
   const mode = context?.[1] ?? null;
@@ -1130,8 +1152,10 @@ async function normalizeRun(run, identity, jobs, durableAssociation) {
   return {
     id: Number(run?.id),
     runAttempt: Number(run?.run_attempt ?? 0),
-    name: run?.name,
-    path: run?.path,
+    workflowId: workflowIdentity?.id,
+    name: workflowIdentity?.name,
+    path: workflowIdentity?.path,
+    workflowState: workflowIdentity?.state,
     event: run?.event,
     status: run?.status,
     conclusion: run?.conclusion,
@@ -1330,11 +1354,12 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
   const currentRun = await latestExactRun(repository, identity, readToken);
   if (suppliedRun && (suppliedRun.id !== currentRun.id || suppliedRun.run_attempt !== currentRun.run_attempt)) throw new Error("PHASE1_STALE_RUN_PUBLICATION_REFUSED");
   const run = currentRun;
+  const workflowIdentity = await readAuthoritativeRunWorkflowIdentity(repository, run, readToken);
   const durable = await resolveDurableRunPullRequest(repository, run, readToken);
   const associatedIdentity = identityFromPr(repository, durable.pr);
   if (stableJson(associatedIdentity) !== stableJson(baseIdentity)) throw new Error("PHASE1_DURABLE_PR_ASSOCIATION_MISMATCH");
   const jobRead = await readRunJobs(repository, run, readToken);
-  const normalizedRun = await normalizeRun(run, identity, jobRead.jobs, durable.complete);
+  const normalizedRun = await normalizeRun(run, identity, jobRead.jobs, durable.complete, workflowIdentity);
   const lifecycle = {
     mode: normalizedRun.lifecycleMode,
     action: normalizedRun.lifecycleAction,
