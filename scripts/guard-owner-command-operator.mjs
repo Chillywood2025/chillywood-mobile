@@ -9,6 +9,9 @@ const fail = (message) => failures.push(message);
 const includes = (source, needle, label) => {
   if (!source.includes(needle)) fail(`${label} missing: ${needle}`);
 };
+const matches = (source, pattern, label) => {
+  if (!pattern.test(source)) fail(`${label} malformed`);
+};
 const notIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
 };
@@ -27,6 +30,9 @@ for (const file of requiredFiles) {
 
 const helper = read("_lib/ownerCommandOperator.ts");
 const fn = read("supabase/functions/owner-command-operator/index.ts");
+const exactSubjectAuthority = read(
+  "supabase/functions/_shared/exact-subject-authority.ts",
+);
 const migration = read("supabase/migrations/20260712180500_owner_command_operator.sql");
 const cli = read("scripts/owner-command-cli.mjs");
 const admin = read("app/admin.tsx");
@@ -72,11 +78,43 @@ for (const systemId of [
 for (const phrase of [
   "authorizeOwnerOrSuperAdmin",
   "owner_or_super_admin_required",
-  "platform_role_memberships",
   "x-owner-command-operator-token",
   "OWNER_COMMAND_OPERATOR_TOKEN_SHA256",
   "constantTimeEqual",
 ]) includes(fn, phrase, "owner/trusted auth");
+
+matches(
+  fn,
+  /import\s*\{\s*readExactCurrentSessionAuthority,\s*readExactPlatformRole,\s*\}\s*from\s*"\.\.\/_shared\/exact-subject-authority\.ts";/u,
+  "owner command exact-subject authority import",
+);
+matches(
+  fn,
+  /const authorizeOwnerOrSuperAdmin = async[\s\S]*?global: \{ headers: \{ Authorization: `Bearer \$\{bearer\}` \} \}[\s\S]*?const \{ data: userData, error: userError \} = await actorClient\.auth\.getUser\(\);[\s\S]*?!\(await readExactCurrentSessionAuthority\(actorClient, user\.id\)\)[\s\S]*?const userId = user\.id;[\s\S]*?const role = await readExactPlatformRole\(client, userId, \["owner", "super_admin"\]\);[\s\S]*?role !== "owner" && role !== "super_admin"/u,
+  "owner command exact live-session and role delegation",
+);
+
+for (const phrase of [
+  'actorClient.rpc("wave1_session_authority_readback")',
+  "authority.authoritative !== true",
+  'toText(authority.state) !== "ACTIVE"',
+  "authority.restoreOnly !== false",
+  "authorityUserId !== subjectId",
+  "authorityAccountId !== subjectId",
+  "const sessionGeneration = normalizeExactSubjectId(authority.sessionGeneration)",
+  "!sessionGeneration",
+  "return parseExactCurrentSessionAuthority(result.data, expectedUserId)",
+  '.from("platform_role_memberships")',
+  '.select("user_id,role,status,expires_at")',
+  '.eq("user_id", subjectId)',
+  '.eq("status", "active")',
+  '.in("role", roles)',
+  "normalizeExactSubjectId(row.user_id) === subjectId",
+  'toText(row.status).toLowerCase() === "active"',
+  "toText(row.role).toLowerCase() === role",
+  "isUnexpired(row.expires_at, nowMs)",
+  "return resolveExactPlatformRole(result.data, subjectId, roles, nowMs)",
+]) includes(exactSubjectAuthority, phrase, "shared exact-subject authority");
 
 for (const phrase of [
   "approvalRequest",

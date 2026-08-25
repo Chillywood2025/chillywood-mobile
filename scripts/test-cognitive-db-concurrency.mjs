@@ -134,13 +134,18 @@ const serviceRoleSql = () => `
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 `;
-const ownerRoleSql = (ownerId) => `
+const ownerRoleSql = (ownerId, sessionId) => `
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub',${sqlLiteral(ownerId)},true);
+select set_config('request.jwt.claim.session_id',${sqlLiteral(sessionId)},true);
 select set_config(
   'request.jwt.claims',
-  ${sqlLiteral(JSON.stringify({ role: "authenticated", sub: ownerId }))},
+  ${sqlLiteral(JSON.stringify({
+    role: "authenticated",
+    sub: ownerId,
+    session_id: sessionId,
+  }))},
   true
 );
 `;
@@ -156,6 +161,7 @@ select set_config(
 
 const ids = {
   owner: randomUUID(),
+  ownerSession: randomUUID(),
   project: randomUUID(),
   task: randomUUID(),
   leaseTaskA: randomUUID(),
@@ -187,6 +193,16 @@ const sourceCommit = "5".repeat(40);
 
 query(`
 begin;
+insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
+values (${sqlLiteral(ids.owner)}::uuid,false,false,transaction_timestamp());
+
+insert into auth.sessions(id,user_id,not_after)
+values (
+  ${sqlLiteral(ids.ownerSession)}::uuid,
+  ${sqlLiteral(ids.owner)}::uuid,
+  transaction_timestamp()+interval '4 hours'
+);
+
 insert into public.platform_role_memberships(user_id,email,role,status)
 values (${sqlLiteral(ids.owner)},null,'owner','active')
 on conflict do nothing;
@@ -438,7 +454,7 @@ const createApproval = ({
   const targetHash = switchTargetHash(switchKey, enabled, policyVersion);
   const output = query(`
 begin;
-${ownerRoleSql(ids.owner)}
+${ownerRoleSql(ids.owner, ids.ownerSession)}
 select public.governance_record_owner_approval(
   ${sqlLiteral(ids.decision)},${sqlLiteral(approvalKey)},${sqlLiteral(h4)},
   ${sqlLiteral(h6)},${sqlLiteral(sourceCommit)},${sqlLiteral(h6)},
@@ -565,7 +581,7 @@ const createBootstrapApproval = (suffix) => {
   ].join("|"));
   const output = query(`
 begin;
-${ownerRoleSql(ids.owner)}
+${ownerRoleSql(ids.owner, ids.ownerSession)}
 select public.governance_record_bootstrap_approval(
   ${sqlLiteral(repository)},${sqlLiteral(bootstrapBranch)},
   ${sqlLiteral(sourceCommit)},${sqlLiteral(retentionHash)},
@@ -702,7 +718,7 @@ recordPass("approval allowance claim", "2 winners / 1 rejection");
 const serviceRevocationMarker = `service-revocation-${randomUUID()}`;
 const serviceRevocationWriter = startSignaledSession(`
 begin;
-${ownerRoleSql(ids.owner)}
+${ownerRoleSql(ids.owner, ids.ownerSession)}
 select public.governance_revoke_two_party_service_principal(
   'product_experience_baseline_service',${sqlLiteral(h2)}
 );
@@ -1136,7 +1152,7 @@ const reinstatementApproval = createApproval({
 await delay(400);
 const revalidateSql = (revalidationHash) => `
 begin;
-${ownerRoleSql(ids.owner)}
+${ownerRoleSql(ids.owner, ids.ownerSession)}
 select public.governance_revalidate_owner_approval(
   ${sqlLiteral(reinstatementApproval.id)},${sqlLiteral(revalidationHash)},
   ${sqlLiteral(h5)},${sqlLiteral(sourceCommit)},${sqlLiteral(h6)},
@@ -1266,7 +1282,7 @@ const revokedBootstrapReceipt = bootstrapStage(
 const bootstrapRevocationMarker = `bootstrap-revocation-${randomUUID()}`;
 const bootstrapRevocationWriter = startSignaledSession(`
 begin;
-${ownerRoleSql(ids.owner)}
+${ownerRoleSql(ids.owner, ids.ownerSession)}
 select public.governance_revoke_bootstrap_approval(
   ${sqlLiteral(revokedBootstrapApproval.id)},${sqlLiteral("e".repeat(64))}
 );
@@ -1325,7 +1341,7 @@ query(bootstrapEvaluatorSql(
 const bootstrapEmergencyMarker = `bootstrap-emergency-${randomUUID()}`;
 const bootstrapEmergencyWriter = startSignaledSession(`
 begin;
-${ownerRoleSql(ids.owner)}
+${ownerRoleSql(ids.owner, ids.ownerSession)}
 select public.governance_set_cognitive_emergency_state(
   'emergency_stop',${sqlLiteral("8".repeat(64))}
 );
@@ -1373,7 +1389,7 @@ where task.task_key='cognitive-level01-canary-control'
 );
 query(`
 begin;
-${ownerRoleSql(ids.owner)}
+${ownerRoleSql(ids.owner, ids.ownerSession)}
 select public.governance_set_cognitive_emergency_state(
   'active',${sqlLiteral("9".repeat(64))}
 );
@@ -1451,6 +1467,7 @@ assert.ok(modelFixtureMatch?.groups?.fixture, "canonical model fixture is missin
 
 const modelIds = new Map([
   ["d2000000-0000-4000-8000-000000000001", randomUUID()],
+  ["d2100000-0000-4000-8000-000000000001", randomUUID()],
   ["d1000000-0000-4000-8000-000000000001", randomUUID()],
   ["d3000000-0000-4000-8000-000000000001", randomUUID()],
   ["d4000000-0000-4000-8000-000000000001", randomUUID()],
@@ -1462,6 +1479,7 @@ const modelIds = new Map([
   ["de000000-0000-4000-8000-000000000001", randomUUID()],
 ]);
 const modelOwnerId = modelIds.get("d2000000-0000-4000-8000-000000000001");
+const modelOwnerSessionId = modelIds.get("d2100000-0000-4000-8000-000000000001");
 const modelProjectId = modelIds.get("d1000000-0000-4000-8000-000000000001");
 const modelTaskId = modelIds.get("d3000000-0000-4000-8000-000000000001");
 const modelBudgetId = modelIds.get("dc000000-0000-4000-8000-000000000001");
@@ -1498,6 +1516,20 @@ modelFixture = modelFixture
   .replaceAll(
     "model-router-budget-fixture",
     `model-router-budget-${modelSuffix}`,
+  )
+  .replaceAll(
+    "select pg_temp.set_service_role_test_context();",
+    `select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claim.sub','',true);
+select set_config('request.jwt.claim.session_id','',true);
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+do $model_service_context$
+begin
+  if auth.uid() is not null or auth.jwt() ? 'session_id' then
+    raise exception 'service_role_fixture_retained_user_session';
+  end if;
+end
+$model_service_context$;`,
   );
 query(`begin;\n${modelFixture}\ncommit;`);
 
@@ -1518,7 +1550,7 @@ const modelIdentityHash = hash([
 ].join("|"));
 const modelCapabilityId = query(`
 begin;
-${ownerRoleSql(modelOwnerId)}
+${ownerRoleSql(modelOwnerId, modelOwnerSessionId)}
 select public.governance_owner_register_model_router_capability(
   (
     select id
