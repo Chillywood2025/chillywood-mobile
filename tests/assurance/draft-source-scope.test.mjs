@@ -6,7 +6,14 @@ import path from "node:path";
 import test from "node:test";
 
 import { git as runGit } from "../../scripts/assurance/lib.mjs";
-import { evaluateDraftSourceReadinessScope } from "../../scripts/assurance/pr-scope-lib.mjs";
+import {
+  autonomousContractSourceAuthorityObserved,
+  deriveEngineeringClosureExecutionMode,
+  deriveEngineeringClosureSelfHostGate,
+  deriveRepositoryRelationshipCandidates,
+  evaluateDraftSourceReadinessScope,
+  resolveEngineeringClosureTaskContext,
+} from "../../scripts/assurance/engineering-closure.mjs";
 
 test("shared Git scope reader retains canonical diffs larger than Node's default buffer", () => {
   const fixtureRoot = fs.mkdtempSync(path.join(tmpdir(), "chillywood-pr-scope-large-diff-"));
@@ -48,17 +55,20 @@ const draftScopeInput = () => {
       draft: true,
       updated_at: updatedAt,
       html_url: htmlUrl,
-      base: { ref: "main", sha: baseSha },
-      head: { ref: branch, sha: headSha },
+      base: { ref: "main", sha: baseSha, repo: { full_name: repository } },
+      head: { ref: branch, sha: headSha, repo: { full_name: repository } },
     },
   };
   const readback = {
     number: pr,
     repository,
+    baseRepository: repository,
     baseRef: "main",
     baseSha,
+    headRepository: repository,
     headRef: branch,
     headSha,
+    mergeCommitSha: "e".repeat(40),
     htmlUrl,
     state: "open",
     draft: true,
@@ -107,5 +117,123 @@ test("exact draft scope reclassifies only final-authority findings and grants no
     const candidate = structuredClone(input);
     mutate(candidate);
     assert.equal(evaluateDraftSourceReadinessScope(candidate).ok, false);
+  }
+});
+
+const resolveDraftEngineeringContext = ({ mutate = null, observeAuthorities = null } = {}) => {
+  const input = draftScopeInput();
+  mutate?.(input);
+  const head = input.readback.headSha;
+  const tree = input.tree;
+  const livePull = {
+    number: input.readback.number,
+    state: input.readback.state,
+    draft: input.readback.draft,
+    updated_at: input.readback.updatedAt,
+    html_url: input.readback.htmlUrl,
+    merge_commit_sha: input.readback.mergeCommitSha,
+    base: { ref: input.readback.baseRef, sha: input.readback.baseSha, repo: { full_name: input.readback.baseRepository } },
+    head: { ref: input.readback.headRef, sha: input.readback.headSha, repo: { full_name: input.readback.headRepository } },
+  };
+  const gitCommand = (argv) => {
+    if (argv[0] === "rev-parse" && argv[1] === "HEAD") return head;
+    if (argv[0] === "rev-parse" && argv[1] === `${head}^{tree}`) return tree;
+    if (argv[0] === "show") return "";
+    if (argv[0] === "merge-tree") return tree;
+    return "";
+  };
+  return resolveEngineeringClosureTaskContext({
+    event: input.event,
+    localIdentity: { head, tree, base: input.readback.baseSha, branch: input.readback.headRef },
+    scope: input.scope,
+    currentTruth: {},
+    readPull: () => livePull,
+    observeAuthorities: observeAuthorities ?? (() => ({ architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null })),
+    sourceAncestryVerified: true,
+    environment: {
+      GITHUB_ACTIONS: "true",
+      GITHUB_EVENT_NAME: "pull_request",
+      GITHUB_REF: `refs/pull/${input.event.number}/merge`,
+      GITHUB_SHA: head,
+    },
+    gitCommand,
+  });
+};
+
+test("engineering closure accepts only its exact branded draft source context without task or merge authority", () => {
+  const resolution = resolveDraftEngineeringContext();
+  assert.equal(resolution.ok, true);
+  assert.equal(resolution.taskContext.type, "DRAFT_SOURCE_READINESS");
+  assert.equal(resolution.taskContext.taskAuthorization, "UNBOUND");
+  assert.equal(resolution.taskContext.taskAuthorityGranted, false);
+  assert.equal(resolution.taskContext.finalSourceAuthority, false);
+  assert.equal(resolution.taskContext.mergeAuthorityGranted, false);
+  assert.equal(resolution.taskContext.sourceScope.classification, "DRAFT_SOURCE_SCOPE_V1");
+  assert.deepEqual(
+    deriveEngineeringClosureExecutionMode({ taskContext: resolution.taskContext, changedPaths: ["app/source.ts"] }),
+    { ok: true, mode: "DRAFT_SOURCE_READINESS", findings: [] },
+  );
+
+  const forged = structuredClone(resolution.taskContext);
+  assert.deepEqual(
+    deriveEngineeringClosureExecutionMode({ taskContext: forged, changedPaths: ["app/source.ts"] }),
+    { ok: false, mode: null, findings: ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] },
+  );
+
+});
+
+test("engineering closure keeps READY, stale lifecycle, ambiguous authority, and local execution strict", () => {
+  const ready = resolveDraftEngineeringContext({ mutate: (input) => {
+    input.event.action = "ready_for_review";
+    input.event.pull_request.draft = false;
+    input.readback.draft = false;
+  } });
+  assert.equal(ready.ok, false);
+  assert.deepEqual(ready.findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"]);
+
+  const stale = resolveDraftEngineeringContext({ mutate: (input) => { input.readback.updatedAt = "2026-08-25T05:52:12Z"; } });
+  assert.equal(stale.ok, false);
+  assert.deepEqual(stale.findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"]);
+
+  const ambiguous = resolveDraftEngineeringContext({ observeAuthorities: () => ({
+    architectureAuthority: { ok: true, type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" },
+    terminalTruthAuthority: { ok: true, type: "TERMINAL_TRUTH_SUCCESSOR" },
+    finiteTaskAuthority: null,
+    finiteTaskAdmissionAuthority: null,
+  }) });
+  assert.equal(ambiguous.ok, false);
+  assert.deepEqual(ambiguous.findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS"]);
+
+  assert.deepEqual(resolveEngineeringClosureTaskContext({ event: null }).findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"]);
+});
+
+test("draft self-hosting reports source readiness only when every source finding is clear", () => {
+  assert.deepEqual(
+    deriveEngineeringClosureSelfHostGate({ mode: "DRAFT_SOURCE_READINESS", findings: [] }),
+    { status: "SOURCE_READINESS_ACCEPTABLE", findings: [] },
+  );
+  assert.deepEqual(
+    deriveEngineeringClosureSelfHostGate({ mode: "DRAFT_SOURCE_READINESS", findings: ["UNEXPECTED_WRONG_AUTHORITY"] }),
+    { status: "BLOCKED_INTERNAL", findings: ["UNEXPECTED_WRONG_AUTHORITY"] },
+  );
+});
+
+test("autonomous governing-edge observation follows only the exact wrapper-to-core delegation", () => {
+  const observed = deriveRepositoryRelationshipCandidates().find(({ discoveryRule }) => discoveryRule === "SECURITY_CONTROL_SHARED_GUARD_DIRECT_CALL_AUTHORITY");
+  assert.equal(observed.verifierResult, "SOURCE_RELATIONSHIP_OBSERVED");
+  assert.equal(observed.relationshipConfidence, "EXACT_STRUCTURAL");
+
+  const fixtureRoot = fs.mkdtempSync(path.join(tmpdir(), "chillywood-autonomous-wrapper-edge-"));
+  const wrapperPath = path.join(fixtureRoot, "scripts/guard-autonomous-systems-contract.mjs");
+  const corePath = path.join(fixtureRoot, "scripts/guard-autonomous-systems-contract-core.mjs");
+  try {
+    fs.mkdirSync(path.dirname(wrapperPath), { recursive: true });
+    fs.writeFileSync(wrapperPath, 'const core = new URL("./guard-autonomous-systems-contract-core.mjs", import.meta.url);\nspawnSync(process.execPath, [core.pathname]);\n');
+    fs.writeFileSync(corePath, 'import { evaluateAutonomousEngineeringRequest } from "./assurance/engineering-closure.mjs";\nevaluateAutonomousEngineeringRequest({ implementation: true });\nevaluateAutonomousEngineeringRequest({ implementation: true, cognitiveRecommendationSelfClear: true });\n');
+    assert.equal(autonomousContractSourceAuthorityObserved(fixtureRoot, "scripts/guard-autonomous-systems-contract.mjs"), true);
+    fs.writeFileSync(wrapperPath, 'const core = new URL("./untrusted-core.mjs", import.meta.url);\nspawnSync(process.execPath, [core.pathname]);\n');
+    assert.equal(autonomousContractSourceAuthorityObserved(fixtureRoot, "scripts/guard-autonomous-systems-contract.mjs"), false);
+  } finally {
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
