@@ -702,6 +702,14 @@ const rulesetStagePayload = ({ ruleset, commonRules, statusRule, checks, bypassA
   rules: [...(restrictUpdates ? [{ type: "update", parameters: { update_allows_fetch_and_merge: false } }] : []), ...commonRules, { ...statusRule, parameters: { ...statusRule.parameters, required_status_checks: checks } }],
 });
 
+export function classifyProtectedPhase1RulesetBypassReadback({ ruleset, publisherAppId } = {}) {
+  const appBypass = [{ actor_id: publisherAppId, actor_type: "Integration", bypass_mode: "pull_request" }];
+  if (stableJson(ruleset?.bypass_actors) === "[]" && ruleset?.current_user_can_bypass === "never") return "EXPLICIT_EMPTY";
+  if (Number.isInteger(publisherAppId) && publisherAppId > 0 && stableJson(ruleset?.bypass_actors) === stableJson(appBypass)) return "EXPLICIT_APP_PULL_REQUEST_ONLY";
+  if (ruleset?.bypass_actors == null && [undefined, null, "never"].includes(ruleset?.current_user_can_bypass)) return "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED";
+  return null;
+}
+
 export async function resolveProtectedPhase1PublisherProvisioningReadback({ repository, environmentToken, readToken, app, appPrivacy, installation, clientId, keyFingerprint, jwtAppReadbackHash, webhookConfigHash } = {}) {
   if (repository !== REPOSITORY || typeof environmentToken !== "string" || !environmentToken || typeof readToken !== "string" || !readToken) throw new Error("PHASE1_PUBLISHER_READBACK_INPUT_INVALID");
   const exactJwtReadbackHash = hashValue({ id: app?.id, clientId: app?.client_id, name: app?.name, slug: app?.slug, owner: app?.owner?.login, public: appPrivacy?.public, publicEvidence: appPrivacy?.publicEvidence, publicAppStatus: appPrivacy?.publicAppStatus, permissions: app?.permissions, events: app?.events, hook: appPrivacy?.webhook });
@@ -722,15 +730,13 @@ export async function resolveProtectedPhase1PublisherProvisioningReadback({ repo
   const stage1Checks = [...raw, aggregate];
   const appBypass = [{ actor_id: app?.id, actor_type: "Integration", bypass_mode: "pull_request" }];
   const updateRules = Array.isArray(ruleset?.rules) ? ruleset.rules.filter(({ type }) => type === "update") : [];
-  const bypassExact = stableJson(ruleset?.bypass_actors) === stableJson(appBypass);
-  const bypassHidden = ruleset?.bypass_actors == null && ruleset?.current_user_can_bypass == null;
+  const bypassReadback = classifyProtectedPhase1RulesetBypassReadback({ ruleset, publisherAppId: app?.id });
+  const bypassExact = bypassReadback === "EXPLICIT_APP_PULL_REQUEST_ONLY";
+  const bypassHidden = bypassReadback === "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED";
   const stage = stableJson(currentChecks) === stableJson(raw) && updateRules.length === 0 && stableJson(ruleset?.bypass_actors ?? []) === "[]" ? "PRE_CUTOVER_13_RAW"
     : stableJson(currentChecks) === stableJson(stage1Checks) && updateRules.length === 0 && stableJson(ruleset?.bypass_actors ?? []) === "[]" ? "STAGE1_AGGREGATE_PLUS_13_RAW"
     : stableJson(currentChecks) === stableJson([aggregate]) && stableJson(updateRules) === stableJson([{ type: "update", parameters: { update_allows_fetch_and_merge: false } }]) && (bypassExact || bypassHidden) ? "FINAL_AGGREGATE_ONLY" : null;
   const variableMap = Object.fromEntries(variables.map(({ name, value }) => [name, value]));
-  const bypassReadback = stableJson(ruleset?.bypass_actors) === "[]" && ruleset?.current_user_can_bypass === "never" ? "EXPLICIT_EMPTY"
-    : bypassExact ? "EXPLICIT_APP_PULL_REQUEST_ONLY"
-    : ruleset?.bypass_actors == null && ruleset?.current_user_can_bypass == null ? "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED" : null;
   if (environment?.name !== environmentName || !Number.isInteger(environment?.id) || environment.id < 1 || environment?.can_admins_bypass !== false
     || stableJson(environment?.deployment_branch_policy) !== stableJson({ protected_branches: false, custom_branch_policies: true })
     || !Array.isArray(environment?.protection_rules) || environment.protection_rules.length !== 1 || environment.protection_rules[0]?.type !== "branch_policy"

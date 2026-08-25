@@ -12,6 +12,7 @@ import {
   PHASE1_PUBLISHER_APP,
   PHASE1_REQUIRED_LANES,
   classifyPhase1Finding,
+  classifyProtectedPhase1RulesetBypassReadback,
   decidePhase1Policy,
   derivePhase1LifecycleGeneration,
   evaluateAppOnlyMergeGateSnapshot,
@@ -93,6 +94,21 @@ test("private App and disabled webhook normalize the live omitted-field/404 shap
 test("caller-supplied 404 claims cannot acquire protected publisher readback provenance", async () => {
   const appPrivacy = normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null });
   await assert.rejects(resolveProtectedPhase1PublisherProvisioningReadback({ repository: REPOSITORY, environmentToken: "untrusted", readToken: "untrusted", app: {}, appPrivacy, installation: {}, clientId: "Iv1.untrusted", keyFingerprint: "a".repeat(64), jwtAppReadbackHash: "b".repeat(64), webhookConfigHash: hashValue(appPrivacy.webhook) }), /PHASE1_PUBLISHER_APP_READBACK_PROVENANCE_INVALID/u);
+});
+
+test("omitted ruleset bypass actors with current-user never require immutable stage-receipt authority", () => {
+  const publisherAppId = 4707730;
+  const appBypass = [{ actor_id: publisherAppId, actor_type: "Integration", bypass_mode: "pull_request" }];
+  assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { current_user_can_bypass: "never" }, publisherAppId }), "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED");
+  assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: {}, publisherAppId }), "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED");
+  assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: [], current_user_can_bypass: "never" }, publisherAppId }), "EXPLICIT_EMPTY");
+  assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: appBypass, current_user_can_bypass: "never" }, publisherAppId }), "EXPLICIT_APP_PULL_REQUEST_ONLY");
+  for (const current_user_can_bypass of ["always", "pull_requests_only", true]) {
+    assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { current_user_can_bypass }, publisherAppId }), null);
+  }
+  assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: [{ actor_id: 1, actor_type: "Integration", bypass_mode: "pull_request" }], current_user_can_bypass: "never" }, publisherAppId }), null);
+  assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: [], current_user_can_bypass: "always" }, publisherAppId }), null);
+  assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: appBypass, current_user_can_bypass: "never" }, publisherAppId: null }), null);
 });
 
 test("GitHub App client IDs accept current and documented exact shapes only", () => {
