@@ -1,4 +1,5 @@
 name: Phase 1 CI
+run-name: "phase1 pr=${{ github.event.pull_request.number }} action=${{ github.event.action }} draft=${{ github.event.pull_request.draft }}"
 
 on:
   pull_request:
