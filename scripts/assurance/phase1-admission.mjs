@@ -55,6 +55,14 @@ export const PHASE1_EVIDENCE_STAGES = Object.freeze({
 export const validGitHubAppClientId = (value) => typeof value === "string"
   && /^(?:Iv[0-9A-Za-z]{18}|Iv1\.[0-9a-f]{16})$/u.test(value);
 
+const PHASE1_CANDIDATE_REMOTE_IDENTITIES = new Set([
+  "https://github.com/Chillywood2025/chillywood-mobile",
+  "https://github.com/Chillywood2025/chillywood-mobile.git",
+  "git@github.com:Chillywood2025/chillywood-mobile.git",
+]);
+export const validPhase1CandidateRemoteIdentity = (value) => typeof value === "string"
+  && PHASE1_CANDIDATE_REMOTE_IDENTITIES.has(value);
+
 const SHA_RE = /^[0-9a-f]{40}$/u;
 const DIGEST_RE = /^[0-9a-f]{64}$/u;
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
@@ -168,7 +176,7 @@ async function withCandidateWorktree(identity, callback) {
   let added = false;
   try {
     const remote = runGit(["remote", "get-url", "origin"]);
-    if (!["https://github.com/Chillywood2025/chillywood-mobile.git", "git@github.com:Chillywood2025/chillywood-mobile.git"].includes(remote)) throw new Error("PHASE1_CANDIDATE_REMOTE_IDENTITY_INVALID");
+    if (!validPhase1CandidateRemoteIdentity(remote)) throw new Error("PHASE1_CANDIDATE_REMOTE_IDENTITY_INVALID");
     runGit(["fetch", "--no-tags", "origin", identity.headSha, identity.baseSha, "+refs/heads/main:refs/remotes/origin/main"]);
     if (runGit(["rev-parse", `${identity.headSha}^{commit}`]) !== identity.headSha
       || runGit(["rev-parse", `${identity.headSha}^{tree}`]) !== identity.sourceTree
