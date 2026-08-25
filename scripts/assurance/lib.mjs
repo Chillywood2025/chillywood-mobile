@@ -2937,7 +2937,7 @@ export function evaluateProtectedMainAdvancement({
     const parsedMergeSubject = parseProtectedPullRequestMergeSubject(observation.subject);
     const subjectFormatAllowed = policy.ordinaryAdvancement?.acceptedMergeSubjectFormats?.includes(parsedMergeSubject.format);
     const observedRepairPaths = [...(observation.changedPaths ?? [])].sort();
-    const projectedRepairReplay = parsedMergeSubject.variant === "GITHUB_MERGE_PR_TITLE"
+    const projectedRepairReplay = ["GITHUB_MERGE_PR_TITLE", "GITHUB_CLASSIC_MERGE_PULL_REQUEST"].includes(parsedMergeSubject.variant)
       && repairHistoryInstances.length + 1 === projectedRepair?.ordinal
       && parsedMergeSubject.prNumber === projectedRepair?.pullRequest
       && observation.parents?.[0] === projectedRepair?.protectedBase

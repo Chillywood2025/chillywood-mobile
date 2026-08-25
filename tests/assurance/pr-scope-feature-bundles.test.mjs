@@ -1059,6 +1059,29 @@ test("protected-main history accepts independently bound repair instances and re
   assert.equal(malformedCheckpoint.authorityControlEligible, false);
 });
 
+test("projected terminal-repair replay accepts the exact classic PR256 merge and rejects wrong authority identity", () => {
+  const record = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
+  const observation = {
+    commit: "b2398df819067a4dea18a1cb9d49dcede0f455ee",
+    parents: ["2d40bc75cfad9a28d7534f3dd8593dab63318769", "2201b91c6dd7efb103d6b3a1c5e86ee76b4055b7"],
+    tree: "b861f4ff6b57c7c7a7a8dd0bbd2b6c3a424a22b0",
+    subject: "Merge pull request #256 from Chillywood2025/codex/current-truth-successor-repair-v3",
+    changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS],
+  };
+  const evaluate = (candidate) => evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha: observation.commit, candidateHead: "f".repeat(40), finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: true }, advancementObservations: [candidate], checkpointTreeObservation: record.protectedMainAuthority.checkpointTree, checkpointIsAncestor: true, candidateContainsObservedMain: true });
+  const exact = evaluate(observation);
+  assert.deepEqual(exact.findings, []);
+  assert.deepEqual([exact.advancementClassifications[0].mergeSubjectFormat, exact.advancementClassifications[0].terminalVerifierRepair, exact.terminalVerifierRepairHistory.at(-1).pullRequest], ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", true, 256]);
+  for (const mutation of [
+    { ...observation, subject: "Merge pull request #255 from Chillywood2025/codex/current-truth-successor-repair-v3" },
+    { ...observation, parents: ["0".repeat(40), observation.parents[1]] },
+  ]) {
+    const denied = evaluate(mutation);
+    assert.equal(denied.advancementClassifications[0].terminalVerifierRepair, false);
+    assert.ok(denied.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(denied));
+  }
+});
+
 test("canonical Git diff identity is newline-independent and shared by both authority callers", () => {
   const range = "c1f9ec1f71cc8bc4448afd2327c4341cac309573...cb4be9ff1e4a956d73cffc1de6902538b79a918c";
   assert.deepEqual(canonicalGitDiffArgs(range), ["diff", "--full-index", "--binary", "--no-ext-diff", range]);
