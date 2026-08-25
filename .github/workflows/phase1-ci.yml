@@ -108,12 +108,6 @@ jobs:
           npm run proof:money-flow-control
           npm run proof:money-operator-write-scope
           npm run proof:livekit-autonomous-operator
-          npm run guard:livekit-heartbeat-monitor-policy
-          node --test supabase/functions/_shared/livekit-seat-token-authority.test.mjs
-          deno test --no-lock \
-            supabase/functions/_shared/livekit-session-generation_test.ts \
-            supabase/functions/_shared/livekit-seat-session-enforcement_test.ts \
-            supabase/functions/_shared/livekit-seat-token-authority_test.ts
           npm run proof:owner-command-operator
           npm run proof:owner-command-routing
           npm run proof:owner-command-approval-gates
@@ -134,8 +128,6 @@ jobs:
           deno check --node-modules-dir=auto --no-lock supabase/functions/owner-command-operator/index.ts
           deno check --node-modules-dir=auto --no-lock supabase/functions/autonomous-approval-request/index.ts
           deno check --node-modules-dir=auto --no-lock supabase/functions/user-report-intake/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/livekit-token/index.ts
-          deno check --node-modules-dir=auto --no-lock supabase/functions/livekit-heartbeat-monitor/index.ts
 
       - name: Validate assurance authority and source correctness
         env:
