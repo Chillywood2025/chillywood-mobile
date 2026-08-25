@@ -5640,7 +5640,9 @@ function terminalD2aTruth() {
   const sourceTree = "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0";
   const mergeSha = "fe775c12b0857aa50d986d24179ae9588049b6a1";
   Object.assign(value.activeTaskBinding, {
+    featureId: "chilly-chat-call-lifecycle",
     implementationPr: 212,
+    implementationBranch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
     currentImplementationHead: sourceHead,
     currentImplementationTree: sourceTree,
     phase: "TERMINAL",
@@ -5716,6 +5718,28 @@ test("terminal D2A evidence substitutions fail closed", () => {
     const value = terminalD2aTruth();
     mutate(value);
     assert.equal(validateStructuredBinding(value.activeTaskBinding, gateCatalog, registry, [], value.latestMergedImplementationPr).includes("ACTIVE_TASK_BINDING_MALFORMED"), true);
+  }
+});
+
+test("terminal D2A legacy Phase 1 evidence is restricted to the exact frozen historical instance", () => {
+  for (const mutate of [
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.repository = "attacker/repository"; },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.pr = 999; },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.branch = "attacker/branch"; },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.baseSha = "a".repeat(40); },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.sourceTree = "b".repeat(40); },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.valid = false; },
+    (value) => { value.activeTaskBinding.implementationBranch = "attacker/branch"; },
+    (value) => {
+      value.activeTaskBinding.implementationPr = 999;
+      value.latestMergedImplementationPr.number = 999;
+    }
+  ]) {
+    const value = terminalD2aTruth();
+    mutate(value);
+    assert.deepEqual(validateTerminalTaskEvidence(value.activeTaskBinding, value.latestMergedImplementationPr), [
+      { id: "ASSURANCE_TERMINAL_TASK_EVIDENCE_MALFORMED", status: "BLOCKED_INTERNAL" }
+    ]);
   }
 });
 

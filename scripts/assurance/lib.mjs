@@ -6059,6 +6059,40 @@ export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, 
 
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
 
+const frozenLegacyD2aTerminalEvidence = Object.freeze({
+  schemaVersion: 1,
+  completionScope: "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+  sourceHead: "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
+  sourceTree: "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+  mergeSha: "fe775c12b0857aa50d986d24179ae9588049b6a1",
+  mergeTree: "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+  ownerReceiptCommentId: 5268095229,
+  repositoryReviewCommentId: 5268063533,
+  repositoryReview: { P0: 0, P1: 0, launchImpactingP2: 0 },
+  phase1: { runId: 31605891078, head: "50b5f0498a59961278bb5afbca443c6e35cd5bb6", result: "PASS_13_OF_13" },
+  proofLimitations: {
+    T4_NATIVE_PROVIDER: "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED",
+    backupClassification: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+    T5_SIGNED_ARTIFACT: "NOT_CURRENT",
+    T6_INSTALLED_PHYSICAL: "NOT_CURRENT",
+    T7_PUBLIC_CANARY: "BLOCKED_EXTERNAL"
+  },
+  publicReleaseAuthorized: false,
+  otaAuthorized: false
+});
+
+function frozenLegacyD2aTerminalEvidenceValid(binding, latestMergedImplementationPr, evidence) {
+  return binding?.completionScope === frozenLegacyD2aTerminalEvidence.completionScope
+    && binding?.implementationPr === 212
+    && binding?.implementationBranch === "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation"
+    && binding?.currentImplementationHead === frozenLegacyD2aTerminalEvidence.sourceHead
+    && binding?.currentImplementationTree === frozenLegacyD2aTerminalEvidence.sourceTree
+    && latestMergedImplementationPr?.number === 212
+    && latestMergedImplementationPr?.head === frozenLegacyD2aTerminalEvidence.sourceHead
+    && latestMergedImplementationPr?.mergeSha === frozenLegacyD2aTerminalEvidence.mergeSha
+    && stableJson(evidence) === stableJson(frozenLegacyD2aTerminalEvidence);
+}
+
 export function validateTerminalTaskEvidence(binding, latestMergedImplementationPr, { livePhase1Evidence = null } = {}) {
   if (binding?.phase !== "TERMINAL") return [];
   const evidence = binding?.terminalEvidence;
@@ -6115,9 +6149,8 @@ export function validateTerminalTaskEvidence(binding, latestMergedImplementation
     }
     return findings;
   }
-  const phase1Valid = Number.isInteger(evidence?.phase1?.runId) && evidence.phase1.runId > 0
-    && ((evidence.phase1.head === binding.currentImplementationHead && evidence.phase1.result === "PASS_13_OF_13")
-      || phase1AdmissionEvidenceValid({ evidence: evidence.phase1, liveEvidence: livePhase1Evidence, pr: binding?.implementationPr, branch: binding?.implementationBranch, head: binding?.currentImplementationHead, tree: binding?.currentImplementationTree }));
+  const phase1Valid = frozenLegacyD2aTerminalEvidenceValid(binding, latestMergedImplementationPr, evidence)
+    || phase1AdmissionEvidenceValid({ evidence: evidence?.phase1, liveEvidence: livePhase1Evidence, pr: binding?.implementationPr, branch: binding?.implementationBranch, head: binding?.currentImplementationHead, tree: binding?.currentImplementationTree, base: evidence?.phase1?.baseSha });
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)
     || evidence.schemaVersion !== 1
     || evidence.completionScope !== binding.completionScope
