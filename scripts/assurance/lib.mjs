@@ -439,7 +439,14 @@ export function args(argv = process.argv.slice(2)) {
 }
 
 export function git(gitArgs, options = {}) {
-  return canonicalGitText(execFileSync("git", gitArgs, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }));
+  const { maxBuffer = 32 * 1024 * 1024, ...overrides } = options;
+  return canonicalGitText(execFileSync("git", gitArgs, {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer,
+    ...overrides,
+  }));
 }
 
 export function baseSynchronizationFirstParentDistance(sourceHead, observedHead, runGit = git) {

@@ -231,6 +231,94 @@ export function validatePullRequestEventIdentity(event, readback = {}) {
   };
 }
 
+const draftSourceReadinessActions = new Set(["opened", "synchronize", "reopened", "edited", "converted_to_draft"]);
+const draftSourceReadinessAuthorityFindings = new Set([
+  "ASSURANCE_TASK_CONTEXT_UNBOUND",
+  "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+  "ASSURANCE_PR_LINE_BUDGET_EXCEEDED",
+  "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+  "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+]);
+
+// A draft may prove exact repository/source scope without manufacturing the
+// final task authority required for READY. This projection never erases the
+// authority findings: it reclassifies only the closed set below as non-blocking
+// draft evidence and grants neither task nor merge authority.
+export function evaluateDraftSourceReadinessScope({ event, readback, executionIdentity, tree, scope, context, findings } = {}) {
+  const validated = validatePullRequestEventIdentity(event, readback);
+  const pull = event?.pull_request;
+  const identity = validated.identity;
+  const findingValues = Array.isArray(findings) ? findings : [];
+  const findingIds = findingValues.map(({ id }) => id);
+  const files = Array.isArray(scope?.files) ? [...scope.files] : null;
+  const contextFindings = Array.isArray(context?.findings) ? context.findings : [];
+  const exactLifecycle = validated.ok
+    && draftSourceReadinessActions.has(event?.action)
+    && pull?.state === "open"
+    && pull?.draft === true
+    && readback?.state === "open"
+    && readback?.draft === true
+    && typeof pull?.updated_at === "string"
+    && Number.isFinite(Date.parse(pull.updated_at))
+    && readback?.updatedAt === pull.updated_at;
+  const exactExecution = executionIdentity?.ok === true
+    && executionIdentity?.repository === identity?.repository
+    && executionIdentity?.pr === identity?.pr
+    && executionIdentity?.action === event?.action
+    && executionIdentity?.draft === true
+    && executionIdentity?.relationship?.valid === true
+    && executionIdentity?.authoritativeSource?.baseRef === identity?.baseRef
+    && executionIdentity?.authoritativeSource?.baseSha === identity?.baseSha
+    && executionIdentity?.authoritativeSource?.headSha === identity?.headSha
+    && executionIdentity?.authoritativeSource?.ref === identity?.branch
+    && executionIdentity?.execution?.tree === tree;
+  const exactScope = sha40(tree)
+    && files !== null
+    && files.length > 0
+    && files.length === new Set(files).size
+    && stableJson(files) === stableJson([...files].sort())
+    && Number.isSafeInteger(scope?.additions) && scope.additions >= 0
+    && Number.isSafeInteger(scope?.deletions) && scope.deletions >= 0
+    && /^[0-9a-f]{64}$/u.test(scope?.diffHash ?? "");
+  const authorityOnly = context?.ok === false
+    && context?.source === "UNBOUND_PR_CONTEXT"
+    && stableJson(contextFindings) === stableJson(["ASSURANCE_TASK_CONTEXT_UNBOUND"])
+    && findingIds.includes("ASSURANCE_TASK_CONTEXT_UNBOUND")
+    && findingIds.length === new Set(findingIds).size
+    && findingIds.every((id) => draftSourceReadinessAuthorityFindings.has(id));
+  const ok = exactLifecycle && exactExecution && exactScope && authorityOnly;
+  return {
+    ok,
+    mode: ok ? "DRAFT_SOURCE_READINESS" : null,
+    taskAuthorityGranted: false,
+    mergeAuthorityGranted: false,
+    sourceScope: ok ? {
+      schemaVersion: 1,
+      classification: "DRAFT_SOURCE_SCOPE_V1",
+      repository: identity.repository,
+      pr: identity.pr,
+      action: event.action,
+      eventUpdatedAt: pull.updated_at,
+      draft: true,
+      baseRef: identity.baseRef,
+      baseSha: identity.baseSha,
+      headRef: identity.branch,
+      headSha: identity.headSha,
+      headTree: tree,
+      changedFiles: files.length,
+      additions: scope.additions,
+      deletions: scope.deletions,
+      diffHash: scope.diffHash,
+      changedPathWorklistSha256: sha256(files),
+      finalSourceAuthority: false,
+      mergeAuthorityGranted: false,
+    } : null,
+    nonBlockingFindings: ok
+      ? findingValues.map((value) => ({ ...value, status: "NON_BLOCKING_ASSURANCE_FAILURE" }))
+      : [],
+  };
+}
+
 const exactBinding = (binding, identity) => binding?.repository === identity.repository
   && binding?.pr === identity.pr
   && binding?.branch === identity.branch
