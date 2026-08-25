@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import crypto from "node:crypto";
 import fs from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 
@@ -13,6 +14,7 @@ const subjectGit = (argv, options = {}) => execFileSync("git", argv, {
 
 const core = new URL("./guard-autonomous-systems-contract-core.mjs", import.meta.url);
 const result = spawnSync(process.execPath, [core.pathname], {
+  cwd: root,
   encoding: "utf8",
   env: process.env,
   maxBuffer: 64 * 1024 * 1024,
@@ -50,6 +52,8 @@ const sourceReadiness = process.env.GITHUB_ACTIONS === "true"
   && pull?.head?.repo?.full_name === event.repository.full_name
   && typeof pull?.head?.ref === "string"
   && pull.head.ref.length > 0
+  && typeof pull?.updated_at === "string"
+  && Number.isFinite(Date.parse(pull.updated_at))
   && /^[0-9a-f]{40}$/u.test(pull?.base?.sha ?? "")
   && /^[0-9a-f]{40}$/u.test(pull?.head?.sha ?? "");
 
@@ -65,6 +69,8 @@ const parseStructuredPayload = (output) => {
 const exactCommit = (value) => (
   typeof value === "string" && /^[0-9a-f]{40}$/u.test(value) ? value : null
 );
+
+const canonicalGitText = (value) => String(value ?? "").replace(/\r\n?|\n/gu, "\n").trim();
 
 const gitResult = ({ args, gitCommand }) => {
   try {
@@ -92,6 +98,82 @@ const trackedTestInventory = (ref) => {
 const exactGitBlobText = (ref, file) => {
   const blob = gitResult({ args: ["show", `${ref}:${file}`], gitCommand: subjectGit });
   return blob.status === 0 ? String(blob.stdout ?? "") : null;
+};
+
+const draftSourceScope = (eventPayload) => {
+  try {
+    const baseSha = exactCommit(eventPayload?.pull_request?.base?.sha);
+    const headSha = exactCommit(eventPayload?.pull_request?.head?.sha);
+    if (!baseSha || !headSha) return null;
+    const baseTree = canonicalGitText(subjectGit(["rev-parse", `${baseSha}^{tree}`]));
+    const headTree = canonicalGitText(subjectGit(["rev-parse", `${headSha}^{tree}`]));
+    const executionSha = canonicalGitText(subjectGit(["rev-parse", "HEAD^{commit}"]));
+    const executionTree = canonicalGitText(subjectGit(["rev-parse", "HEAD^{tree}"]));
+    const executionParents = canonicalGitText(subjectGit(["show", "-s", "--format=%P", executionSha]))
+      .split(/\s+/u)
+      .filter(Boolean);
+    const directHead = executionSha === headSha && executionTree === headTree;
+    const exactPullRequestMerge = executionParents.length === 2
+      && executionParents[0] === baseSha
+      && executionParents[1] === headSha;
+    if ((!directHead && !exactPullRequestMerge)
+      || (process.env.GITHUB_SHA && process.env.GITHUB_SHA !== executionSha)) return null;
+
+    const range = `${baseSha}...${headSha}`;
+    const diff = canonicalGitText(subjectGit(["diff", "--full-index", "--binary", "--no-ext-diff", range]));
+    const changedPaths = String(subjectGit(["diff", "--name-only", "-z", range]))
+      .split("\0")
+      .filter(Boolean)
+      .sort();
+    if (new Set(changedPaths).size !== changedPaths.length) return null;
+    return Object.freeze({
+      schemaVersion: 1,
+      classification: "DRAFT_SOURCE_SCOPE_V1",
+      repository: eventPayload.repository.full_name,
+      pr: eventPayload.number,
+      action: eventPayload.action,
+      eventUpdatedAt: eventPayload.pull_request.updated_at,
+      draft: true,
+      baseRef: eventPayload.pull_request.base.ref,
+      baseSha,
+      baseTree,
+      headRef: eventPayload.pull_request.head.ref,
+      headSha,
+      headTree,
+      executionSha,
+      executionTree,
+      executionRelationship: directHead ? "EXACT_HEAD" : "EXACT_GITHUB_PULL_REQUEST_MERGE",
+      changedFiles: changedPaths.length,
+      changedPathWorklistSha256: crypto.createHash("sha256").update(JSON.stringify(changedPaths)).digest("hex"),
+      diffHash: crypto.createHash("sha256").update(diff).digest("hex"),
+      finalSourceAuthority: false,
+      mergeAuthorityGranted: false,
+    });
+  } catch {
+    return null;
+  }
+};
+
+const blockedExternalProviderProof = () => {
+  try {
+    const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+    const revenueCat = truth?.operationalClosures?.revenueCat;
+    if (truth?.liveProviderReadback !== false
+      || revenueCat?.premiumGranted !== false
+      || revenueCat?.liveMoneyAction !== false
+      || revenueCat?.moneyMoved !== false) return null;
+    return Object.freeze({
+      status: "BLOCKED_EXTERNAL",
+      liveProviderReadback: false,
+      premiumGranted: false,
+      liveMoneyAction: false,
+      moneyMoved: false,
+      grantsSourceAuthority: false,
+      grantsMergeAuthority: false,
+    });
+  } catch {
+    return null;
+  }
 };
 
 const numericPlanCount = (source) => {
@@ -173,19 +255,46 @@ const expectedFiniteTaskFindings = new Set([
   "FINITE_TASK_EFFECTIVE_RESERVATION_LIVE_AUTHORITY_REQUIRED",
 ]);
 
-const admissionOnlyFailure = (failure) => {
-  if (failure === "source-only autonomous contract requires shared evaluator eligibility") return true;
+const expectedRollingProtectedMainFindings = [
+  "CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT",
+  "CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID",
+  "CURRENT_TRUTH_PENDING_TRANSITION_ORDER_INVALID",
+];
+
+const sourceEligibilityFailure = "source-only autonomous contract requires shared evaluator eligibility";
+
+const finiteTaskAdmissionFailure = (failure) => {
   const prefix = "finite task runtime candidate failed: ";
   if (!failure.startsWith(prefix)) return false;
   const findings = failure.slice(prefix.length).split(",").filter(Boolean);
-  return findings.length > 0 && findings.every((finding) => expectedFiniteTaskFindings.has(finding));
+  return findings.length > 0
+    && new Set(findings).size === findings.length
+    && findings.every((finding) => expectedFiniteTaskFindings.has(finding));
+};
+
+const rollingProtectedMainAdmissionFailure = (failure) => {
+  const prefix = "rolling protected-main evaluation failed: ";
+  if (!failure.startsWith(prefix)) return false;
+  const findings = failure.slice(prefix.length).split(",").filter(Boolean);
+  return JSON.stringify(findings) === JSON.stringify(expectedRollingProtectedMainFindings);
+};
+
+const admissionOnlyFailure = (failure) => {
+  return failure === sourceEligibilityFailure
+    || finiteTaskAdmissionFailure(failure)
+    || rollingProtectedMainAdmissionFailure(failure);
 };
 
 const failures = Array.isArray(payload?.failures) ? payload.failures : [];
+const sourceScope = sourceReadiness ? draftSourceScope(event) : null;
+const providerProof = sourceReadiness ? blockedExternalProviderProof() : null;
 const mayDeferFinalAdmission = sourceReadiness
   && payload?.ok === false
-  && failures.length > 0
+  && failures.includes(sourceEligibilityFailure)
+  && failures.some((failure) => finiteTaskAdmissionFailure(failure) || rollingProtectedMainAdmissionFailure(failure))
   && failures.every(admissionOnlyFailure)
+  && sourceScope !== null
+  && providerProof !== null
   && draftTestSourceNonRegression(event);
 
 if (mayDeferFinalAdmission) {
@@ -193,6 +302,8 @@ if (mayDeferFinalAdmission) {
     ok: true,
     mode: "DRAFT_SOURCE_READINESS",
     mergeAuthorityGranted: false,
+    sourceScope,
+    providerProof,
     deferredFinalAdmissionFailures: failures,
   }, null, 2)}\n`);
   process.exit(0);

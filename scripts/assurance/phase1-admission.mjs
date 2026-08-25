@@ -386,8 +386,43 @@ function brandMergeEligibility(proof, { identity, phase1SourceDecisionHash, publ
   return proof;
 }
 
-function brandSourceAuthority(proof, identity) {
-  if (proof?.schemaVersion !== 1 || proof?.producer !== "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1" || proof?.repository !== identity?.repository || proof?.pr !== identity?.pr || proof?.headSha !== identity?.headSha || proof?.sourceTree !== identity?.sourceTree || proof?.baseSha !== identity?.baseSha || !["ARCHITECTURE", "TERMINAL_TRUTH", "FINITE_TASK_ADMISSION", "FINITE_TASK_IMPLEMENTATION"].includes(proof?.authorityType) || !Array.isArray(proof?.findings) || proof.findings.length) throw new Error("PHASE1_SOURCE_AUTHORITY_INVALID");
+export function verifyPhase1SourceAuthorityProof(proof, { identity, lifecycle } = {}) {
+  const mode = lifecycle?.draft === true ? PHASE1_MODES.DRAFT : PHASE1_MODES.READY;
+  const lifecycleValid = lifecycle?.mode === mode
+    && lifecycleActions.has(lifecycle?.action)
+    && validTimestamp(lifecycle?.eventUpdatedAt)
+    && lifecycle?.generation === derivePhase1LifecycleGeneration({
+      identity,
+      mode,
+      action: lifecycle?.action,
+      eventUpdatedAt: lifecycle?.eventUpdatedAt,
+    });
+  const common = proof?.schemaVersion === 1
+    && proof?.contract === "PHASE1_SOURCE_AUTHORITY_RESOLUTION_V2"
+    && proof?.producer === "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1"
+    && proof?.repository === identity?.repository
+    && proof?.pr === identity?.pr
+    && proof?.headRef === identity?.headRef
+    && proof?.headSha === identity?.headSha
+    && proof?.sourceTree === identity?.sourceTree
+    && proof?.baseRef === identity?.baseRef
+    && proof?.baseSha === identity?.baseSha
+    && proof?.authorityMode === mode
+    && proof?.lifecycleAction === lifecycle?.action
+    && proof?.lifecycleEventUpdatedAt === lifecycle?.eventUpdatedAt
+    && proof?.lifecycleGeneration === lifecycle?.generation
+    && proof?.mergeAuthorityGranted === false
+    && DIGEST_RE.test(proof?.scopeHash ?? "")
+    && Array.isArray(proof?.findings) && proof.findings.length === 0
+    && lifecycleValid;
+  if (!common) return false;
+  if (mode === PHASE1_MODES.DRAFT) return proof?.authorityType === "DRAFT_SOURCE_SCOPE" && proof?.draftSourceOnly === true;
+  return ["ARCHITECTURE", "TERMINAL_TRUTH", "FINITE_TASK_ADMISSION", "FINITE_TASK_IMPLEMENTATION"].includes(proof?.authorityType)
+    && proof?.draftSourceOnly === false;
+}
+
+function brandSourceAuthority(proof, { identity, lifecycle } = {}) {
+  if (!verifyPhase1SourceAuthorityProof(proof, { identity, lifecycle })) throw new Error("PHASE1_SOURCE_AUTHORITY_INVALID");
   sourceAuthorityBrand.add(proof); return proof;
 }
 
@@ -1300,6 +1335,13 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
   if (stableJson(associatedIdentity) !== stableJson(baseIdentity)) throw new Error("PHASE1_DURABLE_PR_ASSOCIATION_MISMATCH");
   const jobRead = await readRunJobs(repository, run, readToken);
   const normalizedRun = await normalizeRun(run, identity, jobRead.jobs, durable.complete);
+  const lifecycle = {
+    mode: normalizedRun.lifecycleMode,
+    action: normalizedRun.lifecycleAction,
+    draft: pr.draft === true,
+    eventUpdatedAt: normalizedRun.lifecycleEventUpdatedAt,
+    generation: normalizedRun.lifecycleGeneration,
+  };
   const candidateBlobSha = await readWorkflowBlob(repository, identity.headSha, readToken);
   const protectedBlobSha = await readWorkflowBlob(repository, identity.baseSha, readToken);
   const hasFailures = jobRead.jobs.some((job) => PHASE1_REQUIRED_LANES.includes(job?.name) && job?.conclusion !== "success");
@@ -1312,15 +1354,10 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
     repository, identity, publisherProvisioningReadback: publisher.provisioningReadback, requireFinalSource: false, root,
   })), { repository, identity, provisioningReadback: publisher.provisioningReadback });
   if (typeof engine.resolvePhase1SourceAuthorityEligibility !== "function") throw new Error("PHASE1_SOURCE_AUTHORITY_RESOLVER_MISSING");
-  const sourceAuthorityProof = brandSourceAuthority(await withCandidateWorktree(identity, (root) => engine.resolvePhase1SourceAuthorityEligibility({ repository, identity, root })), identity);
+  const sourceAuthorityProof = brandSourceAuthority(await withCandidateWorktree(identity, (root) => engine.resolvePhase1SourceAuthorityEligibility({ repository, identity, lifecycle, root })), { identity, lifecycle });
   const input = {
     identity,
-    lifecycle: {
-      action: normalizedRun.lifecycleAction,
-      draft: pr.draft === true,
-      eventUpdatedAt: normalizedRun.lifecycleEventUpdatedAt,
-      generation: normalizedRun.lifecycleGeneration,
-    },
+    lifecycle,
     run: normalizedRun,
     jobs: jobRead.jobs,
     evidenceComplete: true,
