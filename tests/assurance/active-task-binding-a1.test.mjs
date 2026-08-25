@@ -2671,6 +2671,8 @@ test("A1 canonical truth binds the third terminal-verifier repair to the immutab
 });
 
 test("A1 terminal repair receipt: exact preliminary receipt round-trips only as the history-bound stale predecessor of one final receipt", () => {
+  const closureSource = fs.readFileSync(path.join(process.cwd(), "scripts/assurance/engineering-closure.mjs"), "utf8");
+  assert.match(closureSource, /verifyArchitectureMaintenanceAuthority\(\{ raw: predecessorRaw,[^\n]+phase1EvidenceResolver, publisherProvisioningReadbackResolver, root \}\)/u, "a terminal repair must re-resolve its architecture predecessor with the protected Phase 1 and publisher readback resolvers");
   const priorTruth = structuredClone(canonicalTruth);
   priorTruth.taskContextArchitecture.terminalVerifierRepair.history = structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY);
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 731, branch: "codex/generic-terminal-verifier-repair-v2", baseSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb", headSha: "b".repeat(40) };
