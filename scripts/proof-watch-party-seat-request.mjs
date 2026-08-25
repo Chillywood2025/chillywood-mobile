@@ -57,6 +57,11 @@ const playerSource = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8"
 const partyRoomSource = readFileSync(path.join(root, "app/watch-party/[partyId].tsx"), "utf8");
 const livekitSurfaceSource = readFileSync(path.join(root, "components/watch-party-live/livekit-stage-media-surface.tsx"), "utf8");
 const watchPartySource = readFileSync(path.join(root, "_lib/watchParty.ts"), "utf8");
+const selfMuteStart = watchPartySource.indexOf("export async function setOwnPartyParticipantMuteState(");
+const selfMuteEnd = watchPartySource.indexOf("export async function updateRoomPlayback(", selfMuteStart);
+const watchPartySelfMuteSource = selfMuteStart >= 0 && selfMuteEnd > selfMuteStart
+  ? watchPartySource.slice(selfMuteStart, selfMuteEnd)
+  : "";
 
 const createProofState = () => ({
   hostAuthority: { isHost: true, source: "proof-room-host" },
@@ -646,12 +651,13 @@ assert(
   "viewer Request Camera must show safe sent, duplicate-pending, and failure feedback",
 );
 assert(
-  watchPartySource.includes("export async function setOwnPartyParticipantMuteState")
-    && watchPartySource.includes(".eq(\"user_id\", writableUserId)")
-    && watchPartySource.includes("is_muted: nextIsMuted")
-    && watchPartySource.includes("camera_enabled: nextCanPublishMedia")
-    && watchPartySource.includes("mic_enabled: nextCanPublishMedia"),
-  "seated participants must have a narrow self-mute membership helper that only updates their own mute/media flags",
+  watchPartySelfMuteSource.includes("const writableUserId = await getWritablePartyUserId();")
+    && watchPartySelfMuteSource.includes("userId: writableUserId")
+    && watchPartySelfMuteSource.includes("isMuted: nextIsMuted")
+    && watchPartySelfMuteSource.includes("cameraEnabled: nextCanPublishMedia && currentMembership.cameraEnabled")
+    && watchPartySelfMuteSource.includes("micEnabled: nextCanPublishMedia && currentMembership.micEnabled")
+    && !watchPartySelfMuteSource.includes('.from("watch_party_room_memberships")'),
+  "seated participants must have a narrow signed-in-user self-mute RPC helper that sends only mute/media intent",
 );
 assert(
   playerSource.includes("shared-player-self-mute-button")

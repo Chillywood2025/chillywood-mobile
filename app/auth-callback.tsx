@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import { clearExactLocalAuthSession, readCurrentAccountSessionAuthority, type LockedLocalAuthClient } from "../_lib/accountSessionAuthority";
-import { consumeApplicationAuthInput, parseApplicationLink } from "../_lib/appLinks";
+import { consumeApplicationAuthInput, parseApplicationLink, registerVerifiedApplicationAuthInput } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
 import { supabase } from "../_lib/supabase";
 
@@ -69,7 +69,7 @@ const parseAuthCallbackUrl = (url: string | null) => {
   if (!url) return null;
 
   try {
-    const link = parseApplicationLink(url);
+    const link = registerVerifiedApplicationAuthInput(url) ?? parseApplicationLink(url);
     if (!link || (link.kind !== "auth_callback" && link.kind !== "password_reset")) return null;
     const parsedUrl = new URL(link.route, "https://chillywoodstream.com");
     const params = new URLSearchParams(parsedUrl.search);

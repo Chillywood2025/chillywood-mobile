@@ -3,11 +3,11 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 import { CREATOR_VIDEO_BUCKET, formatCreatorVideoFileSize, type CreatorVideoFile } from "./creatorVideos";
 import {
-  createSignedMediaDownload,
   deleteStoredMediaObject,
   getMediaStorageProviderBucket,
   normalizeMediaStorageProvider,
   uploadFileToMediaStorage,
+  usesPrivateOriginMediaGateway,
 } from "./mediaStorage";
 import { supabase } from "./supabase";
 
@@ -457,7 +457,10 @@ export async function uploadClipStudioCoverImage(input: {
   const mimeType = inferCoverMimeType(input.file);
   const storagePath = `${ownerUserId}/${normalizedVideoId}/cover-${createClientId()}.${getCoverExtension(input.file)}`;
   const preparedCover = await prepareCoverUploadUri(input.file);
-  let signedUrl = "";
+  // Newly uploaded covers are malware-pending. Use the already-selected local
+  // image for the immediate editor preview; remote delivery remains blocked
+  // until the exact cover scan job is clean.
+  const signedUrl = toText(input.file.uri);
   let uploadedObject: Awaited<ReturnType<typeof uploadFileToMediaStorage>> | null = null;
 
   try {
@@ -469,13 +472,6 @@ export async function uploadClipStudioCoverImage(input: {
       fileName: input.file.name,
       sizeBytes: input.file.size,
     });
-    signedUrl = await createSignedMediaDownload({
-      surfaceType: "creator_video",
-      provider: uploadedObject.provider,
-      bucket: uploadedObject.bucket,
-      objectKey: uploadedObject.objectKey,
-      recordId: normalizedVideoId,
-    });
   } catch (error) {
     if (uploadedObject) {
       await deleteStoredMediaObject({
@@ -483,7 +479,6 @@ export async function uploadClipStudioCoverImage(input: {
         provider: uploadedObject.provider,
         bucket: uploadedObject.bucket,
         objectKey: uploadedObject.objectKey,
-        recordId: normalizedVideoId,
       }).catch(() => undefined);
     }
     throw error;
@@ -492,46 +487,49 @@ export async function uploadClipStudioCoverImage(input: {
   }
   if (!uploadedObject) throw new Error("Cover upload failed. Try again.");
 
-  const previousCoverPath = toText(videoRow.thumb_storage_path);
-  const update: TablesUpdate<"videos"> = {
-    thumb_storage_path: uploadedObject.objectKey,
-    thumb_url: null,
-    updated_at: new Date().toISOString(),
-  };
-  const { error: updateError } = await supabase
-    .from("videos")
-    .update(update)
-    .eq("id", normalizedVideoId);
+  try {
+    const previousCoverPath = toText(videoRow.thumb_storage_path);
+    if (previousCoverPath && previousCoverPath !== uploadedObject.objectKey) {
+      const previousProvider = normalizeMediaStorageProvider(videoRow.storage_provider);
+      const previousBucket = getMediaStorageProviderBucket({
+        provider: previousProvider,
+        bucket: videoRow.storage_bucket,
+        fallbackBucket: CREATOR_VIDEO_BUCKET,
+      });
+      if (usesPrivateOriginMediaGateway(previousProvider)) {
+        await deleteStoredMediaObject({
+          surfaceType: "creator_video",
+          provider: previousProvider,
+          bucket: previousBucket,
+          objectKey: previousCoverPath,
+          recordId: normalizedVideoId,
+        });
+      } else if (previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
+        const { error: previousDeleteError } = await supabase.storage
+          .from(CREATOR_VIDEO_BUCKET)
+          .remove([previousCoverPath]);
+        if (previousDeleteError) throw previousDeleteError;
+      }
+    }
 
-  if (updateError) {
+    const update: TablesUpdate<"videos"> = {
+      thumb_storage_path: uploadedObject.objectKey,
+      thumb_url: null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: updateError } = await supabase
+      .from("videos")
+      .update(update)
+      .eq("id", normalizedVideoId);
+    if (updateError) throw updateError;
+  } catch (error) {
     await deleteStoredMediaObject({
       surfaceType: "creator_video",
       provider: uploadedObject.provider,
       bucket: uploadedObject.bucket,
       objectKey: uploadedObject.objectKey,
-      recordId: normalizedVideoId,
     }).catch(() => undefined);
-    throw updateError;
-  }
-
-  if (previousCoverPath && previousCoverPath !== uploadedObject.objectKey) {
-    const previousProvider = normalizeMediaStorageProvider(videoRow.storage_provider);
-    const previousBucket = getMediaStorageProviderBucket({
-      provider: previousProvider,
-      bucket: videoRow.storage_bucket,
-      fallbackBucket: CREATOR_VIDEO_BUCKET,
-    });
-    if (previousProvider === "s3") {
-      await deleteStoredMediaObject({
-        surfaceType: "creator_video",
-        provider: previousProvider,
-        bucket: previousBucket,
-        objectKey: previousCoverPath,
-        recordId: normalizedVideoId,
-      }).catch(() => undefined);
-    } else if (previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
-      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([previousCoverPath]).catch(() => undefined);
-    }
+    throw error;
   }
 
   return {

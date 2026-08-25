@@ -15,10 +15,14 @@ These files are the Chi'llywood-ready Supabase Auth templates for dashboard copy
 
 ## Variables
 
-Use direct TokenHash app links for active mobile auth flows:
+Use direct TokenHash HTTPS Universal/App Links for active mobile auth flows:
 
-- Confirm signup: `chillywoodmobile://auth/callback?token_hash={{ .TokenHash }}&type=email`
-- Reset password: `chillywoodmobile://reset-password?token_hash={{ .TokenHash }}&type=recovery`
+- Confirm signup: `https://chillywoodstream.com/auth-callback?token_hash={{ .TokenHash }}&type=email`
+- Reset password: `https://chillywoodstream.com/reset-password?token_hash={{ .TokenHash }}&type=recovery`
+
+Never place `TokenHash`, an authorization code, or session credentials in a
+`chillywoodmobile://` URL. Another installed app can claim a custom scheme.
+Custom-scheme auth routes are retained only for credential-free navigation.
 
 Use `{{ .ConfirmationURL }}` for magic-link, invite, and email-change action links unless a route-specific mobile contract is implemented. Use `{{ .Token }}` only for reauthentication code templates.
 
@@ -26,11 +30,14 @@ Use `{{ .ConfirmationURL }}` for magic-link, invite, and email-change action lin
 
 The app currently sends:
 
-- Confirm signup: `chillywoodmobile://auth/callback`
-- Reset password: `chillywoodmobile://reset-password`
-- Planned magic link / OTP: `chillywoodmobile://auth/callback`
+- Confirm signup: `https://chillywoodstream.com/auth-callback`
+- Reset password: `https://chillywoodstream.com/reset-password`
+- Planned magic link / OTP: `https://chillywoodstream.com/auth-callback`
 
-All mobile URLs used in Auth templates must be allowlisted in Supabase Authentication redirect settings before live email proof.
+The HTTPS paths are already scoped by the repository's iOS AASA and Android
+Digital Asset Links configuration. They must also be exact entries in Supabase
+Authentication redirect settings before live email proof. Domain association,
+hosted template application, and installed-device handling remain external proof.
 
 ## Sender
 

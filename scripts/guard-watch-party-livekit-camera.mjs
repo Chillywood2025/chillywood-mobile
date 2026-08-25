@@ -53,6 +53,12 @@ const partyRoom = readSource("app/watch-party/[partyId].tsx");
 const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
 const player = readSource("app/player/[id].tsx");
 const watchParty = readSource("_lib/watchParty.ts");
+const watchPartySelfMuteWriter = sliceBetween(
+  watchParty,
+  "export async function setOwnPartyParticipantMuteState(",
+  "export async function updateRoomPlayback(",
+  "Watch-Party current-user self-mute writer boundary",
+);
 const watchPartyLiveSourceTruth = readSource("_lib/watch-party/watch-party-live-source-truth.ts");
 const watchPartySeatRequestProof = readSource("scripts/proof-watch-party-seat-request.mjs");
 const liveStageSeatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
@@ -1226,14 +1232,24 @@ assertIncludes(
   "shared Watch-Party membership helper must expose a narrow current-user self mute writer",
 );
 assertIncludes(
-  watchParty,
-  ".eq(\"user_id\", writableUserId)",
-  "current-user self mute writer must only update the signed-in user's membership row",
+  watchPartySelfMuteWriter,
+  "const writableUserId = await getWritablePartyUserId();",
+  "current-user self mute writer must derive the signed-in user",
 );
 assertIncludes(
-  watchParty,
-  "is_muted: nextIsMuted",
-  "current-user self mute writer must persist only the mute flag and derived media flags",
+  watchPartySelfMuteWriter,
+  "userId: writableUserId",
+  "current-user self mute writer must bind the authoritative RPC input to the signed-in user",
+);
+assertIncludes(
+  watchPartySelfMuteWriter,
+  "isMuted: nextIsMuted",
+  "current-user self mute writer must send only its self-mute intent and derived media flags",
+);
+assertNotIncludes(
+  watchPartySelfMuteWriter,
+  `.from(${JSON.stringify("watch_party_room_memberships")})`,
+  "current-user self mute writer must not recover raw membership-table update authority",
 );
 assertIncludes(
   playerSharedPlayerDock,

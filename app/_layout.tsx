@@ -18,6 +18,7 @@ import {
   isCreatorReplayApplicationLink,
   parseApplicationLink,
   registerAuthRedirect,
+  registerVerifiedApplicationAuthInput,
   resolveApplicationRouteByKind,
 } from "../_lib/appLinks";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -316,12 +317,18 @@ function RouteAnalyticsBridge() {
       return true;
     };
     const routeRecoveryUrl = (url: string | null) => {
-      const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
+      const verifiedAuthInput = registerVerifiedApplicationAuthInput(url);
+      const recoveryRoute = verifiedAuthInput?.kind === "password_reset"
+        ? verifiedAuthInput.route
+        : getPasswordRecoveryRouteFromUrl(url);
       if (!recoveryRoute || pathname === "/reset-password") return;
       router.replace(recoveryRoute as Parameters<typeof router.replace>[0]);
     };
     const routeAuthCallbackUrl = (url: string | null) => {
-      const callbackRoute = getAuthCallbackRouteFromUrl(url);
+      const verifiedAuthInput = registerVerifiedApplicationAuthInput(url);
+      const callbackRoute = verifiedAuthInput?.kind === "auth_callback"
+        ? verifiedAuthInput.route
+        : getAuthCallbackRouteFromUrl(url);
       if (!callbackRoute || pathname === "/auth-callback") return;
       router.replace(callbackRoute as Parameters<typeof router.replace>[0]);
     };
@@ -333,7 +340,10 @@ function RouteAnalyticsBridge() {
           if (!active) return;
           if (routePublicLegalUrl(url)) return;
 
-          const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
+          const verifiedAuthInput = registerVerifiedApplicationAuthInput(url);
+          const recoveryRoute = verifiedAuthInput?.kind === "password_reset"
+            ? verifiedAuthInput.route
+            : getPasswordRecoveryRouteFromUrl(url);
           if (recoveryRoute) {
             routeRecoveryUrl(url);
             return;
@@ -351,7 +361,10 @@ function RouteAnalyticsBridge() {
     const subscription = Linking.addEventListener("url", ({ url }) => {
       if (routePublicLegalUrl(url)) return;
 
-      const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
+      const verifiedAuthInput = registerVerifiedApplicationAuthInput(url);
+      const recoveryRoute = verifiedAuthInput?.kind === "password_reset"
+        ? verifiedAuthInput.route
+        : getPasswordRecoveryRouteFromUrl(url);
       if (recoveryRoute) {
         routeRecoveryUrl(url);
         return;
@@ -1052,7 +1065,7 @@ function RevenueCatBootstrap() {
 
 function IosNativeCallsBridge() {
   const router = useRouter();
-  const { isSignedIn, user } = useSession();
+  const { authority, isSignedIn, user } = useSession();
   const inviteSubscriptionsRef = useRef(new Map<string, () => void>());
   const nativeCallDescriptorsRef = useRef(new Map<string, { callUuid: string; threadId: string }>());
 
@@ -1071,7 +1084,8 @@ function IosNativeCallsBridge() {
       nativeCallDescriptorsRef.current.clear();
     };
 
-    if (!isSignedIn || !currentUserId) {
+    if (!isSignedIn || !currentUserId || !authority || authority.restoreOnly
+      || authority.userId !== currentUserId || authority.accountId !== currentUserId) {
       nativeCallDescriptorsRef.current.forEach((descriptor) => {
         void reportIosNativeCallRemoteEnd(descriptor.callUuid, "account_transition");
       });
@@ -1234,7 +1248,7 @@ function IosNativeCallsBridge() {
       }
     };
 
-    void startIosNativeCallsReadiness(handleNativeCallEvent);
+    void startIosNativeCallsReadiness(authority, handleNativeCallEvent);
     const activationSubscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
       pendingNativeTerminalActions.forEach(({ event, status }) => {
@@ -1257,7 +1271,12 @@ function IosNativeCallsBridge() {
       clearInviteSubscriptions();
       void revokeIosVoipRegistration();
     };
-  }, [isSignedIn, router, user?.id]);
+  }, [
+    authority,
+    isSignedIn,
+    router,
+    user?.id,
+  ]);
 
   return null;
 }

@@ -2,7 +2,6 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,6 +22,7 @@ import {
   setMainTabHeaderProfileSnapshot,
 } from "./main-tab-profile-cache";
 import { NotificationBellButton } from "../notifications/notification-bell-button";
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 type MainTabTopBarProps = {
   surface: "home" | "explore" | "live" | "library";

@@ -10,7 +10,6 @@ import {
     AppState,
     BackHandler,
     FlatList,
-    Image,
     ImageBackground,
     Keyboard,
     LayoutAnimation,
@@ -31,6 +30,7 @@ import {
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ProfileMediaImage as Image } from "../../../components/ui/ProfileMediaImage";
 import { titles as localTitles } from "../../../_data/titles";
 import {
   resolveRoomAccess,

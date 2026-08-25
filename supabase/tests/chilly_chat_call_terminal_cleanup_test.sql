@@ -4,7 +4,12 @@ select plan(31);
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
   ('81111111-1111-1111-1111-111111111111', false, false),
-  ('82222222-2222-2222-2222-222222222222', false, false)
+  ('82222222-2222-2222-2222-222222222222', false, false),
+  ('83333333-3333-3333-3333-333333333333', false, false),
+  ('84444444-4444-4444-4444-444444444444', false, false),
+  ('85555555-5555-5555-5555-555555555555', false, false),
+  ('86666666-6666-6666-6666-666666666666', false, false),
+  ('87777777-7777-7777-7777-777777777777', false, false)
 on conflict (id) do nothing;
 
 select set_config('request.jwt.claim.sub', '81111111-1111-1111-1111-111111111111', true);
@@ -13,40 +18,38 @@ insert into public.chat_threads (
   id, thread_kind, participant_pair_key, created_by
 )
 values
-  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'direct', 'terminal-cleanup-1', '81111111-1111-1111-1111-111111111111'),
-  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'direct', 'terminal-cleanup-2', '81111111-1111-1111-1111-111111111111'),
-  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'direct', 'terminal-cleanup-3', '81111111-1111-1111-1111-111111111111'),
-  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'direct', 'terminal-cleanup-4', '81111111-1111-1111-1111-111111111111'),
-  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'direct', 'terminal-cleanup-5', '81111111-1111-1111-1111-111111111111'),
-  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6', 'direct', 'terminal-cleanup-6', '81111111-1111-1111-1111-111111111111');
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'direct', '81111111-1111-1111-1111-111111111111::82222222-2222-2222-2222-222222222222', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'direct', '81111111-1111-1111-1111-111111111111::83333333-3333-3333-3333-333333333333', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'direct', '81111111-1111-1111-1111-111111111111::84444444-4444-4444-4444-444444444444', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'direct', '81111111-1111-1111-1111-111111111111::85555555-5555-5555-5555-555555555555', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'direct', '81111111-1111-1111-1111-111111111111::86666666-6666-6666-6666-666666666666', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6', 'direct', '81111111-1111-1111-1111-111111111111::87777777-7777-7777-7777-777777777777', '81111111-1111-1111-1111-111111111111');
 
 insert into public.chat_thread_members (thread_id, user_id)
-select thread_id, user_id
-from (
-  values
-    ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid),
-    ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid),
-    ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'::uuid),
-    ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4'::uuid),
-    ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5'::uuid),
-    ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6'::uuid)
-) threads(thread_id)
-cross join (
-  values
-    ('81111111-1111-1111-1111-111111111111'::text),
-    ('82222222-2222-2222-2222-222222222222'::text)
-) users(user_id);
+values
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '82222222-2222-2222-2222-222222222222'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '83333333-3333-3333-3333-333333333333'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '84444444-4444-4444-4444-444444444444'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', '85555555-5555-5555-5555-555555555555'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', '86666666-6666-6666-6666-666666666666'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6', '81111111-1111-1111-1111-111111111111'),
+  ('8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6', '87777777-7777-7777-7777-777777777777');
 
 alter table public.communication_rooms disable trigger enforce_communication_rooms_abuse_guard;
 
 insert into public.communication_rooms (room_id, room_code, host_user_id, status)
 values
-  ('TERMINALROOM1', 'TERM1', '81111111-1111-1111-1111-111111111111', 'active'),
-  ('TERMINALROOM2', 'TERM2', '81111111-1111-1111-1111-111111111111', 'active'),
-  ('TERMINALROOM3', 'TERM3', '81111111-1111-1111-1111-111111111111', 'active'),
-  ('TERMINALROOM4', 'TERM4', '81111111-1111-1111-1111-111111111111', 'active'),
-  ('TERMINALROOM5', 'TERM5', '81111111-1111-1111-1111-111111111111', 'active'),
-  ('TERMINALROOM6', 'TERM6', '81111111-1111-1111-1111-111111111111', 'active');
+  ('TERMINALROOM1', 'TERMINALROOM1', '81111111-1111-1111-1111-111111111111', 'active'),
+  ('TERMINALROOM2', 'TERMINALROOM2', '81111111-1111-1111-1111-111111111111', 'active'),
+  ('TERMINALROOM3', 'TERMINALROOM3', '81111111-1111-1111-1111-111111111111', 'active'),
+  ('TERMINALROOM4', 'TERMINALROOM4', '81111111-1111-1111-1111-111111111111', 'active'),
+  ('TERMINALROOM5', 'TERMINALROOM5', '81111111-1111-1111-1111-111111111111', 'active'),
+  ('TERMINALROOM6', 'TERMINALROOM6', '81111111-1111-1111-1111-111111111111', 'active');
 
 alter table public.communication_rooms enable trigger enforce_communication_rooms_abuse_guard;
 
@@ -75,18 +78,19 @@ select
   true
 from (
   values
-    ('TERMINALROOM1'::text),
-    ('TERMINALROOM2'::text),
-    ('TERMINALROOM3'::text),
-    ('TERMINALROOM4'::text),
-    ('TERMINALROOM5'::text),
-    ('TERMINALROOM6'::text)
-) rooms(room_id)
-cross join (
-  values
-    ('81111111-1111-1111-1111-111111111111'::text),
-    ('82222222-2222-2222-2222-222222222222'::text)
-) users(user_id);
+    ('TERMINALROOM1'::text, '81111111-1111-1111-1111-111111111111'::text),
+    ('TERMINALROOM1'::text, '82222222-2222-2222-2222-222222222222'::text),
+    ('TERMINALROOM2'::text, '81111111-1111-1111-1111-111111111111'::text),
+    ('TERMINALROOM2'::text, '83333333-3333-3333-3333-333333333333'::text),
+    ('TERMINALROOM3'::text, '81111111-1111-1111-1111-111111111111'::text),
+    ('TERMINALROOM3'::text, '84444444-4444-4444-4444-444444444444'::text),
+    ('TERMINALROOM4'::text, '81111111-1111-1111-1111-111111111111'::text),
+    ('TERMINALROOM4'::text, '85555555-5555-5555-5555-555555555555'::text),
+    ('TERMINALROOM5'::text, '81111111-1111-1111-1111-111111111111'::text),
+    ('TERMINALROOM5'::text, '86666666-6666-6666-6666-666666666666'::text),
+    ('TERMINALROOM6'::text, '81111111-1111-1111-1111-111111111111'::text),
+    ('TERMINALROOM6'::text, '87777777-7777-7777-7777-777777777777'::text)
+) memberships(room_id, user_id);
 
 alter table public.chat_call_invites disable trigger enforce_chat_call_invites_abuse_guard;
 
@@ -96,11 +100,11 @@ insert into public.chat_call_invites (
 )
 values
   ('80000000-0000-0000-0000-000000000001', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'TERMINALROOM1', '81111111-1111-1111-1111-111111111111', '82222222-2222-2222-2222-222222222222', 'voice', 'ringing', now() + interval '5 minutes', null),
-  ('80000000-0000-0000-0000-000000000002', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'TERMINALROOM2', '81111111-1111-1111-1111-111111111111', '82222222-2222-2222-2222-222222222222', 'video', 'ringing', now() + interval '5 minutes', null),
-  ('80000000-0000-0000-0000-000000000003', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'TERMINALROOM3', '81111111-1111-1111-1111-111111111111', '82222222-2222-2222-2222-222222222222', 'voice', 'ringing', now() - interval '1 minute', null),
-  ('80000000-0000-0000-0000-000000000004', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'TERMINALROOM4', '81111111-1111-1111-1111-111111111111', '82222222-2222-2222-2222-222222222222', 'video', 'accepted', now() + interval '5 minutes', now() - interval '1 minute'),
-  ('80000000-0000-0000-0000-000000000005', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'TERMINALROOM5', '81111111-1111-1111-1111-111111111111', '82222222-2222-2222-2222-222222222222', 'voice', 'ringing', now() + interval '5 minutes', null),
-  ('80000000-0000-0000-0000-000000000006', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6', 'TERMINALROOM6', '81111111-1111-1111-1111-111111111111', '82222222-2222-2222-2222-222222222222', 'video', 'ringing', now() + interval '5 minutes', null);
+  ('80000000-0000-0000-0000-000000000002', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'TERMINALROOM2', '81111111-1111-1111-1111-111111111111', '83333333-3333-3333-3333-333333333333', 'video', 'ringing', now() + interval '5 minutes', null),
+  ('80000000-0000-0000-0000-000000000003', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'TERMINALROOM3', '81111111-1111-1111-1111-111111111111', '84444444-4444-4444-4444-444444444444', 'voice', 'ringing', now() - interval '1 minute', null),
+  ('80000000-0000-0000-0000-000000000004', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'TERMINALROOM4', '81111111-1111-1111-1111-111111111111', '85555555-5555-5555-5555-555555555555', 'video', 'accepted', now() + interval '5 minutes', now() - interval '1 minute'),
+  ('80000000-0000-0000-0000-000000000005', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'TERMINALROOM5', '81111111-1111-1111-1111-111111111111', '86666666-6666-6666-6666-666666666666', 'voice', 'ringing', now() + interval '5 minutes', null),
+  ('80000000-0000-0000-0000-000000000006', '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6', 'TERMINALROOM6', '81111111-1111-1111-1111-111111111111', '87777777-7777-7777-7777-777777777777', 'video', 'ringing', now() + interval '5 minutes', null);
 
 alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
 
@@ -116,7 +120,7 @@ select lives_ok(
   'caller cancel atomically cleans product state'
 );
 select lives_ok(
-  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000002', '82222222-2222-2222-2222-222222222222', 'declined', null)$$,
+  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000002', '83333333-3333-3333-3333-333333333333', 'declined', null)$$,
   'callee decline atomically cleans product state'
 );
 select lives_ok(
@@ -124,11 +128,11 @@ select lives_ok(
   'timeout atomically cleans product state'
 );
 select lives_ok(
-  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000004', '82222222-2222-2222-2222-222222222222', 'ended', 60)$$,
+  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000004', '85555555-5555-5555-5555-555555555555', 'ended', 60)$$,
   'accepted call end atomically cleans product state'
 );
 select lives_ok(
-  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000005', '82222222-2222-2222-2222-222222222222', 'busy', null)$$,
+  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000005', '86666666-6666-6666-6666-666666666666', 'busy', null)$$,
   'callee busy atomically cleans product state'
 );
 
@@ -175,7 +179,7 @@ select is(
 );
 
 select lives_ok(
-  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000006', '82222222-2222-2222-2222-222222222222', 'accepted', null)$$,
+  $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000006', '87777777-7777-7777-7777-777777777777', 'accepted', null)$$,
   'acceptance remains non-terminal'
 );
 select is((select status from public.communication_rooms where room_id = 'TERMINALROOM6'), 'active', 'acceptance keeps the communication room active');
@@ -232,20 +236,20 @@ select lives_ok(
   $$update public.communication_room_memberships
     set membership_state = 'active', camera_enabled = true, mic_enabled = true
     where room_id = 'TERMINALROOM6'
-      and user_id = '82222222-2222-2222-2222-222222222222'$$,
+      and user_id = '87777777-7777-7777-7777-777777777777'$$,
   'a stale post-end membership write is handled fail-closed'
 );
 select is(
   (select membership_state from public.communication_room_memberships
     where room_id = 'TERMINALROOM6'
-      and user_id = '82222222-2222-2222-2222-222222222222'),
+      and user_id = '87777777-7777-7777-7777-777777777777'),
   'left',
   'a stale post-end write cannot reactivate membership'
 );
 select is(
   (select camera_enabled or mic_enabled from public.communication_room_memberships
     where room_id = 'TERMINALROOM6'
-      and user_id = '82222222-2222-2222-2222-222222222222'),
+      and user_id = '87777777-7777-7777-7777-777777777777'),
   false,
   'a stale post-end write cannot reactivate media state'
 );

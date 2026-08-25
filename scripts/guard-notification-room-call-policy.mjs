@@ -29,6 +29,7 @@ const chillyChatNativeCallRoutes = read("_lib/chillyChatNativeCallRoutes.mjs");
 const nativeCallTransitionProvenance = read("_lib/nativeCallTransitionProvenance.mjs");
 const authoritativeBusyBegin = read("supabase/migrations/20260730034533_chilly_chat_authoritative_busy_begin.sql");
 const busyActiveThreadGuard = read("supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql");
+const chatRoomAuthorityClosure = read("supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql");
 const nativeCallPlugin = read("plugins/withChillyChatNativeCallNotifications.js");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
@@ -214,10 +215,13 @@ assertNotIncludes(chillyChatNativeCallRouteBuffer, "console.", "the early native
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
-assertIncludes(chatLib, "hasCurrentChatThreadMembership", "stale active call cleanup must verify membership without re-entering full thread readback");
+assertIncludes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"', "stale active call cleanup must use the authoritative compare-and-clear RPC");
+assertIncludes(chatRoomAuthorityClosure, 'if not public."can_access_chat_thread"(p_thread_id)', "stale active call cleanup RPC must require exact thread membership");
+assertIncludes(chatRoomAuthorityClosure, "chat_call_room_identity_mismatch", "stale active call cleanup RPC must reject a newer/different active room");
 assertIncludes(chatLib, "CHAT_CALL_INVITES_TABLE", "stale active call cleanup must read real call invites");
 assertIncludes(chatLib, "activeCommunicationRoomId: undefined", "stale active call cleanup must remove live-call badges from returned thread summaries");
 assertNotIncludes(clearEndedCallBody, "getChatThread(", "clearEndedChatThreadCall must not recurse through getChatThread during stale-call reconciliation");
+assertNotIncludes(clearEndedCallBody, `.from(CHAT_THREADS_TABLE)`, "clearEndedChatThreadCall must not retain direct client thread mutation authority");
 
 assertNotIncludes(layout, "autoAnswer", "incoming calls must not auto-answer");
 assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-answer");

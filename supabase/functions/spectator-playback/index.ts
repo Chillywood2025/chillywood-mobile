@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  readExactCurrentSessionAuthority,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 type AuthenticatedUser = {
@@ -399,7 +403,7 @@ const authenticateRequest = async (
 
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) {
+  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
     return { error: jsonResponse(401, { error: "invalid_session", message: "Supabase could not verify the current user session." }) };
   }
 
@@ -416,31 +420,7 @@ const userHasPlatformRole = async (
   user: AuthenticatedUser,
   roles: string[],
 ) => {
-  const normalizedEmail = toText(user.email).toLowerCase();
-  const userQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("id")
-    .eq("status", "active")
-    .in("role", roles)
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (userQuery.error) throw new Error(`Platform role lookup failed: ${userQuery.error.message}`);
-  if ((userQuery.data as { id?: unknown } | null)?.id) return true;
-  if (!normalizedEmail) return false;
-
-  const emailQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("id")
-    .eq("status", "active")
-    .in("role", roles)
-    .ilike("email", normalizedEmail)
-    .limit(1)
-    .maybeSingle();
-
-  if (emailQuery.error) throw new Error(`Platform role email lookup failed: ${emailQuery.error.message}`);
-  return !!(emailQuery.data as { id?: unknown } | null)?.id;
+  return !!(await readExactPlatformRole(adminClient, user.id, roles));
 };
 
 const parseJsonPayload = async (req: Request): Promise<{ value: PlaybackPayload } | { error: Response }> => {

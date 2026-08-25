@@ -6,6 +6,7 @@ import {
 import {
   createSignedMediaDownload,
   normalizeMediaStorageProvider,
+  usesPrivateOriginMediaGateway,
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { resolveMediaPlaybackDelivery } from "./mediaDelivery";
@@ -496,7 +497,7 @@ export async function createSignedVodRenditionUrl(input: {
   if (!bucket || !objectPath) return "";
   const provider = normalizeMediaStorageProvider(input.storageProvider);
   const resolveFallbackUrl = () => (
-    provider === "s3"
+    usesPrivateOriginMediaGateway(provider)
       ? createSignedMediaDownload({
         surfaceType: "creator_video",
         provider,

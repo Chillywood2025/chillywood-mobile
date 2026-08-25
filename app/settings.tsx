@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ActivityIndicator, Image, ImageBackground, Linking, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
+import { Alert, ActivityIndicator, ImageBackground, Linking, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -97,6 +97,7 @@ import {
   ProfileMediaReviewSheet,
 } from "../components/profile/profile-media-sheets";
 import { AppBackButton } from "../components/navigation/app-back-button";
+import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 

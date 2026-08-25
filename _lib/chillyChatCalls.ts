@@ -84,7 +84,6 @@ export type ChillyChatCallEvent = {
 };
 
 type CallInviteRow = Tables<"chat_call_invites">;
-type CallInviteInsert = TablesInsert<"chat_call_invites">;
 type CallEventRow = Tables<"chat_call_events">;
 type CallEventInsert = TablesInsert<"chat_call_events">;
 
@@ -322,45 +321,46 @@ export async function createChillyChatCallInvite(input: {
   calleeUserId: string;
   callType: ChillyChatCallType;
 }): Promise<CreatedChillyChatCallInvite> {
-  const now = new Date();
-  const payload: CallInviteInsert = {
-    callee_user_id: input.calleeUserId,
-    caller_user_id: input.callerUserId,
-    call_type: input.callType,
-    communication_room_id: input.communicationRoomId,
-    created_at: now.toISOString(),
-    expires_at: new Date(now.getTime() + 45_000).toISOString(),
-    status: "ringing",
-    thread_id: input.threadId,
-  };
-
-  const { data, error } = await supabase
-    .from(CHAT_CALL_INVITES_TABLE)
-    .insert(payload)
-    .select(CALL_INVITE_SELECT)
-    .returns<CallInviteRow>()
-    .single();
-
-  if (error || !data) {
-    throw error ?? new Error("Unable to create Chi'lly Chat call invite.");
-  }
-  const invite = parseInvite(data);
-  if (!invite) {
-    throw new Error("Unable to read Chi'lly Chat call invite.");
+  const threadId = toText(input.threadId);
+  const communicationRoomId = toText(input.communicationRoomId).toUpperCase();
+  const callerUserId = toText(input.callerUserId);
+  const calleeUserId = toText(input.calleeUserId);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const authenticatedUserId = toText(sessionData.session?.user?.id);
+  if (
+    !threadId
+    || !communicationRoomId
+    || !callerUserId
+    || !calleeUserId
+    || authenticatedUserId !== callerUserId
+  ) {
+    throw new Error("Unable to create Chi'lly Chat call invite for this account.");
   }
 
-  await insertChillyChatCallEvent({
-    actorUserId: input.callerUserId,
-    callInviteId: invite.id,
+  const begun = await beginChillyChatCall({
     callType: input.callType,
-    eventType: "started",
-    threadId: input.threadId,
-  }).catch(() => null);
-
-  const delivery = await dispatchChillyChatCallPush({
-    action: "incoming",
-    inviteId: invite.id,
+    communicationRoomId,
+    threadId,
   });
+  const invite = begun.invite;
+  if (
+    begun.role !== "caller"
+    || invite.threadId !== threadId
+    || toText(invite.communicationRoomId).toUpperCase() !== communicationRoomId
+    || invite.callerUserId !== callerUserId
+    || invite.calleeUserId !== calleeUserId
+    || invite.callType !== input.callType
+  ) {
+    throw new Error("The authoritative Chi'lly Chat invite did not match this call.");
+  }
+
+  const delivery = begun.created
+    ? await dispatchChillyChatCallPush({ action: "incoming", inviteId: invite.id })
+    : {
+      ...DEFAULT_CALL_DELIVERY,
+      reason: "authoritative_invite_reused",
+      status: "skipped" as const,
+    };
 
   return { delivery, invite };
 }

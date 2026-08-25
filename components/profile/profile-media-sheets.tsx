@@ -2,7 +2,6 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React from "react";
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 
 import type { ProfileAppearanceFitMode } from "../../_lib/userData";
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 type ProfileSheetOptionProps = {
   icon: keyof typeof MaterialIcons.glyphMap;

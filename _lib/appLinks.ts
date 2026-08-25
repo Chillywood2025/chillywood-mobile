@@ -108,9 +108,11 @@ const NAVIGATION_VALUE_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/iu;
 
 const MAX_LINK_LENGTH = 8_192;
 const AUTH_REDIRECT_TTL_MS = 10 * 60 * 1_000;
+const AUTH_INPUT_PROVENANCE_TTL_MS = 10 * 60 * 1_000;
 const pendingAuthRedirects = new Map<string, AuthRedirectEnvelope>();
 const consumedAuthRedirectIds = new Set<string>();
 const consumedAuthInputs = new Set<string>();
+const verifiedUniversalAuthInputs = new Map<string, number>();
 
 const hasUnsafeRawPathSegments = (value: string) => {
   const pathOnly = value.split(/[?#]/u, 1)[0] ?? "";
@@ -301,6 +303,14 @@ const hasValidAuthParams = (params: URLSearchParams) => {
   return true;
 };
 
+const hasAuthCredentials = (params: URLSearchParams) => (
+  params.has("code")
+  || params.has("token")
+  || params.has("token_hash")
+  || params.has("access_token")
+  || params.has("refresh_token")
+);
+
 const navigationParams = (pathname: string, params: URLSearchParams) => {
   const safe = new URLSearchParams();
   let valid = true;
@@ -376,6 +386,12 @@ export const parseApplicationLink = (value: unknown): ParsedApplicationLink | nu
   const input = readParsedInput(value);
   if (!input) return null;
 
+  // Custom URL schemes are claimable by another installed app. They remain
+  // available for navigation-only routes, but can never carry Auth authority.
+  if (input.source === "custom_scheme" && hasAuthCredentials(input.authParams)) {
+    return null;
+  }
+
   if (isPasswordRecoveryInput(input.pathname, input.authParams)) {
     if (!hasValidAuthParams(input.authParams)) return null;
     return { kind: "password_reset", pathname: "/reset-password",
@@ -413,17 +429,65 @@ export const resolveApplicationRouteByKind = (
   return parsed?.kind === kind ? parsed.route : null;
 };
 
-const authInputFingerprint = (route: string) => {
-  let hash = 2_166_136_261;
-  for (let index = 0; index < route.length; index += 1) hash = Math.imul(hash ^ route.charCodeAt(index), 16_777_619);
-  return `${route.length}:${(hash >>> 0).toString(16)}`;
+const canonicalAuthInputRoute = (route: string) => {
+  const url = new URL(route, `https://${APPLICATION_LINK_HOST}`);
+  const params = new URLSearchParams(url.search);
+  params.sort();
+  return appendParams(url.pathname, params);
 };
+
+const authInputProvenanceFingerprint = (
+  parsed: ParsedApplicationLink,
+  kind: "auth_callback" | "password_reset",
+) => `${kind}:${canonicalAuthInputRoute(parsed.route)}`;
+
+const pruneVerifiedUniversalAuthInputs = (now: number) => {
+  for (const [fingerprint, expiresAt] of verifiedUniversalAuthInputs) {
+    if (expiresAt <= now) verifiedUniversalAuthInputs.delete(fingerprint);
+  }
+};
+
+/**
+ * Records the exact route derived from an HTTPS application link before Expo
+ * Router turns it into an origin-less local pathname. Only the associated
+ * chillywoodstream.com origin can establish this short-lived provenance.
+ */
+export function registerVerifiedApplicationAuthInput(value: unknown) {
+  const parsed = parseApplicationLink(value);
+  if (!parsed || (parsed.kind !== "auth_callback" && parsed.kind !== "password_reset")) return null;
+  if (parsed.source !== "universal_link") return null;
+
+  const parsedUrl = new URL(parsed.route, `https://${APPLICATION_LINK_HOST}`);
+  if (!hasAuthCredentials(parsedUrl.searchParams)) return parsed;
+
+  const now = Date.now();
+  pruneVerifiedUniversalAuthInputs(now);
+  if (verifiedUniversalAuthInputs.size >= 64) {
+    verifiedUniversalAuthInputs.delete(verifiedUniversalAuthInputs.keys().next().value ?? "");
+  }
+  verifiedUniversalAuthInputs.set(
+    authInputProvenanceFingerprint(parsed, parsed.kind),
+    now + AUTH_INPUT_PROVENANCE_TTL_MS,
+  );
+  return parsed;
+}
 
 export function consumeApplicationAuthInput(value: unknown, kind: "auth_callback" | "password_reset") {
   const parsed = parseApplicationLink(value);
   if (!parsed || parsed.kind !== kind || consumedAuthInputs.size >= 512) return null;
-  const fingerprint = `${kind}:${authInputFingerprint(parsed.route)}`;
+  const fingerprint = authInputProvenanceFingerprint(parsed, kind);
   if (consumedAuthInputs.has(fingerprint)) return null;
+
+  const parsedUrl = new URL(parsed.route, `https://${APPLICATION_LINK_HOST}`);
+  if (hasAuthCredentials(parsedUrl.searchParams)) {
+    if (parsed.source === "custom_scheme") return null;
+    if (parsed.source === "notification_path") {
+      const now = Date.now();
+      pruneVerifiedUniversalAuthInputs(now);
+      if ((verifiedUniversalAuthInputs.get(fingerprint) ?? 0) <= now) return null;
+      verifiedUniversalAuthInputs.delete(fingerprint);
+    }
+  }
   consumedAuthInputs.add(fingerprint);
   return parsed;
 }

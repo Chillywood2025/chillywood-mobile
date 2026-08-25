@@ -1,6 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-type GatewayAction = "audit_candidate" | "download" | "transcode_download" | "premium_hd_download" | "record_scan_result";
+type GatewayAction =
+  | "audit_candidate"
+  | "download"
+  | "download_scan_job"
+  | "transcode_download"
+  | "premium_hd_download"
+  | "record_scan_result";
 type SupabaseClient = any;
 
 type GatewayPayload = {
@@ -12,6 +18,18 @@ type GatewayPayload = {
   scanner_type?: unknown;
   status?: unknown;
   proof?: unknown;
+  job_id?: unknown;
+  worker_id?: unknown;
+};
+
+type ClaimedScanJob = {
+  id: string;
+  status: string;
+  claimed_by: string | null;
+  storage_provider: string;
+  storage_bucket: string;
+  storage_object_key: string;
+  size_bytes: number | null;
 };
 
 type ScanCandidate = {
@@ -113,6 +131,7 @@ const normalizeAction = (value: unknown): GatewayAction | null => {
   if (
     action === "audit_candidate"
     || action === "download"
+    || action === "download_scan_job"
     || action === "transcode_download"
     || action === "premium_hd_download"
     || action === "record_scan_result"
@@ -433,6 +452,47 @@ const streamSupabaseStorageObject = async (
   });
 };
 
+const readClaimedScanJob = async (
+  adminClient: SupabaseClient,
+  jobId: string,
+  workerId: string,
+) => {
+  if (!jobId || !workerId || workerId.length > 255) {
+    return { error: json(400, { error: "scan_job_identity_required" }) };
+  }
+
+  const { data, error } = await adminClient
+    .from("media_scan_jobs")
+    .select("id,status,claimed_by,storage_provider,storage_bucket,storage_object_key,size_bytes")
+    .eq("id", jobId)
+    .eq("status", "scanning")
+    .eq("claimed_by", workerId)
+    .maybeSingle();
+  if (error) throw new Error(`scan_job_read_failed:${error.message}`);
+  if (!data) return { error: json(403, { error: "scan_job_claim_invalid" }) };
+
+  const job = data as ClaimedScanJob;
+  const storage = {
+    provider: toLowerText(job.storage_provider),
+    bucket: toText(job.storage_bucket),
+    objectKey: toText(job.storage_object_key),
+  };
+  const maxBytes = Number.parseInt(
+    toText(Deno.env.get("MEDIA_SCAN_MAX_DOWNLOAD_BYTES")) || String(5 * 1024 * 1024 * 1024),
+    10,
+  );
+  const sizeBytes = Number(job.size_bytes ?? 0);
+  if (
+    !["supabase", "s3", "cloudflare_r2"].includes(storage.provider)
+    || !storage.bucket
+    || !isSafeObjectKey(storage.objectKey)
+    || (Number.isFinite(sizeBytes) && sizeBytes > 0 && sizeBytes > maxBytes)
+  ) {
+    return { error: json(403, { error: "scan_job_storage_invalid" }) };
+  }
+  return { job, storage };
+};
+
 const normalizeScanResult = (payload: GatewayPayload) => {
   const status = toLowerText(payload.status);
   const scannerName = toText(payload.scanner_name);
@@ -459,34 +519,14 @@ const normalizeScanResult = (payload: GatewayPayload) => {
   };
 };
 
-const writeScanResult = async (
+const writeReadabilityResult = async (
   adminClient: SupabaseClient,
   candidate: ScanCandidate,
   storage: { provider: string; bucket: string; objectKey: string },
   result: ReturnType<typeof normalizeScanResult>,
 ) => {
-  const now = new Date().toISOString();
-  const scanStatus = result.status === "clean" ? "clean" : "scan_failed";
-  const scanResult = result.status === "clean"
-    ? "ffprobe_media_readability_clean_not_malware_or_content_moderation"
-    : toText(result.proof.errorCode) || "ffprobe_media_readability_failed";
-  const { error } = await adminClient
-    .from("videos")
-    .update({
-      scan_status: scanStatus,
-      scan_provider: result.scannerName,
-      scan_result: scanResult,
-      scanned_at: result.status === "clean" ? now : null,
-      scan_error: result.status === "clean" ? null : scanResult,
-      updated_at: now,
-    })
-    .eq("id", candidate.id)
-    .eq("visibility", "public")
-    .not("moderation_status", "in", "(blocked,hidden,removed,banned,rejected)");
-  if (error) throw new Error(`scan_result_write_failed:${error.message}`);
-
   await adminClient.from("media_security_audit_events").insert({
-    action: "media_scan_result_recorded",
+    action: "media_readability_result_recorded",
     actor_email: null,
     actor_user_id: null,
     metadata: {
@@ -500,7 +540,7 @@ const writeScanResult = async (
     },
     object_key_owner: objectKeyOwner(storage.objectKey),
     record_id: candidate.id,
-    reason: "Trusted backend media scan gateway recorded ffprobe media-readability result.",
+    reason: "Trusted backend gateway recorded a non-authoritative ffprobe media-readability result.",
     result: "success",
     security_context_id: null,
     surface_type: "creator_video",
@@ -509,7 +549,9 @@ const writeScanResult = async (
   return {
     sourceType: "creator_video",
     sourceId: candidate.id,
-    scanStatus,
+    scanStatus: toText(candidate.scan_status),
+    malwareScanStateChanged: false,
+    readabilityStatus: result.status === "clean" ? "readable" : "unreadable",
     scannerName: result.scannerName,
     scannerVersion: result.scannerVersion,
     scannerType: result.scannerType,
@@ -537,6 +579,23 @@ Deno.serve(async (req): Promise<Response> => {
     const sourceType = toLowerText(payload.source_type || "creator_video");
     const sourceId = parseUuid(payload.source_id);
     if (!action) return json(400, { error: "invalid_action" });
+
+    if (action === "download_scan_job") {
+      const jobId = parseUuid(payload.job_id);
+      const workerId = toText(payload.worker_id);
+      const claimed = await readClaimedScanJob(adminClient, jobId, workerId);
+      if ("error" in claimed) return claimed.error ?? json(403, { error: "scan_job_claim_invalid" });
+      const storage = (claimed as {
+        storage: { provider: string; bucket: string; objectKey: string };
+      }).storage;
+      if (storage.provider === "s3") return streamS3Object(storage);
+      if (storage.provider === "cloudflare_r2") return streamR2PrivateOriginObject(storage);
+      if (storage.provider === "supabase") {
+        return streamSupabaseStorageObject(supabaseUrl, serviceRoleKey, storage);
+      }
+      return json(403, { error: "unsupported_storage_provider" });
+    }
+
     if (!sourceId) return json(400, { error: "invalid_source_id" });
 
     const validation = await validateCandidate(adminClient, sourceType, sourceId, {
@@ -566,7 +625,7 @@ Deno.serve(async (req): Promise<Response> => {
 
     const scanResult = normalizeScanResult(payload);
     if (!scanResult.valid) return json(400, { error: "invalid_scan_result", blockedReasons: scanResult.blockedReasons });
-    const writeResult = await writeScanResult(adminClient, candidate, storage, scanResult);
+    const writeResult = await writeReadabilityResult(adminClient, candidate, storage, scanResult);
     return json(200, {
       ok: true,
       result: writeResult,

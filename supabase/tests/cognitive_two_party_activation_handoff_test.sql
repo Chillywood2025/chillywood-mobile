@@ -1,6 +1,19 @@
 begin;
 select no_plan();
 
+create function pg_temp.set_service_role_test_context()
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claim.sub','',true);
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  if auth.uid() is not null or auth.jwt() ? 'session_id' then
+    raise exception 'service_role_fixture_retained_user_session';
+  end if;
+  return current_setting('request.jwt.claims',true);
+end;
+$$;
+
 insert into public.cognitive_projects(
   id, repository_full_name, source_state, activation_state,
   scheduler_state, production_authority
@@ -27,7 +40,14 @@ insert into public.intelligence_tasks(
 insert into auth.users(id, is_sso_user, is_anonymous, email_confirmed_at)
 values
   ('b2000000-0000-0000-0000-000000000001', false, false, now()),
-  ('b2000000-0000-0000-0000-000000000002', false, false, now());
+  ('b2000000-0000-0000-0000-000000000002', false, false, now()),
+  ('b2000000-0000-0000-0000-000000000003', false, false, now());
+
+insert into auth.sessions(id, user_id)
+values
+  ('b2100000-0000-4000-8000-000000000001', 'b2000000-0000-0000-0000-000000000001'),
+  ('b2100000-0000-4000-8000-000000000002', 'b2000000-0000-0000-0000-000000000002'),
+  ('b2100000-0000-4000-8000-000000000003', 'b2000000-0000-0000-0000-000000000003');
 
 insert into public.platform_role_memberships(user_id, email, role, status)
 values
@@ -327,7 +347,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 insert into two_party_fixture(approval_id,approval_version_id,approval_hash)
@@ -397,7 +417,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000003',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000003"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000003","session_id":"b2100000-0000-4000-8000-000000000003"}',
   true
 );
 select throws_ok(
@@ -422,7 +442,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000002',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000002"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000002","session_id":"b2100000-0000-4000-8000-000000000002"}',
   true
 );
 select throws_ok(
@@ -441,7 +461,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -467,7 +487,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_record_owner_approval(
     'b7000000-0000-0000-0000-000000000001','service-owner-attempt',
@@ -484,7 +504,7 @@ select throws_ok(
   'service principal cannot create Owner approval'
 );
 reset role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 insert into two_party_fixture(execution_id)
 select (result->>'executionId')::uuid
 from (
@@ -714,7 +734,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 select throws_ok(
@@ -769,7 +789,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
@@ -809,7 +829,7 @@ from (
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 update two_party_liveness_fixture
 set execution_id = (result->>'executionId')::uuid
 from (
@@ -901,7 +921,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
@@ -941,7 +961,7 @@ from (
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 update two_party_liveness_fixture
 set execution_id = (result->>'executionId')::uuid
 from (
@@ -998,7 +1018,7 @@ set status = 'emergency_stop',
 where system_id = 'product_intelligence_operator';
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_complete_approved_execution(
     (select execution_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
@@ -1035,7 +1055,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
@@ -1075,7 +1095,7 @@ from (
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 update two_party_liveness_fixture
 set execution_id = (result->>'executionId')::uuid
 from (
@@ -1101,7 +1121,7 @@ update public.intelligence_tasks
 set cancelled_at = transaction_timestamp()
 where id = 'b1000000-0000-0000-0000-000000000001';
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_begin_approved_execution(
     (select execution_id from two_party_liveness_fixture where fixture_key='cancelled-after-claim'),
@@ -1123,7 +1143,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
@@ -1163,7 +1183,7 @@ from (
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 update two_party_liveness_fixture
 set execution_id = (result->>'executionId')::uuid
 from (
@@ -1191,7 +1211,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -1205,7 +1225,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_begin_approved_execution(
     (select execution_id from two_party_liveness_fixture where fixture_key='revoked-after-claim'),
@@ -1236,7 +1256,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
@@ -1276,7 +1296,7 @@ from (
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 update two_party_liveness_fixture
 set execution_id = (result->>'executionId')::uuid
 from (
@@ -1316,7 +1336,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -1330,7 +1350,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_execute_approved_switch(
     (select execution_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
@@ -1450,7 +1470,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -1493,7 +1513,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_claim_approved_action(
     (select approval_version_id from two_party_liveness_fixture where fixture_key='expired-revalidation'),
@@ -1515,7 +1535,7 @@ select throws_ok(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_record_model_execution_attestation(
     'two-party-assessment',
@@ -1538,7 +1558,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001","session_id":"b2100000-0000-4000-8000-000000000001"}',
   true
 );
 select public.governance_register_two_party_service_principal(
@@ -1588,7 +1608,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_assert_two_party_service_principal(
     'product_experience_baseline_service',
@@ -1704,7 +1724,7 @@ alter table public.product_quality_findings
 alter table public.product_quality_findings
   alter column finding_scope_hash drop not null;
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.product_experience_record_sentinel_run(
     'b1000000-0000-0000-0000-000000000001',
@@ -2058,7 +2078,7 @@ revoke execute on function public.product_quality_record_finding(
 ) from service_role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select is(
   public.product_experience_erase_expired_evidence(
     'product_experience_sentinel_runs',

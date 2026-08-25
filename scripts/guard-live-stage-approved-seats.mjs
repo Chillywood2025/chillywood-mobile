@@ -60,6 +60,12 @@ const watchPartyLiveKitGuard = readSource("scripts/guard-watch-party-livekit-cam
 const seatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
 const liveStagePresentation = readSource("_lib/watch-party/live-stage-presentation.ts");
 const watchParty = readSource("_lib/watchParty.ts");
+const watchPartySelfMuteWriter = sliceBetween(
+  watchParty,
+  "export async function setOwnPartyParticipantMuteState(",
+  "export async function updateRoomPlayback(",
+  "Watch-Party current-user self-mute writer boundary",
+);
 const liveStageTopChrome = sliceBetween(
   liveStage,
   "const renderStageTopChrome = () => (",
@@ -236,7 +242,10 @@ assertIncludes(liveStage, "forceLocalHeroFallback={false}", "Live Stage self-her
 assertIncludes(liveStage, "testID=\"live-stage-self-hero-toggle\"", "Live Stage self-hero toggle is exposed for proof");
 assertIncludes(liveStage, "testID=\"live-stage-request-camera-button\"", "Live Stage request-camera button is exposed for installed proof");
 assertIncludes(watchParty, "export async function setOwnPartyParticipantMuteState", "Watch-Party shared helper exposes current-user self mute persistence");
-assertIncludes(watchParty, ".eq(\"user_id\", writableUserId)", "self mute persistence only writes the signed-in user's membership row");
+assertIncludes(watchPartySelfMuteWriter, "const writableUserId = await getWritablePartyUserId();", "self mute persistence derives the signed-in user");
+assertIncludes(watchPartySelfMuteWriter, "userId: writableUserId", "self mute persistence binds its RPC input to the signed-in user");
+assertIncludes(watchPartySelfMuteWriter, "isMuted: nextIsMuted", "self mute persistence sends only the user's self-mute intent and derived media flags");
+assertNotIncludes(watchPartySelfMuteWriter, `.from(${JSON.stringify("watch_party_room_memberships")})`, "self mute persistence must not regain direct membership-table authority");
 assertIncludes(liveStage, "testID={isCurrentStageParticipantMuted ? \"live-stage-self-unmute-button\" : \"live-stage-self-mute-button\"}", "Live Stage seated viewers expose self mute/unmute proof targets");
 assertIncludes(liveStage, "await setOwnPartyParticipantMuteState(partyId, nextMuted)", "Live Stage self mute uses narrow current-user persistence helper");
 assertIncludes(liveStage, "setLiveKitJoinContract(null);", "Live Stage self mute clears stale LiveKit contract for authority refresh");

@@ -127,8 +127,10 @@ const settings = read("app/settings.tsx");
 const callInvites = read("_lib/chillyChatCalls.ts");
 const easConfig = JSON.parse(read("eas.json"));
 const migration = read("supabase/migrations/20260715150522_ios_voip_push_token_foundation.sql");
+const sessionAuthorityMigration = read("supabase/migrations/202608250003_ios_voip_session_authority_closure.sql");
 const tokenFunction = read("supabase/functions/ios-voip-push-tokens/index.ts");
 const dispatchFunction = read("supabase/functions/ios-voip-call-dispatch/index.ts");
+const notifications = read("_lib/notifications.ts");
 const retryFunction = read("supabase/functions/chilly-chat-call-transition-retry/index.ts");
 const retryMigration = read("supabase/migrations/20260718113000_durable_call_delivery_retry_and_storefront_prices.sql");
 const voipPolicy = read("supabase/functions/_shared/ios-voip-policy.mjs");
@@ -157,6 +159,9 @@ requireText(coordinator, "reportInvalidVoipPushOnMain", "Every received VoIP pus
 requireText(coordinator, "pendingAnswerActions", "CallKit answer actions must remain pending until media connection acknowledgement.");
 requireText(coordinator, "activeCallsDefaultsKey", "Non-secret active call descriptors must support bounded process recovery.");
 requireText(coordinator, "pendingEventsDefaultsKey", "Sanitized native call events must survive cold-start bridge hydration.");
+requireText(coordinator, "NativeVoipAuthority", "Terminated PushKit delivery must retain only an exact account/session/install binding.");
+requireText(coordinator, "voipPayloadMatchesPersistedAuthority", "Native CallKit presentation must reject a provider payload for another account/session/install.");
+requireText(coordinator, "resetAccountContextOnMain", "Logout and account switch must end stale CallKit state and clear persisted descriptors.");
 requireText(coordinator, "completion?(error)", "PushKit completion must wait for CallKit reporting.");
 requireText(coordinator, "#if DEBUG", "The local CallKit trigger must compile only in debug builds.");
 rejectText(coordinator, "AVCapture", "The native incoming-call bridge must not activate a camera before answer.");
@@ -176,6 +181,8 @@ requireText(facade, "const { token: _token", "Native events exposed to applicati
 requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers must receive sanitized audio-session and application-state events.");
 requireText(facade, "nativeEventGeneration", "Native and cold-start events must bind the current JavaScript readiness generation.");
 requireText(facade, 'clearNativeCallTransitionClaims("ios")', "Account and readiness lifecycle changes must clear only iOS in-memory native claims.");
+requireText(facade, "isCurrentAccountSessionAuthority", "PushKit token registration must recheck the exact current server session generation.");
+requireText(facade, "getNotificationRevocationCredential", "PushKit must reuse the device-held notification revocation credential.");
 rejectText(facade, "console.", "The native-call facade must never log PushKit tokens or provider responses.");
 requireText(rootLayout, "startIosNativeCallsReadiness", "Authenticated runtime must wire the native-call bridge.");
 requireText(rootLayout, "createIosCallKitAnswerRouteHandler", "CallKit Answer must create a bounded claim through the canonical bridge handler.");
@@ -281,13 +288,35 @@ requireText(migration, "provider_status_code", "Sanitized APNs HTTP status evide
 requireText(migration, "attempt_count", "Transient APNs attempts must have a bounded retry counter.");
 rejectText(migration, "grant select", "Raw VoIP token tables must not gain direct client SELECT grants.");
 
+for (const marker of [
+  'add column if not exists "account_id"',
+  'add column if not exists "session_generation"',
+  'add column if not exists "ownership_state"',
+  "whole_app_register_ios_voip_push_token",
+  "whole_app_revoke_ios_voip_push_ownership",
+  "whole_app_read_deliverable_ios_voip_tokens",
+  "whole_app_revoke_ios_voip_on_session_delete",
+  "whole_app_revoke_ios_voip_on_account_deletion",
+  "whole_app_revoke_ios_voip_on_auth_restriction",
+]) {
+  requireText(sessionAuthorityMigration, marker, `iOS VoIP session authority closure requires ${marker}.`);
+}
+requireText(sessionAuthorityMigration, '"ownership_state" = \'INVALID\'', "Legacy active PushKit rows must be quarantined.");
+requireText(sessionAuthorityMigration, "from auth.sessions session_row", "Deliverability must require a live exact auth session generation.");
+requireText(sessionAuthorityMigration, "to service_role", "Raw deliverability readback must remain service-only.");
+rejectText(sessionAuthorityMigration, 'whole_app_read_deliverable_ios_voip_tokens"(uuid)\n+  to authenticated', "Authenticated clients must never read raw PushKit delivery tokens.");
+
 for (const source of [tokenFunction, dispatchFunction]) {
   requireText(source, ".auth.getUser()", "Every iOS VoIP Edge Function must authenticate the user JWT.");
   requireText(source, "SUPABASE_SERVICE_ROLE_KEY", "Server-owned VoIP tables must be accessed only after authentication through the backend.");
   rejectText(source, "console.", "VoIP Edge Functions must not log tokens, JWTs, provider keys, or private payloads.");
 }
 requireText(tokenFunction, "enforce_abuse_rate_limit", "PushKit token lifecycle writes must be rate limited.");
-requireText(tokenFunction, "token_fingerprint", "PushKit token responses must use only a non-secret fingerprint.");
+requireText(tokenFunction, "tokenFingerprint", "PushKit token responses must use only a non-secret fingerprint.");
+requireText(tokenFunction, "whole_app_register_ios_voip_push_token", "PushKit registration must use the exact session-bound RPC.");
+requireText(tokenFunction, "whole_app_revoke_ios_voip_push_ownership", "PushKit revocation must use the exact old-session credential RPC.");
+rejectText(tokenFunction, '.from("user_voip_push_tokens")', "The lifecycle Edge Function must not bypass exact VoIP ownership RPCs.");
+requireText(notifications, "invokePendingIosVoipRevocation", "The durable notification revocation ledger must also revoke iOS VoIP ownership.");
 requireText(dispatchFunction, "runtime_disabled_pending_physical_proof", "APNs VoIP dispatch must default to a runtime-disabled result.");
 requireText(voipPolicy, "IOS_VOIP_PUSH_DISPATCH_ENABLED", "APNs VoIP dispatch must require its explicit server flag.");
 requireText(dispatchFunction, "IOS_VOIP_DISPATCH_ENABLED_ENV", "APNs VoIP dispatch must consume the shared explicit server flag.");
@@ -313,6 +342,8 @@ for (const header of ["apns-push-type", "apns-topic", "apns-expiration", "apns-c
 requireText(dispatchFunction, "api.sandbox.push.apple.com", "Development PushKit tokens must use Apple's APNs sandbox endpoint.");
 requireText(dispatchFunction, "api.push.apple.com", "Production PushKit tokens must use Apple's APNs production endpoint.");
 requireText(dispatchFunction, "isApnsInvalidVoipTokenReason", "Invalid APNs tokens must be revoked.");
+requireText(dispatchFunction, "whole_app_read_deliverable_ios_voip_tokens", "APNs dispatch must read only exact current-session tokens.");
+requireText(dispatchFunction, "recipientSessionGeneration", "APNs payloads must carry the exact recipient session generation for native rejection.");
 requireText(dispatchFunction, "provider_status_code", "APNs delivery attempts must record the provider HTTP status without response secrets.");
 requireText(dispatchFunction, "if (!await readCallPreference", "incoming VoIP presentation must honor the new-call preference");
 rejectText(dispatchFunction, "authorize_chilly_chat_call_transition_retry", "terminal retry work must never enter the incoming-only VoIP dispatcher");

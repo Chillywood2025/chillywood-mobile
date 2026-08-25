@@ -2,7 +2,6 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   ImageBackground,
   type ImageSourcePropType,
   RefreshControl,
@@ -26,6 +25,7 @@ import {
   type WatchProgressEntry,
 } from "../../_lib/userData";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import type { Tables } from "../../supabase/database.types";
 
 type TitleRow = Pick<

@@ -1,4 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  readExactBreakGlassSessionId,
+  readExactCurrentSessionAuthority,
+  readExactPermissionKeys,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -94,60 +100,18 @@ const hasAnyPermission = (user: AuthenticatedUser, keys: string[]) =>
 const readActivePermissions = async (
   adminClient: SupabaseClientLike,
   userId: string,
-  email: string | null,
-) => {
-  const normalizedEmail = toText(email).toLowerCase();
-  let query = adminClient
-    .from("platform_staff_permission_grants")
-    .select("permission_key,expires_at")
-    .eq("status", "active");
-
-  if (normalizedEmail) {
-    query = query.or(`target_user_id.eq.${userId},target_email.ilike.${normalizedEmail}`);
-  } else {
-    query = query.eq("target_user_id", userId);
-  }
-
-  const { data, error } = await query.limit(100);
-  if (error) throw new Error(`Permission lookup failed: ${error.message}`);
-  const now = Date.now();
-  return new Set(
-    ((data ?? []) as JsonObject[])
-      .filter((row) => {
-        const expiresAt = toText(row.expires_at);
-        return !expiresAt || Date.parse(expiresAt) > now;
-      })
-      .map((row) => normalizePermission(row.permission_key))
-      .filter(Boolean),
-  );
-};
+) => readExactPermissionKeys(adminClient, userId, [
+  "legal_review",
+  "evidence_preview",
+  "evidence_export",
+  "legal_hold",
+  "legal_ops",
+]);
 
 const readActiveBreakGlassSessionId = async (
   adminClient: SupabaseClientLike,
   userId: string,
-  email: string | null,
-) => {
-  const normalizedEmail = toText(email).toLowerCase();
-  let query = adminClient
-    .from("platform_break_glass_sessions")
-    .select("id,expires_at")
-    .eq("status", "active");
-
-  if (normalizedEmail) {
-    query = query.or(`actor_user_id.eq.${userId},actor_email.ilike.${normalizedEmail}`);
-  } else {
-    query = query.eq("actor_user_id", userId);
-  }
-
-  const { data, error } = await query.order("activated_at", { ascending: false }).limit(5);
-  if (error) throw new Error(`Break Glass lookup failed: ${error.message}`);
-  const now = Date.now();
-  const active = ((data ?? []) as JsonObject[]).find((row) => {
-    const expiresAt = toText(row.expires_at);
-    return !expiresAt || Date.parse(expiresAt) > now;
-  });
-  return toText(active?.id) || null;
-};
+) => readExactBreakGlassSessionId(adminClient, userId);
 
 const authenticate = async (
   req: Request,
@@ -166,36 +130,16 @@ const authenticate = async (
   });
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) return { error: json(401, { error: "invalid_session" }) };
+  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
+    return { error: json(401, { error: "invalid_session" }) };
+  }
 
   const email = data.user?.email ?? null;
-  const normalizedEmail = toText(email).toLowerCase();
-  const userLookup = await adminClient
-    .from("platform_role_memberships")
-    .select("role")
-    .eq("status", "active")
-    .in("role", ["owner", "operator", "moderator"])
-    .eq("user_id", userId)
-    .order("role", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (userLookup.error) throw new Error(`Role lookup failed: ${userLookup.error.message}`);
-  let role = toText((userLookup.data as JsonObject | null)?.role);
-
-  if (!role && normalizedEmail) {
-    const emailLookup = await adminClient
-      .from("platform_role_memberships")
-      .select("role")
-      .eq("status", "active")
-      .in("role", ["owner", "operator", "moderator"])
-      .ilike("email", normalizedEmail)
-      .order("role", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (emailLookup.error) throw new Error(`Role email lookup failed: ${emailLookup.error.message}`);
-    role = toText((emailLookup.data as JsonObject | null)?.role);
-  }
+  const role = await readExactPlatformRole(
+    adminClient,
+    userId,
+    ["owner", "operator", "moderator"],
+  );
 
   if (role !== "owner" && role !== "operator" && role !== "moderator") {
     return { error: json(403, { error: "staff_role_required" }) };
@@ -204,8 +148,8 @@ const authenticate = async (
     return { error: json(403, { error: "owner_or_approved_operator_required" }) };
   }
 
-  const permissions = await readActivePermissions(adminClient, userId, email);
-  const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, email);
+  const permissions = await readActivePermissions(adminClient, userId);
+  const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId);
   const user = { activeBreakGlassSessionId, email, id: userId, permissions, role } as AuthenticatedUser;
   if (!hasAnyPermission(user, ["legal_review", "evidence_preview", "evidence_export", "legal_hold", "legal_ops"])) {
     return { error: json(403, { error: "legal_permission_required" }) };

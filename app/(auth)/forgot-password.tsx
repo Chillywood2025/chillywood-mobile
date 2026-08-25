@@ -19,7 +19,7 @@ import { supabase } from "../../_lib/supabase";
 import { AppActionButton, AppStatusPill } from "../../components/ui/app-surface";
 
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
-const PASSWORD_RESET_REDIRECT_URL = "chillywoodmobile://reset-password";
+const PASSWORD_RESET_REDIRECT_URL = "https://chillywoodstream.com/reset-password";
 
 function getPasswordResetErrorMessage(error: unknown) {
   const raw = String(

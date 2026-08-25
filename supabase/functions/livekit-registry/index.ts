@@ -1,6 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  readExactCurrentSessionAuthority,
+  readExactPermissionKeys,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
 import { writeLiveKitRoutingAudit } from "../_shared/livekit-routing.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -138,7 +143,7 @@ const authenticateRequest = async (
 
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) {
+  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
     return { error: jsonResponse(401, { error: "invalid_session", message: "Supabase could not verify the current user session." }) };
   }
 
@@ -154,61 +159,15 @@ const userHasPlatformRole = async (
   adminClient: SupabaseClientLike,
   user: AuthenticatedUser,
 ) => {
-  const normalizedEmail = toText(user.email).toLowerCase();
-  const userQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("role")
-    .eq("status", "active")
-    .in("role", ["owner", "operator"])
-    .eq("user_id", user.id)
-    .order("role", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (userQuery.error) throw new Error(`Platform role lookup failed: ${userQuery.error.message}`);
-  const userRole = toText((userQuery.data as { role?: unknown } | null)?.role);
-  if (userRole === "owner" || userRole === "operator") return userRole;
-  if (!normalizedEmail) return null;
-
-  const emailQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("role")
-    .eq("status", "active")
-    .in("role", ["owner", "operator"])
-    .ilike("email", normalizedEmail)
-    .order("role", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (emailQuery.error) throw new Error(`Platform role email lookup failed: ${emailQuery.error.message}`);
-  const emailRole = toText((emailQuery.data as { role?: unknown } | null)?.role);
-  return emailRole === "owner" || emailRole === "operator" ? emailRole : null;
+  return readExactPlatformRole(adminClient, user.id, ["owner", "operator"]);
 };
 
 const userHasLiveOpsPermission = async (
   adminClient: SupabaseClientLike,
   user: AuthenticatedUser,
 ) => {
-  const normalizedEmail = toText(user.email).toLowerCase();
-  let query = adminClient
-    .from("platform_staff_permission_grants")
-    .select("id,expires_at")
-    .eq("status", "active")
-    .eq("permission_key", "live_ops");
-
-  if (normalizedEmail) {
-    query = query.or(`target_user_id.eq.${user.id},target_email.ilike.${normalizedEmail}`);
-  } else {
-    query = query.eq("target_user_id", user.id);
-  }
-
-  const { data, error } = await query.limit(10);
-  if (error) throw new Error(`Live Ops permission lookup failed: ${error.message}`);
-  const now = Date.now();
-  return ((data ?? []) as JsonObject[]).some((row) => {
-    const expiresAt = toText(row.expires_at);
-    return !expiresAt || Date.parse(expiresAt) > now;
-  });
+  return (await readExactPermissionKeys(adminClient, user.id, ["live_ops"]))
+    .has("live_ops");
 };
 
 const requireOperator = async (

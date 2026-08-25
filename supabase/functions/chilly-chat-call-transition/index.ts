@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
+import { readExactCurrentSessionAuthority } from "../_shared/exact-subject-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -154,7 +155,11 @@ Deno.serve(async (req): Promise<Response> => {
     });
     const { data: authData, error: authError } = await userClient.auth.getUser();
     const actorUserId = toText(authData.user?.id);
-    if (authError || !actorUserId) return jsonResponse(401, { error: "unauthenticated" });
+    if (
+      authError
+      || !actorUserId
+      || !(await readExactCurrentSessionAuthority(userClient, actorUserId))
+    ) return jsonResponse(401, { error: "unauthenticated" });
 
     const body = await parseBody(req);
     if (!body) return jsonResponse(400, { error: "invalid_json_body" });

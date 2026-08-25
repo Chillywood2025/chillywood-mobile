@@ -6,6 +6,14 @@ Latest recovery check: 2026-06-10
 
 Status: Callback routing is fixed for recovery links, sender branding is configured as `Chi'llywood <no-reply@chillywoodstream.com>`, and hosted Supabase Auth recovery/confirmation templates are now patched/read-backed with direct app TokenHash links. A temporary SMTP-key failure was reproduced as Supabase Auth recovery `500 unexpected_failure` / `Error sending recovery email` plus Brevo SMTP `535 Authentication failed`; the Brevo SMTP key was then rotated locally, Supabase Auth SMTP was patched/read back with secrets redacted, and recovery dispatch returned `HTTP 200 {}` again. Direct Brevo smoke email delivery/open proof passed, which proved Brevo/domain/Gmail were healthy. The remaining app-path issue was the hosted Supabase Auth recovery template link: using `{{ .ConfirmationURL }}` generated a Supabase verify URL with `redirect_to=https://chillywoodstream.com`, and the user screenshot proved that landed on the public policy site. The recovery and confirmation templates now build direct `chillywoodmobile://` TokenHash links so those two flows no longer depend on Supabase's generated web redirect.
 
+Superseding source-security note (2026-08-25): this document records historical
+external proof only. Current repository templates replace the claimable custom
+scheme links with exact `https://chillywoodstream.com/auth-callback` and
+`https://chillywoodstream.com/reset-password` Universal/App Links. Reapplying
+those templates and exact redirect allowlist in hosted Supabase, followed by
+installed iOS/Android proof, is `BLOCKED_EXTERNAL`; no hosted mutation occurred
+as part of the repository correction.
+
 ## Scope
 
 This proof confirms auth email callback behavior, Supabase Auth SMTP sender branding, and route handling for password reset links. It does not alter monetization, payouts, LiveKit behavior, or route ownership.

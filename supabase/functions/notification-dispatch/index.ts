@@ -7,6 +7,10 @@ import {
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
 import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
+import {
+  readExactCurrentSessionAuthority,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = ReturnType<typeof createClient<any>>;
@@ -200,17 +204,11 @@ async function readAuthenticatedOperator(req: Request) {
   });
   const { data, error } = await userClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) return { error: jsonResponse(401, { error: "unauthenticated" }) };
+  if (error || !userId || !(await readExactCurrentSessionAuthority(userClient, userId))) {
+    return { error: jsonResponse(401, { error: "unauthenticated" }) };
+  }
 
-  const { data: membership, error: membershipError } = await adminClient
-    .from("platform_role_memberships")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .in("role", ["owner", "operator"])
-    .limit(1);
-
-  if (membershipError || !membership?.length) {
+  if (!(await readExactPlatformRole(adminClient, userId, ["owner", "operator"]))) {
     return { error: jsonResponse(403, { error: "operator_required" }) };
   }
 

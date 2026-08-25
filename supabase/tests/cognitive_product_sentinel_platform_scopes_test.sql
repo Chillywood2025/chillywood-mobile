@@ -1,6 +1,19 @@
 begin;
 select no_plan();
 
+create function pg_temp.set_service_role_test_context()
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claim.sub','',true);
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  if auth.uid() is not null or auth.jwt() ? 'session_id' then
+    raise exception 'service_role_fixture_retained_user_session';
+  end if;
+  return current_setting('request.jwt.claims',true);
+end;
+$$;
+
 insert into public.cognitive_projects(
   id,
   repository_full_name,
@@ -123,6 +136,11 @@ values
   ('f2000000-0000-4000-8000-000000000001', false, false, now()),
   ('f2000000-0000-4000-8000-000000000002', false, false, now());
 
+insert into auth.sessions(id, user_id)
+values
+  ('f2100000-0000-4000-8000-000000000001', 'f2000000-0000-4000-8000-000000000001'),
+  ('f2100000-0000-4000-8000-000000000002', 'f2000000-0000-4000-8000-000000000002');
+
 insert into public.platform_role_memberships(user_id, email, role, status)
 values
   ('f2000000-0000-4000-8000-000000000001', null, 'owner', 'active'),
@@ -223,7 +241,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"f2000000-0000-4000-8000-000000000002"}',
+  '{"role":"authenticated","sub":"f2000000-0000-4000-8000-000000000002","session_id":"f2100000-0000-4000-8000-000000000002"}',
   true
 );
 select throws_ok(
@@ -278,7 +296,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"f2000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"f2000000-0000-4000-8000-000000000001","session_id":"f2100000-0000-4000-8000-000000000001"}',
   true
 );
 select throws_ok(
@@ -513,7 +531,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"f2000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"f2000000-0000-4000-8000-000000000001","session_id":"f2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -572,7 +590,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select lives_ok(
   $$select public.cognitive_product_quality_assert_service_capability(
       'cognitive_sentinel_collector',

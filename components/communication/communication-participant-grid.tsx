@@ -1,9 +1,10 @@
 import React, { useEffect } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule, type CommunicationParticipantView } from "../../_lib/communication";
 import { LiveKitVideoTrack } from "../../_lib/livekit/react-native-module";
 import { responsiveFontSize, type ResponsiveLayout, useResponsiveLayout } from "../../hooks/use-responsive-layout";
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 const logCallDebug = (..._args: unknown[]) => {};
 
