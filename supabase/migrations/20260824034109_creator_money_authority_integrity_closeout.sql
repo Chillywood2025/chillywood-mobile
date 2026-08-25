@@ -4577,8 +4577,14 @@ begin
       or v_identity."raw_payload_hash" is distinct from p_raw_payload_hash
       or v_identity."metadata"->>'source_user_id' is distinct from p_source_user_id::text
       or v_identity."metadata"->>'target_user_id' is distinct from p_target_user_id::text
-      or v_identity."metadata"->>'reported_occurred_at' is distinct from
-        (case when p_occurred_at is null then null else p_occurred_at::text end)
+      or (p_occurred_at is null
+        and v_identity."metadata"->>'reported_occurred_at' is not null)
+      or (p_occurred_at is not null
+        and (
+          v_identity."metadata"->>'reported_occurred_at' is null
+          or (v_identity."metadata"->>'reported_occurred_at')::timestamptz
+            is distinct from p_occurred_at
+        ))
     then
       raise exception 'revenuecat_premium_transfer_event_id_identity_mismatch';
     end if;

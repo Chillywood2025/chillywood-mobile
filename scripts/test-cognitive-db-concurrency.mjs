@@ -187,6 +187,12 @@ const sourceCommit = "5".repeat(40);
 
 query(`
 begin;
+insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
+values (${sqlLiteral(ids.owner)},false,false,transaction_timestamp())
+on conflict (id) do update
+set is_sso_user=false,is_anonymous=false,
+    email_confirmed_at=excluded.email_confirmed_at;
+
 insert into public.platform_role_memberships(user_id,email,role,status)
 values (${sqlLiteral(ids.owner)},null,'owner','active')
 on conflict do nothing;

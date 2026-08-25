@@ -88,15 +88,54 @@ select is(
   '8. no unexpected non-owner role has execute privilege'
 );
 
-insert into auth.users (id, is_sso_user, is_anonymous)
+insert into auth.users (id, is_sso_user, is_anonymous, email_confirmed_at)
 values
-  ('46111111-1111-4111-8111-111111111111', false, false),
-  ('46222222-2222-4222-8222-222222222222', false, false),
-  ('46333333-3333-4333-8333-333333333333', false, false),
-  ('46444444-4444-4444-8444-444444444444', false, false),
-  ('46555555-5555-4555-8555-555555555555', false, false),
-  ('46666666-6666-4666-8666-666666666666', false, false)
+  ('46111111-1111-4111-8111-111111111111', false, false, transaction_timestamp()),
+  ('46222222-2222-4222-8222-222222222222', false, false, transaction_timestamp()),
+  ('46333333-3333-4333-8333-333333333333', false, false, transaction_timestamp()),
+  ('46444444-4444-4444-8444-444444444444', false, false, transaction_timestamp()),
+  ('46555555-5555-4555-8555-555555555555', false, false, transaction_timestamp()),
+  ('46666666-6666-4666-8666-666666666666', false, false, transaction_timestamp())
 on conflict (id) do nothing;
+
+create temporary table room_host_block_auth_fixture (
+  user_id uuid primary key,
+  session_generation uuid not null unique
+);
+insert into pg_temp.room_host_block_auth_fixture (user_id, session_generation)
+values
+  ('46111111-1111-4111-8111-111111111111', '56111111-1111-4111-8111-111111111111'),
+  ('46222222-2222-4222-8222-222222222222', '56222222-2222-4222-8222-222222222222'),
+  ('46333333-3333-4333-8333-333333333333', '56333333-3333-4333-8333-333333333333'),
+  ('46444444-4444-4444-8444-444444444444', '56444444-4444-4444-8444-444444444444'),
+  ('46555555-5555-4555-8555-555555555555', '56555555-5555-4555-8555-555555555555'),
+  ('46666666-6666-4666-8666-666666666666', '56666666-6666-4666-8666-666666666666');
+
+insert into auth.sessions (id, user_id)
+select session_generation, user_id
+from pg_temp.room_host_block_auth_fixture
+on conflict (id) do nothing;
+
+insert into public.wave1_legal_acceptances (
+  user_id, subject_hash, document_key, document_version, market,
+  role_key, capability, session_generation, authority_source
+)
+select
+  fixture.user_id,
+  public.wave1_sha256(fixture.user_id::text),
+  document.document_key,
+  document.version,
+  document.market,
+  'member',
+  document.capability,
+  fixture.session_generation::text,
+  'service_reconciliation'
+from pg_temp.room_host_block_auth_fixture fixture
+cross join public.wave1_legal_document_versions document
+where document.active
+  and document.market = 'UNITED_STATES'
+  and document.capability = 'account'
+on conflict do nothing;
 
 insert into public.watch_party_rooms (
   party_id,
@@ -240,7 +279,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select lives_ok(
@@ -296,7 +335,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select is(
@@ -327,7 +366,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444"}',
+  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444","session_id":"56444444-4444-4444-8444-444444444444"}',
   true
 );
 select throws_ok(
@@ -347,7 +386,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
   true
 );
 select is(
@@ -375,7 +414,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46333333-3333-4333-8333-333333333333"}',
+  '{"role":"authenticated","sub":"46333333-3333-4333-8333-333333333333","session_id":"56333333-3333-4333-8333-333333333333"}',
   true
 );
 select throws_ok(
@@ -395,7 +434,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444"}',
+  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444","session_id":"56444444-4444-4444-8444-444444444444"}',
   true
 );
 select throws_ok(
@@ -415,7 +454,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select throws_ok(
@@ -435,7 +474,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
   true
 );
 select throws_ok(
@@ -610,7 +649,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555"}',
+  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555","session_id":"56555555-5555-4555-8555-555555555555"}',
   true
 );
 select lives_ok(
@@ -629,7 +668,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46666666-6666-4666-8666-666666666666"}',
+  '{"role":"authenticated","sub":"46666666-6666-4666-8666-666666666666","session_id":"56666666-6666-4666-8666-666666666666"}',
   true
 );
 select throws_ok(
@@ -650,7 +689,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select throws_ok(
@@ -659,8 +698,8 @@ select throws_ok(
     where party_id = 'ROOM-HOST-BLOCK-CHECK'
       and user_id = '46222222-2222-4222-8222-222222222222'$$,
   'P0001',
-  'blocked_from_room',
-  '32. a blocked participant reconnect update is denied'
+  'room_membership_access_required',
+  '32. a blocked participant reconnect update is denied without leaking block state'
 );
 
 select set_config(
@@ -670,7 +709,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555"}',
+  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555","session_id":"56555555-5555-4555-8555-555555555555"}',
   true
 );
 select lives_ok(
@@ -695,7 +734,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select throws_ok(
@@ -739,7 +778,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
   true
 );
 select lives_ok(
@@ -767,7 +806,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
   true
 );
 select throws_ok(
@@ -795,12 +834,14 @@ reset role;
 select ok(
   (
     select pg_get_expr(policy.polwithcheck, policy.polrelid) like
-      '%user_has_active_entitlement%'
+      '%watch_party_room_current_user_access_allowed%'
     from pg_policy policy
     where policy.polrelid = 'public.watch_party_room_memberships'::regclass
       and policy.polname = 'watch_party_room_memberships_self_insert_policy'
-  ),
-  '39. existing Premium and content-access checks remain present'
+  ) and pg_get_functiondef(
+    'public.watch_party_room_current_user_access_allowed(text)'::regprocedure
+  ) like '%watch_party_room_self_access_allowed_internal%',
+  '39. exact Premium, paid-room, and content-access checks remain centralized'
 );
 
 select ok(
@@ -824,7 +865,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select is(
@@ -863,7 +904,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444"}',
+  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444","session_id":"56444444-4444-4444-8444-444444444444"}',
   true
 );
 select is(
