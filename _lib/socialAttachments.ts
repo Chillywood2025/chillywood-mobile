@@ -416,6 +416,8 @@ export async function createSocialAttachmentForSurface(input: {
         mimeType,
         fileName,
         sizeBytes: normalized.file.size,
+        maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,
+        tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
       });
 
       return {
@@ -428,7 +430,7 @@ export async function createSocialAttachmentForSurface(input: {
       await normalized.cleanup();
     }
   })();
-  const { file, fileName, mimeType, uploadedObject } = preparedUpload;
+  const { fileName, mimeType, uploadedObject } = preparedUpload;
 
   const payload: SocialAttachmentInsert & Record<string, unknown> = {
     id,
@@ -440,7 +442,7 @@ export async function createSocialAttachmentForSurface(input: {
     storage_object_key: uploadedObject.objectKey,
     storage_path: uploadedObject.objectKey,
     mime_type: mimeType,
-    size_bytes: Math.max(0, Number(file.size ?? 0) || 0),
+    size_bytes: uploadedObject.sizeBytes,
     original_file_name: fileName,
     moderation_status: "clean",
     scan_status: "pending_scan",

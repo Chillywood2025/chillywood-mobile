@@ -586,6 +586,12 @@ begin
     end if;
     if not v_trusted
       and lower(btrim(coalesce(new.storage_provider, ''))) in ('s3', 'cloudflare_r2')
+      and (new.file_size_bytes is null or new.file_size_bytes <= 0)
+    then
+      raise exception using errcode = '42501', message = 'creator_video_verified_upload_required';
+    end if;
+    if not v_trusted
+      and lower(btrim(coalesce(new.storage_provider, ''))) in ('s3', 'cloudflare_r2')
       and not public.consume_verified_media_upload(
         'creator_video',
         new.storage_provider,

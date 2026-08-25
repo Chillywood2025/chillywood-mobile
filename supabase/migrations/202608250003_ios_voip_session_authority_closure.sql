@@ -122,7 +122,17 @@ begin
     raise exception 'ios_voip_registration_invalid';
   end if;
 
-  perform pg_advisory_xact_lock(hashtextextended('whole-app-ios-voip-authority', 0));
+  v_token_hash := public."wave1_sha256"('apns_voip:' || p_apns_environment || ':' || lower(p_token));
+  v_token_fingerprint := left(v_token_hash, 12);
+  perform pg_advisory_xact_lock(lock_row.lock_id)
+  from (
+    select distinct hashtextextended(lock_key, 0) as lock_id
+    from unnest(array[
+      'whole-app-ios-voip-install:' || p_apns_environment || ':' || btrim(p_install_id),
+      'whole-app-ios-voip-token:' || p_apns_environment || ':' || v_token_hash
+    ]) as lock_value(lock_key)
+    order by lock_id
+  ) lock_row;
   v_session := public."wave1_session_authority_readback"();
   if v_session->>'state' <> 'ACTIVE'
     or coalesce((v_session->>'restoreOnly')::boolean, false)
@@ -135,13 +145,14 @@ begin
       from auth.sessions session_row
       where session_row.id = p_session_generation
         and session_row.user_id = p_expected_user_id
+        and (
+          session_row.not_after is null
+          or session_row.not_after > now()
+        )
     )
   then
     raise exception 'ios_voip_session_binding_mismatch';
   end if;
-
-  v_token_hash := public."wave1_sha256"('apns_voip:' || p_apns_environment || ':' || lower(p_token));
-  v_token_fingerprint := left(v_token_hash, 12);
 
   select token_row.*
   into v_install_owner
@@ -293,6 +304,16 @@ begin
     or (v_session->>'userId')::uuid is distinct from p_expected_user_id
     or (v_session->>'accountId')::uuid is distinct from p_expected_account_id
     or (v_session->>'sessionGeneration')::uuid is distinct from p_session_generation
+    or not exists (
+      select 1
+      from auth.sessions session_row
+      where session_row.id = p_session_generation
+        and session_row.user_id = p_expected_user_id
+        and (
+          session_row.not_after is null
+          or session_row.not_after > now()
+        )
+    )
   then
     raise exception 'ios_voip_session_binding_mismatch';
   end if;
@@ -383,7 +404,22 @@ begin
     'operationKey', btrim(p_operation_key)
   );
 
-  perform pg_advisory_xact_lock(hashtextextended('whole-app-ios-voip-authority', 0));
+  perform pg_advisory_xact_lock(lock_row.lock_id)
+  from (
+    select distinct hashtextextended(lock_key, 0) as lock_id
+    from unnest(
+      case when p_apns_environment = 'all'
+        then array[
+          'whole-app-ios-voip-install:development:' || btrim(p_install_id),
+          'whole-app-ios-voip-install:production:' || btrim(p_install_id)
+        ]
+        else array[
+          'whole-app-ios-voip-install:' || p_apns_environment || ':' || btrim(p_install_id)
+        ]
+      end
+    ) as lock_value(lock_key)
+    order by lock_id
+  ) lock_row;
 
   select count(*)::integer,
          count(*) filter (
@@ -493,6 +529,10 @@ begin
       from auth.sessions session_row
       where session_row.id = token_row."session_generation"
         and session_row.user_id = p_recipient_user_id
+        and (
+          session_row.not_after is null
+          or session_row.not_after > now()
+        )
     )
   order by token_row."last_seen_at" desc
   limit 5;

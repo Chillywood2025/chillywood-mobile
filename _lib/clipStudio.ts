@@ -471,6 +471,8 @@ export async function uploadClipStudioCoverImage(input: {
       mimeType,
       fileName: input.file.name,
       sizeBytes: input.file.size,
+      maximumSizeBytes: CLIP_STUDIO_COVER_MAX_BYTES,
+      tooLargeMessage: `Cover images support up to ${getClipStudioCoverLimitLabel()}.`,
     });
   } catch (error) {
     if (uploadedObject) {
@@ -487,55 +489,82 @@ export async function uploadClipStudioCoverImage(input: {
   }
   if (!uploadedObject) throw new Error("Cover upload failed. Try again.");
 
+  const previousCoverPath = toText(videoRow.thumb_storage_path);
+  let coverMetadataCommitted = false;
   try {
-    const previousCoverPath = toText(videoRow.thumb_storage_path);
-    if (previousCoverPath && previousCoverPath !== uploadedObject.objectKey) {
-      const previousProvider = normalizeMediaStorageProvider(videoRow.storage_provider);
-      const previousBucket = getMediaStorageProviderBucket({
-        provider: previousProvider,
-        bucket: videoRow.storage_bucket,
-        fallbackBucket: CREATOR_VIDEO_BUCKET,
-      });
-      if (usesPrivateOriginMediaGateway(previousProvider)) {
-        await deleteStoredMediaObject({
-          surfaceType: "creator_video",
-          provider: previousProvider,
-          bucket: previousBucket,
-          objectKey: previousCoverPath,
-          recordId: normalizedVideoId,
-        });
-      } else if (previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
-        const { error: previousDeleteError } = await supabase.storage
-          .from(CREATOR_VIDEO_BUCKET)
-          .remove([previousCoverPath]);
-        if (previousDeleteError) throw previousDeleteError;
-      }
-    }
-
     const update: TablesUpdate<"videos"> = {
       thumb_storage_path: uploadedObject.objectKey,
       thumb_url: null,
       updated_at: new Date().toISOString(),
     };
-    const { error: updateError } = await supabase
+    const updateRequest = supabase
       .from("videos")
       .update(update)
       .eq("id", normalizedVideoId);
-    if (updateError) throw updateError;
+    const guardedUpdateRequest = previousCoverPath
+      ? updateRequest.eq("thumb_storage_path", previousCoverPath)
+      : updateRequest.is("thumb_storage_path", null);
+    const { data: updatedVideo, error: updateError } = await guardedUpdateRequest
+      .select("thumb_storage_path")
+      .single()
+      .returns<{ thumb_storage_path: string | null }>();
+    if (updateError || toText(updatedVideo?.thumb_storage_path) !== uploadedObject.objectKey) {
+      throw updateError ?? new Error("The creator video cover changed before this upload completed.");
+    }
+    coverMetadataCommitted = true;
   } catch (error) {
-    await deleteStoredMediaObject({
-      surfaceType: "creator_video",
-      provider: uploadedObject.provider,
-      bucket: uploadedObject.bucket,
-      objectKey: uploadedObject.objectKey,
-    }).catch(() => undefined);
-    throw error;
+    // A response can fail after Postgres commits. Re-read before deleting the
+    // new object so a lost response cannot leave the row pointing at bytes we
+    // then remove.
+    const { data: currentVideo } = await supabase
+      .from("videos")
+      .select("thumb_storage_path")
+      .eq("id", normalizedVideoId)
+      .maybeSingle()
+      .returns<{ thumb_storage_path: string | null }>();
+    coverMetadataCommitted = toText(currentVideo?.thumb_storage_path) === uploadedObject.objectKey;
+    if (!coverMetadataCommitted) {
+      await deleteStoredMediaObject({
+        surfaceType: "creator_video",
+        provider: uploadedObject.provider,
+        bucket: uploadedObject.bucket,
+        objectKey: uploadedObject.objectKey,
+      }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  // The new cover is authoritative before the old one is retired. Old-object
+  // cleanup is best-effort: gateway delivery no longer recognizes a detached
+  // key, so a provider failure cannot break the newly committed cover or make
+  // the previous private object newly readable.
+  if (coverMetadataCommitted && previousCoverPath && previousCoverPath !== uploadedObject.objectKey) {
+    const previousProvider = normalizeMediaStorageProvider(videoRow.storage_provider);
+    const previousBucket = getMediaStorageProviderBucket({
+      provider: previousProvider,
+      bucket: videoRow.storage_bucket,
+      fallbackBucket: CREATOR_VIDEO_BUCKET,
+    });
+    if (usesPrivateOriginMediaGateway(previousProvider)) {
+      await deleteStoredMediaObject({
+        surfaceType: "creator_video",
+        provider: previousProvider,
+        bucket: previousBucket,
+        objectKey: previousCoverPath,
+        recordId: normalizedVideoId,
+      }).catch(() => undefined);
+    } else if (previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
+      await supabase.storage
+        .from(CREATOR_VIDEO_BUCKET)
+        .remove([previousCoverPath])
+        .catch(() => undefined);
+    }
   }
 
   return {
     storagePath: uploadedObject.objectKey,
     mimeType,
-    fileSizeBytes: Math.max(0, Number(input.file.size ?? 0) || 0),
+    fileSizeBytes: uploadedObject.sizeBytes,
     signedUrl,
   };
 }

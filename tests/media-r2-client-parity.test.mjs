@@ -20,6 +20,7 @@ test("the private-origin gateway recognizes both supported S3-compatible provide
   for (const header of ["Content-Length", "Content-Type", "If-None-Match"]) {
     assert.match(mediaStorage, new RegExp(`"${header}"`, "u"));
   }
+  assert.match(mediaStorage, /sizeBytes: verifiedSizeBytes/u);
 });
 
 test("creator source, cover, and delete paths route R2 through the authority gateway", () => {
@@ -33,6 +34,15 @@ test("creator source, cover, and delete paths route R2 through the authority gat
   );
   assert.match(clipStudio, /usesPrivateOriginMediaGateway\(previousProvider\)/u);
   assert.equal(clipStudio.includes("createSignedMediaDownload"), false);
+  assert.ok(
+    clipStudio.indexOf('update\(update\)')
+      < clipStudio.indexOf('objectKey: previousCoverPath'),
+    "cover metadata must commit before the previous private object is retired",
+  );
+  assert.match(clipStudio, /coverMetadataCommitted = toText\(currentVideo\?\.thumb_storage_path\) === uploadedObject\.objectKey/u);
+  assert.match(clipStudio, /deleteStoredMediaObject\([\s\S]*?objectKey: previousCoverPath,[\s\S]*?\)\.catch\(\(\) => undefined\)/u);
+  assert.match(creatorVideos, /file_size_bytes: uploadedObject\.sizeBytes/u);
+  assert.match(clipStudio, /fileSizeBytes: uploadedObject\.sizeBytes/u);
 });
 
 test("social attachments use the R2 gateway and preserve retry identity until deletion succeeds", () => {
@@ -44,6 +54,7 @@ test("social attachments use the R2 gateway and preserve retry identity until de
       < socialAttachments.indexOf('.from("social_attachments")\n    .delete()'),
     "object authority/deletion must finish before attachment metadata deletion",
   );
+  assert.match(socialAttachments, /size_bytes: uploadedObject\.sizeBytes/u);
 });
 
 test("VOD fallback routes R2 through exact signed delivery", () => {

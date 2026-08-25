@@ -789,6 +789,7 @@ export async function uploadCreatorVideo(input: {
     provider: MediaStorageProvider;
     bucket: string;
     objectKey: string;
+    sizeBytes: number;
   } | null = null;
 
   try {
@@ -806,6 +807,8 @@ export async function uploadCreatorVideo(input: {
       mimeType,
       fileName: input.file.name,
       sizeBytes: input.file.size,
+      maximumSizeBytes: getCreatorVideoUploadLimitBytes(runtimeUploadLimitMb),
+      tooLargeMessage: getCreatorVideoTooLargeMessage(null, runtimeUploadLimitMb),
     });
   } catch (error) {
     logCreatorVideoUpload("storage_upload_failed", {
@@ -832,7 +835,7 @@ export async function uploadCreatorVideo(input: {
     storage_path: uploadedObject.objectKey,
     thumb_storage_path: null,
     mime_type: mimeType,
-    file_size_bytes: typeof input.file.size === "number" ? input.file.size : null,
+    file_size_bytes: uploadedObject.sizeBytes,
     updated_at: new Date().toISOString(),
   };
 
