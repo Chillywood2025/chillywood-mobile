@@ -2587,7 +2587,7 @@ const authorityControlCompanionBlobAtHead = (file, head, root) => {
   return blob.status === 0 && blob.stdout.trim() === match[2] ? content.stdout : null;
 };
 
-export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOSITORY_ROOT, terminalBaseAdvancement = false } = {}) {
+export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOSITORY_ROOT, terminalBaseAdvancement = false, historicalEmbeddedCompanion = false } = {}) {
   if (!authorityControlCurrentTruthCompanionV2Required({ identity, root })) return null;
   const recordBytes = authorityControlCompanionBlobAtHead(AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH, identity?.headSha, root);
   const currentStateBytes = authorityControlCompanionBlobAtHead(AUTHORITY_CONTROL_CURRENT_STATE_PATH, identity?.headSha, root);
@@ -2600,10 +2600,11 @@ export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOS
   const terminalReceiptLifecyclePolicyExact = stableJson(record?.receiptLifecyclePolicy?.finiteTaskTerminalTruth) === stableJson(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1);
   const rollingCheckpoint = terminalBaseAdvancement && terminalReceiptLifecyclePolicyExact && record?.mainSha === checkpoint
     && verifyFiniteTaskTerminalBaseAdvancement({ repository: identity?.repository, baseRef: identity?.baseRef, historicalImplementationMerge: checkpoint, currentProtectedBase: identity?.baseSha, expectedCurrentProtectedBase: identity?.baseSha, root }).ok;
+  const generatedDocumentsMatch = historicalEmbeddedCompanion && terminalBaseAdvancement && terminalReceiptLifecyclePolicyExact
+    || currentStateBytes.toString("utf8") === renderCurrentState(record) && nextTaskBytes.toString("utf8") === renderNextTask(record);
   if (!(rollingCheckpoint || record?.mainSha === identity.baseSha && checkpoint === identity.baseSha)
     || record?.protectedMainAuthority?.checkpointTree !== checkpointTree
-    || currentStateBytes.toString("utf8") !== renderCurrentState(record)
-    || nextTaskBytes.toString("utf8") !== renderNextTask(record)) {
+    || !generatedDocumentsMatch) {
     throw new Error("AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_INVALID");
   }
   const value = {
@@ -3127,7 +3128,7 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
       || !Number.isSafeInteger(Number(scope?.additions)) || Number(scope?.additions) < 0
       || !Number.isSafeInteger(Number(scope?.deletions)) || Number(scope?.deletions) < 0
       || Number(scope.additions) + Number(scope.deletions) > 900)) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID");
-  const currentTruthCompanion = phase1Profile ? null : authorityControlCurrentTruthCompanionV2({ identity, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection });
+  const currentTruthCompanion = phase1Profile && !terminalReceiptLifecycleCorrection ? null : authorityControlCurrentTruthCompanionV2({ identity, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection });
   if (profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2") {
     const amendmentControlRepair = objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
     const testAdaptationOverlay = objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
@@ -4202,11 +4203,11 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const architectureDependencyAmendmentActive = architectureDependencyAmendment?.valid === true;
   const architectureDependencyProjection = dependencyAmendmentProjection(architectureDependencyAmendment);
   const phase1ControlAuthority = phase1ControlProfile(originalSubject?.objective);
-  const companionRequired = !phase1ControlAuthority && authorityControlCurrentTruthCompanionV2Required({ identity, root });
+  const companionRequired = (!phase1ControlAuthority || terminalReceiptLifecycleCorrection) && authorityControlCurrentTruthCompanionV2Required({ identity, root });
   let expectedCompanion = null;
   try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection }); } catch { expectedCompanion = null; }
   let originalCompanion = null;
-  try { originalCompanion = authorityControlCurrentTruthCompanionV2({ identity: { ...identity, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead }, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection }); } catch { originalCompanion = null; }
+  try { originalCompanion = authorityControlCurrentTruthCompanionV2({ identity: { ...identity, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead }, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection, historicalEmbeddedCompanion: historicalTerminalAuthorityValid }); } catch { originalCompanion = null; }
   const subjectHasCompanion = Object.hasOwn(originalSubject ?? {}, "currentTruthCompanion");
   const requiredCompanionPaths = originalCompanion?.requiredChangedPaths ?? [];
   const protectedBaseAdvanced = originalSubject?.protectedBase !== identity?.baseSha
@@ -5732,7 +5733,7 @@ export async function executeProtectedPhase1AppOnlyMergeGate({ repository, ident
 export function resolvePhase1SourceAuthorityEligibility({ repository, identity, root = REPOSITORY_ROOT } = {}) {
   const tree = gitText(root, ["rev-parse", `${identity?.headSha}^{tree}`]); const scope = observeFiniteTaskGitScope(root, identity?.baseSha, identity?.headSha);
   let currentTruth = null; try { currentTruth = readJson(root, "config/assurance/current-truth-v1.json"); } catch {}
-  const engineIdentity = { repository, pr: identity?.pr, branch: identity?.headRef, headSha: identity?.headSha, baseSha: identity?.baseSha };
+  const engineIdentity = { repository, pr: identity?.pr, branch: identity?.headRef, headSha: identity?.headSha, baseRef: identity?.baseRef, baseSha: identity?.baseSha };
   const authorities = currentTruth && scope ? observeTypedTaskAuthorities({ identity: engineIdentity, tree, scope, currentTruth, root }) : {};
   const candidates = [
     ["ARCHITECTURE", authorities?.architectureAuthority?.authorizationOk === true],
@@ -5746,7 +5747,7 @@ export function resolvePhase1SourceAuthorityEligibility({ repository, identity, 
 
 export async function resolvePhase1AdmissionMergeEligibility({ repository, pr, identity, phase1Evidence, publisherProvisioningReadback, token, root = REPOSITORY_ROOT } = {}) {
   const findings = [];
-  const engineIdentity = { repository, pr, branch: identity?.headRef, headSha: identity?.headSha, baseSha: identity?.baseSha };
+  const engineIdentity = { repository, pr, branch: identity?.headRef, headSha: identity?.headSha, baseRef: identity?.baseRef, baseSha: identity?.baseSha };
   const tree = gitText(root, ["rev-parse", `${identity?.headSha}^{tree}`]);
   const scope = observeFiniteTaskGitScope(root, identity?.baseSha, identity?.headSha);
   if (repository !== "Chillywood2025/chillywood-mobile" || pr !== identity?.pr || identity?.baseRef !== "main"
