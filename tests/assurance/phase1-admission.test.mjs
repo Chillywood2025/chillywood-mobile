@@ -25,6 +25,7 @@ import {
   parsePhase1AdmissionCheckReadback,
   partitionProtectedAdmissionChecks,
   resolveProtectedPhase1PublisherProvisioningReadback,
+  selectAuthoritativePhase1WorkflowIdentity,
   selectDurablePhase1PullRequest,
   verifyPhase1AggregateEvidence,
   verifyPhase1SourceAuthorityProof,
@@ -152,6 +153,37 @@ test("candidate remote identity accepts the exact Actions HTTPS projection witho
   ]) assert.equal(validPhase1CandidateRemoteIdentity(value), false);
 });
 
+test("dynamic run-name is bound through exact authoritative workflow metadata", () => {
+  const run = {
+    workflow_id: 251388000,
+    name: "phase1 pr=245 action=synchronize draft=true",
+    path: ".github/workflows/phase1-ci.yml",
+  };
+  const workflow = {
+    id: 251388000,
+    name: "Phase 1 CI",
+    path: ".github/workflows/phase1-ci.yml",
+    state: "active",
+  };
+  assert.deepEqual(selectAuthoritativePhase1WorkflowIdentity({ run, workflow }), {
+    id: 251388000,
+    name: "Phase 1 CI",
+    path: ".github/workflows/phase1-ci.yml",
+    state: "active",
+  });
+  for (const candidate of [
+    { ...workflow, id: 251388001 },
+    { ...workflow, name: run.name },
+    { ...workflow, path: ".github/workflows/other.yml" },
+    { ...workflow, state: "disabled_manually" },
+  ]) {
+    assert.throws(() => selectAuthoritativePhase1WorkflowIdentity({ run, workflow: candidate }), /PHASE1_RUN_WORKFLOW_IDENTITY_INVALID/u);
+  }
+  assert.throws(() => selectAuthoritativePhase1WorkflowIdentity({ run: { ...run, workflow_id: null }, workflow }), /PHASE1_RUN_WORKFLOW_IDENTITY_INVALID/u);
+  assert.throws(() => selectAuthoritativePhase1WorkflowIdentity({ run: { ...run, workflow_id: "251388000" }, workflow }), /PHASE1_RUN_WORKFLOW_IDENTITY_INVALID/u);
+  assert.throws(() => selectAuthoritativePhase1WorkflowIdentity({ run: { ...run, path: ".github/workflows/other.yml" }, workflow }), /PHASE1_RUN_WORKFLOW_IDENTITY_INVALID/u);
+});
+
 const successSteps = () => [
   { number: 1, name: "Checkout", status: "completed", conclusion: "success" },
   { number: 2, name: "Run safety and correctness coverage", status: "completed", conclusion: "success" },
@@ -182,8 +214,10 @@ function fixture({ draft = false, action = "synchronize", eventUpdatedAt = "2026
   const run = {
     id: 8001,
     runAttempt: 1,
+    workflowId: 251388000,
     name: "Phase 1 CI",
     path: ".github/workflows/phase1-ci.yml",
+    workflowState: "active",
     event: "pull_request",
     status: "completed",
     conclusion: failed.length > 0 ? "failure" : "success",
