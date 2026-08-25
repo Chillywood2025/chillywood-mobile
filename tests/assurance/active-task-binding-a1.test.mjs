@@ -2660,6 +2660,16 @@ test("A1 Phase 1 publisher-metadata compatibility profile is exact, bounded, and
   assert.match(renderNextTask(canonicalTruth), /exact `2`-path \/ `80`-line assurance-only profile/u);
 });
 
+test("A1 canonical truth binds the third terminal-verifier repair to the immutable PR254 successor evidence", () => {
+  const instances = canonicalTruth.taskContextArchitecture.terminalVerifierRepair.history.instances;
+  const current = instances.at(-1);
+  assert.equal(instances.length, 3);
+  assert.deepEqual([current.ordinal, current.pullRequest, current.protectedBase, current.priorInstanceId], [3, 256, "2d40bc75cfad9a28d7534f3dd8593dab63318769", "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"]);
+  assert.deepEqual([current.predecessor.pullRequest, current.predecessor.mergeSha, current.predecessor.authorityCommentId], [254, "2d40bc75cfad9a28d7534f3dd8593dab63318769", 5404284190]);
+  assert.deepEqual([current.receiptBindings.historicalTerminalReceipt.commentId, current.receiptBindings.predecessorReceipts.map(({ commentId }) => commentId)], [5404748755, [5404284190, 5404381682]]);
+  assert.equal(current.instanceId, "9e523767d9508b2f5b0ead48e5d7ee6dc3953a9c6039a47e987ac9f91137c38c");
+});
+
 test("A1 terminal repair receipt: exact preliminary receipt round-trips only as the history-bound stale predecessor of one final receipt", () => {
   const priorTruth = structuredClone(canonicalTruth);
   priorTruth.taskContextArchitecture.terminalVerifierRepair.history = structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY);

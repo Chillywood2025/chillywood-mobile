@@ -19,13 +19,13 @@
   "protectedMainAuthority": {
     "schemaVersion": 1,
     "policyId": "ROLLING_PROTECTED_MAIN_AUTHORITY_V1",
-    "checkpointSha": "5e595e684f4dcc9454eee5065066e1b48d20e3eb",
-    "checkpointTree": "e89be3a2987952152560ebb46bdffcf0ea094028",
+    "checkpointSha": "2d40bc75cfad9a28d7534f3dd8593dab63318769",
+    "checkpointTree": "4b6a65c52eb1cd12d0f2a191cfb7064a297fe10f",
     "allowProtectedAdvancement": true,
     "acceptedMergeSubjectFormats": ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", "GITHUB_TITLE_WITH_PR_SUFFIX"],
     "terminalSynchronizationRequiredFor": ["active-task-identity-change", "finite-lease-authority-change", "proof-tier-promotion", "provider-authority-change", "task-terminal-state", "public-release-authority"]
   },
-  "mainSha": "5e595e684f4dcc9454eee5065066e1b48d20e3eb",
+  "mainSha": "2d40bc75cfad9a28d7534f3dd8593dab63318769",
   "latestMergedImplementationPr": {"number": 229, "state": "merged", "head": "698871780a7610f677fdec1929d85389594d080a", "mergeSha": "5e595e684f4dcc9454eee5065066e1b48d20e3eb", "mergeTree": "e89be3a2987952152560ebb46bdffcf0ea094028", "title": "Close pre-release identity, legal, eligibility, and entitlement authority"},
   "android": {"distribution": "google_play_internal_testing", "packageId": "com.chillywood.mobile", "buildNumber": "86", "runtime": "1.0.0-android-chat-call-action-v1", "channel": "android-chat-livekit-qa", "updateId": "e3379ac9-61f0-40db-a014-81975be123e5", "source": "HISTORICAL_ONLY_PR_50_DOES_NOT_CONTAIN_FINAL_D2B_D2A"},
   "ios": {"distribution": "internal_testflight", "bundleId": "com.chillywood.mobile", "buildNumber": "8", "runtime": "1.0.0-iosqa1", "channel": "ios-qa", "updateId": "019fb099-f7c3-7130-97aa-a4bb1c49792f", "source": "HISTORICAL_ONLY_PR_50_NOT_EXACT_FINAL_MAIN"},
@@ -1792,17 +1792,17 @@
   },
   "taskContextArchitecture": {
     "contractId": "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1",
-    "architecturePr": 243,
-    "sourceHead": "5e44d1fd2a84f51b322eb40ca147c0882d1d664f",
-    "sourceTree": "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc",
-    "mergeSha": "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76",
-    "mergeTree": "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc",
-    "authorityCommentId": 5362647294,
-    "authorityBodyHash": "a2b650cc14e0350f6461b33de028028011dc0dfe93c2185a265d0171070dbe25",
-    "authoritySubjectHash": "cb22fae3ea5b5646a24107c02618e2c87a5af98fa2345ded9804329ae378e05f",
-    "repositoryReviewCommentId": 5362828091,
+    "architecturePr": 254,
+    "sourceHead": "c1aca873f55b45c72c4932e130dfd2ce8350a601",
+    "sourceTree": "4b6a65c52eb1cd12d0f2a191cfb7064a297fe10f",
+    "mergeSha": "2d40bc75cfad9a28d7534f3dd8593dab63318769",
+    "mergeTree": "4b6a65c52eb1cd12d0f2a191cfb7064a297fe10f",
+    "authorityCommentId": 5404284190,
+    "authorityBodyHash": "1fd000e6f8f7c2972b2563ea3519aeaa18bcfc81e852d446281e68c8ffe83a85",
+    "authoritySubjectHash": "0ba5f3a244afcdaf5945138885f46866868285c568cf18caab48ec672c2bbefd",
+    "repositoryReviewCommentId": 5404380785,
     "repositoryReview": {"P0":0,"P1":0,"launchImpactingP2":0},
-    "phase1": {"runId":32424350259,"attempt":1,"result":"PASS_13_OF_13"},
+    "phase1": {"runId":32801929144,"attempt":1,"result":"PASS_13_OF_13"},
     "doctrinePr": 226,
     "doctrineMerge": "c1f9ec1f71cc8bc4448afd2327c4341cac309573",
     "terminalTransitionConsumed": true,
@@ -1810,7 +1810,7 @@
     "pendingTransitionCountAfterSynchronization": 0,
     "pendingTransitions": [
       {"pr":226,"mergeSha":"c1f9ec1f71cc8bc4448afd2327c4341cac309573","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"},
-      {"pr":243,"mergeSha":"f74a6d53948a37fc35ef3dbb87e3741ede5c8d76","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"}
+      {"pr":254,"mergeSha":"2d40bc75cfad9a28d7534f3dd8593dab63318769","status":"CONSUMED_BY_THIS_TERMINAL_TRUTH"}
     ],
     "expectedNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
     "verificationDependencyClosureHash": "0188cbb076efaa1940f2dc2c701d3830cda0f68b5151847b50c24e819c1b878a",
@@ -2033,6 +2033,89 @@
               "publicRelease": false
             },
             "instanceId": "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"
+          },
+          {
+            "schemaVersion": 1,
+            "ordinal": 3,
+            "classification": "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1",
+            "repository": "Chillywood2025/chillywood-mobile",
+            "pullRequest": 256,
+            "branch": "codex/current-truth-successor-repair-v3",
+            "protectedBase": "2d40bc75cfad9a28d7534f3dd8593dab63318769",
+            "priorCurrentTruthHash": "6df16d07b1fd9de05486416a3a3a165aba038cf073754b534fe2f4c77bd3675b",
+            "priorInstanceId": "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe",
+            "predecessor": {
+              "pullRequest": 254,
+              "mergeSha": "2d40bc75cfad9a28d7534f3dd8593dab63318769",
+              "firstParent": "8aa74d0442eb9797900005d3c2dca9709b43c0c8",
+              "sourceHead": "c1aca873f55b45c72c4932e130dfd2ce8350a601",
+              "sourceTree": "4b6a65c52eb1cd12d0f2a191cfb7064a297fe10f",
+              "authorityCommentId": 5404284190,
+              "authoritySubjectHash": "0ba5f3a244afcdaf5945138885f46866868285c568cf18caab48ec672c2bbefd",
+              "authorityBodyHash": "1fd000e6f8f7c2972b2563ea3519aeaa18bcfc81e852d446281e68c8ffe83a85"
+            },
+            "receiptBindings": {
+              "historicalTerminalReceipt": {
+                "commentId": 5404748755,
+                "subjectHash": "5f968870bb2cb19d476dd3763d26580175e03019b00430c0214d5e451b89827c",
+                "commentBodyHash": "b3bc327e72a6ad072a92fbed6b8161ae7dbe8cb36899ad39b10734c3cf88fb0c",
+                "disposition": "HISTORICAL_STALE_TERMINAL_RECEIPT"
+              },
+              "predecessorReceipts": [
+                {
+                  "commentId": 5404284190,
+                  "subjectHash": "0ba5f3a244afcdaf5945138885f46866868285c568cf18caab48ec672c2bbefd",
+                  "commentBodyHash": "1fd000e6f8f7c2972b2563ea3519aeaa18bcfc81e852d446281e68c8ffe83a85",
+                  "disposition": "OWNER_ARCHITECTURE_AUTHORITY"
+                },
+                {
+                  "commentId": 5404381682,
+                  "subjectHash": "42fdd259ca08db066169f106d2d90af387a825adc6b47665591ae232d38b3a95",
+                  "commentBodyHash": "cc3538b829e195b3c931e7aaaa2e97f103b3927c20b1c54c9c7002c20200e063",
+                  "diffHash": "8402ef33c1f404b40c66aacde0a9bd6b736edb69cc4d20f7355de9e9efaa825b",
+                  "disposition": "CANONICAL_CURRENT"
+                }
+              ]
+            },
+            "pendingTransitionPolicyId": "PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1",
+            "pendingTransitions": [
+              {
+                "pr": 254,
+                "mergeSha": "2d40bc75cfad9a28d7534f3dd8593dab63318769",
+                "status": "CONSUMED_BY_THIS_TERMINAL_TRUTH"
+              }
+            ],
+            "expectedNextTask": "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE",
+            "profile": {
+              "schemaVersion": 2,
+              "profileId": "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE_V2",
+              "changedPaths": [
+                "CURRENT_STATE.md",
+                "NEXT_TASK.md",
+                "config/assurance/current-truth-v1.json",
+                "scripts/assurance/engineering-closure.mjs",
+                "scripts/assurance/lib.mjs",
+                "scripts/assurance/pr-scope.mjs",
+                "tests/assurance/active-task-binding-a1.test.mjs",
+                "tests/assurance/engineering-doctrine.test.mjs",
+                "tests/assurance/pr-scope-feature-bundles.test.mjs"
+              ],
+              "changedPathHash": "3352912101c40daae9381b626d135c7c78bdd13250b0bd6a285859ac0936bf7d",
+              "maximumFiles": 9,
+              "maximumNetLines": 1800
+            },
+            "singleUse": true,
+            "authority": {
+              "product": false,
+              "nativeProduct": false,
+              "database": false,
+              "providerMutation": false,
+              "build": false,
+              "submission": false,
+              "ota": false,
+              "publicRelease": false
+            },
+            "instanceId": "9e523767d9508b2f5b0ead48e5d7ee6dc3953a9c6039a47e987ac9f91137c38c"
           }
         ]
       }

@@ -6,7 +6,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 Ordinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.
 
-Terminal-verifier repair history retains `2` independently bound single-use instances. No historical instance or receipt is reusable, and this history grants no merge authority.
+Terminal-verifier repair history retains `3` independently bound single-use instances. No historical instance or receipt is reusable, and this history grants no merge authority.
 
 The bounded Phase 1 publisher-metadata compatibility successor is predeclared as an exact `2`-path / `80`-line assurance-only profile; it grants no merge or provider-mutation authority.
 
