@@ -1767,7 +1767,7 @@ export const PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1 = Object.freeze({
   schemaVersion: 1,
   contract: "PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1",
   owner: "Chillywood2025",
-  app: { name: "Chillywood Phase1 Admission App", slug: "chillywood-phase1-admission-app", public: false, permissions: { checks: "write", contents: "write", environments: "read", statuses: "write", metadata: "read" }, events: [], registration: "OWNER_UI_EXACT_GENERIC_REGISTRATION", presentationFieldsAuthority: "NON_AUTHORITATIVE", webhookEvidence: "JWT_GET_APP_HOOK_CONFIG_URL_EMPTY", ownerUiSettingsProjection: { callbackUrls: [], requestOauthOnInstall: false, deviceFlow: false, setupUrl: null, setupOnUpdate: false, evidence: "IMMUTABLE_OWNER_FINAL_SOURCE_ATTESTATION" } },
+  app: { name: "Chillywood Phase1 Admission App", slug: "chillywood-phase1-admission-app", public: false, permissions: { checks: "write", contents: "write", environments: "read", statuses: "write", metadata: "read" }, events: [], registration: "OWNER_UI_EXACT_GENERIC_REGISTRATION", presentationFieldsAuthority: "NON_AUTHORITATIVE", webhookEvidence: "JWT_APP_IDENTITY_ANONYMOUS_EXACT_SLUG_404_AND_JWT_DISABLED_HOOK_CONFIG_404", ownerUiSettingsProjection: { public: false, callbackUrls: [], requestOauthOnInstall: false, deviceFlow: false, setupUrl: null, setupOnUpdate: false, webhookActive: false, webhookUrl: null, evidence: "IMMUTABLE_OWNER_FINAL_SOURCE_ATTESTATION" } },
   installation: { repositorySelection: "selected", repositories: ["Chillywood2025/chillywood-mobile"], suspended: false },
   environment: { name: "phase1-admission-publisher", protectedBranches: false, customBranchPolicies: true, deploymentBranches: ["main"], requiredReviewers: [], preventSelfReview: false, allowAdministratorsToBypass: false },
   configuration: { appIntegrationIdVariable: "PHASE1_ADMISSION_APP_INTEGRATION_ID", appClientIdVariable: "PHASE1_ADMISSION_APP_CLIENT_ID", appInstallationIdVariable: "PHASE1_ADMISSION_APP_INSTALLATION_ID", appKeyFingerprintVariable: "PHASE1_ADMISSION_APP_KEY_FINGERPRINT", appPrivateKeySecret: "PHASE1_ADMISSION_APP_PRIVATE_KEY" },
@@ -1812,11 +1812,13 @@ export const phase1AdmissionPublisherProvisioningReadback = ({ appId, clientId, 
   };
   return { ...body, readbackHash: hashValue(body) };
 };
+const validPhase1AdmissionPublisherClientId = (value) => typeof value === "string"
+  && /^(?:Iv[0-9A-Za-z]{18}|Iv1\.[0-9a-f]{16})$/u.test(value);
 export const phase1AdmissionPublisherProvisioningReadbackValid = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const canonical = phase1AdmissionPublisherProvisioningReadback({ appId: value.app?.id, clientId: value.app?.clientId, installationId: value.installation?.id, environmentId: value.environment?.id, aggregateCheckIntegrationId: value.aggregate?.integrationId, keyFingerprint: value.app?.key?.publicKeySpkiSha256, jwtAppReadbackHash: value.app?.jwtSelfReadbackHash, webhookConfigHash: value.app?.webhook?.configReadbackHash, secretCreatedAt: value.environment?.secretMetadata?.[0]?.createdAt, secretUpdatedAt: value.environment?.secretMetadata?.[0]?.updatedAt, observedAt: value.observedAt, rulesetNodeId: value.ruleset?.nodeId, rulesetProviderUpdatedAt: value.ruleset?.providerUpdatedAt, bypassReadback: value.ruleset?.bypassReadback, stage1PutPayloadSha256: value.ruleset?.stage1PutPayloadSha256, finalPutPayloadSha256: value.ruleset?.finalPutPayloadSha256, rollbackPutPayloadSha256: value.ruleset?.rollbackPutPayloadSha256, stage: value.ruleset?.stage });
   return Number.isInteger(value.app?.id) && value.app.id > 0
-    && /^(?:Iv1\.[0-9a-f]+|[0-9]+)$/iu.test(value.app?.clientId ?? "")
+    && validPhase1AdmissionPublisherClientId(value.app?.clientId)
     && Number.isInteger(value.installation?.id) && value.installation.id > 0
     && Number.isInteger(value.environment?.id) && value.environment.id > 0
     && value.aggregate?.integrationId === value.app.id

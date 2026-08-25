@@ -19,11 +19,14 @@ import {
   evaluatePhase1Admission,
   evaluateRepositoryActionsQuiescence,
   inspectPhase1AggregateEvidence,
+  normalizePhase1PublisherAppPrivacyAndWebhookReadback,
   parsePhase1AdmissionCheckReadback,
   partitionProtectedAdmissionChecks,
+  resolveProtectedPhase1PublisherProvisioningReadback,
   selectDurablePhase1PullRequest,
   verifyPhase1AggregateEvidence,
   verifyProtectedPhase1PublisherProvisioningReadback,
+  validGitHubAppClientId,
 } from "../../scripts/assurance/phase1-admission.mjs";
 import {
   ARCHITECTURE_FINAL_SOURCE_MARKER,
@@ -66,6 +69,37 @@ const stableValue = (value) => {
   return value;
 };
 const stableJson = (value) => JSON.stringify(stableValue(value));
+
+test("private App and disabled webhook normalize the live omitted-field/404 shape without accepting public or active hooks", () => {
+  const omitted = normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null });
+  assert.deepEqual(omitted, { public: false, publicEvidence: "ANONYMOUS_EXACT_SLUG_404", publicAppStatus: 404, webhook: { evidence: "JWT_DISABLED_HOOK_CONFIG_404", httpStatus: 404, url: null, contentType: null, insecureSsl: null } });
+  const explicit = normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: { public: false, hook_attributes: { active: false } }, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null });
+  assert.equal(explicit.webhook.url, null);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: { public: true }, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: { public: null }, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: { public: undefined }, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 200, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: { hook_attributes: { active: true } }, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: { hook_attributes: {} }, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: { hook_attributes: { active: false, url: "https://example.invalid/hook" } }, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus: 500, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus: 200, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus: 404, webhookConfig: { url: "https://example.invalid/hook" } }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  for (const webhookStatus of [204, 401, 403, 422, 500, undefined]) assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  for (const publicAppStatus of [200, 403, 500, undefined]) assert.throws(() => normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus, webhookStatus: 404, webhookConfig: null }), /PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID/u);
+  assert.equal(hashValue(omitted), hashValue(normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null })));
+});
+
+test("caller-supplied 404 claims cannot acquire protected publisher readback provenance", async () => {
+  const appPrivacy = normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app: {}, publicAppStatus: 404, webhookStatus: 404, webhookConfig: null });
+  await assert.rejects(resolveProtectedPhase1PublisherProvisioningReadback({ repository: REPOSITORY, environmentToken: "untrusted", readToken: "untrusted", app: {}, appPrivacy, installation: {}, clientId: "Iv1.untrusted", keyFingerprint: "a".repeat(64), jwtAppReadbackHash: "b".repeat(64), webhookConfigHash: hashValue(appPrivacy.webhook) }), /PHASE1_PUBLISHER_APP_READBACK_PROVENANCE_INVALID/u);
+});
+
+test("GitHub App client IDs accept current and documented exact shapes only", () => {
+  assert.equal(validGitHubAppClientId("Iv23liJtjp7stElgO1T2"), true);
+  assert.equal(validGitHubAppClientId("Iv1.0123456789abcdef"), true);
+  for (const value of ["Iv1.abcdef", "4707730", "Iv23liJtjp7stElgO1T2-extra", "iv23liJtjp7stElgO1T2", "", null]) assert.equal(validGitHubAppClientId(value), false);
+});
 
 const successSteps = () => [
   { number: 1, name: "Checkout", status: "completed", conclusion: "success" },
@@ -370,7 +404,8 @@ test("privileged workflow is main-owned, private-App isolated, and never grants 
   assert.match(publisher, /PHASE1_PR_NOT_OPEN_UNMERGED/u);
   assert.match(publisher, /delete process\.env\.PHASE1_ADMISSION_APP_PRIVATE_KEY/u);
   assert.match(publisher, /mode === "merge" \? \{ contents: "write" \} : mode === "publisher" \? \{ checks: "write", environments: "read" \}/u);
-  assert.match(publisher, /githubRequest\("\/app\/hook\/config", jwt\)/u);
+  assert.match(publisher, /githubRawRequest\(`\/apps\/\$\{encodeURIComponent\(PHASE1_PUBLISHER_APP\.slug\)\}`, null, \{ redirect: "error" \}\)/u);
+  assert.match(publisher, /githubRawRequest\("\/app\/hook\/config", jwt, \{ redirect: "error" \}\)/u);
   assert.match(publisher, /environments\/\$\{environmentName\}`, readToken/u, "Actions-read environment discovery uses the protected workflow token");
   assert.match(publisher, /deployment-branch-policies`, "branch_policies", readToken/u, "Actions-read branch policy discovery uses the protected workflow token, not the App environment token");
   assert.doesNotMatch(publisher, /keyRecordId/u, "the runtime proves the private key by its SPKI fingerprint, never by an unreadable key record ID");
@@ -394,7 +429,7 @@ test("App-only gate binds PR identity, lifecycle, source, base, execution, provi
   };
   const provisioningReadback = phase1AdmissionPublisherProvisioningReadback({
     ...PUBLISHER_KEY_READBACK,
-    appId: 4242, clientId: "Iv1.abcdef", installationId: 55, environmentId: 66,
+    appId: 4242, clientId: "Iv1.0123456789abcdef", installationId: 55, environmentId: 66,
     aggregateCheckIntegrationId: 4242, observedAt: "2026-08-24T12:00:00Z", rulesetNodeId: "RRS_gate",
     rulesetProviderUpdatedAt: "2026-08-24T12:00:00-05:00", bypassReadback: "EXPLICIT_APP_PULL_REQUEST_ONLY",
     stage1PutPayloadSha256: "5".repeat(64), finalPutPayloadSha256: "6".repeat(64), rollbackPutPayloadSha256: "7".repeat(64),
@@ -485,7 +520,7 @@ test("immutable publisher anchor requires exact R1 Owner receipts and exact sepa
   const live = phase1AdmissionPublisherProvisioningReadback({
     ...PUBLISHER_KEY_READBACK,
     appId: 101,
-    clientId: "Iv1.abcdef",
+    clientId: "Iv1.0123456789abcdef",
     installationId: 202,
     environmentId: 303,
     aggregateCheckIntegrationId: 101,

@@ -52,6 +52,9 @@ export const PHASE1_EVIDENCE_STAGES = Object.freeze({
   FINAL: "FINAL_ADMISSION",
 });
 
+export const validGitHubAppClientId = (value) => typeof value === "string"
+  && /^(?:Iv[0-9A-Za-z]{18}|Iv1\.[0-9a-f]{16})$/u.test(value);
+
 const SHA_RE = /^[0-9a-f]{40}$/u;
 const DIGEST_RE = /^[0-9a-f]{64}$/u;
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
@@ -69,6 +72,7 @@ const appMergeDecisionBrand = new WeakSet();
 const maintenanceProofBrand = new WeakSet();
 const publisherRuntimeIdentityBrand = new WeakSet();
 const publisherProvisioningBrand = new WeakSet();
+const publisherAppPrivacyBrand = new WeakSet();
 const publisherAnchorBrand = new WeakSet();
 const sourceAuthorityBrand = new WeakSet();
 const lifecycleActions = new Set(["opened", "synchronize", "reopened", "edited", "ready_for_review", "converted_to_draft"]);
@@ -623,16 +627,20 @@ function parseArgs(argv) {
   }));
 }
 
-async function githubRequest(apiPath, token, options = {}) {
-  const response = await fetch(`https://api.github.com${apiPath}`, {
+async function githubRawRequest(apiPath, token, options = {}) {
+  return fetch(`https://api.github.com${apiPath}`, {
     ...options,
     headers: {
       Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
+      ...(typeof token === "string" && token ? { Authorization: `Bearer ${token}` } : {}),
       "X-GitHub-Api-Version": "2022-11-28",
       ...(options.headers ?? {}),
     },
   });
+}
+
+async function githubRequest(apiPath, token, options = {}) {
+  const response = await githubRawRequest(apiPath, token, options);
   if (!response.ok) throw new Error(`GITHUB_API_${response.status}:${apiPath}`);
   if (response.status === 204) return null;
   return response.json();
@@ -655,6 +663,26 @@ export function verifyProtectedPhase1PublisherProvisioningReadback(value) {
     && value?.readbackHash === hashValue(Object.fromEntries(Object.entries(value).filter(([key]) => key !== "readbackHash")));
 }
 
+export function normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app, publicAppStatus, webhookStatus, webhookConfig } = {}) {
+  const hasPublicField = app && typeof app === "object" && Object.hasOwn(app, "public");
+  const hasHookAttributes = app && typeof app === "object" && Object.hasOwn(app, "hook_attributes");
+  const hookAttributes = app?.hook_attributes;
+  const explicitHookDisabled = !hasHookAttributes || (hookAttributes && typeof hookAttributes === "object" && !Array.isArray(hookAttributes)
+    && hookAttributes.active === false && [undefined, null, ""].includes(hookAttributes.url));
+  const webhookNotConfigured = webhookStatus === 404 && webhookConfig == null;
+  const webhookProjection = {
+    evidence: "JWT_DISABLED_HOOK_CONFIG_404",
+    httpStatus: webhookStatus,
+    url: [null, ""].includes(webhookConfig?.url ?? null) ? null : webhookConfig.url,
+    contentType: webhookConfig?.content_type ?? null,
+    insecureSsl: webhookConfig?.insecure_ssl ?? null,
+  };
+  if ((hasPublicField && app.public !== false) || publicAppStatus !== 404
+    || !explicitHookDisabled || !webhookNotConfigured
+    || webhookProjection.url !== null) throw new Error("PHASE1_PUBLISHER_APP_PRIVACY_OR_WEBHOOK_INVALID");
+  return Object.freeze({ public: false, publicEvidence: "ANONYMOUS_EXACT_SLUG_404", publicAppStatus, webhook: Object.freeze(webhookProjection) });
+}
+
 async function githubCollection(apiPath, key, token) {
   const values = [];
   for (let page = 1; page <= 20; page += 1) {
@@ -674,8 +702,12 @@ const rulesetStagePayload = ({ ruleset, commonRules, statusRule, checks, bypassA
   rules: [...(restrictUpdates ? [{ type: "update", parameters: { update_allows_fetch_and_merge: false } }] : []), ...commonRules, { ...statusRule, parameters: { ...statusRule.parameters, required_status_checks: checks } }],
 });
 
-export async function resolveProtectedPhase1PublisherProvisioningReadback({ repository, environmentToken, readToken, app, installation, clientId, keyFingerprint, jwtAppReadbackHash, webhookConfigHash } = {}) {
+export async function resolveProtectedPhase1PublisherProvisioningReadback({ repository, environmentToken, readToken, app, appPrivacy, installation, clientId, keyFingerprint, jwtAppReadbackHash, webhookConfigHash } = {}) {
   if (repository !== REPOSITORY || typeof environmentToken !== "string" || !environmentToken || typeof readToken !== "string" || !readToken) throw new Error("PHASE1_PUBLISHER_READBACK_INPUT_INVALID");
+  const exactJwtReadbackHash = hashValue({ id: app?.id, clientId: app?.client_id, name: app?.name, slug: app?.slug, owner: app?.owner?.login, public: appPrivacy?.public, publicEvidence: appPrivacy?.publicEvidence, publicAppStatus: appPrivacy?.publicAppStatus, permissions: app?.permissions, events: app?.events, hook: appPrivacy?.webhook });
+  if (!publisherAppPrivacyBrand.has(appPrivacy) || appPrivacy?.public !== false || appPrivacy?.publicAppStatus !== 404
+    || appPrivacy?.publicEvidence !== "ANONYMOUS_EXACT_SLUG_404" || appPrivacy?.webhook?.evidence !== "JWT_DISABLED_HOOK_CONFIG_404"
+    || webhookConfigHash !== hashValue(appPrivacy.webhook) || jwtAppReadbackHash !== exactJwtReadbackHash) throw new Error("PHASE1_PUBLISHER_APP_READBACK_PROVENANCE_INVALID");
   const environmentName = "phase1-admission-publisher";
   const environment = await githubRequest(`/repos/${repository}/environments/${environmentName}`, readToken);
   const branches = await githubCollection(`/repos/${repository}/environments/${environmentName}/deployment-branch-policies`, "branch_policies", readToken);
@@ -722,7 +754,7 @@ export async function resolveProtectedPhase1PublisherProvisioningReadback({ repo
     schemaVersion: 1, contract: "PHASE1_ADMISSION_PUBLISHER_PROVISIONING_READBACK_V1", repository, owner: "Chillywood2025",
     originalContractHash: engine.hashValue(engine.PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1),
     observedAt: [environment?.updated_at, ruleset?.updated_at].filter(validTimestamp).sort((left, right) => Date.parse(left) - Date.parse(right)).at(-1),
-    app: { id: app.id, clientId, name: app.name, slug: app.slug, public: app.public, permissions: { checks: "write", contents: "write", environments: "read", statuses: "write", metadata: "read" }, events: app.events, webhook: { active: false, url: null, configReadbackHash: webhookConfigHash }, ownerUiSettingsProjection: engine.PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.app.ownerUiSettingsProjection, jwtSelfReadbackHash: jwtAppReadbackHash, key: { publicKeySpkiSha256: keyFingerprint } },
+    app: { id: app.id, clientId, name: app.name, slug: app.slug, public: false, permissions: { checks: "write", contents: "write", environments: "read", statuses: "write", metadata: "read" }, events: app.events, webhook: { active: false, url: null, configReadbackHash: webhookConfigHash }, ownerUiSettingsProjection: engine.PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.app.ownerUiSettingsProjection, jwtSelfReadbackHash: jwtAppReadbackHash, key: { publicKeySpkiSha256: keyFingerprint } },
     installation: { id: installation.id, appId: app.id, repositorySelection: installation.repository_selection, repositories: [repository], suspended: installation.suspended_at != null },
     environment: { id: environment.id, name: environmentName, protectedBranches: false, customBranchPolicies: true, deploymentBranches: ["main"], requiredReviewers: [], preventSelfReview: false, allowAdministratorsToBypass: false, variableNames: Object.keys(variableMap).sort(), secretNames: secrets.map(({ name }) => name).sort(), secretMetadata: secrets.map(({ name, created_at: createdAt, updated_at: updatedAt }) => ({ name, createdAt, updatedAt })).sort((a, b) => a.name.localeCompare(b.name)), secretValuesIncluded: false },
     aggregate: { context: PHASE1_ADMISSION_CHECK_NAME, publisher: "DEDICATED_GITHUB_APP_ONLY", rawLaneExecutionCount: 13, displayOnlyNeverPassing: true, mergeAuthoritySource: "APP_ONLY_SHA_BOUND_MERGE_API", integrationId: app.id },
@@ -737,7 +769,7 @@ export async function resolveProtectedPhase1PublisherProvisioningReadback({ repo
 const base64url = (value) => Buffer.from(value).toString("base64url");
 
 function githubAppJwt(clientId, privateKey) {
-  if (typeof clientId !== "string" || !/^(Iv1\.[0-9a-f]+|[0-9]+)$/iu.test(clientId)
+  if (!validGitHubAppClientId(clientId)
     || typeof privateKey !== "string" || !privateKey.includes("PRIVATE KEY")) throw new Error("PHASE1_PUBLISHER_CREDENTIAL_INPUT_INVALID");
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
@@ -750,20 +782,21 @@ function githubAppJwt(clientId, privateKey) {
 async function publisherInstallationToken(repository, readToken, clientId, privateKey, expectedAppId, expectedInstallationId, expectedKeyFingerprint, mode = "publisher") {
   const jwt = githubAppJwt(clientId, privateKey);
   const app = await githubRequest("/app", jwt);
-  const hookConfig = await githubRequest("/app/hook/config", jwt);
   const keyFingerprint = crypto.createHash("sha256").update(crypto.createPublicKey(privateKey.replace(/\\n/gu, "\n")).export({ type: "spki", format: "der" })).digest("hex");
-  const hookProjection = { url: [null, ""].includes(hookConfig?.url ?? null) ? null : hookConfig?.url, contentType: hookConfig?.content_type ?? null, insecureSsl: hookConfig?.insecure_ssl ?? null };
-  const webhookConfigHash = hashValue(hookProjection);
-  const jwtAppReadbackHash = hashValue({ id: app?.id, clientId: app?.client_id, name: app?.name, slug: app?.slug, owner: app?.owner?.login, public: app?.public, permissions: app?.permissions, events: app?.events, hook: hookProjection });
   if (!Number.isInteger(expectedAppId) || expectedAppId < 1 || app?.id !== expectedAppId
     || app?.name !== PHASE1_PUBLISHER_APP.name || app?.slug !== PHASE1_PUBLISHER_APP.slug
-    || app?.owner?.login !== "Chillywood2025"
-    || app?.client_id !== clientId
-    || app?.public !== false
+    || app?.owner?.login !== "Chillywood2025" || app?.client_id !== clientId
     || stableJson(app?.permissions) !== stableJson({ checks: "write", contents: "write", environments: "read", metadata: "read", statuses: "write" })
     || !Array.isArray(app?.events) || app.events.length !== 0
-    || app?.hook_attributes?.active !== false || hookProjection.url !== null
     || expectedKeyFingerprint !== keyFingerprint) throw new Error("PHASE1_PUBLISHER_APP_CONTRACT_INVALID");
+  const publicAppResponse = await githubRawRequest(`/apps/${encodeURIComponent(PHASE1_PUBLISHER_APP.slug)}`, null, { redirect: "error" });
+  const hookResponse = await githubRawRequest("/app/hook/config", jwt, { redirect: "error" });
+  const hookConfig = null;
+  const appPrivacy = normalizePhase1PublisherAppPrivacyAndWebhookReadback({ app, publicAppStatus: publicAppResponse.status, webhookStatus: hookResponse.status, webhookConfig: hookConfig });
+  publisherAppPrivacyBrand.add(appPrivacy);
+  const hookProjection = appPrivacy.webhook;
+  const webhookConfigHash = hashValue(hookProjection);
+  const jwtAppReadbackHash = hashValue({ id: app?.id, clientId: app?.client_id, name: app?.name, slug: app?.slug, owner: app?.owner?.login, public: appPrivacy.public, publicEvidence: appPrivacy.publicEvidence, publicAppStatus: appPrivacy.publicAppStatus, permissions: app?.permissions, events: app?.events, hook: hookProjection });
   const installations = [];
   for (let page = 1; page <= 20; page += 1) {
     const values = await githubRequest(`/app/installations?per_page=100&page=${page}`, jwt);
@@ -791,8 +824,8 @@ async function publisherInstallationToken(repository, readToken, clientId, priva
     const runtimeBody = { schemaVersion: 1, contract: "PHASE1_ADMISSION_PUBLISHER_RUNTIME_IDENTITY_V1", repository, owner: "Chillywood2025", appId: app.id, clientId, installationId: eligible[0].id, appName: app.name, appSlug: app.slug, repositorySelection: eligible[0].repository_selection, repositories: [repository], permissions: { checks: "write", contents: "write", environments: "read", statuses: "write", metadata: "read" }, suspended: false };
     const runtimeIdentity = { ...runtimeBody, runtimeIdentityHash: hashValue(runtimeBody) };
     publisherRuntimeIdentityBrand.add(runtimeIdentity);
-    const provisioningReadback = mode === "publisher" ? await resolveProtectedPhase1PublisherProvisioningReadback({ repository, environmentToken: access.token, readToken, app, installation: eligible[0], clientId, keyFingerprint, jwtAppReadbackHash, webhookConfigHash }) : null;
-    return { token: access.token, mode, appId: app.id, installationId: eligible[0].id, clientId, app, installation: eligible[0], jwtAppReadbackHash, webhookConfigHash, runtimeIdentity, provisioningReadback };
+    const provisioningReadback = mode === "publisher" ? await resolveProtectedPhase1PublisherProvisioningReadback({ repository, environmentToken: access.token, readToken, app, appPrivacy, installation: eligible[0], clientId, keyFingerprint, jwtAppReadbackHash, webhookConfigHash }) : null;
+    return { token: access.token, mode, appId: app.id, installationId: eligible[0].id, clientId, app, appPrivacy, installation: eligible[0], jwtAppReadbackHash, webhookConfigHash, runtimeIdentity, provisioningReadback };
   } catch (error) {
     await revokePublisherToken(access.token);
     throw error;
@@ -1326,12 +1359,13 @@ async function performAppOnlyMerge({ repository, identity, decision, readToken, 
     repository,
     environmentToken: publisher.token,
     readToken,
-    app: publisher.app,
-    installation: publisher.installation,
-    clientId: publisher.clientId,
+    app: merger.app,
+    appPrivacy: merger.appPrivacy,
+    installation: merger.installation,
+    clientId: merger.clientId,
     keyFingerprint: publisher.provisioningReadback.app.key.publicKeySpkiSha256,
-    jwtAppReadbackHash: publisher.provisioningReadback.app.jwtSelfReadbackHash,
-    webhookConfigHash: publisher.provisioningReadback.app.webhook.configReadbackHash,
+    jwtAppReadbackHash: merger.jwtAppReadbackHash,
+    webhookConfigHash: merger.webhookConfigHash,
   });
   if (currentProvisioning.readbackHash !== publisher.provisioningReadback.readbackHash) throw new Error("PHASE1_APP_MERGE_PROVIDER_DRIFT");
   const protectedFinal = (await resolveProtectedPhase1AdmissionEvidence({
