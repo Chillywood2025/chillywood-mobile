@@ -2517,7 +2517,7 @@ function embeddedRollingAuthorityBound(commit, checkpoint, gitCommand) {
   }
 }
 
-function parseProtectedPullRequestMergeSubject(subject) {
+export function parseProtectedPullRequestMergeSubject(subject) {
   const patterns = [
     ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge pull request #([1-9][0-9]*) from [^/\s]+\/(.+)$/u, "GITHUB_CLASSIC_MERGE_PULL_REQUEST"],
     ["GITHUB_TITLE_WITH_PR_SUFFIX", /^\S(?:.*\S)? \(#([1-9][0-9]*)\)$/u, "GITHUB_TITLE_WITH_PR_SUFFIX"],

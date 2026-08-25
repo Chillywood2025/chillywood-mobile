@@ -28,7 +28,7 @@ import {
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { finiteTaskLeaseFor, finiteTaskReservationProjection, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -716,6 +716,9 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   const proofSource = fs.readFileSync("scripts/proof-autonomous-systems-contract.mjs", "utf8");
   assert.match(proofSource, /resolvePhase1SourceAuthorityEligibility/u);
   assert.match(proofSource, /evaluateFiniteTaskLeaseRuntime\(\{[^}]*assuranceControlAuthorityProof/u);
+  const closureSource = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
+  assert.match(closureSource, /import \{[^;]*parseProtectedPullRequestMergeSubject[^;]*\} from "\.\/lib\.mjs";/u);
+  assert.deepEqual(parseProtectedPullRequestMergeSubject("Merge pull request #251 from Chillywood2025/codex/phase1-risk-based-admission-v5"), { ok: true, format: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", variant: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", prNumber: 251, sourceBranch: "codex/phase1-risk-based-admission-v5" });
   assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", PHASE1_RISK_BASED_ADMISSION_REFORM_V1]);
   assert.equal(subject.currentTruthCompanionIncluded, false);
   assert.equal(subject.reusableByAnotherPr, false);
