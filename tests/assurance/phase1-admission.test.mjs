@@ -21,6 +21,7 @@ import {
   evaluateRepositoryActionsQuiescence,
   inspectPhase1AggregateEvidence,
   normalizePhase1PublisherAppPrivacyAndWebhookReadback,
+  normalizeProtectedPhase1RulesetUpdateReadback,
   parsePhase1AdmissionCheckReadback,
   partitionProtectedAdmissionChecks,
   resolveProtectedPhase1PublisherProvisioningReadback,
@@ -109,6 +110,19 @@ test("omitted ruleset bypass actors with current-user never require immutable st
   assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: [{ actor_id: 1, actor_type: "Integration", bypass_mode: "pull_request" }], current_user_can_bypass: "never" }, publisherAppId }), null);
   assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: [], current_user_can_bypass: "always" }, publisherAppId }), null);
   assert.equal(classifyProtectedPhase1RulesetBypassReadback({ ruleset: { bypass_actors: appBypass, current_user_can_bypass: "never" }, publisherAppId: null }), null);
+});
+
+test("live ruleset update readback normalizes omitted false parameters without accepting broader update authority", () => {
+  const canonical = { type: "update", parameters: { update_allows_fetch_and_merge: false } };
+  assert.deepEqual(normalizeProtectedPhase1RulesetUpdateReadback([{ type: "pull_request" }, { type: "required_status_checks" }, { type: "update" }]), canonical);
+  assert.deepEqual(normalizeProtectedPhase1RulesetUpdateReadback([canonical, { type: "pull_request" }]), canonical);
+  for (const rules of [
+    [], null, [{ type: "pull_request" }], [{ type: "update" }, { type: "update" }],
+    [{ type: "update", parameters: {} }], [{ type: "update", parameters: null }], [{ type: "update", parameters: undefined }],
+    [{ type: "update", parameters: { update_allows_fetch_and_merge: true } }],
+    [{ type: "update", parameters: { update_allows_fetch_and_merge: false, extra: false } }],
+    [{ type: "update", extra: false }],
+  ]) assert.equal(normalizeProtectedPhase1RulesetUpdateReadback(rules), null);
 });
 
 test("GitHub App client IDs accept current and documented exact shapes only", () => {
