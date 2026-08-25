@@ -629,6 +629,9 @@ function evaluateRulesetRecoveryReceipt({ observation, current } = {}) {
     && ruleSuiteDetails.length === phase1RulesetRecoveryPolicy.windows.length
     && same(ruleSuiteSummaries, canonicalRuleSuiteSummaries)
     && same(ruleSuiteDetails, canonicalRuleSuiteDetails)
+    && canonicalRuleSuiteSummaries.every((summary) => positiveInteger(summary?.id)
+      && summary?.ref === "refs/heads/main"
+      && Number.isFinite(recoveryTimestamp(summary?.pushed_at)))
     && new Set(canonicalRuleSuiteSummaries.map((entry) => entry.id)).size === canonicalRuleSuiteSummaries.length
     && new Set(canonicalRuleSuiteDetails.map((entry) => entry.id)).size === canonicalRuleSuiteDetails.length
     && canonicalRuleSuiteDetails.every((detail) => canonicalRuleSuiteSummaries.some((summary) => same(summary, recoveryRuleSuiteProjection(detail))))
@@ -771,7 +774,7 @@ function evaluateRulesetRecoveryWindows({ chain, canonicalFinalState, observatio
       const pushed = recoveryTimestamp(entry?.pushed_at);
       return entry?.ref === "refs/heads/main" && Number.isFinite(pushed)
         && Number.isFinite(openedAt) && Number.isFinite(restoredAt)
-        && openedAt < pushed && pushed < restoredAt;
+        && openedAt <= pushed && pushed <= restoredAt;
     });
     if (intervalRuleSuites.length !== 1 || intervalRuleSuites[0]?.id !== ruleSuite?.id) {
       findings.push("PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID");

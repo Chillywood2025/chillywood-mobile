@@ -556,6 +556,22 @@ test("ruleset recovery rejects omission, truncation, replay, drift, extra writes
       currentUserCanBypass: "never",
     };
     mutate(candidate);
+    if (candidate.rebuildReceipt === true) {
+      candidate.ruleSuites.sort((left, right) => {
+        const leftTimestamp = Date.parse(left?.pushed_at ?? "");
+        const rightTimestamp = Date.parse(right?.pushed_at ?? "");
+        return (Number.isFinite(leftTimestamp) ? leftTimestamp : 0) - (Number.isFinite(rightTimestamp) ? rightTimestamp : 0)
+          || (left?.id ?? 0) - (right?.id ?? 0);
+      });
+      candidate.recoveryReceipt = buildPhase1RulesetRecoveryReceipt({
+        historySummaries: candidate.entries,
+        historyDetails: candidate.entries,
+        ruleSuiteSummaries: candidate.ruleSuites,
+        ruleSuiteDetails: candidate.recoveryEvidence.map(({ ruleSuiteDetail }) => ruleSuiteDetail),
+        currentRuleset: currentRuleset(candidate.entries.at(-1), candidate.providerUpdatedAt),
+      });
+      candidate.recoveryReceiptComment.body = formatPhase1RulesetRecoveryReceiptComment(candidate.recoveryReceipt);
+    }
     return evaluateCutover({
       stage: "FINAL_AGGREGATE_ONLY",
       entries: candidate.entries,
@@ -597,6 +613,18 @@ test("ruleset recovery rejects omission, truncation, replay, drift, extra writes
     ["wrong detailed rule source", (value) => { value.recoveryEvidence[2].ruleSuiteDetail.rule_evaluations[0].rule_source.id = 1; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_DETAIL_INVALID"],
     ["required status check did not fail", (value) => { value.recoveryEvidence[2].ruleSuiteDetail.rule_evaluations[0].result = "pass"; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_DETAIL_INVALID"],
     ["second main write in open window", (value) => { value.ruleSuites.push({ ...structuredClone(value.ruleSuites[2]), id: 3812000001, pushed_at: "2026-08-25T08:00:04-05:00" }); }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
+    ["second main write at open boundary", (value) => {
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[2]), id: 3812000002, pushed_at: bootstrapOpenedAt });
+      value.rebuildReceipt = true;
+    }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
+    ["second main write at restore boundary", (value) => {
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[2]), id: 3812000003, pushed_at: bootstrapRestoredAt });
+      value.rebuildReceipt = true;
+    }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
+    ["malformed main write timestamp", (value) => {
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[2]), id: 3812000004, pushed_at: "not-a-date" });
+      value.rebuildReceipt = true;
+    }, "PHASE1_RULESET_RECOVERY_RECEIPT_EVIDENCE_INVALID"],
     ["missing provider file", (value) => { value.recoveryEvidence[2].files.pop(); }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
     ["non-modified provider file", (value) => { value.recoveryEvidence[2].files[0].status = "added"; }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
     ["merge diff path omitted", (value) => { value.recoveryEvidence[2].mergeIdentity.changedPaths.pop(); }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
