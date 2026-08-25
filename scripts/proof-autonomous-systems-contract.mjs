@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -8,6 +8,22 @@ import {
   HISTORICAL_PROVIDER_FACT
 } from "./assurance/lib.mjs";
 import { evaluateAutonomousEngineeringRequest, resolvePhase1SourceAuthorityEligibility } from "./assurance/engineering-closure.mjs";
+
+// GitHub Actions must use the shared exact-event lifecycle classifier. Local
+// proof remains strict and standalone; draft classification never grants merge
+// or provider authority.
+if (process.env.GITHUB_ACTIONS === "true") {
+  const wrapper = new URL("./guard-autonomous-systems-contract.mjs", import.meta.url);
+  const wrapped = spawnSync(process.execPath, [wrapper.pathname], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: process.env,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (wrapped.stdout) process.stdout.write(wrapped.stdout);
+  if (wrapped.stderr) process.stderr.write(wrapped.stderr);
+  process.exit(wrapped.status ?? 1);
+}
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");

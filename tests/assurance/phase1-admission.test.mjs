@@ -27,6 +27,7 @@ import {
   resolveProtectedPhase1PublisherProvisioningReadback,
   selectDurablePhase1PullRequest,
   verifyPhase1AggregateEvidence,
+  verifyPhase1SourceAuthorityProof,
   verifyProtectedPhase1PublisherProvisioningReadback,
   validGitHubAppClientId,
   validPhase1CandidateRemoteIdentity,
@@ -42,6 +43,7 @@ import {
   architectureMaintenanceSubject,
   hashValue,
   phase1AdmissionPublisherProvisioningReadback,
+  phase1InstalledPublisherAnchorFindings,
   verifyPhase1AdmissionPublisherImmutableAnchor,
 } from "../../scripts/assurance/engineering-closure.mjs";
 
@@ -280,6 +282,97 @@ test("9: draft 13/13 is source-readiness acceptable and grants no merge authorit
   const decision = evaluatePhase1Admission(fixture({ draft: true, action: "opened" }));
   assert.equal(decision.result, PHASE1_ADMISSION_RESULTS.SOURCE_READINESS_ACCEPTABLE);
   assert.equal(decision.mergeAuthorityGranted, false);
+});
+
+test("draft source-scope proof is exact-lifecycle bound and cannot become ready merge authority", () => {
+  const eventUpdatedAt = "2026-08-24T12:00:00Z";
+  const draftLifecycle = {
+    mode: PHASE1_MODES.DRAFT,
+    draft: true,
+    action: "synchronize",
+    eventUpdatedAt,
+    generation: derivePhase1LifecycleGeneration({ identity, mode: PHASE1_MODES.DRAFT, action: "synchronize", eventUpdatedAt }),
+  };
+  const proof = {
+    schemaVersion: 1,
+    contract: "PHASE1_SOURCE_AUTHORITY_RESOLUTION_V2",
+    producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1",
+    repository: identity.repository,
+    pr: identity.pr,
+    headRef: identity.headRef,
+    headSha: identity.headSha,
+    sourceTree: identity.sourceTree,
+    baseRef: identity.baseRef,
+    baseSha: identity.baseSha,
+    authorityType: "DRAFT_SOURCE_SCOPE",
+    authorityMode: PHASE1_MODES.DRAFT,
+    draftSourceOnly: true,
+    mergeAuthorityGranted: false,
+    lifecycleAction: draftLifecycle.action,
+    lifecycleEventUpdatedAt: draftLifecycle.eventUpdatedAt,
+    lifecycleGeneration: draftLifecycle.generation,
+    scopeHash: "a".repeat(64),
+    findings: [],
+  };
+  assert.equal(verifyPhase1SourceAuthorityProof(proof, { identity, lifecycle: draftLifecycle }), true);
+  for (const mutate of [
+    (candidate) => { candidate.headSha = "9".repeat(40); },
+    (candidate) => { candidate.baseSha = "8".repeat(40); },
+    (candidate) => { candidate.lifecycleAction = "opened"; },
+    (candidate) => { candidate.lifecycleGeneration = "b".repeat(64); },
+    (candidate) => { candidate.authorityMode = PHASE1_MODES.READY; },
+    (candidate) => { candidate.draftSourceOnly = false; },
+    (candidate) => { candidate.mergeAuthorityGranted = true; },
+  ]) {
+    const candidate = structuredClone(proof);
+    mutate(candidate);
+    assert.equal(verifyPhase1SourceAuthorityProof(candidate, { identity, lifecycle: draftLifecycle }), false);
+  }
+  const replayedLifecycle = { ...draftLifecycle, eventUpdatedAt: "2026-08-24T12:01:00Z" };
+  assert.equal(verifyPhase1SourceAuthorityProof(proof, { identity, lifecycle: replayedLifecycle }), false);
+  const readyLifecycle = {
+    ...draftLifecycle,
+    mode: PHASE1_MODES.READY,
+    draft: false,
+    action: "ready_for_review",
+    generation: derivePhase1LifecycleGeneration({ identity, mode: PHASE1_MODES.READY, action: "ready_for_review", eventUpdatedAt }),
+  };
+  assert.equal(verifyPhase1SourceAuthorityProof(proof, { identity, lifecycle: readyLifecycle }), false);
+  const readyProof = {
+    ...proof,
+    authorityType: "FINITE_TASK_IMPLEMENTATION",
+    authorityMode: PHASE1_MODES.READY,
+    draftSourceOnly: false,
+    lifecycleAction: readyLifecycle.action,
+    lifecycleGeneration: readyLifecycle.generation,
+  };
+  assert.equal(verifyPhase1SourceAuthorityProof(readyProof, { identity, lifecycle: readyLifecycle }), true);
+  assert.equal(verifyPhase1SourceAuthorityProof(readyProof, { identity, lifecycle: draftLifecycle }), false);
+});
+
+test("installed publisher anchor defers only merge-only cutover history for draft decisions", () => {
+  const validCutover = {
+    cutoverLock: "OPEN",
+    stageReceiptChainHash: "c".repeat(64),
+    paginationComplete: true,
+    findings: [],
+  };
+  const findings = (requireFinalSource, cutoverState) => phase1InstalledPublisherAnchorFindings({
+    verifiedFindings: [],
+    installedGitValid: true,
+    requireFinalSource,
+    cutoverState,
+  });
+  assert.deepEqual(findings(false, null), []);
+  assert.deepEqual(findings(true, validCutover), []);
+  for (const inaccessibleOrInvalid of [
+    null,
+    { ...validCutover, cutoverLock: "CLOSED" },
+    { ...validCutover, paginationComplete: false },
+    { ...validCutover, stageReceiptChainHash: "wrong-chain" },
+    { ...validCutover, findings: ["PHASE1_RULESET_CUTOVER_REPLAY"] },
+  ]) assert.deepEqual(findings(true, inaccessibleOrInvalid), ["PHASE1_PUBLISHER_RULESET_CUTOVER_STATE_INVALID"]);
+  assert.deepEqual(phase1InstalledPublisherAnchorFindings({ verifiedFindings: [], installedGitValid: false, requireFinalSource: false }), ["PHASE1_PUBLISHER_ANCHOR_SOURCE_MERGE_INVALID"]);
 });
 
 test("10: ready_for_review requires a fresh lifecycle generation", () => {

@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { canonicalGitText, classifyGitHubExecutionIdentity, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
-import { inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
+import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -5840,6 +5840,18 @@ async function resolveInstalledPhase1CutoverState({ repository, identity, anchor
   } catch { return null; }
 }
 
+export function phase1InstalledPublisherAnchorFindings({ verifiedFindings = [], installedGitValid = false, requireFinalSource = false, cutoverState = null } = {}) {
+  const finalCutoverValid = cutoverState?.cutoverLock === "OPEN"
+    && /^[0-9a-f]{64}$/u.test(cutoverState?.stageReceiptChainHash ?? "")
+    && cutoverState?.paginationComplete === true
+    && Array.isArray(cutoverState?.findings) && cutoverState.findings.length === 0;
+  return [...new Set([
+    ...(Array.isArray(verifiedFindings) ? verifiedFindings : ["PHASE1_PUBLISHER_IMMUTABLE_ANCHOR_INVALID"]),
+    ...(!installedGitValid ? ["PHASE1_PUBLISHER_ANCHOR_SOURCE_MERGE_INVALID"] : []),
+    ...(requireFinalSource === true && !finalCutoverValid ? ["PHASE1_PUBLISHER_RULESET_CUTOVER_STATE_INVALID"] : []),
+  ])].sort();
+}
+
 export async function resolvePhase1AdmissionPublisherAnchor({ repository, identity, publisherProvisioningReadback, requireFinalSource = false, root = REPOSITORY_ROOT } = {}) {
   const baseFindings = [];
   if (repository !== "Chillywood2025/chillywood-mobile" || identity?.repository !== repository || identity?.baseRef !== "main") baseFindings.push("PHASE1_PUBLISHER_ANCHOR_IDENTITY_INVALID");
@@ -5849,14 +5861,20 @@ export async function resolvePhase1AdmissionPublisherAnchor({ repository, identi
   const installed = readTaskArtifactAtGitHead(policy.configurationPath, identity.baseSha, root)?.artifact?.[policy.configurationProperty] ?? null;
   if (installed) {
     const sourceComments = paginatedIssueComments(root, repository, installed.sourcePr);
-  const verified = verifyPhase1AdmissionPublisherImmutableAnchor({ anchor: installed, liveProvisioningReadback: publisherProvisioningReadback, comments: sourceComments.comments, paginationComplete: sourceComments.complete, repository });
-  const mergeParents = gitText(root, ["show", "-s", "--format=%P", installed.sourceMergeSha]).split(/\s+/u).filter(Boolean);
-  const mergeTree = gitText(root, ["rev-parse", `${installed.sourceMergeSha}^{tree}`]);
-  const mergeSubject = parseProtectedPullRequestMergeSubject(gitText(root, ["show", "-s", "--format=%s", installed.sourceMergeSha]));
-  const installedGitValid = stableJson(mergeParents) === stableJson([installed.sourceBase, installed.sourceHead]) && mergeTree === installed.sourceMergeTree && mergeTree === installed.sourceTree && mergeSubject.ok && mergeSubject.prNumber === installed.sourcePr && mergeSubject.sourceBranch === installed.sourceBranch && gitAncestor(root, installed.sourceMergeSha, identity.baseSha);
-  const cutoverState = installedGitValid && verified.ok ? await resolveInstalledPhase1CutoverState({ repository, identity, anchor: installed, liveProvisioningReadback: publisherProvisioningReadback }) : null;
-  const findings = [...verified.findings, ...(!installedGitValid ? ["PHASE1_PUBLISHER_ANCHOR_SOURCE_MERGE_INVALID"] : []), ...(!cutoverState ? ["PHASE1_PUBLISHER_RULESET_CUTOVER_STATE_INVALID"] : [])];
-  return phase1PublisherAnchorProof({ repository, anchorType: "R2_INSTALLED", sourcePr: installed.sourcePr, sourceBranch: installed.sourceBranch, anchorHash: installed.anchorHash, provisioningReadback: publisherProvisioningReadback, paginationComplete: sourceComments.complete, immutableOwnerEvidence: findings.length === 0, configurationSourceVerified: findings.length === 0, cutoverLock: cutoverState?.cutoverLock ?? null, stageReceiptChainHash: cutoverState?.stageReceiptChainHash ?? null, findings });
+    const verified = verifyPhase1AdmissionPublisherImmutableAnchor({ anchor: installed, liveProvisioningReadback: publisherProvisioningReadback, comments: sourceComments.comments, paginationComplete: sourceComments.complete, repository });
+    const mergeParents = gitText(root, ["show", "-s", "--format=%P", installed.sourceMergeSha]).split(/\s+/u).filter(Boolean);
+    const mergeTree = gitText(root, ["rev-parse", `${installed.sourceMergeSha}^{tree}`]);
+    const mergeSubject = parseProtectedPullRequestMergeSubject(gitText(root, ["show", "-s", "--format=%s", installed.sourceMergeSha]));
+    const installedGitValid = stableJson(mergeParents) === stableJson([installed.sourceBase, installed.sourceHead]) && mergeTree === installed.sourceMergeTree && mergeTree === installed.sourceTree && mergeSubject.ok && mergeSubject.prNumber === installed.sourcePr && mergeSubject.sourceBranch === installed.sourceBranch && gitAncestor(root, installed.sourceMergeSha, identity.baseSha);
+    // The installed immutable anchor, protected source merge, and current branded
+    // App/ruleset readback are sufficient to publish a draft source-readiness
+    // decision. Historical ruleset cutover receipts are merge-only evidence and
+    // remain mandatory for every final-source/merge authority path.
+    const cutoverState = requireFinalSource === true && installedGitValid && verified.ok
+      ? await resolveInstalledPhase1CutoverState({ repository, identity, anchor: installed, liveProvisioningReadback: publisherProvisioningReadback })
+      : null;
+    const findings = phase1InstalledPublisherAnchorFindings({ verifiedFindings: verified.findings, installedGitValid, requireFinalSource, cutoverState });
+    return phase1PublisherAnchorProof({ repository, anchorType: "R2_INSTALLED", sourcePr: installed.sourcePr, sourceBranch: installed.sourceBranch, anchorHash: installed.anchorHash, provisioningReadback: publisherProvisioningReadback, paginationComplete: sourceComments.complete, immutableOwnerEvidence: findings.length === 0, configurationSourceVerified: findings.length === 0, cutoverLock: cutoverState?.cutoverLock ?? null, stageReceiptChainHash: cutoverState?.stageReceiptChainHash ?? null, findings });
   }
   const currentComments = paginatedIssueComments(root, repository, identity.pr);
   const tree = gitText(root, ["rev-parse", `${identity.headSha}^{tree}`]);
@@ -5902,19 +5920,87 @@ export async function executeProtectedPhase1AppOnlyMergeGate({ repository, ident
   }));
 }
 
-export function resolvePhase1SourceAuthorityEligibility({ repository, identity, root = REPOSITORY_ROOT } = {}) {
-  const tree = gitText(root, ["rev-parse", `${identity?.headSha}^{tree}`]); const scope = observeFiniteTaskGitScope(root, identity?.baseSha, identity?.headSha);
+export function resolvePhase1SourceAuthorityEligibility({ repository, identity, lifecycle, root = REPOSITORY_ROOT } = {}) {
+  const tree = gitText(root, ["rev-parse", `${identity?.headSha}^{tree}`]);
+  const scope = observeFiniteTaskGitScope(root, identity?.baseSha, identity?.headSha);
+  const mode = lifecycle?.mode;
+  const legacyAuthorityConsumer = lifecycle === undefined || lifecycle === null;
+  const draftSourceScope = !legacyAuthorityConsumer
+    && mode === PHASE1_MODES.DRAFT && lifecycle?.draft === true;
+  const readyMergeAuthority = !legacyAuthorityConsumer
+    && mode === PHASE1_MODES.READY && lifecycle?.draft === false;
+  const typedTaskAuthorityRequired = legacyAuthorityConsumer || readyMergeAuthority;
+  const lifecycleValid = legacyAuthorityConsumer || ((draftSourceScope || readyMergeAuthority)
+    && lifecycle?.generation === derivePhase1LifecycleGeneration({
+      identity,
+      mode,
+      action: lifecycle?.action,
+      eventUpdatedAt: lifecycle?.eventUpdatedAt,
+    }));
+  const exactSourceScope = repository === "Chillywood2025/chillywood-mobile"
+    && identity?.repository === repository
+    && Number.isInteger(identity?.pr) && identity.pr > 0
+    && typeof identity?.headRef === "string" && identity.headRef.length > 0
+    && identity?.baseRef === "main"
+    && tree === identity?.sourceTree
+    && gitAncestor(root, identity?.baseSha, identity?.headSha)
+    && Array.isArray(scope?.files) && scope.files.length > 0
+    && /^[0-9a-f]{64}$/u.test(scope?.diffHash ?? "")
+    && Number.isSafeInteger(scope?.additions) && scope.additions >= 0
+    && Number.isSafeInteger(scope?.deletions) && scope.deletions >= 0;
   let currentTruth = null; try { currentTruth = readJson(root, "config/assurance/current-truth-v1.json"); } catch {}
   const engineIdentity = { repository, pr: identity?.pr, branch: identity?.headRef, headSha: identity?.headSha, baseRef: identity?.baseRef, baseSha: identity?.baseSha };
-  const authorities = currentTruth && scope ? observeTypedTaskAuthorities({ identity: engineIdentity, tree, scope, currentTruth, root }) : {};
+  const authorities = typedTaskAuthorityRequired && currentTruth && scope
+    ? observeTypedTaskAuthorities({ identity: engineIdentity, tree, scope, currentTruth, root })
+    : {};
   const candidates = [
     ["ARCHITECTURE", authorities?.architectureAuthority?.authorizationOk === true],
     ["TERMINAL_TRUTH", authorities?.terminalTruthAuthority?.authorizationOk === true],
     ["FINITE_TASK_ADMISSION", authorities?.finiteTaskAdmissionAuthority?.authorizationOk === true],
     ["FINITE_TASK_IMPLEMENTATION", authorities?.finiteTaskAuthority?.ok === true],
   ].filter(([, ok]) => ok).map(([type]) => type);
-  const findings = repository === "Chillywood2025/chillywood-mobile" && identity?.repository === repository && identity?.baseRef === "main" && tree === identity?.sourceTree && scope && candidates.length === 1 ? [] : [candidates.length > 1 ? "PHASE1_SOURCE_AUTHORITY_AMBIGUOUS" : "PHASE1_SOURCE_AUTHORITY_INVALID"];
-  return { schemaVersion: 1, producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1", repository, pr: identity?.pr, headSha: identity?.headSha, sourceTree: tree, baseSha: identity?.baseSha, authorityType: candidates[0] ?? null, findings };
+  const authorityType = draftSourceScope ? "DRAFT_SOURCE_SCOPE" : candidates[0] ?? null;
+  const findings = [
+    ...(!exactSourceScope ? ["PHASE1_SOURCE_AUTHORITY_INVALID"] : []),
+    ...(!lifecycleValid ? ["PHASE1_SOURCE_LIFECYCLE_INVALID"] : []),
+    ...(typedTaskAuthorityRequired && candidates.length !== 1 ? [candidates.length > 1 ? "PHASE1_SOURCE_AUTHORITY_AMBIGUOUS" : "PHASE1_SOURCE_AUTHORITY_INVALID"] : []),
+    ...(!legacyAuthorityConsumer && !draftSourceScope && !readyMergeAuthority ? ["PHASE1_SOURCE_LIFECYCLE_INVALID"] : []),
+  ];
+  const scopeHash = exactSourceScope ? hashValue({
+    schemaVersion: "PHASE1_EXACT_SOURCE_SCOPE_V1",
+    repository,
+    pr: identity.pr,
+    headRef: identity.headRef,
+    headSha: identity.headSha,
+    sourceTree: tree,
+    baseRef: identity.baseRef,
+    baseSha: identity.baseSha,
+    files: scope.files,
+    additions: scope.additions,
+    deletions: scope.deletions,
+    diffHash: scope.diffHash,
+  }) : null;
+  return {
+    schemaVersion: 1,
+    contract: "PHASE1_SOURCE_AUTHORITY_RESOLUTION_V2",
+    producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1",
+    repository,
+    pr: identity?.pr,
+    headRef: identity?.headRef,
+    headSha: identity?.headSha,
+    sourceTree: tree,
+    baseRef: identity?.baseRef,
+    baseSha: identity?.baseSha,
+    authorityType,
+    authorityMode: mode ?? null,
+    draftSourceOnly: draftSourceScope,
+    mergeAuthorityGranted: false,
+    lifecycleAction: lifecycle?.action ?? null,
+    lifecycleEventUpdatedAt: lifecycle?.eventUpdatedAt ?? null,
+    lifecycleGeneration: lifecycle?.generation ?? null,
+    scopeHash,
+    findings: [...new Set(findings)].sort(),
+  };
 }
 
 export async function resolvePhase1AdmissionMergeEligibility({ repository, pr, identity, phase1Evidence, publisherProvisioningReadback, token, root = REPOSITORY_ROOT } = {}) {

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 
 import { args, classifyGitHubExecutionIdentity, emit, evaluateProtectedMainAdvancement, git, readJson, resolveAssuranceControlSourceOnlyProfile, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "./lib.mjs";
 import { canonicalGitDiffArgs, canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
-import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
+import { classifyPrScopePaths, deriveTaskScopeContext, evaluateDraftSourceReadinessScope, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
 const options = args();
 const policy = readJson("config/assurance/pr-scope-policy-v1.json");
@@ -29,7 +29,7 @@ const readPull = (repository, pr) => {
   if (result.status !== 0) return null;
   try {
     const pull = JSON.parse(result.stdout);
-    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRepository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRepository: pull.head?.repo?.full_name, headRef: pull.head?.ref, headSha: pull.head?.sha, mergeCommitSha: pull.merge_commit_sha, draft: pull.draft, htmlUrl: pull.html_url, state: pull.state };
+    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRepository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRepository: pull.head?.repo?.full_name, headRef: pull.head?.ref, headSha: pull.head?.sha, mergeCommitSha: pull.merge_commit_sha, draft: pull.draft, updatedAt: pull.updated_at, htmlUrl: pull.html_url, state: pull.state };
   } catch {
     return null;
   }
@@ -135,8 +135,21 @@ if (!event.pull_request) {
   });
   findings.push(...scopeEvaluation.findings);
   if (waiver && (waiver.secondHighRiskDomain || !waiver.reviewer || waiver.newTimeboxHours > 8)) findings.push({ id: "ASSURANCE_SCOPE_WAIVER_INVALID", status: "BLOCKED_INTERNAL" });
-  emit("assurance:pr-scope", findings.length === 0, {
-    mode: "GITHUB_EVENT_TASK_CONTEXT",
+  const draftSourceReadiness = evaluateDraftSourceReadinessScope({
+    event,
+    readback,
+    executionIdentity,
+    tree,
+    scope,
+    context,
+    findings,
+  });
+  const acceptable = findings.length === 0 || draftSourceReadiness.ok;
+  emit("assurance:pr-scope", acceptable, {
+    mode: draftSourceReadiness.ok ? draftSourceReadiness.mode : "GITHUB_EVENT_TASK_CONTEXT",
+    taskAuthorityGranted: draftSourceReadiness.ok ? false : context.ok,
+    mergeAuthorityGranted: false,
+    sourceScope: draftSourceReadiness.sourceScope,
     base,
     head,
     taskContext: context,
@@ -159,6 +172,8 @@ if (!event.pull_request) {
     waiver: waiver ? waiver.contractId : null,
     classified,
     executionIdentity,
-    findings
-  }, [`PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
+    findings: draftSourceReadiness.ok ? draftSourceReadiness.nonBlockingFindings : findings,
+  }, [draftSourceReadiness.ok
+    ? `PR scope: SOURCE READINESS — ${scope.files.length} exact files, task authority deferred, merge authority false`
+    : `PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
 }
