@@ -2,6 +2,7 @@ name: Phase 1 CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
   push:
     branches:
       - main
@@ -12,6 +13,15 @@ permissions:
   pull-requests: read
 
 jobs:
+  phase1-context:
+    name: Phase 1 Context / ${{ github.event.pull_request.draft && 'DRAFT_SOURCE_READINESS' || 'READY_MERGE_AUTHORITY' }} / PR-${{ github.event.pull_request.number }} / BASE-${{ github.event.pull_request.base.sha }} / ACT-${{ github.event.action }} / GEN-${{ github.event.pull_request.updated_at }}
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record immutable workflow lifecycle context
+        run: echo 'Phase 1 admission binds this run to its trigger lifecycle; this job grants no authority.'
+
   autonomous-systems-all-platform-contract:
     name: Phase 1 / Autonomous Systems All-Platform Contract
     runs-on: ubuntu-latest
@@ -67,11 +77,10 @@ jobs:
           node scripts/assurance/codex-security-reliability.mjs --benchmark=all
           node --test tests/assurance/codex-security-reliability-s0.test.mjs
 
-      - name: Validate all-platform autonomous contracts
+      - name: Validate all-platform autonomous safety and product contracts
         run: |
           npm run guard:autonomous-component-inventory
           npm run proof:autonomous-component-inventory
-          npm run guard:autonomous-systems-contract
           npm run proof:autonomous-systems-contract
           npm run guard:autonomous-operating-model
           npm run guard:scheduled-provider-adapters
@@ -119,6 +128,36 @@ jobs:
           deno check --node-modules-dir=auto --no-lock supabase/functions/autonomous-approval-request/index.ts
           deno check --node-modules-dir=auto --no-lock supabase/functions/user-report-intake/index.ts
 
+      - name: Validate assurance authority and source correctness
+        env:
+          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          set +e
+          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
+            PHASE1_STRICT_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-strict-evaluator.XXXXXX")"
+            trap 'git worktree remove --force "$PHASE1_STRICT_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
+            git worktree add --detach "$PHASE1_STRICT_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
+            node "$PHASE1_STRICT_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs"; SOURCE_GUARD=$?
+          else
+            node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
+          fi
+          npm run test:engineering-doctrine; DOCTRINE=$?
+          npm run assurance:engineering-closure; CLOSURE=$?
+          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE" -eq 0
+
+      - name: Validate non-authoritative assurance display projection
+        env:
+          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
+            PHASE1_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-evaluator.XXXXXX")"
+            trap 'git worktree remove --force "$PHASE1_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
+            git worktree add --detach "$PHASE1_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
+            node "$PHASE1_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs" --maintenance-projection-only
+          else
+            echo 'LEGACY_PRE_CUTOVER'
+          fi
+
   autonomous-systems-ios-contract:
     name: Phase 1 / Autonomous Systems iOS Contract
     runs-on: ubuntu-latest
@@ -139,9 +178,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate autonomous iOS contracts
+      - name: Validate autonomous iOS safety and product contracts
         run: |
-          npm run guard:autonomous-systems-contract
           npm run proof:autonomous-systems-contract
           npm run guard:autonomous-operating-model
           npm run guard:ios-autonomous-call-retry
@@ -161,6 +199,36 @@ jobs:
           npm run guard:ios-autonomous-system-coverage
           npm run proof:ios-autonomous-system-coverage
 
+      - name: Validate assurance authority and source correctness
+        env:
+          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          set +e
+          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
+            PHASE1_STRICT_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-strict-evaluator.XXXXXX")"
+            trap 'git worktree remove --force "$PHASE1_STRICT_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
+            git worktree add --detach "$PHASE1_STRICT_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
+            node "$PHASE1_STRICT_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs"; SOURCE_GUARD=$?
+          else
+            node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
+          fi
+          npm run test:engineering-doctrine; DOCTRINE=$?
+          npm run assurance:engineering-closure; CLOSURE=$?
+          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE" -eq 0
+
+      - name: Validate non-authoritative assurance display projection
+        env:
+          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
+            PHASE1_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-evaluator.XXXXXX")"
+            trap 'git worktree remove --force "$PHASE1_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
+            git worktree add --detach "$PHASE1_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
+            node "$PHASE1_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs" --maintenance-projection-only
+          else
+            echo 'LEGACY_PRE_CUTOVER'
+          fi
+
   cognitive-intelligence-contract:
     name: Phase 1 / Cognitive Intelligence Contract
     runs-on: ubuntu-latest
@@ -178,19 +246,48 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Validate cognitive registry and architecture
+      - name: Validate cognitive registry and architecture safety
         env:
           COGNITIVE_EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: |
           npm run guard:autonomous-component-inventory
           npm run proof:autonomous-component-inventory
-          npm run guard:autonomous-systems-contract
           npm run proof:autonomous-systems-contract
           npm run guard:autonomous-operating-model
           npm run guard:cognitive-intelligence-contract
           npm run proof:cognitive-intelligence-contract
           npm run guard:cognitive-architecture-graph
           npm run proof:cognitive-architecture-graph
+
+      - name: Validate assurance authority and source correctness
+        env:
+          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          set +e
+          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
+            PHASE1_STRICT_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-strict-evaluator.XXXXXX")"
+            trap 'git worktree remove --force "$PHASE1_STRICT_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
+            git worktree add --detach "$PHASE1_STRICT_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
+            node "$PHASE1_STRICT_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs"; SOURCE_GUARD=$?
+          else
+            node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
+          fi
+          npm run test:engineering-doctrine; DOCTRINE=$?
+          npm run assurance:engineering-closure; CLOSURE=$?
+          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE" -eq 0
+
+      - name: Validate non-authoritative assurance display projection
+        env:
+          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
+            PHASE1_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-evaluator.XXXXXX")"
+            trap 'git worktree remove --force "$PHASE1_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
+            git worktree add --detach "$PHASE1_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
+            node "$PHASE1_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs" --maintenance-projection-only
+          else
+            echo 'LEGACY_PRE_CUTOVER'
+          fi
 
   cognitive-execution-safety:
     name: Phase 1 / Cognitive Execution Safety

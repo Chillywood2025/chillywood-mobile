@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readBootstrapMergeIdentity, validateBootstrapPhase1GithubReadback, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
+import { evaluatePhase1AdmissionRulesetCutoverState, mainBranchCondition, phase1AdmissionCheck, phase1AdmissionRulesetCutoverAggregateValid, phase1AdmissionRulesetCutoverStateValid, phase1PublisherAnchorStructurallyValid, phase1RulesetGenesis, readBootstrapMergeIdentity, requiredCheckBindings, validateBootstrapPhase1GithubReadback, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
 import { readJson, sha256, stableJson } from "../../scripts/assurance/lib.mjs";
 import { runReceipt } from "../../scripts/assurance/receipt.mjs";
 
@@ -12,6 +12,67 @@ const finalCarrierGithubReadback = readJson("config/assurance/a1-owner-final-car
 const bootstrapPhase1GithubReadback = readJson("config/assurance/a1-bootstrap-phase1-github-readback-v1.json");
 const mergeIdentity = readBootstrapMergeIdentity(contract.authorizedBootstrapException.mergeSha);
 const validate = (candidate, identity = mergeIdentity, receipt = authorizationReceipt, carrierReceipt = finalCarrierBindingReceipt, githubReadback = finalCarrierGithubReadback, now = "2026-08-11T04:20:00Z", freshnessMode = "CURRENT_CLAIM", phase1Readback = bootstrapPhase1GithubReadback) => validateGithubMainRulesetReadback({ contract: candidate, authorizationReceipt: receipt, finalCarrierBindingReceipt: carrierReceipt, finalCarrierGithubReadback: githubReadback, bootstrapPhase1GithubReadback: phase1Readback, mergeIdentity: identity, now, freshnessMode });
+
+const publisherAnchor = contract.phase1AdmissionPublisherImmutableAnchor;
+const cutoverIdentity = { repository: contract.repository, baseRef: "main", baseSha: publisherAnchor.sourceMergeSha };
+const cutoverActor = { id: 210200794, type: "User" };
+const genesisState = {
+  id: 18940814,
+  name: "main-pr-review-protection",
+  target: "branch",
+  source_type: "Repository",
+  source: contract.repository,
+  enforcement: "active",
+  conditions: mainBranchCondition,
+  rules: [
+    { type: "pull_request", parameters: { required_approving_review_count: 0, dismiss_stale_reviews_on_push: true, required_reviewers: [], require_code_owner_review: false, require_last_push_approval: false, required_review_thread_resolution: false, require_extra_approval_for_unattributed_changes: true, allowed_merge_methods: ["merge", "squash", "rebase"] } },
+    { type: "non_fast_forward" },
+    { type: "deletion" },
+    { type: "required_status_checks", parameters: { strict_required_status_checks_policy: true, do_not_enforce_on_create: false, required_status_checks: requiredCheckBindings } },
+  ],
+  bypass_actors: [],
+};
+const stageState = (stage) => {
+  const state = structuredClone(genesisState);
+  const status = state.rules.find(({ type }) => type === "required_status_checks");
+  const aggregate = { context: phase1AdmissionCheck, integration_id: publisherAnchor.aggregateCheckIntegrationId };
+  if (stage === "STAGE1_AGGREGATE_PLUS_13_RAW") status.parameters.required_status_checks = [...requiredCheckBindings, aggregate];
+  if (stage === "FINAL_AGGREGATE_ONLY") {
+    status.parameters.required_status_checks = [aggregate];
+    state.rules.unshift({ type: "update", parameters: { update_allows_fetch_and_merge: false } });
+    state.bypass_actors = [{ actor_id: publisherAnchor.aggregateCheckIntegrationId, actor_type: "Integration", bypass_mode: "pull_request" }];
+  }
+  return state;
+};
+const historyEntry = (stage, versionId, updatedAt) => ({ version_id: versionId, updated_at: updatedAt, actor: cutoverActor, state: stageState(stage) });
+const preEntry = historyEntry("PRE_CUTOVER_13_RAW", phase1RulesetGenesis.versionId, phase1RulesetGenesis.updatedAt);
+const stage1Entry = historyEntry("STAGE1_AGGREGATE_PLUS_13_RAW", 47545239, "2026-08-24T22:59:53.294-05:00");
+const finalEntry = historyEntry("FINAL_AGGREGATE_ONLY", 47545277, "2026-08-24T23:00:33.818-05:00");
+delete finalEntry.state.rules.find(({ type }) => type === "update").parameters;
+const finalProviderUpdatedAt = "2026-08-24T23:00:33.629-05:00";
+const liveProvisioning = (stage, providerUpdatedAt) => {
+  const value = structuredClone(publisherAnchor.provisioningReadback);
+  value.observedAt = providerUpdatedAt;
+  value.ruleset.providerUpdatedAt = providerUpdatedAt;
+  value.ruleset.stage = stage;
+  value.ruleset.bypassReadback = stage === "FINAL_AGGREGATE_ONLY" ? "EXPLICIT_APP_PULL_REQUEST_ONLY" : "EXPLICIT_EMPTY";
+  value.ruleset.currentPutPayloadSha256 = { PRE_CUTOVER_13_RAW: publisherAnchor.prestatePutPayloadSha256, STAGE1_AGGREGATE_PLUS_13_RAW: publisherAnchor.stage1PutPayloadSha256, FINAL_AGGREGATE_ONLY: publisherAnchor.finalPutPayloadSha256 }[stage];
+  delete value.readbackHash;
+  value.readbackHash = sha256(stableJson(value));
+  return value;
+};
+const currentRuleset = (entry, providerUpdatedAt) => ({ ...structuredClone(entry.state), node_id: publisherAnchor.rulesetNodeId, updated_at: providerUpdatedAt, current_user_can_bypass: entry.state.bypass_actors.length ? "always" : "never" });
+const evaluateCutover = ({ stage = "PRE_CUTOVER_13_RAW", entries = [preEntry], currentEntry = entries.at(-1), paginationComplete = true, anchor = publisherAnchor, live = null, providerUpdatedAt = stage === "PRE_CUTOVER_13_RAW" ? publisherAnchor.rulesetProviderUpdatedAt : currentEntry.updated_at } = {}) => {
+  return evaluatePhase1AdmissionRulesetCutoverState({
+    repository: contract.repository,
+    identity: cutoverIdentity,
+    anchor,
+    liveProvisioningReadback: live ?? liveProvisioning(stage, providerUpdatedAt),
+    contract: { ...contract, phase1AdmissionPublisherImmutableAnchor: anchor },
+    observation: { current: currentRuleset(currentEntry, providerUpdatedAt), history: entries, paginationComplete },
+    protectedSourceVerified: true,
+  });
+};
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -272,6 +333,111 @@ test("missing bootstrap history becomes a deterministic validation error", () =>
   });
   assert.deepEqual(identity.errors, ["github ruleset readback: bootstrap merge history unavailable"]);
   assert.ok(validate(contract, identity).some((error) => error.includes("bootstrap merge history unavailable")));
+});
+
+test("R2 immutable publisher anchor is exact, self-hashed, and schema-bound", () => {
+  assert.equal(phase1PublisherAnchorStructurallyValid(publisherAnchor), true);
+  assert.equal(publisherAnchor.anchorHash, "b59479e0fb714e11c941cf2b7a2304fb1ca721ed930327611be289d3a3260cd2");
+  assert.equal(publisherAnchor.provisioningReadbackHash, "99a60cd198b972f630e5bccc9024721b1482f2d54bed9706009ff8e383a4beee");
+  for (const mutate of [
+    (candidate) => { candidate.appId = 1; },
+    (candidate) => { candidate.sourceMergeSha = "0".repeat(40); },
+    (candidate) => { candidate.provisioningReadback.ruleset.stage1PutPayloadSha256 = "0".repeat(64); },
+    (candidate) => { candidate.extraAuthority = true; },
+  ]) {
+    const candidate = structuredClone(contract);
+    mutate(candidate.phase1AdmissionPublisherImmutableAnchor);
+    assert.equal(phase1PublisherAnchorStructurallyValid(candidate.phase1AdmissionPublisherImmutableAnchor), false);
+    assert.ok(validate(candidate).some((error) => error.includes("immutable publisher anchor")));
+  }
+});
+
+test("R2 stage resolver accepts only contiguous PRE, STAGE1, and FINAL prefixes", () => {
+  const pre = evaluateCutover();
+  const stage1 = evaluateCutover({ stage: "STAGE1_AGGREGATE_PLUS_13_RAW", entries: [preEntry, stage1Entry] });
+  const final = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry], providerUpdatedAt: finalProviderUpdatedAt });
+  const payloadFinalEntry = structuredClone(finalEntry);
+  payloadFinalEntry.state.rules.find(({ type }) => type === "update").parameters = { update_allows_fetch_and_merge: false };
+  const payloadFinal = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, payloadFinalEntry] });
+  for (const state of [pre, stage1, final, payloadFinal]) {
+    assert.equal(phase1AdmissionRulesetCutoverStateValid(state), true);
+    assert.equal(state.cutoverLock, "OPEN");
+    assert.equal(state.paginationComplete, true);
+    assert.deepEqual(state.findings, []);
+  }
+  assert.equal(pre.currentRulesetStage, "PRE_CUTOVER_13_RAW");
+  assert.equal(stage1.currentRulesetStage, "STAGE1_AGGREGATE_PLUS_13_RAW");
+  assert.equal(final.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
+  assert.equal(payloadFinal.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
+  assert.equal(new Set([pre.stageReceiptChainHash, stage1.stageReceiptChainHash, final.stageReceiptChainHash]).size, 3);
+});
+
+test("R2 stage resolver closes on incomplete, skipped, replayed, substituted, or drifting history", () => {
+  const wrongActor = structuredClone(stage1Entry);
+  wrongActor.actor.id = 1;
+  const policyDrift = structuredClone(finalEntry);
+  policyDrift.state.rules.find(({ type }) => type === "pull_request").parameters.required_approving_review_count = 1;
+  const broaderUpdate = structuredClone(finalEntry);
+  broaderUpdate.state.rules.find(({ type }) => type === "update").parameters = { update_allows_fetch_and_merge: true };
+  const rollback = historyEntry("PRE_CUTOVER_13_RAW", 50000003, "2026-08-25T03:02:00.001-05:00");
+  const currentDrift = structuredClone(finalEntry);
+  currentDrift.state.enforcement = "evaluate";
+  const mutableGenesisContract = structuredClone(contract);
+  mutableGenesisContract.applicationReadback.rulesetVersionId = rollback.version_id;
+  const cases = [
+    evaluateCutover({ paginationComplete: false }),
+    evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, finalEntry] }),
+    evaluateCutover({ stage: "PRE_CUTOVER_13_RAW", entries: [preEntry, stage1Entry, finalEntry, rollback] }),
+    evaluateCutover({ stage: "STAGE1_AGGREGATE_PLUS_13_RAW", entries: [preEntry, wrongActor] }),
+    evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, policyDrift] }),
+    evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, broaderUpdate] }),
+    evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry], currentEntry: currentDrift }),
+    evaluatePhase1AdmissionRulesetCutoverState({ repository: contract.repository, identity: cutoverIdentity, anchor: publisherAnchor, liveProvisioningReadback: liveProvisioning("PRE_CUTOVER_13_RAW", publisherAnchor.rulesetProviderUpdatedAt), contract: mutableGenesisContract, observation: { current: currentRuleset(preEntry, publisherAnchor.rulesetProviderUpdatedAt), history: [preEntry], paginationComplete: true }, protectedSourceVerified: true }),
+  ];
+  for (const state of cases) {
+    assert.equal(phase1AdmissionRulesetCutoverStateValid(state), false);
+    assert.equal(state.cutoverLock, "CLOSED");
+    assert.equal(state.stageReceiptChainHash, null);
+    assert.ok(state.findings.length > 0);
+  }
+});
+
+test("R2 current-truth aggregate is hash-bound, live-only, and never merge authority", () => {
+  const state = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry] });
+  const body = {
+    ...state,
+    contract: "PHASE1_ADMISSION_RULESET_CUTOVER_LIVE_AGGREGATE_V1",
+    producer: "CURRENT_TRUTH_PROTECTED_LIVE_AGGREGATE_V1",
+    upstreamContract: state.contract,
+    upstreamProducer: state.producer,
+    live: true,
+    mergeAuthority: false,
+  };
+  const aggregate = { ...body, aggregateHash: sha256(stableJson(body)) };
+  assert.equal(phase1AdmissionRulesetCutoverAggregateValid(aggregate), true);
+  for (const mutate of [
+    (candidate) => { candidate.currentRulesetStage = "PRE_CUTOVER_13_RAW"; },
+    (candidate) => { candidate.stageReceiptChainHash = "0".repeat(64); },
+    (candidate) => { candidate.mergeAuthority = true; },
+    (candidate) => { candidate.live = false; },
+    (candidate) => { candidate.aggregateHash = "0".repeat(64); },
+  ]) {
+    const candidate = structuredClone(aggregate);
+    mutate(candidate);
+    assert.equal(phase1AdmissionRulesetCutoverAggregateValid(candidate), false);
+  }
+});
+
+test("R2 live aggregate plumbing remains protected-source, explicit-provider, and fail-closed", () => {
+  const currentTruthSource = readFileSync("scripts/assurance/current-truth.mjs", "utf8");
+  const activeTaskSource = readFileSync("scripts/assurance/active-task.mjs", "utf8");
+  const schema = readJson("config/assurance/schemas-v1.json");
+  assert.match(currentTruthSource, /resolvePhase1AdmissionRulesetCutoverState/u);
+  assert.match(currentTruthSource, /CURRENT_TRUTH_PROTECTED_LIVE_AGGREGATE_V1/u);
+  assert.match(activeTaskSource, /phase1AdmissionRulesetCutoverAggregateValid/u);
+  assert.match(activeTaskSource, /--provider-snapshot/u);
+  assert.equal(schema.$defs.githubMainRulesetReadbackContract.required.includes("phase1AdmissionPublisherImmutableAnchor"), true);
+  assert.equal(schema.$defs.githubMainRulesetReadbackContract.properties.phase1AdmissionPublisherImmutableAnchor.$ref, "#/$defs/phase1AdmissionPublisherImmutableAnchor");
 });
 
 test("focused readback regressions are mandatory Level A and Phase 1 inputs", () => {

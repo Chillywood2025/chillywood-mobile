@@ -23,8 +23,10 @@ import {
 } from "../../scripts/assurance/active-task.mjs";
 import {
   ASSURANCE_RECURSIVE_BOOTSTRAP_CYCLE,
+  classifyGitHubExecutionIdentity,
   controlMaintenanceAuthorizationCommentBody,
   controlMaintenanceAuthorizationSubject,
+  createTerminalVerifierRepairInstance,
   detectAssuranceRecursion,
   deriveFiniteTaskCandidateObservation,
   evaluateFiniteTaskCandidate,
@@ -37,6 +39,8 @@ import {
   finiteTaskImplementationLifecycleAuthorityValid,
   finiteTaskPostMergeTransitionAuthorityValid,
   finiteTaskTerminalReservationMatchesOutcome,
+  HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY,
+  HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE,
   finiteTaskTestAdaptationCommentBody,
   finiteTaskTestAdaptationSubject,
   finiteTaskLeaseEffectivelyTerminal,
@@ -56,12 +60,16 @@ import {
   resolveFiniteTaskCurrentTruthCandidateLease,
   resolveFiniteTaskEffectiveReservation,
   stableJson,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID,
   TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS,
+  TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE,
   taskLeaseAmendmentCommentBody,
   taskLeaseAmendmentSubject,
   transitionFiniteTaskState,
   validateFiniteTaskLeaseRegistry,
   validateEngineeringDoctrineTruth,
+  validateTerminalVerifierRepairProtectedMerge,
   validateProofTierStatuses,
   validateTerminalTaskEvidence,
   verifyCommittedClaimEvidence,
@@ -74,7 +82,7 @@ import {
   verifyFiniteTaskTestAdaptationReceipt,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -124,7 +132,7 @@ const preAdmissionFixture = () => {
 const preAdmissionMutation = (mutate) => { const facts = preAdmissionFixture(); mutate(facts); return evaluatePreAdmissionEngineeringSeed(facts); };
 test("pre-admission 01: exact governed seed passes without product authority", () => { const result = evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()); assert.equal(result.ok, true); assert.equal(result.packet.classification, OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1); assert.equal(result.packet.productSourceMutationAllowed, false); });
 test("pre-admission 02: terminal history does not block explicit seed mode", () => { const facts = preAdmissionFixture(); facts.currentTruth.activeTaskBinding = canonicalTruth.activeTaskBinding; assert.equal(evaluatePreAdmissionEngineeringSeed(facts).ok, true); });
-test("pre-admission 03: normal active-task terminal history remains unchanged", () => { assert.equal(canonicalTruth.activeTaskBinding.implementationPr, 212); assert.deepEqual(validateStructuredBinding(canonicalTruth.activeTaskBinding, gateCatalog, registry, canonicalTruth.openImplementationPrs, canonicalTruth.latestMergedImplementationPr), []); });
+test("pre-admission 03: normal active-task terminal history remains unchanged", () => { assert.equal(canonicalTruth.activeTaskBinding.implementationPr, 229); assert.deepEqual(validateStructuredBinding(canonicalTruth.activeTaskBinding, gateCatalog, registry, canonicalTruth.openImplementationPrs, canonicalTruth.latestMergedImplementationPr), []); });
 test("pre-admission 04: normal feature conflict stays denied", () => assert.deepEqual(activeTask({ currentTruth: canonicalTruth, truthCheck: { ok: true }, registry, featureId: "auth-session-password-recovery" }).findings, ["FEATURE_OVERRIDE_CONFLICT"]));
 test("pre-admission 05: feature derives from Owner and artifact", () => assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet.featureId, "auth-session-password-recovery"));
 test("pre-admission 06: caller feature is rejected", () => assert.equal(preAdmissionMutation((facts) => { facts.callerFeature = "auth-session-password-recovery"; }).ok, false));
@@ -1731,11 +1739,15 @@ const f252Tree = "7174d34d2a8552874a74e5094dc172a5b5bec756";
 const e768Head = "e76831f2edb2c17e9b827587594573bfef7c6fef";
 const e768Tree = "6a4d48c29e5e083e6e43e85dcbf93771b2ff99a3";
 const protectedMain = "68d2f2b745425296fae2753e8a0cba9cc1137067";
-const historicalSyntheticMergeHead = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+const historicalSyntheticMergeHead = "b".repeat(40);
+const historicalRepository = "Chillywood2025/chillywood-mobile";
+const historicalPullRequest = { number: 214, state: "open", draft: false, merge_commit_sha: historicalSyntheticMergeHead, head: { ref: pr214Lease.implementationBranch, sha: f252Head, repo: { full_name: historicalRepository } }, base: { ref: "main", sha: protectedMain, repo: { full_name: historicalRepository } } };
+const historicalEvent = { action: "synchronize", number: 214, repository: { full_name: historicalRepository }, pull_request: { ...historicalPullRequest, html_url: `https://github.com/${historicalRepository}/pull/214` } };
+const historicalEnvironment = { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_REF: "refs/pull/214/merge", GITHUB_SHA: historicalSyntheticMergeHead };
 const historicalRuntimeGit = (args) => {
-  if (args[0] === "show" && args[1] === "-s" && args[2] === "--format=%P" && args[3] === historicalSyntheticMergeHead) {
-    return `${protectedMain} ${f252Head}`;
-  }
+  if (args[0] === "rev-parse" && args[1] === "HEAD") return historicalSyntheticMergeHead;
+  if (args[0] === "rev-parse" && args[1] === `${historicalSyntheticMergeHead}^{tree}` || args[0] === "merge-tree") return f252Tree;
+  if (args[0] === "show" && args[1] === "-s" && args[2] === "--format=%P" && args[3] === historicalSyntheticMergeHead) return `${protectedMain} ${f252Head}`;
   const result = spawnSync("git", args, { encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr);
   return result.stdout.trim();
@@ -1745,26 +1757,20 @@ const runtimeAtF252 = (now = new Date("2026-08-11T22:00:00Z")) => evaluateFinite
   contract: currentTruthContract,
   now,
   currentProtectedBase: protectedMain,
-  githubEvent: {
-    number: 214,
-    pull_request: {
-      number: 214,
-      state: "open",
-      head: { ref: pr214Lease.implementationBranch, sha: f252Head },
-      base: { sha: protectedMain }
-    }
-  },
+  githubEvent: historicalEvent,
   checkoutHead: historicalSyntheticMergeHead,
-  gitCommand: historicalRuntimeGit
+  gitCommand: historicalRuntimeGit,
+  environment: historicalEnvironment,
+  effectiveReservationObservation: { comments: [], commentsPaginationComplete: true, pullRequest: historicalPullRequest, commits: [], commitsPaginationComplete: true, requireCompleteDiscovery: false, observationMode: "SYNTHETIC_NO_WRITE" }
 });
+const historicalExecutionIdentity = ({ event = historicalEvent, live = historicalPullRequest, environment = historicalEnvironment, checkout = historicalSyntheticMergeHead, parents = [live.base.sha, live.head.sha], mergeTree = f252Tree, expectedTree = f252Tree, sourceTree = f252Tree, identity = { repository: historicalRepository, pr: 214, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: protectedMain } } = {}) => classifyGitHubExecutionIdentity({ event, livePullRequest: live, authoritativeSourceIdentity: identity, checkoutHead: checkout, environment, gitCommand: (args) => args[0] === "rev-parse" && args[1] === "HEAD" ? checkout : args[0] === "rev-parse" && args[1] === `${identity.headSha}^{tree}` ? sourceTree : args[0] === "rev-parse" && args[1] === `${live.merge_commit_sha}^{tree}` ? mergeTree : args[0] === "rev-parse" ? mergeTree : args[0] === "show" ? parents.join(" ") : args[0] === "merge-tree" ? expectedTree : "" });
 const pullRequestCandidate = (overrides = {}) => finiteCandidate(pr214Lease, 400, {
   head: f252Head,
   tree: f252Tree,
   observationSource: "GITHUB_PULL_REQUEST_EVENT",
   currentProtectedBase: protectedMain,
   eventBase: protectedMain,
-  mergeRefParents: [protectedMain, f252Head],
-  mergeRefSourceTree: f252Tree,
+  executionIdentity: historicalExecutionIdentity(),
   ...overrides
 });
 const maintenancePaths = currentTruthContract.synchronizationMerge.terminalControlMaintenance.allowedChangedPaths;
@@ -1942,24 +1948,21 @@ test("finite runtime matrix 18: closed PR fails", () => {
   assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: finiteCandidate(pr214Lease, 18, { prState: "closed" }) }).findings.includes("FINITE_TASK_PR_NOT_OPEN"), true);
 });
 
-test("finite runtime matrix 19: malformed merge ref fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain] }) }).findings.includes("FINITE_TASK_MERGE_REF_MALFORMED"), true);
+test("finite runtime matrix 19-23: malformed, wrong-parent, wrong-tree, and octopus executions fail through the shared identity model", () => {
+  for (const executionIdentity of [historicalExecutionIdentity({ parents: [protectedMain] }), historicalExecutionIdentity({ parents: ["a".repeat(40), f252Head] }), historicalExecutionIdentity({ parents: [protectedMain, "a".repeat(40)] }), historicalExecutionIdentity({ mergeTree: "a".repeat(40) }), historicalExecutionIdentity({ parents: [protectedMain, f252Head, "a".repeat(40)] })]) assert.ok(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ executionIdentity }) }).findings.includes("FINITE_TASK_GITHUB_EXECUTION_IDENTITY_INVALID"));
 });
 
-test("finite runtime matrix 20: wrong merge-ref first parent fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: ["a".repeat(40), f252Head] }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_FIRST_PARENT"), true);
-});
-
-test("finite runtime matrix 21: wrong merge-ref second parent fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain, "a".repeat(40)] }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_SECOND_PARENT"), true);
-});
-
-test("finite runtime matrix 22: wrong merge-ref source tree fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefSourceTree: "a".repeat(40) }) }).findings.includes("FINITE_TASK_MERGE_REF_WRONG_SOURCE_TREE"), true);
-});
-
-test("finite runtime matrix 23: octopus merge ref fails", () => {
-  assert.equal(evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ mergeRefParents: [protectedMain, f252Head, "a".repeat(40)] }) }).findings.includes("FINITE_TASK_MERGE_REF_MALFORMED"), true);
+test("GitHub PR source/execution classifier permanently separates authority from exact merge-ref execution", () => {
+  const cloneEvent = () => structuredClone(historicalEvent); const clonePull = () => structuredClone(historicalPullRequest); const exactHead = historicalExecutionIdentity({ checkout: f252Head }); const exactMerge = historicalExecutionIdentity();
+  assert.deepEqual([exactHead.ok, exactHead.eventType, exactMerge.ok, exactMerge.eventType, exactMerge.authoritativeSource.headSha === f252Head, exactMerge.execution.sha !== f252Head], [true, "PULL_REQUEST_HEAD_CHECKOUT", true, "PULL_REQUEST_MERGE_REF", true, true]);
+  const wrongHead = cloneEvent(); wrongHead.pull_request.head.sha = "c".repeat(40); const wrongBase = cloneEvent(); wrongBase.pull_request.base.sha = "d".repeat(40); const wrongLiveHead = clonePull(); wrongLiveHead.head.sha = "e".repeat(40); const wrongLiveBase = clonePull(); wrongLiveBase.base.sha = "f".repeat(40); const wrongPr = cloneEvent(); wrongPr.number = wrongPr.pull_request.number = 215; const wrongRepo = cloneEvent(); wrongRepo.repository.full_name = "attacker/repository"; const wrongDraft = clonePull(); wrongDraft.draft = true; const wrongMerge = cloneEvent(); wrongMerge.pull_request.merge_commit_sha = "9".repeat(40); const missingMerge = cloneEvent(); delete missingMerge.pull_request.merge_commit_sha; const movedLiveMerge = clonePull(); movedLiveMerge.merge_commit_sha = "8".repeat(40); const otherEvent = cloneEvent(); otherEvent.number = otherEvent.pull_request.number = 215; const otherPull = clonePull(); otherPull.number = 215; const otherExecution = historicalExecutionIdentity({ event: otherEvent, live: otherPull, identity: { repository: historicalRepository, pr: 215, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: protectedMain } });
+  const invalid = [historicalExecutionIdentity({ parents: [protectedMain, "0".repeat(40)] }), historicalExecutionIdentity({ checkout: "1".repeat(40) }), historicalExecutionIdentity({ event: wrongHead }), historicalExecutionIdentity({ event: wrongBase }), historicalExecutionIdentity({ live: wrongLiveHead }), historicalExecutionIdentity({ live: wrongLiveBase }), historicalExecutionIdentity({ event: wrongPr }), historicalExecutionIdentity({ event: wrongRepo }), historicalExecutionIdentity({ live: wrongDraft }), historicalExecutionIdentity({ environment: { ...historicalEnvironment, GITHUB_REF: "refs/pull/999/merge" } }), historicalExecutionIdentity({ environment: { ...historicalEnvironment, GITHUB_ACTIONS: "false" } }), historicalExecutionIdentity({ environment: { ...historicalEnvironment, GITHUB_EVENT_NAME: "workflow_dispatch" } })];
+  assert.equal(invalid.every(({ ok }) => !ok) && historicalExecutionIdentity({ event: missingMerge }).ok && historicalExecutionIdentity({ event: wrongMerge }).ok && historicalExecutionIdentity({ live: movedLiveMerge }).ok && evaluateFiniteTaskCandidate({ lease: pr214Lease, registry: finiteRegistry, candidate: pullRequestCandidate({ executionIdentity: otherExecution }) }).findings.includes("FINITE_TASK_GITHUB_EXECUTION_IDENTITY_INVALID"), true);
+  const movedBase = "2".repeat(40); const movedMerge = "3".repeat(40); const movedTree = "4".repeat(40); const movedPull = clonePull(); Object.assign(movedPull, { merge_commit_sha: movedMerge }); movedPull.base.sha = movedBase; const movedEvent = cloneEvent(); Object.assign(movedEvent.pull_request, movedPull); const movedIdentity = { repository: historicalRepository, pr: 214, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: movedBase }; const movedEnvironment = { ...historicalEnvironment, GITHUB_SHA: movedMerge };
+  const moved = historicalExecutionIdentity({ event: movedEvent, live: movedPull, identity: movedIdentity, environment: movedEnvironment, checkout: movedMerge, parents: [movedBase, f252Head], mergeTree: movedTree, expectedTree: movedTree }); const stale = historicalExecutionIdentity({ event: movedEvent, live: movedPull, identity: movedIdentity, environment: historicalEnvironment, parents: [protectedMain, f252Head], mergeTree: f252Tree, expectedTree: movedTree }); const readyEvent = cloneEvent(); readyEvent.action = "ready_for_review"; const staleReady = cloneEvent(); staleReady.action = "ready_for_review"; staleReady.pull_request.draft = true;
+  assert.deepEqual([moved.ok, moved.authoritativeSource.headSha, moved.execution.sha, stale.ok, historicalExecutionIdentity({ event: readyEvent }).ok, historicalExecutionIdentity({ event: staleReady, live: staleReady.pull_request }).ok], [true, f252Head, movedMerge, false, true, false]);
+  const headOnly = historicalExecutionIdentity({ checkout: f252Head, environment: { ...historicalEnvironment, GITHUB_REF: pr214Lease.implementationBranch, GITHUB_SHA: "0".repeat(40) }, parents: [], expectedTree: "" }); const editedEvent = cloneEvent(); editedEvent.action = "edited";
+  assert.deepEqual([headOnly.ok, headOnly.eventType, historicalExecutionIdentity({ event: editedEvent }).ok], [true, "PULL_REQUEST_HEAD_CHECKOUT", true]);
 });
 
 test("finite runtime matrix 24: edited Owner maintenance comment fails", () => {
@@ -1991,8 +1994,8 @@ const wave1Lease = finiteTaskLeaseFor(canonicalTruth.finiteTaskLeases, {
   implementationBranch: "codex/pre-release-identity-entitlement-authority-v1",
   featureId: "auth-session-password-recovery"
 });
-const wave1BoundBase = "1".repeat(40);
-const wave1BoundBaseTree = "2".repeat(40);
+const wave1BoundBase = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
+const wave1BoundBaseTree = "cee9c69c6a4bfffd152e02881174cc5f27216bce";
 const wave1BoundStart = "3".repeat(40);
 const wave1BoundStartTree = "4".repeat(40);
 const wave1Descendant = "5".repeat(40);
@@ -2429,7 +2432,7 @@ function wave1CurrentValidLifecycleFixture({
     profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1,
     effectiveReservationResolution: initialResolution,
   });
-  const phaseBody = { runId: 900201, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900201, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSubject = finiteTaskFinalReceiptSubject({
     schemaVersion: 3,
@@ -2647,6 +2650,106 @@ test("finite test-adaptation active-task scope: only a trusted layered resolutio
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
+});
+
+test("A1 Phase 1 publisher-metadata compatibility profile is exact, bounded, and authority-closed", () => {
+  const capability = canonicalTruth.phase1PublisherMetadataCompatibilityRepairCapability;
+  assert.deepEqual([capability.contract, capability.paths, capability.maximumFiles, capability.maximumChangedLines], ["PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1", ["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"], 2, 80]);
+  assert.ok(Object.values(capability.authority).every((value) => value === false));
+  assert.match(renderCurrentState(canonicalTruth), /Hidden or ambiguous bypass authority remains fail-closed/u);
+  assert.match(renderNextTask(canonicalTruth), /exact `2`-path \/ `80`-line assurance-only profile/u);
+});
+
+test("A1 canonical truth binds the third terminal-verifier repair to the immutable PR254 successor evidence", () => {
+  const instances = canonicalTruth.taskContextArchitecture.terminalVerifierRepair.history.instances;
+  const current = instances.at(-1);
+  assert.equal(instances.length, 3);
+  assert.deepEqual([current.ordinal, current.pullRequest, current.protectedBase, current.priorInstanceId], [3, 256, "2d40bc75cfad9a28d7534f3dd8593dab63318769", "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"]);
+  assert.deepEqual([current.predecessor.pullRequest, current.predecessor.mergeSha, current.predecessor.authorityCommentId], [254, "2d40bc75cfad9a28d7534f3dd8593dab63318769", 5404284190]);
+  assert.deepEqual([current.receiptBindings.historicalTerminalReceipt.commentId, current.receiptBindings.predecessorReceipts.map(({ commentId }) => commentId)], [5404748755, [5404284190, 5404381682]]);
+  assert.equal(current.instanceId, "9e523767d9508b2f5b0ead48e5d7ee6dc3953a9c6039a47e987ac9f91137c38c");
+});
+
+test("A1 terminal repair receipt: exact preliminary receipt round-trips only as the history-bound stale predecessor of one final receipt", () => {
+  const closureSource = fs.readFileSync(path.join(process.cwd(), "scripts/assurance/engineering-closure.mjs"), "utf8");
+  assert.match(closureSource, /verifyArchitectureMaintenanceAuthority\(\{ raw: predecessorRaw,[^\n]+phase1EvidenceResolver, publisherProvisioningReadbackResolver, root \}\)/u, "a terminal repair must re-resolve its architecture predecessor with the protected Phase 1 and publisher readback resolvers");
+  const priorTruth = structuredClone(canonicalTruth);
+  priorTruth.taskContextArchitecture.terminalVerifierRepair.history = structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY);
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 731, branch: "codex/generic-terminal-verifier-repair-v2", baseSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb", headSha: "b".repeat(40) };
+  const preliminaryIdentity = { ...identity, headSha: "a".repeat(40) };
+  const predecessor = { valid: true, protectedBaseAncestor: true, pr: 243, mergeSha: "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76", firstParent: "406a776a697c3a786fd37911b6e2160906fb9121", sourceHead: "5e44d1fd2a84f51b322eb40ca147c0882d1d664f", sourceTree: "e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc" };
+  const predecessorAuthority = {
+    ok: true, authorizationOk: true, mergeEligible: true,
+    commentId: 5362647294, subjectHash: "1".repeat(64), commentBodyHash: "2".repeat(64),
+    currentHead: predecessor.sourceHead, currentTree: predecessor.sourceTree, currentFinalSourceReceiptId: 5363013036,
+    canonicalFinalSourceReceipt: { commentId: 5363013036, subjectHash: "3".repeat(64), commentBodyHash: "4".repeat(64), diffHash: "5".repeat(64) },
+  };
+  const consumedPendingTransitions = [{ pr: predecessor.pr, mergeSha: predecessor.mergeSha, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, authorityCommentId: predecessorAuthority.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }];
+  const priorTruthHash = "6".repeat(64);
+  const preliminaryScope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500, diffHash: "7".repeat(64) };
+  const finalScope = { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 650, diffHash: "8".repeat(64) };
+  const rawComment = (id, body) => ({ id, node_id: `IC_terminal_repair_${id}`, user: { login: "Chillywood2025" }, author_association: "OWNER", body, created_at: "2026-08-24T12:00:00Z", updated_at: "2026-08-24T12:00:00Z", issue_url: `https://api.github.com/repos/${identity.repository}/issues/${identity.pr}`, html_url: `https://github.com/${identity.repository}/pull/${identity.pr}#issuecomment-${id}` });
+  const preliminarySubject = terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: preliminaryScope, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true }); const preliminaryBody = terminalTruthSuccessorVerifierRepairOwnerCommentBody(preliminarySubject); const preliminaryPayload = JSON.parse(preliminaryBody.slice(preliminaryBody.indexOf("\n") + 1)); const preliminaryRaw = rawComment(9000000731, preliminaryBody);
+  assert.equal(preliminarySubject.receiptStage, "PRELIMINARY_HISTORY_BINDING"); assert.equal(Object.hasOwn(preliminarySubject, "originalTerminalReceipt"), false); assert.equal(Object.hasOwn(preliminarySubject, "terminalVerifierRepairInstanceId"), false); assert.deepEqual(JSON.parse(stableJson(preliminarySubject)), preliminarySubject);
+
+  const closedAuthority = { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false };
+  const repairInstance = createTerminalVerifierRepairInstance({
+    schemaVersion: 1, ordinal: 2, classification: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
+    repository: identity.repository, pullRequest: identity.pr, branch: identity.branch, protectedBase: identity.baseSha,
+    priorCurrentTruthHash: priorTruthHash, priorInstanceId: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.instanceId,
+    predecessor: { pullRequest: predecessor.pr, mergeSha: predecessor.mergeSha, firstParent: predecessor.firstParent, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, authorityCommentId: predecessorAuthority.commentId, authoritySubjectHash: predecessorAuthority.subjectHash, authorityBodyHash: predecessorAuthority.commentBodyHash },
+    receiptBindings: {
+      historicalTerminalReceipt: { commentId: preliminaryRaw.id, subjectHash: preliminaryPayload.subjectHash, commentBodyHash: hashValue(preliminaryBody), disposition: "HISTORICAL_STALE_TERMINAL_RECEIPT" },
+      predecessorReceipts: [
+        { commentId: predecessorAuthority.commentId, subjectHash: predecessorAuthority.subjectHash, commentBodyHash: predecessorAuthority.commentBodyHash, disposition: "OWNER_ARCHITECTURE_AUTHORITY" },
+        { commentId: predecessorAuthority.canonicalFinalSourceReceipt.commentId, subjectHash: predecessorAuthority.canonicalFinalSourceReceipt.subjectHash, commentBodyHash: predecessorAuthority.canonicalFinalSourceReceipt.commentBodyHash, diffHash: predecessorAuthority.canonicalFinalSourceReceipt.diffHash, disposition: "CANONICAL_CURRENT" },
+      ],
+    },
+    pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId,
+    pendingTransitions: [{ pr: predecessor.pr, mergeSha: predecessor.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }],
+    expectedNextTask: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE", profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE,
+    singleUse: true, authority: closedAuthority,
+  });
+  const truthRecord = structuredClone(priorTruth); truthRecord.engineeringDoctrine = { status: "ACTIVE", nextPermittedAction: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" }; truthRecord.openImplementationPrs = [];
+  truthRecord.taskContextArchitecture = {
+    ...truthRecord.taskContextArchitecture,
+    architecturePr: predecessor.pr, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, mergeSha: predecessor.mergeSha,
+    authorityCommentId: predecessorAuthority.commentId, authoritySubjectHash: predecessorAuthority.subjectHash, authorityBodyHash: predecessorAuthority.commentBodyHash,
+    terminalTransitionConsumed: true, pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId, pendingTransitionCountAfterSynchronization: 0,
+    pendingTransitions: [
+      { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor.pr, mergeSha: predecessor.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    ],
+    terminalVerifierRepair: { ...truthRecord.taskContextArchitecture.terminalVerifierRepair, history: { schemaVersion: 1, policyId: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, profile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, instances: [...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY.instances, repairInstance] } },
+    authority: closedAuthority,
+  };
+  const finalSubject = terminalTruthSuccessorVerifierRepairSubject({ identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, originalRaw: preliminaryRaw, terminalVerifierRepairInstanceId: repairInstance.instanceId, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false }); const finalRaw = rawComment(9000000732, terminalTruthSuccessorVerifierRepairOwnerCommentBody(finalSubject)); const args = { raw: preliminaryRaw, allComments: [preliminaryRaw, finalRaw], paginationComplete: true, identity, tree: "d".repeat(40), scope: finalScope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: renderCurrentState(truthRecord), nextTaskText: renderNextTask(truthRecord), currentMain: identity.baseSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false }; const exact = verifyTerminalTruthSuccessorAuthority(args);
+  assert.equal(exact.ok, true, exact.findings.join(","));
+  assert.deepEqual(finalSubject.pendingTransitions.map(({ pr }) => pr), [predecessor.pr], "ordinal-2 receipt consumption remains PR243-only");
+  assert.deepEqual(truthRecord.taskContextArchitecture.pendingTransitions.map(({ pr }) => pr), [226, predecessor.pr], "top-level compatibility history remains exactly PR226 then PR243");
+  assert.deepEqual(exact.historicalTerminalReceiptIds, [preliminaryRaw.id]);
+  assert.equal(exact.currentTerminalReceiptId, finalRaw.id);
+  assert.equal(verifyTerminalTruthSuccessorAuthority({ ...args, allComments: [preliminaryRaw] }).ok, false, "the preliminary receipt cannot authorize without one exact current final receipt");
+  const verifyTopLevelMutation = (mutate) => {
+    const candidate = structuredClone(args);
+    mutate(candidate.truthRecord.taskContextArchitecture.pendingTransitions);
+    candidate.currentStateText = renderCurrentState(candidate.truthRecord);
+    candidate.nextTaskText = renderNextTask(candidate.truthRecord);
+    return verifyTerminalTruthSuccessorAuthority(candidate);
+  };
+  for (const [label, mutate] of [
+    ["missing", (pending) => { pending.shift(); }],
+    ["wrong", (pending) => { pending[0].mergeSha = "0".repeat(40); }],
+    ["extra", (pending) => { pending.push({ pr: 244, mergeSha: "9".repeat(40), status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }); }],
+  ]) {
+    const invalid = verifyTopLevelMutation(mutate);
+    assert.equal(invalid.ok, false, `${label} top-level compatibility history must fail closed`);
+    assert.ok(invalid.findings.includes("TERMINAL_TRUTH_SUCCESSOR_INVALID:generatedTruth"), label);
+  }
+  const observerSource = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
+  assert.match(observerSource, /terminalSuccessorScope = currentRepairScope \? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS/u, "repair and terminal-truth successor cardinality must remain scope-specific");
+  assert.match(observerSource, /paginationComplete: commentsRead\.complete && openPullsRead\.complete && openTerminalSuccessorFilesComplete/u, "incomplete competing-PR file pagination must fail closed");
+  assert.throws(() => terminalTruthSuccessorVerifierRepairSubject({ identity: preliminaryIdentity, tree: "c".repeat(40), scope: { ...preliminaryScope, files: preliminaryScope.files.slice(1) }, predecessor, predecessorAuthority, priorTruthHash, repairProfile: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair: false, preliminaryReceipt: true }), /ASSURANCE_TERMINAL_REPAIR_PRELIMINARY_RECEIPT_INVALID/u);
 });
 
 test("finite test-adaptation resolver: implementation and fixture line ceilings cannot pool", () => {
@@ -3051,7 +3154,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
   });
   const finiteTaskPrRiskAuthority = reviewSubject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority;
   assert.equal(finiteTaskPrRiskAuthority.ok, true, stableJson(finiteTaskPrRiskAuthority.findings));
-  const phaseBody = { runId: 900101, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900101, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSubject = finiteTaskFinalReceiptSubject({
     schemaVersion: 3,
@@ -3212,7 +3315,7 @@ test("finite test-adaptation lifecycle: trusted live overlay binds final receipt
     assert.equal(result.ok, false, label);
   }
 
-  const postMergeSha = "7".repeat(40);
+  const postMergeSha = "5e595e684f4dcc9454eee5065066e1b48d20e3eb";
   const closedPull = {
     state: "closed",
     merged: true,
@@ -4050,6 +4153,11 @@ test("finite lifecycle: amendment-capable tasks require supplied live final-sour
   const legacy = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord });
   assert.equal(legacy.liveFinalEvidenceRequired, false);
   assert.equal(legacy.mergeEligible, true);
+  const controlRuntime = { ...shared.finiteTaskRuntime, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", candidateKind: "ASSURANCE_CONTROL_SOURCE_ONLY", terminal: false, mergeAuthorityGranted: false, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, sourceOnlyEligible: true, providerDependentEligible: false, candidateEvaluation: { evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", sourceOnly: true, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false } };
+  const control = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord, finiteTaskRuntime: controlRuntime });
+  assert.equal(control.mergeEligible, false); assert.equal(control.candidateBaseStatus, "ASSURANCE_CONTROL_SOURCE_ONLY"); assert.equal(control.nextRequiredAction, "CONTINUE_ASSURANCE_CONTROL_SOURCE_VALIDATION");
+  assert.deepEqual([control.providerDependentEligible, control.buildEligible, control.submissionEligible, control.otaEligible, control.publicReleaseEligible], [false, false, false, false, false]);
+  for (const forged of [{ ...controlRuntime, evaluationType: null }, { ...controlRuntime, mergeAuthorityGranted: true }, { ...controlRuntime, productAuthorityGranted: true }, { ...controlRuntime, providerAuthorityGranted: true }, { ...controlRuntime, finiteTaskAuthorityGranted: true }, { ...controlRuntime, terminalAuthorityGranted: true }, { ...controlRuntime, providerDependentEligible: true }, { ...controlRuntime, candidateKind: "ACTIVE_FINITE_TASK" }, { ...controlRuntime, candidateEvaluation: { ...controlRuntime.candidateEvaluation, mergeAuthorityGranted: true } }]) { const denied = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord, finiteTaskRuntime: forged }); assert.deepEqual([denied.mergeEligible, denied.providerDependentEligible, denied.sourceOnlyEligible], [false, false, false]); assert.ok(denied.findings.includes("ASSURANCE_CONTROL_SOURCE_ONLY_RUNTIME_INVALID")); }
 });
 test("finite lifecycle: verified post-merge evidence requires exactly one finite-task terminal truth", () => {
   const record = historicalRollingRecord();
@@ -4473,7 +4581,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence =
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 229, branch: wave1Lease.implementationBranch, baseSha: wave1BoundBase, headSha: candidate.head };
   const scope = { files: candidate.changedPaths, additions: 2250, deletions: 2250, netChangedLines: 0, diffHash: "a".repeat(64) };
   const reviewSubject = architectureRepositoryReviewSubject({ identity, tree: candidate.tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
-  const phaseBody = { runId: 900060, sourceHead: candidate.head, sourceTree: candidate.tree, result: "PASS_13_OF_13" };
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900060, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSourceSubject = finiteTaskFinalReceiptSubject({
     schemaVersion: 2,
@@ -4827,7 +4935,7 @@ test("finite runtime matrix 29: source-only Autonomous All-Platform contract pas
 
 test("finite runtime matrix 30: source-only Autonomous iOS contract passes for f252", () => {
   const result = runtimeAtF252();
-  assert.equal(result.sourceOnlyEligible && result.candidateTree === f252Tree, true);
+  assert.equal(result.sourceOnlyEligible && result.candidateTree === f252Tree, true, stableJson(result));
 });
 
 test("finite runtime matrix 31: provider-dependent work remains denied", () => {
@@ -4839,7 +4947,7 @@ test("unrelated repository-source expiry does not invalidate finite lease author
   assert.equal(runtime.claimFreshness.ok, false, "the unrelated S0 claim is stale at this time");
   assert.equal(runtime.leaseAuthorityEligible, true);
   assert.equal(runtime.candidateEligible, true);
-  assert.equal(runtime.sourceOnlyEligible, true);
+  assert.equal(runtime.sourceOnlyEligible, true, stableJson(runtime));
   assert.equal(runtime.providerDependentEligible, false);
 });
 
@@ -4912,7 +5020,7 @@ function syntheticRollingEvaluation(count, {
       commit,
       parents,
       tree: digest(`rolling-tree-${count}-${index}`).slice(0, 40),
-      subject: subject ?? `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
+      subject: Array.isArray(subject) ? subject[index] : subject ?? `Merge pull request #${300 + index} from Chillywood2025/codex/rolling-fixture-${index}`,
       changedPaths: changedPaths ?? [changedPath]
     };
     if (authorityUpdateBound !== undefined) observation.authorityUpdateBound = authorityUpdateBound;
@@ -5137,10 +5245,29 @@ test("rolling main matrix 27: classic GitHub merge subject remains accepted", ()
 });
 
 test("rolling main matrix 28: malformed or unregistered merge subjects fail closed", () => {
-  for (const subject of ["direct push", "Title (#0)", "Title #221", " (#221)", "Title (#221) trailing"]) {
+  for (const subject of ["direct push", "Title (#0)", "Title #221", " (#221)", "Title (#221) trailing", "Merge PR #0: title", "Merge PR #246:", "Merge PR #246 title"]) {
     const result = syntheticRollingEvaluation(1, { subject });
     assert.equal(result.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true, subject);
   }
+});
+
+test("rolling main matrix 29: exact projected repair accepts GitHub Merge PR title only with frozen source proof", () => {
+  const record = structuredClone(canonicalTruth); const observedProtectedMainSha = "8aa74d0442eb9797900005d3c2dca9709b43c0c8"; const repairInstance = record.taskContextArchitecture.terminalVerifierRepair.history.instances.at(-1);
+  const exactObservation = { commit: observedProtectedMainSha, parents: ["5e595e684f4dcc9454eee5065066e1b48d20e3eb", "da41288c5caad40a7b33892e0c0120a369cca1bb"], tree: "cee9c69c6a4bfffd152e02881174cc5f27216bce", subject: "Merge PR #246: Repair durable terminal-verifier provenance", changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS] };
+  assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance }), true);
+  for (const [label, mutate] of [["replacement merge", (value) => { value.commit = value.parents[1]; }], ["wrong source parent", (value) => { value.parents[1] = "0".repeat(40); }], ["wrong execution tree", (value) => { value.tree = "0".repeat(40); }]]) { const observation = structuredClone(exactObservation); mutate(observation); assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation, instance: repairInstance }), false, label); }
+  const runGit = (argv) => spawnSync("git", argv, { encoding: "utf8" }).stdout.trim();
+  for (const [label, command] of [["wrong source diff", "diff"], ["arbitrary merge tree", "merge-tree"]]) assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance, gitCommand: (argv) => argv[0] === command && (command === "merge-tree" || argv.includes("--full-index")) ? "0".repeat(40) : runGit(argv) }), false, label);
+  const originalMapGet = Map.prototype.get; try { Map.prototype.get = () => ({ ...repairInstance, sourceHead: "0".repeat(40) }); assert.equal(validateTerminalVerifierRepairProtectedMerge({ observation: exactObservation, instance: repairInstance }), true); } finally { Map.prototype.get = originalMapGet; }
+  const exact = evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha, candidateHead: "6c724deca7969dc72aaf1ae24b69a150a6cfbaca", finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false }, candidateContainsObservedMain: true });
+  assert.equal(exact.findings.length, 0, exact.findings.join(",")); assert.deepEqual([exact.pendingTransitionCount, exact.pendingTransitionConsumptionCount, exact.terminalVerifierRepairHistory.length], [0, 1, 2]);
+  const wrongPr = evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha, finiteTaskRuntime: { sourceOnlyEligible: true }, advancementObservations: [{ ...exactObservation, subject: "Merge PR #247: wrong repair" }], checkpointTreeObservation: record.protectedMainAuthority.checkpointTree, checkpointIsAncestor: true, candidateContainsObservedMain: true });
+  assert.ok(wrongPr.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"));
+});
+
+test("rolling main matrix 30: consecutive GitHub Merge PR title variants remain ordinary advancement", () => {
+  const exact = syntheticRollingEvaluation(2, { subject: ["Merge PR #300: First assurance correction", "Merge PR #301: Second assurance correction"] });
+  assert.equal(exact.findings.length, 0, exact.findings.join(",")); assert.deepEqual(exact.advancementClassifications.map(({ pullRequestNumber, mergeSubjectFormat, terminalVerifierRepair }) => [pullRequestNumber, mergeSubjectFormat, terminalVerifierRepair]), [[300, "GITHUB_CLASSIC_MERGE_PULL_REQUEST", false], [301, "GITHUB_CLASSIC_MERGE_PULL_REQUEST", false]]);
 });
 
 const recoveryPaths = [...TYPED_CONTEXT_ARCHITECTURE_PATHS].sort();
@@ -5233,6 +5360,7 @@ function pendingTransitionEvaluation({ recovery = false, terminal = false, repai
               canonicalPredecessorReceipt: 5280109323,
               rawPredecessorDiffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
               canonicalPredecessorDiffHash: "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea",
+              history: structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY),
               singleUse: true,
               authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false }
             } } : {}),
@@ -5289,12 +5417,12 @@ test("pending transition 18: exact three-file successor consumes PR 226 and PR 2
   assert.equal(result.pendingTransitionConsumptionCount, 1);
   assert.equal(result.findings.length, 0);
 });
-test("combined terminal verifier repair consumes both pending transitions without creating a third", () => {
+test("fabricated combined terminal verifier repair cannot consume historical pending transitions", () => {
   const result = pendingTransitionEvaluation({ recovery: true, repair: true });
-  assert.equal(result.pendingTransitionCount, 0, result.findings.join(","));
-  assert.equal(result.pendingTransitionConsumptionCount, 1);
-  assert.equal(result.findings.length, 0);
-  assert.equal(result.advancementClassifications.at(-1).terminalVerifierRepair, true);
+  assert.equal(result.pendingTransitionCount, 2, result.findings.join(","));
+  assert.equal(result.pendingTransitionConsumptionCount, 0);
+  assert.deepEqual(result.findings, ["CURRENT_TRUTH_PENDING_TERMINAL_SUCCESSOR_REQUIRED", "CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"]);
+  assert.equal(result.advancementClassifications.at(-1).terminalVerifierRepair, false);
   assert.equal(result.providerDependentEligible, false);
   assert.equal(result.buildEligible, false);
   assert.equal(result.submissionEligible, false);
@@ -5392,6 +5520,55 @@ test("doctrine baseline/current delta controls 20-38: inventory deltas and depen
   assert.equal(controls.length, 19); assert.equal(controls.every(Boolean), true);
 });
 
+test("doctrine dependency closure distinguishes assurance-policy content from structural model changes", () => {
+  const baseline = validateDoctrineBaselineArtifacts();
+  const currentGraph = generateDomainGraph(undefined, { authoritative: true });
+  const policyOnly = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph, changedPaths: ["config/assurance/engineering-doctrine-v1.json"] });
+  assert.equal(hashValue(structuralGraphSubject(currentGraph)), baseline.baselineStructuralGraphHash);
+  assert.deepEqual(policyOnly.structuralGraphInputs, []);
+  assert.deepEqual(policyOnly.contentOnlyInputs, ["config/assurance/engineering-doctrine-v1.json"]);
+  assert.equal(policyOnly.structuralModelChanged, false);
+  assert.equal(policyOnly.modelRevisionRequired, false);
+
+  const closureTraversalChanged = structuredClone(baseline.graph);
+  closureTraversalChanged.affectedClosurePolicy = { ...closureTraversalChanged.affectedClosurePolicy, stopClassification: "UNAUTHORIZED_CHANGE" };
+  const structural = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: closureTraversalChanged, changedPaths: ["config/assurance/engineering-doctrine-v1.json"] });
+  assert.equal(structural.structuralModelChanged, true);
+  assert.equal(structural.modelRevisionRequired, true);
+  assert.deepEqual(structural.structuralGraphInputs, ["config/assurance/engineering-doctrine-v1.json"]);
+
+  const unattributed = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: closureTraversalChanged, changedPaths: ["CURRENT_STATE.md"] });
+  assert.equal(unattributed.modelRevisionRequired, true);
+  assert.deepEqual(unattributed.structuralGraphInputs, ["UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE"]);
+
+  for (const field of ["contractBindings", "invariants", "requirements", "unresolvedUnknowns"]) {
+    const changed = structuredClone(baseline.graph);
+    changed.nodes[0][field] = [...(changed.nodes[0][field] ?? []), `unauthorized-${field}`];
+    const result = deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: changed, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+    assert.equal(result.modelRevisionRequired, true, field);
+  }
+  const unsafeEdge = structuredClone(baseline.graph);
+  unsafeEdge.edges[0].boundedSideEffects = !unsafeEdge.edges[0].boundedSideEffects;
+  assert.equal(deriveDoctrineArtifactDependencyClosure({ baseline, currentGraph: unsafeEdge, changedPaths: ["config/assurance/feature-registry-v1.json"] }).modelRevisionRequired, true);
+
+  const inventoryOwnership = structuredClone(baseline.graph);
+  const ownershipGroup = inventoryOwnership.inventory.groups.find(({ members }) => members.length > 0);
+  const ownershipMember = ownershipGroup.members[0];
+  ownershipMember.ownerDomains = [...ownershipMember.ownerDomains, "unauthorized-owner"];
+  const ownershipObservation = deriveCurrentTreeObservation({ baseline, currentGraph: inventoryOwnership, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+  assert.equal(ownershipObservation.taskDelta.changedOwnership.includes(`${ownershipGroup.id}:${ownershipMember.path ?? ownershipMember.id}`), true);
+  assert.equal(ownershipObservation.dependencyClosure.modelRevisionRequired, true);
+  assert.deepEqual(ownershipObservation.dependencyClosure.structuralGraphInputs, ["config/assurance/feature-registry-v1.json"]);
+
+  const sharedContract = structuredClone(baseline.graph);
+  const sharedGroup = sharedContract.inventory.groups.find(({ members }) => members.some(({ sharedDependencyContract }) => sharedDependencyContract));
+  const sharedMember = sharedGroup.members.find(({ sharedDependencyContract }) => sharedDependencyContract);
+  sharedMember.sharedDependencyContract = `${sharedMember.sharedDependencyContract} unauthorized`;
+  const sharedObservation = deriveCurrentTreeObservation({ baseline, currentGraph: sharedContract, changedPaths: ["config/assurance/feature-registry-v1.json"] });
+  assert.equal(sharedObservation.taskDelta.changedOwnership.includes(`${sharedGroup.id}:${sharedMember.path ?? sharedMember.id}`), true);
+  assert.equal(sharedObservation.dependencyClosure.modelRevisionRequired, true);
+});
+
 test("doctrine baseline/current delta controls 39-48: modes, reports, callers, and closed authority remain deterministic", () => {
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 227, branch: "codex/typed-task-context-terminal-successor-v1", head: "d".repeat(40), tree: "e".repeat(40), base: "c1f9ec1f71cc8bc4448afd2327c4341cac309573" };
   const architecture = deriveEngineeringClosureExecutionMode({ identity, changedPaths: TYPED_CONTEXT_ARCHITECTURE_PATHS, pendingTerminalTruth: true });
@@ -5405,19 +5582,30 @@ test("doctrine baseline/current delta controls 39-48: modes, reports, callers, a
   assert.equal(controls.length, 10); assert.equal(controls.every(Boolean), true);
 });
 
+test("terminal task context preserves historical implementation identity across exact protected-main advancement", () => {
+  const historicalImplementationMerge = "5e595e684f4dcc9454eee5065066e1b48d20e3eb";
+  const correctedProtectedMain = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
+  const advancement = verifyFiniteTaskTerminalBaseAdvancement({ repository: "Chillywood2025/chillywood-mobile", baseRef: "main", historicalImplementationMerge, currentProtectedBase: correctedProtectedMain, expectedCurrentProtectedBase: correctedProtectedMain });
+  assert.equal(advancement.ok, true, stableJson(advancement.findings));
+  assert.equal(advancement.relationship, "FIRST_PARENT_ANCESTOR");
+  assert.equal(deriveEngineeringClosureExecutionMode({ taskContext: { ok: true, type: "TERMINAL_TRUTH_SUCCESSOR" }, changedPaths: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"] }).mode, "TERMINAL_TRUTH_SUCCESSOR");
+});
+
 test("engineering closure inherits one exact typed terminal context from GitHub event readback", () => {
   const sourceHead = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
   const sourceTree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).stdout.trim();
   const baseSha = spawnSync("git", ["rev-parse", "origin/main"], { encoding: "utf8" }).stdout.trim();
   const branch = spawnSync("git", ["branch", "--show-current"], { encoding: "utf8" }).stdout.trim();
-  const event = { repository: { full_name: "Chillywood2025/chillywood-mobile" }, number: 228, pull_request: { number: 228, state: "open", html_url: "https://github.com/Chillywood2025/chillywood-mobile/pull/228", base: { ref: "main", sha: baseSha }, head: { ref: branch, sha: sourceHead } } };
-  const readback = { number: 228, repository: event.repository.full_name, baseRef: "main", baseSha, headRef: branch, headSha: sourceHead, htmlUrl: event.pull_request.html_url, state: "open" };
+  const mergeSha = "f".repeat(40); const repository = "Chillywood2025/chillywood-mobile";
+  const event = { action: "reopened", repository: { full_name: repository }, number: 228, pull_request: { number: 228, state: "open", draft: false, merge_commit_sha: mergeSha, html_url: `https://github.com/${repository}/pull/228`, base: { ref: "main", sha: baseSha, repo: { full_name: repository } }, head: { ref: branch, sha: sourceHead, repo: { full_name: repository } } } };
+  const readback = { number: 228, repository, baseRepository: repository, baseRef: "main", baseSha, headRepository: repository, headRef: branch, headSha: sourceHead, mergeCommitSha: mergeSha, draft: false, htmlUrl: event.pull_request.html_url, state: "open" };
   const taskContext = { ok: true, type: "TERMINAL_TRUTH_SUCCESSOR", authoritySource: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" };
-  const input = { event, localIdentity: { branch, head: sourceHead, tree: sourceTree, base: baseSha }, scope: { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500 }, currentTruth: canonicalTruth, readPull: () => readback, sourceAncestryVerified: true };
+  const input = { event, environment: { GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_REF: "refs/pull/228/merge", GITHUB_SHA: mergeSha }, gitCommand: (argv) => argv[0] === "rev-parse" && argv[1] === "HEAD" ? sourceHead : argv[0] === "rev-parse" ? sourceTree : argv[0] === "show" ? `${baseSha} ${sourceHead}` : argv[0] === "merge-tree" ? sourceTree : "", localIdentity: { branch, head: sourceHead, tree: sourceTree, base: baseSha }, scope: { files: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS], netChangedLines: 500 }, currentTruth: canonicalTruth, readPull: () => readback, sourceAncestryVerified: true };
   const exact = resolveEngineeringClosureTaskContext({ ...input, observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
+  const exactMerge = resolveEngineeringClosureTaskContext({ ...input, gitCommand: (argv) => argv[0] === "rev-parse" && argv[1] === "HEAD" ? mergeSha : argv[0] === "rev-parse" ? sourceTree : argv[0] === "show" ? `${baseSha} ${sourceHead}` : argv[0] === "merge-tree" ? sourceTree : "", localIdentity: { branch: "", head: mergeSha, tree: sourceTree, base: baseSha }, observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
   const wrongReadback = resolveEngineeringClosureTaskContext({ ...input, readPull: () => ({ ...readback, headSha: "0".repeat(40) }), observeAuthorities: () => ({ architectureAuthority: null, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
   const ambiguous = resolveEngineeringClosureTaskContext({ ...input, observeAuthorities: () => ({ architectureAuthority: { ok: true }, terminalTruthAuthority: taskContext, finiteTaskAuthority: null }) });
-  assert.equal(exact.ok, true);
+  assert.equal(exact.ok && exactMerge.ok, true);
   assert.equal(exact.taskContext.authoritySource, "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1");
   assert.deepEqual(wrongReadback.findings, ["ENGINEERING_CLOSURE_ASSURANCE_PR_EVENT_READBACK_MISMATCH"]);
   assert.deepEqual(ambiguous.findings, ["ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS"]);
@@ -5481,6 +5669,9 @@ function terminalD2aTruth() {
   const sourceTree = "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0";
   const mergeSha = "fe775c12b0857aa50d986d24179ae9588049b6a1";
   Object.assign(value.activeTaskBinding, {
+    featureId: "chilly-chat-call-lifecycle",
+    implementationPr: 212,
+    implementationBranch: "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation",
     currentImplementationHead: sourceHead,
     currentImplementationTree: sourceTree,
     phase: "TERMINAL",
@@ -5556,6 +5747,28 @@ test("terminal D2A evidence substitutions fail closed", () => {
     const value = terminalD2aTruth();
     mutate(value);
     assert.equal(validateStructuredBinding(value.activeTaskBinding, gateCatalog, registry, [], value.latestMergedImplementationPr).includes("ACTIVE_TASK_BINDING_MALFORMED"), true);
+  }
+});
+
+test("terminal D2A legacy Phase 1 evidence is restricted to the exact frozen historical instance", () => {
+  for (const mutate of [
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.repository = "attacker/repository"; },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.pr = 999; },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.branch = "attacker/branch"; },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.baseSha = "a".repeat(40); },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.sourceTree = "b".repeat(40); },
+    (value) => { value.activeTaskBinding.terminalEvidence.phase1.valid = false; },
+    (value) => { value.activeTaskBinding.implementationBranch = "attacker/branch"; },
+    (value) => {
+      value.activeTaskBinding.implementationPr = 999;
+      value.latestMergedImplementationPr.number = 999;
+    }
+  ]) {
+    const value = terminalD2aTruth();
+    mutate(value);
+    assert.deepEqual(validateTerminalTaskEvidence(value.activeTaskBinding, value.latestMergedImplementationPr), [
+      { id: "ASSURANCE_TERMINAL_TASK_EVIDENCE_MALFORMED", status: "BLOCKED_INTERNAL" }
+    ]);
   }
 });
 
@@ -6227,4 +6440,151 @@ test("active-task frozen artifact 08: packet edge summaries cannot contradict in
   }, 799103);
   assert.equal(result.clear, false);
   assert.ok(result.findings.includes("PREIMPLEMENTATION_TASK_LOCAL_EDGE_CLOSURE_INCOMPLETE"));
+});
+
+test("A1 Phase 1 evidence survives post-merge association loss only through complete unique exact GitHub provenance", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "phase1-durable-provenance-"));
+  const fakeGitHub = path.join(temporary, "gh");
+  const callsPath = path.join(temporary, "calls.jsonl");
+  fs.writeFileSync(fakeGitHub, `#!/usr/bin/env node
+const fs = require("node:fs");
+const fixture = JSON.parse(process.env.A1_PHASE1_GITHUB_FIXTURE);
+const endpoint = process.argv.at(-1);
+fs.appendFileSync(fixture.callsPath, JSON.stringify({ endpoint, args: process.argv.slice(2) }) + "\\n");
+if (endpoint.includes("/actions/runs/") && endpoint.endsWith("/jobs?per_page=100")) {
+  process.stdout.write(JSON.stringify({ total_count: fixture.jobsComplete === false ? fixture.jobs.length + 1 : fixture.jobs.length, jobs: fixture.jobs }));
+} else if (endpoint.includes("/actions/runs/")) {
+  process.stdout.write(JSON.stringify(fixture.run));
+} else if (/\\/pulls\\/[1-9]\\d*$/u.test(endpoint)) {
+  process.stdout.write(JSON.stringify(fixture.directPullRequest ?? null));
+} else if (/\\/commits\\/[0-9a-f]{40}\\/pulls\\?per_page=100$/u.test(endpoint)) {
+  process.stdout.write(JSON.stringify(fixture.commitAssociationPaginationComplete === false ? { incomplete: true } : [fixture.commitAssociatedPullRequests]));
+} else {
+  process.stderr.write("unexpected endpoint: " + endpoint);
+  process.exitCode = 1;
+}
+`);
+  fs.chmodSync(fakeGitHub, 0o755);
+  const originalPath = process.env.PATH;
+  const originalFixture = process.env.A1_PHASE1_GITHUB_FIXTURE;
+  const identity = {
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: 731,
+    branch: "codex/generic-phase1-durable-provenance-v1",
+    baseRef: "main",
+    baseSha: "b".repeat(40),
+    headSha: "a".repeat(40),
+  };
+  const tree = "c".repeat(40);
+  const runId = 910731;
+  const exactPullRequest = {
+    number: identity.pr,
+    head: { ref: identity.branch, sha: identity.headSha, repo: { full_name: identity.repository } },
+    base: { ref: identity.baseRef, sha: identity.baseSha, repo: { full_name: identity.repository } },
+  };
+  const successfulRun = {
+    id: runId,
+    run_attempt: 1,
+    name: "Phase 1 CI",
+    path: ".github/workflows/phase1-ci.yml",
+    event: "pull_request",
+    status: "completed",
+    conclusion: "success",
+    repository: { full_name: identity.repository },
+    head_sha: identity.headSha,
+    head_branch: identity.branch,
+    pull_requests: [],
+  };
+  const jobs = PHASE1_REQUIRED_JOB_NAMES.map((name, index) => ({ id: index + 1, name, status: "completed", conclusion: "success", head_sha: identity.headSha }));
+  const baselineFixture = {
+    callsPath,
+    run: successfulRun,
+    jobs,
+    jobsComplete: true,
+    directPullRequest: exactPullRequest,
+    commitAssociationPaginationComplete: true,
+    commitAssociatedPullRequests: [exactPullRequest],
+  };
+  const observe = ({ fixtureOverrides = {}, identityOverrides = {}, observedRunId = runId } = {}) => {
+    const fixture = structuredClone(baselineFixture);
+    Object.assign(fixture, structuredClone(fixtureOverrides));
+    process.env.A1_PHASE1_GITHUB_FIXTURE = JSON.stringify(fixture);
+    return observePhase1RunEvidence({ runId: observedRunId, identity: { ...identity, ...identityOverrides }, tree, root: process.cwd() });
+  };
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+
+    const durable = observe();
+    assert.equal(durable.valid, true, "empty run.pull_requests must recover from the exact direct PR and complete unique commit association");
+
+    const directRun = {
+      ...Object.fromEntries(Object.entries(successfulRun).filter(([key]) => !["path", "repository"].includes(key))),
+      pull_requests: [{ number: identity.pr, head: { sha: identity.headSha }, base: { sha: identity.baseSha } }],
+    };
+    const direct = verifyPhase1RunEvidence({ run: directRun, jobs, identity, tree });
+    const historicalBody = {
+      classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1",
+      repository: identity.repository,
+      pr: identity.pr,
+      branch: identity.branch,
+      baseSha: identity.baseSha,
+      runId,
+      runAttempt: 1,
+      sourceHead: identity.headSha,
+      sourceTree: tree,
+      status: "completed",
+      conclusion: "success",
+      requiredJobs: PHASE1_REQUIRED_JOB_NAMES.length,
+      passedJobs: PHASE1_REQUIRED_JOB_NAMES.length,
+      jobNames: [...PHASE1_REQUIRED_JOB_NAMES],
+      result: "PASS_13_OF_13",
+    };
+    assert.deepEqual(direct, { ...historicalBody, valid: true, evidenceHash: hashValue(historicalBody) }, "ordinary one-linked-PR evidence must retain its historical authoritative result and hash");
+    assert.deepEqual(durable, direct, "durable recovery substitutes only the exact linked PR before canonical evidence hashing");
+
+    assert.equal(observe({ fixtureOverrides: { commitAssociatedPullRequests: [] } }).valid, false, "zero commit-associated PRs must fail closed");
+    const wrongPr = { ...exactPullRequest, number: identity.pr + 1 };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongPr, commitAssociatedPullRequests: [wrongPr] } }).valid, false, "wrong PR must fail closed");
+    const wrongHead = { ...exactPullRequest, head: { ...exactPullRequest.head, sha: "d".repeat(40) } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongHead, commitAssociatedPullRequests: [wrongHead] } }).valid, false, "wrong head must fail closed");
+    const wrongBase = { ...exactPullRequest, base: { ...exactPullRequest.base, sha: "e".repeat(40) } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongBase, commitAssociatedPullRequests: [wrongBase] } }).valid, false, "wrong base must fail closed");
+    const wrongBranch = { ...exactPullRequest, head: { ...exactPullRequest.head, ref: "codex/unrelated-branch" } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongBranch, commitAssociatedPullRequests: [wrongBranch] } }).valid, false, "wrong branch must fail closed");
+    const unrelatedPullRequest = { ...exactPullRequest, number: identity.pr + 2 };
+    assert.equal(observe({ fixtureOverrides: { commitAssociatedPullRequests: [exactPullRequest, unrelatedPullRequest] } }).valid, false, "multiple commit-associated candidates, including an unrelated PR for the same commit, must fail closed");
+    assert.equal(observe({ fixtureOverrides: { commitAssociationPaginationComplete: false } }).valid, false, "incomplete commit-to-pulls pagination must fail closed");
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: null } }).valid, false, "an incomplete exact-PR read must fail closed");
+    assert.equal(observe({ fixtureOverrides: { commitAssociatedPullRequests: [wrongBranch] } }).valid, false, "direct PR and commit association disagreement must fail closed");
+    const wrongRepository = { ...exactPullRequest, head: { ...exactPullRequest.head, repo: { full_name: "Chillywood2025/unrelated" } } };
+    assert.equal(observe({ fixtureOverrides: { directPullRequest: wrongRepository, commitAssociatedPullRequests: [wrongRepository] } }).valid, false, "wrong repository must fail closed");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, event: "workflow_dispatch" } } }).valid, false, "a non-pull_request event must fail closed");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, conclusion: "failure" } } }).valid, false, "an unsuccessful run must fail closed");
+    assert.equal(observe({ identityOverrides: { pr: identity.pr + 1 } }).valid, false, "one PR's run must not authorize another PR");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, id: runId + 1 } } }).valid, false, "the fetched run ID must equal the receipt-bound run ID");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, repository: { full_name: "Chillywood2025/unrelated" } } } }).valid, false, "the live workflow run repository must match the expected repository");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, path: ".github/workflows/unrelated.yml" } } }).valid, false, "the live workflow run must come from the canonical Phase 1 workflow path");
+    assert.equal(observe({ fixtureOverrides: { run: { ...successfulRun, pull_requests: [directRun.pull_requests[0], { number: identity.pr + 1 }] } } }).valid, false, "multiple direct run associations must not enter durable recovery");
+    assert.equal(verifyPhase1RunEvidence({
+      run: successfulRun,
+      jobs,
+      identity,
+      tree,
+      durablePullRequestProvenance: {
+        directPullRequestReadComplete: true,
+        directPullRequest: exactPullRequest,
+        commitAssociationPaginationComplete: true,
+        commitAssociatedPullRequests: [exactPullRequest],
+      },
+    }).valid, false, "caller-supplied provenance that was not gathered by the live observer must not be trusted");
+
+    const endpoints = fs.readFileSync(callsPath, "utf8").trim().split("\n").map((line) => JSON.parse(line).endpoint);
+    assert.equal(endpoints.some((endpoint) => endpoint === `repos/${identity.repository}/pulls/${identity.pr}`), true);
+    assert.equal(endpoints.some((endpoint) => endpoint === `repos/${identity.repository}/commits/${identity.headSha}/pulls?per_page=100`), true);
+  } finally {
+    process.env.PATH = originalPath;
+    if (originalFixture === undefined) delete process.env.A1_PHASE1_GITHUB_FIXTURE;
+    else process.env.A1_PHASE1_GITHUB_FIXTURE = originalFixture;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
 });

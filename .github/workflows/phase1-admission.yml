@@ -1,0 +1,133 @@
+name: Phase 1 Admission
+
+on:
+  # Every evaluator invocation uses the workflow and script from protected main.
+  # Pull-request source is read as GitHub data and is never checked out or run.
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft, closed]
+  workflow_run:
+    workflows: ["Phase 1 CI"]
+    types: [completed]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Exact ready pull request number to merge through the protected App-only gate
+        required: true
+        type: number
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  initialize:
+    name: Initialize exact-head admission
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == github.event.repository.default_branch && github.event.pull_request.base.repo.full_name == github.event.repository.full_name
+    environment: phase1-admission-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout protected-main evaluator
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Invalidate prior lifecycle admission and initialize current head
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PHASE1_EVALUATOR_SHA: ${{ github.workflow_sha }}
+          PHASE1_ADMISSION_APP_INTEGRATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INTEGRATION_ID }}
+          PHASE1_ADMISSION_APP_INSTALLATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INSTALLATION_ID }}
+          PHASE1_ADMISSION_APP_KEY_FINGERPRINT: ${{ vars.PHASE1_ADMISSION_APP_KEY_FINGERPRINT }}
+          PHASE1_ADMISSION_APP_CLIENT_ID: ${{ vars.PHASE1_ADMISSION_APP_CLIENT_ID }}
+          PHASE1_ADMISSION_APP_PRIVATE_KEY: ${{ secrets.PHASE1_ADMISSION_APP_PRIVATE_KEY }}
+        run: node scripts/assurance/phase1-admission.mjs --initialize --event="$GITHUB_EVENT_PATH" --pr-number="${{ github.event.pull_request.number }}"
+
+  finalize:
+    name: Classify completed Phase 1 evidence
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request'
+    environment: phase1-admission-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout protected-main evaluator
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Publish protected aggregate decision
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PHASE1_EVALUATOR_SHA: ${{ github.workflow_sha }}
+          PHASE1_ADMISSION_APP_INTEGRATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INTEGRATION_ID }}
+          PHASE1_ADMISSION_APP_INSTALLATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INSTALLATION_ID }}
+          PHASE1_ADMISSION_APP_KEY_FINGERPRINT: ${{ vars.PHASE1_ADMISSION_APP_KEY_FINGERPRINT }}
+          PHASE1_ADMISSION_APP_CLIENT_ID: ${{ vars.PHASE1_ADMISSION_APP_CLIENT_ID }}
+          PHASE1_ADMISSION_APP_PRIVATE_KEY: ${{ secrets.PHASE1_ADMISSION_APP_PRIVATE_KEY }}
+        run: node scripts/assurance/phase1-admission.mjs --finalize --event="$GITHUB_EVENT_PATH"
+
+  refresh:
+    name: Refresh exact-head admission after immutable evidence changes
+    if: github.event_name == 'issue_comment' && github.event.issue.pull_request != null
+    environment: phase1-admission-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout protected-main evaluator
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Re-resolve exact-head evidence without trusting comment text
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PHASE1_EVALUATOR_SHA: ${{ github.workflow_sha }}
+          PHASE1_ADMISSION_APP_INTEGRATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INTEGRATION_ID }}
+          PHASE1_ADMISSION_APP_INSTALLATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INSTALLATION_ID }}
+          PHASE1_ADMISSION_APP_KEY_FINGERPRINT: ${{ vars.PHASE1_ADMISSION_APP_KEY_FINGERPRINT }}
+          PHASE1_ADMISSION_APP_CLIENT_ID: ${{ vars.PHASE1_ADMISSION_APP_CLIENT_ID }}
+          PHASE1_ADMISSION_APP_PRIVATE_KEY: ${{ secrets.PHASE1_ADMISSION_APP_PRIVATE_KEY }}
+        run: node scripts/assurance/phase1-admission.mjs --refresh --event="$GITHUB_EVENT_PATH" --pr-number="${{ github.event.issue.number }}"
+
+  merge:
+    name: Execute protected App-only merge gate
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'Chillywood2025' && github.triggering_actor == 'Chillywood2025'
+    environment: phase1-admission-publisher
+    concurrency:
+      group: phase1-app-only-merge
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout protected-main evaluator
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Recompute every gate and perform one SHA-bound merge
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PHASE1_EVALUATOR_SHA: ${{ github.workflow_sha }}
+          PHASE1_ADMISSION_APP_INTEGRATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INTEGRATION_ID }}
+          PHASE1_ADMISSION_APP_INSTALLATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INSTALLATION_ID }}
+          PHASE1_ADMISSION_APP_KEY_FINGERPRINT: ${{ vars.PHASE1_ADMISSION_APP_KEY_FINGERPRINT }}
+          PHASE1_ADMISSION_APP_CLIENT_ID: ${{ vars.PHASE1_ADMISSION_APP_CLIENT_ID }}
+          PHASE1_ADMISSION_APP_PRIVATE_KEY: ${{ secrets.PHASE1_ADMISSION_APP_PRIVATE_KEY }}
+          PHASE1_MERGE_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          PHASE1_MERGE_WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+          PHASE1_MERGE_ACTOR: ${{ github.actor }}
+          PHASE1_MERGE_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        run: node scripts/assurance/phase1-admission.mjs --merge --event="$GITHUB_EVENT_PATH" --pr-number="${{ inputs.pr }}"
