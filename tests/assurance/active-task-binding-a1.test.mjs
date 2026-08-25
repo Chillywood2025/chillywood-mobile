@@ -110,11 +110,13 @@ const completedProofTierStatuses = {
   T7_PUBLIC_CANARY: "NOT_APPLICABLE"
 };
 
-const preAdmissionFixture = () => {
+const preAdmissionFixture = ({
+  leaseId = "pre-release-identity-entitlement-authority-v1",
+  taskArtifactPath = "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json",
+} = {}) => {
   const seedHead = "1".repeat(40); const seedTree = "2".repeat(40); const planningHead = "3".repeat(40); const planningTree = "4".repeat(40);
-  const taskArtifactPath = "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json";
   const defectIds = ["WAPR-P1-AUTH-REDIRECT-001", "WAPR-P1-LEGAL-ACCEPTANCE-002", "WAPR-P1-PREMIUM-UNKNOWN-004", "WAPR-P1-PREMIUM-ACCOUNT-RACE-007", "WAPR-P1-PUSH-REVOCATION-008", "WAPR-CM-P1-CREATOR-ELIGIBILITY-014"];
-  const subject = { repository: "Chillywood2025/chillywood-mobile", implementationPr: 229, implementationBranch: "codex/pre-release-identity-entitlement-authority-v1", admittedSeed: { head: seedHead, tree: seedTree }, taskArtifact: taskArtifactPath, primaryFeature: "auth-session-password-recovery", leaseId: "pre-release-identity-entitlement-authority-v1", defectIds, scopeBudget: { initial: { maximumFiles: 30, maximumHandAuthoredNetLines: 3600 } } };
+  const subject = { repository: "Chillywood2025/chillywood-mobile", implementationPr: 229, implementationBranch: "codex/pre-release-identity-entitlement-authority-v1", admittedSeed: { head: seedHead, tree: seedTree }, taskArtifact: taskArtifactPath, primaryFeature: "auth-session-password-recovery", leaseId, defectIds, scopeBudget: { initial: { maximumFiles: 30, maximumHandAuthoredNetLines: 3600 } } };
   const payloadBase = { repository: subject.repository, pr: "229", subject, subjectHash: hashValue(subject) };
   const payload = { ...payloadBase, bodyHash: hashValue(payloadBase) };
   const body = `<!-- chillywood-pre-release-plan-wave1-owner-approval-v1 -->\n${stableJson(payload)}`;
@@ -150,6 +152,29 @@ test("pre-admission 17: competing seed fails", () => assert.equal(preAdmissionMu
 test("pre-admission 18: mutation authority is false on failure", () => assert.equal(preAdmissionMutation((facts) => { facts.seedIsAncestor = false; }).productSourceMutationAllowed, false));
 test("pre-admission 19: clearance cannot issue before admission", () => { const packet = evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet; assert.equal(packet.highestPermittedState, "ENGINEERING_PLAN_DRAFTED"); assert.equal(packet.finiteLeasePresent, false); });
 test("pre-admission 20: packet is deterministic 3 of 3", () => assert.equal(new Set([1, 2, 3].map(() => stableJson(evaluatePreAdmissionEngineeringSeed(preAdmissionFixture()).packet))).size, 1));
+test("pre-admission 21: a new exact task artifact path is admitted generically", () => {
+  const facts = preAdmissionFixture({ leaseId: "whole-app-pre-release-engineering-closure-v1", taskArtifactPath: "docs/assurance/tasks/whole-app-pre-release-engineering-closure-v1.json" });
+  assert.equal(evaluatePreAdmissionEngineeringSeed(facts).ok, true);
+});
+test("pre-admission 22: an artifact path outside the exact task directory fails closed", () => {
+  const facts = preAdmissionFixture({ leaseId: "whole-app-pre-release-engineering-closure-v1", taskArtifactPath: "docs/assurance/whole-app-pre-release-engineering-closure-v1.json" });
+  const result = evaluatePreAdmissionEngineeringSeed(facts);
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("PRE_ADMISSION_PRODUCT_SOURCE_PRESENT"));
+});
+test("pre-admission 23: a traversal-shaped task artifact path fails closed", () => {
+  const facts = preAdmissionFixture({ leaseId: "whole-app-pre-release-engineering-closure-v1", taskArtifactPath: "docs/assurance/tasks/../whole-app-pre-release-engineering-closure-v1.json" });
+  const result = evaluatePreAdmissionEngineeringSeed(facts);
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("PRE_ADMISSION_PRODUCT_SOURCE_PRESENT"));
+});
+test("pre-admission 24: a different task artifact cannot substitute for the exact bound artifact", () => {
+  const facts = preAdmissionFixture({ leaseId: "whole-app-pre-release-engineering-closure-v1", taskArtifactPath: "docs/assurance/tasks/whole-app-pre-release-engineering-closure-v1.json" });
+  facts.changedPaths = ["docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json"];
+  const result = evaluatePreAdmissionEngineeringSeed(facts);
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.includes("PRE_ADMISSION_PRODUCT_SOURCE_PRESENT"));
+});
 
 const jurisdictionActiveTaskFixture = ({
   domainIds = ["creator-money-ledger", "payouts-stripe-connect"],
