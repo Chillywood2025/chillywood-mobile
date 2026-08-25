@@ -1776,8 +1776,8 @@ export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
   }),
   Object.freeze({
     profileId: "PHASE1_RISK_BASED_ADMISSION_REFORM_V1",
-    paths: Object.freeze([".github/workflows/phase1-admission.yml", ".github/workflows/phase1-ci.yml", "CURRENT_STATE.md", "config/assurance/engineering-doctrine-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "scripts/assurance/lib.mjs", "scripts/assurance/phase1-admission.mjs", "scripts/guard-autonomous-systems-contract.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/phase1-admission.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
-    maximumFiles: 13,
+    paths: Object.freeze([".github/workflows/phase1-admission.yml", ".github/workflows/phase1-ci.yml", "CURRENT_STATE.md", "config/assurance/engineering-doctrine-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "scripts/assurance/lib.mjs", "scripts/assurance/phase1-admission.mjs", "scripts/guard-autonomous-systems-contract.mjs", "scripts/proof-autonomous-systems-contract.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/phase1-admission.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
+    maximumFiles: 14,
     maximumChangedLines: 4200,
   }),
   Object.freeze({

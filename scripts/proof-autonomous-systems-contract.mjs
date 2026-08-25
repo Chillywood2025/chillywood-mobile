@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -6,10 +7,17 @@ import {
   evaluateProtectedMainAdvancement,
   HISTORICAL_PROVIDER_FACT
 } from "./assurance/lib.mjs";
-import { evaluateAutonomousEngineeringRequest } from "./assurance/engineering-closure.mjs";
+import { evaluateAutonomousEngineeringRequest, resolvePhase1SourceAuthorityEligibility } from "./assurance/engineering-closure.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
+const subjectGit = (argv, options = {}) => execFileSync("git", argv, {
+  cwd: root,
+  encoding: "utf8",
+  shell: false,
+  maxBuffer: options.maxBuffer ?? 32 * 1024 * 1024,
+  stdio: ["ignore", "pipe", "pipe"],
+}).trim();
 
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
@@ -69,12 +77,20 @@ const approvalRequesterSystems = [
   ...activeSystems,
   "owner_command_operator",
 ];
-const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract });
+let assuranceControlAuthorityProof = null;
+try {
+  const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+  const pull = event?.pull_request;
+  const identity = { repository: event?.repository?.full_name, pr: pull?.number, headRef: pull?.head?.ref, headSha: pull?.head?.sha, sourceTree: subjectGit(["rev-parse", `${pull?.head?.sha}^{tree}`]), baseRef: pull?.base?.ref, baseSha: pull?.base?.sha };
+  assuranceControlAuthorityProof = resolvePhase1SourceAuthorityEligibility({ repository: identity.repository, identity, root });
+} catch {}
+const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract, gitCommand: subjectGit, assuranceControlAuthorityProof });
 const protectedMainRuntime = evaluateProtectedMainAdvancement({
   record: currentTruth,
   contract: currentTruthContract,
   candidateHead: finiteTaskRuntime.candidateHead,
-  finiteTaskRuntime
+  finiteTaskRuntime,
+  gitCommand: subjectGit
 });
 const claimFreshness = finiteTaskRuntime.claimFreshness;
 const sourceOnlyFreshness = { eligible: protectedMainRuntime.sourceOnlyEligible };

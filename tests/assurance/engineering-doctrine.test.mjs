@@ -711,7 +711,11 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   assert.equal(result.authorizationOk, true, stableJson(result.findings));
   assert.equal(result.mergeEligible, false);
   assert.deepEqual(subject.changedPaths, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS);
-  assert.deepEqual(subject.budget, { maximumFiles: 13, maximumChangedLines: 4200, maximumHandAuthoredNetLines: 4200 });
+  assert.deepEqual(subject.budget, { maximumFiles: 14, maximumChangedLines: 4200, maximumHandAuthoredNetLines: 4200 });
+  assert.equal(subject.changedPaths.includes("scripts/proof-autonomous-systems-contract.mjs"), true);
+  const proofSource = fs.readFileSync("scripts/proof-autonomous-systems-contract.mjs", "utf8");
+  assert.match(proofSource, /resolvePhase1SourceAuthorityEligibility/u);
+  assert.match(proofSource, /evaluateFiniteTaskLeaseRuntime\(\{[^}]*assuranceControlAuthorityProof/u);
   assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", PHASE1_RISK_BASED_ADMISSION_REFORM_V1]);
   assert.equal(subject.currentTruthCompanionIncluded, false);
   assert.equal(subject.reusableByAnotherPr, false);

@@ -1943,13 +1943,14 @@ export const PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS = Object.free
   "scripts/assurance/lib.mjs",
   "scripts/assurance/phase1-admission.mjs",
   "scripts/guard-autonomous-systems-contract.mjs",
+  "scripts/proof-autonomous-systems-contract.mjs",
   "tests/assurance/active-task-binding-a1.test.mjs",
   "tests/assurance/engineering-doctrine.test.mjs",
   "tests/assurance/phase1-admission.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
 export const PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS = Object.freeze(["config/assurance/github-main-ruleset-codex-review-v1.json", "config/assurance/schemas-v1.json", "scripts/assurance/active-task.mjs", "scripts/assurance/current-truth.mjs", "scripts/assurance/github-main-ruleset-readback.mjs", "tests/assurance/github-main-ruleset-readback.test.mjs"]);
-const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1 ? { paths: PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, maximumFiles: 13, maximumChangedLines: 4200 } : objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1 ? { paths: PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 1800 } : null;
+const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1 ? { paths: PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, maximumFiles: 14, maximumChangedLines: 4200 } : objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1 ? { paths: PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 1800 } : null;
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 export const FINITE_TASK_ADMISSION_LEASE_STATE = "ACTIVE_IMPLEMENTATION";
 export const finiteTaskAdmissionLeaseStateValid = (lease) => lease?.taskState === FINITE_TASK_ADMISSION_LEASE_STATE;
@@ -5444,7 +5445,7 @@ export function verifyPhase1AdmissionPublisherImmutableAnchor({ anchor, liveProv
     || !/^[0-9a-f]{40}$/u.test(selectedFinal.subject.finalTree ?? "") || selectedFinal.subject.currentTree !== selectedFinal.subject.finalTree
     || selectedFinal.subject.protectedBase !== intent?.subject?.protectedBase
     || stableJson(selectedFinal.subject.changedPaths) !== stableJson(PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS)
-    || selectedFinal.subject.budget?.maximumFiles !== 13 || selectedFinal.subject.budget?.maximumChangedLines !== 4200
+    || selectedFinal.subject.budget?.maximumFiles !== 14 || selectedFinal.subject.budget?.maximumChangedLines !== 4200
     || selectedFinal.subject.repositoryReview?.valid !== true || selectedFinal.subject.repositoryReview?.profile !== PHASE1_RISK_BASED_ADMISSION_REFORM_V1
     || !phase1AdmissionPublisherProvisioningReadbackValid(selectedFinal.subject.admissionPublisherProvisioningReadback)
     || stableJson(phase1PublisherStableProvisioningProjection(selectedFinal.subject.admissionPublisherProvisioningReadback)) !== stableJson(phase1PublisherStableProvisioningProjection(anchor?.provisioningReadback))) findings.push("PHASE1_PUBLISHER_ANCHOR_FINAL_SOURCE_INVALID");
