@@ -2652,6 +2652,14 @@ test("finite test-adaptation active-task scope: only a trusted layered resolutio
   }
 });
 
+test("A1 Phase 1 publisher-metadata compatibility profile is exact, bounded, and authority-closed", () => {
+  const capability = canonicalTruth.phase1PublisherMetadataCompatibilityRepairCapability;
+  assert.deepEqual([capability.contract, capability.paths, capability.maximumFiles, capability.maximumChangedLines], ["PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1", ["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"], 2, 80]);
+  assert.ok(Object.values(capability.authority).every((value) => value === false));
+  assert.match(renderCurrentState(canonicalTruth), /Hidden or ambiguous bypass authority remains fail-closed/u);
+  assert.match(renderNextTask(canonicalTruth), /exact `2`-path \/ `80`-line assurance-only profile/u);
+});
+
 test("A1 terminal repair receipt: exact preliminary receipt round-trips only as the history-bound stale predecessor of one final receipt", () => {
   const priorTruth = structuredClone(canonicalTruth);
   priorTruth.taskContextArchitecture.terminalVerifierRepair.history = structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY);

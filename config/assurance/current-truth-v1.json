@@ -1612,6 +1612,27 @@
       "publicRelease": false
     }
   },
+  "phase1PublisherMetadataCompatibilityRepairCapability": {
+    "contract": "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1",
+    "status": "PROTECTED_EXACT_PROFILE_PREDECLARED",
+    "paths": [
+      "scripts/assurance/phase1-admission.mjs",
+      "tests/assurance/phase1-admission.test.mjs"
+    ],
+    "maximumFiles": 2,
+    "maximumChangedLines": 80,
+    "purpose": "Accept only the protected provider projection where bypass_actors is hidden and current_user_can_bypass is exactly never; every other hidden, ambiguous, or unknown bypass projection remains fail-closed.",
+    "authority": {
+      "productMutation": false,
+      "providerMutation": false,
+      "databaseDeployment": false,
+      "build": false,
+      "submission": false,
+      "ota": false,
+      "publicRelease": false,
+      "repositoryMerge": false
+    }
+  },
   "preReleaseOwnerDecisions": {
     "plan": {
       "direction": "Complete all six approved source waves before final source freeze; this lease executes Wave 1 only.",

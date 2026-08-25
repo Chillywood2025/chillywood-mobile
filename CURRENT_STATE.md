@@ -68,6 +68,11 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Capability `FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1` permits at most one immutable Owner receipt for one exact pre-existing fixture path and `500` fixture-only canonical changed lines.
 - The implementation reservation remains independent; budget pooling, wildcard paths, product mutation, provider mutation, database deployment, build, submission, OTA, and public-release authority remain forbidden.
 
+## Phase 1 publisher-metadata compatibility repair
+
+- Contract `PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1` predeclares exactly `2` paths and `80` canonical changed lines for the bounded publisher-metadata compatibility correction.
+- Hidden or ambiguous bypass authority remains fail-closed; this profile grants no product, provider-mutation, database-deployment, build, submission, OTA, public-release, or merge authority.
+
 ## Open implementation PRs
 
 - None.

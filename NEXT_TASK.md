@@ -8,6 +8,8 @@ Ordinary protected-main advancement never requires a truth-only prerequisite PR.
 
 Terminal-verifier repair history retains `2` independently bound single-use instances. No historical instance or receipt is reusable, and this history grants no merge authority.
 
+The bounded Phase 1 publisher-metadata compatibility successor is predeclared as an exact `2`-path / `80`-line assurance-only profile; it grants no merge or provider-mutation authority.
+
 Do not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.
 
 Do not resume Cognitive LiveKit activation.
