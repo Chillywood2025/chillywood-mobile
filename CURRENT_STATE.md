@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `5e595e684f4dcc9454eee5065066e1b48d20e3eb` / tree `e89be3a2987952152560ebb46bdffcf0ea094028`.
+- Protected authority checkpoint: `2d40bc75cfad9a28d7534f3dd8593dab63318769` / tree `4b6a65c52eb1cd12d0f2a191cfb7064a297fe10f`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
 - Latest merged implementation: PR #229, `698871780a7610f677fdec1929d85389594d080a`; merge `5e595e684f4dcc9454eee5065066e1b48d20e3eb`.
@@ -33,8 +33,8 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 ## Typed task-context architecture
 
-- Contract `TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1`; architecture PR #243, source `5e44d1fd2a84f51b322eb40ca147c0882d1d664f` / `e1f6c2f2455bcf4dad747261e0b6e10ab7619dbc`, merge `f74a6d53948a37fc35ef3dbb87e3741ede5c8d76`.
-- Pending terminal transitions: PR #226=`CONSUMED_BY_THIS_TERMINAL_TRUTH`, PR #243=`CONSUMED_BY_THIS_TERMINAL_TRUTH`; count after synchronization `0`.
+- Contract `TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1`; architecture PR #254, source `c1aca873f55b45c72c4932e130dfd2ce8350a601` / `4b6a65c52eb1cd12d0f2a191cfb7064a297fe10f`, merge `2d40bc75cfad9a28d7534f3dd8593dab63318769`.
+- Pending terminal transitions: PR #226=`CONSUMED_BY_THIS_TERMINAL_TRUTH`, PR #254=`CONSUMED_BY_THIS_TERMINAL_TRUTH`; count after synchronization `0`.
 - Product, provider, build, submission, OTA, and public-release authority remain closed.
 
 ## Pre-admission engineering seed capability
@@ -67,6 +67,11 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 - Capability `FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1` permits at most one immutable Owner receipt for one exact pre-existing fixture path and `500` fixture-only canonical changed lines.
 - The implementation reservation remains independent; budget pooling, wildcard paths, product mutation, provider mutation, database deployment, build, submission, OTA, and public-release authority remain forbidden.
+
+## Phase 1 publisher-metadata compatibility repair
+
+- Contract `PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1` predeclares exactly `2` paths and `80` canonical changed lines for the bounded publisher-metadata compatibility correction.
+- Hidden or ambiguous bypass authority remains fail-closed; this profile grants no product, provider-mutation, database-deployment, build, submission, OTA, public-release, or merge authority.
 
 ## Open implementation PRs
 

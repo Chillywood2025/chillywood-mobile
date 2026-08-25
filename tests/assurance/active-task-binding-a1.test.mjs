@@ -2652,7 +2652,27 @@ test("finite test-adaptation active-task scope: only a trusted layered resolutio
   }
 });
 
+test("A1 Phase 1 publisher-metadata compatibility profile is exact, bounded, and authority-closed", () => {
+  const capability = canonicalTruth.phase1PublisherMetadataCompatibilityRepairCapability;
+  assert.deepEqual([capability.contract, capability.paths, capability.maximumFiles, capability.maximumChangedLines], ["PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1", ["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"], 2, 80]);
+  assert.ok(Object.values(capability.authority).every((value) => value === false));
+  assert.match(renderCurrentState(canonicalTruth), /Hidden or ambiguous bypass authority remains fail-closed/u);
+  assert.match(renderNextTask(canonicalTruth), /exact `2`-path \/ `80`-line assurance-only profile/u);
+});
+
+test("A1 canonical truth binds the third terminal-verifier repair to the immutable PR254 successor evidence", () => {
+  const instances = canonicalTruth.taskContextArchitecture.terminalVerifierRepair.history.instances;
+  const current = instances.at(-1);
+  assert.equal(instances.length, 3);
+  assert.deepEqual([current.ordinal, current.pullRequest, current.protectedBase, current.priorInstanceId], [3, 256, "2d40bc75cfad9a28d7534f3dd8593dab63318769", "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"]);
+  assert.deepEqual([current.predecessor.pullRequest, current.predecessor.mergeSha, current.predecessor.authorityCommentId], [254, "2d40bc75cfad9a28d7534f3dd8593dab63318769", 5404284190]);
+  assert.deepEqual([current.receiptBindings.historicalTerminalReceipt.commentId, current.receiptBindings.predecessorReceipts.map(({ commentId }) => commentId)], [5404748755, [5404284190, 5404381682]]);
+  assert.equal(current.instanceId, "9e523767d9508b2f5b0ead48e5d7ee6dc3953a9c6039a47e987ac9f91137c38c");
+});
+
 test("A1 terminal repair receipt: exact preliminary receipt round-trips only as the history-bound stale predecessor of one final receipt", () => {
+  const closureSource = fs.readFileSync(path.join(process.cwd(), "scripts/assurance/engineering-closure.mjs"), "utf8");
+  assert.match(closureSource, /verifyArchitectureMaintenanceAuthority\(\{ raw: predecessorRaw,[^\n]+phase1EvidenceResolver, publisherProvisioningReadbackResolver, root \}\)/u, "a terminal repair must re-resolve its architecture predecessor with the protected Phase 1 and publisher readback resolvers");
   const priorTruth = structuredClone(canonicalTruth);
   priorTruth.taskContextArchitecture.terminalVerifierRepair.history = structuredClone(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY);
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 731, branch: "codex/generic-terminal-verifier-repair-v2", baseSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb", headSha: "b".repeat(40) };
