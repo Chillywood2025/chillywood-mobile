@@ -273,7 +273,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     date_trunc('hour', now()),
     repeat('e', 64),
-    'transfer_duplicate_identity_mismatch'
+    'revenuecat_premium_transfer_event_id_identity_mismatch'
   ),
   'transfer duplicate requires the exact immutable payload identity'
 );
@@ -296,7 +296,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     now(),
     repeat('f', 64),
-    'transfer_users_must_differ'
+    'revenuecat_premium_transfer_identity_invalid'
   ),
   'transfer to the same user fails closed'
 );
