@@ -29,6 +29,7 @@ import {
   verifyPhase1AggregateEvidence,
   verifyProtectedPhase1PublisherProvisioningReadback,
   validGitHubAppClientId,
+  validPhase1CandidateRemoteIdentity,
 } from "../../scripts/assurance/phase1-admission.mjs";
 import {
   ARCHITECTURE_FINAL_SOURCE_MARKER,
@@ -129,6 +130,24 @@ test("GitHub App client IDs accept current and documented exact shapes only", ()
   assert.equal(validGitHubAppClientId("Iv23liJtjp7stElgO1T2"), true);
   assert.equal(validGitHubAppClientId("Iv1.0123456789abcdef"), true);
   for (const value of ["Iv1.abcdef", "4707730", "Iv23liJtjp7stElgO1T2-extra", "iv23liJtjp7stElgO1T2", "", null]) assert.equal(validGitHubAppClientId(value), false);
+});
+
+test("candidate remote identity accepts the exact Actions HTTPS projection without broadening repository authority", () => {
+  for (const value of [
+    "https://github.com/Chillywood2025/chillywood-mobile",
+    "https://github.com/Chillywood2025/chillywood-mobile.git",
+    "git@github.com:Chillywood2025/chillywood-mobile.git",
+  ]) assert.equal(validPhase1CandidateRemoteIdentity(value), true);
+  for (const value of [
+    "http://github.com/Chillywood2025/chillywood-mobile", "git://github.com/Chillywood2025/chillywood-mobile.git",
+    "ssh://git@github.com/Chillywood2025/chillywood-mobile.git", "https://git@github.com/Chillywood2025/chillywood-mobile",
+    "https://github.com.evil/Chillywood2025/chillywood-mobile", "https://github.com:443/Chillywood2025/chillywood-mobile",
+    "https://github.com/Attacker/chillywood-mobile", "https://github.com/Chillywood2025/other",
+    "https://github.com/%43hillywood2025/chillywood-mobile", "https://github.com/chillywood2025/chillywood-mobile",
+    "https://github.com/Chillywood2025/chillywood-mobile.git/extra", "https://github.com/Chillywood2025/chillywood-mobile.git.evil",
+    "https://github.com/Chillywood2025/chillywood-mobile/", "https://github.com/Chillywood2025/chillywood-mobile?ref=main",
+    "https://github.com/Chillywood2025/chillywood-mobile#main", "git@github.com:Chillywood2025/chillywood-mobile", "", null,
+  ]) assert.equal(validPhase1CandidateRemoteIdentity(value), false);
 });
 
 const successSteps = () => [
