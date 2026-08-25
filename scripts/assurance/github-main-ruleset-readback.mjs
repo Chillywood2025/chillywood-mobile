@@ -332,9 +332,11 @@ function classifyRulesetStage(state, genesis, anchor, { allowHiddenFinal = false
     && same(withoutHash(parts.status[0]?.parameters, "required_status_checks"), withoutHash(genesisParts.status[0]?.parameters, "required_status_checks"));
   if (!identityValid) return null;
   const checks = parts.status[0]?.parameters?.required_status_checks;
+  const updateRule = parts.update.length === 1 && (same(parts.update[0], { type: "update" })
+    || same(parts.update[0], { type: "update", parameters: { update_allows_fetch_and_merge: false } }));
   if (same(checks, raw) && parts.update.length === 0 && same(state?.bypass_actors, [])) return "PRE_CUTOVER_13_RAW";
   if (same(checks, [...raw, aggregate]) && parts.update.length === 0 && same(state?.bypass_actors, [])) return "STAGE1_AGGREGATE_PLUS_13_RAW";
-  if (same(checks, [aggregate]) && same(parts.update, [{ type: "update", parameters: { update_allows_fetch_and_merge: false } }])
+  if (same(checks, [aggregate]) && updateRule
     && (same(state?.bypass_actors, exactBypass) || (allowHiddenFinal && state?.bypass_actors == null))) return "FINAL_AGGREGATE_ONLY";
   return null;
 }

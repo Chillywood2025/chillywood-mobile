@@ -355,7 +355,10 @@ test("R2 stage resolver accepts only contiguous PRE, STAGE1, and FINAL prefixes"
   const pre = evaluateCutover();
   const stage1 = evaluateCutover({ stage: "STAGE1_AGGREGATE_PLUS_13_RAW", entries: [preEntry, stage1Entry] });
   const final = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry] });
-  for (const state of [pre, stage1, final]) {
+  const providerFinalEntry = structuredClone(finalEntry);
+  delete providerFinalEntry.state.rules.find(({ type }) => type === "update").parameters;
+  const providerFinal = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, providerFinalEntry] });
+  for (const state of [pre, stage1, final, providerFinal]) {
     assert.equal(phase1AdmissionRulesetCutoverStateValid(state), true);
     assert.equal(state.cutoverLock, "OPEN");
     assert.equal(state.paginationComplete, true);
@@ -364,6 +367,7 @@ test("R2 stage resolver accepts only contiguous PRE, STAGE1, and FINAL prefixes"
   assert.equal(pre.currentRulesetStage, "PRE_CUTOVER_13_RAW");
   assert.equal(stage1.currentRulesetStage, "STAGE1_AGGREGATE_PLUS_13_RAW");
   assert.equal(final.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
+  assert.equal(providerFinal.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
   assert.equal(new Set([pre.stageReceiptChainHash, stage1.stageReceiptChainHash, final.stageReceiptChainHash]).size, 3);
 });
 
@@ -372,6 +376,8 @@ test("R2 stage resolver closes on incomplete, skipped, replayed, substituted, or
   wrongActor.actor.id = 1;
   const policyDrift = structuredClone(finalEntry);
   policyDrift.state.rules.find(({ type }) => type === "pull_request").parameters.required_approving_review_count = 1;
+  const broaderUpdate = structuredClone(finalEntry);
+  broaderUpdate.state.rules.find(({ type }) => type === "update").parameters.update_allows_fetch_and_merge = true;
   const rollback = historyEntry("PRE_CUTOVER_13_RAW", 50000003, "2026-08-25T03:02:00.001-05:00");
   const currentDrift = structuredClone(finalEntry);
   currentDrift.state.enforcement = "evaluate";
@@ -383,6 +389,7 @@ test("R2 stage resolver closes on incomplete, skipped, replayed, substituted, or
     evaluateCutover({ stage: "PRE_CUTOVER_13_RAW", entries: [preEntry, stage1Entry, finalEntry, rollback] }),
     evaluateCutover({ stage: "STAGE1_AGGREGATE_PLUS_13_RAW", entries: [preEntry, wrongActor] }),
     evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, policyDrift] }),
+    evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, broaderUpdate] }),
     evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry], currentEntry: currentDrift }),
     evaluatePhase1AdmissionRulesetCutoverState({ repository: contract.repository, identity: cutoverIdentity, anchor: publisherAnchor, liveProvisioningReadback: liveProvisioning("PRE_CUTOVER_13_RAW", publisherAnchor.rulesetProviderUpdatedAt), contract: mutableGenesisContract, observation: { current: currentRuleset(preEntry, publisherAnchor.rulesetProviderUpdatedAt), history: [preEntry], paginationComplete: true }, protectedSourceVerified: true }),
   ];
