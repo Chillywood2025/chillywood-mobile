@@ -46,8 +46,10 @@ const stageState = (stage) => {
 };
 const historyEntry = (stage, versionId, updatedAt) => ({ version_id: versionId, updated_at: updatedAt, actor: cutoverActor, state: stageState(stage) });
 const preEntry = historyEntry("PRE_CUTOVER_13_RAW", phase1RulesetGenesis.versionId, phase1RulesetGenesis.updatedAt);
-const stage1Entry = historyEntry("STAGE1_AGGREGATE_PLUS_13_RAW", 50000001, "2026-08-25T03:00:00.001-05:00");
-const finalEntry = historyEntry("FINAL_AGGREGATE_ONLY", 50000002, "2026-08-25T03:01:00.001-05:00");
+const stage1Entry = historyEntry("STAGE1_AGGREGATE_PLUS_13_RAW", 47545239, "2026-08-24T22:59:53.294-05:00");
+const finalEntry = historyEntry("FINAL_AGGREGATE_ONLY", 47545277, "2026-08-24T23:00:33.818-05:00");
+delete finalEntry.state.rules.find(({ type }) => type === "update").parameters;
+const finalProviderUpdatedAt = "2026-08-24T23:00:33.629-05:00";
 const liveProvisioning = (stage, providerUpdatedAt) => {
   const value = structuredClone(publisherAnchor.provisioningReadback);
   value.observedAt = providerUpdatedAt;
@@ -60,8 +62,7 @@ const liveProvisioning = (stage, providerUpdatedAt) => {
   return value;
 };
 const currentRuleset = (entry, providerUpdatedAt) => ({ ...structuredClone(entry.state), node_id: publisherAnchor.rulesetNodeId, updated_at: providerUpdatedAt, current_user_can_bypass: entry.state.bypass_actors.length ? "always" : "never" });
-const evaluateCutover = ({ stage = "PRE_CUTOVER_13_RAW", entries = [preEntry], currentEntry = entries.at(-1), paginationComplete = true, anchor = publisherAnchor, live = null } = {}) => {
-  const providerUpdatedAt = stage === "PRE_CUTOVER_13_RAW" ? publisherAnchor.rulesetProviderUpdatedAt : currentEntry.updated_at;
+const evaluateCutover = ({ stage = "PRE_CUTOVER_13_RAW", entries = [preEntry], currentEntry = entries.at(-1), paginationComplete = true, anchor = publisherAnchor, live = null, providerUpdatedAt = stage === "PRE_CUTOVER_13_RAW" ? publisherAnchor.rulesetProviderUpdatedAt : currentEntry.updated_at } = {}) => {
   return evaluatePhase1AdmissionRulesetCutoverState({
     repository: contract.repository,
     identity: cutoverIdentity,
@@ -354,11 +355,11 @@ test("R2 immutable publisher anchor is exact, self-hashed, and schema-bound", ()
 test("R2 stage resolver accepts only contiguous PRE, STAGE1, and FINAL prefixes", () => {
   const pre = evaluateCutover();
   const stage1 = evaluateCutover({ stage: "STAGE1_AGGREGATE_PLUS_13_RAW", entries: [preEntry, stage1Entry] });
-  const final = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry] });
-  const providerFinalEntry = structuredClone(finalEntry);
-  delete providerFinalEntry.state.rules.find(({ type }) => type === "update").parameters;
-  const providerFinal = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, providerFinalEntry] });
-  for (const state of [pre, stage1, final, providerFinal]) {
+  const final = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry], providerUpdatedAt: finalProviderUpdatedAt });
+  const payloadFinalEntry = structuredClone(finalEntry);
+  payloadFinalEntry.state.rules.find(({ type }) => type === "update").parameters = { update_allows_fetch_and_merge: false };
+  const payloadFinal = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, payloadFinalEntry] });
+  for (const state of [pre, stage1, final, payloadFinal]) {
     assert.equal(phase1AdmissionRulesetCutoverStateValid(state), true);
     assert.equal(state.cutoverLock, "OPEN");
     assert.equal(state.paginationComplete, true);
@@ -367,7 +368,7 @@ test("R2 stage resolver accepts only contiguous PRE, STAGE1, and FINAL prefixes"
   assert.equal(pre.currentRulesetStage, "PRE_CUTOVER_13_RAW");
   assert.equal(stage1.currentRulesetStage, "STAGE1_AGGREGATE_PLUS_13_RAW");
   assert.equal(final.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
-  assert.equal(providerFinal.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
+  assert.equal(payloadFinal.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
   assert.equal(new Set([pre.stageReceiptChainHash, stage1.stageReceiptChainHash, final.stageReceiptChainHash]).size, 3);
 });
 
@@ -377,7 +378,7 @@ test("R2 stage resolver closes on incomplete, skipped, replayed, substituted, or
   const policyDrift = structuredClone(finalEntry);
   policyDrift.state.rules.find(({ type }) => type === "pull_request").parameters.required_approving_review_count = 1;
   const broaderUpdate = structuredClone(finalEntry);
-  broaderUpdate.state.rules.find(({ type }) => type === "update").parameters.update_allows_fetch_and_merge = true;
+  broaderUpdate.state.rules.find(({ type }) => type === "update").parameters = { update_allows_fetch_and_merge: true };
   const rollback = historyEntry("PRE_CUTOVER_13_RAW", 50000003, "2026-08-25T03:02:00.001-05:00");
   const currentDrift = structuredClone(finalEntry);
   currentDrift.state.enforcement = "evaluate";
