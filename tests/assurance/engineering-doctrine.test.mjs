@@ -28,7 +28,7 @@ import {
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -866,6 +866,37 @@ test("finite-task implementation exact-head review binds the effective reservati
   assert.ok(subject.lanes.some((lane) => lane.includes("exact effective lease reservation")));
   assert.ok(Object.values(subject.authority).every((value) => value === false));
   assert.equal(result.valid, false);
+});
+
+test("finite-task implementation exact-head review accepts only an exact zero-amendment BASE_ONLY reservation", () => {
+  const registry = structuredClone(json("config/assurance/current-truth-v1.json").finiteTaskLeases);
+  registry.completedLeaseOutcomes = [];
+  const lease = registry.tasks.find(({ implementationPr }) => implementationPr === 229);
+  lease.amendmentMaximum = { maximumAmendments: 0, maximumChangedLines: lease.scopeBudget.maximumChangedLines, maximumFiles: lease.scopeBudget.maximumFiles };
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: lease.implementationPr, branch: lease.implementationBranch, headSha: "8".repeat(40), baseSha: "9".repeat(40) };
+  const tree = "a".repeat(40);
+  const scope = { files: ["_lib/session.tsx"], additions: 20, deletions: 2, netChangedLines: 18, diffHash: "b".repeat(64) };
+  const resolution = resolveFiniteTaskEffectiveReservation({
+    registry,
+    lease,
+    candidate: { head: identity.headSha, tree },
+    comments: [],
+    commentsPaginationComplete: true,
+  });
+  const subject = architectureRepositoryReviewSubject({ identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
+  const raw = taskLocalArchitectureComment({ id: 700042, pr: identity.pr, body: architectureRepositoryReviewCommentBody(subject) });
+  assert.equal(subject.finiteTaskEffectiveReservation.status, "BASE_ONLY");
+  assert.equal(subject.finiteTaskEffectiveReservation.amendmentsConsumed, 0);
+  assert.equal(subject.finiteTaskEffectiveReservation.amendmentReceipt, null);
+  assert.equal(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.ok, true, stableJson(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.findings));
+  assert.equal(verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution }).valid, true);
+
+  const forgedReceipt = structuredClone(resolution);
+  forgedReceipt.amendmentReceipt = { commentId: 700043, subjectHash: "1".repeat(64), bodyHash: "2".repeat(64), rawBodyHash: "3".repeat(64) };
+  assert.equal(verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: forgedReceipt }).valid, false);
+  const mixedReservation = structuredClone(resolution);
+  mixedReservation.effectiveReservation.maximumLines += 1;
+  assert.equal(verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: mixedReservation }).valid, false);
 });
 
 test("finite-task terminal truth projection preserves the base lease but synthetic transition authority fails closed", () => {

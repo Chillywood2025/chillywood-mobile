@@ -1016,7 +1016,7 @@ export function resolveFiniteTaskImplementation(truth, identity, facts, binding,
   const effectiveResolution = facts.finiteTaskEffectiveReservationResolution;
   const terminalOutcome = truth?.finiteTaskRuntime?.terminalOutcome;
   const amendedTerminalProjection = binding.phase === "TERMINAL"
-    && ["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalOutcome?.classification)
+    && ["FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalOutcome?.classification)
     && finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, lease)
     && finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome, reservationResolution: effectiveResolution });
   const reservationProjection = effectiveResolution ? {

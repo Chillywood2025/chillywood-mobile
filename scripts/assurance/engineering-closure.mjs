@@ -2882,11 +2882,25 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const dependencyAmendmentBound = dependencyAmendmentResolution === null
     || dependencyAmendmentReadyForFinalEvidence(dependencyAmendmentResolution);
+  const baseOnlyReservationBound = effectiveReservationResolution?.status === "BASE_ONLY"
+    && effectiveReservationResolution?.amendmentsConsumed === 0
+    && effectiveReservationResolution?.amendmentReceipt === null
+    && effectiveReservationResolution?.baseLease?.amendmentMaximum?.maximumAmendments === 0
+    && effectiveReservationResolution.baseLease.amendmentMaximum.maximumFiles === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumFiles
+    && effectiveReservationResolution.baseLease.amendmentMaximum.maximumChangedLines === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumChangedLines
+    && stableJson(effectiveReservationResolution?.baseLease) === stableJson(effectiveReservationResolution?.effectiveLease)
+    && stableJson(effectiveReservationResolution?.baseReservation) === stableJson(effectiveReservationResolution?.effectiveReservation)
+    && effectiveReservationResolution?.testAdaptationsConsumed == null
+    && effectiveReservationResolution?.testAdaptationReceipt == null
+    && effectiveReservationResolution?.testAdaptationReservation == null
+    && effectiveReservationResolution?.aggregateReservation == null
+    && effectiveReservationResolution?.scopePartitions == null;
+  const amendedReservationBound = ["AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
+    && effectiveReservationResolution?.amendmentsConsumed === 1
+    && effectiveReservationResolution?.amendmentReceipt;
   const effectiveReservationBound = !finiteTaskImplementationReview || Boolean(
     finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
-    && ["AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
-    && effectiveReservationResolution?.amendmentsConsumed === 1
-    && effectiveReservationResolution?.amendmentReceipt
+    && (baseOnlyReservationBound || amendedReservationBound)
     && effectiveReservationResolution?.baseLease?.implementationPr === identity?.pr
     && effectiveReservationResolution?.baseLease?.implementationBranch === identity?.branch
     && effectiveReservationResolution?.candidateHead === identity?.headSha
@@ -6756,10 +6770,15 @@ export function observeFiniteTaskPostMergeTransition({
     findings.push("FINITE_TASK_POST_MERGE_NOT_ON_PROTECTED_MAIN");
   }
   const unique = [...new Set(findings)].sort();
+  const baseOnly = resolution?.status === "BASE_ONLY";
   const adapted = resolution?.status === "AMENDED_WITH_TEST_ADAPTATION";
   const terminalEvidence = unique.length === 0 ? {
     schemaVersion: adapted ? 2 : 1,
-    classification: adapted ? "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2" : "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    classification: adapted
+      ? "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"
+      : baseOnly
+        ? "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1"
+        : "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
     repository: identity.repository,
     taskId: lease.leaseId,
     leaseId: lease.leaseId,

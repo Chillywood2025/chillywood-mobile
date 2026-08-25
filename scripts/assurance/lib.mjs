@@ -1093,6 +1093,14 @@ export const finiteTaskStates = [
 ];
 const finiteTaskTerminalStates = new Set(["MERGED_VERIFIED", "ABANDONED_BY_OWNER"]);
 const finiteTaskActiveStates = new Set(finiteTaskStates.filter((state) => !finiteTaskTerminalStates.has(state)));
+const finiteTaskBaseOnlyTerminalClassification = "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1";
+const finiteTaskAmendedTerminalClassification = "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1";
+const finiteTaskAdaptedTerminalClassification = "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2";
+const finiteTaskTerminalOutcomeClassifications = new Set([
+  finiteTaskBaseOnlyTerminalClassification,
+  finiteTaskAmendedTerminalClassification,
+  finiteTaskAdaptedTerminalClassification,
+]);
 const sha256Pattern = /^[0-9a-f]{64}$/u;
 const finiteTaskPathHasWildcard = (file) => typeof file === "string"
   && (/[?*{}]/u.test(file) || /(?:!|@|\+)\(/u.test(file));
@@ -1183,7 +1191,7 @@ export function validateFiniteTaskLeaseRegistry(registry) {
       || !Number.isInteger(task.scopeBudget?.maximumFiles) || task.scopeBudget.maximumFiles < 1
       || !Number.isInteger(task.scopeBudget?.maximumChangedLines) || task.scopeBudget.maximumChangedLines < 1
       || task.scopeBudget?.maximumFiles < basePaths.length
-      || (amendmentMaximum?.maximumAmendments > 0 && (
+      || (Number.isInteger(amendmentMaximum?.maximumAmendments) && (
         !Array.isArray(artifactPaths)
         || basePaths.some(finiteTaskPathHasWildcard)
         || artifactPaths.some(finiteTaskPathHasWildcard)
@@ -1203,6 +1211,10 @@ export function validateFiniteTaskLeaseRegistry(registry) {
         && Number.isInteger(amendmentMaximum?.maximumAmendments)
         && amendmentMaximum.maximumAmendments >= 0
         && amendmentMaximum.maximumAmendments <= 1
+        && (amendmentMaximum.maximumAmendments !== 0 || (
+          amendmentMaximum.maximumFiles === task.scopeBudget?.maximumFiles
+          && amendmentMaximum.maximumChangedLines === task.scopeBudget?.maximumChangedLines
+        ))
         && (amendmentMaximum.maximumAmendments === 0 || task?.artifactReservation && typeof task.artifactReservation === "object");
       if (!amendmentMaximumValid) findings.push("FINITE_TASK_LEASE_AMENDMENT_RESERVATION_MALFORMED");
       if (amendmentMaximum?.maximumAmendments > 0) {
@@ -1416,7 +1428,10 @@ export function finiteTaskFinalReceiptBody(value) {
 }
 
 export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation, effectiveReservationResolution = null, livePhase1Evidence = null }) {
-  const amendmentBound = effectiveReservationResolution?.status === "AMENDED"
+  const modernReservationLease = Number.isInteger(lease?.amendmentMaximum?.maximumAmendments);
+  const reservationBound = modernReservationLease
+    || effectiveReservationResolution?.status === "BASE_ONLY"
+    || effectiveReservationResolution?.status === "AMENDED"
     || effectiveReservationResolution?.status === "AMENDED_WITH_TEST_ADAPTATION"
     || evidence?.effectiveReservation !== undefined
     || evidence?.amendmentReceipt !== undefined;
@@ -1430,7 +1445,7 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
   } : evidence?.authority;
   const testAdaptationBound = effectiveReservationResolution?.status === "AMENDED_WITH_TEST_ADAPTATION";
   const subject = finiteTaskFinalReceiptSubject({
-    schemaVersion: testAdaptationBound ? 3 : amendmentBound ? 2 : 1,
+    schemaVersion: testAdaptationBound ? 3 : reservationBound ? 2 : 1,
     policyId: "ASSURANCE_FINITE_TASK_LEASE_V1",
     repository: "Chillywood2025/chillywood-mobile",
     featureId: lease?.featureId,
@@ -1448,17 +1463,21 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
     repositoryReviewHash: evidence?.repositoryReviewHash,
     phase1RunId: evidence?.phase1RunId,
     phase1Head: evidence?.phase1Head,
-    baseLeaseHash: amendmentBound ? effectiveReservationResolution?.baseLeaseHash ?? evidence?.baseLeaseHash : undefined,
-    baseReservation: amendmentBound ? effectiveReservationResolution?.baseReservation ?? evidence?.baseReservation : undefined,
-    effectiveReservation: amendmentBound ? effectiveReservationResolution?.effectiveReservation ?? evidence?.effectiveReservation : undefined,
-    amendmentReceipt: amendmentBound ? effectiveReservationResolution?.amendmentReceipt ?? evidence?.amendmentReceipt : undefined,
+    baseLeaseHash: reservationBound ? effectiveReservationResolution?.baseLeaseHash ?? evidence?.baseLeaseHash : undefined,
+    baseReservation: reservationBound ? effectiveReservationResolution?.baseReservation ?? evidence?.baseReservation : undefined,
+    effectiveReservation: reservationBound ? effectiveReservationResolution?.effectiveReservation ?? evidence?.effectiveReservation : undefined,
+    amendmentReceipt: reservationBound
+      ? effectiveReservationResolution
+        ? effectiveReservationResolution.amendmentReceipt
+        : evidence?.amendmentReceipt ?? null
+      : undefined,
     scopeBase: testAdaptationBound ? effectiveReservationResolution?.scopeBase : undefined,
     testAdaptationReservation: testAdaptationBound ? effectiveReservationResolution?.testAdaptationReservation : undefined,
     aggregateReservation: testAdaptationBound ? effectiveReservationResolution?.aggregateReservation : undefined,
     scopePartitions: testAdaptationBound ? effectiveReservationResolution?.scopePartitions : undefined,
     testAdaptationReceipt: testAdaptationBound ? effectiveReservationResolution?.testAdaptationReceipt : undefined,
     finiteTaskPrRiskAuthority: testAdaptationBound ? evidence?.finiteTaskPrRiskAuthority : undefined,
-    authority: amendmentBound ? resolvedAuthority : undefined
+    authority: reservationBound ? resolvedAuthority : undefined
   });
   const hashesValid = [subject.diffHash, subject.changedPathHash, subject.callDomainClosureLedgerHash,
     subject.focusedTestHash, subject.mutationNegativeControlHash, subject.repositoryReviewHash]
@@ -1476,7 +1495,7 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
     && subject.scopeResult === "PASS"
     && Number.isInteger(subject.phase1RunId) && subject.phase1RunId > 0
     && subject.phase1Head === candidate?.head
-    && (!amendmentBound || (
+    && (!reservationBound || (
       evidence?.repositoryReview?.valid === true
       && evidence.repositoryReview.reviewedHead === candidate?.head
       && evidence.repositoryReview.reviewedTree === candidate?.tree
@@ -1488,10 +1507,9 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
       && subject.phase1RunId === evidence.phase1Evidence.runId
       && subject.phase1Head === (evidence.phase1Evidence.sourceHead ?? evidence.phase1Evidence.headSha)
     ))
-    && (!amendmentBound || (
+    && (!reservationBound || (
       finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
-      && ["AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
-      && effectiveReservationResolution?.authority?.liveReceipt === true
+      && ["BASE_ONLY", "AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
       && effectiveReservationResolution?.candidateHead === candidate?.head
       && effectiveReservationResolution?.candidateTree === candidate?.tree
       && subject.baseLeaseHash === sha256(lease)
@@ -1509,10 +1527,22 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
         maximumLines: subject.effectiveReservation?.maximumLines,
         eligiblePathCount: subject.effectiveReservation?.eligiblePathCount
       })
-      && Number.isInteger(subject.amendmentReceipt?.commentId)
-      && subject.amendmentReceipt.commentId > 0
-      && [subject.amendmentReceipt.subjectHash, subject.amendmentReceipt.bodyHash, subject.amendmentReceipt.rawBodyHash]
-        .every((value) => sha256Pattern.test(value ?? ""))
+      && (effectiveReservationResolution.status === "BASE_ONLY" ? (
+        effectiveReservationResolution?.baseLease?.amendmentMaximum?.maximumAmendments === 0
+        && effectiveReservationResolution.baseLease.amendmentMaximum.maximumFiles === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumFiles
+        && effectiveReservationResolution.baseLease.amendmentMaximum.maximumChangedLines === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumChangedLines
+        && effectiveReservationResolution.amendmentsConsumed === 0
+        && effectiveReservationResolution.amendmentReceipt === null
+        && stableJson(subject.baseReservation) === stableJson(subject.effectiveReservation)
+        && subject.amendmentReceipt === null
+        && effectiveReservationResolution?.authority?.liveReceipt === false
+      ) : (
+        effectiveReservationResolution?.authority?.liveReceipt === true
+        && Number.isInteger(subject.amendmentReceipt?.commentId)
+        && subject.amendmentReceipt.commentId > 0
+        && [subject.amendmentReceipt.subjectHash, subject.amendmentReceipt.bodyHash, subject.amendmentReceipt.rawBodyHash]
+          .every((value) => sha256Pattern.test(value ?? ""))
+      ))
       && stableJson(subject.authority) === stableJson({
         providerMutation: false,
         databaseDeployment: false,
@@ -1661,10 +1691,16 @@ export function transitionFiniteTaskState(currentState, event) {
 
 export function verifyFiniteTaskMergeProvenance({ lease, receiptSubject, currentProtectedBase, mergeRef, actualMerge = null, effectiveReservationResolution = null, finiteTaskPrRiskAuthority = null }) {
   const findings = [];
+  const modernReservationLease = Number.isInteger(lease?.amendmentMaximum?.maximumAmendments);
   const adaptedResolution = effectiveReservationResolution?.status === "AMENDED_WITH_TEST_ADAPTATION";
   const adaptedReceipt = receiptSubject?.schemaVersion === 3;
+  const baseOnlyResolutionEligible = effectiveReservationResolution?.status !== "BASE_ONLY" || (
+    effectiveReservationResolution?.baseLease?.amendmentMaximum?.maximumAmendments === 0
+    && effectiveReservationResolution.baseLease.amendmentMaximum.maximumFiles === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumFiles
+    && effectiveReservationResolution.baseLease.amendmentMaximum.maximumChangedLines === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumChangedLines
+  );
   const expectedReceiptSchema = effectiveReservationResolution?.status === "BASE_ONLY"
-    ? 1
+    ? 2
     : effectiveReservationResolution?.status === "AMENDED"
       ? 2
       : adaptedResolution
@@ -1686,10 +1722,12 @@ export function verifyFiniteTaskMergeProvenance({ lease, receiptSubject, current
     || receiptSubject.effectiveReservation?.reservationHash !== effectiveReservationResolution?.effectiveReservation?.reservationHash
     || stableJson(receiptSubject.amendmentReceipt) !== stableJson(effectiveReservationResolution?.amendmentReceipt)
   )) findings.push("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH");
-  if (effectiveReservationResolution !== null && (
-    !finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
-    || receiptSubject?.schemaVersion !== expectedReceiptSchema
-  )) findings.push("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH");
+  if ((modernReservationLease && !finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution))
+    || (effectiveReservationResolution !== null && (
+      !finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
+      || !baseOnlyResolutionEligible
+      || receiptSubject?.schemaVersion !== expectedReceiptSchema
+    ))) findings.push("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH");
   if (![1, 2, 3].includes(receiptSubject?.schemaVersion)) findings.push("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH");
   if ((adaptedResolution || adaptedReceipt) && (
     !adaptedResolution
@@ -2045,7 +2083,36 @@ export function finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome, r
     && stableJson(reservationResolution?.amendmentReceipt) === stableJson(terminalOutcome?.amendmentReceipt);
   if (!common) return false;
   if (terminalOutcome?.schemaVersion === 1
-    && terminalOutcome.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1") {
+    && terminalOutcome.classification === finiteTaskBaseOnlyTerminalClassification) {
+    return reservationResolution?.status === "BASE_ONLY"
+      && reservationResolution?.amendmentsConsumed === 0
+      && reservationResolution?.amendmentReceipt === null
+      && reservationResolution?.baseLease?.amendmentMaximum?.maximumAmendments === 0
+      && reservationResolution.baseLease.amendmentMaximum.maximumFiles === reservationResolution?.baseLease?.scopeBudget?.maximumFiles
+      && reservationResolution.baseLease.amendmentMaximum.maximumChangedLines === reservationResolution?.baseLease?.scopeBudget?.maximumChangedLines
+      && stableJson(reservationResolution?.baseLease) === stableJson(reservationResolution?.effectiveLease)
+      && stableJson(reservationResolution?.baseReservation) === stableJson(reservationResolution?.effectiveReservation)
+      && stableJson(terminalOutcome?.baseReservation) === stableJson(reservationResolution?.baseReservation)
+      && stableJson(terminalOutcome?.effectiveReservation) === stableJson(reservationResolution?.effectiveReservation)
+      && (reservationResolution?.testAdaptationsConsumed ?? 0) === 0
+      && reservationResolution?.testAdaptationReceipt == null
+      && reservationResolution?.testAdaptationReservation == null
+      && reservationResolution?.aggregateReservation == null
+      && reservationResolution?.scopePartitions == null
+      && terminalOutcome?.amendmentReceipt === null
+      && terminalOutcome?.testAdaptationReceipt == null
+      && terminalOutcome?.testAdaptationReservation == null
+      && terminalOutcome?.aggregateReservation == null
+      && terminalOutcome?.scopePartitions == null
+      && terminalOutcome?.finiteTaskPrRiskAuthority == null
+      && terminalOutcome?.finalSourceReceipt?.effectiveReservationHash === terminalOutcome?.effectiveReservation?.reservationHash
+      && terminalOutcome?.finalSourceReceipt?.amendmentCommentId === null
+      && terminalOutcome?.finalSourceReceipt?.aggregateReservationHash == null
+      && terminalOutcome?.finalSourceReceipt?.testAdaptationCommentId == null
+      && terminalOutcome?.finalSourceReceipt?.subject == null;
+  }
+  if (terminalOutcome?.schemaVersion === 1
+    && terminalOutcome.classification === finiteTaskAmendedTerminalClassification) {
     return reservationResolution?.status === "AMENDED"
       && (reservationResolution?.testAdaptationsConsumed ?? 0) === 0
       && reservationResolution?.testAdaptationReceipt == null
@@ -2226,7 +2293,7 @@ export function evaluateFiniteTaskLeaseRuntime({
     const latest = record?.latestMergedImplementationPr;
     const terminalOutcome = record?.finiteTaskRuntime?.terminalOutcome;
     const amendedTerminalProjection = binding?.phase === "TERMINAL"
-      && ["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalOutcome?.classification)
+      && finiteTaskTerminalOutcomeClassifications.has(terminalOutcome?.classification)
       && stableJson(binding?.terminalEvidence) === stableJson(terminalOutcome)
       && terminalOutcome?.baseLeaseHash === sha256(lease)
       && finiteTaskLeaseEffectivelyTerminal(record?.finiteTaskLeases, lease)
@@ -3095,16 +3162,18 @@ export function evaluateProtectedMainAdvancement({
   const legacyFinalEvidence = record?.finiteTaskRuntime?.finalEvidence ?? {};
   const legacyFinalEvidenceCurrent = ["ownerReceipt", "repositoryReview", "phase1", "mergeEligible"].every((key) => legacyFinalEvidence[key] === true);
   const liveFinalEvidenceSupplied = finiteTaskFinalSourceEligibility !== undefined;
-  const liveFinalEvidenceRequired = Number(activeLease?.amendmentMaximum?.maximumAmendments ?? 0) > 0;
+  const liveFinalEvidenceRequired = Number.isInteger(activeLease?.amendmentMaximum?.maximumAmendments);
+  const liveFinalEvidenceAuthorityValid = finiteTaskImplementationLifecycleAuthorityValid(finiteTaskFinalSourceEligibility)
+    && finiteTaskFinalSourceEligibility?.baseLeaseHash === sha256(activeLease);
   const finalEvidenceCurrent = liveFinalEvidenceSupplied
-    ? (!liveFinalEvidenceRequired || finiteTaskImplementationLifecycleAuthorityValid(finiteTaskFinalSourceEligibility))
+    ? (!liveFinalEvidenceRequired || liveFinalEvidenceAuthorityValid)
       && finiteTaskFinalSourceEligibility?.mergeEligible === true
       && finiteTaskFinalSourceEligibility?.candidateHead === candidateHead
       && finiteTaskFinalSourceEligibility?.candidateTree === finiteTaskRuntime?.candidateTree
     : !liveFinalEvidenceRequired && legacyFinalEvidenceCurrent;
   if (liveFinalEvidenceRequired && liveFinalEvidenceSupplied
     && finiteTaskFinalSourceEligibility?.mergeEligible === true
-    && !finiteTaskImplementationLifecycleAuthorityValid(finiteTaskFinalSourceEligibility)) findings.push("FINITE_TASK_IMPLEMENTATION_LIFECYCLE_AUTHORITY_INVALID");
+    && !liveFinalEvidenceAuthorityValid) findings.push("FINITE_TASK_IMPLEMENTATION_LIFECYCLE_AUTHORITY_INVALID");
   if (finiteTaskPostMergeTransition?.applicable === true && !verifiedAmendedTerminal) {
     findings.push(...(finiteTaskPostMergeTransition.findings ?? ["FINITE_TASK_POST_MERGE_TRANSITION_INVALID"]));
     findings.push("FINITE_TASK_POST_MERGE_TRANSITION_AUTHORITY_INVALID");
@@ -3498,11 +3567,13 @@ function finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTra
   if (evidenceBody) delete evidenceBody.evidenceHash;
   const repository = "Chillywood2025/chillywood-mobile";
   const closedAuthority = stableJson(terminal?.authority) === stableJson(finiteTaskAmendmentClosedAuthority);
+  const baseOnlyTerminal = terminal?.schemaVersion === 1
+    && terminal.classification === finiteTaskBaseOnlyTerminalClassification;
   const legacyTerminal = terminal?.schemaVersion === 1
-    && terminal.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1";
+    && terminal.classification === finiteTaskAmendedTerminalClassification;
   const adaptedTerminal = terminal?.schemaVersion === 2
-    && terminal.classification === "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2";
-  const legacyOverlayFieldsAbsent = !legacyTerminal || (
+    && terminal.classification === finiteTaskAdaptedTerminalClassification;
+  const legacyOverlayFieldsAbsent = !(baseOnlyTerminal || legacyTerminal) || (
     terminal?.testAdaptationReservation == null
     && terminal?.aggregateReservation == null
     && terminal?.scopePartitions == null
@@ -3521,7 +3592,7 @@ function finiteTaskClosedSourceProjection({ lease, liveObservation, postMergeTra
     && postMergeTransition?.baseLeaseUnchanged === true
     && lifecycle?.mergeEligible === true
     && postMergeTransition?.mergeProvenance?.ok === true
-    && (legacyTerminal || adaptedTerminal)
+    && (baseOnlyTerminal || legacyTerminal || adaptedTerminal)
     && legacyOverlayFieldsAbsent
     && terminal?.repository === repository
     && terminal?.taskId === lease?.leaseId
@@ -4064,10 +4135,11 @@ function finiteTaskTerminalOutcomeMatchesLease(registry, lease, outcome) {
   const added = receipt?.addedPaths; const policy = (registry?.amendmentPolicy?.domains ?? []).filter(({ id }) => id === lease?.domain);
   const effectivePaths = Array.isArray(added) ? [...new Set([...(lease?.allowedPaths ?? []), ...added])].sort() : [];
   const unhashed = Object.fromEntries(Object.entries(outcome ?? {}).filter(([key]) => key !== "evidenceHash"));
-  const overlay = outcome?.schemaVersion === 2 && outcome.classification === "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2";
-  const legacy = outcome?.schemaVersion === 1 && outcome.classification === "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1";
+  const baseOnly = outcome?.schemaVersion === 1 && outcome.classification === finiteTaskBaseOnlyTerminalClassification;
+  const overlay = outcome?.schemaVersion === 2 && outcome.classification === finiteTaskAdaptedTerminalClassification;
+  const legacy = outcome?.schemaVersion === 1 && outcome.classification === finiteTaskAmendedTerminalClassification;
   const adaptation = outcome?.testAdaptationReceipt;
-  const legacyOverlayFieldsAbsent = !legacy || (
+  const nonOverlayFieldsAbsent = !(baseOnly || legacy) || (
     outcome?.testAdaptationReservation == null
     && outcome?.aggregateReservation == null
     && outcome?.scopePartitions == null
@@ -4100,17 +4172,28 @@ function finiteTaskTerminalOutcomeMatchesLease(registry, lease, outcome) {
     && final?.testAdaptationCommentId === adaptation.commentId
     && final?.aggregateReservationHash === outcome.aggregateReservation.reservationHash
     && stableJson(outcome.aggregateReservation.allowedPaths) === stableJson([...new Set([...effectivePaths, ...adaptation.fixturePaths])].sort()));
-  return (legacy || overlay) && legacyOverlayFieldsAbsent && overlayValid
+  const common = nonOverlayFieldsAbsent
     && outcome.repository === "Chillywood2025/chillywood-mobile" && outcome.taskId === lease?.leaseId && outcome.leaseId === lease?.leaseId && outcome.implementationPr === lease?.implementationPr && outcome.implementationBranch === lease?.implementationBranch
     && outcome.baseLeaseHash === sha256(lease) && stableJson(outcome.baseReservation) === stableJson(finiteTaskReservationProjection(lease))
-    && policy.length === 1 && finiteTaskReservationRecordValid(outcome.effectiveReservation) && stableJson(outcome.effectiveReservation.allowedPaths) === stableJson(effectivePaths) && outcome.effectiveReservation.maximumFiles === effectivePaths.length
+    && finiteTaskReservationRecordValid(outcome.effectiveReservation)
+    && Number.isInteger(final?.commentId) && final.commentId > 0 && validInstant(final.createdAt) && [final.subjectHash, final.bodyHash, final.rawBodyHash].every((hash) => sha256Pattern.test(hash ?? ""))
+    && final.effectiveReservationHash === outcome.effectiveReservation.reservationHash && final.finalHead === outcome.sourceHead && final.finalTree === outcome.sourceTree
+    && [outcome.sourceHead, outcome.sourceTree, outcome.mergeSha, outcome.mergeTree].every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeTree === outcome.sourceTree && Array.isArray(outcome.mergeParents) && outcome.mergeParents.length === 2 && outcome.mergeParents.every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeParents[1] === outcome.sourceHead
+    && typeof outcome.nextTask === "string" && outcome.nextTask.length > 0 && stableJson(outcome.authority) === stableJson({ providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false }) && outcome.evidenceHash === sha256(unhashed);
+  const baseOnlyValid = baseOnly
+    && lease?.amendmentMaximum?.maximumAmendments === 0
+    && lease.amendmentMaximum.maximumFiles === lease?.scopeBudget?.maximumFiles
+    && lease.amendmentMaximum.maximumChangedLines === lease?.scopeBudget?.maximumChangedLines
+    && receipt === null
+    && stableJson(outcome.effectiveReservation) === stableJson(outcome.baseReservation)
+    && final?.amendmentCommentId === null;
+  const amendedValid = (legacy || overlay) && overlayValid
+    && policy.length === 1 && stableJson(outcome.effectiveReservation.allowedPaths) === stableJson(effectivePaths) && outcome.effectiveReservation.maximumFiles === effectivePaths.length
     && outcome.effectiveReservation.maximumFiles <= lease?.amendmentMaximum?.maximumFiles && outcome.effectiveReservation.maximumFiles <= policy[0]?.maximumFiles && outcome.effectiveReservation.maximumLines >= outcome.baseReservation.maximumLines && outcome.effectiveReservation.maximumLines <= lease?.amendmentMaximum?.maximumChangedLines && outcome.effectiveReservation.maximumLines <= policy[0]?.maximumChangedLines
     && Array.isArray(added) && added.length > 0 && stableJson(added) === stableJson([...(policy[0]?.amendablePaths ?? [])].sort()) && added.every((file) => !finiteTaskAmendmentPathHasWildcard(file))
     && Number.isInteger(receipt?.commentId) && receipt.commentId > 0 && validInstant(receipt.createdAt) && [receipt.subjectHash, receipt.bodyHash, receipt.rawBodyHash].every((hash) => sha256Pattern.test(hash ?? "")) && receipt.domain === lease.domain && receipt.authorityClassification === "LIVE_IMMUTABLE_OWNER_RECEIPT" && gitShaPattern.test(receipt.boundStartingHead ?? "") && gitShaPattern.test(receipt.boundStartingTree ?? "")
-    && Number.isInteger(final?.commentId) && final.commentId > 0 && validInstant(final.createdAt) && [final.subjectHash, final.bodyHash, final.rawBodyHash].every((hash) => sha256Pattern.test(hash ?? ""))
-    && final.amendmentCommentId === receipt.commentId && final.effectiveReservationHash === outcome.effectiveReservation.reservationHash && final.finalHead === outcome.sourceHead && final.finalTree === outcome.sourceTree
-    && [outcome.sourceHead, outcome.sourceTree, outcome.mergeSha, outcome.mergeTree].every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeTree === outcome.sourceTree && Array.isArray(outcome.mergeParents) && outcome.mergeParents.length === 2 && outcome.mergeParents.every((sha) => gitShaPattern.test(sha ?? "")) && outcome.mergeParents[1] === outcome.sourceHead
-    && typeof outcome.nextTask === "string" && outcome.nextTask.length > 0 && stableJson(outcome.authority) === stableJson({ providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false }) && outcome.evidenceHash === sha256(unhashed);
+    && final?.amendmentCommentId === receipt.commentId;
+  return common && (baseOnlyValid || amendedValid);
 }
 export function finiteTaskLeaseEffectivelyTerminal(registry, lease) {
   if (finiteTaskTerminalStates.has(lease?.taskState)) return true;
@@ -4688,11 +4771,15 @@ export function resolveFiniteTaskEffectiveReservation({
   const baseLease = lease ? structuredClone(lease) : null;
   const baseLeaseHash = lease ? sha256(lease) : null;
   const baseReservation = finiteTaskReservationProjection(lease);
+  const registeredLeaseMatches = (registry?.tasks ?? []).filter((task) => task?.leaseId === lease?.leaseId);
   const rawComments = Array.isArray(comments) ? comments : [];
   const marked = rawComments.filter(({ body }) => typeof body === "string" && body.includes(taskLeaseAmendmentMarker));
   const adaptationMarked = rawComments.filter(({ body }) => typeof body === "string" && body.includes(finiteTaskTestAdaptationMarker));
   const maximumAmendments = lease?.amendmentMaximum?.maximumAmendments ?? 0;
   if (!lease) findings.push("FINITE_TASK_EFFECTIVE_RESERVATION_LEASE_MISSING");
+  else if (registeredLeaseMatches.length !== 1 || stableJson(registeredLeaseMatches[0]) !== stableJson(lease)) {
+    findings.push("FINITE_TASK_EFFECTIVE_RESERVATION_LEASE_REGISTRY_MISMATCH");
+  }
   if (!Array.isArray(comments) || ((requireCompleteDiscovery || maximumAmendments > 0 || marked.length > 0 || adaptationMarked.length > 0) && commentsPaginationComplete !== true)) {
     findings.push("FINITE_TASK_LEASE_AMENDMENT_COMMENT_DISCOVERY_INCOMPLETE");
   }
@@ -6118,8 +6205,9 @@ export function validateTerminalTaskEvidence(binding, latestMergedImplementation
   if (binding?.phase !== "TERMINAL") return [];
   const evidence = binding?.terminalEvidence;
   const findings = [];
-  if (["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(evidence?.classification)) {
-    const adapted = evidence.classification === "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2";
+  if (finiteTaskTerminalOutcomeClassifications.has(evidence?.classification)) {
+    const baseOnly = evidence.classification === finiteTaskBaseOnlyTerminalClassification;
+    const adapted = evidence.classification === finiteTaskAdaptedTerminalClassification;
     const legacyOverlayFieldsAbsent = adapted || (
       evidence.testAdaptationReservation == null
       && evidence.aggregateReservation == null
@@ -6142,7 +6230,11 @@ export function validateTerminalTaskEvidence(binding, latestMergedImplementation
       || !sha256Pattern.test(evidence.baseLeaseHash ?? "")
       || !sha256Pattern.test(evidence.baseReservation?.reservationHash ?? "")
       || !sha256Pattern.test(evidence.effectiveReservation?.reservationHash ?? "")
-      || !Number.isInteger(evidence.amendmentReceipt?.commentId) || evidence.amendmentReceipt.commentId < 1
+      || (baseOnly ? (
+        evidence.amendmentReceipt !== null
+        || stableJson(evidence.baseReservation) !== stableJson(evidence.effectiveReservation)
+        || evidence.finalSourceReceipt?.amendmentCommentId !== null
+      ) : (!Number.isInteger(evidence.amendmentReceipt?.commentId) || evidence.amendmentReceipt.commentId < 1))
       || !Number.isInteger(evidence.finalSourceReceipt?.commentId) || evidence.finalSourceReceipt.commentId < 1
       || (adapted && (!finiteTaskScopePartitionsValid({
         implementationReservation: evidence.effectiveReservation,
@@ -6410,7 +6502,7 @@ export function validateProofTierStatuses(binding, gateCatalog, featureRegistry)
     if (!tierIds.includes(tier)) findings.push({ id: "ASSURANCE_PROOF_TIER_STATUS_UNKNOWN", status: "BLOCKED_INTERNAL", tier });
   }
   if (terminalTask) {
-    const finiteTaskTerminal = ["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(binding?.terminalEvidence?.classification);
+    const finiteTaskTerminal = finiteTaskTerminalOutcomeClassifications.has(binding?.terminalEvidence?.classification);
     const expected = {
       T0_REQUIREMENT: "REQUIREMENTS_CLEAR",
       T1_SOURCE: "SOURCE_CLEAR",
@@ -6730,7 +6822,7 @@ export function renderCurrentState(record) {
 
 export function renderNextTask(record) {
   const finiteTaskTerminalNext = record?.activeTaskBinding?.phase === "TERMINAL"
-    && ["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(record?.finiteTaskRuntime?.terminalOutcome?.classification)
+    && finiteTaskTerminalOutcomeClassifications.has(record?.finiteTaskRuntime?.terminalOutcome?.classification)
     ? record.finiteTaskRuntime.terminalOutcome.nextTask
     : null;
   const nextActions = finiteTaskTerminalNext
@@ -6762,7 +6854,7 @@ export function projectFiniteTaskTerminalTruth({ record, terminalEvidence, proof
   });
   if (!lease
     || sha256(lease) !== terminalEvidence?.baseLeaseHash
-    || !["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalEvidence?.classification)
+    || !finiteTaskTerminalOutcomeClassifications.has(terminalEvidence?.classification)
     || !finiteTaskTerminalOutcomeMatchesLease(projected?.finiteTaskLeases, lease, terminalEvidence)
     || !sha256Pattern.test(proofTierApplicabilityHash ?? "")) throw new Error("FINITE_TASK_TERMINAL_PROJECTION_INVALID");
   const priorOutcomes = projected.finiteTaskLeases.completedLeaseOutcomes ?? [];

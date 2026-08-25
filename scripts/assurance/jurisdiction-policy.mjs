@@ -851,7 +851,11 @@ function taskScopeValid(taskScope) {
     && isPositiveInteger(taskScope.amendmentMaximum.maximumChangedLines)
     && taskScope.amendmentMaximum.maximumFiles >= taskScope.scopeBudget.maximumFiles
     && taskScope.amendmentMaximum.maximumChangedLines >= taskScope.scopeBudget.maximumChangedLines
-    && taskScope.amendmentMaximum.maximumAmendments === 1
+    && [0, 1].includes(taskScope.amendmentMaximum.maximumAmendments)
+    && (taskScope.amendmentMaximum.maximumAmendments === 1 || (
+      taskScope.amendmentMaximum.maximumFiles === taskScope.scopeBudget.maximumFiles
+      && taskScope.amendmentMaximum.maximumChangedLines === taskScope.scopeBudget.maximumChangedLines
+    ))
     && exactKeys(taskScope.recursion, ["admissionPrMaximum", "postAdmissionClearancePrMaximum", "provenancePrMaximum", "sourceBindingPrMaximum", "terminalTruthPrMaximum"])
     && taskScope.recursion.admissionPrMaximum === 1
     && taskScope.recursion.postAdmissionClearancePrMaximum === 0

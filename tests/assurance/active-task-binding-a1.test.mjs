@@ -82,7 +82,7 @@ import {
   verifyFiniteTaskTestAdaptationReceipt,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observeFiniteTaskGitScope, observeFiniteTaskPostMergeTransition, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -3972,7 +3972,7 @@ test("finite amendment resolver: only resolver-branded structurally unchanged ba
     currentProtectedBase: wave1BoundBase,
     mergeRef: baseOnlyMergeRef,
     effectiveReservationResolution: liveReserved,
-  }).ok, true);
+  }).ok, false);
   const baseOnlyV2 = finiteTaskFinalReceiptSubject({
     ...baseOnlyV1,
     schemaVersion: 2,
@@ -3988,8 +3988,344 @@ test("finite amendment resolver: only resolver-branded structurally unchanged ba
     mergeRef: baseOnlyMergeRef,
     effectiveReservationResolution: liveReserved,
   }).findings.includes("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH"));
+
+  const baseOnlyRegistry = structuredClone(canonicalTruth.finiteTaskLeases);
+  baseOnlyRegistry.completedLeaseOutcomes = [];
+  const baseOnlyLease = baseOnlyRegistry.tasks.find(({ implementationPr }) => implementationPr === wave1Lease.implementationPr);
+  baseOnlyLease.amendmentMaximum = { maximumAmendments: 0, maximumChangedLines: baseOnlyLease.scopeBudget.maximumChangedLines, maximumFiles: baseOnlyLease.scopeBudget.maximumFiles };
+  const zeroAmendmentResolution = resolveFiniteTaskEffectiveReservation({
+    registry: baseOnlyRegistry,
+    lease: baseOnlyLease,
+    candidate: baseOnlyCandidate,
+    comments: [],
+    commentsPaginationComplete: true,
+  });
+  const zeroAmendmentV2 = finiteTaskFinalReceiptSubject({
+    ...baseOnlyV1,
+    schemaVersion: 2,
+    baseLeaseHash: zeroAmendmentResolution.baseLeaseHash,
+    baseReservation: zeroAmendmentResolution.baseReservation,
+    effectiveReservation: zeroAmendmentResolution.effectiveReservation,
+    amendmentReceipt: null,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  });
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(zeroAmendmentResolution), true);
+  assert.equal(verifyFiniteTaskMergeProvenance({
+    lease: baseOnlyLease,
+    receiptSubject: zeroAmendmentV2,
+    currentProtectedBase: wave1BoundBase,
+    mergeRef: baseOnlyMergeRef,
+    effectiveReservationResolution: zeroAmendmentResolution,
+  }).ok, true);
   liveReserved.effectiveLease.allowedPaths.push("package.json");
   assert.equal(finiteTaskEffectiveReservationAuthorityValid(liveReserved), false);
+});
+
+test("finite BASE_ONLY lifecycle uses a schema-2 final receipt and a strict no-amendment terminal outcome", () => {
+  const record = structuredClone(canonicalTruth);
+  record.finiteTaskLeases.completedLeaseOutcomes = [];
+  delete record.finiteTaskRuntime.terminalOutcome;
+  record.activeTaskBinding.phase = "PREIMPLEMENTATION_ENGINEERING_CLEAR";
+  delete record.activeTaskBinding.terminalEvidence;
+  const lease = record.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === wave1Lease.implementationPr);
+  lease.amendmentMaximum = { maximumAmendments: 0, maximumChangedLines: lease.scopeBudget.maximumChangedLines, maximumFiles: lease.scopeBudget.maximumFiles };
+  assert.deepEqual(validateFiniteTaskLeaseRegistry(record.finiteTaskLeases), []);
+  for (const mutate of [
+    (value) => { value.artifactReservation.maximumFiles += 1; },
+    (value) => { value.artifactReservation.maximumLines += 1; },
+    (value) => { value.artifactReservation.pathGlobs = value.artifactReservation.pathGlobs.slice(1); },
+    (value) => { delete value.artifactReservation; },
+  ]) {
+    const drift = structuredClone(record.finiteTaskLeases);
+    mutate(drift.tasks.find(({ implementationPr }) => implementationPr === lease.implementationPr));
+    assert.ok(validateFiniteTaskLeaseRegistry(drift).includes("FINITE_TASK_LEASE_MALFORMED"));
+  }
+  const candidate = wave1Candidate({
+    changedPaths: [...lease.allowedPaths],
+    changedLines: lease.scopeBudget.maximumChangedLines,
+    diffHash: "a".repeat(64),
+    changedPathHash: digest(stableJson(lease.allowedPaths)),
+  });
+  const resolution = resolveFiniteTaskEffectiveReservation({
+    registry: record.finiteTaskLeases,
+    lease,
+    candidate,
+    comments: [],
+    commentsPaginationComplete: true,
+  });
+  assert.equal(resolution.status, "BASE_ONLY");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(resolution), true);
+  assert.deepEqual(resolution.baseReservation, resolution.effectiveReservation);
+  assert.equal(resolution.amendmentReceipt, null);
+  const unregisteredLease = structuredClone(lease);
+  unregisteredLease.implementationPr += 1000;
+  unregisteredLease.implementationBranch = `${lease.implementationBranch}-unregistered`;
+  const unregisteredResolution = resolveFiniteTaskEffectiveReservation({
+    registry: record.finiteTaskLeases,
+    lease: unregisteredLease,
+    comments: [],
+    commentsPaginationComplete: true,
+  });
+  assert.ok(unregisteredResolution.findings.includes("FINITE_TASK_EFFECTIVE_RESERVATION_LEASE_REGISTRY_MISMATCH"));
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(unregisteredResolution), false);
+  const omittedResolutionReceipt = exactFinalReceipt(lease, candidate);
+  assert.equal(verifyFiniteTaskFinalReceipt({ lease, candidate, ...omittedResolutionReceipt }).ok, false);
+  const omittedResolutionMerge = verifyFiniteTaskMergeProvenance({
+    lease,
+    receiptSubject: omittedResolutionReceipt.subject,
+    currentProtectedBase: wave1BoundBase,
+    mergeRef: { pr: lease.implementationPr, branch: lease.implementationBranch, parents: [wave1BoundBase, candidate.head], sourceTree: candidate.tree, tree: candidate.tree },
+  });
+  assert.ok(omittedResolutionMerge.findings.includes("FINITE_MERGE_EFFECTIVE_RESERVATION_MISMATCH"));
+
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: lease.implementationPr, branch: lease.implementationBranch, baseSha: wave1BoundBase, headSha: candidate.head };
+  const scope = { files: candidate.changedPaths, additions: 1800, deletions: 1800, netChangedLines: 0, diffHash: candidate.diffHash };
+  const reviewSubject = architectureRepositoryReviewSubject({ identity, tree: candidate.tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
+  const reviewRaw = wave1ImmutableComment(810100, architectureRepositoryReviewCommentBody(reviewSubject), "2026-08-15T00:00:00Z");
+  const repositoryReview = verifyArchitectureRepositoryReview({ raw: reviewRaw, identity, tree: candidate.tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
+  assert.equal(repositoryReview.valid, true);
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900100, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
+  const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
+  const evidence = {
+    scopeResult: "PASS",
+    callDomainClosureLedgerHash: "b".repeat(64),
+    focusedTestHash: "c".repeat(64),
+    mutationNegativeControlHash: "d".repeat(64),
+    repositoryReviewHash: repositoryReview.subjectHash,
+    repositoryReview,
+    phase1RunId: phaseBody.runId,
+    phase1Head: candidate.head,
+    phase1Evidence,
+  };
+  const finalSubject = finiteTaskFinalReceiptSubject({
+    schemaVersion: 2,
+    policyId: "ASSURANCE_FINITE_TASK_LEASE_V1",
+    repository: identity.repository,
+    featureId: lease.featureId,
+    implementationPr: lease.implementationPr,
+    implementationBranch: lease.implementationBranch,
+    admittedSeedHead: lease.admittedSeedHead,
+    finalHead: candidate.head,
+    finalTree: candidate.tree,
+    diffHash: candidate.diffHash,
+    changedPathHash: candidate.changedPathHash,
+    ...evidence,
+    baseLeaseHash: resolution.baseLeaseHash,
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: null,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  });
+  const finalBody = finiteTaskFinalReceiptBody(finalSubject);
+  const finalEnvelope = JSON.parse(finalBody.slice(finalBody.indexOf("\n") + 1));
+  const finalObservation = { commentId: 810101, author: "Chillywood2025", authorAssociation: "OWNER", createdAt: "2026-08-15T00:01:00Z", updatedAt: "2026-08-15T00:01:00Z", issueUrl: `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${lease.implementationPr}`, body: finalBody };
+  const finalReceipt = { commentId: finalObservation.commentId, author: finalObservation.author, authorAssociation: finalObservation.authorAssociation, subjectHash: finalEnvelope.subjectHash, bodyHash: finalEnvelope.bodyHash, rawBodyHash: digest(finalBody) };
+  const verifiedFinal = verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt: finalReceipt, observation: finalObservation, effectiveReservationResolution: resolution, livePhase1Evidence: phase1Evidence });
+  assert.equal(verifiedFinal.ok, true);
+  assert.equal(verifiedFinal.subject.schemaVersion, 2);
+  assert.equal(verifiedFinal.subject.amendmentReceipt, null);
+
+  const finalRaw = wave1ImmutableComment(finalObservation.commentId, finalBody, finalObservation.createdAt);
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-base-only-live-"));
+  const fakeGh = path.join(temporary, "gh");
+  const pullRequest = { number: lease.implementationPr, state: "open", merged: false, merged_at: null, merge_commit_sha: null, head: { ref: lease.implementationBranch, sha: candidate.head, repo: { full_name: identity.repository } }, base: { ref: "main", sha: identity.baseSha, repo: { full_name: identity.repository } } };
+  fs.writeFileSync(fakeGh, `#!/usr/bin/env node\nconst endpoint = process.argv.at(-1);\nif (endpoint.includes("/comments?")) process.stdout.write(${JSON.stringify(JSON.stringify([[reviewRaw, finalRaw]]))});\nelse if (endpoint.includes("/commits?")) process.stdout.write("[[]]");\nelse process.stdout.write(${JSON.stringify(JSON.stringify(pullRequest))});\n`);
+  fs.chmodSync(fakeGh, 0o755);
+  const originalPath = process.env.PATH;
+  let liveObservation;
+  try {
+    process.env.PATH = `${temporary}:${originalPath}`;
+    liveObservation = observeLiveFiniteTaskEffectiveReservation({ repository: identity.repository, pr: lease.implementationPr, authorityEvidence: wave1AuthorityEvidence });
+  } finally {
+    process.env.PATH = originalPath;
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+  const liveResolution = resolveFiniteTaskEffectiveReservation({ registry: record.finiteTaskLeases, lease, candidate, liveObservation });
+  const lifecycle = registerVerifiedFiniteTaskImplementationLifecycle({
+    lifecycle: verifyFiniteTaskImplementationLifecycle({
+      identity,
+      tree: candidate.tree,
+      scope,
+      finiteTaskAuthority: { ok: true, candidate, baseLease: lease, effectiveReservationResolution: liveResolution },
+      comments: liveObservation.comments,
+      commentsPaginationComplete: true,
+      phase1EvidenceResolver: () => phase1Evidence,
+    }),
+    effectiveReservationResolution: liveResolution,
+    liveObservation,
+  });
+  assert.equal(lifecycle.mergeEligible, true, stableJson(lifecycle.findings));
+  assert.equal(finiteTaskImplementationLifecycleAuthorityValid(lifecycle), true);
+  const advancementRecord = historicalRollingRecord();
+  advancementRecord.finiteTaskLeases.completedLeaseOutcomes = [];
+  const advancementLeaseIndex = advancementRecord.finiteTaskLeases.tasks.findIndex(({ implementationPr }) => implementationPr === lease.implementationPr);
+  advancementRecord.finiteTaskLeases.tasks[advancementLeaseIndex] = structuredClone(lease);
+  const advancementArgs = {
+    record: advancementRecord,
+    contract: currentTruthContract,
+    observedProtectedMainSha: advancementRecord.mainSha,
+    candidateHead: candidate.head,
+    finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: false, candidateTree: candidate.tree },
+    checkpointTreeObservation: advancementRecord.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: true,
+    candidateContainsObservedMain: true,
+  };
+  assert.equal(evaluateProtectedMainAdvancement(advancementArgs).mergeEligible, false);
+  assert.equal(evaluateProtectedMainAdvancement({ ...advancementArgs, finiteTaskFinalSourceEligibility: { mergeEligible: true, candidateHead: candidate.head, candidateTree: candidate.tree } }).mergeEligible, false);
+  assert.equal(evaluateProtectedMainAdvancement({ ...advancementArgs, finiteTaskFinalSourceEligibility: structuredClone(lifecycle) }).mergeEligible, false);
+  assert.equal(evaluateProtectedMainAdvancement({ ...advancementArgs, finiteTaskFinalSourceEligibility: lifecycle }).mergeEligible, true);
+
+  const normalizedFinal = { commentId: finalObservation.commentId, createdAt: finalObservation.createdAt, subjectHash: verifiedFinal.subjectHash, bodyHash: verifiedFinal.bodyHash, rawBodyHash: verifiedFinal.rawBodyHash, finalHead: candidate.head, finalTree: candidate.tree, effectiveReservationHash: resolution.effectiveReservation.reservationHash, amendmentCommentId: null };
+  const terminalBase = {
+    schemaVersion: 1,
+    classification: "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    repository: identity.repository,
+    taskId: lease.leaseId,
+    leaseId: lease.leaseId,
+    implementationPr: lease.implementationPr,
+    implementationBranch: lease.implementationBranch,
+    baseLeaseHash: resolution.baseLeaseHash,
+    baseReservation: resolution.baseReservation,
+    effectiveReservation: resolution.effectiveReservation,
+    amendmentReceipt: null,
+    finalSourceReceipt: normalizedFinal,
+    sourceHead: candidate.head,
+    sourceTree: candidate.tree,
+    mergeSha: "7".repeat(40),
+    mergeTree: candidate.tree,
+    mergeParents: [wave1BoundBase, candidate.head],
+    nextTask: record.engineeringDoctrine.nextPermittedAction,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  };
+  const terminalEvidence = { ...terminalBase, evidenceHash: hashValue(terminalBase) };
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: terminalEvidence, reservationResolution: resolution }), true);
+  const terminalRegistry = structuredClone(record.finiteTaskLeases);
+  terminalRegistry.completedLeaseOutcomes = [terminalEvidence];
+  assert.deepEqual(validateFiniteTaskLeaseRegistry(terminalRegistry), []);
+  record.finiteTaskLeases = terminalRegistry;
+  const feature = registry.features.find(({ featureId }) => featureId === lease.featureId);
+  const projected = projectFiniteTaskTerminalTruth({ record: { ...record, finiteTaskLeases: { ...terminalRegistry, completedLeaseOutcomes: [] } }, terminalEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) });
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(projected.finiteTaskLeases, lease), true);
+  assert.deepEqual(validateTerminalTaskEvidence(projected.activeTaskBinding, projected.latestMergedImplementationPr), []);
+  assert.match(renderNextTask(projected), new RegExp(record.engineeringDoctrine.nextPermittedAction, "u"));
+
+  const rehash = (value) => { const body = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "evidenceHash")); return { ...body, evidenceHash: hashValue(body) }; };
+  const forgedReceipt = rehash({ ...terminalEvidence, amendmentReceipt: { commentId: 810102 } });
+  const mixedClassification = rehash({ ...terminalEvidence, classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1" });
+  const forgedFinal = rehash({ ...terminalEvidence, finalSourceReceipt: { ...terminalEvidence.finalSourceReceipt, amendmentCommentId: 810102 } });
+  const mixedReservation = rehash({ ...terminalEvidence, effectiveReservation: { ...terminalEvidence.effectiveReservation, maximumLines: terminalEvidence.effectiveReservation.maximumLines + 1 } });
+  for (const hostile of [forgedReceipt, mixedClassification, forgedFinal, mixedReservation]) {
+    assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: hostile, reservationResolution: resolution }), false);
+    const hostileRegistry = structuredClone(record.finiteTaskLeases);
+    hostileRegistry.completedLeaseOutcomes = [hostile];
+    assert.ok(validateFiniteTaskLeaseRegistry(hostileRegistry).includes("FINITE_TASK_COMPLETION_LEDGER_MALFORMED"));
+  }
+});
+
+test("finite post-merge observer emits and registers the exact BASE_ONLY terminal classification", () => {
+  const baseSha = "f74a6d53948a37fc35ef3dbb87e3741ede5c8d76";
+  const sourceHead = "698871780a7610f677fdec1929d85389594d080a";
+  const mergeSha = "5e595e684f4dcc9454eee5065066e1b48d20e3eb";
+  const sourceTree = spawnSync("git", ["rev-parse", `${sourceHead}^{tree}`], { encoding: "utf8" }).stdout.trim();
+  const mergeTree = spawnSync("git", ["rev-parse", `${mergeSha}^{tree}`], { encoding: "utf8" }).stdout.trim();
+  const currentProtectedMain = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  const scope = observeFiniteTaskGitScope(process.cwd(), baseSha, sourceHead);
+  const record = structuredClone(canonicalTruth);
+  record.finiteTaskLeases.completedLeaseOutcomes = [];
+  delete record.finiteTaskRuntime.terminalOutcome;
+  record.activeTaskBinding.phase = "PREIMPLEMENTATION_ENGINEERING_CLEAR";
+  delete record.activeTaskBinding.terminalEvidence;
+  const lease = record.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === wave1Lease.implementationPr);
+  lease.allowedPaths = [...scope.files];
+  lease.scopeBudget = { maximumFiles: scope.files.length, maximumChangedLines: scope.additions + scope.deletions };
+  lease.artifactReservation.pathGlobs = [...scope.files];
+  lease.artifactReservation.maximumFiles = lease.scopeBudget.maximumFiles;
+  lease.artifactReservation.maximumLines = lease.scopeBudget.maximumChangedLines;
+  lease.amendmentMaximum = { maximumAmendments: 0, maximumFiles: lease.scopeBudget.maximumFiles, maximumChangedLines: lease.scopeBudget.maximumChangedLines };
+  assert.deepEqual(validateFiniteTaskLeaseRegistry(record.finiteTaskLeases), []);
+  const candidate = { pr: lease.implementationPr, branch: lease.implementationBranch, prState: "closed", head: sourceHead, tree: sourceTree, scopeBase: baseSha, changedPaths: scope.files, changedLines: scope.additions + scope.deletions, diffHash: scope.diffHash, changedPathHash: hashValue(scope.files) };
+  const initialResolution = resolveFiniteTaskEffectiveReservation({ registry: record.finiteTaskLeases, lease, candidate, comments: [], commentsPaginationComplete: true });
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: lease.implementationPr, branch: lease.implementationBranch, baseSha, headSha: sourceHead };
+  const reviewSubject = architectureRepositoryReviewSubject({ identity, tree: sourceTree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: initialResolution });
+  assert.equal(reviewSubject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.ok, true, stableJson(reviewSubject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.findings));
+  const reviewRaw = wave1ImmutableComment(810110, architectureRepositoryReviewCommentBody(reviewSubject), "2026-08-15T00:10:00Z");
+  const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha, runId: 900110, sourceHead, sourceTree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
+  const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
+  const finalSubject = finiteTaskFinalReceiptSubject({
+    schemaVersion: 2,
+    policyId: "ASSURANCE_FINITE_TASK_LEASE_V1",
+    repository: identity.repository,
+    featureId: lease.featureId,
+    implementationPr: lease.implementationPr,
+    implementationBranch: lease.implementationBranch,
+    admittedSeedHead: lease.admittedSeedHead,
+    finalHead: sourceHead,
+    finalTree: sourceTree,
+    diffHash: scope.diffHash,
+    changedPathHash: hashValue(scope.files),
+    scopeResult: "PASS",
+    callDomainClosureLedgerHash: "b".repeat(64),
+    focusedTestHash: "c".repeat(64),
+    mutationNegativeControlHash: "d".repeat(64),
+    repositoryReviewHash: hashValue(reviewSubject),
+    phase1RunId: phaseBody.runId,
+    phase1Head: sourceHead,
+    baseLeaseHash: initialResolution.baseLeaseHash,
+    baseReservation: initialResolution.baseReservation,
+    effectiveReservation: initialResolution.effectiveReservation,
+    amendmentReceipt: null,
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  });
+  const finalRaw = wave1ImmutableComment(810111, finiteTaskFinalReceiptBody(finalSubject), "2026-08-15T00:11:00Z");
+  const pullRequest = { number: lease.implementationPr, state: "closed", merged: true, merged_at: "2026-08-15T00:12:00Z", merge_commit_sha: mergeSha, head: { ref: lease.implementationBranch, sha: sourceHead, repo: { full_name: identity.repository } }, base: { ref: "main", sha: baseSha, repo: { full_name: identity.repository } } };
+  const observeWithComments = (comments) => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-base-only-post-merge-"));
+    const fakeGh = path.join(temporary, "gh");
+    fs.writeFileSync(fakeGh, `#!/usr/bin/env node\nconst endpoint = process.argv.at(-1);\nif (endpoint.includes("/comments?")) process.stdout.write(${JSON.stringify(JSON.stringify([comments]))});\nelse if (endpoint.includes("/commits?")) process.stdout.write("[[]]");\nelse process.stdout.write(${JSON.stringify(JSON.stringify(pullRequest))});\n`);
+    fs.chmodSync(fakeGh, 0o755);
+    const originalPath = process.env.PATH;
+    try {
+      process.env.PATH = `${temporary}:${originalPath}`;
+      return observeLiveFiniteTaskEffectiveReservation({ repository: identity.repository, pr: lease.implementationPr, authorityEvidence: wave1AuthorityEvidence });
+    } finally {
+      process.env.PATH = originalPath;
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  };
+  const liveObservation = observeWithComments([reviewRaw, finalRaw]);
+  const transition = observeFiniteTaskPostMergeTransition({ record, currentProtectedMain, root: process.cwd(), liveObservation, phase1EvidenceResolver: () => phase1Evidence });
+  assert.equal(transition.ok, true, stableJson(transition.findings));
+  assert.equal(transition.terminalEvidence.classification, "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1");
+  assert.equal(transition.terminalEvidence.schemaVersion, 1);
+  assert.equal(transition.terminalEvidence.amendmentReceipt, null);
+  assert.equal(transition.terminalEvidence.finalSourceReceipt.amendmentCommentId, null);
+  assert.equal(transition.terminalEvidence.mergeTree, mergeTree);
+  const liveResolution = resolveFiniteTaskEffectiveReservation({ registry: record.finiteTaskLeases, lease, candidate, liveObservation });
+  registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: transition.lifecycle, effectiveReservationResolution: liveResolution, liveObservation, livePhase1Evidence: phase1Evidence });
+  registerVerifiedFiniteTaskPostMergeTransition({ lease, liveObservation, postMergeTransition: transition });
+  assert.equal(finiteTaskImplementationLifecycleAuthorityValid(transition.lifecycle), true);
+  assert.equal(finiteTaskPostMergeTransitionAuthorityValid(transition), true);
+  assert.equal(finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome: transition.terminalEvidence, reservationResolution: liveResolution }), true);
+  const feature = registry.features.find(({ featureId }) => featureId === lease.featureId);
+  const projected = projectFiniteTaskTerminalTruth({ record, terminalEvidence: transition.terminalEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) });
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(projected.finiteTaskLeases, lease), true);
+  assert.deepEqual(validateTerminalTaskEvidence(projected.activeTaskBinding, projected.latestMergedImplementationPr), []);
+
+  const maxOneRecord = structuredClone(record);
+  const maxOneLease = maxOneRecord.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === lease.implementationPr);
+  maxOneLease.amendmentMaximum = { maximumAmendments: 1, maximumFiles: lease.scopeBudget.maximumFiles + 1, maximumChangedLines: lease.scopeBudget.maximumChangedLines + 500 };
+  const policy = maxOneRecord.finiteTaskLeases.amendmentPolicy.domains.find(({ id }) => id === maxOneLease.domain);
+  policy.amendablePaths = ["_lib/base-only-negative-control.ts"];
+  policy.maximumFiles = maxOneLease.amendmentMaximum.maximumFiles;
+  policy.maximumChangedLines = maxOneLease.amendmentMaximum.maximumChangedLines;
+  assert.deepEqual(validateFiniteTaskLeaseRegistry(maxOneRecord.finiteTaskLeases), []);
+  const maxOneResolution = resolveFiniteTaskEffectiveReservation({ registry: maxOneRecord.finiteTaskLeases, lease: maxOneLease, candidate, liveObservation });
+  assert.equal(maxOneResolution.status, "BASE_ONLY");
+  assert.equal(finiteTaskEffectiveReservationAuthorityValid(maxOneResolution), true);
+  const maxOneTransition = observeFiniteTaskPostMergeTransition({ record: maxOneRecord, currentProtectedMain, root: process.cwd(), liveObservation, phase1EvidenceResolver: () => phase1Evidence });
+  assert.equal(maxOneTransition.ok, false);
+  assert.equal(maxOneTransition.terminalEvidence, null);
+  assert.ok(maxOneTransition.findings.includes("FINITE_TASK_POST_MERGE_FINAL_SOURCE_INVALID"));
 });
 test("finite amendment resolver: path 33 and changed line 4501 fail", () => {
   const path33 = wave1AmendmentResolution({ candidate: wave1Candidate({ changedPaths: [...wave1Candidate().changedPaths, "_lib/not-authorized.ts"] }) });
@@ -4101,7 +4437,7 @@ test("finite amendment resolver: future reserved amendments require one bounded 
   reservedLease.artifactReservation.pathGlobs[reservedLease.artifactReservation.pathGlobs.indexOf("_lib/**")] = "_lib/@(accessEntitlements).ts";
   assert.ok(validateFiniteTaskLeaseRegistry(reservedBaseWildcard).includes("FINITE_TASK_LEASE_MALFORMED"));
   reservedLease.amendmentMaximum.maximumAmendments = 0;
-  assert.equal(validateFiniteTaskLeaseRegistry(reservedBaseWildcard).includes("FINITE_TASK_LEASE_MALFORMED"), false);
+  assert.equal(validateFiniteTaskLeaseRegistry(reservedBaseWildcard).includes("FINITE_TASK_LEASE_MALFORMED"), true);
   const unusableCapacity = structuredClone(canonicalTruth.finiteTaskLeases);
   unusableCapacity.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).maximumFiles = 30;
   assert.ok(validateFiniteTaskLeaseRegistry(unusableCapacity).includes("FINITE_TASK_LEASE_AMENDMENT_POLICY_UNAVAILABLE"));
@@ -4149,10 +4485,26 @@ test("finite lifecycle: amendment-capable tasks require supplied live final-sour
     implementationBranch: legacyRecord.activeTaskBinding.implementationBranch,
     featureId: legacyRecord.activeTaskBinding.featureId,
   });
-  legacyLease.amendmentMaximum = { maximumAmendments: 0, maximumFiles: 0, maximumLines: 0 };
+  delete legacyLease.amendmentMaximum;
   const legacy = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord });
   assert.equal(legacy.liveFinalEvidenceRequired, false);
   assert.equal(legacy.mergeEligible, true);
+  const baseOnlyRecord = structuredClone(record);
+  const baseOnlyLease = finiteTaskLeaseFor(baseOnlyRecord.finiteTaskLeases, {
+    implementationPr: baseOnlyRecord.activeTaskBinding.implementationPr,
+    implementationBranch: baseOnlyRecord.activeTaskBinding.implementationBranch,
+    featureId: baseOnlyRecord.activeTaskBinding.featureId,
+  });
+  baseOnlyLease.amendmentMaximum = { maximumAmendments: 0, maximumFiles: baseOnlyLease.scopeBudget.maximumFiles, maximumChangedLines: baseOnlyLease.scopeBudget.maximumChangedLines };
+  const omittedBaseOnly = evaluateProtectedMainAdvancement({ ...shared, record: baseOnlyRecord });
+  assert.equal(omittedBaseOnly.liveFinalEvidenceRequired, true);
+  assert.equal(omittedBaseOnly.mergeEligible, false);
+  const plainBaseOnly = evaluateProtectedMainAdvancement({ ...shared, record: baseOnlyRecord, finiteTaskFinalSourceEligibility: { mergeEligible: true, candidateHead, candidateTree } });
+  assert.equal(plainBaseOnly.mergeEligible, false);
+  assert.ok(plainBaseOnly.findings.includes("FINITE_TASK_IMPLEMENTATION_LIFECYCLE_AUTHORITY_INVALID"));
+  const wrongLeaseLifecycle = evaluateProtectedMainAdvancement({ ...shared, record: baseOnlyRecord, finiteTaskFinalSourceEligibility: observed.transition.lifecycle });
+  assert.equal(wrongLeaseLifecycle.mergeEligible, false);
+  assert.ok(wrongLeaseLifecycle.findings.includes("FINITE_TASK_IMPLEMENTATION_LIFECYCLE_AUTHORITY_INVALID"));
   const controlRuntime = { ...shared.finiteTaskRuntime, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", candidateKind: "ASSURANCE_CONTROL_SOURCE_ONLY", terminal: false, mergeAuthorityGranted: false, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, sourceOnlyEligible: true, providerDependentEligible: false, candidateEvaluation: { evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", sourceOnly: true, productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false } };
   const control = evaluateProtectedMainAdvancement({ ...shared, record: legacyRecord, finiteTaskRuntime: controlRuntime });
   assert.equal(control.mergeEligible, false); assert.equal(control.candidateBaseStatus, "ASSURANCE_CONTROL_SOURCE_ONLY"); assert.equal(control.nextRequiredAction, "CONTINUE_ASSURANCE_CONTROL_SOURCE_VALIDATION");

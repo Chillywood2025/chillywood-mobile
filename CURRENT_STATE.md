@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `5e595e684f4dcc9454eee5065066e1b48d20e3eb` / tree `e89be3a2987952152560ebb46bdffcf0ea094028`.
+- Protected authority checkpoint: `0f4354fce5097be478ed83d86f2e4dead6391bef` / tree `17ee73617f35e1f22a01b9ee3e7b2ea7aec0d154`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
 - Latest merged implementation: PR #229, `698871780a7610f677fdec1929d85389594d080a`; merge `5e595e684f4dcc9454eee5065066e1b48d20e3eb`.

@@ -87,6 +87,10 @@
         "authorizedPrRiskDomains": ["Cognitive", "LiveKit", "database-RLS"]
       },
       {
+        "featureId": "media-upload-image-manipulation",
+        "authorizedPrRiskDomains": ["media-storage"]
+      },
+      {
         "featureId": "moderation-reporting",
         "authorizedPrRiskDomains": ["database-RLS"]
       },
@@ -97,6 +101,10 @@
       {
         "featureId": "payouts-stripe-connect",
         "authorizedPrRiskDomains": ["money-payouts"]
+      },
+      {
+        "featureId": "protected-media-playback",
+        "authorizedPrRiskDomains": ["media-storage"]
       },
       {
         "featureId": "revenuecat-premium",

@@ -238,6 +238,45 @@ const trustedFiniteTaskProjectionFixture = () => {
     }),
   };
 };
+const mediaFiniteTaskProjectionFixture = ({
+  featureId = "media-upload-image-manipulation",
+  observedChangedPaths = [
+    "components/creator-media/creator-video-card.tsx",
+    "supabase/functions/media-storage/index.ts",
+  ],
+  taskPolicy = policy,
+} = {}) => {
+  const finiteTaskRegistry = structuredClone(admissionFixture().truthRecord.finiteTaskLeases);
+  const lease = finiteTaskRegistry.tasks[0];
+  const allowedPaths = [...new Set([...observedChangedPaths, "eas.json"])].sort();
+  lease.featureId = featureId;
+  lease.domain = featureId;
+  lease.allowedPaths = allowedPaths;
+  lease.scopeBudget = { maximumFiles: allowedPaths.length, maximumChangedLines: 200 };
+  lease.artifactReservation = {
+    ...lease.artifactReservation,
+    allowedDomains: [featureId],
+    pathGlobs: allowedPaths,
+    maximumFiles: allowedPaths.length,
+    maximumLines: 200,
+  };
+  const effectiveReservationResolution = resolveFiniteTaskEffectiveReservation({
+    registry: finiteTaskRegistry,
+    lease,
+    comments: [],
+    commentsPaginationComplete: true,
+  });
+  return {
+    effectiveReservationResolution,
+    finiteTaskPrRiskAuthority: deriveFiniteTaskPrRiskAuthority({
+      effectiveReservationResolution,
+      registry,
+      policy: taskPolicy,
+      observedChangedPaths: [...observedChangedPaths].sort(),
+      observedCanonicalChangedLines: 40,
+    }),
+  };
+};
 const finiteTaskAuthorityFor = (fixture) => {
   const value = trustedFiniteTaskProjectionFixture();
   return {
@@ -269,6 +308,53 @@ test("policy bundles reference registered features and known high-risk domains",
 test("finite-task risk policy covers every legacy bundle without changing legacy semantics", () => {
   const mapped = new Map(policy.finiteTaskFeatureRiskProjection.featureRiskMappings.map((entry) => [entry.featureId, entry.authorizedPrRiskDomains]));
   for (const bundle of policy.featureDomainBundles) assert.deepEqual(mapped.get(bundle.featureId), bundle.allowedHighRiskDomains);
+});
+
+test("finite-task upload and protected-playback features authorize only exact mapped media-storage paths", () => {
+  const cases = [
+    ["media-upload-image-manipulation", ["components/creator-media/creator-video-card.tsx", "supabase/functions/media-storage/index.ts"]],
+    ["protected-media-playback", ["app/player/[id].tsx", "workers/premium-media-access/worker.mjs"]],
+  ];
+  for (const [featureId, observedChangedPaths] of cases) {
+    const value = mediaFiniteTaskProjectionFixture({ featureId, observedChangedPaths });
+    assert.equal(value.effectiveReservationResolution.ok, true, stableJson(value.effectiveReservationResolution.findings));
+    assert.equal(value.finiteTaskPrRiskAuthority.ok, true, stableJson(value.finiteTaskPrRiskAuthority.findings));
+    assert.equal(value.finiteTaskPrRiskAuthority.primaryFeatureId, featureId);
+    assert.deepEqual(value.finiteTaskPrRiskAuthority.affectedFeatureIds, [featureId]);
+    assert.deepEqual(value.finiteTaskPrRiskAuthority.authorizedPrRiskDomains, ["media-storage"]);
+    assert.deepEqual(value.finiteTaskPrRiskAuthority.observedPrRiskDomains, ["media-storage"]);
+  }
+});
+
+test("finite-task media features reject unrelated reserved high-risk paths", () => {
+  for (const featureId of ["media-upload-image-manipulation", "protected-media-playback"]) {
+    const value = mediaFiniteTaskProjectionFixture({ featureId });
+    const result = deriveFiniteTaskPrRiskAuthority({
+      effectiveReservationResolution: value.effectiveReservationResolution,
+      registry,
+      policy,
+      observedChangedPaths: ["eas.json"],
+      observedCanonicalChangedLines: 1,
+    });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.observedPrRiskDomains, ["release-OTA"]);
+    assert.deepEqual(result.unauthorizedObservedPrRiskDomains, ["release-OTA"]);
+    assert.ok(result.findings.includes("ASSURANCE_FINITE_TASK_PR_RISK_SCOPE_UNAUTHORIZED"));
+  }
+});
+
+test("finite-task media mappings cannot be widened to universal high-risk authority", () => {
+  const hostile = structuredClone(policy);
+  for (const mapping of hostile.finiteTaskFeatureRiskProjection.featureRiskMappings
+    .filter(({ featureId }) => ["media-upload-image-manipulation", "protected-media-playback"].includes(featureId))) {
+    mapping.authorizedPrRiskDomains = [...policyHighRiskDomains];
+  }
+  for (const featureId of ["media-upload-image-manipulation", "protected-media-playback"]) {
+    const value = mediaFiniteTaskProjectionFixture({ featureId, taskPolicy: hostile });
+    assert.equal(value.finiteTaskPrRiskAuthority.ok, false);
+    assert.ok(value.finiteTaskPrRiskAuthority.findings.includes("ASSURANCE_FINITE_TASK_PR_RISK_POLICY_INVALID"));
+    assert.ok(value.finiteTaskPrRiskAuthority.findings.includes("ASSURANCE_FINITE_TASK_PR_RISK_UNIVERSAL_AUTHORITY_FORBIDDEN"));
+  }
 });
 
 test("trusted finite-task authority preserves the nine affected features and projects risk separately", () => {
