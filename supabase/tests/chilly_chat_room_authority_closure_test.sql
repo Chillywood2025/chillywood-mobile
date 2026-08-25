@@ -1,5 +1,5 @@
 begin;
-select plan(140);
+select plan(142);
 
 -- Contract and ACL surface (1-15).
 select has_function('public', 'can_access_chat_thread', array['uuid'], '1. exact chat membership helper exists');
@@ -126,6 +126,19 @@ values (
   'a1111111-1111-4111-8111-111111111101',
   'a1111111-1111-4111-8111-111111111111'
 );
+update auth.sessions
+set not_after = now() - interval '1 second'
+where id = 'a1111111-1111-4111-8111-111111111101';
+set local role authenticated;
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"a1111111-1111-4111-8111-111111111111","session_id":"a1111111-1111-4111-8111-111111111101"}', true);
+select ok(
+  not public.can_access_chat_thread('aa111111-1111-4111-8111-111111111111'),
+  '17d. a retained time-box-expired session cannot retain member thread authority'
+);
+reset role;
+update auth.sessions
+set not_after = null
+where id = 'a1111111-1111-4111-8111-111111111101';
 set local role authenticated;
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"c3333333-3333-4333-8333-333333333333","session_id":"c3333333-3333-4333-8333-333333333301"}', true);
 select ok(not public.can_access_chat_thread('aa111111-1111-4111-8111-111111111111'), '18. creator/navigation claims cannot substitute for membership');
@@ -1278,6 +1291,27 @@ select is(
   'exact_paid_seat_viewer_authority',
   '89. LiveKit resolves the same exact paid viewer authority'
 );
+reset role;
+update auth.sessions
+set not_after = now() - interval '1 second'
+where id = 'b2222222-2222-4222-8222-222222222201';
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select is(
+  public.resolve_watch_party_livekit_viewer_authority(
+    'CLOSURESEAT',
+    'b2222222-2222-4222-8222-222222222222',
+    'b2222222-2222-4222-8222-222222222201'
+  ) ->> 'reason',
+  'viewer_session_authority_invalid',
+  '89a. a retained time-box-expired session cannot mint a LiveKit viewer proof'
+);
+reset role;
+update auth.sessions
+set not_after = null
+where id = 'b2222222-2222-4222-8222-222222222201';
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select ok(
   (public.resolve_watch_party_livekit_viewer_authority(
     'CLOSURESEAT',

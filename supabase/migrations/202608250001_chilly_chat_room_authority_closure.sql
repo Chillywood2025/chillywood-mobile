@@ -33,6 +33,21 @@ begin
     return false;
   end if;
 
+  -- Supabase may retain an Auth session row after its explicit timebox has
+  -- elapsed. Row existence therefore is not current-session authority.
+  if not exists (
+    select 1
+    from auth."sessions" session_row
+    where session_row."id"::text = v_session_generation
+      and session_row."user_id" = v_user_id
+      and (
+        session_row."not_after" is null
+        or session_row."not_after" > now()
+      )
+  ) then
+    return false;
+  end if;
+
   begin
     v_readback := public."wave1_session_authority_readback"();
   exception when others then
@@ -901,6 +916,10 @@ begin
           from auth."sessions" session_row
           where session_row."id" = p_session_generation
             and session_row."user_id" = p_user_id
+            and (
+              session_row."not_after" is null
+              or session_row."not_after" > now()
+            )
         )
       )
     )

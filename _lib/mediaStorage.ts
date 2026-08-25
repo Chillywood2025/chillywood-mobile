@@ -1,6 +1,7 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
+import { resolveMediaUploadSizeBytes } from "./mediaUploadSize";
 import { SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 
 export type MediaStorageProvider = "supabase" | "s3" | "cloudflare_r2";
@@ -10,6 +11,10 @@ export type MediaStorageObject = {
   provider: MediaStorageProvider;
   bucket: string;
   objectKey: string;
+};
+
+export type UploadedMediaStorageObject = MediaStorageObject & {
+  sizeBytes: number;
 };
 
 type SignedUploadResponse = MediaStorageObject & {
@@ -336,25 +341,6 @@ const assertUploadResponseOk = async (response: Response, attemptIndex = SLOW_DO
   throw new Error(toText(body) || "Unable to upload this media file.");
 };
 
-async function uploadFileToSignedUrl(input: {
-  uploadUrl: string;
-  uploadHeaders: SignedUploadResponse["uploadHeaders"];
-  uri: string;
-  mimeType: string;
-  fileName?: string | null;
-  sizeBytes?: number | null;
-}) {
-  const preparedUpload = await prepareUploadUri(input);
-  try {
-    await uploadPreparedFileToSignedUrl({
-      ...input,
-      uri: preparedUpload.uri,
-    });
-  } finally {
-    await preparedUpload.cleanup();
-  }
-}
-
 async function prepareUploadUri(input: {
   uri: string;
   mimeType: string;
@@ -471,23 +457,37 @@ export async function uploadFileToMediaStorage(input: {
   mimeType: string;
   fileName?: string | null;
   sizeBytes?: number | null;
-}): Promise<MediaStorageObject> {
-  const upload = await createSignedMediaUpload({
-    surfaceType: input.surfaceType,
-    objectKey: input.objectKey,
-    mimeType: input.mimeType,
-    sizeBytes: input.sizeBytes,
-  });
+  maximumSizeBytes?: number | null;
+  tooLargeMessage?: string;
+}): Promise<UploadedMediaStorageObject> {
+  const preparedUpload = await prepareUploadUri(input);
+  let upload: SignedUploadResponse | null = null;
+  let verifiedSizeBytes: number | null = null;
   let putCompleted = false;
 
   try {
-    await uploadFileToSignedUrl({
+    const sizeBytes = await resolveMediaUploadSizeBytes({
+      providedSizeBytes: input.sizeBytes,
+      readSizeBytes: async () => {
+        const info = await FileSystem.getInfoAsync(preparedUpload.uri);
+        return info.exists && "size" in info ? info.size : null;
+      },
+      maximumSizeBytes: input.maximumSizeBytes,
+      tooLargeMessage: input.tooLargeMessage,
+    });
+    upload = await createSignedMediaUpload({
+      surfaceType: input.surfaceType,
+      objectKey: input.objectKey,
+      mimeType: input.mimeType,
+      sizeBytes,
+    });
+    await uploadPreparedFileToSignedUrl({
       uploadUrl: upload.uploadUrl,
       uploadHeaders: upload.uploadHeaders,
-      uri: input.uri,
+      uri: preparedUpload.uri,
       mimeType: input.mimeType,
       fileName: input.fileName,
-      sizeBytes: input.sizeBytes,
+      sizeBytes,
     });
     putCompleted = true;
 
@@ -498,18 +498,16 @@ export async function uploadFileToMediaStorage(input: {
       objectKey: upload.objectKey,
     });
     const expectedMimeType = toText(input.mimeType).toLowerCase().split(";", 1)[0]?.trim();
-    const expectedSizeBytes = Number(input.sizeBytes);
     if (
       verified.observedMimeType !== expectedMimeType
-      || !Number.isSafeInteger(expectedSizeBytes)
-      || expectedSizeBytes <= 0
-      || verified.observedSizeBytes !== expectedSizeBytes
+      || verified.observedSizeBytes !== sizeBytes
     ) {
       throw new Error("Uploaded media did not match its verified reservation.");
     }
+    verifiedSizeBytes = verified.observedSizeBytes;
 
   } catch (error) {
-    if (putCompleted) {
+    if (putCompleted && upload) {
       await deleteStoredMediaObject({
         surfaceType: input.surfaceType,
         provider: upload.provider,
@@ -518,11 +516,16 @@ export async function uploadFileToMediaStorage(input: {
       }).catch(() => undefined);
     }
     throw error;
+  } finally {
+    await preparedUpload.cleanup();
   }
+
+  if (!upload || verifiedSizeBytes === null) throw new Error("Media upload is not available right now.");
 
   return {
     provider: upload.provider,
     bucket: upload.bucket,
     objectKey: upload.objectKey,
+    sizeBytes: verifiedSizeBytes,
   };
 }

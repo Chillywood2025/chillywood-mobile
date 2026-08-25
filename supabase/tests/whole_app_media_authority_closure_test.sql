@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(51);
+select plan(52);
 
 select is(public.media_scan_public_safe('clean'), true,
   'only an explicit clean result is public-safe');
@@ -122,7 +122,36 @@ select is(
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   'the verified upload is bound to the exact media record'
 );
+
+insert into public.media_upload_reservations (
+  owner_user_id, surface_type, storage_provider, storage_bucket,
+  storage_object_key, expected_mime_type, expected_size_bytes, status,
+  expires_at, observed_mime_type, observed_size_bytes, verified_at
+) values (
+  '11111111-1111-4111-8111-111111111111', 'creator_video', 'cloudflare_r2',
+  'chillywood-media-origin',
+  '11111111-1111-4111-8111-111111111111/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/source.mp4',
+  'video/mp4', 2048, 'verified', transaction_timestamp() + interval '1 hour',
+  'video/mp4', 2048, transaction_timestamp()
+);
 set local role authenticated;
+
+select throws_ok($sql$
+  insert into public.videos (
+    id, owner_id, title, visibility, moderation_status,
+    storage_provider, storage_bucket, storage_object_key, storage_path,
+    mime_type, file_size_bytes
+  ) values (
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    '11111111-1111-4111-8111-111111111111',
+    'Missing size source', 'draft', 'clean', 'cloudflare_r2',
+    'chillywood-media-origin',
+    '11111111-1111-4111-8111-111111111111/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/source.mp4',
+    '11111111-1111-4111-8111-111111111111/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/source.mp4',
+    'video/mp4', null
+  )
+$sql$, '42501', 'creator_video_verified_upload_required',
+  'creator source metadata must preserve the exact provider-observed size');
 
 select lives_ok($sql$
   update public.videos

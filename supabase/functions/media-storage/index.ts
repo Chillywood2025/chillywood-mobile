@@ -785,7 +785,7 @@ const hasExactDeleteObjectProvenance = async (
   return (!legacyError && exactLegacy === true) || !!tombstone?.id;
 };
 
-const hasExactDeletedDeliveryTombstone = async (
+const hasExactAttachedUploadAuthorityForDelete = async (
   adminClient: SupabaseClient,
   input: {
     ownerUserId: string;
@@ -799,18 +799,20 @@ const hasExactDeletedDeliveryTombstone = async (
   if (!input.recordId) return false;
   const { data, error } = await adminClient
     .from("media_upload_reservations")
-    .select("id")
+    .select("id,status,verified_at,attached_at,deleted_at")
     .eq("owner_user_id", input.ownerUserId)
     .eq("surface_type", input.surfaceType)
     .eq("storage_provider", input.provider)
     .eq("storage_bucket", input.bucket)
     .eq("storage_object_key", input.objectKey)
     .eq("attached_record_id", input.recordId)
-    .eq("status", "deleted")
-    .not("deleted_at", "is", null)
+    .in("status", ["verified", "deleted"])
     .limit(1)
     .maybeSingle();
-  return !error && !!data?.id;
+  if (error || !data?.id || !data.attached_at) return false;
+  return data.status === "verified"
+    ? !!data.verified_at
+    : data.status === "deleted" && !!data.deleted_at;
 };
 
 const userHasActiveEntitlement = async (
@@ -977,7 +979,7 @@ const canDeleteCreatorVideo = async (
   const video = await readCreatorVideoForObject(adminClient, recordId, provider, bucket, objectKey, false);
   if (!video) {
     if (!recordId) return objectKeyOwner(objectKey) === user.id;
-    return hasExactDeletedDeliveryTombstone(adminClient, {
+    return hasExactAttachedUploadAuthorityForDelete(adminClient, {
       ownerUserId: user.id,
       surfaceType: "creator_video",
       provider,
@@ -1214,7 +1216,7 @@ const canDeleteSocialAttachment = async (
   const attachment = await readSocialAttachmentForObject(adminClient, recordId, provider, bucket, objectKey);
   if (!attachment) {
     if (!recordId) return objectKeyOwner(objectKey) === user.id;
-    return hasExactDeletedDeliveryTombstone(adminClient, {
+    return hasExactAttachedUploadAuthorityForDelete(adminClient, {
       ownerUserId: user.id,
       surfaceType: "social_attachment",
       provider,

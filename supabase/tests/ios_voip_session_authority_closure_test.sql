@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(40);
 
 select has_column('public', 'user_voip_push_tokens', 'account_id', 'VoIP tokens carry exact account identity');
 select has_column('public', 'user_voip_push_tokens', 'session_generation', 'VoIP tokens carry exact auth session generation');
@@ -13,6 +13,17 @@ select has_function('public', 'whole_app_read_deliverable_ios_voip_tokens', arra
 select ok(has_function_privilege('authenticated', 'public.whole_app_register_ios_voip_push_token(uuid,uuid,uuid,text,text,text,text,text,text,text)', 'EXECUTE'), 'authenticated sessions may request exact registration');
 select ok(not has_function_privilege('authenticated', 'public.whole_app_revoke_ios_voip_push_ownership(uuid,uuid,uuid,text,text,text,text,text)', 'EXECUTE'), 'JWT-independent revocation stays service-only');
 select ok(not has_function_privilege('authenticated', 'public.whole_app_read_deliverable_ios_voip_tokens(uuid)', 'EXECUTE'), 'authenticated clients cannot read raw deliverable tokens');
+select ok(
+  pg_get_functiondef('public.whole_app_register_ios_voip_push_token(uuid,uuid,uuid,text,text,text,text,text,text,text)'::regprocedure)
+    not like '%whole-app-ios-voip-authority%'
+  and pg_get_functiondef('public.whole_app_revoke_ios_voip_push_ownership(uuid,uuid,uuid,text,text,text,text,text)'::regprocedure)
+    not like '%whole-app-ios-voip-authority%'
+  and pg_get_functiondef('public.whole_app_register_ios_voip_push_token(uuid,uuid,uuid,text,text,text,text,text,text,text)'::regprocedure)
+    like '%whole-app-ios-voip-install:%'
+  and pg_get_functiondef('public.whole_app_revoke_ios_voip_push_ownership(uuid,uuid,uuid,text,text,text,text,text)'::regprocedure)
+    like '%whole-app-ios-voip-install:%',
+  'anonymous revocation and registration serialize only the exact install instead of one global lifecycle lock'
+);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -75,6 +86,45 @@ select is(
   1,
   'service dispatch sees one exact live-session token'
 );
+
+update auth.sessions
+set not_after = now() - interval '1 second'
+where id = 'a1111111-1111-4111-8111-111111111101';
+select throws_ok(
+  $$select public.whole_app_register_ios_voip_push_token(
+    'a1111111-1111-4111-8111-111111111111',
+    'a1111111-1111-4111-8111-111111111111',
+    'a1111111-1111-4111-8111-111111111101',
+    'ios-voip-install-1', 'development', repeat('1',64), repeat('a',64), 'expired:register', null, null
+  )$$,
+  'P0001',
+  'ios_voip_session_binding_mismatch',
+  'a retained time-box-expired session cannot register a PushKit token'
+);
+select throws_ok(
+  $$select public.whole_app_ios_voip_push_readback(
+    'a1111111-1111-4111-8111-111111111111',
+    'a1111111-1111-4111-8111-111111111111',
+    'a1111111-1111-4111-8111-111111111101',
+    'ios-voip-install-1', 'development'
+  )$$,
+  'P0001',
+  'ios_voip_session_binding_mismatch',
+  'a retained time-box-expired session cannot read back PushKit authority'
+);
+select is(
+  (select count(*)::integer from public.whole_app_read_deliverable_ios_voip_tokens('a1111111-1111-4111-8111-111111111111')),
+  0,
+  'a retained time-box-expired session is not deliverable to APNs'
+);
+select ok(
+  (select enabled and ownership_state = 'ACCOUNT_BOUND'
+   from public.user_voip_push_tokens where install_id = 'ios-voip-install-1'),
+  'session expiry blocks delivery without converting a reversible timebox into destructive token state'
+);
+update auth.sessions
+set not_after = null
+where id = 'a1111111-1111-4111-8111-111111111101';
 
 select throws_ok(
   $$select public.whole_app_register_ios_voip_push_token(
