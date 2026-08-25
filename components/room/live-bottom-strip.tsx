@@ -2,7 +2,6 @@ import { CameraView } from "expo-camera";
 import React from "react";
 import {
     FlatList,
-    Image,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 
 import { getInitials, getParticipantMediaUri } from "../../_lib/watch-party/room-shared";
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 export type LiveBottomStripParticipant = {
   id: string;

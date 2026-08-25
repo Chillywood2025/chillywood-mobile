@@ -12,7 +12,12 @@ export type NativeCallsModule = {
   addListener(eventName: "onNativeCallEvent", listener: (event: NativeCallEvent) => void): { remove(): void };
   removeAllListeners(eventName: "onNativeCallEvent"): void;
   isBuildEnabledAsync(): Promise<boolean>;
-  startVoipRegistrationAsync(): Promise<boolean>;
+  startVoipRegistrationAsync(
+    userId: string,
+    accountId: string,
+    sessionGeneration: string,
+    installId: string,
+  ): Promise<boolean>;
   stopVoipRegistrationAsync(): Promise<boolean>;
   getPendingEventsAsync(): Promise<NativeCallEvent[]>;
   reportIncomingCallAsync(payload: Record<string, unknown>): Promise<string>;

@@ -11,6 +11,14 @@ Latest external status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and `do
 - verified sender email: `no-reply@chillywoodstream.com`
 The latest 2026-06-10 rerun first reproduced a stale SMTP-key failure (`535 Authentication failed` plus Supabase Auth recovery `500 unexpected_failure` / `Error sending recovery email`). The Brevo SMTP key was then rotated locally, Supabase Auth SMTP was patched/read back with secrets redacted, direct SMTP auth passed, and a recovery dispatch returned `200 {}`. Direct Brevo smoke email then delivered and was opened, proving Brevo/domain/Gmail delivery outside Supabase Auth. The remaining app-path issue was hosted Supabase Auth template configuration: first stale generic `Reset Your Password` recovery subject/content, then a branded template that still used `{{ .ConfirmationURL }}`. User screenshot proved that generated a Supabase verify link with `redirect_to=https://chillywoodstream.com` and opened the public policy site. The hosted recovery and confirmation templates are now patched/read-backed with `Chi'llywood` branding plus direct TokenHash app links. The app route contract is corrected. June 12 source audit proved repeated owner-inbox reset emails were triggered by Google Play automated app-access/pre-launch crawling of the forgot-password flow from Google proxy IPs; future proof must use a disposable non-admin recovery-test inbox, not the owner's personal/internal tester inbox.
 
+August 25 source-security correction: active signup and recovery source now uses
+exact `https://chillywoodstream.com` Universal/App Links. The older direct
+`chillywoodmobile://` TokenHash links were claimable by another installed app
+and are no longer an authority-bearing contract. Applying the revised templates
+and exact redirect allowlist in hosted Supabase, then proving them on installed
+iOS and Android builds, remains `BLOCKED_EXTERNAL`; this repository change did
+not mutate hosted Auth configuration.
+
 June 12 App Access containment: Play Console Sign in details now uses disposable non-admin account `play-reviewer-app-access@chillywoodstream.com` instead of the owner's inbox, with the password stored only in the local macOS Keychain item `chillywood-play-reviewer-app-access`. The automated Android compatibility-testing switch for sign-in details is off and saved. If password recovery proof is repeated, use this disposable account or another approved disposable inbox, never the owner/internal tester inbox.
 
 This is account email only. It is not marketing email, newsletter email, production money activation, payout activation, LiveKit work, or a replacement for Supabase Auth.
@@ -19,13 +27,18 @@ This is account email only. It is not marketing email, newsletter email, product
 
 | Auth action | App call | Redirect |
 | --- | --- | --- |
-| Confirm signup | `supabase.auth.signUp` in `app/(auth)/signup.tsx` | `chillywoodmobile://auth/callback` |
-| Reset password | `supabase.auth.resetPasswordForEmail` in `app/(auth)/login.tsx` | `chillywoodmobile://reset-password` |
-| Magic link / OTP | No current app caller | Planned: `chillywoodmobile://auth/callback` |
-| Invite user | No current app caller | Use `chillywoodmobile://auth/callback` or onboarding route after product approval |
-| Email change | No current app caller | Use `chillywoodmobile://auth/callback` or settings confirmation route after product approval |
+| Confirm signup | `supabase.auth.signUp` in `app/(auth)/signup.tsx` | `https://chillywoodstream.com/auth-callback` |
+| Reset password | `supabase.auth.resetPasswordForEmail` in `app/(auth)/forgot-password.tsx` | `https://chillywoodstream.com/reset-password` |
+| Magic link / OTP | No current app caller | Planned: `https://chillywoodstream.com/auth-callback` |
+| Invite user | No current app caller | Use an exact verified HTTPS route after product approval |
+| Email change | No current app caller | Use an exact verified HTTPS route after product approval |
 
-`app/_layout.tsx` routes `chillywoodmobile://reset-password`, `chillywoodmobile://auth/callback`, `chillywoodmobile://auth/confirm`, and legacy `chillywoodmobile://auth-callback` into safe app screens. Token-like params are stripped from route analytics.
+`app/_layout.tsx` records exact HTTPS origin provenance before Expo Router turns
+the URL into a local route. Auth callback and reset handlers reject credential
+inputs without that provenance. `chillywoodmobile://reset-password`,
+`chillywoodmobile://auth/callback`, and legacy custom routes remain compatible
+only as navigation-only links with no TokenHash, code, or session credentials.
+Token-like params remain stripped from route analytics.
 
 ## Sender Recommendation
 
@@ -101,22 +114,25 @@ If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appe
 2. For each template, set the subject from `docs/auth-email-templates/SUBJECTS.md`.
 3. Paste the matching HTML body from `docs/auth-email-templates/*.html`.
 4. Paste the matching text fallback from `docs/auth-email-templates/*.txt` if the dashboard surface supports it.
-5. For Confirm signup and Reset password, preserve the direct `chillywoodmobile://...token_hash={{ .TokenHash }}` app links instead of `{{ .ConfirmationURL }}`. The generated ConfirmationURL can fall back to `https://chillywoodstream.com` and land on the public policy site if the redirect is missing or rejected.
+5. For Confirm signup and Reset password, preserve the exact direct `https://chillywoodstream.com/...token_hash={{ .TokenHash }}` Universal/App Links instead of a claimable custom scheme. The generated ConfirmationURL can fall back to the Site URL and land on a public policy page if the redirect is missing or rejected.
 6. Preserve `{{ .ConfirmationURL }}` for other action links unless a route-specific mobile contract is explicitly implemented, and preserve `{{ .Token }}` for reauthentication codes.
 7. Save one template at a time and send a test where Supabase supports it.
 
 ## Redirect Allowlist
 
-Supabase Authentication redirect URLs must include:
+Supabase Authentication redirect URLs must include exact active entries:
 
-- `chillywoodmobile://auth/callback`
-- `chillywoodmobile://auth/confirm`
-- `chillywoodmobile://auth-callback` while legacy links are still tolerated
-- `chillywoodmobile://reset-password`
-- official web fallback URL if needed, such as `https://chillywoodstream.com`
+- `https://chillywoodstream.com/auth-callback`
+- `https://chillywoodstream.com/reset-password`
+- official Site URL `https://chillywoodstream.com` only as the non-credential fallback
 - local dev URLs only when actively needed for development
 
-Avoid broad wildcards unless explicitly approved. If a verification email lands on a policy page, the likely causes are missing `emailRedirectTo` in the app call, missing allowlist entry, or a Site URL fallback.
+Remove authority-bearing custom-scheme redirects after installed-version
+compatibility is confirmed. They may temporarily remain allowlisted only for
+navigation-only legacy behavior; templates and app calls must never send them a
+TokenHash, code, or session credential. Avoid broad wildcards. If a verification
+email lands on a policy page, the likely causes are missing `emailRedirectTo` in
+the app call, a missing exact allowlist entry, or a Site URL fallback.
 
 ## Management API Example
 
@@ -133,12 +149,14 @@ Do not commit `$SUPABASE_MANAGEMENT_TOKEN`, SMTP credentials, service-role keys,
 
 - Signup email is from `Chi'llywood`.
 - Signup subject is `Confirm your Chi'llywood account`.
-- Signup CTA opens the app through `chillywoodmobile://auth/callback?token_hash=...&type=email`.
+- Signup CTA opens the app through `https://chillywoodstream.com/auth-callback?token_hash=...&type=email`.
 - Confirmed signup returns to login or signed-in state according to app behavior.
 - Forgot-password email is from `Chi'llywood` (`no-reply@chillywoodstream.com` in the current config).
 - Reset subject is `Reset your Chi'llywood password`.
 - Signup copy is set to `Chi'llywood`.
-- Reset CTA opens `chillywoodmobile://reset-password?token_hash=...&type=recovery`.
+- Reset CTA opens `https://chillywoodstream.com/reset-password?token_hash=...&type=recovery`.
+- A `chillywoodmobile://` URL carrying TokenHash, code, or session credentials fails closed.
+- Credential-free custom-scheme auth routes remain navigation-only.
 - Reset email does not show a Supabase verify link with `redirect_to=https://chillywoodstream.com`.
 - Reset success returns to login.
 - Expired/invalid links show safe Chi'llywood copy.

@@ -16,10 +16,34 @@ values
   ('4bbbbbbb-2222-4bbb-8bbb-222222222222', false, false)
 on conflict (id) do nothing;
 
-select set_config('request.jwt.claim.sub', '41111111-1111-4111-8111-111111111111', true);
+insert into auth.sessions (id, user_id)
+values
+  ('41111111-1111-4111-8111-111111111101', '41111111-1111-4111-8111-111111111111'),
+  ('42222222-2222-4222-8222-222222222201', '42222222-2222-4222-8222-222222222222'),
+  ('43333333-3333-4333-8333-333333333301', '43333333-3333-4333-8333-333333333333'),
+  ('44444444-4444-4444-8444-444444444401', '44444444-4444-4444-8444-444444444444'),
+  ('45555555-5555-4555-8555-555555555501', '45555555-5555-4555-8555-555555555555'),
+  ('46666666-6666-4666-8666-666666666601', '46666666-6666-4666-8666-666666666666'),
+  ('47777777-7777-4777-8777-777777777701', '47777777-7777-4777-8777-777777777777'),
+  ('48888888-8888-4888-8888-888888888801', '48888888-8888-4888-8888-888888888888'),
+  ('49999999-9999-4999-8999-999999999901', '49999999-9999-4999-8999-999999999999'),
+  ('4aaaaaaa-1111-4aaa-8aaa-111111111101', '4aaaaaaa-1111-4aaa-8aaa-111111111111'),
+  ('4bbbbbbb-2222-4bbb-8bbb-222222222201', '4bbbbbbb-2222-4bbb-8bbb-222222222222')
+on conflict (id) do nothing;
+
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"41111111-1111-4111-8111-111111111111","session_id":"41111111-1111-4111-8111-111111111101"}',
+  true
+);
 
 insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by)
-values ('4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'direct', 'atomic-call-pair', '41111111-1111-4111-8111-111111111111');
+values (
+  '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'direct',
+  '41111111-1111-4111-8111-111111111111::42222222-2222-4222-8222-222222222222',
+  '41111111-1111-4111-8111-111111111111'
+);
 
 insert into public.chat_thread_members (thread_id, user_id)
 values
@@ -46,7 +70,11 @@ select is((select count(*)::integer from public.chat_call_invites where thread_i
 select is((select count(*)::integer from public.chat_call_events where thread_id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and event_type = 'started'), 1, 'one started event is created');
 select is((select active_communication_room_id from public.chat_threads where id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), 'ATOMIC1', 'winning room is attached to the thread');
 
-select set_config('request.jwt.claim.sub', '42222222-2222-4222-8222-222222222222', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"42222222-2222-4222-8222-222222222222","session_id":"42222222-2222-4222-8222-222222222201"}',
+  true
+);
 insert into call_begin_results
 values (
   'second',
@@ -67,8 +95,8 @@ select is((select status from public.communication_rooms where room_id = 'ATOMIC
 
 insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by)
 values
-  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'direct', 'busy-established-pair', '45555555-5555-4555-8555-555555555555'),
-  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', 'direct', 'busy-overlap-pair', '44444444-4444-4444-8444-444444444444');
+  ('4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'direct', '45555555-5555-4555-8555-555555555555::46666666-6666-4666-8666-666666666666', '45555555-5555-4555-8555-555555555555'),
+  ('4ccccccc-cccc-4ccc-8ccc-cccccccccccc', 'direct', '44444444-4444-4444-8444-444444444444::45555555-5555-4555-8555-555555555555', '44444444-4444-4444-8444-444444444444');
 
 insert into public.chat_thread_members (thread_id, user_id)
 values
@@ -114,7 +142,11 @@ set
   active_call_type = 'voice'
 where id = '4bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-select set_config('request.jwt.claim.sub', '44444444-4444-4444-8444-444444444444', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"44444444-4444-4444-8444-444444444444","session_id":"44444444-4444-4444-8444-444444444401"}',
+  true
+);
 insert into call_begin_results
 values (
   'busy',
@@ -167,9 +199,9 @@ select is(
 
 insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by)
 values
-  ('4ddddddd-dddd-4ddd-8ddd-dddddddddddd', 'direct', 'stale-established-pair', '48888888-8888-4888-8888-888888888888'),
-  ('4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'direct', 'stale-overlap-pair', '47777777-7777-4777-8777-777777777777'),
-  ('4fffffff-ffff-4fff-8fff-ffffffffffff', 'direct', 'same-thread-stale-pair', '4aaaaaaa-1111-4aaa-8aaa-111111111111');
+  ('4ddddddd-dddd-4ddd-8ddd-dddddddddddd', 'direct', '48888888-8888-4888-8888-888888888888::49999999-9999-4999-8999-999999999999', '48888888-8888-4888-8888-888888888888'),
+  ('4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'direct', '47777777-7777-4777-8777-777777777777::48888888-8888-4888-8888-888888888888', '47777777-7777-4777-8777-777777777777'),
+  ('4fffffff-ffff-4fff-8fff-ffffffffffff', 'direct', '4aaaaaaa-1111-4aaa-8aaa-111111111111::4bbbbbbb-2222-4bbb-8bbb-222222222222', '4aaaaaaa-1111-4aaa-8aaa-111111111111');
 
 insert into public.chat_thread_members (thread_id, user_id)
 values
@@ -217,7 +249,11 @@ values
   );
 alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
 
-select set_config('request.jwt.claim.sub', '47777777-7777-4777-8777-777777777777', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"47777777-7777-4777-8777-777777777777","session_id":"47777777-7777-4777-8777-777777777701"}',
+  true
+);
 insert into call_begin_results
 values (
   'stale-cross-thread',
@@ -229,7 +265,11 @@ select is((select payload #>> '{invite,status}' from call_begin_results where la
 select is((select status from public.communication_rooms where room_id = 'STALEACTIVE'), 'active', 'false-busy guard does not mutate historical room state');
 select is((select active_communication_room_id from public.chat_threads where id = '4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'), 'STALECANDIDATE', 'cross-thread candidate becomes the authoritative room');
 
-select set_config('request.jwt.claim.sub', '4aaaaaaa-1111-4aaa-8aaa-111111111111', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"4aaaaaaa-1111-4aaa-8aaa-111111111111","session_id":"4aaaaaaa-1111-4aaa-8aaa-111111111101"}',
+  true
+);
 insert into call_begin_results
 values (
   'stale-same-thread',
@@ -253,7 +293,11 @@ select throws_ok(
   'legacy reverse-direction insert cannot create a competing ringing call'
 );
 
-select set_config('request.jwt.claim.sub', '43333333-3333-4333-8333-333333333333', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"43333333-3333-4333-8333-333333333333","session_id":"43333333-3333-4333-8333-333333333301"}',
+  true
+);
 select throws_ok(
   $$select public.begin_chilly_chat_call('4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'ATOMIC3', 'voice')$$,
   'chat_call_thread_access_required',

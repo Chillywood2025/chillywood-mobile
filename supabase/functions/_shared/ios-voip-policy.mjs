@@ -31,8 +31,15 @@ export const buildIosVoipTopic = (bundleIdentifier) => {
 export const buildIosVoipApnsPayload = (input) => {
   const callInviteId = toText(input.callInviteId);
   const threadId = toText(input.threadId);
+  const recipientUserId = toText(input.recipientUserId);
+  const recipientAccountId = toText(input.recipientAccountId);
+  const recipientSessionGeneration = toText(input.recipientSessionGeneration);
+  const recipientInstallId = toText(input.recipientInstallId);
   const action = toText(input.action).toLowerCase() || "incoming";
-  if (!callInviteId || !threadId) throw new Error("invalid_voip_payload_scope");
+  if (!callInviteId || !threadId || !recipientUserId || recipientAccountId !== recipientUserId
+    || !recipientSessionGeneration || !recipientInstallId) {
+    throw new Error("invalid_voip_payload_scope");
+  }
   if (action !== "incoming") throw new Error("non_incoming_voip_payload_denied");
 
   const callerName = toText(input.callerName).slice(0, 80) || "Chi'llywood caller";
@@ -48,6 +55,10 @@ export const buildIosVoipApnsPayload = (input) => {
     callerName,
     expiresAt: toText(input.expiresAt),
     path: `/chat/${encodeURIComponent(threadId)}?callInviteId=${encodeURIComponent(callInviteId)}`,
+    recipientAccountId,
+    recipientInstallId,
+    recipientSessionGeneration,
+    recipientUserId,
     threadId,
   };
 };

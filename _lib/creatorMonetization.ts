@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export const CREATOR_MONETIZATION_SETTINGS_TABLE = "monetization_system_settings";
 export const CREATOR_MONETIZATION_PROFILES_TABLE = "creator_monetization_profiles";
@@ -178,22 +179,78 @@ const toCents = (value: unknown) => {
   return Math.max(0, Math.trunc(normalized));
 };
 
-const normalizeCreatorContentAccessResolution = (
+const CREATOR_CONTENT_ALLOW_REASONS = new Set([
+  "owner",
+  "free_content",
+  "purchase_grant",
+  "active_grant",
+  "sandbox_grant",
+]);
+const CREATOR_CONTENT_DENY_REASONS = new Set([
+  "unsupported_content_type",
+  "content_unavailable",
+  "purchase_required",
+]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const createUnknownCreatorContentAccessResolution = (): CreatorContentAccessResolution => ({
+  allowed: false,
+  reason: "resolver_unavailable",
+  requiresPurchase: false,
+  priceCents: null,
+  currency: null,
+  creatorId: null,
+  resolverStatus: "unavailable",
+});
+
+export const normalizeCreatorContentAccessResolution = (
   payload: unknown,
-  fallbackReason = "resolver_unavailable",
 ): CreatorContentAccessResolution => {
-  const body = payload && typeof payload === "object" && !Array.isArray(payload)
-    ? payload as Record<string, unknown>
-    : {};
-  const reason = toText(body.reason) || fallbackReason;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return createUnknownCreatorContentAccessResolution();
+  }
+
+  const body = payload as Record<string, unknown>;
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  const allowed = body.allowed;
+  const requiresPurchase = body.requiresPurchase;
+  const priceCents = body.priceCents;
+  const currency = body.currency;
+  const creatorId = body.creatorId;
+  const optionalFieldsAreWellFormed = (
+    (priceCents == null || (typeof priceCents === "number" && Number.isSafeInteger(priceCents) && priceCents >= 0))
+    && (currency == null || (typeof currency === "string" && /^[a-z]{3}$/.test(currency.trim())))
+    && (creatorId == null || (typeof creatorId === "string" && UUID_PATTERN.test(creatorId.trim())))
+  );
+  const reasonMatchesDecision = allowed === true
+    ? CREATOR_CONTENT_ALLOW_REASONS.has(reason) && requiresPurchase === false
+    : allowed === false
+      ? CREATOR_CONTENT_DENY_REASONS.has(reason)
+        && (requiresPurchase == null || typeof requiresPurchase === "boolean")
+        && (reason !== "purchase_required" || (
+          requiresPurchase === true
+          && typeof priceCents === "number"
+          && Number.isSafeInteger(priceCents)
+          && priceCents > 0
+          && typeof currency === "string"
+          && /^[a-z]{3}$/.test(currency.trim())
+          && typeof creatorId === "string"
+          && UUID_PATTERN.test(creatorId.trim())
+        ))
+      : false;
+
+  if (!reasonMatchesDecision || !optionalFieldsAreWellFormed) {
+    return createUnknownCreatorContentAccessResolution();
+  }
+
   return {
-    allowed: body.allowed === true,
+    allowed: allowed === true,
     reason,
-    requiresPurchase: body.requiresPurchase === true || reason === "purchase_required",
-    priceCents: body.priceCents == null ? null : toCents(body.priceCents),
-    currency: toText(body.currency) || null,
-    creatorId: toText(body.creatorId) || null,
-    resolverStatus: fallbackReason === "resolver_unavailable" ? "unavailable" : "resolved",
+    requiresPurchase: requiresPurchase === true,
+    priceCents: typeof priceCents === "number" ? priceCents : null,
+    currency: typeof currency === "string" ? currency.trim() : null,
+    creatorId: typeof creatorId === "string" ? creatorId.trim() : null,
+    resolverStatus: "resolved",
   };
 };
 
@@ -386,22 +443,21 @@ export async function resolveCreatorContentAccess(options: {
   contentId: string;
 }): Promise<CreatorContentAccessResolution> {
   try {
-    const { data, error } = await monetizationClient.rpc("resolve_creator_content_access", {
-      p_content_type: options.contentType,
-      p_content_id: options.contentId,
-    });
-    if (error) throw error;
-    return normalizeCreatorContentAccessResolution(data, "resolved");
+    const result = await withAuthorityReadDeadline<unknown>(
+      monetizationClient.rpc("resolve_creator_content_access", {
+        p_content_type: options.contentType,
+        p_content_id: options.contentId,
+      }),
+      null,
+    );
+    if (!result || typeof result !== "object" || Array.isArray(result)) {
+      return createUnknownCreatorContentAccessResolution();
+    }
+    const { data, error } = result as { data?: unknown; error?: unknown };
+    if (error) return createUnknownCreatorContentAccessResolution();
+    return normalizeCreatorContentAccessResolution(data);
   } catch {
-    return {
-      allowed: true,
-      reason: "resolver_unavailable",
-      requiresPurchase: false,
-      priceCents: null,
-      currency: null,
-      creatorId: null,
-      resolverStatus: "unavailable",
-    };
+    return createUnknownCreatorContentAccessResolution();
   }
 }
 

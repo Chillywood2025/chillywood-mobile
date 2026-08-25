@@ -19,6 +19,7 @@ const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const notifications = read("_lib/notifications.ts");
 const chillyChatCalls = read("_lib/chillyChatCalls.ts");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
+const chatRoomAuthorityClosure = read("supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql");
 const clearEndedCallMatch = chatLib.match(/export async function clearEndedChatThreadCall[\s\S]*?\n}/);
 const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
 
@@ -65,7 +66,7 @@ add(
   includes(layout, "testID=\"room-safe-incoming-call-leave-answer\"")
     && includes(layout, "onPress={leaveRoomAndAnswer}")
     && includes(layout, "testID=\"app-wide-incoming-call-answer\"")
-    && includes(layout, "onPress={openCall}"),
+    && includes(layout, "void openCall();"),
   "room-safe leave/answer and normal app answer are separate explicit controls",
 );
 add("Reply in Chat routes to chat without answering", includes(layout, "replyInChat") && includes(layout, "`/chat/${threadId}`"), "replyInChat route");
@@ -128,7 +129,9 @@ add(
   "inbox/thread reads clear stale active call state after terminal invite status",
   includes(chatLib, "reconcileActiveChatThreadCallState")
     && includes(chatLib, "shouldClearStaleActiveThreadCall")
-    && includes(chatLib, "hasCurrentChatThreadMembership")
+    && includes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"')
+    && includes(chatRoomAuthorityClosure, 'if not public."can_access_chat_thread"(p_thread_id)')
+    && includes(chatRoomAuthorityClosure, "chat_call_room_identity_mismatch")
     && includes(chatLib, "CHAT_CALL_INVITES_TABLE")
     && includes(chatLib, "inviteStatus === \"ringing\"")
     && includes(chatLib, "activeCommunicationRoomId: undefined"),
@@ -136,9 +139,10 @@ add(
 );
 add(
   "stale active call clearing does not recurse through full thread readback",
-  includes(clearEndedCallBody, "hasCurrentChatThreadMembership")
-    && !includes(clearEndedCallBody, "getChatThread("),
-  "clearEndedChatThreadCall must not call getChatThread because thread readback also reconciles stale calls",
+  includes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"')
+    && !includes(clearEndedCallBody, "getChatThread(")
+    && !includes(clearEndedCallBody, ".from(CHAT_THREADS_TABLE)"),
+  "clearEndedChatThreadCall must use the exact server RPC without recursive readback or direct thread mutation",
 );
 add(
   "room-safe Decline clears active thread call state",

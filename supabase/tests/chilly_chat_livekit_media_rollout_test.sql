@@ -1,5 +1,5 @@
 begin;
-select plan(15);
+select plan(16);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -131,7 +131,7 @@ insert into public.chat_threads (id, thread_kind, participant_pair_key, created_
 values (
   '5aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   'direct',
-  'livekit-rollout-pair',
+  '51111111-1111-4111-8111-111111111111::52222222-2222-4222-8222-222222222222',
   '51111111-1111-4111-8111-111111111111'
 );
 
@@ -180,9 +180,13 @@ select is(
   'the server trigger overrides a client-supplied provider'
 );
 
-update public.chat_call_invites
-set chat_call_media_provider = 'legacy_webrtc'
-where id = '50000000-0000-4000-8000-000000000001';
+select throws_ok(
+  $$update public.chat_call_invites
+    set chat_call_media_provider = 'legacy_webrtc'
+    where id = '50000000-0000-4000-8000-000000000001'$$,
+  'chat_call_invite_binding_immutable',
+  'an attempted transport rewrite is rejected as an immutable invite binding'
+);
 
 select is(
   (

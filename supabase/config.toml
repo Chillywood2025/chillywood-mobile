@@ -24,6 +24,9 @@ verify_jwt = false
 [functions.media-scan-private-access]
 verify_jwt = false
 
+[functions.profile-media-public]
+verify_jwt = false
+
 [functions.media-object-storage-migration]
 verify_jwt = false
 

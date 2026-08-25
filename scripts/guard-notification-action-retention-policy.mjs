@@ -82,16 +82,18 @@ assertIncludes(settings, "nextRegistration = await readCurrentPushRegistration()
 assertIncludes(settings, "onPressRefreshPushRegistration", "Device push Refresh must have a dedicated backend readback handler");
 assertIncludes(settings, "setNotificationSavingKey(\"push-refresh\")", "Device push Refresh must show a busy state");
 assertIncludes(settings, "void onPressRefreshPushRegistration();", "Device push Refresh button must call the dedicated readback handler");
-assertIncludes(deviceTokens, ".eq(\"user_id\", auth.user.id)", "device token status must scope to current user");
-assertIncludes(deviceTokens, ".eq(\"install_id\", installId)", "device token status must scope to current install");
+assertIncludes(deviceTokens, 'userClient.rpc("wave1_push_ownership_readback"', "device token status must use authoritative current-session readback");
+assertIncludes(deviceTokens, "p_install_id: installId", "device token status must bind the exact current install");
+assertIncludes(deviceTokens, "p_platform: platform", "device token status must bind the exact platform");
+assertIncludes(deviceTokens, "p_provider: provider", "device token status must bind the exact provider");
 assertIncludes(deviceTokens, "tokenFingerprint", "device token status must expose fingerprint only");
 assertNotIncludes(deviceTokens, "token: token", "device token status must not return raw push token");
 assertNotIncludes(chatIndex, "creator_money_sale", "Chat must not become creator-money notification ledger");
 assertNotIncludes(chatIndex, "creator_money_purchase", "Chat must not become creator-money notification ledger");
 
 [
-  "Watch-Party Seat Pass",
-  "Seat Pass ready",
+  "watch_party_live_ticket",
+  "Your Seat Pass is ready.",
   "Seat Pass sold",
 ].forEach((needle) => assertIncludes(revenuecatWebhook, needle, "Seat Pass visible notification copy"));
 

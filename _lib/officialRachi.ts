@@ -12,7 +12,7 @@ import {
   type ProfileMediaImageFile,
 } from "./profileMedia";
 import { readProfilePosts, type ProfilePost } from "./profilePosts";
-import { supabase } from "./supabase";
+import { SUPABASE_URL, supabase } from "./supabase";
 import { readUserProfileByUserId } from "./userData";
 
 export type OfficialRachiPostResult = ProfilePost & {
@@ -65,6 +65,18 @@ const getImageFileSize = async (file: ProfileMediaImageFile) => {
 
 const extractOfficialRachiProfileMediaKey = (url?: string | null) => {
   const normalizedUrl = toText(url);
+  const proxyMarker = "/functions/v1/profile-media-public?";
+  const proxyIndex = normalizedUrl.indexOf(proxyMarker);
+  if (proxyIndex >= 0) {
+    const query = normalizedUrl.slice(proxyIndex + proxyMarker.length);
+    const encodedKey = query.split("&").find((part) => part.startsWith("objectKey="))?.slice("objectKey=".length) ?? "";
+    try {
+      const key = decodeURIComponent(encodedKey);
+      return key.startsWith(`${RACHI_PROFILE_MEDIA_PREFIX}/`) ? key : null;
+    } catch {
+      return null;
+    }
+  }
   const marker = `/storage/v1/object/public/${PROFILE_MEDIA_BUCKET}/`;
   const index = normalizedUrl.indexOf(marker);
   if (index < 0) return null;
@@ -80,7 +92,8 @@ const extractOfficialRachiProfileMediaKey = (url?: string | null) => {
 const removeOfficialRachiProfileMediaObject = async (url?: string | null) => {
   const objectKey = extractOfficialRachiProfileMediaKey(url);
   if (!objectKey) return;
-  await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
+  const { error } = await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]);
+  if (error) throw new Error(error.message || "Unable to remove Rachi's previous profile picture.");
 };
 
 const uploadOfficialRachiProfileMedia = async (file: ProfileMediaImageFile) => {
@@ -110,7 +123,7 @@ const uploadOfficialRachiProfileMedia = async (file: ProfileMediaImageFile) => {
     throw new Error(uploadError.message || "Unable to upload Rachi's profile picture right now.");
   }
 
-  const publicUrl = toText(supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectKey).data.publicUrl);
+  const publicUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/profile-media-public?ownerUserId=${RACHI_OFFICIAL_ACCOUNT.userId}&objectKey=${objectKey}`;
   if (!publicUrl) {
     await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
     throw new Error("Unable to prepare Rachi's profile picture for display.");
@@ -207,17 +220,18 @@ export async function chooseOfficialRachiProfileImageFromGallery(input?: {
   if (!file) return null;
 
   const uploaded = await uploadOfficialRachiProfileMedia(file);
+  let saved: OfficialRachiProfileImage;
   try {
-    const saved = await updateOfficialRachiProfileImage({
+    saved = await updateOfficialRachiProfileImage({
       avatarUrl: uploaded.publicUrl,
       reason: "Update official Rachi profile photo from gallery",
     });
-    await removeOfficialRachiProfileMediaObject(input?.previousAvatarUrl);
-    return saved;
   } catch (error) {
     await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([uploaded.objectKey]).catch(() => undefined);
     throw error;
   }
+  await removeOfficialRachiProfileMediaObject(input?.previousAvatarUrl);
+  return saved;
 }
 
 export async function clearOfficialRachiProfileImage(input?: {

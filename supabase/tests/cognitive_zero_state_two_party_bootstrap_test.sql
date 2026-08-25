@@ -1,6 +1,19 @@
 begin;
 select no_plan();
 
+create function pg_temp.set_service_role_test_context()
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claim.sub','',true);
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  if auth.uid() is not null or auth.jwt() ? 'session_id' then
+    raise exception 'service_role_fixture_retained_user_session';
+  end if;
+  return current_setting('request.jwt.claims',true);
+end;
+$$;
+
 select is(
   (
     select count(*)::integer
@@ -89,7 +102,7 @@ select ok(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_bootstrap_level01_canary(
     repeat('1',40),repeat('2',64),repeat('3',64),repeat('4',64),
@@ -116,6 +129,11 @@ insert into auth.users(id, is_sso_user, is_anonymous, email_confirmed_at)
 values
   ('c2000000-0000-0000-0000-000000000001', false, false, now()),
   ('c2000000-0000-0000-0000-000000000002', false, false, now());
+
+insert into auth.sessions(id, user_id)
+values
+  ('c2100000-0000-4000-8000-000000000001', 'c2000000-0000-0000-0000-000000000001'),
+  ('c2100000-0000-4000-8000-000000000002', 'c2000000-0000-0000-0000-000000000002');
 
 insert into public.platform_role_memberships(user_id, email, role, status)
 values
@@ -156,7 +174,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c2000000-0000-0000-0000-000000000002',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000002"}',
+  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000002","session_id":"c2100000-0000-4000-8000-000000000002"}',
   true
 );
 select throws_ok(
@@ -177,7 +195,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001","session_id":"c2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -260,7 +278,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001","session_id":"c2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -277,7 +295,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_record_bootstrap_approval(
     'Chillywood2025/chillywood-mobile',
@@ -348,7 +366,7 @@ select is(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_claim_bootstrap_control_plane(
     fixture.approval_id, fixture.approval_hash,
@@ -437,7 +455,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001","session_id":"c2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -454,7 +472,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_record_bootstrap_evaluator_proof(
     fixture.execution_id, fixture.execution_receipt_hash, repeat('8',64),
@@ -508,7 +526,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001","session_id":"c2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -521,7 +539,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_complete_bootstrap_control_plane(
     fixture.execution_id, fixture.execution_receipt_hash,
@@ -550,7 +568,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001","session_id":"c2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -563,7 +581,7 @@ select is(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select is(
   public.governance_complete_bootstrap_control_plane(
     fixture.execution_id, fixture.execution_receipt_hash,
@@ -680,7 +698,7 @@ select is(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.governance_complete_bootstrap_control_plane(
     fixture.execution_id, fixture.execution_receipt_hash,
@@ -700,7 +718,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c2000000-0000-0000-0000-000000000001',true);
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001"}',
+  '{"role":"authenticated","sub":"c2000000-0000-0000-0000-000000000001","session_id":"c2100000-0000-4000-8000-000000000001"}',
   true
 );
 select throws_ok(

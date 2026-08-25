@@ -86,8 +86,8 @@ assertIncludes(
 );
 assertIncludes(
   chat,
-  "await clearEndedChatThreadCall(thread.threadId);",
-  "Chat thread stale active-call reference cleanup",
+  "await clearEndedChatThreadCall(thread.threadId, existingRoomId);",
+  "Chat thread stale active-call reference cleanup must compare the exact stale room",
 );
 assertIncludes(
   communicationSession,
@@ -97,8 +97,8 @@ assertIncludes(
 
 assertIncludes(
   livekitToken,
-  ".select(\"party_id,host_user_id,room_type,is_active,started_at,updated_at,last_activity_at\")",
-  "LiveKit token room liveness select",
+  ".select(\"party_id,host_user_id,room_type,content_access_rule,is_active,started_at,updated_at,last_activity_at\")",
+  "LiveKit token room liveness and authoritative access-rule select",
 );
 assertIncludes(livekitToken, "isWatchPartyRoomCurrentlyActive(room)", "LiveKit token stale-room check");
 assertIncludes(livekitToken, "error: \"room_expired\"", "LiveKit token room_expired rejection");

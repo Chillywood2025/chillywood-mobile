@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  readExactCurrentSessionAuthority,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
 
 type ReconciliationProvider = "cloudflare_r2" | "hetzner_object_storage" | "hetzner_server";
 type RequestedProvider = ReconciliationProvider | "all_configured";
@@ -160,7 +164,7 @@ const authenticateRequest = async (req: Request, supabaseUrl: string, supabaseAn
 
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) {
+  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
     return { error: json(401, { error: "invalid_session", message: "Supabase could not verify the current user session." }) };
   }
 
@@ -177,31 +181,8 @@ const userHasPlatformRole = async (
   user: { id: string; email: string },
   roles: string[],
 ) => {
-  const userQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("id,role")
-    .eq("status", "active")
-    .in("role", roles)
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (userQuery.data?.id) return { allowed: true, role: toText(userQuery.data.role) };
-  if (!user.email) return { allowed: false, role: null };
-
-  const emailQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("id,role")
-    .eq("status", "active")
-    .in("role", roles)
-    .ilike("email", user.email)
-    .limit(1)
-    .maybeSingle();
-
-  return {
-    allowed: !!emailQuery.data?.id,
-    role: emailQuery.data?.role ? toText(emailQuery.data.role) : null,
-  };
+  const role = await readExactPlatformRole(adminClient, user.id, roles);
+  return { allowed: role !== null, role };
 };
 
 const sumProviderUsage = async (

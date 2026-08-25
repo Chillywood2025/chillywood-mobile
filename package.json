@@ -262,6 +262,7 @@
     "guard:premium-sandbox-policy": "node ./scripts/guard-premium-sandbox-policy.mjs",
     "guard:brand-spelling-policy": "node ./scripts/guard-brand-spelling-policy.mjs",
     "guard:auth-email-branding-policy": "node ./scripts/guard-auth-email-branding-policy.mjs",
+    "proof:application-links": "node ./scripts/proof-application-links.mjs",
     "guard:android-app-links-policy": "node ./scripts/guard-android-app-links-policy.mjs",
     "guard:android-launcher-icon-policy": "node ./scripts/guard-android-launcher-icon-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",

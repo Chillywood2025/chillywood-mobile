@@ -9,6 +9,7 @@ import {
   getMediaStorageProviderBucket,
   normalizeMediaStorageProvider,
   uploadFileToMediaStorage,
+  usesPrivateOriginMediaGateway,
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
@@ -326,7 +327,7 @@ async function createCreatorVideoPlaybackUrl(input: {
   storagePath: string;
   playbackUrl: string;
 }) {
-  if (input.storageProvider === "s3" && input.storageObjectKey) {
+  if (usesPrivateOriginMediaGateway(input.storageProvider) && input.storageObjectKey) {
     return createSignedMediaDownload({
       surfaceType: "creator_video",
       provider: input.storageProvider,
@@ -343,12 +344,12 @@ async function createCreatorVideoThumbnailUrl(input: {
   storageProvider: MediaStorageProvider;
   storageBucket: string;
   thumbStoragePath: string;
-  thumbUrl: string;
 }) {
   const thumbnailPath = toText(input.thumbStoragePath);
-  if (!thumbnailPath) return toText(input.thumbUrl);
+  // Legacy arbitrary URLs had no exact object-version malware-scan binding.
+  if (!thumbnailPath) return "";
 
-  if (input.storageProvider === "s3") {
+  if (usesPrivateOriginMediaGateway(input.storageProvider)) {
     const signedThumbnailUrl = await createSignedMediaDownload({
       surfaceType: "creator_video",
       provider: input.storageProvider,
@@ -390,7 +391,6 @@ async function parseCreatorVideo(
     storageProvider,
     storageBucket,
     thumbStoragePath: toText(row.thumb_storage_path),
-    thumbUrl: toText(row.thumb_url),
   });
 
   return {
@@ -720,7 +720,7 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
     contentType: "creator_video",
     contentId: parsedWithAccess.id,
   });
-  if (paidContentAccess.resolverStatus === "resolved" && !paidContentAccess.allowed) {
+  if (paidContentAccess.resolverStatus !== "resolved" || paidContentAccess.allowed !== true) {
     return {
       ...parsedWithAccess,
       playbackUrl: "",
@@ -767,7 +767,6 @@ export async function uploadCreatorVideo(input: {
   file: CreatorVideoFile;
   title: string;
   description?: string;
-  thumbUrl?: string;
   visibility: CreatorVideoVisibility;
   maxUploadSizeMb?: number | null;
 }): Promise<CreatorVideo> {
@@ -824,7 +823,7 @@ export async function uploadCreatorVideo(input: {
     title,
     description: toText(input.description) || null,
     playback_url: null,
-    thumb_url: toText(input.thumbUrl) || null,
+    thumb_url: null,
     visibility: normalizeVisibility(input.visibility),
     moderation_status: "clean",
     storage_provider: uploadedObject.provider,
@@ -885,7 +884,6 @@ export async function updateCreatorVideoMetadata(
   patch: {
     title?: string;
     description?: string;
-    thumbUrl?: string;
     visibility?: CreatorVideoVisibility;
   },
 ): Promise<CreatorVideo> {
@@ -897,7 +895,6 @@ export async function updateCreatorVideoMetadata(
   };
   if (patch.title !== undefined) update.title = toText(patch.title) || "Untitled Video";
   if (patch.description !== undefined) update.description = toText(patch.description) || null;
-  if (patch.thumbUrl !== undefined) update.thumb_url = toText(patch.thumbUrl) || null;
   if (patch.visibility !== undefined) update.visibility = normalizeVisibility(patch.visibility);
 
   const { data, error } = await supabase
@@ -972,27 +969,34 @@ export async function deleteCreatorVideo(
   const videoId = toText(video.id);
   if (!videoId) return;
 
-  const { error } = await supabase.from("videos").delete().eq("id", videoId);
-  if (error) throw error;
-
   const provider = normalizeMediaStorageProvider(video.storageProvider);
   const objectKey = toText(video.storageObjectKey) || toText(video.storagePath);
   const thumbnailPath = toText(video.thumbStoragePath);
-  if (provider === "s3" && objectKey) {
+  if (usesPrivateOriginMediaGateway(provider) && objectKey) {
     await deleteStoredMediaObject({
       surfaceType: "creator_video",
       provider,
       bucket: toText(video.storageBucket),
       objectKey,
       recordId: videoId,
-    }).catch(() => undefined);
+    });
     if (thumbnailPath) {
-      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([thumbnailPath]).catch(() => undefined);
+      await deleteStoredMediaObject({
+        surfaceType: "creator_video",
+        provider,
+        bucket: toText(video.storageBucket),
+        objectKey: thumbnailPath,
+        recordId: videoId,
+      });
     }
   } else {
     const paths = [toText(video.storagePath), thumbnailPath].filter(Boolean);
     if (paths.length) {
-      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove(paths).catch(() => undefined);
+      const { error: storageError } = await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove(paths);
+      if (storageError) throw storageError;
     }
   }
+
+  const { error } = await supabase.from("videos").delete().eq("id", videoId);
+  if (error) throw error;
 }

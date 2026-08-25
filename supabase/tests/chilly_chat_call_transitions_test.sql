@@ -11,7 +11,12 @@ on conflict (id) do nothing;
 select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
 
 insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by)
-values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'direct', '11111111:22222222', '11111111-1111-1111-1111-111111111111');
+values (
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  'direct',
+  '11111111-1111-1111-1111-111111111111::22222222-2222-2222-2222-222222222222',
+  '11111111-1111-1111-1111-111111111111'
+);
 
 insert into public.chat_thread_members (thread_id, user_id)
 values

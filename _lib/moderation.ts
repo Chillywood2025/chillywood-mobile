@@ -1,8 +1,17 @@
 import type { Json, TablesInsert } from "../supabase/database.types";
+import {
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
+} from "./accountSessionAuthority";
 import { trackEvent } from "./analytics";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import type { PlatformAdminAuditLogRow } from "./platformAudit";
 import { isBetaOperatorIdentity } from "./runtimeConfig";
+import {
+  activePlatformRoleHasAnyPermission,
+  platformRoleStatusAndExpiryAreActive,
+  selectExactActivePlatformRoleRows,
+} from "./platformRoleAuthority";
 import { supabase } from "./supabase";
 import { formatUsernameHandle } from "./usernameHandles";
 
@@ -113,6 +122,7 @@ export type PlatformRoleMembership = {
   email: string | null;
   status: string;
   grantedAt: string | null;
+  expiresAt: string | null;
   permissionKeys: PlatformStaffPermissionKey[];
 };
 
@@ -719,7 +729,15 @@ export function hasPlatformRoleMembership(
   requiredRoles: readonly PlatformRole[],
 ) {
   if (!memberships.length || !requiredRoles.length) return false;
-  return memberships.some((membership) => membership.status === "active" && requiredRoles.includes(membership.role));
+  const now = Date.now();
+  return memberships.some((membership) =>
+    requiredRoles.includes(membership.role) &&
+    platformRoleStatusAndExpiryAreActive(
+      membership.status,
+      membership.expiresAt,
+      now,
+    )
+  );
 }
 
 export function resolvePlatformActorRole(
@@ -784,10 +802,9 @@ export function hasPlatformStaffPermission(
   );
   if (!normalizedRequired.size) return false;
 
+  const now = Date.now();
   for (const membership of memberships) {
-    for (const key of membership.permissionKeys ?? []) {
-      if (normalizedRequired.has(key)) return true;
-    }
+    if (activePlatformRoleHasAnyPermission(membership, normalizedRequired, now)) return true;
   }
   return false;
 }
@@ -833,15 +850,6 @@ export function canAccessLegalRequestIntakeTools(memberships: PlatformRoleMember
   return hasPlatformStaffPermission(memberships, ["legal_request_intake", "legal_review", "legal_ops"]);
 }
 
-const platformMembershipMatchesIdentity = (
-  entry: { user_id?: unknown; email?: unknown },
-  identity: { userId: string; email: string },
-) => {
-  const rowUserId = normalizeText(entry.user_id);
-  const rowEmail = normalizeText(entry.email).toLowerCase();
-  return (!!identity.userId && rowUserId === identity.userId) || (!!identity.email && rowEmail === identity.email);
-};
-
 async function readMyPlatformStaffPermissionKeys(): Promise<PlatformStaffPermissionKey[]> {
   const rpc = supabase.rpc as unknown as (
     fn: string,
@@ -860,24 +868,23 @@ async function readMyPlatformStaffPermissionKeys(): Promise<PlatformStaffPermiss
 }
 
 export async function readMyPlatformRoleMemberships(): Promise<PlatformRoleMembership[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = normalizeText(sessionData.session?.user?.id);
-  const email = normalizeText(sessionData.session?.user?.email).toLowerCase();
-
-  if (!userId && !email) return [];
+  const authority = await readCurrentAccountSessionAuthority();
+  if (!authority || authority.restoreOnly) return [];
+  const userId = authority.userId;
 
   const { data, error } = await supabase
     .from(PLATFORM_ROLE_MEMBERSHIPS_TABLE)
-    .select("id,role,user_id,email,status,granted_at")
+    .select("id,role,user_id,email,status,granted_at,expires_at")
+    .eq("user_id", userId)
     .eq("status", "active")
     .order("granted_at", { ascending: false });
 
   if (error) throw error;
 
   const permissionKeys: PlatformStaffPermissionKey[] = await readMyPlatformStaffPermissionKeys().catch(() => []);
+  if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return [];
 
-  return (data ?? [])
-    .filter((entry) => platformMembershipMatchesIdentity(entry, { userId, email }))
+  return selectExactActivePlatformRoleRows(data ?? [], userId)
     .map((entry) => {
       const role = normalizePlatformRole(entry.role);
       if (!role) return null;
@@ -888,6 +895,7 @@ export async function readMyPlatformRoleMemberships(): Promise<PlatformRoleMembe
         email: normalizeText(entry.email) || null,
         status: normalizeText(entry.status) || "active",
         grantedAt: normalizeText(entry.granted_at) || null,
+        expiresAt: normalizeText(entry.expires_at) || null,
         permissionKeys: [...permissionKeys],
       } satisfies PlatformRoleMembership;
     })
@@ -902,7 +910,7 @@ export async function readPlatformRoleRoster(options?: {
   const limit = normalizePositiveLimit(options?.limit, 12, 50);
   let query = supabase
     .from(PLATFORM_ROLE_MEMBERSHIPS_TABLE)
-    .select("id,role,user_id,email,status,granted_at,granted_by,notes")
+    .select("id,role,user_id,email,status,granted_at,granted_by,notes,expires_at")
     .order("granted_at", { ascending: false })
     .limit(limit);
 
@@ -954,6 +962,7 @@ export async function readPlatformRoleRoster(options?: {
         email: normalizeText(entry.email).toLowerCase() || null,
         status,
         grantedAt: normalizeText(entry.granted_at) || null,
+        expiresAt: normalizeText(entry.expires_at) || null,
         permissionKeys: [] as PlatformStaffPermissionKey[],
         grantedBy: normalizeText(entry.granted_by) || null,
         notes: normalizeText(entry.notes) || null,

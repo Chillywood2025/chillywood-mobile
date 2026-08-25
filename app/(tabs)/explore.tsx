@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   ImageBackground,
   type ImageSourcePropType,
   type ListRenderItem,
@@ -51,6 +50,7 @@ import {
 } from "../../_lib/publicPeopleSearch";
 import { supabase } from "../../_lib/supabase";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import type { Tables } from "../../supabase/database.types";
 
 type TitleRow = Pick<

@@ -35,10 +35,14 @@ assertIncludes(gatewaySource, "streamR2PrivateOriginObject", "Cloudflare R2 priv
 assertIncludes(gatewaySource, "MEDIA_ORIGIN_PRIVATE_ONLY", "Cloudflare R2 private origin must be private-only");
 assertIncludes(gatewaySource, "MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED", "Cloudflare R2 private origin cannot be public playback");
 assertIncludes(gatewaySource, "record_scan_result", "record scan result action exists");
-assertIncludes(gatewaySource, "observed_readable_required", "clean write requires scanner proof");
-assertIncludes(gatewaySource, "decoded_stream_required", "clean write requires decoded stream proof");
+assertIncludes(gatewaySource, "observed_readable_required", "readability result requires probe proof");
+assertIncludes(gatewaySource, "decoded_stream_required", "readability result requires decoded stream proof");
 assertIncludes(gatewaySource, "ffprobe_media_readability_only_not_malware_or_content_moderation", "scanner is not overclaimed");
-assertIncludes(gatewaySource, "media_scan_result_recorded", "redacted audit event is written");
+assertIncludes(gatewaySource, "media_readability_result_recorded", "redacted readability audit event is written");
+assertIncludes(gatewaySource, "malwareScanStateChanged: false", "ffprobe cannot grant malware-clean authority");
+assertIncludes(gatewaySource, "download_scan_job", "claimed scan-job private-origin download exists");
+assertIncludes(gatewaySource, '.eq("status", "scanning")', "scan-job download requires an active lease");
+assertIncludes(gatewaySource, '.eq("claimed_by", workerId)', "scan-job download binds the exact worker");
 assertIncludes(gatewaySource, "noSecretsReturned", "audit response declares no secrets");
 assertNotIncludes(gatewaySource, "downloadUrl,", "gateway must not return a signed download URL field");
 assertNotIncludes(gatewaySource, "uploadUrl,", "gateway must not return an upload URL field");

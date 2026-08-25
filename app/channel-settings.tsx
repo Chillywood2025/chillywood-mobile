@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ImageBackground,
   Linking,
   Modal,
@@ -174,6 +173,7 @@ import {
   type ChannelAudienceMemberSummary,
 } from "../_lib/channelAudience";
 import { useSession } from "../_lib/session";
+import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
 import {
   getCachedMonetizationSnapshot,
   readCreatorPermissions,
@@ -421,7 +421,6 @@ type ChannelVideoEditorState = {
   editingVideoId: string | null;
   title: string;
   description: string;
-  thumbUrl: string;
   visibility: CreatorVideoVisibility;
   accessMode: "free" | "paid";
   priceDollars: string;
@@ -468,7 +467,6 @@ const createEmptyVideoEditorState = (): ChannelVideoEditorState => ({
   editingVideoId: null,
   title: "",
   description: "",
-  thumbUrl: "",
   visibility: "draft",
   accessMode: "free",
   priceDollars: "0.99",
@@ -3826,7 +3824,6 @@ export function ChannelStudioScreen() {
       editingVideoId: video.id,
       title: video.title,
       description: video.description,
-      thumbUrl: video.thumbnailUrl,
       visibility: video.visibility,
       accessMode: paidOffer?.isPaid && (paidOffer.status === "sandbox" || paidOffer.status === "active") ? "paid" : "free",
       priceDollars: paidOffer?.priceCents ? formatCentsAsDollarInput(paidOffer.priceCents) : "0.99",
@@ -3883,7 +3880,6 @@ export function ChannelStudioScreen() {
         const updatedVideo = await updateCreatorVideoMetadata(videoEditor.editingVideoId, {
           title: videoEditor.title,
           description: videoEditor.description,
-          thumbUrl: videoEditor.thumbUrl,
           visibility: videoEditor.visibility,
         });
         savedVideoId = updatedVideo.id;
@@ -3893,7 +3889,6 @@ export function ChannelStudioScreen() {
           file: fileToUpload!,
           title: videoEditor.title,
           description: videoEditor.description,
-          thumbUrl: videoEditor.thumbUrl,
           visibility: videoEditor.visibility,
           maxUploadSizeMb,
         });
@@ -4084,7 +4079,6 @@ export function ChannelStudioScreen() {
           file: selectedClipVideoFile!,
           title,
           description: clipEditor.description,
-          thumbUrl: "",
           visibility: targetVisibility,
           maxUploadSizeMb,
         });
@@ -5132,7 +5126,7 @@ export function ChannelStudioScreen() {
   const brandReadyToPublishCount = brandStudioAssets.filter((asset) => (
     asset.assetState === "draft"
     && (asset.moderationStatus === "pending_review" || ["clean", "reported"].includes(asset.moderationStatus))
-    && ["clean", "manual_review"].includes(asset.scanStatus)
+    && asset.scanStatus === "clean"
   )).length;
   const brandPublished = !!activeBrandProfile?.publishedAt;
   const brandStatusLabel = brandBlockedCount
@@ -5613,14 +5607,6 @@ export function ChannelStudioScreen() {
             value={videoEditor.description}
             onChangeText={(text) => updateVideoEditor({ description: text })}
             multiline
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Thumbnail URL (optional)"
-            placeholderTextColor="#8d8d8d"
-            value={videoEditor.thumbUrl}
-            onChangeText={(text) => updateVideoEditor({ thumbUrl: text })}
-            autoCapitalize="none"
           />
           <Text style={styles.sectionLabel}>Visibility</Text>
           <View style={styles.chipRow}>

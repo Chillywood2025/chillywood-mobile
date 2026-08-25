@@ -22,7 +22,6 @@ import {
     Animated,
     AppState,
     BackHandler,
-    Image,
     ImageBackground,
     type ImageSourcePropType,
     KeyboardAvoidingView,
@@ -42,6 +41,7 @@ import {
 } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import { titles as localTitles } from "../../_data/titles";
 import {
     DEFAULT_APP_CONFIG,

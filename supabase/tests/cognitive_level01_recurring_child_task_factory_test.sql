@@ -1,8 +1,27 @@
 begin;
 select no_plan();
 
+create function pg_temp.set_service_role_test_context()
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claim.sub','',true);
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  if auth.uid() is not null or auth.jwt() ? 'session_id' then
+    raise exception 'service_role_fixture_retained_user_session';
+  end if;
+  return current_setting('request.jwt.claims',true);
+end;
+$$;
+
 insert into auth.users(id, is_sso_user, is_anonymous, email_confirmed_at)
 values ('d0000000-0000-4000-8000-000000000001', false, false, now());
+
+insert into auth.sessions(id, user_id)
+values (
+  'd0100000-0000-4000-8000-000000000001',
+  'd0000000-0000-4000-8000-000000000001'
+);
 
 insert into public.platform_role_memberships(
   user_id, email, role, status
@@ -254,7 +273,7 @@ select ok(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select ok(
   (
     select
@@ -301,7 +320,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"d0000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"d0000000-0000-4000-8000-000000000001","session_id":"d0100000-0000-4000-8000-000000000001"}',
   true
 );
 
@@ -353,7 +372,7 @@ select is(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 
 select throws_ok(
   $$select public.cognitive_level01_issue_recurring_child_task(
@@ -392,7 +411,7 @@ update public.cognitive_level01_schedule_definitions
 set enabled = false
 where id = 'd3000000-0000-4000-8000-000000000001';
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_level01_issue_recurring_child_task(
     (select capability_id from scheduler_factory_fixture where fixture_key='work'),
@@ -418,7 +437,7 @@ set enabled = false, enabled_at = null, disabled_at = transaction_timestamp()
 where task_id = 'd2000000-0000-4000-8000-000000000001'
   and switch_key = 'cognitive_scheduled_level01_enabled';
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_level01_issue_recurring_child_task(
     (select capability_id from scheduler_factory_fixture where fixture_key='work'),
@@ -448,7 +467,7 @@ update public.autonomous_system_emergency_states
 set status = 'emergency_stop', updated_at = transaction_timestamp()
 where system_id = 'product_intelligence_operator';
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_level01_issue_recurring_child_task(
     (select capability_id from scheduler_factory_fixture where fixture_key='work'),
@@ -470,7 +489,7 @@ set status = 'active', updated_at = transaction_timestamp()
 where system_id = 'product_intelligence_operator';
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 update scheduler_factory_fixture
 set result = public.cognitive_level01_issue_recurring_child_task(
   capability_id,
@@ -561,7 +580,7 @@ select ok(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select is(
   (
     public.cognitive_level01_issue_recurring_child_task(
@@ -595,7 +614,7 @@ select is(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_level01_issue_recurring_child_task(
     (select capability_id from scheduler_factory_fixture where fixture_key='work'),
@@ -629,7 +648,7 @@ select throws_ok(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 update scheduler_factory_fixture
 set result = public.cognitive_level01_issue_recurring_child_task(
   capability_id,
@@ -670,7 +689,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"d0000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"d0000000-0000-4000-8000-000000000001","session_id":"d0100000-0000-4000-8000-000000000001"}',
   true
 );
 select public.cognitive_level01_revoke_scheduler_capability(
@@ -680,7 +699,7 @@ select public.cognitive_level01_revoke_scheduler_capability(
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_level01_issue_recurring_child_task(
     (select capability_id from scheduler_factory_fixture where fixture_key='no-work'),

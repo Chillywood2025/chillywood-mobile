@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -32,6 +31,7 @@ import {
 } from "../_lib/peopleSearchNormalization";
 import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publicPeopleSearch";
 import { useSession } from "../_lib/session";
+import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
 
 type CircleAction = "accept" | "decline" | "cancel" | "remove";
 

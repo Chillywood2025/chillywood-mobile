@@ -14,7 +14,7 @@ insert into public.chat_threads (
 ) values (
   '7aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
   'direct',
-  'call-expiry:71111111:72222222',
+  '71111111-1111-1111-1111-111111111111::72222222-2222-2222-2222-222222222222',
   '71111111-1111-1111-1111-111111111111'
 );
 
@@ -27,7 +27,7 @@ insert into public.communication_rooms (
   room_id, room_code, host_user_id, status
 ) values (
   'EXPIRYROOM1',
-  'EXP1',
+  'EXPIRYROOM1',
   '71111111-1111-1111-1111-111111111111',
   'active'
 );

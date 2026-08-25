@@ -16,6 +16,7 @@ const doc = read(docPath);
 const chatThread = read("app/chat/[threadId].tsx");
 const chatLib = read("_lib/chat.ts");
 const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts");
+const callTransition = read("supabase/functions/chilly-chat-call-transition/index.ts");
 const deviceTokens = read("supabase/functions/notification-device-tokens/index.ts");
 const moderationLib = read("_lib/moderation.ts");
 const accountAccessMigration = read("supabase/migrations/20260624171153_wave5_1_account_access_restrictions.sql");
@@ -63,6 +64,16 @@ assert(abuseMigration.includes("create trigger \"enforce_chat_call_invites_abuse
 
 assert(callMigration.includes("public.can_access_chat_thread"), "chat call RLS must remain thread-member scoped");
 assert(callDispatch.includes("thread_membership_required") && callDispatch.includes("not_call_participant"), "call dispatch must validate actor/thread membership");
+assert(
+  callDispatch.includes("readExactCurrentSessionAuthority")
+    && callDispatch.includes("await readExactCurrentSessionAuthority(userClient, userId)"),
+  "user-authorized call dispatch must require the exact current session",
+);
+assert(
+  callTransition.includes("readExactCurrentSessionAuthority")
+    && callTransition.includes("await readExactCurrentSessionAuthority(userClient, actorUserId)"),
+  "call acceptance and terminal transitions must require the exact current session",
+);
 assert(callDispatch.includes("hasAudienceBlock") && callDispatch.includes("audience_block"), "call dispatch must deny blocked relationships");
 assert(callDispatch.includes("isAccountAccessRestricted") && callDispatch.includes("account_access_restricted"), "call dispatch must deny restricted accounts");
 assert(callDispatch.includes("notification_event_dedupes") && callDispatch.includes("duplicate_prevented"), "call notification dedupe must stay present");
@@ -70,7 +81,13 @@ assert(callDispatch.includes("notification_delivery_attempts"), "call notificati
 assert(callDispatch.includes("sanitizeErrorMessage") && callDispatch.includes("ExpoPushToken[redacted]"), "call dispatch must sanitize token/error output");
 assert(!callDispatch.includes("messageBody"), "call/ring dispatch must not include message body payloads");
 
-assert(deviceTokens.includes("token_fingerprint") && deviceTokens.includes("tokenFingerprint"), "device token status must expose fingerprint/status only");
+assert(
+  deviceTokens.includes('userClient.rpc("wave1_push_ownership_readback"')
+    && deviceTokens.includes("p_install_id: installId")
+    && deviceTokens.includes("tokenFingerprint")
+    && deviceTokens.includes('status: result.registered === true ? "registered" : "not_registered"'),
+  "device token status must use exact current-session RPC and expose fingerprint/status only",
+);
 assert(!deviceTokens.includes("return jsonResponse(200, { status: \"ok\", token:"), "device token endpoint must not return raw token");
 
 assert(attachmentPolicyMigration.includes("\"surface_type\" = 'chat_message'"), "chat-message attachment surface policy must stay present");

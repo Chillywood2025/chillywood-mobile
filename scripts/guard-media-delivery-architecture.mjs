@@ -915,7 +915,7 @@ assertIncludes(mediaScanPrivateAccessFunction, "streamS3Object", "scan gateway S
 assertIncludes(mediaScanPrivateAccessFunction, "streamSupabaseStorageObject", "scan gateway Supabase Storage support");
 assertIncludes(mediaScanPrivateAccessFunction, "observed_readable_required", "scan gateway clean write proof requirement");
 assertIncludes(mediaScanPrivateAccessFunction, "ffprobe_media_readability_only_not_malware_or_content_moderation", "scan gateway overclaim guard");
-assertIncludes(mediaScanPrivateAccessFunction, "media_scan_result_recorded", "scan gateway redacted audit event");
+assertIncludes(mediaScanPrivateAccessFunction, "media_readability_result_recorded", "readability gateway redacted audit event");
 assertIncludes(mediaScanPrivateAccessProof, "noLocalServiceRoleRequired", "scan gateway proof no local service role");
 assertIncludes(mediaScanPrivateAccessProof, "noLocalStorageCredentialsRequired", "scan gateway proof no local storage credentials");
 assertIncludes(mediaScanAutomation, "| \"scan_skipped_private\"", "scan automation private skip state");
