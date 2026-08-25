@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { canonicalGitText, classifyGitHubExecutionIdentity, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
-import { deriveFiniteTaskPrRiskAuthority, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
+import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER,
@@ -63,6 +63,7 @@ export {
   verifyOwnerJurisdictionDecisionV2,
   verifyTaskJurisdictionBindingV2,
 };
+export { evaluateDraftSourceReadinessScope };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -816,6 +817,24 @@ const exactSourceSubjects = (root, paths) => canonicalSort([...new Set(paths)]).
   sourceHash: fs.existsSync(path.join(root, sourcePath)) ? crypto.createHash("sha256").update(fs.readFileSync(path.join(root, sourcePath))).digest("hex") : null,
 }));
 
+export function autonomousContractSourceAuthorityObserved(root = REPOSITORY_ROOT, sourcePath = "") {
+  const absolute = path.join(root, sourcePath);
+  if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) return false;
+  const source = fs.readFileSync(absolute, "utf8");
+  if (source.includes("evaluateAutonomousEngineeringRequest")) return true;
+  if (sourcePath !== "scripts/guard-autonomous-systems-contract.mjs") return false;
+  const corePath = "scripts/guard-autonomous-systems-contract-core.mjs";
+  const coreAbsolute = path.join(root, corePath);
+  if (!fs.existsSync(coreAbsolute) || !fs.statSync(coreAbsolute).isFile()) return false;
+  const core = fs.readFileSync(coreAbsolute, "utf8");
+  return source.includes('new URL("./guard-autonomous-systems-contract-core.mjs", import.meta.url)')
+    && source.includes("spawnSync(process.execPath, [core.pathname]")
+    && core.includes('from "./assurance/engineering-closure.mjs"')
+    && core.includes("evaluateAutonomousEngineeringRequest")
+    && core.includes("evaluateAutonomousEngineeringRequest({ implementation: true })")
+    && core.includes("evaluateAutonomousEngineeringRequest({ implementation: true, cognitiveRecommendationSelfClear: true })");
+}
+
 export function deriveRepositoryRelationshipCandidates(root = REPOSITORY_ROOT) {
   const registry = readJson(root, "config/assurance/feature-registry-v1.json");
   const effective = effectiveFeatures(registry);
@@ -844,7 +863,7 @@ export function deriveRepositoryRelationshipCandidates(root = REPOSITORY_ROOT) {
       dataControlTransferred: "trust-boundary and failure-mode slice",
       sources: sharedSourceFilesFor("codex-security-scan-reliability-s0", "autonomous-cognitive-governance").map(({ path: sourcePath }) => sourcePath),
       condition: sharedSourceFilesFor("codex-security-scan-reliability-s0", "autonomous-cognitive-governance").length === 2
-        && sharedSourceFilesFor("codex-security-scan-reliability-s0", "autonomous-cognitive-governance").every(({ path: sourcePath }) => fs.readFileSync(path.join(root, sourcePath), "utf8").includes("evaluateAutonomousEngineeringRequest")),
+        && sharedSourceFilesFor("codex-security-scan-reliability-s0", "autonomous-cognitive-governance").every(({ path: sourcePath }) => autonomousContractSourceAuthorityObserved(root, sourcePath)),
     },
     {
       discoveryRule: "SHARED_SECURITY_OWNER_AUTHORITY",
@@ -1184,11 +1203,29 @@ export function generateCurrentEngineeringTaskReport({ root = REPOSITORY_ROOT, i
   return { ...body, currentTaskReportHash: hashValue(body), baseline, observation };
 }
 
+const trustedDraftSourceReadinessTaskContexts = new WeakMap();
+const registerDraftSourceReadinessTaskContext = (value) => {
+  trustedDraftSourceReadinessTaskContexts.set(value, hashValue(value));
+  return value;
+};
+const draftSourceReadinessTaskContextValid = (value) => value?.type === "DRAFT_SOURCE_READINESS"
+  && value?.source === "EXACT_GITHUB_DRAFT_SOURCE_SCOPE"
+  && value?.taskAuthorization === "UNBOUND"
+  && value?.taskAuthorityGranted === false
+  && value?.finalSourceAuthority === false
+  && value?.mergeAuthorityGranted === false
+  && value?.finalSourceAttestationRequiredAtThisStage === false
+  && value?.sourceScope?.classification === "DRAFT_SOURCE_SCOPE_V1"
+  && value?.sourceScope?.draft === true
+  && value?.sourceScope?.finalSourceAuthority === false
+  && value?.sourceScope?.mergeAuthorityGranted === false
+  && trustedDraftSourceReadinessTaskContexts.get(value) === hashValue(value);
+
 export function deriveEngineeringClosureExecutionMode({ identity = {}, changedPaths = [], taskContext = null, callerMode = null, pendingTerminalTruth = false } = {}) {
   if (callerMode !== null) return { ok: false, mode: null, findings: ["ENGINEERING_CLOSURE_CALLER_MODE_INJECTION_REJECTED"] };
   const exactTruth = stableJson(canonicalSort([...changedPaths])) === stableJson(TERMINAL_TRUTH_PATHS);
   const boundedArchitecture = changedPaths.length > 0 && changedPaths.every((name) => TYPED_CONTEXT_ARCHITECTURE_PATHS.includes(name)) && identity.base === TYPED_CONTEXT_DOCTRINE_MERGE && pendingTerminalTruth;
-  const mode = identity.head === HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead ? "DOCTRINE_BOOTSTRAP_SELF_HOST" : taskContext?.type === "FINITE_TASK_ADMISSION_SUCCESSOR" ? "FINITE_TASK_ADMISSION_SUCCESSOR" : taskContext?.type === "TERMINAL_TRUTH_SUCCESSOR" || exactTruth ? "TERMINAL_TRUTH_SUCCESSOR" : taskContext?.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" || boundedArchitecture ? "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE" : taskContext?.type === "ACTIVE_FINITE_TASK_LEASE" ? "PRODUCT_DOMAIN_TASK" : null;
+  const mode = identity.head === HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead ? "DOCTRINE_BOOTSTRAP_SELF_HOST" : draftSourceReadinessTaskContextValid(taskContext) ? "DRAFT_SOURCE_READINESS" : taskContext?.type === "FINITE_TASK_ADMISSION_SUCCESSOR" ? "FINITE_TASK_ADMISSION_SUCCESSOR" : taskContext?.type === "TERMINAL_TRUTH_SUCCESSOR" || exactTruth ? "TERMINAL_TRUTH_SUCCESSOR" : taskContext?.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" || boundedArchitecture ? "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE" : taskContext?.type === "ACTIVE_FINITE_TASK_LEASE" ? "PRODUCT_DOMAIN_TASK" : null;
   return { ok: Boolean(mode), mode, findings: mode ? [] : ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
 }
 
@@ -1218,10 +1255,15 @@ export function resolveEngineeringClosureTaskContext({
   const readback = pullReadback?.base?.repo ? {
     number: pullReadback.number,
     repository: pullReadback.base.repo.full_name,
+    baseRepository: pullReadback.base.repo.full_name,
     baseRef: pullReadback.base.ref,
     baseSha: pullReadback.base.sha,
+    headRepository: pullReadback.head?.repo?.full_name,
     headRef: pullReadback.head?.ref,
     headSha: pullReadback.head?.sha,
+    mergeCommitSha: pullReadback.merge_commit_sha,
+    draft: pullReadback.draft,
+    updatedAt: pullReadback.updated_at,
     htmlUrl: pullReadback.html_url,
     state: pullReadback.state,
   } : pullReadback;
@@ -1241,7 +1283,33 @@ export function resolveEngineeringClosureTaskContext({
   if (!localMatches || !sourceScope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
   const authorities = observeAuthorities({ identity, tree: sourceTree, scope: sourceScope, currentTruth, root });
   const eligible = [authorities.architectureAuthority, authorities.terminalTruthAuthority, authorities.finiteTaskAuthority, authorities.finiteTaskAdmissionAuthority].filter((authority) => authority?.ok === true);
-  if (eligible.length !== 1) return { ok: false, taskContext: null, findings: [eligible.length > 1 ? "ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS" : "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
+  if (eligible.length > 1) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS"] };
+  if (eligible.length === 0) {
+    const unboundContext = { ok: false, source: "UNBOUND_PR_CONTEXT", findings: ["ASSURANCE_TASK_CONTEXT_UNBOUND"] };
+    const draftSourceReadiness = evaluateDraftSourceReadinessScope({
+      event: trustedEvent,
+      readback,
+      executionIdentity,
+      tree: sourceTree,
+      scope: sourceScope,
+      context: unboundContext,
+      findings: [{ id: "ASSURANCE_TASK_CONTEXT_UNBOUND", status: "BLOCKED_INTERNAL" }],
+    });
+    if (!draftSourceReadiness.ok) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
+    const taskContext = registerDraftSourceReadinessTaskContext({
+      ok: false,
+      type: "DRAFT_SOURCE_READINESS",
+      source: "EXACT_GITHUB_DRAFT_SOURCE_SCOPE",
+      taskAuthorization: "UNBOUND",
+      taskAuthorityGranted: false,
+      finalSourceAuthority: false,
+      mergeAuthorityGranted: false,
+      finalSourceAttestationRequiredAtThisStage: false,
+      sourceScope: draftSourceReadiness.sourceScope,
+      nonBlockingFindings: draftSourceReadiness.nonBlockingFindings,
+    });
+    return { ok: true, taskContext, executionIdentity, findings: [] };
+  }
   return { ok: true, taskContext: eligible[0], executionIdentity, findings: [] };
 }
 
@@ -9259,6 +9327,21 @@ export function buildDoctrineReport(root = REPOSITORY_ROOT) {
   };
 }
 
+export function deriveEngineeringClosureSelfHostGate({ bootstrapMode = false, bootstrapGate = null, mode = null, findings = [] } = {}) {
+  if (bootstrapMode) return bootstrapGate;
+  const uniqueFindings = [...new Set(Array.isArray(findings) ? findings : ["ENGINEERING_CLOSURE_FINDINGS_INVALID"])];
+  return {
+    status: uniqueFindings.length
+      ? "BLOCKED_INTERNAL"
+      : mode === "DRAFT_SOURCE_READINESS"
+        ? "SOURCE_READINESS_ACCEPTABLE"
+        : mode === "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE"
+          ? "ARCHITECTURE_MAINTENANCE_ENGINEERING_CLEAR"
+          : "PREIMPLEMENTATION_ENGINEERING_CLEAR",
+    findings: uniqueFindings,
+  };
+}
+
 function parseOptions(argv) {
   return Object.fromEntries(
     argv.map((item) => {
@@ -9297,8 +9380,18 @@ async function main() {
   const taskContextResolution = resolveEngineeringClosureTaskContext({ localIdentity: identity, scope, currentTruth, eventPath: typeof options["github-event"] === "string" ? options["github-event"] : process.env.GITHUB_EVENT_PATH });
   const modeResult = deriveEngineeringClosureExecutionMode({ identity, changedPaths: scope?.files ?? [], taskContext: taskContextResolution.taskContext, callerMode: options.mode ?? null, pendingTerminalTruth: currentTruth.engineeringDoctrine?.status !== "ACTIVE" && base === TYPED_CONTEXT_DOCTRINE_MERGE });
   const bootstrapMode = modeResult.mode === "DOCTRINE_BOOTSTRAP_SELF_HOST";
+  const draftSourceReadinessMode = modeResult.mode === "DRAFT_SOURCE_READINESS";
+  const draftSourceScope = draftSourceReadinessMode ? taskContextResolution.taskContext?.sourceScope : null;
+  const currentTaskIdentity = draftSourceReadinessMode ? {
+    repository: draftSourceScope.repository,
+    pr: draftSourceScope.pr,
+    branch: draftSourceScope.headRef,
+    head: draftSourceScope.headSha,
+    tree: draftSourceScope.headTree,
+    base: draftSourceScope.baseSha,
+  } : identity;
   const report = bootstrapMode || options.write ? buildDoctrineReport() : null;
-  const currentTaskReport = bootstrapMode ? null : generateCurrentEngineeringTaskReport({ identity, taskContext: { type: modeResult.mode }, changedPaths: scope?.files ?? [] });
+  const currentTaskReport = bootstrapMode ? null : generateCurrentEngineeringTaskReport({ identity: currentTaskIdentity, taskContext: draftSourceReadinessMode ? taskContextResolution.taskContext : { type: modeResult.mode }, changedPaths: scope?.files ?? [] });
   if (options.write) {
     if (!bootstrapMode) throw new Error("DOCTRINE_BASELINE_ARTIFACT_WRITE_FORBIDDEN_OUTSIDE_BOOTSTRAP");
     fs.writeFileSync(graphPath, `${JSON.stringify(graph)}\n`); fs.writeFileSync(reportPath, `${JSON.stringify(report)}\n`);
@@ -9321,8 +9414,8 @@ async function main() {
   const runs = Number(options.determinism ?? 1);
   const hashes = Array.from({ length: runs }, () => hashValue(generateDomainGraph(REPOSITORY_ROOT, { refreshInventory: true })));
   if (new Set(hashes).size !== 1) findings.push("WHOLE_APP_GRAPH_NONDETERMINISTIC");
-  const selfHostGate = bootstrapMode ? runtimeBootstrap?.gate ?? report.bootstrap.gate : { status: findings.length ? "BLOCKED_INTERNAL" : modeResult.mode === "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE" ? "ARCHITECTURE_MAINTENANCE_ENGINEERING_CLEAR" : "PREIMPLEMENTATION_ENGINEERING_CLEAR", findings: [...new Set(findings)] };
-  if (options["self-host"] && !["ENGINEERING_PLAN_DRAFTED", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "ARCHITECTURE_MAINTENANCE_ENGINEERING_CLEAR"].includes(selfHostGate.status)) findings.push(...selfHostGate.findings);
+  const selfHostGate = deriveEngineeringClosureSelfHostGate({ bootstrapMode, bootstrapGate: runtimeBootstrap?.gate ?? report?.bootstrap?.gate ?? null, mode: modeResult.mode, findings });
+  if (options["self-host"] && !["ENGINEERING_PLAN_DRAFTED", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "ARCHITECTURE_MAINTENANCE_ENGINEERING_CLEAR", "SOURCE_READINESS_ACCEPTABLE"].includes(selfHostGate?.status)) findings.push(...(selfHostGate?.findings ?? ["ENGINEERING_CLOSURE_SELF_HOST_GATE_INVALID"]));
   const baseline = currentTaskReport?.baseline ?? validateDoctrineBaselineArtifacts();
   const result = {
     command: "assurance:engineering-closure",
@@ -9330,7 +9423,12 @@ async function main() {
     executionMode: modeResult.mode,
     taskContext: taskContextResolution.taskContext?.type ?? null,
     taskAuthorization: taskContextResolution.taskContext?.taskAuthorization ?? (taskContextResolution.taskContext?.ok === true ? "VALID" : "UNBOUND"),
+    taskAuthorityGranted: draftSourceReadinessMode ? false : taskContextResolution.taskContext?.ok === true,
+    finalSourceAuthority: false,
+    mergeAuthorityGranted: false,
     finalSourceAttestationRequiredAtThisStage: taskContextResolution.taskContext?.finalSourceAttestationRequiredAtThisStage ?? false,
+    sourceScope: draftSourceScope,
+    nonBlockingFindings: draftSourceReadinessMode ? taskContextResolution.taskContext.nonBlockingFindings : [],
     graphBaselineStatus: baseline.graphStatus,
     doctrineReportBaselineStatus: baseline.reportStatus,
     baselineStructuralGraphHash: baseline.baselineStructuralGraphHash,
@@ -9347,7 +9445,7 @@ async function main() {
     inventoryTotals: graph.inventory.totals,
     ownershipGaps: graph.inventory.ownershipGaps,
     determinism: `${runs}/${runs}`,
-    selfHosting: selfHostGate.status,
+    selfHosting: selfHostGate?.status ?? "BLOCKED_INTERNAL",
     computedGate: selfHostGate,
     findings: [...new Set(findings)],
   };
