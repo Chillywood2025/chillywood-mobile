@@ -3263,8 +3263,8 @@ const PHASE1_ADMISSION_WORKFLOW_PATH = ".github/workflows/phase1-admission.yml";
 const PHASE1_READY_MODE = "READY_MERGE_AUTHORITY";
 const PHASE1_ACCEPTABLE_RESULT = "PHASE_1_ACCEPTABLE";
 const aggregatePhase1EvidenceValue = (value) => value?.evidence ?? value?.decision ?? value;
-const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
-const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
+const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "maintenanceStatus", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
+export const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
 
 export function phase1AdmissionPolicyForBase({ identity, root = REPOSITORY_ROOT } = {}) {
   const base = identity?.baseSha;

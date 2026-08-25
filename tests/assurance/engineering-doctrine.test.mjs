@@ -14,7 +14,7 @@ import {
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
-  canonicalGitDiffArgs, canonicalGitDiffHash,
+  canonicalGitDiffArgs, canonicalGitDiffHash, compactAggregatePhase1Evidence,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
@@ -774,6 +774,26 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   const metadataRepair = architectureMaintenanceSubject({ identity: { ...identity, pr: 250, branch: "codex/phase1-metadata-compat-fix-v1" }, tree, scope: metadataScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 });
   assert.deepEqual([metadataRepair.changedPaths, metadataRepair.budget, metadataRepair.capabilities, metadataRepair.currentTruthCompanionIncluded, metadataRepair.reusableByAnotherPr], [PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1], false, false]);
   assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...metadataScope, additions: 73 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE/u);
+});
+
+test("Phase 1 aggregate final-source compactor preserves only the exact maintenance-aware projection", () => {
+  const expectedKeys = [
+    "acceptable", "action", "affectedRiskDomains", "baseRef", "baseSha", "blockingFindingCount", "checkName", "currentRulesetStage", "decisionHash", "deferredExternalCount", "draft", "evaluatorSha", "eventUpdatedAt", "headRef", "headSha", "lifecycleGeneration", "maintenanceStatus", "mergeAuthorityGranted", "mode", "nonBlockingAssuranceFindingCount", "phase1SourceDecisionHash", "pr", "publisherAnchorHash", "publisherProvisioningReadbackHash", "rawFailedLanes", "rawPassedLanes", "repository", "requiredLanes", "result", "runAttempt", "runId", "schemaVersion", "sourceTree",
+  ];
+  const aggregate = Object.fromEntries(expectedKeys.map((key) => [key, `value:${key}`]));
+  aggregate.maintenanceStatus = "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED";
+  aggregate.foreignAuthority = "MUST_NOT_PROJECT";
+  const projected = compactAggregatePhase1Evidence(aggregate);
+  assert.deepEqual(Object.keys(projected).sort(), expectedKeys);
+  assert.equal(projected.maintenanceStatus, "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED");
+  assert.equal(Object.hasOwn(projected, "foreignAuthority"), false);
+
+  const nullMaintenance = compactAggregatePhase1Evidence({ ...aggregate, maintenanceStatus: null });
+  assert.equal(Object.hasOwn(nullMaintenance, "maintenanceStatus"), true);
+  assert.equal(nullMaintenance.maintenanceStatus, null);
+
+  const omittedMaintenance = compactAggregatePhase1Evidence({ ...aggregate, maintenanceStatus: undefined });
+  assert.equal(Object.hasOwn(omittedMaintenance, "maintenanceStatus"), false);
 });
 
 const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, objective = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, branch = "codex/finite-task-lease-amendment-control-plane-repair-v1" } = {}) => {
