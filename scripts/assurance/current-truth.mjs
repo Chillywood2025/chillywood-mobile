@@ -34,6 +34,7 @@ import {
 } from "./lib.mjs";
 import { validateStructuredBinding } from "./active-task.mjs";
 import { architectureDependencyBaselinePolicyV1, observeFiniteTaskGitScope, observeFiniteTaskImplementationLifecycle, observeFiniteTaskPostMergeTransition } from "./engineering-closure.mjs";
+import { phase1AdmissionRulesetCutoverStateValid, resolvePhase1AdmissionRulesetCutoverState } from "./github-main-ruleset-readback.mjs";
 import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
 
 function safeGit(gitArgs, fallback = null) {
@@ -42,6 +43,10 @@ function safeGit(gitArgs, fallback = null) {
   } catch {
     return fallback;
   }
+}
+
+function protectedRulesetContract(ref) {
+  try { return JSON.parse(git(["show", `${ref}:config/assurance/github-main-ruleset-codex-review-v1.json`])); } catch { return null; }
 }
 
 function splitNullTerminated(value) {
@@ -362,6 +367,14 @@ if (mode) {
   }
   const findings = [...headBindings.findings, ...runtimeFindings, ...protectedMainFindings, ...structuredBindingFindings, ...proofTierStatusFindings, ...terminalEvidenceFindings, ...completedMergeFindings, ...reviewPolicyFindings, ...finiteLeaseFindings, ...engineeringDoctrineFindings, ...ownerJurisdictionPolicyFindings, ...architectureDependencyBaselinePolicyFindings, ...finiteTaskPrRiskProjectionPolicyFindings, ...finiteTaskPrRiskAuthorityFindings, ...taskContextArchitectureFindings, ...validateLateReviewSentinelState(record)];
   let providerImplementationSnapshot = null;
+  let phase1AdmissionRulesetCutover = {
+    schemaVersion: 1,
+    contract: "PHASE1_ADMISSION_RULESET_CUTOVER_CURRENT_TRUTH_V1",
+    producer: "CURRENT_TRUTH_DIAGNOSTIC_ONLY",
+    live: false,
+    cutoverLock: "CLOSED",
+    mergeAuthority: false,
+  };
   if (record.liveProviderReadback !== claimFreshness.liveProviderReadback) {
     findings.push({
       id: "ASSURANCE_CURRENT_TRUTH_PROVIDER_FRESHNESS_DERIVATION_MISMATCH",
@@ -393,6 +406,31 @@ if (mode) {
         }
         for (const key of ["latestMergedImplementationPr", "android", "ios", "remoteMigrationHead", "enabledCognitiveSwitches", "enabledSchedules", "effectiveBaselineCount", "blockedProviders"]) {
           if (snapshot[key] !== undefined && JSON.stringify(snapshot[key]) !== JSON.stringify(record[key])) findings.push({ id: `ASSURANCE_CURRENT_TRUTH_${key.toUpperCase()}_STALE`, status: "BLOCKED_INTERNAL" });
+        }
+        const rulesetContract = protectedRulesetContract(remoteMain);
+        const installedAnchor = rulesetContract?.phase1AdmissionPublisherImmutableAnchor;
+        if (installedAnchor) {
+          const cutoverState = await resolvePhase1AdmissionRulesetCutoverState({
+            repository: rulesetContract.repository,
+            identity: { repository: rulesetContract.repository, baseRef: "main", baseSha: remoteMain },
+            anchor: installedAnchor,
+            liveProvisioningReadback: snapshot.phase1AdmissionPublisherProvisioningReadback,
+          });
+          if (!phase1AdmissionRulesetCutoverStateValid(cutoverState)) {
+            const cutoverFindings = cutoverState?.findings?.length ? cutoverState.findings : ["PHASE1_RULESET_CUTOVER_LIVE_STATE_INVALID"];
+            findings.push(...cutoverFindings.map((id) => ({ id, status: "BLOCKED_INTERNAL" })));
+          } else {
+            const aggregateBody = {
+              ...cutoverState,
+              contract: "PHASE1_ADMISSION_RULESET_CUTOVER_LIVE_AGGREGATE_V1",
+              producer: "CURRENT_TRUTH_PROTECTED_LIVE_AGGREGATE_V1",
+              upstreamContract: cutoverState.contract,
+              upstreamProducer: cutoverState.producer,
+              live: true,
+              mergeAuthority: false,
+            };
+            phase1AdmissionRulesetCutover = { ...aggregateBody, aggregateHash: sha256(stableJson(aggregateBody)) };
+          }
         }
       }
     } catch {
@@ -442,6 +480,6 @@ if (mode) {
       blocked: claimFreshness.blockedClaims.map(({ id, freshnessClass, platform, expiresAt }) => ({ id, freshnessClass, platform, expiresAt }))
     },
     taskFreshness,
-    generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, synchronization: protectedMainRuntime, findings
+    generatedDocuments: Object.keys(expectedDocs), headBindings, providerImplementationSnapshot, phase1AdmissionRulesetCutover, synchronization: protectedMainRuntime, findings
   }, [`current truth: ${findings.length ? "FAIL" : "PASS"} — authority checkpoint ${record.protectedMainAuthority.checkpointSha.slice(0, 8)}, observed main ${remoteMain.slice(0, 8)}, remote migration ${record.remoteMigrationHead}`]);
 }

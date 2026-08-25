@@ -7,6 +7,7 @@ import { ROOT, deriveFiniteTaskCandidateObservation, emit, evaluateFiniteTaskCan
 import { git, packet, privateArtifactDirectory, sha256, sha40, sha64, strictOptions, writePrivateFile } from "./efficiency-lib.mjs";
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 import { deriveFiniteTaskPrRiskAuthority } from "./pr-scope-lib.mjs";
+import { phase1AdmissionRulesetCutoverAggregateValid } from "./github-main-ruleset-readback.mjs";
 import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -1228,7 +1229,8 @@ export function activeTask(facts = {}) {
     return { ok: false, findings: ["CODEX_REVIEW_OPTIONAL_ADVISORY_POLICY_INVALID"] };
   }
   const checked = facts.truthCheck ?? (() => {
-    const run = spawnSync(process.execPath, ["scripts/assurance/current-truth.mjs"], {
+    const currentTruthArgs = ["scripts/assurance/current-truth.mjs", ...(facts.providerSnapshot ? ["--provider-mode=read-only", `--provider-snapshot=${facts.providerSnapshot}`] : [])];
+    const run = spawnSync(process.execPath, currentTruthArgs, {
       cwd: ROOT, encoding: "utf8", shell: false
     });
     try {
@@ -1240,6 +1242,13 @@ export function activeTask(facts = {}) {
     const findings = (checked.findings ?? []).map((finding) => finding?.id ?? finding).filter(Boolean);
     return { ok: false, findings: findings.length ? [...new Set(findings)].sort() : ["CURRENT_TRUTH_VALIDATION_FAILED"] };
   }
+  const suppliedCutoverAggregate = checked.phase1AdmissionRulesetCutover;
+  if (suppliedCutoverAggregate?.live === true && !phase1AdmissionRulesetCutoverAggregateValid(suppliedCutoverAggregate)) {
+    return { ok: false, findings: ["PHASE1_RULESET_CUTOVER_CURRENT_TRUTH_AGGREGATE_INVALID"] };
+  }
+  const phase1AdmissionRulesetCutover = phase1AdmissionRulesetCutoverAggregateValid(suppliedCutoverAggregate)
+    ? structuredClone(suppliedCutoverAggregate)
+    : { schemaVersion: 1, contract: "PHASE1_ADMISSION_RULESET_CUTOVER_CURRENT_TRUTH_V1", producer: "CURRENT_TRUTH_DIAGNOSTIC_ONLY", live: false, cutoverLock: "CLOSED", mergeAuthority: false };
 
   const registry = facts.registry ?? readJson("config/assurance/feature-registry-v1.json");
   const resolution = resolveFeature(truth, facts, registry);
@@ -1525,6 +1534,7 @@ export function activeTask(facts = {}) {
   });
   if (!built.ok) return built;
   built.packet.protectedMainRuntime = checked.protectedMainRuntime ?? null;
+  built.packet.phase1AdmissionRulesetCutover = phase1AdmissionRulesetCutover;
   built.packet.engineeringClosure = engineeringPacket ? {
     closureArtifactPath: engineeringLease?.artifactReservation?.closureArtifactPath ?? null,
     allowedDomains: engineeringLease?.artifactReservation?.allowedDomains ?? [],
@@ -1543,7 +1553,7 @@ export function activeTask(facts = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const parsed = strictOptions(process.argv.slice(2), { "--feature": "featureId", "--pre-admission-pr": "preAdmissionPr", "--task-artifact": "taskArtifactPath", "--owner-comment": "ownerCommentId" });
+  const parsed = strictOptions(process.argv.slice(2), { "--feature": "featureId", "--pre-admission-pr": "preAdmissionPr", "--task-artifact": "taskArtifactPath", "--owner-comment": "ownerCommentId", "--provider-snapshot": "providerSnapshot" });
   const preAdmissionRequested = parsed.ok && parsed.values.preAdmissionPr !== undefined;
   const preAdmissionArgumentsValid = preAdmissionRequested
     && /^\d+$/u.test(String(parsed.values.preAdmissionPr))

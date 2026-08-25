@@ -1,4 +1,5 @@
-import { git, sha256, stableJson } from "./lib.mjs";
+import { spawnSync } from "node:child_process";
+import { ROOT, git, sha256, stableJson } from "./lib.mjs";
 
 export const exactHeadCheck = "Chi'llywood / Codex Review Exact Head";
 export const phase1Checks = [
@@ -199,6 +200,302 @@ const observationHash = (observation) => {
   return sha256(stableJson(payload));
 };
 
+export const phase1AdmissionCheck = "Phase 1 / Admission Decision";
+export const phase1RulesetStages = Object.freeze(["PRE_CUTOVER_13_RAW", "STAGE1_AGGREGATE_PLUS_13_RAW", "FINAL_AGGREGATE_ONLY"]);
+export const phase1RulesetGenesis = Object.freeze({ versionId: 46160124, updatedAt: "2026-08-10T23:16:54.635-05:00" });
+export const phase1PublisherAnchorFields = Object.freeze([
+  "schemaVersion", "contract", "sourcePr", "sourceBranch", "sourceHead", "sourceTree", "sourceBase", "sourceMergeSha", "sourceMergeTree",
+  "originalIntentCommentId", "originalIntentBodyHash", "originalIntentSubjectHash", "finalSourceCommentId", "finalSourceBodyHash", "finalSourceSubjectHash",
+  "provisioningReadback", "provisioningReadbackHash", "appId", "clientId", "installationId", "environmentId", "aggregateCheckIntegrationId",
+  "rulesetNodeId", "rulesetProviderUpdatedAt", "prestatePutPayloadSha256", "stage1PutPayloadSha256", "finalPutPayloadSha256",
+  "rollbackPutPayloadSha256", "currentRulesetStage", "anchorHash",
+]);
+const digest = (value) => /^[0-9a-f]{64}$/u.test(value ?? "");
+const sha = (value) => /^[0-9a-f]{40}$/u.test(value ?? "");
+const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
+const cutoverStateBrand = new WeakSet();
+
+const withoutHash = (value, field) => Object.fromEntries(Object.entries(value ?? {}).filter(([key]) => key !== field));
+const stableProvisioningProjection = (readback) => ({
+  schemaVersion: readback?.schemaVersion,
+  contract: readback?.contract,
+  repository: readback?.repository,
+  owner: readback?.owner,
+  originalContractHash: readback?.originalContractHash,
+  app: readback?.app,
+  installation: readback?.installation,
+  environment: readback?.environment,
+  aggregate: readback?.aggregate,
+  ruleset: {
+    id: readback?.ruleset?.id,
+    nodeId: readback?.ruleset?.nodeId,
+    prestatePutPayloadSha256: readback?.ruleset?.prestatePutPayloadSha256,
+    stage1PutPayloadSha256: readback?.ruleset?.stage1PutPayloadSha256,
+    finalPutPayloadSha256: readback?.ruleset?.finalPutPayloadSha256,
+    rollbackPutPayloadSha256: readback?.ruleset?.rollbackPutPayloadSha256,
+  },
+  authority: readback?.authority,
+});
+
+export function phase1PublisherAnchorStructurallyValid(anchor) {
+  const readback = anchor?.provisioningReadback;
+  const ruleset = readback?.ruleset;
+  return Boolean(anchor && typeof anchor === "object" && !Array.isArray(anchor)
+    && same(Object.keys(anchor).sort(), [...phase1PublisherAnchorFields].sort())
+    && anchor.schemaVersion === 1 && anchor.contract === "PHASE1_ADMISSION_PUBLISHER_IMMUTABLE_ANCHOR_V1"
+    && positiveInteger(anchor.sourcePr) && typeof anchor.sourceBranch === "string" && anchor.sourceBranch.length > 0
+    && [anchor.sourceHead, anchor.sourceTree, anchor.sourceBase, anchor.sourceMergeSha, anchor.sourceMergeTree].every(sha)
+    && anchor.sourceTree === anchor.sourceMergeTree
+    && [anchor.originalIntentCommentId, anchor.finalSourceCommentId, anchor.appId, anchor.installationId, anchor.environmentId, anchor.aggregateCheckIntegrationId].every(positiveInteger)
+    && [anchor.originalIntentBodyHash, anchor.originalIntentSubjectHash, anchor.finalSourceBodyHash, anchor.finalSourceSubjectHash,
+      anchor.provisioningReadbackHash, anchor.prestatePutPayloadSha256, anchor.stage1PutPayloadSha256, anchor.finalPutPayloadSha256,
+      anchor.rollbackPutPayloadSha256, anchor.anchorHash].every(digest)
+    && anchor.anchorHash === sha256(stableJson(withoutHash(anchor, "anchorHash")))
+    && readback?.schemaVersion === 1 && readback?.contract === "PHASE1_ADMISSION_PUBLISHER_PROVISIONING_READBACK_V1"
+    && readback?.repository === "Chillywood2025/chillywood-mobile" && readback?.owner === "Chillywood2025"
+    && readback?.readbackHash === sha256(stableJson(withoutHash(readback, "readbackHash")))
+    && anchor.provisioningReadbackHash === readback.readbackHash
+    && anchor.appId === readback?.app?.id && anchor.clientId === readback?.app?.clientId
+    && anchor.installationId === readback?.installation?.id && anchor.environmentId === readback?.environment?.id
+    && anchor.aggregateCheckIntegrationId === readback?.aggregate?.integrationId && anchor.aggregateCheckIntegrationId === anchor.appId
+    && anchor.rulesetNodeId === ruleset?.nodeId && anchor.rulesetProviderUpdatedAt === ruleset?.providerUpdatedAt
+    && anchor.prestatePutPayloadSha256 === ruleset?.prestatePutPayloadSha256
+    && anchor.stage1PutPayloadSha256 === ruleset?.stage1PutPayloadSha256
+    && anchor.finalPutPayloadSha256 === ruleset?.finalPutPayloadSha256
+    && anchor.rollbackPutPayloadSha256 === ruleset?.rollbackPutPayloadSha256
+    && anchor.currentRulesetStage === "PRE_CUTOVER_13_RAW" && ruleset?.stage === anchor.currentRulesetStage
+    && ruleset?.currentPutPayloadSha256 === anchor.prestatePutPayloadSha256 && ruleset?.bypassReadback === "EXPLICIT_EMPTY"
+    && ruleset?.id === 18940814 && readback?.aggregate?.context === phase1AdmissionCheck
+    && readback?.aggregate?.displayOnlyNeverPassing === true && readback?.aggregate?.integrationId === anchor.appId);
+}
+
+function liveProvisioningReadbackValid(anchor, readback) {
+  const ruleset = readback?.ruleset;
+  const expectedCurrentHash = {
+    PRE_CUTOVER_13_RAW: anchor?.prestatePutPayloadSha256,
+    STAGE1_AGGREGATE_PLUS_13_RAW: anchor?.stage1PutPayloadSha256,
+    FINAL_AGGREGATE_ONLY: anchor?.finalPutPayloadSha256,
+  }[ruleset?.stage];
+  return Boolean(phase1PublisherAnchorStructurallyValid(anchor)
+    && readback && typeof readback === "object" && !Array.isArray(readback)
+    && readback.schemaVersion === 1 && readback.contract === "PHASE1_ADMISSION_PUBLISHER_PROVISIONING_READBACK_V1"
+    && readback.readbackHash === sha256(stableJson(withoutHash(readback, "readbackHash")))
+    && same(stableProvisioningProjection(readback), stableProvisioningProjection(anchor.provisioningReadback))
+    && phase1RulesetStages.includes(ruleset?.stage) && ruleset?.currentPutPayloadSha256 === expectedCurrentHash
+    && (ruleset.stage === "FINAL_AGGREGATE_ONLY"
+      ? ["EXPLICIT_APP_PULL_REQUEST_ONLY", "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED"].includes(ruleset.bypassReadback)
+      : ruleset.bypassReadback === "EXPLICIT_EMPTY"));
+}
+
+const rulesetState = (value) => ({
+  id: value?.id,
+  name: value?.name,
+  target: value?.target,
+  source_type: value?.source_type,
+  source: value?.source,
+  enforcement: value?.enforcement,
+  conditions: value?.conditions,
+  rules: value?.rules,
+  bypass_actors: value?.bypass_actors,
+});
+const splitRules = (state) => ({
+  common: (state?.rules ?? []).filter(({ type }) => !["required_status_checks", "update"].includes(type)),
+  status: (state?.rules ?? []).filter(({ type }) => type === "required_status_checks"),
+  update: (state?.rules ?? []).filter(({ type }) => type === "update"),
+});
+const stagePayload = ({ genesis, checks, bypassActors, restrictUpdates }) => {
+  const parts = splitRules(genesis);
+  return {
+    name: genesis?.name,
+    target: genesis?.target,
+    enforcement: genesis?.enforcement,
+    bypass_actors: bypassActors,
+    conditions: genesis?.conditions,
+    rules: [
+      ...(restrictUpdates ? [{ type: "update", parameters: { update_allows_fetch_and_merge: false } }] : []),
+      ...parts.common,
+      { ...parts.status[0], parameters: { ...parts.status[0]?.parameters, required_status_checks: checks } },
+    ],
+  };
+};
+
+function classifyRulesetStage(state, genesis, anchor, { allowHiddenFinal = false } = {}) {
+  const parts = splitRules(state);
+  const genesisParts = splitRules(genesis);
+  const raw = requiredCheckBindings;
+  const aggregate = { context: phase1AdmissionCheck, integration_id: anchor?.aggregateCheckIntegrationId };
+  const exactBypass = [{ actor_id: anchor?.aggregateCheckIntegrationId, actor_type: "Integration", bypass_mode: "pull_request" }];
+  const identityValid = state?.id === 18940814 && state?.name === "main-pr-review-protection" && state?.target === "branch"
+    && state?.source_type === "Repository" && state?.source === "Chillywood2025/chillywood-mobile" && state?.enforcement === "active"
+    && same(state?.conditions, mainBranchCondition) && same(parts.common, genesisParts.common)
+    && parts.status.length === 1 && genesisParts.status.length === 1
+    && same(withoutHash(parts.status[0]?.parameters, "required_status_checks"), withoutHash(genesisParts.status[0]?.parameters, "required_status_checks"));
+  if (!identityValid) return null;
+  const checks = parts.status[0]?.parameters?.required_status_checks;
+  const updateRule = parts.update.length === 1 && (same(parts.update[0], { type: "update" })
+    || same(parts.update[0], { type: "update", parameters: { update_allows_fetch_and_merge: false } }));
+  if (same(checks, raw) && parts.update.length === 0 && same(state?.bypass_actors, [])) return "PRE_CUTOVER_13_RAW";
+  if (same(checks, [...raw, aggregate]) && parts.update.length === 0 && same(state?.bypass_actors, [])) return "STAGE1_AGGREGATE_PLUS_13_RAW";
+  if (same(checks, [aggregate]) && updateRule
+    && (same(state?.bypass_actors, exactBypass) || (allowHiddenFinal && state?.bypass_actors == null))) return "FINAL_AGGREGATE_ONLY";
+  return null;
+}
+
+function cutoverReceipt({ anchor, entry, stage, putPayloadSha256, previousReceiptHash }) {
+  const body = {
+    schemaVersion: 1,
+    contract: "PHASE1_ADMISSION_RULESET_STAGE_RECEIPT_V1",
+    repository: "Chillywood2025/chillywood-mobile",
+    anchorHash: anchor.anchorHash,
+    rulesetId: 18940814,
+    stage,
+    versionId: entry.version_id,
+    providerUpdatedAt: entry.updated_at,
+    actor: entry.actor,
+    putPayloadSha256,
+    providerStateHash: sha256(stableJson(rulesetState(entry.state))),
+    previousReceiptHash,
+  };
+  return { ...body, receiptHash: sha256(stableJson(body)) };
+}
+
+const invalidCutoverState = ({ repository, anchor, liveProvisioningReadback, paginationComplete, findings }) => ({
+  schemaVersion: 1,
+  contract: "PHASE1_ADMISSION_RULESET_CUTOVER_STATE_V1",
+  producer: "PROTECTED_MAIN_RULESET_READBACK_V1",
+  repository,
+  anchorHash: anchor?.anchorHash ?? null,
+  rulesetId: 18940814,
+  currentRulesetStage: liveProvisioningReadback?.ruleset?.stage ?? null,
+  publisherProvisioningReadbackHash: liveProvisioningReadback?.readbackHash ?? null,
+  stageReceiptChainHash: null,
+  cutoverLock: "CLOSED",
+  paginationComplete: paginationComplete === true,
+  findings: [...new Set(findings)].sort(),
+});
+
+export function evaluatePhase1AdmissionRulesetCutoverState({ repository, identity, anchor, liveProvisioningReadback, contract, observation, protectedSourceVerified = false } = {}) {
+  const findings = [];
+  const paginationComplete = observation?.paginationComplete === true;
+  if (repository !== "Chillywood2025/chillywood-mobile" || identity?.repository !== repository || identity?.baseRef !== "main" || !sha(identity?.baseSha)) findings.push("PHASE1_RULESET_CUTOVER_IDENTITY_INVALID");
+  if (!protectedSourceVerified || !phase1PublisherAnchorStructurallyValid(anchor) || !same(contract?.phase1AdmissionPublisherImmutableAnchor, anchor)) findings.push("PHASE1_RULESET_CUTOVER_PROTECTED_ANCHOR_INVALID");
+  if (!liveProvisioningReadbackValid(anchor, liveProvisioningReadback)) findings.push("PHASE1_RULESET_CUTOVER_LIVE_PROVISIONING_INVALID");
+  if (!paginationComplete || !Array.isArray(observation?.history)) findings.push("PHASE1_RULESET_CUTOVER_HISTORY_PAGINATION_INCOMPLETE");
+  const current = observation?.current;
+  if (current?.id !== 18940814 || current?.node_id !== anchor?.rulesetNodeId || current?.updated_at !== liveProvisioningReadback?.ruleset?.providerUpdatedAt) findings.push("PHASE1_RULESET_CUTOVER_CURRENT_RULESET_IDENTITY_INVALID");
+  const history = Array.isArray(observation?.history) ? observation.history : [];
+  const completeHistory = history.every((entry) => positiveInteger(entry?.version_id) && Number.isFinite(Date.parse(entry?.updated_at ?? ""))
+    && positiveInteger(entry?.actor?.id) && entry?.actor?.type === "User" && entry?.state && typeof entry.state === "object");
+  if (!completeHistory || new Set(history.map(({ version_id: versionId }) => versionId)).size !== history.length) findings.push("PHASE1_RULESET_CUTOVER_HISTORY_MALFORMED");
+  const genesisVersionId = phase1RulesetGenesis.versionId;
+  const ordered = [...history].sort((left, right) => Date.parse(left.updated_at) - Date.parse(right.updated_at) || left.version_id - right.version_id);
+  const genesisIndex = ordered.findIndex(({ version_id: versionId }) => versionId === genesisVersionId);
+  const chain = genesisIndex >= 0 ? ordered.slice(genesisIndex) : [];
+  if (contract?.applicationReadback?.rulesetVersionId !== phase1RulesetGenesis.versionId
+    || contract?.applicationReadback?.rulesetUpdatedAt !== phase1RulesetGenesis.updatedAt
+    || genesisIndex < 0 || chain.length === 0 || chain[0]?.updated_at !== phase1RulesetGenesis.updatedAt) findings.push("PHASE1_RULESET_CUTOVER_PRE_GENESIS_MISSING");
+  const genesis = chain[0]?.state;
+  const hashes = genesis ? {
+    PRE_CUTOVER_13_RAW: sha256(stableJson(stagePayload({ genesis, checks: requiredCheckBindings, bypassActors: [], restrictUpdates: false }))),
+    STAGE1_AGGREGATE_PLUS_13_RAW: sha256(stableJson(stagePayload({ genesis, checks: [...requiredCheckBindings, { context: phase1AdmissionCheck, integration_id: anchor?.aggregateCheckIntegrationId }], bypassActors: [], restrictUpdates: false }))),
+    FINAL_AGGREGATE_ONLY: sha256(stableJson(stagePayload({ genesis, checks: [{ context: phase1AdmissionCheck, integration_id: anchor?.aggregateCheckIntegrationId }], bypassActors: [{ actor_id: anchor?.aggregateCheckIntegrationId, actor_type: "Integration", bypass_mode: "pull_request" }], restrictUpdates: true }))),
+  } : {};
+  if (hashes.PRE_CUTOVER_13_RAW !== anchor?.prestatePutPayloadSha256 || hashes.STAGE1_AGGREGATE_PLUS_13_RAW !== anchor?.stage1PutPayloadSha256
+    || hashes.FINAL_AGGREGATE_ONLY !== anchor?.finalPutPayloadSha256 || anchor?.rollbackPutPayloadSha256 !== anchor?.prestatePutPayloadSha256) findings.push("PHASE1_RULESET_CUTOVER_PAYLOAD_HASH_INVALID");
+  const stages = chain.map(({ state }) => classifyRulesetStage(state, genesis, anchor));
+  const currentStage = classifyRulesetStage(rulesetState(current), genesis, anchor, { allowHiddenFinal: liveProvisioningReadback?.ruleset?.bypassReadback === "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED" });
+  const expectedSequence = {
+    PRE_CUTOVER_13_RAW: ["PRE_CUTOVER_13_RAW"],
+    STAGE1_AGGREGATE_PLUS_13_RAW: ["PRE_CUTOVER_13_RAW", "STAGE1_AGGREGATE_PLUS_13_RAW"],
+    FINAL_AGGREGATE_ONLY: ["PRE_CUTOVER_13_RAW", "STAGE1_AGGREGATE_PLUS_13_RAW", "FINAL_AGGREGATE_ONLY"],
+  }[liveProvisioningReadback?.ruleset?.stage];
+  if (!expectedSequence || !same(stages, expectedSequence)) findings.push("PHASE1_RULESET_CUTOVER_STAGE_CHAIN_INVALID");
+  if (currentStage !== liveProvisioningReadback?.ruleset?.stage || !chain.length
+    || !same({ ...rulesetState(current), bypass_actors: chain.at(-1)?.state?.bypass_actors }, rulesetState(chain.at(-1)?.state))) findings.push("PHASE1_RULESET_CUTOVER_LIVE_STAGE_INVALID");
+  const genesisActor = chain[0]?.actor;
+  if (!genesisActor || chain.some(({ actor }) => !same(actor, genesisActor))) findings.push("PHASE1_RULESET_CUTOVER_ACTOR_CHAIN_INVALID");
+  if (findings.length) return invalidCutoverState({ repository, anchor, liveProvisioningReadback, paginationComplete, findings });
+  const receipts = [];
+  for (let index = 0; index < chain.length; index += 1) receipts.push(cutoverReceipt({
+    anchor,
+    entry: chain[index],
+    stage: stages[index],
+    putPayloadSha256: hashes[stages[index]],
+    previousReceiptHash: receipts.at(-1)?.receiptHash ?? null,
+  }));
+  const result = {
+    schemaVersion: 1,
+    contract: "PHASE1_ADMISSION_RULESET_CUTOVER_STATE_V1",
+    producer: "PROTECTED_MAIN_RULESET_READBACK_V1",
+    repository,
+    anchorHash: anchor.anchorHash,
+    rulesetId: 18940814,
+    currentRulesetStage: currentStage,
+    publisherProvisioningReadbackHash: liveProvisioningReadback.readbackHash,
+    stageReceiptChainHash: sha256(stableJson(receipts)),
+    cutoverLock: "OPEN",
+    paginationComplete: true,
+    findings: [],
+  };
+  cutoverStateBrand.add(result);
+  return result;
+}
+
+export function phase1AdmissionRulesetCutoverStateValid(value) {
+  return cutoverStateBrand.has(value) && value?.schemaVersion === 1
+    && value?.contract === "PHASE1_ADMISSION_RULESET_CUTOVER_STATE_V1" && value?.producer === "PROTECTED_MAIN_RULESET_READBACK_V1"
+    && value?.repository === "Chillywood2025/chillywood-mobile" && value?.rulesetId === 18940814
+    && phase1RulesetStages.includes(value?.currentRulesetStage) && digest(value?.anchorHash) && digest(value?.publisherProvisioningReadbackHash)
+    && digest(value?.stageReceiptChainHash) && value?.cutoverLock === "OPEN" && value?.paginationComplete === true
+    && Array.isArray(value?.findings) && value.findings.length === 0;
+}
+
+export function phase1AdmissionRulesetCutoverAggregateValid(value) {
+  const body = withoutHash(value, "aggregateHash");
+  return Boolean(value?.schemaVersion === 1
+    && value?.contract === "PHASE1_ADMISSION_RULESET_CUTOVER_LIVE_AGGREGATE_V1"
+    && value?.producer === "CURRENT_TRUTH_PROTECTED_LIVE_AGGREGATE_V1"
+    && value?.upstreamContract === "PHASE1_ADMISSION_RULESET_CUTOVER_STATE_V1"
+    && value?.upstreamProducer === "PROTECTED_MAIN_RULESET_READBACK_V1"
+    && value?.repository === "Chillywood2025/chillywood-mobile" && value?.rulesetId === 18940814
+    && phase1RulesetStages.includes(value?.currentRulesetStage) && digest(value?.anchorHash)
+    && digest(value?.publisherProvisioningReadbackHash) && digest(value?.stageReceiptChainHash)
+    && value?.cutoverLock === "OPEN" && value?.paginationComplete === true && value?.live === true
+    && value?.mergeAuthority === false && Array.isArray(value?.findings) && value.findings.length === 0
+    && digest(value?.aggregateHash) && value.aggregateHash === sha256(stableJson(body)));
+}
+
+function readGitHubJson(args) {
+  const run = spawnSync("gh", ["api", "--method=GET", ...args], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  if (run.status !== 0) return null;
+  try { return JSON.parse(run.stdout); } catch { return null; }
+}
+
+export function observePhase1AdmissionRulesetHistory(repository = "Chillywood2025/chillywood-mobile") {
+  if (repository !== "Chillywood2025/chillywood-mobile") return { current: null, history: [], paginationComplete: false };
+  const endpoint = `repos/${repository}/rulesets/18940814`;
+  const current = readGitHubJson([endpoint]);
+  const pages = readGitHubJson(["--paginate", "--slurp", `${endpoint}/history?per_page=100`]);
+  if (!current || !Array.isArray(pages) || !pages.every(Array.isArray)) return { current, history: [], paginationComplete: false };
+  const summaries = pages.flat();
+  const history = summaries.map((summary) => readGitHubJson([`${endpoint}/history/${summary?.version_id}`]));
+  const paginationComplete = history.every((entry, index) => entry && entry.version_id === summaries[index]?.version_id
+    && entry.updated_at === summaries[index]?.updated_at && same(entry.actor, summaries[index]?.actor));
+  return { current, history: history.filter(Boolean), paginationComplete };
+}
+
+export async function resolvePhase1AdmissionRulesetCutoverState({ repository, identity, anchor, liveProvisioningReadback } = {}) {
+  let contract = null;
+  let protectedSourceVerified = false;
+  try {
+    contract = JSON.parse(git(["show", `${identity?.baseSha}:config/assurance/github-main-ruleset-codex-review-v1.json`]));
+    git(["merge-base", "--is-ancestor", anchor?.sourceMergeSha, identity?.baseSha]);
+    protectedSourceVerified = same(contract?.phase1AdmissionPublisherImmutableAnchor, anchor);
+  } catch {}
+  const observation = protectedSourceVerified ? observePhase1AdmissionRulesetHistory(repository) : { current: null, history: [], paginationComplete: false };
+  return evaluatePhase1AdmissionRulesetCutoverState({ repository, identity, anchor, liveProvisioningReadback, contract, observation, protectedSourceVerified });
+}
+
 export function validateBootstrapPhase1GithubReadback(observation, now = new Date()) {
   const errors = [];
   const observedAt = Date.parse(observation?.observedAt ?? "");
@@ -317,6 +614,16 @@ export function validateGithubMainRulesetReadback({ contract, authorizationRecei
   const window = exception?.protectionWindow;
   const freshness = readback?.repositorySourceFreshness;
   const add = (id) => errors.push(`github ruleset readback: ${id}`);
+
+  const anchor = contract?.phase1AdmissionPublisherImmutableAnchor;
+  if (!phase1PublisherAnchorStructurallyValid(anchor)
+    || anchor?.anchorHash !== "b59479e0fb714e11c941cf2b7a2304fb1ca721ed930327611be289d3a3260cd2"
+    || anchor?.sourcePr !== 254 || anchor?.sourceBranch !== "codex/phase1-risk-based-admission-v7"
+    || anchor?.sourceHead !== "c1aca873f55b45c72c4932e130dfd2ce8350a601"
+    || anchor?.sourceTree !== "4b6a65c52eb1cd12d0f2a191cfb7064a297fe10f"
+    || anchor?.sourceBase !== "8aa74d0442eb9797900005d3c2dca9709b43c0c8"
+    || anchor?.sourceMergeSha !== "2d40bc75cfad9a28d7534f3dd8593dab63318769"
+    || anchor?.originalIntentCommentId !== 5404284190 || anchor?.finalSourceCommentId !== 5404381682) add("Phase 1 immutable publisher anchor mismatch");
 
   if (contract?.applicationState !== "SOLO_OWNER_OPTIONAL_ADVISORY_APPLIED_AND_READ_BACK_S0"
     || contract?.advisoryStatusCheckExcluded !== exactHeadCheck
