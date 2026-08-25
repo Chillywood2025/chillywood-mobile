@@ -112,6 +112,11 @@ select is(
   'denied legacy bootstrap invocation creates no live control-plane rows'
 );
 
+insert into auth.users(id, is_sso_user, is_anonymous, email_confirmed_at)
+values
+  ('c2000000-0000-0000-0000-000000000001', false, false, now()),
+  ('c2000000-0000-0000-0000-000000000002', false, false, now());
+
 insert into public.platform_role_memberships(user_id, email, role, status)
 values
   ('c2000000-0000-0000-0000-000000000001', null, 'owner', 'active'),

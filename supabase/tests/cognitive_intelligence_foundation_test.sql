@@ -634,12 +634,21 @@ select throws_ok(
 );
 reset role;
 
-insert into auth.users(id,email,is_sso_user,is_anonymous)
-values (
+insert into auth.users(id,email,is_sso_user,is_anonymous,email_confirmed_at)
+values
+(
   '09000000-0000-0000-0000-000000000009',
   'recycled-cognitive-owner@example.invalid',
   false,
-  false
+  false,
+  now()
+),
+(
+  '09000000-0000-0000-0000-000000000008',
+  'original-cognitive-owner@example.invalid',
+  false,
+  false,
+  now()
 );
 insert into public.platform_role_memberships(role,user_id,email,status)
 values
@@ -691,8 +700,8 @@ select is(
 reset role;
 select set_config('request.jwt.claims','{}',true);
 
-insert into auth.users(id,is_sso_user,is_anonymous)
-values ('09000000-0000-0000-0000-000000000001',false,false);
+insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
+values ('09000000-0000-0000-0000-000000000001',false,false,now());
 insert into public.platform_role_memberships(role,user_id,email,status)
 values (
   'operator','09000000-0000-0000-0000-000000000001',

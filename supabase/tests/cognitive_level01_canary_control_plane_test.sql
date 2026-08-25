@@ -173,12 +173,13 @@ select throws_ok(
   'service actor claims cannot cross the closed operation scope'
 );
 
-insert into auth.users(id,email,is_sso_user,is_anonymous)
+insert into auth.users(id,email,is_sso_user,is_anonymous,email_confirmed_at)
 values (
   'b5000000-0000-0000-0000-000000000001',
   'level01-owner@example.invalid',
   false,
-  false
+  false,
+  now()
 );
 insert into public.platform_role_memberships(role,user_id,email,status)
 values (

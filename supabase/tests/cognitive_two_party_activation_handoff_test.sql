@@ -24,6 +24,11 @@ insert into public.intelligence_tasks(
   repeat('a',64), 'two-party-fixture', transaction_timestamp()+interval '2 days'
 );
 
+insert into auth.users(id, is_sso_user, is_anonymous, email_confirmed_at)
+values
+  ('b2000000-0000-0000-0000-000000000001', false, false, now()),
+  ('b2000000-0000-0000-0000-000000000002', false, false, now());
+
 insert into public.platform_role_memberships(user_id, email, role, status)
 values
   ('b2000000-0000-0000-0000-000000000001', null, 'owner', 'active'),
