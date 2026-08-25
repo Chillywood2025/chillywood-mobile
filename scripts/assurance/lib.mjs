@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, verifyPhase1AggregateEvidence } from "./phase1-admission.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const rel = (...parts) => path.join(ROOT, ...parts);
@@ -18,6 +19,33 @@ export const stableValue = (value) => Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]))
     : value;
 export const stableJson = (value, space = 0) => JSON.stringify(stableValue(value), null, space);
+export function phase1AdmissionEvidenceValid({ evidence, liveEvidence = null, repository = "Chillywood2025/chillywood-mobile", pr, branch, head, tree, base } = {}) {
+  if (evidence?.valid === true && evidence?.result === "PASS_13_OF_13") {
+    const { valid: _valid, evidenceHash: suppliedHash, ...body } = evidence;
+    let preCutover = false;
+    try {
+      execFileSync("git", ["cat-file", "-e", `${base}^{commit}`], { cwd: ROOT, stdio: "ignore" });
+      try { execFileSync("git", ["cat-file", "-e", `${base}:.github/workflows/phase1-admission.yml`], { cwd: ROOT, stdio: "ignore" }); }
+      catch { preCutover = true; }
+    } catch {}
+    return preCutover && evidence.classification === "PHASE1_EXACT_HEAD_EVIDENCE_V1"
+      && evidence.repository === repository && evidence.pr === pr && evidence.branch === branch
+      && evidence.baseSha === base
+      && evidence.sourceHead === head && evidence.sourceTree === tree && suppliedHash === sha256(body);
+  }
+  const stored = evidence?.evidence ?? evidence?.decision ?? evidence;
+  const live = liveEvidence?.evidence ?? liveEvidence?.decision ?? liveEvidence ?? stored;
+  if (!stored || stored.schemaVersion !== "PHASE1_ADMISSION_EVIDENCE_V1"
+    || !live || live.schemaVersion !== "PHASE1_ADMISSION_EVIDENCE_V1") return false;
+  const expectedBase = base ?? stored.baseSha;
+  const identity = { repository, pr, headSha: head, baseSha: expectedBase, tree };
+  const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity, mode: PHASE1_MODES.READY, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
+  const verified = verifyPhase1AggregateEvidence({ aggregate: live, identity, mode: PHASE1_MODES.READY, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
+  return inspected.ok === true && verified.ok === true
+    && stableJson(inspected.evidence) === stableJson(verified.evidence)
+    && stored.headRef === branch && stored.result === "PHASE_1_ACCEPTABLE"
+    && stored.acceptable === true && stored.mergeAuthorityGranted === false;
+}
 export function selectCurrentImmutableEvidence({ candidates = [], requiredKey, classify } = {}) {
   const values = Array.isArray(candidates) ? candidates : [];
   const canonicalRequiredKey = stableJson(requiredKey);
@@ -1380,7 +1408,7 @@ export function finiteTaskFinalReceiptBody(value) {
   return `${finalReceiptMarker}\n${stableJson(subject.schemaVersion >= 2 ? { ...payload, bodyHash: sha256(payload) } : payload)}`;
 }
 
-export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation, effectiveReservationResolution = null }) {
+export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, receipt, observation, effectiveReservationResolution = null, livePhase1Evidence = null }) {
   const amendmentBound = effectiveReservationResolution?.status === "AMENDED"
     || effectiveReservationResolution?.status === "AMENDED_WITH_TEST_ADAPTATION"
     || evidence?.effectiveReservation !== undefined
@@ -1449,12 +1477,9 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
       && subject.changedPathHash === evidence.repositoryReview.changedPathHash
       && stableJson(evidence.repositoryReview.disposition) === stableJson({ P0: 0, P1: 0, launchImpactingP2: 0 })
       && subject.repositoryReviewHash === evidence.repositoryReview.subjectHash
-      && evidence?.phase1Evidence?.valid === true
-      && evidence.phase1Evidence.result === "PASS_13_OF_13"
-      && evidence.phase1Evidence.sourceHead === candidate?.head
-      && evidence.phase1Evidence.sourceTree === candidate?.tree
+      && phase1AdmissionEvidenceValid({ evidence: evidence?.phase1Evidence, liveEvidence: livePhase1Evidence ?? evidence?.livePhase1Evidence, pr: lease?.implementationPr, branch: lease?.implementationBranch, head: candidate?.head, tree: candidate?.tree, base: candidate?.scopeBase })
       && subject.phase1RunId === evidence.phase1Evidence.runId
-      && subject.phase1Head === evidence.phase1Evidence.sourceHead
+      && subject.phase1Head === (evidence.phase1Evidence.sourceHead ?? evidence.phase1Evidence.headSha)
     ))
     && (!amendmentBound || (
       finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
@@ -1523,6 +1548,7 @@ export function verifyFiniteTaskFinalSourceEligibility({
   candidate,
   evidence,
   evidenceResolver = null,
+  livePhase1Evidence = null,
   effectiveReservationResolution,
   comments = [],
   commentsPaginationComplete = false
@@ -1556,7 +1582,10 @@ export function verifyFiniteTaskFinalSourceEligibility({
         : typeof evidence === "function"
           ? evidence({ raw, index, observation, envelope, receipt })
           : evidence;
-      const verified = verifyFiniteTaskFinalReceipt({ lease, candidate, evidence: candidateEvidence, receipt, observation, effectiveReservationResolution });
+      const livePhase1 = typeof livePhase1Evidence === "function"
+        ? livePhase1Evidence({ raw, index, observation, envelope, receipt })
+        : livePhase1Evidence ?? candidateEvidence?.livePhase1Evidence;
+      const verified = verifyFiniteTaskFinalReceipt({ lease, candidate, evidence: candidateEvidence, receipt, observation, effectiveReservationResolution, livePhase1Evidence: livePhase1 });
       return {
         valid: verified.ok,
         key,
@@ -1714,52 +1743,111 @@ export function classifyGitHubExecutionIdentity({ event, livePullRequest, author
     const push = eventName === "push" && environment?.GITHUB_ACTIONS === "true" && !eventPull && repository === "Chillywood2025/chillywood-mobile" && event?.ref === environment?.GITHUB_REF && event?.after === actualCheckout && requestedCheckout === actualCheckout && environment?.GITHUB_SHA === actualCheckout && gitShaPattern.test(checkoutTree ?? ""); const eventType = eventName === "push" ? "PUSH" : eventName === "workflow_dispatch" ? "WORKFLOW_DISPATCH" : "OTHER_UNSUPPORTED"; const findings = push ? [] : [eventType === "PUSH" ? "GITHUB_EXECUTION_PUSH_IDENTITY_INVALID" : "GITHUB_EXECUTION_EVENT_UNSUPPORTED"];
     return registerGitHubExecutionIdentity({ ok: push, eventType, repository, pr: null, action: event?.action ?? null, draft: null, authoritativeSource: push ? { ref: event.ref, headSha: event.after, headTree: checkoutTree, baseRef: null, baseSha: event.before } : null, execution: { ref: environment?.GITHUB_REF ?? null, sha: actualCheckout ?? null, tree: checkoutTree, parents: checkoutParents }, relationship: { type: push ? "EXACT_PUSH_COMMIT" : "UNSUPPORTED", valid: push, findings } });
   }
-  const source = { ref: supplied.branch, headSha: supplied.headSha, headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${supplied.headSha}^{tree}`]), baseRef: supplied.baseRef, baseSha: supplied.baseSha }; const supportedAction = ["opened", "synchronize", "reopened", "ready_for_review", "converted_to_draft"].includes(event.action);
+  const source = { ref: supplied.branch, headSha: supplied.headSha, headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${supplied.headSha}^{tree}`]), baseRef: supplied.baseRef, baseSha: supplied.baseSha }; const supportedAction = ["opened", "synchronize", "reopened", "edited", "ready_for_review", "converted_to_draft"].includes(event.action);
   const sourceExact = repository === "Chillywood2025/chillywood-mobile" && Number.isInteger(pr) && pr > 0 && supplied.repository === repository && supplied.pr === pr && eventPull.number === pr && eventPull.state === "open" && supportedAction && (event.action !== "ready_for_review" || eventPull.draft === false) && (event.action !== "converted_to_draft" || eventPull.draft === true) && typeof eventPull.draft === "boolean" && eventPull.head?.ref === source.ref && eventPull.head?.sha === source.headSha && eventPull.head?.repo?.full_name === repository && eventPull.base?.ref === source.baseRef && eventPull.base?.sha === source.baseSha && eventPull.base?.repo?.full_name === repository && live.repository === repository && live.pr === pr && live.ref === source.ref && live.headSha === source.headSha && live.headRepository === repository && live.baseRef === source.baseRef && live.baseSha === source.baseSha && live.baseRepository === repository && live.draft === eventPull.draft && live.state === "open" && gitShaPattern.test(source.headTree ?? "");
   const mergeSha = environment?.GITHUB_SHA; const mergeParents = gitShaPattern.test(mergeSha ?? "") ? (safeRuntimeGit(gitCommand, ["show", "-s", "--format=%P", mergeSha], "") ?? "").split(/\s+/u).filter(Boolean) : []; const mergeTree = gitShaPattern.test(mergeSha ?? "") ? safeRuntimeGit(gitCommand, ["rev-parse", `${mergeSha}^{tree}`]) : null; const expectedMergeTree = safeRuntimeGit(gitCommand, ["merge-tree", "--write-tree", source.baseSha, source.headSha]);
-  const actionsContext = environment?.GITHUB_ACTIONS === "true" && eventName === "pull_request" && environment?.GITHUB_REF === `refs/pull/${pr}/merge` && gitShaPattern.test(mergeSha ?? ""); const mergeProof = actionsContext && mergeParents.length === 2 && mergeParents[0] === source.baseSha && mergeParents[1] === source.headSha && gitShaPattern.test(expectedMergeTree ?? "") && mergeTree === expectedMergeTree;
-  const sourceCheckout = actualCheckout === source.headSha && checkoutTree === source.headTree; const mergeCheckout = actualCheckout === mergeSha && checkoutTree === expectedMergeTree && stableJson(checkoutParents) === stableJson(mergeParents); const relationshipValid = sourceExact && requestedCheckout === actualCheckout && mergeProof && (sourceCheckout || mergeCheckout); const eventType = sourceCheckout ? "PULL_REQUEST_HEAD_CHECKOUT" : "PULL_REQUEST_MERGE_REF";
-  const findings = relationshipValid ? [] : [!sourceExact ? "GITHUB_EXECUTION_SOURCE_IDENTITY_INVALID" : !actionsContext ? "GITHUB_EXECUTION_CONTEXT_INVALID" : !mergeProof ? "GITHUB_EXECUTION_SYNTHETIC_MERGE_INVALID" : "GITHUB_EXECUTION_CHECKOUT_INVALID"];
+  const actionsContext = environment?.GITHUB_ACTIONS === "true" && eventName === "pull_request"; const mergeRefContext = actionsContext && environment?.GITHUB_REF === `refs/pull/${pr}/merge` && gitShaPattern.test(mergeSha ?? ""); const mergeProof = mergeRefContext && mergeParents.length === 2 && mergeParents[0] === source.baseSha && mergeParents[1] === source.headSha && gitShaPattern.test(expectedMergeTree ?? "") && mergeTree === expectedMergeTree;
+  const sourceCheckout = actualCheckout === source.headSha && checkoutTree === source.headTree; const mergeCheckout = actualCheckout === mergeSha && checkoutTree === expectedMergeTree && stableJson(checkoutParents) === stableJson(mergeParents); const relationshipValid = sourceExact && requestedCheckout === actualCheckout && actionsContext && (sourceCheckout || mergeProof && mergeCheckout); const eventType = sourceCheckout ? "PULL_REQUEST_HEAD_CHECKOUT" : "PULL_REQUEST_MERGE_REF";
+  const findings = relationshipValid ? [] : [!sourceExact ? "GITHUB_EXECUTION_SOURCE_IDENTITY_INVALID" : !actionsContext ? "GITHUB_EXECUTION_CONTEXT_INVALID" : !sourceCheckout && !mergeProof ? "GITHUB_EXECUTION_SYNTHETIC_MERGE_INVALID" : "GITHUB_EXECUTION_CHECKOUT_INVALID"];
   return registerGitHubExecutionIdentity({ ok: relationshipValid, eventType, repository, pr, action: event.action, draft: eventPull.draft, authoritativeSource: source, execution: { ref: sourceCheckout ? source.ref : environment?.GITHUB_REF ?? null, sha: actualCheckout ?? null, tree: checkoutTree, parents: checkoutParents }, mergeRef: { ref: environment?.GITHUB_REF ?? null, sha: mergeSha ?? null, tree: mergeTree, parents: mergeParents }, relationship: { type: sourceCheckout ? "EXACT_AUTHORIZED_SOURCE_HEAD" : "EXACT_GITHUB_PULL_REQUEST_MERGE", valid: relationshipValid, findings } });
 }
 
-export function observeLiveTerminalRepairTaskContext({ environment = process.env, run = execFileSync, expectedIdentity = null } = {}) {
+export function observeLiveTerminalRepairTaskContext({ environment = process.env, run = execFileSync, expectedIdentity = null, gitCommand = git } = {}) {
   const eventPath = environment?.GITHUB_EVENT_PATH;
   if (typeof eventPath !== "string" || !eventPath) return null;
   try {
-    const output = run(process.execPath, [rel("scripts/assurance/pr-scope.mjs"), `--github-event=${eventPath}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 });
+    const candidateRoot = process.cwd();
+    // Terminal-repair authority includes pr-scope.mjs itself. A protected-base
+    // evaluator therefore cannot execute or trust that candidate observer; the
+    // generic assurance-control observer below is independently revalidated.
+    if (path.resolve(candidateRoot) !== path.resolve(ROOT)) return null;
+    const output = run(process.execPath, [path.join(candidateRoot, "scripts/assurance/pr-scope.mjs"), `--github-event=${eventPath}`], { cwd: candidateRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 });
     const result = JSON.parse(output.trim().split(/\r?\n/gu).at(-1));
-    const context = result?.taskContext; const child = result?.executionIdentity; const executionIdentity = classifyGitHubExecutionIdentity({ event: readGithubEvent(environment), livePullRequest: { repository: child?.repository, number: child?.pr, headRef: child?.authoritativeSource?.ref, headSha: child?.authoritativeSource?.headSha, headRepository: child?.repository, baseRef: child?.authoritativeSource?.baseRef, baseSha: child?.authoritativeSource?.baseSha, baseRepository: child?.repository, mergeCommitSha: child?.mergeRef?.sha, draft: child?.draft, state: "open" }, authoritativeSourceIdentity: context?.identity, environment });
-    return result?.ok === true && context?.ok === true && githubExecutionIdentityValid(executionIdentity) && context.contextType === "TERMINAL_TRUTH_SUCCESSOR" && context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && context.budget?.maximumFiles === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles && context.budget?.maximumHandAuthoredNetLines === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines && (!expectedIdentity || stableJson({ repository: context.identity?.repository, pr: context.identity?.pr, branch: context.identity?.branch, headSha: context.identity?.headSha, baseSha: context.identity?.baseSha, baseRef: context.identity?.baseRef }) === stableJson(expectedIdentity)) ? { ...context, executionIdentity } : null;
+    const context = result?.taskContext; const child = result?.executionIdentity; const executionIdentity = classifyGitHubExecutionIdentity({ event: readGithubEvent(environment), livePullRequest: { repository: child?.repository, number: child?.pr, headRef: child?.authoritativeSource?.ref, headSha: child?.authoritativeSource?.headSha, headRepository: child?.repository, baseRef: child?.authoritativeSource?.baseRef, baseSha: child?.authoritativeSource?.baseSha, baseRepository: child?.repository, mergeCommitSha: child?.mergeRef?.sha, draft: child?.draft, state: "open" }, authoritativeSourceIdentity: context?.identity, environment, gitCommand });
+    return result?.ok === true && context?.ok === true && githubExecutionIdentityValid(executionIdentity) && stableJson(child) === stableJson(executionIdentity) && context.contextType === "TERMINAL_TRUTH_SUCCESSOR" && context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && context.budget?.maximumFiles === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles && context.budget?.maximumHandAuthoredNetLines === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines && (!expectedIdentity || stableJson({ repository: context.identity?.repository, pr: context.identity?.pr, branch: context.identity?.branch, headSha: context.identity?.headSha, baseSha: context.identity?.baseSha, baseRef: context.identity?.baseRef }) === stableJson(expectedIdentity)) ? { ...context, executionIdentity } : null;
   } catch { return null; }
 }
 
-export const ASSURANCE_CONTROL_SOURCE_ONLY_PATHS = Object.freeze(["config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
+export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
+  Object.freeze({
+    profileId: "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION",
+    paths: Object.freeze(["config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
+    maximumFiles: 6,
+    maximumChangedLines: 900,
+  }),
+  Object.freeze({
+    profileId: "PHASE1_RISK_BASED_ADMISSION_REFORM_V1",
+    paths: Object.freeze([".github/workflows/phase1-admission.yml", ".github/workflows/phase1-ci.yml", "CURRENT_STATE.md", "config/assurance/engineering-doctrine-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "scripts/assurance/lib.mjs", "scripts/assurance/phase1-admission.mjs", "scripts/guard-autonomous-systems-contract.mjs", "scripts/proof-autonomous-systems-contract.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/phase1-admission.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
+    maximumFiles: 14,
+    maximumChangedLines: 4200,
+  }),
+  Object.freeze({
+    profileId: "PHASE1_ADMISSION_RULESET_CUTOVER_V1",
+    paths: Object.freeze(["config/assurance/github-main-ruleset-codex-review-v1.json", "config/assurance/schemas-v1.json", "scripts/assurance/active-task.mjs", "scripts/assurance/current-truth.mjs", "scripts/assurance/github-main-ruleset-readback.mjs", "tests/assurance/github-main-ruleset-readback.test.mjs"]),
+    maximumFiles: 6,
+    maximumChangedLines: 1800,
+  }),
+  Object.freeze({
+    profileId: "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1",
+    paths: Object.freeze(["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"]),
+    maximumFiles: 2,
+    maximumChangedLines: 80,
+  }),
+]);
+
+export function resolveAssuranceControlSourceOnlyProfile({ changedPaths, budget, changedFiles } = {}) {
+  return ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ paths, maximumFiles, maximumChangedLines }) => stableJson(changedPaths) === stableJson(paths)
+    && budget?.maximumFiles === maximumFiles
+    && budget?.maximumChangedLines === maximumChangedLines
+    && budget?.maximumHandAuthoredNetLines === maximumChangedLines
+    && changedFiles === maximumFiles) ?? null;
+}
 const trustedAssuranceControlTaskContexts = new WeakMap();
 const registerAssuranceControlTaskContext = (value) => { trustedAssuranceControlTaskContexts.set(value, sha256(value)); return value; };
 export const assuranceControlTaskContextValid = (value) => trustedAssuranceControlTaskContexts.get(value) === sha256(value);
-export function validateUntrustedAssuranceControlTaskContextObservation({ result, expectedIdentity = null, githubEvent, gitCommand = git, environment = process.env } = {}) {
+export function validateUntrustedAssuranceControlTaskContextObservation({ result, authorityProof = null, expectedIdentity = null, githubEvent, gitCommand = git, environment = process.env } = {}) {
   try {
     const context = result?.taskContext; const child = result?.executionIdentity; const event = githubEvent ?? readGithubEvent(environment);
     const executionIdentity = classifyGitHubExecutionIdentity({ event, livePullRequest: { repository: child?.repository, number: child?.pr, headRef: child?.authoritativeSource?.ref, headSha: child?.authoritativeSource?.headSha, headRepository: child?.repository, baseRef: child?.authoritativeSource?.baseRef, baseSha: child?.authoritativeSource?.baseSha, baseRepository: child?.repository, mergeCommitSha: child?.mergeRef?.sha, draft: child?.draft, state: "open" }, authoritativeSourceIdentity: context?.identity, environment, gitCommand });
     const budget = context?.budget; const identity = { repository: context?.identity?.repository, pr: context?.identity?.pr, branch: context?.identity?.branch, headSha: context?.identity?.headSha, headTree: executionIdentity?.authoritativeSource?.headTree, baseSha: context?.identity?.baseSha, baseRef: context?.identity?.baseRef };
     const empty = (value) => Array.isArray(value) && value.length === 0; const additions = result?.additions; const deletions = result?.deletions; const changedPaths = Array.isArray(result?.classified) ? result.classified.map(({ file }) => file).sort() : null;
-    const exact = result?.ok === true && result?.mode === "GITHUB_EVENT_TASK_CONTEXT" && context?.ok === true && empty(context?.findings) && empty(result?.findings) && githubExecutionIdentityValid(executionIdentity) && stableJson(child) === stableJson(executionIdentity)
+    const diffRange = `${identity.baseSha}...${identity.headSha}`;
+    const observedPaths = gitCommand(["diff", "--name-only", diffRange]).split(/\r?\n/gu).filter(Boolean).sort();
+    const observedNumstat = gitCommand(["diff", "--numstat", diffRange]).split(/\r?\n/gu).filter(Boolean);
+    if (observedNumstat.some((line) => line.split("\t", 2).some((part) => part === "-"))) return null;
+    const observedAdditions = observedNumstat.reduce((sum, line) => sum + Number(line.split("\t")[0] ?? Number.NaN), 0);
+    const observedDeletions = observedNumstat.reduce((sum, line) => sum + Number(line.split("\t")[1] ?? Number.NaN), 0);
+    const authorityVerified = authorityProof?.schemaVersion === 1
+      && authorityProof?.producer === "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1"
+      && authorityProof?.authorityType === "ARCHITECTURE"
+      && authorityProof?.repository === identity.repository && authorityProof?.pr === identity.pr
+      && authorityProof?.headSha === identity.headSha && authorityProof?.sourceTree === identity.headTree
+      && authorityProof?.baseSha === identity.baseSha && Array.isArray(authorityProof?.findings) && authorityProof.findings.length === 0;
+    const profile = resolveAssuranceControlSourceOnlyProfile({ changedPaths, budget, changedFiles: result?.changedFiles });
+    const exact = authorityVerified && result?.ok === true && result?.mode === "GITHUB_EVENT_TASK_CONTEXT" && context?.ok === true && empty(context?.findings) && empty(result?.findings) && githubExecutionIdentityValid(executionIdentity) && stableJson(child) === stableJson(executionIdentity)
       && context.contextType === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" && context.source === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE" && context.authoritySource === "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE"
       && result.head === identity.headSha && result.base === identity.baseSha && context.featureId === "assurance-efficiency-e0" && context.primaryFeatureId === "assurance-efficiency-e0" && result.featureId === context.featureId && result.primaryFeatureId === context.primaryFeatureId && empty(context.affectedFeatureIds) && empty(context.objectiveDomains) && empty(context.authorizedPrRiskDomains) && empty(result.highRiskDomains) && empty(result.authorizedPrRiskDomains) && empty(result.observedPrRiskDomains) && empty(result.objectiveDomains)
       && stableJson(context.supportingDomains) === stableJson(["CI-test-infrastructure"]) && context.finiteTaskPrRiskAuthority === null && context.finiteLeaseId === null && context.historicalWaiverPath === null && result.waiver === null && context.bindingId === `owner-architecture-maintenance-pr-${context.identity?.pr}`
-      && budget?.maximumFiles === 6 && budget?.maximumChangedLines === 900 && budget?.maximumHandAuthoredNetLines === 900 && result?.budget?.files === 6 && result?.budget?.lines === 900 && result?.budget?.source === context.authoritySource && result.changedFiles === 6 && stableJson(changedPaths) === stableJson(ASSURANCE_CONTROL_SOURCE_ONLY_PATHS)
-      && Number.isSafeInteger(additions) && additions >= 0 && Number.isSafeInteger(deletions) && deletions >= 0 && additions + deletions <= 900
+      && profile && result?.budget?.files === profile.maximumFiles && result?.budget?.lines === profile.maximumChangedLines && stableJson(changedPaths) === stableJson(observedPaths) && result.changedFiles === observedPaths.length
+      && additions === observedAdditions && deletions === observedDeletions
+      && result?.budget?.source === context.authoritySource && Number.isSafeInteger(additions) && additions >= 0 && Number.isSafeInteger(deletions) && deletions >= 0 && additions + deletions <= profile.maximumChangedLines
       && (!expectedIdentity || stableJson(identity) === stableJson(expectedIdentity));
-    return exact ? { ok: true, findings: [], source: context.source, contextType: context.contextType, identity: { repository: identity.repository, pr: identity.pr, branch: identity.branch, headSha: identity.headSha, baseSha: identity.baseSha, baseRef: identity.baseRef }, featureId: context.featureId, primaryFeatureId: context.primaryFeatureId, affectedFeatureIds: [], objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], authorizedPrRiskDomains: [], finiteTaskPrRiskAuthority: null, historicalWaiverPath: null, bindingId: context.bindingId, finiteLeaseId: null, budget: { maximumFiles: 6, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 }, authoritySource: context.authoritySource, executionIdentity, sourceTree: identity.headTree, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false } : null;
+    return exact ? { ok: true, findings: [], source: context.source, contextType: context.contextType, identity: { repository: identity.repository, pr: identity.pr, branch: identity.branch, headSha: identity.headSha, baseSha: identity.baseSha, baseRef: identity.baseRef }, featureId: context.featureId, primaryFeatureId: context.primaryFeatureId, affectedFeatureIds: [], objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], authorizedPrRiskDomains: [], finiteTaskPrRiskAuthority: null, historicalWaiverPath: null, bindingId: context.bindingId, finiteLeaseId: null, budget: { maximumFiles: profile.maximumFiles, maximumChangedLines: profile.maximumChangedLines, maximumHandAuthoredNetLines: profile.maximumChangedLines }, profileId: profile.profileId, authoritySource: context.authoritySource, executionIdentity, sourceTree: identity.headTree, evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY", productAuthorityGranted: false, providerAuthorityGranted: false, finiteTaskAuthorityGranted: false, terminalAuthorityGranted: false, mergeAuthorityGranted: false } : null;
   } catch { return null; }
 }
-export function observeLiveAssuranceControlTaskContext({ environment = process.env, expectedIdentity = null, gitCommand = git } = {}) {
+export function observeLiveAssuranceControlTaskContext({ environment = process.env, authorityProof = null, expectedIdentity = null, gitCommand = git } = {}) {
   const eventPath = environment?.GITHUB_EVENT_PATH;
   if (typeof eventPath !== "string" || !eventPath) return null;
   try {
-    const output = execFileSync(process.execPath, [rel("scripts/assurance/pr-scope.mjs"), `--github-event=${eventPath}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 });
-    const context = validateUntrustedAssuranceControlTaskContextObservation({ result: JSON.parse(output.trim().split(/\r?\n/gu).at(-1)), expectedIdentity, githubEvent: readGithubEvent(environment), gitCommand, environment });
+    // The candidate scope command is an untrusted observer over the checked-out
+    // source. Protected code below re-derives execution identity and accepts only
+    // an exact closed assurance-control profile; none of its authority claims are
+    // inherited. Using ROOT here would inspect protected main instead of the PR.
+    const candidateRoot = process.cwd();
+    const candidateObserver = path.join(candidateRoot, "scripts/assurance/pr-scope.mjs");
+    if (!fs.existsSync(candidateObserver)) return null;
+    const output = execFileSync(process.execPath, [candidateObserver, `--github-event=${eventPath}`], { cwd: candidateRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 });
+    const context = validateUntrustedAssuranceControlTaskContextObservation({ result: JSON.parse(output.trim().split(/\r?\n/gu).at(-1)), authorityProof, expectedIdentity, githubEvent: readGithubEvent(environment), gitCommand, environment });
     return context ? registerAssuranceControlTaskContext(context) : null;
   } catch { return null; }
 }
@@ -2002,6 +2090,7 @@ export function evaluateFiniteTaskLeaseRuntime({
   effectiveReservationObservation = null,
   effectiveReservationResolution = null,
   finiteTaskPostMergeTransition = null,
+  assuranceControlAuthorityProof = null,
   gitCommand = git,
   environment = process.env
 } = {}) {
@@ -2268,10 +2357,10 @@ export function evaluateFiniteTaskLeaseRuntime({
     && candidateEvaluation.ok;
   const terminalRepairHistory = evaluateTerminalVerifierRepairHistory({ repair: record?.taskContextArchitecture?.terminalVerifierRepair });
   const liveContextEligible = githubEvent === undefined && suppliedObservation === undefined && effectiveReservationResolution === null && (checkoutHead === undefined || checkoutHead === safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]));
-  const terminalRepairContext = liveContextEligible && terminalRepairHistory.ok ? observeLiveTerminalRepairTaskContext({ environment, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
+  const terminalRepairContext = liveContextEligible && terminalRepairHistory.ok ? observeLiveTerminalRepairTaskContext({ environment, gitCommand, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
   const terminalRepairTree = terminalRepairContext?.executionIdentity?.authoritativeSource?.headTree ?? null;
   const terminalRepairEligible = Boolean(terminalRepairContext && githubExecutionIdentityValid(terminalRepairContext.executionIdentity) && terminalRepairHistory.current?.repository === terminalRepairContext.identity.repository && terminalRepairHistory.current?.pullRequest === terminalRepairContext.identity.pr && terminalRepairHistory.current?.branch === terminalRepairContext.identity.branch && terminalRepairHistory.current?.protectedBase === terminalRepairContext.identity.baseSha && terminalRepairContext.executionIdentity.authoritativeSource.headSha === terminalRepairContext.identity.headSha);
-  const assuranceControlContext = liveContextEligible ? observeLiveAssuranceControlTaskContext({ environment, gitCommand, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${event?.pull_request?.head?.sha}^{tree}`]), baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
+  const assuranceControlContext = liveContextEligible ? observeLiveAssuranceControlTaskContext({ environment, gitCommand, authorityProof: assuranceControlAuthorityProof, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${event?.pull_request?.head?.sha}^{tree}`]), baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
   const assuranceControlEligible = Boolean(assuranceControlContext && assuranceControlTaskContextValid(assuranceControlContext) && githubExecutionIdentityValid(assuranceControlContext.executionIdentity));
   const result = {
     leaseAuthorityEligible: leaseFreshness.eligible,
@@ -2443,7 +2532,7 @@ function embeddedRollingAuthorityBound(commit, checkpoint, gitCommand) {
   }
 }
 
-function parseProtectedPullRequestMergeSubject(subject) {
+export function parseProtectedPullRequestMergeSubject(subject) {
   const patterns = [
     ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", /^Merge pull request #([1-9][0-9]*) from [^/\s]+\/(.+)$/u, "GITHUB_CLASSIC_MERGE_PULL_REQUEST"],
     ["GITHUB_TITLE_WITH_PR_SUFFIX", /^\S(?:.*\S)? \(#([1-9][0-9]*)\)$/u, "GITHUB_TITLE_WITH_PR_SUFFIX"],
@@ -2598,23 +2687,44 @@ const historicalProtectedTerminalRepairMergeEvidence = Object.freeze({
   mergeSha: "8aa74d0442eb9797900005d3c2dca9709b43c0c8", mergeTree: "cee9c69c6a4bfffd152e02881174cc5f27216bce", diffHash: "cdf5fbcb1ea081a797000ba4f3c9ec4579aac718dde2f4c9db9f92d05f11e5cb",
   finalReceipt: { commentId: 5396710897, createdAt: "2026-08-24T14:32:32Z", updatedAt: "2026-08-24T14:32:32Z", rawBodyHash: "156acf394f5ce4503dd4a945136b4f783bb94a8638f1aaa6ed1e87b15ed25969", payloadBodyHash: "1e8120dec3df545127ec3601b54d78441cf9aae99cc8d9279d5929fa1a98e20d", subjectHash: "0ef10e9b89baf050fd384179d2ab8b8d3c4e8512d57134a65d3c03e4512ef40a" },
 });
-const protectedTerminalRepairMergeEvidence = (instanceId) => instanceId === "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"
-  ? historicalProtectedTerminalRepairMergeEvidence : null;
-
 export function validateTerminalVerifierRepairProtectedMerge({ observation, instance: current, gitCommand = git } = {}) {
   try {
-    const evidence = protectedTerminalRepairMergeEvidence(current?.instanceId);
+    const historicalEvidence = current?.instanceId === "4fa2485f48e96c934f92236e0d5cfbdcde795d41238a256ff01065e96304f9fe"
+      ? historicalProtectedTerminalRepairMergeEvidence
+      : null;
+    const parsed = parseProtectedPullRequestMergeSubject(observation?.subject);
     const parents = gitCommand(["show", "-s", "--format=%P", observation.commit]).split(/\s+/u).filter(Boolean);
     const tree = gitCommand(["rev-parse", `${observation.commit}^{tree}`]);
-    const sourceTree = gitCommand(["rev-parse", `${evidence.sourceHead}^{tree}`]);
-    const mergeTree = gitCommand(["merge-tree", "--write-tree", evidence.protectedBase, evidence.sourceHead]).split(/\r?\n/gu)[0];
-    const sourcePaths = gitCommand(["diff", "--name-only", `${evidence.protectedBase}...${evidence.sourceHead}`]).split(/\r?\n/gu).filter(Boolean).sort();
-    const diffHash = sha256(canonicalGitText(gitCommand(["diff", "--full-index", "--binary", "--no-ext-diff", `${evidence.protectedBase}...${evidence.sourceHead}`])));
-    return evidence.repository === current.repository && evidence.pullRequest === current.pullRequest && evidence.branch === current.branch && evidence.protectedBase === current.protectedBase
-      && evidence.finalReceipt.createdAt === evidence.finalReceipt.updatedAt && hash64Pattern.test(evidence.finalReceipt.rawBodyHash) && hash64Pattern.test(evidence.finalReceipt.payloadBodyHash) && hash64Pattern.test(evidence.finalReceipt.subjectHash)
-      && observation.commit === evidence.mergeSha && stableJson(observation.parents) === stableJson([evidence.protectedBase, evidence.sourceHead]) && observation.tree === evidence.mergeTree
-      && stableJson(parents) === stableJson(observation.parents) && tree === evidence.mergeTree && sourceTree === evidence.sourceTree && mergeTree === evidence.mergeTree
-      && stableJson(sourcePaths) === stableJson(current.profile.changedPaths) && stableJson(sourcePaths) === stableJson([...(observation.changedPaths ?? [])].sort()) && diffHash === evidence.diffHash;
+    const sourceHead = parents[1];
+    const sourceTree = gitCommand(["rev-parse", `${sourceHead}^{tree}`]);
+    const mergeTree = gitCommand(["merge-tree", "--write-tree", current.protectedBase, sourceHead]).split(/\r?\n/gu)[0];
+    const sourcePaths = gitCommand(["diff", "--name-only", `${current.protectedBase}...${sourceHead}`]).split(/\r?\n/gu).filter(Boolean).sort();
+    const structural = parsed.ok
+      && parsed.prNumber === current.pullRequest
+      && (parsed.sourceBranch === current.branch || parsed.variant === "GITHUB_MERGE_PR_TITLE" && historicalEvidence?.branch === current.branch)
+      && stableJson(parents) === stableJson(observation.parents)
+      && stableJson(parents) === stableJson([current.protectedBase, sourceHead])
+      && sha40Pattern.test(sourceHead ?? "")
+      && sha40Pattern.test(sourceTree ?? "")
+      && tree === observation.tree
+      && mergeTree === observation.tree
+      && stableJson(sourcePaths) === stableJson(current.profile.changedPaths)
+      && stableJson(sourcePaths) === stableJson([...(observation.changedPaths ?? [])].sort());
+    if (!structural || historicalEvidence === null) return structural;
+    const diffHash = sha256(canonicalGitText(gitCommand(["diff", "--full-index", "--binary", "--no-ext-diff", `${historicalEvidence.protectedBase}...${historicalEvidence.sourceHead}`])));
+    return historicalEvidence.repository === current.repository
+      && historicalEvidence.pullRequest === current.pullRequest
+      && historicalEvidence.branch === current.branch
+      && historicalEvidence.protectedBase === current.protectedBase
+      && historicalEvidence.finalReceipt.createdAt === historicalEvidence.finalReceipt.updatedAt
+      && hash64Pattern.test(historicalEvidence.finalReceipt.rawBodyHash)
+      && hash64Pattern.test(historicalEvidence.finalReceipt.payloadBodyHash)
+      && hash64Pattern.test(historicalEvidence.finalReceipt.subjectHash)
+      && observation.commit === historicalEvidence.mergeSha
+      && sourceHead === historicalEvidence.sourceHead
+      && sourceTree === historicalEvidence.sourceTree
+      && tree === historicalEvidence.mergeTree
+      && diffHash === historicalEvidence.diffHash;
   } catch { return false; }
 }
 
@@ -3174,7 +3284,7 @@ export function finiteTaskImplementationLifecycleAuthorityValid(value) {
   return value?.mergeEligible === true
     && trustedFiniteTaskImplementationLifecycles.get(value) === finiteTaskImplementationLifecycleFingerprint(value);
 }
-export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: value, effectiveReservationResolution: resolution, liveObservation } = {}) {
+export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: value, effectiveReservationResolution: resolution, liveObservation, livePhase1Evidence = null } = {}) {
   const trustedLive = liveObservation && trustedFiniteTaskLiveObservations.get(liveObservation) === sha256(liveObservation)
     && liveObservation.commentsPaginationComplete === true && liveObservation.commitsPaginationComplete === true
     && liveObservation.requireCompleteDiscovery === true && liveObservation.observationMode === "LIVE_GITHUB_COMPLETE_READBACK";
@@ -3290,7 +3400,7 @@ export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: v
   });
   const review = reviewSelection.selected?.value ?? null;
   const final = finalSelection.selected?.value ?? null;
-  const phase = value?.phase1Evidence; const { valid: _valid, evidenceHash: _hash, ...phaseBody } = phase ?? {};
+  const phase = value?.phase1Evidence;
   if (trustedLive && finiteTaskEffectiveReservationAuthorityValid(resolution)
     && trustedFiniteTaskResolutionObservations.get(resolution) === sha256(liveObservation)
     && reviewSelection.ok && finalSelection.ok
@@ -3314,11 +3424,11 @@ export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: v
     && (resolution.status !== "AMENDED_WITH_TEST_ADAPTATION" || liveObservation.pullRequest?.base?.sha === resolution.scopeBase)
     && liveObservation.pullRequest?.head?.sha === value.candidateHead && liveObservation.pullRequest?.head?.repo?.full_name === "Chillywood2025/chillywood-mobile"
     && value?.repositoryReview?.valid === true && value?.finalSource?.mergeEligible === true && value?.finalSourceSubject
-    && phase?.valid === true && phase.result === "PASS_13_OF_13" && phase.evidenceHash === sha256(phaseBody)
+    && phase1AdmissionEvidenceValid({ evidence: phase, liveEvidence: livePhase1Evidence, repository, pr: implementationPr, branch: implementationBranch, head: value.candidateHead, tree: value.candidateTree, base: resolution?.scopeBase ?? phase?.baseSha })
     && value.candidateHead === value.finalSourceSubject.finalHead && value.candidateTree === value.finalSourceSubject.finalTree
     && (resolution.status !== "AMENDED_WITH_TEST_ADAPTATION" || value.finalSourceSubject.scopeBase === resolution.scopeBase)
     && value.finalSourceSubject.repositoryReviewHash === value.repositoryReview.subjectHash
-    && value.finalSourceSubject.phase1RunId === phase.runId && value.finalSourceSubject.phase1Head === phase.sourceHead
+    && value.finalSourceSubject.phase1RunId === phase.runId && value.finalSourceSubject.phase1Head === (phase.sourceHead ?? phase.headSha)
     && review?.raw.id === value.repositoryReview.commentId && sha256(review.raw.body) === value.repositoryReview.commentBodyHash && review.envelope.subjectHash === value.repositoryReview.subjectHash
     && review.envelope.subject?.reviewedHead === value.candidateHead && review.envelope.subject?.reviewedTree === value.candidateTree
     && (resolution.status !== "AMENDED_WITH_TEST_ADAPTATION"
@@ -5963,7 +6073,41 @@ export function verifyCompletedImplementationMergeIdentity({ activeTaskBinding, 
 
 export const tierIds = ["T0_REQUIREMENT", "T1_SOURCE", "T2_MODEL", "T3_INTEGRATION", "T4_NATIVE_PROVIDER", "T5_SIGNED_ARTIFACT", "T6_INSTALLED_PHYSICAL", "T7_PUBLIC_CANARY"];
 
-export function validateTerminalTaskEvidence(binding, latestMergedImplementationPr) {
+const frozenLegacyD2aTerminalEvidence = Object.freeze({
+  schemaVersion: 1,
+  completionScope: "D2A_BOUND_COMPLETE_FOR_REGISTERED_NATIVE_LIFECYCLE_SCOPE",
+  sourceHead: "50b5f0498a59961278bb5afbca443c6e35cd5bb6",
+  sourceTree: "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+  mergeSha: "fe775c12b0857aa50d986d24179ae9588049b6a1",
+  mergeTree: "cdbfcba71edfd1a6967e1fa2173696c6f2f524a0",
+  ownerReceiptCommentId: 5268095229,
+  repositoryReviewCommentId: 5268063533,
+  repositoryReview: { P0: 0, P1: 0, launchImpactingP2: 0 },
+  phase1: { runId: 31605891078, head: "50b5f0498a59961278bb5afbca443c6e35cd5bb6", result: "PASS_13_OF_13" },
+  proofLimitations: {
+    T4_NATIVE_PROVIDER: "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED",
+    backupClassification: "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT",
+    T5_SIGNED_ARTIFACT: "NOT_CURRENT",
+    T6_INSTALLED_PHYSICAL: "NOT_CURRENT",
+    T7_PUBLIC_CANARY: "BLOCKED_EXTERNAL"
+  },
+  publicReleaseAuthorized: false,
+  otaAuthorized: false
+});
+
+function frozenLegacyD2aTerminalEvidenceValid(binding, latestMergedImplementationPr, evidence) {
+  return binding?.completionScope === frozenLegacyD2aTerminalEvidence.completionScope
+    && binding?.implementationPr === 212
+    && binding?.implementationBranch === "codex/first-pass-assurance-android-generated-native-lifecycle-instrumentation"
+    && binding?.currentImplementationHead === frozenLegacyD2aTerminalEvidence.sourceHead
+    && binding?.currentImplementationTree === frozenLegacyD2aTerminalEvidence.sourceTree
+    && latestMergedImplementationPr?.number === 212
+    && latestMergedImplementationPr?.head === frozenLegacyD2aTerminalEvidence.sourceHead
+    && latestMergedImplementationPr?.mergeSha === frozenLegacyD2aTerminalEvidence.mergeSha
+    && stableJson(evidence) === stableJson(frozenLegacyD2aTerminalEvidence);
+}
+
+export function validateTerminalTaskEvidence(binding, latestMergedImplementationPr, { livePhase1Evidence = null } = {}) {
   if (binding?.phase !== "TERMINAL") return [];
   const evidence = binding?.terminalEvidence;
   const findings = [];
@@ -6019,6 +6163,8 @@ export function validateTerminalTaskEvidence(binding, latestMergedImplementation
     }
     return findings;
   }
+  const phase1Valid = frozenLegacyD2aTerminalEvidenceValid(binding, latestMergedImplementationPr, evidence)
+    || phase1AdmissionEvidenceValid({ evidence: evidence?.phase1, liveEvidence: livePhase1Evidence, pr: binding?.implementationPr, branch: binding?.implementationBranch, head: binding?.currentImplementationHead, tree: binding?.currentImplementationTree, base: evidence?.phase1?.baseSha });
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)
     || evidence.schemaVersion !== 1
     || evidence.completionScope !== binding.completionScope
@@ -6031,9 +6177,7 @@ export function validateTerminalTaskEvidence(binding, latestMergedImplementation
     || evidence.repositoryReview?.P0 !== 0
     || evidence.repositoryReview?.P1 !== 0
     || evidence.repositoryReview?.launchImpactingP2 !== 0
-    || !Number.isInteger(evidence.phase1?.runId) || evidence.phase1.runId < 1
-    || evidence.phase1?.head !== binding.currentImplementationHead
-    || evidence.phase1?.result !== "PASS_13_OF_13"
+    || !phase1Valid
     || evidence.proofLimitations?.T4_NATIVE_PROVIDER !== "LOCAL_ANDROID_ONLY_PROVIDER_NOT_CONTACTED"
     || evidence.proofLimitations?.backupClassification !== "BLOCKED_LOCAL_ANDROID_BACKUP_TRANSPORT"
     || evidence.proofLimitations?.T5_SIGNED_ARTIFACT !== "NOT_CURRENT"
@@ -6571,9 +6715,10 @@ export function renderCurrentState(record) {
   const taskLocalEdgeCapability = record.taskLocalGoverningEdgeClosureCapability ? `\n## Task-local governing-edge closure capability\n\n- Contract \`${record.taskLocalGoverningEdgeClosureCapability.contract}\` is \`${record.taskLocalGoverningEdgeClosureCapability.status}\`; the baseline graph remains immutable: \`${record.taskLocalGoverningEdgeClosureCapability.baselineGraphRemainsImmutable}\`.\n- Task-local evidence requires independent verification: \`${record.taskLocalGoverningEdgeClosureCapability.independentVerificationRequired}\`; static edge allowlists and exclusion combinations are not required. Product mutation before admission remains \`${record.taskLocalGoverningEdgeClosureCapability.productMutationBeforeAdmission}\`.\n` : "";
   const receiptLifecycle = record.receiptLifecyclePolicy ? `\n## Assurance receipt lifecycle\n\n- Contract \`${record.receiptLifecyclePolicy.contract}\`; Owner task authorization survives exact in-scope descendants: \`${record.receiptLifecyclePolicy.ownerAuthorizationSurvivesInScopeDescendants}\`.\n- Final-source attestation is required during development/self-host/review/Phase 1: \`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredDuringDevelopment}\`/\`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredForSelfHost}\`/\`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredForRepositoryReview}\`/\`${record.receiptLifecyclePolicy.finalSourceAttestationRequiredForPhase1}\`; it is issued after review and Phase 1 and required for merge. Historical invalid attestations are non-blocking when exactly one valid current attestation exists.\n` : "";
   const testAdaptationOverlay = record.finiteTaskLeases?.testAdaptationPolicy ? `\n## Finite-task test-adaptation overlay\n\n- Capability \`${record.finiteTaskLeases.testAdaptationPolicy.capability}\` permits at most one immutable Owner receipt for one exact pre-existing fixture path and \`${record.finiteTaskLeases.testAdaptationPolicy.maximumChangedLines}\` fixture-only canonical changed lines.\n- The implementation reservation remains independent; budget pooling, wildcard paths, product mutation, provider mutation, database deployment, build, submission, OTA, and public-release authority remain forbidden.\n` : "";
+  const metadataCompatibilityRepair = record.phase1PublisherMetadataCompatibilityRepairCapability ? `\n## Phase 1 publisher-metadata compatibility repair\n\n- Contract \`${record.phase1PublisherMetadataCompatibilityRepairCapability.contract}\` predeclares exactly \`${record.phase1PublisherMetadataCompatibilityRepairCapability.maximumFiles}\` paths and \`${record.phase1PublisherMetadataCompatibilityRepairCapability.maximumChangedLines}\` canonical changed lines for the bounded publisher-metadata compatibility correction.\n- Hidden or ambiguous bypass authority remains fail-closed; this profile grants no product, provider-mutation, database-deployment, build, submission, OTA, public-release, or merge authority.\n` : "";
   const jurisdictionCapability = record.ownerJurisdictionPolicyCapability ? `\n## Owner jurisdiction policy capability\n\n- Contract \`${record.ownerJurisdictionPolicyCapability.contract}\` is \`${record.ownerJurisdictionPolicyCapability.status}\`; standing policy may be reused: \`${record.ownerJurisdictionPolicyCapability.standingPolicyReusable}\`; domain coverage may be reused: \`${record.ownerJurisdictionPolicyCapability.domainCoverageReusable}\`. Every task must enumerate exact domains: \`${record.ownerJurisdictionPolicyCapability.exactTaskDomainsRequired}\`.\n- Legacy receipts retain their original semantics. External proof is never inherited, operational ownership is preserved, and this capability grants no product, provider, database-deployment, build, submission, OTA, or public-release authority.${record.ownerJurisdictionPolicyBinding ? `\n- Current immutable policy source: comment #${record.ownerJurisdictionPolicyBinding.policySource.commentId}, standing-policy hash \`${record.ownerJurisdictionPolicyBinding.policySource.standingPolicyHash}\`, status \`${record.ownerJurisdictionPolicyBinding.policySource.status}\`; task binding \`${record.ownerJurisdictionPolicyBinding.taskBinding.bindingHash}\` covers \`${record.ownerJurisdictionPolicyBinding.coverage.coveredCount}/${record.ownerJurisdictionPolicyBinding.taskBinding.domainIds.length}\` exact domains.` : "\n- No immutable standing-policy receipt is bound in current truth yet."}\n` : "";
-  const preAdmissionCapability = `${record.preAdmissionEngineeringSeedCapability ? `\n## Pre-admission engineering seed capability\n\n- Contract \`${record.preAdmissionEngineeringSeedCapability.contract}\` is \`${record.preAdmissionEngineeringSeedCapability.status}\`; product mutation is \`${record.preAdmissionEngineeringSeedCapability.productMutationAllowed}\` until finite lease admission through \`${record.preAdmissionEngineeringSeedCapability.admissionContext}\`.\n- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: \`${record.preAdmissionEngineeringSeedCapability.nextAction}\`.\n` : ""}${admissionClearanceCapability}${taskLocalEdgeCapability}${jurisdictionCapability}${receiptLifecycle}${testAdaptationOverlay}`;
-  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Protected authority checkpoint: \`${protectedMainAuthority.checkpointSha}\` / tree \`${protectedMainAuthority.checkpointTree}\`.\n- Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.\n- Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n${implementationBindingLine}${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`, is not a required status check, does not block progress or merge, and may become blocking only after independent repository validation; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 checks and repository-owned exact-head review remain required.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: ${record.liveProviderReadback}.\n${engineering}${taskContextArchitecture}${preAdmissionCapability}\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
+  const preAdmissionCapability = `${record.preAdmissionEngineeringSeedCapability ? `\n## Pre-admission engineering seed capability\n\n- Contract \`${record.preAdmissionEngineeringSeedCapability.contract}\` is \`${record.preAdmissionEngineeringSeedCapability.status}\`; product mutation is \`${record.preAdmissionEngineeringSeedCapability.productMutationAllowed}\` until finite lease admission through \`${record.preAdmissionEngineeringSeedCapability.admissionContext}\`.\n- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: \`${record.preAdmissionEngineeringSeedCapability.nextAction}\`.\n` : ""}${admissionClearanceCapability}${taskLocalEdgeCapability}${jurisdictionCapability}${receiptLifecycle}${testAdaptationOverlay}${metadataCompatibilityRepair}`;
+  return `# CURRENT STATE\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n- Protected authority checkpoint: \`${protectedMainAuthority.checkpointSha}\` / tree \`${protectedMainAuthority.checkpointTree}\`.\n- Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.\n- Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.\n- Latest merged implementation: PR #${record.latestMergedImplementationPr.number}, \`${record.latestMergedImplementationPr.head}\`; merge \`${record.latestMergedImplementationPr.mergeSha}\`.\n${implementationBindingLine}${proofTierStatusLine}${leaseLine}\n- Review policy: provider Codex Review is \`${record.reviewPolicy.classification}\`; all ${record.reviewPolicy.requiredPhase1Checks} Phase 1 lanes still execute, while canonical admission is decided by the protected aggregate's fail-closed blocking classification and repository-owned exact-head review. Unknown findings block, and draft source-readiness never grants merge authority.\n- Assurance program display text: ${record.assuranceProgram.active}; completed: ${record.assuranceProgram.completed.join(", ") || "none"}.\n- Android internal: build ${record.android.buildNumber}, runtime \`${record.android.runtime}\`, channel \`${record.android.channel}\`, update \`${record.android.updateId}\`.\n- iOS internal: build ${record.ios.buildNumber}, runtime \`${record.ios.runtime}\`, channel \`${record.ios.channel}\`, update \`${record.ios.updateId}\`.\n- Historical provider value only: remote migration head \`${record.remoteMigrationHead}\`; current provider proof is not claimed.\n- Historical provider snapshot only: enabled Cognitive switches recorded as ${enabled}; no current switch proof is claimed.\n- Historical provider snapshot only: Cognitive schedules recorded as ${record.scheduleState.enabled}/${record.scheduleState.total} enabled; effective baseline count recorded as ${record.effectiveBaselineCount}.\n- Historical provider snapshot only: Cognitive LiveKit recorded ${record.safety.livekitSentinelRuns} formal runs, ${record.safety.livekitFindings} findings, and ${record.safety.livekitSwitchesEnabled} enabled switches.\n- Historical provider/safety snapshot only: PUBLIC schema \`net\` USAGE recorded as ${record.safety.publicSchemaNetUsage}; user-derived memory recorded as ${record.safety.userDerivedMemory}; Level 2 repair recorded as ${record.safety.level2Repair}. None is current provider proof.\n- Chi'llywood autonomous app operating model is now documented and guarded at \`${record.operatingPolicy.modelDocument}\`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.\n- Installed Product QA closure is retained as historical evidence only: ${installedQa.schedulerStatus}; proof rows ${installedQa.proofRowIds.map((id) => `\`${id}\``).join(", ")}; last recorded matrix state \`${installedQa.currentMatrixState}\`. It is not fresh installed or physical proof.\n- RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP \`${revenueCat.dashboardTest.httpStatus}\` / \`${revenueCat.dashboardTest.result}\` with \`premiumGranted=${revenueCat.premiumGranted}\`, \`liveMoneyAction=${revenueCat.liveMoneyAction}\`, and \`moneyMoved=${revenueCat.moneyMoved}\`.\n- Current freshness claims: ${currentClaims}.\n- Blocked freshness claims: ${blockedClaims}.\n- Internally validated historical review sentinels: ${lateReviews}. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.\n- Document rendered at \`${record.timestamp}\`; document deadline \`${record.freshnessDeadline}\` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: ${record.liveProviderReadback}.\n${engineering}${taskContextArchitecture}${preAdmissionCapability}\n## Open implementation PRs\n\n${implementations}\n\n## Open review-only PRs\n\n${reviews}\n\n## Current external blockers\n\n${blocked}\n\nHistorical proof belongs in Git history and scoped reports, not this hot path.\n`;
 }
 
 export function renderNextTask(record) {
@@ -6594,7 +6739,10 @@ export function renderNextTask(record) {
   const repairHistoryLine = repairHistory?.ok
     ? `\n\nTerminal-verifier repair history retains \`${repairHistory.instances.length}\` independently bound single-use instance${repairHistory.instances.length === 1 ? "" : "s"}. No historical instance or receipt is reusable, and this history grants no merge authority.`
     : "";
-  return `# NEXT TASK\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n${actions}\n\nOrdinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.${repairHistoryLine}\n\nDo not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.\n\n${record.assuranceProgram.prohibitions.join("\n")}\n`;
+  const metadataRepairLine = record?.phase1PublisherMetadataCompatibilityRepairCapability
+    ? `\n\nThe bounded Phase 1 publisher-metadata compatibility successor is predeclared as an exact \`${record.phase1PublisherMetadataCompatibilityRepairCapability.maximumFiles}\`-path / \`${record.phase1PublisherMetadataCompatibilityRepairCapability.maximumChangedLines}\`-line assurance-only profile; it grants no merge or provider-mutation authority.`
+    : "";
+  return `# NEXT TASK\n\nGenerated from \`config/assurance/current-truth-v1.json\`. Do not hand-edit.\n\n${actions}\n\nOrdinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.${repairHistoryLine}${metadataRepairLine}\n\nDo not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 owner approval and external-confirmation boundaries intact.\n\n${record.assuranceProgram.prohibitions.join("\n")}\n`;
 }
 
 export function projectFiniteTaskTerminalTruth({ record, terminalEvidence, proofTierApplicabilityHash, implementationTitle = null } = {}) {

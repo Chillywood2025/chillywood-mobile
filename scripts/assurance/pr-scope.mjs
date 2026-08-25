@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
-import { args, classifyGitHubExecutionIdentity, emit, evaluateProtectedMainAdvancement, git, readJson, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "./lib.mjs";
+import { args, classifyGitHubExecutionIdentity, emit, evaluateProtectedMainAdvancement, git, readJson, resolveAssuranceControlSourceOnlyProfile, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "./lib.mjs";
 import { canonicalGitDiffArgs, canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
@@ -116,6 +116,10 @@ if (!event.pull_request) {
       : { files: policy.defaultBudget.changedFiles, lines: policy.defaultBudget.netChangedLines, source: "pr-scope-policy-v1" };
   if (context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && (stableJson(scope.files) !== stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS) || scope.files.length !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles || scope.additions + scope.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines || budget.files !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles || budget.lines !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines)) {
     findings.push({ id: "ASSURANCE_TERMINAL_VERIFIER_REPAIR_PROFILE_INVALID", status: "BLOCKED_INTERNAL" });
+  }
+  if (context.authoritySource === "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE" && Number.isInteger(context.budget?.maximumChangedLines)) {
+    const profile = resolveAssuranceControlSourceOnlyProfile({ changedPaths: scope.files, budget: context.budget, changedFiles: scope.files.length });
+    if (!profile || scope.additions + scope.deletions > profile.maximumChangedLines) findings.push({ id: "ASSURANCE_CONTROL_SOURCE_ONLY_PROFILE_INVALID", status: "BLOCKED_INTERNAL" });
   }
   if (scope.files.length > budget.files) findings.push({ id: "ASSURANCE_PR_FILE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.files.length, maximum: budget.files });
   if (Math.max(0, scope.additions - scope.deletions) > budget.lines) findings.push({ id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.additions - scope.deletions, maximum: budget.lines });

@@ -1116,9 +1116,56 @@ const FINAL_SOURCE_OWNER_KEYS = ["commentId", "domainIds", "referenceScope", "st
 const FINAL_SOURCE_ADMISSION_KEYS = ["bodyHash", "commentId", "sequence", "subjectHash"];
 const FINAL_SOURCE_REVIEW_KEYS = ["bodyHash", "commentId", "disposition", "subjectHash"];
 const FINAL_SOURCE_PHASE1_KEYS = ["head", "passedJobs", "requiredJobs", "result", "runId", "tree"];
+const FINAL_SOURCE_PHASE1_AGGREGATE_KEYS = ["acceptable", "action", "affectedRiskDomains", "baseRef", "baseSha", "blockingFindingCount", "checkName", "currentRulesetStage", "decisionHash", "deferredExternalCount", "draft", "evaluatorSha", "eventUpdatedAt", "headRef", "headSha", "lifecycleGeneration", "maintenanceStatus", "mergeAuthorityGranted", "mode", "nonBlockingAssuranceFindingCount", "phase1SourceDecisionHash", "pr", "publisherAnchorHash", "publisherProvisioningReadbackHash", "rawFailedLanes", "rawPassedLanes", "repository", "requiredLanes", "result", "runAttempt", "runId", "schemaVersion", "sourceTree"];
 const FINAL_SOURCE_PROSPECTIVE_KEYS = ["classification", "externalProofInherited", "marketJurisdictionOwnerCoverage", "productMutationAllowedAfterAdmissionMerge", "productMutationAllowedBeforeAdmissionMerge", "taskLocalGoverningEdgeClosure"];
 const ADMISSION_FINAL_SOURCE_SUBJECT_KEYS = ["admissionIdentity", "authority", "changedPaths", "currentAdmission", "diffHash", "ownerJurisdiction", "phase1", "prospective", "repositoryReview", "schemaVersion", "scope", "type"];
 const ADMISSION_FINAL_SOURCE_PAYLOAD_KEYS = ["bodyHash", "commentContextHash", "envelopeHash", "evidenceClass", "owner", "pr", "repository", "schemaVersion", "subject", "subjectHash", "task", "type"];
+
+const legacyFinalSourcePhase1Valid = (phase1, subject) => exactKeys(phase1, FINAL_SOURCE_PHASE1_KEYS)
+  && isPositiveInteger(phase1.runId)
+  && phase1.head === subject.admissionIdentity.head
+  && phase1.tree === subject.admissionIdentity.tree
+  && phase1.requiredJobs === 13
+  && phase1.passedJobs === 13
+  && phase1.result === "PASS";
+
+const aggregateFinalSourcePhase1Valid = (phase1, subject) => exactKeys(phase1, FINAL_SOURCE_PHASE1_AGGREGATE_KEYS)
+  && phase1.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V1"
+  && phase1.checkName === "Phase 1 / Admission Decision"
+  && phase1.result === "PHASE_1_ACCEPTABLE"
+  && phase1.mode === "READY_MERGE_AUTHORITY"
+  && phase1.acceptable === true
+  && phase1.mergeAuthorityGranted === false
+  && phase1.repository === subject.scope.repository
+  && phase1.pr === subject.admissionIdentity.pr
+  && phase1.headRef === subject.admissionIdentity.branch
+  && phase1.headSha === subject.admissionIdentity.head
+  && phase1.sourceTree === subject.admissionIdentity.tree
+  && phase1.baseRef === "main"
+  && isGitSha(phase1.baseSha)
+  && phase1.evaluatorSha === phase1.baseSha
+  && ["PRE_CUTOVER_13_RAW", "STAGE1_AGGREGATE_PLUS_13_RAW", "FINAL_AGGREGATE_ONLY"].includes(phase1.currentRulesetStage)
+  && isSha256(phase1.publisherAnchorHash)
+  && isSha256(phase1.publisherProvisioningReadbackHash)
+  && ["opened", "synchronize", "reopened", "edited", "ready_for_review", "converted_to_draft"].includes(phase1.action)
+  && typeof phase1.eventUpdatedAt === "string" && Number.isFinite(Date.parse(phase1.eventUpdatedAt))
+  && phase1.draft === false
+  && phase1.lifecycleGeneration === legacyHash({ schemaVersion: "PHASE1_LIFECYCLE_GENERATION_V1", repository: phase1.repository, pr: phase1.pr, headSha: phase1.headSha, baseSha: phase1.baseSha, mode: phase1.mode, action: phase1.action, eventUpdatedAt: phase1.eventUpdatedAt })
+  && isSha256(phase1.phase1SourceDecisionHash)
+  && [null, "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED"].includes(phase1.maintenanceStatus)
+  && isPositiveInteger(phase1.runId)
+  && Number.isSafeInteger(phase1.runAttempt) && phase1.runAttempt > 0
+  && phase1.requiredLanes === 13
+  && Number.isSafeInteger(phase1.rawPassedLanes) && phase1.rawPassedLanes >= 0
+  && Number.isSafeInteger(phase1.rawFailedLanes) && phase1.rawFailedLanes >= 0
+  && phase1.rawPassedLanes + phase1.rawFailedLanes === phase1.requiredLanes
+  && phase1.blockingFindingCount === 0
+  && Number.isSafeInteger(phase1.nonBlockingAssuranceFindingCount) && phase1.nonBlockingAssuranceFindingCount >= 0
+  && Number.isSafeInteger(phase1.deferredExternalCount) && phase1.deferredExternalCount >= 0
+  && Array.isArray(phase1.affectedRiskDomains)
+  && phase1.affectedRiskDomains.every(isText)
+  && canonicalJson(phase1.affectedRiskDomains) === canonicalJson(sorted([...new Set(phase1.affectedRiskDomains)]))
+  && isSha256(phase1.decisionHash);
 
 function admissionFinalSourceSubjectValid(subject) {
   const ownerBinding = subject?.ownerJurisdiction;
@@ -1151,13 +1198,7 @@ function admissionFinalSourceSubjectValid(subject) {
     && review.disposition.P0 === 0
     && review.disposition.P1 === 0
     && review.disposition.launchImpactingP2 === 0
-    && exactKeys(phase1, FINAL_SOURCE_PHASE1_KEYS)
-    && isPositiveInteger(phase1.runId)
-    && phase1.head === subject.admissionIdentity.head
-    && phase1.tree === subject.admissionIdentity.tree
-    && phase1.requiredJobs === 13
-    && phase1.passedJobs === 13
-    && phase1.result === "PASS"
+    && (legacyFinalSourcePhase1Valid(phase1, subject) || aggregateFinalSourcePhase1Valid(phase1, subject))
     && exactKeys(prospective, FINAL_SOURCE_PROSPECTIVE_KEYS)
     && prospective.classification === "PREIMPLEMENTATION_ENGINEERING_CLEAR"
     && exactKeys(prospective.marketJurisdictionOwnerCoverage, ["covered", "required", "result"])
@@ -1203,6 +1244,7 @@ export function verifyFiniteTaskAdmissionFinalSourceV2({ body, receipt = null, e
     if (expected.task && payload.task !== expected.task) findings.push("ADMISSION_FINAL_SOURCE_TASK_MISMATCH");
     if (expected.head && payload.subject.admissionIdentity.head !== expected.head) findings.push("ADMISSION_FINAL_SOURCE_HEAD_MISMATCH");
     if (expected.tree && payload.subject.admissionIdentity.tree !== expected.tree) findings.push("ADMISSION_FINAL_SOURCE_TREE_MISMATCH");
+    if (expected.baseSha && payload.subject.phase1?.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V1" && payload.subject.phase1.baseSha !== expected.baseSha) findings.push("ADMISSION_FINAL_SOURCE_BASE_MISMATCH");
     if (expected.subject && canonicalJson(payload.subject) !== canonicalJson(expected.subject)) findings.push("ADMISSION_FINAL_SOURCE_SUBJECT_MISMATCH");
     if (expected.ownerLogin && payload.owner.login !== expected.ownerLogin) findings.push("ADMISSION_FINAL_SOURCE_OWNER_MISMATCH");
     if (receipt && (!isPositiveInteger(receipt.id) || receipt.authorLogin !== payload.owner.login || receipt.authorAssociation !== "OWNER" || !isCanonicalTimestamp(receipt.createdAt) || receipt.createdAt !== receipt.updatedAt || (receipt.body !== undefined && receipt.body !== body))) findings.push("ADMISSION_FINAL_SOURCE_IMMUTABILITY_INVALID");
