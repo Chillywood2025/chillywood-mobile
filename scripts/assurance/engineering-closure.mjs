@@ -5,9 +5,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { canonicalGitText, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, classifyGitHubExecutionIdentity, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -1101,13 +1102,14 @@ const gitRead = (root, args) => spawnSync("git", args, { cwd: root, encoding: nu
 const gitText = (root, args) => { const result = gitRead(root, args); return result.status === 0 ? result.stdout.toString("utf8").trim() : null; };
 const blobAt = (root, ref, name) => { const result = gitRead(root, ["show", `${ref}:${name}`]); return result.status === 0 ? result.stdout : null; };
 const shaBytes = (value) => crypto.createHash("sha256").update(value).digest("hex");
-const memberStructure = ({ id, path: sourcePath, ownerDomains, ownershipStatus, sharedContract }) => ({ id, path: sourcePath, ownerDomains, ownershipStatus, sharedContract: sharedContract ? { path: sharedContract.path, owners: sharedContract.owners, contract: sharedContract.contract } : null });
-const edgeStructure = ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, rollbackBehavior, platformDifferences, negativeContracts = [] }) => ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, rollbackBehavior, platformDifferences, negativeContracts: negativeContracts.map(({ reasonCode, statement, sourcePath, bindingType, selector }) => ({ reasonCode, statement, sourcePath, bindingType, selector })) });
+const memberStructure = ({ id, path: sourcePath, ownerDomains = [], ownershipStatus, sharedDependencyContract }) => ({ id, path: sourcePath, ownerDomains: canonicalSort(ownerDomains), ownershipStatus, sharedDependencyContract: sharedDependencyContract ?? null });
+const edgeStructure = ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, authentication, boundedSideEffects, failureBehavior, ordering, replacementAuthority, retryIdempotency, rollbackBehavior, platformDifferences, negativeContracts = [] }) => ({ edgeId, sourceDomain, destinationDomain, dataControlTransferred, authorityDirection, evidenceOwner, impactTraversal, impactClasses, authentication, boundedSideEffects, failureBehavior, ordering, replacementAuthority, retryIdempotency, rollbackBehavior, platformDifferences, negativeContracts: negativeContracts.map(({ reasonCode, statement, sourcePath, bindingType, selector, negativeWitnessTestPath, negativeWitnessTestId }) => ({ reasonCode, statement, sourcePath, bindingType, selector, negativeWitnessTestPath, negativeWitnessTestId })) });
 export const structuralGraphSubject = (graph) => ({
   contractId: graph?.contractId,
-  nodes: (graph?.nodes ?? []).map(({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts, cleanup }) => ({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts: transitionContracts?.map(({ sourceContentSha256, sourceLine, ...contract }) => contract), cleanup })),
+  nodes: (graph?.nodes ?? []).map(({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts, cleanup, contractBindings, hooksLibraries, invariants, inventoryAssets, launchDisposition, migrationApplicability, migrations, observability, requirements, securityPrivacyClassification, transitionBindingStatus, unresolvedUnknowns }) => ({ domain, owner, ownerSystems, sourcePaths, dataOwned, authorityOwned, providers, platforms, markets, upstreamDependencies, downstreamConsumers, sharedMutableState, proofTierApplicability, rollbackOwner, observabilityOwner, states, transitions, transitionContracts: transitionContracts?.map(({ sourceContentSha256, sourceLine, ...contract }) => contract), cleanup, contractBindings, hooksLibraries, invariants, inventoryAssets, launchDisposition, migrationApplicability, migrations, observability, requirements, securityPrivacyClassification, transitionBindingStatus, unresolvedUnknowns })),
   edges: (graph?.edges ?? []).map(edgeStructure),
   inventoryClasses: (graph?.inventory?.groups ?? []).map(({ id, classification }) => ({ id, classification })),
+  inventoryOwnership: (graph?.inventory?.groups ?? []).map(({ id, members = [] }) => ({ id, members: members.filter(({ ownerDomains = [], ownershipStatus, sharedDependencyContract }) => ownerDomains.length > 0 || ownershipStatus !== "ORPHAN" || sharedDependencyContract != null).map(memberStructure) })),
   affectedClosurePolicy: graph?.affectedClosurePolicy,
 });
 export const contentSnapshotSubject = (graph) => (graph?.inventory?.groups ?? []).map(({ id, pathHash, contentHash, members }) => ({ id, pathHash, contentHash, members: members.map(({ id: memberId, path: sourcePath, contentSha256, recordSha256 }) => ({ id: memberId, path: sourcePath, contentSha256: contentSha256 ?? null, recordSha256: recordSha256 ?? null })) }));
@@ -1150,12 +1152,14 @@ export function deriveDoctrineArtifactDependencyClosure({ root = REPOSITORY_ROOT
   const structuralPaths = new Set(["config/assurance/feature-registry-v1.json", "config/autonomy/autonomous-components.json", "config/assurance/platform-provider-contracts-v1.json", "config/assurance/engineering-doctrine-v1.json"]);
   const currentSource = fs.readFileSync(path.join(root, "scripts/assurance/engineering-closure.mjs"), "utf8");
   const generatorSemanticChanged = (generatorSemanticHash ?? functionBodyHash(currentSource, "computeDomainGraph")) !== baseline.generatorSourceVersion?.semanticBodyHash;
-  const structuralGraphInputs = changedPaths.filter((name) => structuralPaths.has(name));
-  if (changedPaths.includes("scripts/assurance/engineering-closure.mjs") && generatorSemanticChanged) structuralGraphInputs.push("scripts/assurance/engineering-closure.mjs#computeDomainGraph");
   const currentStructuralGraphHash = hashValue(structuralGraphSubject(currentGraph));
+  const structuralModelChanged = currentStructuralGraphHash !== baseline.baselineStructuralGraphHash;
+  const structuralGraphInputs = structuralModelChanged ? changedPaths.filter((name) => structuralPaths.has(name)) : [];
+  if (changedPaths.includes("scripts/assurance/engineering-closure.mjs") && generatorSemanticChanged) structuralGraphInputs.push("scripts/assurance/engineering-closure.mjs#computeDomainGraph");
+  if (structuralModelChanged && structuralGraphInputs.length === 0) structuralGraphInputs.push("UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE");
   const verificationOnlyInputs = changedPaths.filter((name) => !structuralPaths.has(name) && /^(?:tests\/assurance\/|scripts\/assurance\/|config\/assurance\/pr-scope-policy-v1\.json$)/u.test(name));
-  const body = { classification: "DOCTRINE_ARTIFACT_DEPENDENCY_CLOSURE_V1", structuralGraphInputs: canonicalSort(structuralGraphInputs), currentObservationInputs: canonicalSort([...changedPaths]), contentOnlyInputs: canonicalSort(changedPaths.filter((name) => !structuralPaths.has(name) && !verificationOnlyInputs.includes(name))), doctrineImplementationReportInputs: [], taskReportInputs: canonicalSort([...changedPaths]), verificationOnlyInputs: canonicalSort(verificationOnlyInputs), generatorSemanticChanged, structuralModelChanged: currentStructuralGraphHash !== baseline.baselineStructuralGraphHash };
-  return { ...body, closureHash: hashValue(body), modelRevisionRequired: body.generatorSemanticChanged || body.structuralGraphInputs.length > 0 || body.structuralModelChanged };
+  const body = { classification: "DOCTRINE_ARTIFACT_DEPENDENCY_CLOSURE_V1", structuralGraphInputs: canonicalSort(structuralGraphInputs), currentObservationInputs: canonicalSort([...changedPaths]), contentOnlyInputs: canonicalSort(changedPaths.filter((name) => !structuralGraphInputs.includes(name) && !verificationOnlyInputs.includes(name))), doctrineImplementationReportInputs: [], taskReportInputs: canonicalSort([...changedPaths]), verificationOnlyInputs: canonicalSort(verificationOnlyInputs), generatorSemanticChanged, structuralModelChanged };
+  return { ...body, closureHash: hashValue(body), modelRevisionRequired: body.generatorSemanticChanged || body.structuralModelChanged };
 }
 
 export function deriveCurrentTreeObservation({ root = REPOSITORY_ROOT, identity = {}, changedPaths = [], baseline = validateDoctrineBaselineArtifacts(root), currentGraph = generateDomainGraph(root, { authoritative: true }) } = {}) {
@@ -1198,6 +1202,8 @@ export function resolveEngineeringClosureTaskContext({
   readPull = null,
   observeAuthorities = observeTypedTaskAuthorities,
   sourceAncestryVerified = null,
+  environment = process.env,
+  gitCommand = (args) => gitText(root, args),
 } = {}) {
   let trustedEvent = event;
   try {
@@ -1222,22 +1228,21 @@ export function resolveEngineeringClosureTaskContext({
   const validated = validatePullRequestEventIdentity(trustedEvent, readback);
   if (!validated.ok) return { ok: false, taskContext: null, findings: validated.findings.map((finding) => `ENGINEERING_CLOSURE_${finding}`) };
   const identity = validated.identity;
-  const sourceTree = gitText(root, ["rev-parse", `${identity.headSha}^{tree}`]);
+  const executionIdentity = classifyGitHubExecutionIdentity({ event: trustedEvent, livePullRequest: pullReadback, authoritativeSourceIdentity: identity, checkoutHead: localIdentity.head, gitCommand, environment });
+  const sourceTree = executionIdentity.authoritativeSource?.headTree;
+  const sourceScope = executionIdentity.eventType === "PULL_REQUEST_HEAD_CHECKOUT" ? scope : gitScope(root, identity.baseSha, identity.headSha);
   const ancestry = sourceAncestryVerified ?? typedGit(root, ["merge-base", "--is-ancestor", identity.headSha, localIdentity.head]).status === 0;
-  const localParents = typedGit(root, ["rev-list", "--parents", "-n", "1", localIdentity.head]).stdout.trim().split(/\s+/u).slice(1);
-  const exactSourceCheckout = localIdentity.head === identity.headSha;
-  const exactPullRequestMergeCheckout = localParents.length === 2
-    && localParents[0] === identity.baseSha
-    && localParents[1] === identity.headSha;
   const localMatches = localIdentity.base === identity.baseSha
     && ancestry
-    && ((exactSourceCheckout && sourceTree === localIdentity.tree) || exactPullRequestMergeCheckout)
+    && executionIdentity.relationship.valid === true
+    && executionIdentity.execution.sha === localIdentity.head
+    && executionIdentity.execution.tree === localIdentity.tree
     && (!localIdentity.branch || localIdentity.branch === identity.branch);
-  if (!localMatches || !scope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
-  const authorities = observeAuthorities({ identity, tree: sourceTree, scope, currentTruth, root });
+  if (!localMatches || !sourceScope || !currentTruth) return { ok: false, taskContext: null, findings: ["ENGINEERING_CLOSURE_GITHUB_EVENT_READBACK_MISMATCH"] };
+  const authorities = observeAuthorities({ identity, tree: sourceTree, scope: sourceScope, currentTruth, root });
   const eligible = [authorities.architectureAuthority, authorities.terminalTruthAuthority, authorities.finiteTaskAuthority, authorities.finiteTaskAdmissionAuthority].filter((authority) => authority?.ok === true);
   if (eligible.length !== 1) return { ok: false, taskContext: null, findings: [eligible.length > 1 ? "ENGINEERING_CLOSURE_TASK_CONTEXT_AMBIGUOUS" : "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"] };
-  return { ok: true, taskContext: eligible[0], findings: [] };
+  return { ok: true, taskContext: eligible[0], executionIdentity, findings: [] };
 }
 
 const resolveJsonPointer = (document, pointer) => {
@@ -1759,6 +1764,78 @@ export const FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1 = "FINITE_TASK_
 export const FINITE_TASK_TERMINAL_TRUTH_V1 = "FINITE_TASK_TERMINAL_TRUTH_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1 = "FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1";
 export const IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 = "IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1";
+export const PHASE1_RISK_BASED_ADMISSION_REFORM_V1 = "PHASE1_RISK_BASED_ADMISSION_REFORM_V1";
+export const PHASE1_ADMISSION_RULESET_CUTOVER_V1 = "PHASE1_ADMISSION_RULESET_CUTOVER_V1";
+export const PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 = "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1";
+export const PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1 = Object.freeze({
+  schemaVersion: 1,
+  contract: "PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1",
+  owner: "Chillywood2025",
+  app: { name: "Chillywood Phase1 Admission App", slug: "chillywood-phase1-admission-app", public: false, permissions: { checks: "write", contents: "write", environments: "read", statuses: "write", metadata: "read" }, events: [], registration: "OWNER_UI_EXACT_GENERIC_REGISTRATION", presentationFieldsAuthority: "NON_AUTHORITATIVE", webhookEvidence: "JWT_APP_IDENTITY_ANONYMOUS_EXACT_SLUG_404_AND_JWT_DISABLED_HOOK_CONFIG_404", ownerUiSettingsProjection: { public: false, callbackUrls: [], requestOauthOnInstall: false, deviceFlow: false, setupUrl: null, setupOnUpdate: false, webhookActive: false, webhookUrl: null, evidence: "IMMUTABLE_OWNER_FINAL_SOURCE_ATTESTATION" } },
+  installation: { repositorySelection: "selected", repositories: ["Chillywood2025/chillywood-mobile"], suspended: false },
+  environment: { name: "phase1-admission-publisher", protectedBranches: false, customBranchPolicies: true, deploymentBranches: ["main"], requiredReviewers: [], preventSelfReview: false, allowAdministratorsToBypass: false },
+  configuration: { appIntegrationIdVariable: "PHASE1_ADMISSION_APP_INTEGRATION_ID", appClientIdVariable: "PHASE1_ADMISSION_APP_CLIENT_ID", appInstallationIdVariable: "PHASE1_ADMISSION_APP_INSTALLATION_ID", appKeyFingerprintVariable: "PHASE1_ADMISSION_APP_KEY_FINGERPRINT", appPrivateKeySecret: "PHASE1_ADMISSION_APP_PRIVATE_KEY" },
+  aggregate: { context: "Phase 1 / Admission Decision", publisher: "DEDICATED_GITHUB_APP_ONLY", rawLaneExecutionCount: 13, displayOnlyNeverPassing: true, mergeAuthoritySource: "APP_ONLY_SHA_BOUND_MERGE_API" },
+  appOnlyMergeGate: { mergeEndpoint: "PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge", requiredBody: { sha: "EXACT_CURRENT_PR_HEAD", merge_method: "merge", commit_title: "CANONICAL_PR_AND_BRANCH", commit_message: "CANONICAL_HEAD_AND_BASE" }, contentsTokenSeparateFromPublisherToken: true, protectedR2ResolverRequired: true, r2State: { anchorType: "R2_INSTALLED", rulesetStage: "FINAL_AGGREGATE_ONLY", cutoverLock: "OPEN" }, oneShotMergeExactCallback: true, candidateReceivesToken: false, immediateLiveRereadRequired: true, allRepositoryActionsQuiescentRequired: true, postMergeParents: ["EXACT_CURRENT_MAIN_BASE", "EXACT_CURRENT_PR_HEAD"], postMergeTree: "EXACT_VERIFIED_SYNTHETIC_MERGE_TREE" },
+  ruleset: { id: 18940814, prestatePutPayloadSha256: "1bf616541bc6a87b7b559374a99e1478fe229087466b998e59c5b1cecfa1cb09", target: { refName: "refs/heads/main", restrictUpdates: true, requirePullRequest: true, nonFastForward: true, deletion: true }, soleBypassActor: { actorType: "Integration", actorIdSource: "aggregateCheckIntegrationId", bypassMode: "pull_request" }, stage1: { operation: "ADD_NONPASSING_AGGREGATE_KEEP_13_RAW_NO_BYPASS", preserveAllOtherRulesByteCanonically: true }, final: { operation: "INSTALL_APP_ONLY_GATE_REMOVE_13_RAW_KEEP_NONPASSING_DISPLAY_CHECK", preserveAllOtherRulesByteCanonically: true }, strict: true },
+  dynamicReadbackOutputs: ["appId", "clientId", "installationId", "environmentId", "aggregateCheckIntegrationId", "keyFingerprint", "jwtAppReadbackHash", "webhookConfigHash", "environmentSecretMetadata"],
+  authorizedProviderMutations: ["CREATE_PRIVATE_GITHUB_APP_OWNER_UI_EXACT_CONTRACT", "INSTALL_APP_SELECTED_REPOSITORY_ONLY", "CREATE_MAIN_ONLY_PROTECTED_ENVIRONMENT", "SET_EXACT_ENVIRONMENT_VARIABLE_NAMES_AND_VALUES", "SET_APP_PRIVATE_KEY_ENVIRONMENT_SECRET", "R2_STAGE1_ADD_NONPASSING_AGGREGATE_KEEP_13_RAW", "R2_FINAL_INSTALL_APP_ONLY_GATE_REMOVE_13_RAW", "ROLLBACK_RULESET_AND_REVOKE_KEY_INSTALLATION"],
+  provisioningReceipt: { appendOnly: true, exactCurrentCount: 1, immutableOwnerReadbackRequired: true, requiredBeforeRulesetCutover: true },
+  r2ImmutableAnchor: {
+    configurationPath: "config/assurance/github-main-ruleset-codex-review-v1.json",
+    configurationProperty: "phase1AdmissionPublisherImmutableAnchor",
+    configurationSource: "EXACT_PROTECTED_BASE_GIT_OBJECT",
+    contract: "PHASE1_ADMISSION_PUBLISHER_IMMUTABLE_ANCHOR_V1",
+    sourceIntentMarker: ARCHITECTURE_MAINTENANCE_MARKER,
+    sourceFinalMarker: ARCHITECTURE_FINAL_SOURCE_MARKER,
+    completeCommentPaginationRequired: true,
+    exactOwnerLogin: "Chillywood2025",
+    exactOwnerAssociation: "OWNER",
+    immutableTimestampsRequired: true,
+    protectedStageResolver: { path: "scripts/assurance/github-main-ruleset-readback.mjs", export: "resolvePhase1AdmissionRulesetCutoverState", contract: "PHASE1_ADMISSION_RULESET_CUTOVER_STATE_V1", producer: "PROTECTED_MAIN_RULESET_READBACK_V1" },
+    requiredFields: ["schemaVersion", "contract", "sourcePr", "sourceBranch", "sourceHead", "sourceTree", "sourceBase", "sourceMergeSha", "sourceMergeTree", "originalIntentCommentId", "originalIntentBodyHash", "originalIntentSubjectHash", "finalSourceCommentId", "finalSourceBodyHash", "finalSourceSubjectHash", "provisioningReadback", "provisioningReadbackHash", "appId", "clientId", "installationId", "environmentId", "aggregateCheckIntegrationId", "rulesetNodeId", "rulesetProviderUpdatedAt", "prestatePutPayloadSha256", "stage1PutPayloadSha256", "finalPutPayloadSha256", "rollbackPutPayloadSha256", "currentRulesetStage", "anchorHash"],
+  },
+  rollback: { restorePrestateRequiredChecks: true, revokeInstallationTokens: true, revokePrivateKey: true, uninstallApp: true },
+  authority: { repositoryMerge: true, product: false, providerMutationBeyondThisContract: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+});
+export const phase1AdmissionPublisherProvisioningReadback = ({ appId, clientId, installationId, environmentId, aggregateCheckIntegrationId, keyFingerprint, jwtAppReadbackHash, webhookConfigHash, secretCreatedAt, secretUpdatedAt, observedAt, rulesetNodeId, rulesetProviderUpdatedAt, bypassReadback = "EXPLICIT_EMPTY", stage1PutPayloadSha256, finalPutPayloadSha256, rollbackPutPayloadSha256, stage = "PRE_CUTOVER_13_RAW" } = {}) => {
+  const stagePayloads = { PRE_CUTOVER_13_RAW: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.ruleset.prestatePutPayloadSha256, STAGE1_AGGREGATE_PLUS_13_RAW: stage1PutPayloadSha256, FINAL_AGGREGATE_ONLY: finalPutPayloadSha256 };
+  const body = {
+    schemaVersion: 1,
+    contract: "PHASE1_ADMISSION_PUBLISHER_PROVISIONING_READBACK_V1",
+    repository: "Chillywood2025/chillywood-mobile",
+    owner: "Chillywood2025",
+    originalContractHash: hashValue(PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1),
+    observedAt,
+    app: { id: appId, clientId, name: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.app.name, slug: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.app.slug, public: false, permissions: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.app.permissions, events: [], webhook: { active: false, url: null, configReadbackHash: webhookConfigHash }, ownerUiSettingsProjection: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.app.ownerUiSettingsProjection, jwtSelfReadbackHash: jwtAppReadbackHash, key: { publicKeySpkiSha256: keyFingerprint } },
+    installation: { id: installationId, appId, repositorySelection: "selected", repositories: ["Chillywood2025/chillywood-mobile"], suspended: false },
+    environment: { id: environmentId, ...PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.environment, variableNames: ["PHASE1_ADMISSION_APP_CLIENT_ID", "PHASE1_ADMISSION_APP_INSTALLATION_ID", "PHASE1_ADMISSION_APP_INTEGRATION_ID", "PHASE1_ADMISSION_APP_KEY_FINGERPRINT"], secretNames: ["PHASE1_ADMISSION_APP_PRIVATE_KEY"], secretMetadata: [{ name: "PHASE1_ADMISSION_APP_PRIVATE_KEY", createdAt: secretCreatedAt, updatedAt: secretUpdatedAt }], secretValuesIncluded: false },
+    aggregate: { ...PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.aggregate, integrationId: aggregateCheckIntegrationId },
+    ruleset: { id: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.ruleset.id, nodeId: rulesetNodeId, providerUpdatedAt: rulesetProviderUpdatedAt, bypassReadback, prestatePutPayloadSha256: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.ruleset.prestatePutPayloadSha256, stage1PutPayloadSha256, finalPutPayloadSha256, rollbackPutPayloadSha256, stage, currentPutPayloadSha256: stagePayloads[stage] ?? null },
+    authority: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.authority,
+  };
+  return { ...body, readbackHash: hashValue(body) };
+};
+const validPhase1AdmissionPublisherClientId = (value) => typeof value === "string"
+  && /^(?:Iv[0-9A-Za-z]{18}|Iv1\.[0-9a-f]{16})$/u.test(value);
+export const phase1AdmissionPublisherProvisioningReadbackValid = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const canonical = phase1AdmissionPublisherProvisioningReadback({ appId: value.app?.id, clientId: value.app?.clientId, installationId: value.installation?.id, environmentId: value.environment?.id, aggregateCheckIntegrationId: value.aggregate?.integrationId, keyFingerprint: value.app?.key?.publicKeySpkiSha256, jwtAppReadbackHash: value.app?.jwtSelfReadbackHash, webhookConfigHash: value.app?.webhook?.configReadbackHash, secretCreatedAt: value.environment?.secretMetadata?.[0]?.createdAt, secretUpdatedAt: value.environment?.secretMetadata?.[0]?.updatedAt, observedAt: value.observedAt, rulesetNodeId: value.ruleset?.nodeId, rulesetProviderUpdatedAt: value.ruleset?.providerUpdatedAt, bypassReadback: value.ruleset?.bypassReadback, stage1PutPayloadSha256: value.ruleset?.stage1PutPayloadSha256, finalPutPayloadSha256: value.ruleset?.finalPutPayloadSha256, rollbackPutPayloadSha256: value.ruleset?.rollbackPutPayloadSha256, stage: value.ruleset?.stage });
+  return Number.isInteger(value.app?.id) && value.app.id > 0
+    && validPhase1AdmissionPublisherClientId(value.app?.clientId)
+    && Number.isInteger(value.installation?.id) && value.installation.id > 0
+    && Number.isInteger(value.environment?.id) && value.environment.id > 0
+    && value.aggregate?.integrationId === value.app.id
+    && [value.app?.key?.publicKeySpkiSha256, value.app?.jwtSelfReadbackHash, value.app?.webhook?.configReadbackHash].every((digest) => /^[0-9a-f]{64}$/u.test(digest ?? ""))
+    && [value.environment?.secretMetadata?.[0]?.createdAt, value.environment?.secretMetadata?.[0]?.updatedAt].every((timestamp) => typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp)))
+    && typeof value.observedAt === "string" && Number.isFinite(Date.parse(value.observedAt))
+    && typeof value.ruleset?.nodeId === "string" && value.ruleset.nodeId.length > 0
+    && typeof value.ruleset?.providerUpdatedAt === "string" && Number.isFinite(Date.parse(value.ruleset.providerUpdatedAt))
+    && ["EXPLICIT_EMPTY", "EXPLICIT_APP_PULL_REQUEST_ONLY", "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED"].includes(value.ruleset?.bypassReadback)
+    && [value.ruleset?.stage1PutPayloadSha256, value.ruleset?.finalPutPayloadSha256, value.ruleset?.rollbackPutPayloadSha256].every((digest) => /^[0-9a-f]{64}$/u.test(digest ?? ""))
+    && ["PRE_CUTOVER_13_RAW", "STAGE1_AGGREGATE_PLUS_13_RAW", "FINAL_AGGREGATE_ONLY"].includes(value.ruleset?.stage)
+    && stableJson(value) === stableJson(canonical);
+};
 export const PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER = "<!-- chillywood-pre-admission-capability-dependency-amendment-v1 -->";
 export const ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER = "<!-- chillywood-assurance-architecture-final-source-correction-v1 -->";
 export const TERMINAL_TRUTH_SUCCESSOR_MARKER = "<!-- chillywood-terminal-truth-successor-v1 -->";
@@ -1835,6 +1912,7 @@ export const OWNER_JURISDICTION_ARCHITECTURE_PATHS = Object.freeze([
   "scripts/assurance/active-task.mjs",
   "scripts/assurance/current-truth.mjs",
   "scripts/assurance/engineering-closure.mjs",
+  "scripts/guard-autonomous-systems-contract.mjs",
   "scripts/assurance/jurisdiction-policy.mjs",
   "scripts/assurance/lib.mjs",
   "tests/assurance/active-task-binding-a1.test.mjs",
@@ -1859,6 +1937,50 @@ export const IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS = Objec
   "tests/assurance/jurisdiction-policy.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
+export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION = "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION";
+export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS = Object.freeze([
+  "config/assurance/current-truth-v1.json",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
+  "tests/assurance/active-task-binding-a1.test.mjs",
+  "tests/assurance/engineering-doctrine.test.mjs",
+  "tests/assurance/pr-scope-feature-bundles.test.mjs",
+]);
+export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1 = Object.freeze({
+  policyId: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
+  historicalImplementationIdentityImmutable: true,
+  protectedBaseAdvancement: "EXACT_PROTECTED_MAIN_FIRST_PARENT_ANCESTRY",
+  historicalValidReceiptCardinality: "ZERO_OR_MORE",
+  currentValidReceiptCardinality: "EXACTLY_ONE",
+  totalMarkerCardinalityRequired: false,
+  conflictingTerminalOutcomeAllowed: false,
+});
+const HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY = Object.freeze({ commentId: 5397695980, subjectHash: "eceeb6e43b48fef39d465b3b28da0c3d4fbf57ebc08e641ef3e833eb01386da3", payloadBodyHash: "67c61953eeb4f3d9262b15f2fe3bcfa31ccfbb0069bb3b31e6af5bc03350a9b1", commentBodyHash: "780147af11f258d1beae6c69a200007197197c15531470dd47d543ed2b0b93df", head: "c107ba8824f935b20a44f2e56dd5ec827e1da709", tree: "05ab290d1d0e92ccbaa15321f541e0976346a6d3", changedPathHash: "90027eeff4efe02ed341cf19739d955b979904835c63c6513f3aa14221737d9f" });
+export const PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS = Object.freeze([
+  ".github/workflows/phase1-admission.yml",
+  ".github/workflows/phase1-ci.yml",
+  "CURRENT_STATE.md",
+  "config/assurance/engineering-doctrine-v1.json",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/jurisdiction-policy.mjs",
+  "scripts/assurance/lib.mjs",
+  "scripts/assurance/phase1-admission.mjs",
+  "scripts/guard-autonomous-systems-contract.mjs",
+  "scripts/proof-autonomous-systems-contract.mjs",
+  "tests/assurance/active-task-binding-a1.test.mjs",
+  "tests/assurance/engineering-doctrine.test.mjs",
+  "tests/assurance/phase1-admission.test.mjs",
+  "tests/assurance/pr-scope-feature-bundles.test.mjs",
+]);
+export const PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS = Object.freeze(["config/assurance/github-main-ruleset-codex-review-v1.json", "config/assurance/schemas-v1.json", "scripts/assurance/active-task.mjs", "scripts/assurance/current-truth.mjs", "scripts/assurance/github-main-ruleset-readback.mjs", "tests/assurance/github-main-ruleset-readback.test.mjs"]);
+export const PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS = Object.freeze(["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"]);
+const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1
+  ? { paths: PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, maximumFiles: 14, maximumChangedLines: 4200 }
+  : objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1
+  ? { paths: PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 1800 }
+  : objective === PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1
+  ? { paths: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
+  : null;
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 export const FINITE_TASK_ADMISSION_LEASE_STATE = "ACTIVE_IMPLEMENTATION";
 export const finiteTaskAdmissionLeaseStateValid = (lease) => lease?.taskState === FINITE_TASK_ADMISSION_LEASE_STATE;
@@ -2465,20 +2587,24 @@ const authorityControlCompanionBlobAtHead = (file, head, root) => {
   return blob.status === 0 && blob.stdout.trim() === match[2] ? content.stdout : null;
 };
 
-export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOSITORY_ROOT } = {}) {
+export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOSITORY_ROOT, terminalBaseAdvancement = false, historicalEmbeddedCompanion = false } = {}) {
   if (!authorityControlCurrentTruthCompanionV2Required({ identity, root })) return null;
   const recordBytes = authorityControlCompanionBlobAtHead(AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH, identity?.headSha, root);
   const currentStateBytes = authorityControlCompanionBlobAtHead(AUTHORITY_CONTROL_CURRENT_STATE_PATH, identity?.headSha, root);
   const nextTaskBytes = authorityControlCompanionBlobAtHead(AUTHORITY_CONTROL_NEXT_TASK_PATH, identity?.headSha, root);
   if (![recordBytes, currentStateBytes, nextTaskBytes].every(Buffer.isBuffer)) throw new Error("AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_INVALID");
   const record = JSON.parse(recordBytes.toString("utf8"));
-  const baseTreeRun = spawnSync("git", ["rev-parse", `${identity.baseSha}^{tree}`], { cwd: root, encoding: "utf8", shell: false });
-  const baseTree = baseTreeRun.status === 0 ? baseTreeRun.stdout.trim() : null;
-  if (record?.mainSha !== identity.baseSha
-    || record?.protectedMainAuthority?.checkpointSha !== identity.baseSha
-    || record?.protectedMainAuthority?.checkpointTree !== baseTree
-    || currentStateBytes.toString("utf8") !== renderCurrentState(record)
-    || nextTaskBytes.toString("utf8") !== renderNextTask(record)) {
+  const checkpoint = record?.protectedMainAuthority?.checkpointSha;
+  const checkpointTreeRun = spawnSync("git", ["rev-parse", `${checkpoint}^{tree}`], { cwd: root, encoding: "utf8", shell: false });
+  const checkpointTree = checkpointTreeRun.status === 0 ? checkpointTreeRun.stdout.trim() : null;
+  const terminalReceiptLifecyclePolicyExact = stableJson(record?.receiptLifecyclePolicy?.finiteTaskTerminalTruth) === stableJson(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_POLICY_V1);
+  const rollingCheckpoint = terminalBaseAdvancement && terminalReceiptLifecyclePolicyExact && record?.mainSha === checkpoint
+    && verifyFiniteTaskTerminalBaseAdvancement({ repository: identity?.repository, baseRef: identity?.baseRef, historicalImplementationMerge: checkpoint, currentProtectedBase: identity?.baseSha, expectedCurrentProtectedBase: identity?.baseSha, root }).ok;
+  const generatedDocumentsMatch = historicalEmbeddedCompanion && terminalBaseAdvancement && terminalReceiptLifecyclePolicyExact
+    || currentStateBytes.toString("utf8") === renderCurrentState(record) && nextTaskBytes.toString("utf8") === renderNextTask(record);
+  if (!(rollingCheckpoint || record?.mainSha === identity.baseSha && checkpoint === identity.baseSha)
+    || record?.protectedMainAuthority?.checkpointTree !== checkpointTree
+    || !generatedDocumentsMatch) {
     throw new Error("AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_INVALID");
   }
   const value = {
@@ -2486,7 +2612,7 @@ export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOS
     contractId: AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2,
     hashDomain: "CHILLYWOOD_ASSURANCE_AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2",
     cutover: { ...AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2_CUTOVER },
-    requiredChangedPaths: [AUTHORITY_CONTROL_CURRENT_STATE_PATH, AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH].sort(),
+    requiredChangedPaths: terminalBaseAdvancement ? [AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH] : [AUTHORITY_CONTROL_CURRENT_STATE_PATH, AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH].sort(),
     currentTruth: {
       path: AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_PATH,
       sha256: shaBytes(recordBytes),
@@ -2498,7 +2624,7 @@ export function authorityControlCurrentTruthCompanionV2({ identity, root = REPOS
       { path: AUTHORITY_CONTROL_CURRENT_STATE_PATH, sha256: shaBytes(currentStateBytes) },
       { path: AUTHORITY_CONTROL_NEXT_TASK_PATH, sha256: shaBytes(nextTaskBytes) },
     ],
-    bindingMode: "EMBEDDED_ROLLING_PROTECTED_MAIN_AUTHORITY",
+    bindingMode: terminalBaseAdvancement ? "EMBEDDED_ROLLING_PROTECTED_MAIN_FIRST_PARENT_ANCESTRY" : "EMBEDDED_ROLLING_PROTECTED_MAIN_AUTHORITY",
     authority: { product: false, provider: false, database: false, build: false, submission: false, ota: false, publicRelease: false },
   };
   return Object.freeze({ ...value, companionHash: hashValue({ hashDomain: value.hashDomain, value }) });
@@ -2578,6 +2704,8 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const finiteTaskTerminalReview = profile === FINITE_TASK_TERMINAL_TRUTH_V1;
   const immutableEvidenceLifecycleReview = profile === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
+  const phase1RiskBasedAdmissionReview = profile === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
+  const phase1AdmissionControlReview = Boolean(phase1ControlProfile(profile));
   const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
   const finiteTaskPrRiskAuthority = finiteTaskImplementationReview
     ? deriveFiniteTaskPrRiskAuthority({
@@ -2603,10 +2731,17 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
     deletions: Number(scope?.deletions ?? 0),
     netChangedLines: observed.netChangedLines,
     disposition: { P0: 0, P1: 0, launchImpactingP2: 0 },
-    ...((jurisdictionAdmissionReview || amendmentControlRepairReview || testAdaptationOverlayReview || finiteTaskImplementationReview || finiteTaskTerminalReview || immutableEvidenceLifecycleReview) ? { reviewProfile: profile } : {}),
+    ...((jurisdictionAdmissionReview || amendmentControlRepairReview || testAdaptationOverlayReview || finiteTaskImplementationReview || finiteTaskTerminalReview || immutableEvidenceLifecycleReview || phase1AdmissionControlReview) ? { reviewProfile: profile } : {}),
     ...(finiteTaskImplementationReview ? { finiteTaskEffectiveReservation: finiteTaskImplementationReviewBinding(effectiveReservationResolution, finiteTaskPrRiskAuthority) } : {}),
     ...(dependencyAmendment ? { dependencyAmendment } : {}),
-    lanes: immutableEvidenceLifecycleReview ? [
+    lanes: phase1AdmissionControlReview ? [
+      "all thirteen Phase 1 lanes execute with canonical protected aggregate admission",
+      "blocking safety, authority, product, database, money, auth, RLS, and security findings remain fail-closed",
+      "maintenance-only classification requires canonical proof and every unknown finding defaults blocking",
+      "draft source-readiness cannot grant merge authority; ready evidence binds exact source and lifecycle",
+      "legacy exact 13-of-13 receipts remain historical; cutover follows the protected-base workflow",
+      "no product, provider, database-deployment, build, submission, OTA, or public-release authority",
+    ] : immutableEvidenceLifecycleReview ? [
       "canonical current-valid immutable review and final-source selection with complete candidate validation",
       "append-only stale and malformed history retention with duplicate-current denial",
       "finite-task merge eligibility, protected-main synchronization, post-merge observation, and terminal-truth convergence",
@@ -2806,11 +2941,64 @@ const selectCurrentArchitectureRepositoryReview = ({ comments = [], identity, tr
   };
 };
 
+const phase1PullRequestProvenance = (pullRequest) => ({
+  repository: pullRequest?.base?.repo?.full_name ?? null,
+  headRepository: pullRequest?.head?.repo?.full_name ?? null,
+  pr: pullRequest?.number ?? null,
+  branch: pullRequest?.head?.ref ?? null,
+  headSha: pullRequest?.head?.sha ?? null,
+  baseRef: pullRequest?.base?.ref ?? null,
+  baseSha: pullRequest?.base?.sha ?? null,
+});
+
+const exactDurablePhase1PullRequest = (pullRequest, identity) => {
+  const provenance = phase1PullRequestProvenance(pullRequest);
+  return provenance.repository === identity?.repository
+    && provenance.headRepository === identity?.repository
+    && provenance.pr === identity?.pr
+    && provenance.branch === identity?.branch
+    && provenance.headSha === identity?.headSha
+    && provenance.baseSha === identity?.baseSha
+    && (identity?.baseRef === undefined || provenance.baseRef === identity.baseRef);
+};
+
+const trustedDurablePhase1PullRequestProvenance = new WeakSet();
+
+const resolvePhase1LinkedPullRequest = ({ run, identity, durablePullRequestProvenance } = {}) => {
+  if (!Array.isArray(run?.pull_requests)) return null;
+  if (run.pull_requests.length === 1) return run.pull_requests[0];
+  if (run.pull_requests.length !== 0) return null;
+  const directPullRequest = durablePullRequestProvenance?.directPullRequest;
+  const commitAssociatedPullRequests = durablePullRequestProvenance?.commitAssociatedPullRequests;
+  if (!trustedDurablePhase1PullRequestProvenance.has(durablePullRequestProvenance)
+    || durablePullRequestProvenance?.directPullRequestReadComplete !== true
+    || durablePullRequestProvenance?.commitAssociationPaginationComplete !== true
+    || !Array.isArray(commitAssociatedPullRequests)
+    || commitAssociatedPullRequests.length !== 1
+    || !exactDurablePhase1PullRequest(directPullRequest, identity)
+    || !exactDurablePhase1PullRequest(commitAssociatedPullRequests[0], identity)
+    || stableJson(phase1PullRequestProvenance(directPullRequest)) !== stableJson(phase1PullRequestProvenance(commitAssociatedPullRequests[0]))) return null;
+  return {
+    number: directPullRequest.number,
+    head: { sha: directPullRequest.head.sha },
+    base: { sha: directPullRequest.base.sha },
+  };
+};
+
 const githubTimestampMillis = (value) => {
   if (typeof value !== "string" || value.length === 0) return null;
   const millis = Date.parse(value);
   return Number.isFinite(millis) ? millis : null;
 };
+
+const PHASE1_LIFECYCLE_ACTIONS = Object.freeze([
+  "opened",
+  "synchronize",
+  "reopened",
+  "edited",
+  "ready_for_review",
+  "converted_to_draft",
+]);
 
 export const phase1WorkflowRequiresLifecycleBinding = (source) => {
   if (typeof source !== "string") return false;
@@ -2833,14 +3021,13 @@ export const phase1WorkflowRequiresLifecycleBinding = (source) => {
       values.push(...(line.match(/[a-z_]+/gu) ?? []));
     }
   }
-  const required = ["opened", "synchronize", "reopened", "ready_for_review", "converted_to_draft"];
   const uniqueValues = [...new Set(values)];
-  return uniqueValues.length === required.length
+  return uniqueValues.length === PHASE1_LIFECYCLE_ACTIONS.length
     && values.length === uniqueValues.length
-    && required.every((value) => uniqueValues.includes(value));
+    && PHASE1_LIFECYCLE_ACTIONS.every((value) => uniqueValues.includes(value));
 };
 
-const PHASE1_RUN_DISPLAY_TITLE_PATTERN = /^phase1 pr=([1-9]\d*) action=(opened|synchronize|reopened|ready_for_review|converted_to_draft) draft=(true|false)$/u;
+const PHASE1_RUN_DISPLAY_TITLE_PATTERN = /^phase1 pr=([1-9]\d*) action=(opened|synchronize|reopened|edited|ready_for_review|converted_to_draft) draft=(true|false)$/u;
 
 export const phase1WorkflowHasRunDisplayProvenance = (source) => {
   if (typeof source !== "string") return false;
@@ -2885,15 +3072,9 @@ export function verifyPhase1PullRequestLifecycle({ run, pullRequest, lifecycleEv
     && pullRequest.head?.sha === identity?.headSha
     && (merged || pullRequest.base?.sha === identity?.baseSha));
   if (!pullIdentityValid) return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_IDENTITY_INVALID", epochEvent: null, epochAt: null };
-  if (lifecyclePaginationComplete !== true || !Array.isArray(lifecycleEvents)) {
-    return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_DISCOVERY_INCOMPLETE", epochEvent: null, epochAt: null };
-  }
-  if (pullRequest.draft !== false) {
-    return { valid: false, reason: "PHASE1_PULL_REQUEST_CURRENTLY_DRAFT", epochEvent: null, epochAt: null };
-  }
-  if (pullRequest.state !== "open" && !merged) {
-    return { valid: false, reason: "PHASE1_PULL_REQUEST_NOT_OPEN_OR_MERGED", epochEvent: null, epochAt: null };
-  }
+  if (lifecyclePaginationComplete !== true || !Array.isArray(lifecycleEvents)) return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_DISCOVERY_INCOMPLETE", epochEvent: null, epochAt: null };
+  if (pullRequest.draft !== false) return { valid: false, reason: "PHASE1_PULL_REQUEST_CURRENTLY_DRAFT", epochEvent: null, epochAt: null };
+  if (pullRequest.state !== "open" && !merged) return { valid: false, reason: "PHASE1_PULL_REQUEST_NOT_OPEN_OR_MERGED", epochEvent: null, epochAt: null };
   if (runCreatedAtMillis === null || pullCreatedAtMillis === null || (merged && runCreatedAtMillis > mergedAtMillis)) {
     return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_TIMESTAMP_INVALID", epochEvent: null, epochAt: null };
   }
@@ -2926,24 +3107,16 @@ export function verifyPhase1PullRequestLifecycle({ run, pullRequest, lifecycleEv
     return { valid: false, reason: "PHASE1_PULL_REQUEST_LIFECYCLE_STATE_INCONSISTENT", epochEvent: null, epochAt: null };
   }
   const reopened = relevant.filter(({ event }) => event === "reopened").sort((left, right) => left.millis - right.millis).at(-1) ?? null;
-  const openedEpoch = {
-    event: legacyMergedEvidence ? "legacy_merged_historical" : "opened_ready",
-    createdAt: pullRequest.created_at,
-    millis: pullCreatedAtMillis,
-  };
+  const openedEpoch = { event: legacyMergedEvidence ? "legacy_merged_historical" : "opened_ready", createdAt: pullRequest.created_at, millis: pullCreatedAtMillis };
   const epoch = legacyMergedEvidence
     ? openedEpoch
     : [openedEpoch, latestReadiness, reopened].filter(Boolean).sort((left, right) => left.millis - right.millis).at(-1);
-  // GitHub REST lifecycle timestamps have one-second precision. Equality is
-  // authoritative only when the immutable run display title proves the exact
-  // ready-state action that opened the current epoch; a same-second draft run
-  // therefore cannot be reused after ready_for_review.
   const expectedEqualAction = epoch.event === "opened_ready" ? "opened"
     : epoch.event === "ready_for_review" ? "ready_for_review"
     : epoch.event === "reopened" ? "reopened"
     : null;
   const readyStateAction = displayProvenance
-    && ["opened", "synchronize", "reopened", "ready_for_review"].includes(displayProvenance.action);
+    && ["opened", "synchronize", "reopened", "edited", "ready_for_review"].includes(displayProvenance.action);
   const legacyMergedEvidenceValid = epoch.event === "legacy_merged_historical" && lifecyclePolicyRequired === false;
   const valid = legacyMergedEvidenceValid
     ? runCreatedAtMillis >= epoch.millis
@@ -2952,18 +3125,14 @@ export function verifyPhase1PullRequestLifecycle({ run, pullRequest, lifecycleEv
       : runCreatedAtMillis === epoch.millis
         && readyStateAction === true
         && displayProvenance?.action === expectedEqualAction;
-  return {
-    valid,
-    reason: valid ? null : "PHASE1_RUN_PREDATES_CURRENT_READY_LIFECYCLE",
-    epochEvent: epoch.event,
-    epochAt: epoch.createdAt,
-  };
+  return { valid, reason: valid ? null : "PHASE1_RUN_PREDATES_CURRENT_READY_LIFECYCLE", epochEvent: epoch.event, epochAt: epoch.createdAt };
 }
 
-export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, pullRequest, lifecycleEvents, lifecyclePaginationComplete, lifecyclePolicyRequired, lifecycleDisplayProvenanceConfigured } = {}) {
+export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, expectedRunId, durablePullRequestProvenance, pullRequest, lifecycleEvents, lifecyclePaginationComplete, lifecyclePolicyRequired, lifecycleDisplayProvenanceConfigured } = {}) {
   const requiredJobs = jobs.filter(({ name }) => PHASE1_REQUIRED_JOB_NAMES.includes(name));
   const names = requiredJobs.map(({ name }) => name).sort();
   const uniqueNames = [...new Set(names)];
+  const linkedPullRequest = resolvePhase1LinkedPullRequest({ run, identity, durablePullRequestProvenance });
   const lifecycleSupplied = pullRequest !== undefined || lifecycleEvents !== undefined || lifecyclePaginationComplete !== undefined;
   const lifecycle = lifecycleSupplied
     ? verifyPhase1PullRequestLifecycle({ run, pullRequest, lifecycleEvents, lifecyclePaginationComplete, lifecyclePolicyRequired, lifecycleDisplayProvenanceConfigured, identity })
@@ -2973,12 +3142,16 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, pullRe
     && run.event === "pull_request"
     && run.status === "completed"
     && run.conclusion === "success"
+    && (expectedRunId === undefined || (Number.isInteger(expectedRunId)
+      && expectedRunId > 0
+      && run.id === expectedRunId
+      && run.repository?.full_name === identity?.repository
+      && run.path === ".github/workflows/phase1-ci.yml"))
     && run.head_sha === identity?.headSha
     && run.head_branch === identity?.branch
-    && run.pull_requests?.length === 1
-    && run.pull_requests[0]?.number === identity?.pr
-    && run.pull_requests[0]?.head?.sha === identity?.headSha
-    && run.pull_requests[0]?.base?.sha === identity?.baseSha
+    && linkedPullRequest?.number === identity?.pr
+    && linkedPullRequest?.head?.sha === identity?.headSha
+    && linkedPullRequest?.base?.sha === identity?.baseSha
     && requiredJobs.length === PHASE1_REQUIRED_JOB_NAMES.length
     && uniqueNames.length === requiredJobs.length
     && stableJson(uniqueNames) === stableJson([...PHASE1_REQUIRED_JOB_NAMES])
@@ -2989,6 +3162,7 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, pullRe
     repository: identity?.repository,
     pr: identity?.pr,
     branch: identity?.branch,
+    baseSha: identity?.baseSha,
     runId: Number(run?.id ?? 0),
     runAttempt: Number(run?.run_attempt ?? 0),
     sourceHead: run?.head_sha ?? null,
@@ -3003,17 +3177,112 @@ export function verifyPhase1RunEvidence({ run, jobs = [], identity, tree, pullRe
   return { ...body, valid, evidenceHash: hashValue(body) };
 }
 
+const PHASE1_ADMISSION_WORKFLOW_PATH = ".github/workflows/phase1-admission.yml";
+const PHASE1_READY_MODE = "READY_MERGE_AUTHORITY";
+const PHASE1_ACCEPTABLE_RESULT = "PHASE_1_ACCEPTABLE";
+const aggregatePhase1EvidenceValue = (value) => value?.evidence ?? value?.decision ?? value;
+const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
+const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
+
+export function phase1AdmissionPolicyForBase({ identity, root = REPOSITORY_ROOT } = {}) {
+  const base = identity?.baseSha;
+  if (!/^[0-9a-f]{40}$/u.test(base ?? "") || typedGit(root, ["cat-file", "-e", `${base}^{commit}`]).status !== 0) return "BASE_IDENTITY_UNAVAILABLE";
+  return typedGit(root, ["cat-file", "-e", `${base}:${PHASE1_ADMISSION_WORKFLOW_PATH}`]).status === 0
+    ? "RISK_BASED_AGGREGATE_V1"
+    : "LEGACY_EXACT_13_OF_13";
+}
+
+const verifyPhase1AdmissionEvidence = ({ phase1Evidence, identity, tree, root = REPOSITORY_ROOT, stage = "SOURCE_EVIDENCE" } = {}) => {
+  const policy = phase1AdmissionPolicyForBase({ identity, root });
+  if (policy === "LEGACY_EXACT_13_OF_13") {
+    const valid = Boolean(phase1Evidence?.valid === true
+      && phase1Evidence?.classification === "PHASE1_EXACT_HEAD_EVIDENCE_V1"
+      && phase1Evidence?.result === "PASS_13_OF_13"
+      && phase1Evidence?.requiredJobs === PHASE1_REQUIRED_JOB_NAMES.length
+      && phase1Evidence?.passedJobs === PHASE1_REQUIRED_JOB_NAMES.length
+      && phase1Evidence?.repository === identity?.repository
+      && phase1Evidence?.pr === identity?.pr
+      && phase1Evidence?.branch === identity?.branch
+      && phase1Evidence?.baseSha === identity?.baseSha
+      && phase1Evidence?.sourceHead === identity?.headSha
+      && phase1Evidence?.sourceTree === tree);
+    return { ok: valid, policy, evidence: valid ? phase1Evidence : null, findings: valid ? [] : ["PHASE1_LEGACY_EXACT_13_OF_13_INVALID"] };
+  }
+  if (policy !== "RISK_BASED_AGGREGATE_V1") return { ok: false, policy, evidence: null, findings: ["PHASE1_BASE_CUTOVER_CLASSIFICATION_UNAVAILABLE"] };
+  let verified;
+  try {
+    verified = verifyPhase1AggregateEvidence({ aggregate: aggregatePhase1EvidenceValue(phase1Evidence), identity: { ...identity, tree }, mode: PHASE1_READY_MODE, stage });
+  } catch {
+    verified = { ok: false, findings: ["PHASE1_AGGREGATE_VERIFICATION_EXCEPTION"] };
+  }
+  const evidence = compactAggregatePhase1Evidence(aggregatePhase1EvidenceValue(verified?.evidence ?? phase1Evidence));
+  const valid = Boolean(verified?.ok === true
+    && evidence?.result === PHASE1_ACCEPTABLE_RESULT
+    && evidence?.mode === PHASE1_READY_MODE
+    && evidence?.acceptable === true
+    && evidence?.mergeAuthorityGranted === (stage === "FINAL_ADMISSION")
+    && evidence?.repository === identity?.repository
+    && evidence?.pr === identity?.pr
+    && evidence?.headSha === identity?.headSha
+    && evidence?.baseSha === identity?.baseSha
+    && evidence?.sourceTree === tree);
+  return { ok: valid, policy, evidence: valid ? evidence : null, findings: valid ? [] : [...new Set(verified?.findings ?? ["PHASE1_AGGREGATE_INVALID"])].sort() };
+};
+
+export const verifyPhase1SourceReadinessEvidence = (options = {}) => verifyPhase1AdmissionEvidence({ ...options, stage: "SOURCE_EVIDENCE" });
+export const verifyPhase1AdmissionEvidenceForMerge = (options = {}) => verifyPhase1AdmissionEvidence({ ...options, stage: "FINAL_ADMISSION" });
+const storedPhase1MatchesLive = ({ stored, live, identity, tree, root = REPOSITORY_ROOT }) => {
+  const verified = verifyPhase1SourceReadinessEvidence({ phase1Evidence: live, identity, tree, root });
+  if (!verified.ok) return false;
+  if (verified.policy === "LEGACY_EXACT_13_OF_13") return true;
+  const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity: { ...identity, tree }, mode: PHASE1_READY_MODE, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
+  return inspected.ok && stableJson(compactAggregatePhase1Evidence(inspected.evidence)) === stableJson(compactAggregatePhase1Evidence(verified.evidence));
+};
+
+export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree, root = REPOSITORY_ROOT } = {}) {
+  const verified = verifyPhase1SourceReadinessEvidence({ phase1Evidence, identity, tree, root });
+  if (!verified.ok) return null;
+  if (verified.policy === "LEGACY_EXACT_13_OF_13") return {
+    repository: phase1Evidence.repository,
+    pr: phase1Evidence.pr,
+    branch: phase1Evidence.branch,
+    baseSha: phase1Evidence.baseSha,
+    runId: phase1Evidence.runId,
+    runAttempt: phase1Evidence.runAttempt,
+    sourceHead: phase1Evidence.sourceHead,
+    sourceTree: phase1Evidence.sourceTree,
+    requiredJobs: phase1Evidence.requiredJobs,
+    passedJobs: phase1Evidence.passedJobs,
+    result: phase1Evidence.result,
+    evidenceHash: phase1Evidence.evidenceHash,
+    valid: true,
+  };
+  return structuredClone(verified.evidence);
+}
+
 export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1", objective = null, root = REPOSITORY_ROOT } = {}) {
   const observed = exactScope(scope);
+  const phase1Profile = profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2" ? phase1ControlProfile(objective) : null;
+  const terminalReceiptLifecycleCorrection = profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2" && objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
   if (profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2" && objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1
     && (stableJson(observed.changedPaths) !== stableJson(IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS)
       || observed.netChangedLines > 2000)) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID");
-  const currentTruthCompanion = authorityControlCurrentTruthCompanionV2({ identity, root });
+  if (profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2" && objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1
+    && (stableJson(observed.changedPaths) !== stableJson(PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS)
+      || Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) > 4200)) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID");
+  if (phase1Profile && (stableJson(observed.changedPaths) !== stableJson(phase1Profile.paths) || Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) > phase1Profile.maximumChangedLines)) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID");
+  if (terminalReceiptLifecycleCorrection
+    && (stableJson(observed.changedPaths) !== stableJson(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS)
+      || !Number.isSafeInteger(Number(scope?.additions)) || Number(scope?.additions) < 0
+      || !Number.isSafeInteger(Number(scope?.deletions)) || Number(scope?.deletions) < 0
+      || Number(scope.additions) + Number(scope.deletions) > 900)) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID");
+  const currentTruthCompanion = phase1Profile && !terminalReceiptLifecycleCorrection ? null : authorityControlCurrentTruthCompanionV2({ identity, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection });
   if (profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2") {
     const amendmentControlRepair = objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
     const testAdaptationOverlay = objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
     const immutableEvidenceLifecycleConvergence = objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
-    if (objective !== null && !amendmentControlRepair && !testAdaptationOverlay && !immutableEvidenceLifecycleConvergence) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_OBJECTIVE_INVALID");
+    const phase1RiskBasedAdmissionReform = objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
+    if (objective !== null && !amendmentControlRepair && !testAdaptationOverlay && !immutableEvidenceLifecycleConvergence && !phase1Profile && !terminalReceiptLifecycleCorrection) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_OBJECTIVE_INVALID");
     return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
     classification: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1",
@@ -3028,23 +3297,32 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     additions: Number(scope?.additions ?? 0),
     deletions: Number(scope?.deletions ?? 0),
     netChangedLines: observed.netChangedLines,
-    budget: immutableEvidenceLifecycleConvergence ? { maximumFiles: 8, maximumNetLines: 2000 } : { maximumFiles: 15, maximumNetLines: 3500 },
+    ...(terminalReceiptLifecycleCorrection ? { canonicalChangedLines: Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0), diffHash: scope?.diffHash ?? null } : {}),
+    budget: terminalReceiptLifecycleCorrection
+      ? { maximumFiles: 6, maximumChangedLines: 900 }
+      : phase1Profile
+      ? { maximumFiles: phase1Profile.maximumFiles, maximumChangedLines: phase1Profile.maximumChangedLines, maximumHandAuthoredNetLines: phase1Profile.maximumChangedLines }
+      : immutableEvidenceLifecycleConvergence ? { maximumFiles: 8, maximumNetLines: 2000 } : { maximumFiles: 15, maximumNetLines: 3500 },
     featureId: "assurance-efficiency-e0",
     objectiveDomains: [],
     supportingDomains: ["CI-test-infrastructure"],
-    objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
+    objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : phase1Profile ? objective : "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
     capabilities: amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
       : testAdaptationOverlay
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1]
       : immutableEvidenceLifecycleConvergence
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1]
+      : terminalReceiptLifecycleCorrection
+      ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION]
+      : phase1Profile
+      ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective]
       : ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"],
     relatedWave1Pr: 229,
     relatedAdmissionPr: 233,
     relatedOwnerComment: 5285464582,
     historicalAdmissionComment: 5290645158,
-    currentTruthCompanionIncluded: true,
+    currentTruthCompanionIncluded: !phase1Profile,
     terminalTruthRequired: false,
     authorityLevel: "LEVEL_0_1_REPOSITORY_ARCHITECTURE_MAINTENANCE",
     authority: { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false },
@@ -3052,7 +3330,8 @@ export function architectureMaintenanceSubject({ identity, tree, scope, profile 
     immutableCommentRequired: true,
     createdAtEqualsUpdatedAtRequired: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
-    reusableByAnotherPr: amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence ? false : true,
+    reusableByAnotherPr: amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile ? false : true,
+    ...(phase1RiskBasedAdmissionReform ? { admissionPublisherProvisioning: PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1 } : {}),
     ...(currentTruthCompanion ? { currentTruthCompanion } : {}),
   };
   }
@@ -3190,6 +3469,13 @@ export function architectureMaintenanceSuccessorSubject({ identity, tree, scope,
   const originalSubject = originalPayload?.subject ?? {};
   const observed = exactScope(scope);
   const addedPaths = observed.changedPaths.filter((file) => !(originalSubject.changedPaths ?? []).includes(file));
+  const terminalReceiptLifecycleCorrection = originalSubject.objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
+  if (terminalReceiptLifecycleCorrection) {
+    const historicalExact = original?.id === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentId && original?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentBodyHash && originalPayload?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.payloadBodyHash && originalPayload?.subjectHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.subjectHash && originalSubject.currentHead === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.head && originalSubject.currentTree === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.tree && originalSubject.changedPathHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.changedPathHash;
+    const changedLines = Number(scope?.additions) + Number(scope?.deletions);
+    if (!historicalExact || stableJson(observed.changedPaths) !== stableJson(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS) || stableJson(addedPaths) !== stableJson(["scripts/assurance/lib.mjs"]) || identity?.repository !== originalSubject.repository || identity?.pr !== originalSubject.pr || identity?.branch !== originalSubject.branch || identity?.baseSha !== originalSubject.protectedBase || !/^[0-9a-f]{40}$/u.test(identity?.headSha ?? "") || !/^[0-9a-f]{40}$/u.test(tree ?? "") || !Number.isSafeInteger(Number(scope?.additions)) || Number(scope.additions) < 0 || !Number.isSafeInteger(Number(scope?.deletions)) || Number(scope.deletions) < 0 || changedLines > 900 || !/^[0-9a-f]{64}$/u.test(scope?.diffHash ?? "")) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_SCOPE_INVALID");
+    return { type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_V1", classification: FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION, repository: identity.repository, pr: identity.pr, branch: identity.branch, protectedBase: identity.baseSha, originalCommentId: original.id, originalSubjectHash: originalPayload.subjectHash, originalBodyHash: original.bodyHash, originalHead: originalSubject.currentHead, originalTree: originalSubject.currentTree, originalChangedPaths: originalSubject.changedPaths, originalChangedPathHash: originalSubject.changedPathHash, originalBudget: originalSubject.budget, currentHead: identity.headSha, currentTree: tree, changedPaths: observed.changedPaths, changedPathHash: observed.changedPathHash, addedPaths, additions: Number(scope.additions), deletions: Number(scope.deletions), canonicalChangedLines: changedLines, diffHash: scope.diffHash, budget: { maximumFiles: 6, maximumChangedLines: 900 }, objective: originalSubject.objective, capabilities: originalSubject.capabilities, reason: "add the shared assurance-control runtime observer required by the finite terminal receipt lifecycle correction", authority: originalSubject.authority, ownerIdentity: { login: "Chillywood2025", association: "OWNER" }, immutableCommentRequired: true, createdAtEqualsUpdatedAtRequired: true, expiresOn: `PR_${identity.pr}_MERGE`, reusableByAnotherPr: false };
+  }
   return {
     type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SUCCESSOR_V1",
     repository: identity?.repository,
@@ -3234,22 +3520,33 @@ const historicalArchitectureReviewProjection = (raws, identity) => (raws ?? []).
     ? { commentId: normalized.id, commentBodyHash: normalized.bodyHash, subjectHash: payload.subjectHash, reviewedHead: payload.subject.reviewedHead, reviewedTree: payload.subject.reviewedTree, disposition: payload.subject.disposition, status: "HISTORICAL_EXACT_HEAD_REVIEW" }
     : null;
 }).filter(Boolean).sort((left, right) => left.commentId - right.commentId);
-export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], historicalRepositoryReviewRaws = [], repositoryReviewRaw, phase1Evidence, dependencyAmendmentRaw, dependencyAmendmentResolution = null, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
+export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], historicalRepositoryReviewRaws = [], repositoryReviewRaw, phase1Evidence, admissionPublisherProvisioningReadback = null, dependencyAmendmentRaw, dependencyAmendmentResolution = null, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject ?? {};
   const amendmentControlRepair = originalSubject.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
   const testAdaptationOverlay = originalSubject.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
   const immutableEvidenceLifecycleConvergence = originalSubject.objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
+  const phase1RiskBasedAdmissionReform = originalSubject.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
+  const phase1AdmissionRulesetCutover = originalSubject.objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1;
+  const phase1PublisherMetadataCompatibilityRepair = originalSubject.objective === PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1;
+  const terminalReceiptLifecycleCorrection = originalSubject.objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
+  const lifecycleSuccessor = terminalReceiptLifecycleCorrection ? normalizeGitHubCommentIdentity(historicalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: historicalRaw?.id }) : null;
+  const lifecycleSuccessorPayload = parseExactOwnerBody(lifecycleSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
+  const lifecycleAuthority = lifecycleSuccessorPayload?.subject?.originalCommentId === original?.id ? { receipt: lifecycleSuccessor, payload: lifecycleSuccessorPayload, subject: lifecycleSuccessorPayload.subject } : { receipt: original, payload: originalPayload, subject: originalSubject };
   if ([
     "install generic source-grounded task-local governing-edge closure for pre-admission engineering packets",
     "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession",
     FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1,
     FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
     IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1,
+    PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
+    PHASE1_ADMISSION_RULESET_CUTOVER_V1,
+    PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
+    FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
-    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : null;
+    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair ? originalSubject.objective : null;
     const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
     const historicalRepositoryReviews = dependencyAmendment ? historicalArchitectureReviewProjection(historicalRepositoryReviewRaws, identity) : [];
     const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution });
@@ -3269,11 +3566,11 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       pr: identity?.pr,
       branch: identity?.branch,
       protectedBase: identity?.baseSha,
-      originalCommentId: original?.id,
-      originalSubjectHash: originalPayload?.subjectHash,
-      originalBodyHash: original?.bodyHash,
-      originalHead: originalSubject.currentHead,
-      originalTree: originalSubject.currentTree,
+      originalCommentId: lifecycleAuthority.receipt?.id,
+      originalSubjectHash: lifecycleAuthority.payload?.subjectHash,
+      originalBodyHash: lifecycleAuthority.receipt?.bodyHash,
+      originalHead: lifecycleAuthority.subject.currentHead,
+      originalTree: lifecycleAuthority.subject.currentTree,
       currentHead: identity?.headSha,
       currentTree: tree,
       finalHead: identity?.headSha,
@@ -3284,7 +3581,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       additions: Number(scope?.additions ?? 0),
       deletions: Number(scope?.deletions ?? 0),
       netChangedLines: observed.netChangedLines,
-      budget: dependencyAmendment?.finalBudget ?? originalSubject.budget,
+      budget: dependencyAmendment?.finalBudget ?? lifecycleAuthority.subject.budget,
       objective: originalSubject.objective,
       capabilities: originalSubject.capabilities,
       receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
@@ -3299,19 +3596,10 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
         valid: review.valid,
         ...(reviewProfile ? { profile: reviewProfile } : {}),
       },
-      phase1: phase1Evidence ? {
-        runId: phase1Evidence.runId,
-        runAttempt: phase1Evidence.runAttempt,
-        sourceHead: phase1Evidence.sourceHead,
-        sourceTree: phase1Evidence.sourceTree,
-        requiredJobs: phase1Evidence.requiredJobs,
-        passedJobs: phase1Evidence.passedJobs,
-        result: phase1Evidence.result,
-        evidenceHash: phase1Evidence.evidenceHash,
-        valid: phase1Evidence.valid,
-      } : null,
+      phase1: phase1Evidence ? projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree, root }) : null,
+      ...(phase1RiskBasedAdmissionReform ? { admissionPublisherProvisioningReadback: structuredClone(admissionPublisherProvisioningReadback) } : {}),
       historicalAttestations,
-      currentTruthCompanionIncluded: true,
+      currentTruthCompanionIncluded: !(phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair),
       ...(originalSubject.currentTruthCompanion ? { currentTruthCompanion: originalSubject.currentTruthCompanion } : {}),
       terminalTruthRequired: false,
       authority: originalSubject.authority,
@@ -3962,7 +4250,7 @@ export function verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ raw = null, 
     requiredKey,
     classify: (item) => {
       const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
-      const verified = normalized ? verifyFiniteTaskAdmissionFinalSourceV2({ body: normalized.body, receipt: jurisdictionReceipt(normalized), expected: { repository: identity?.repository, product: ownerJurisdictionAuthority.taskBinding?.scope?.product, launchProgram: ownerJurisdictionAuthority.taskBinding?.scope?.launchProgram, pr: identity?.pr, task: admissionAuthority.finiteLeaseId, ownerLogin: "Chillywood2025" } }) : { ok: false };
+      const verified = normalized ? verifyFiniteTaskAdmissionFinalSourceV2({ body: normalized.body, receipt: jurisdictionReceipt(normalized), expected: { repository: identity?.repository, product: ownerJurisdictionAuthority.taskBinding?.scope?.product, launchProgram: ownerJurisdictionAuthority.taskBinding?.scope?.launchProgram, pr: identity?.pr, task: admissionAuthority.finiteLeaseId, ownerLogin: "Chillywood2025", baseSha: identity?.baseSha } }) : { ok: false };
       const subject = verified.subject;
       if (!verified.ok || !subject) return { valid: false, key: null, value: { normalized, verified, phase1: null }, disposition: "MALFORMED_INVALID" };
       const key = { repository: subject.scope?.repository ?? null, pr: subject.admissionIdentity?.pr ?? null, branch: subject.admissionIdentity?.branch ?? null, head: subject.admissionIdentity?.head ?? null, tree: subject.admissionIdentity?.tree ?? null, task: subject.admissionIdentity?.taskId ?? null };
@@ -3970,20 +4258,26 @@ export function verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ raw = null, 
       if (!sameCurrentKey) return { valid: true, key, value: { normalized, verified, phase1: null }, disposition: "HISTORICAL_STALE_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
       let phase1 = null;
       try { phase1 = phase1EvidenceResolver({ runId: subject.phase1?.runId, identity, tree, root }); } catch {}
+      const phase1Verification = verifyPhase1SourceReadinessEvidence({ phase1Evidence: phase1, identity, tree, root });
+      const phase1Projection = phase1Verification.ok
+        ? phase1Verification.policy === "LEGACY_EXACT_13_OF_13"
+          ? { head: identity?.headSha, passedJobs: phase1.passedJobs, requiredJobs: phase1.requiredJobs, result: "PASS", runId: phase1.runId, tree }
+          : structuredClone(phase1Verification.evidence)
+        : null;
+      const phase1Current = storedPhase1MatchesLive({ stored: subject.phase1, live: phase1, identity, tree, root });
       const domains = ownerJurisdictionAuthority.taskBinding?.domainIds ?? [];
       const expected = {
         ownerJurisdiction: finiteTaskFinalSourceOwnerJurisdictionV2(ownerJurisdictionAuthority),
         currentAdmission: { bodyHash: admissionAuthority.commentBodyHash, commentId: admissionAuthority.commentId, sequence: admissionAuthority.subject?.sequence, subjectHash: admissionAuthority.subjectHash },
         repositoryReview: { bodyHash: review?.commentBodyHash, commentId: review?.commentId, disposition: review?.disposition, subjectHash: review?.subjectHash },
-        phase1: { head: identity?.headSha, passedJobs: phase1?.passedJobs, requiredJobs: phase1?.requiredJobs, result: phase1?.valid ? "PASS" : "BLOCKED", runId: phase1?.runId, tree },
+        phase1: phase1Projection,
         prospective: { classification: admissionAuthority.futureTaskStatus, externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: domains.length, required: domains.length, result: `${domains.length}/${domains.length}` }, productMutationAllowedAfterAdmissionMerge: admissionAuthority.futureProductSourceMutationAllowed, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: admissionAuthority.checks?.artifact ? "CLEAR" : "BLOCKED" },
       };
       let rendered = null;
       try { rendered = renderFiniteTaskAdmissionFinalSourceV2({ scope: ownerJurisdictionAuthority.taskBinding.scope, owner: ownerJurisdictionAuthority.standingPolicy.owner, admissionIdentity: { branch: identity?.branch, head: identity?.headSha, pr: identity?.pr, taskId: admissionAuthority.finiteLeaseId, tree }, diffHash: scope?.diffHash, ...expected }); } catch {}
       const currentValid = reviewSelection.ok
         && review?.valid === true
-        && phase1?.valid === true
-        && phase1?.sourceHead !== null
+        && phase1Current
         && normalized.body === rendered?.body;
       return { valid: currentValid, key, value: { normalized, verified, phase1 }, disposition: "INVALID_CURRENT_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
     },
@@ -4007,13 +4301,43 @@ export function verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ raw = null, 
   };
 }
 
-export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, phase1EvidenceResolver = observePhase1RunEvidence, root = REPOSITORY_ROOT } = {}) {
+export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, phase1EvidenceResolver = observePhase1RunEvidence, publisherProvisioningReadbackResolver = () => null, root = REPOSITORY_ROOT } = {}) {
   const normalizedOriginal = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
   const originalPayload = parseExactOwnerBody(normalizedOriginal, ARCHITECTURE_MAINTENANCE_MARKER);
   const originalSubject = originalPayload?.subject;
+  const terminalReceiptLifecycleCorrection = originalSubject?.objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
   const originalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
   const suppliedOriginalIsSoleDiscoveredAuthority = originalMatches.length === 1 && originalMatches[0]?.id === raw?.id;
   const successorMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER}\n`));
+  const normalizedTerminalSuccessor = terminalReceiptLifecycleCorrection && successorMatches.length === 1 ? normalizeGitHubCommentIdentity(successorMatches[0], { repository: identity?.repository, pr: identity?.pr, commentId: successorMatches[0]?.id }) : null;
+  const terminalSuccessorPayload = parseExactOwnerBody(normalizedTerminalSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
+  const terminalSuccessorSubject = terminalSuccessorPayload?.subject;
+  const historicalTerminalAuthorityValid = terminalReceiptLifecycleCorrection && normalizedOriginal?.id === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentId && normalizedOriginal?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.commentBodyHash && originalPayload?.bodyHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.payloadBodyHash && originalPayload?.subjectHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.subjectHash && originalSubject?.currentHead === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.head && originalSubject?.currentTree === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.tree && originalSubject?.changedPathHash === HISTORICAL_TERMINAL_RECEIPT_LIFECYCLE_AUTHORITY.changedPathHash && normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject);
+  let expectedTerminalSuccessor = null;
+  try {
+    expectedTerminalSuccessor = terminalReceiptLifecycleCorrection ? architectureMaintenanceSuccessorSubject({
+      identity: { ...identity, baseSha: terminalSuccessorSubject?.protectedBase, headSha: terminalSuccessorSubject?.currentHead },
+      tree: terminalSuccessorSubject?.currentTree,
+      scope: { files: terminalSuccessorSubject?.changedPaths, additions: terminalSuccessorSubject?.additions, deletions: terminalSuccessorSubject?.deletions, diffHash: terminalSuccessorSubject?.diffHash },
+      originalRaw: raw,
+    }) : null;
+  } catch {}
+  const terminalSuccessorAnchorTree = terminalReceiptLifecycleCorrection ? typedGit(root, ["rev-parse", `${terminalSuccessorSubject?.currentHead}^{tree}`]) : { status: 1, stdout: "" };
+  const terminalSuccessorCurrentTree = terminalReceiptLifecycleCorrection ? typedGit(root, ["rev-parse", `${identity?.headSha}^{tree}`]) : { status: 1, stdout: "" };
+  const terminalSuccessorAnchorScope = terminalReceiptLifecycleCorrection ? observeFiniteTaskGitScope(root, terminalSuccessorSubject?.protectedBase, terminalSuccessorSubject?.currentHead) : null;
+  const terminalSuccessorCurrentScope = terminalReceiptLifecycleCorrection ? observeFiniteTaskGitScope(root, identity?.baseSha, identity?.headSha) : null;
+  const strictNumstat = (base, head) => { const run = terminalReceiptLifecycleCorrection ? typedGit(root, ["diff", "--numstat", `${base}...${head}`]) : { status: 1, stdout: "" }; return run.status === 0 && run.stdout.split(/\r?\n/gu).filter(Boolean).every((line) => { const [added, deleted, file] = line.split("\t"); return /^\d+$/u.test(added ?? "") && /^\d+$/u.test(deleted ?? "") && Boolean(file); }); };
+  const terminalSuccessorAnchorValid = Boolean(historicalTerminalAuthorityValid && normalizedTerminalSuccessor && expectedTerminalSuccessor && terminalSuccessorPayload?.subjectHash === hashValue(terminalSuccessorSubject) && terminalSuccessorPayload?.bodyHash === hashValue(Object.fromEntries(Object.entries(terminalSuccessorPayload).filter(([key]) => key !== "bodyHash"))) && normalizedTerminalSuccessor.body === architectureMaintenanceSuccessorOwnerCommentBody(terminalSuccessorSubject) && stableJson(terminalSuccessorSubject) === stableJson(expectedTerminalSuccessor) && terminalSuccessorSubject.originalHead !== terminalSuccessorSubject.currentHead && gitAncestor(root, terminalSuccessorSubject.originalHead, terminalSuccessorSubject.currentHead) && terminalSuccessorAnchorTree.status === 0 && terminalSuccessorAnchorTree.stdout.trim() === terminalSuccessorSubject.currentTree && terminalSuccessorAnchorScope && strictNumstat(terminalSuccessorSubject.protectedBase, terminalSuccessorSubject.currentHead) && stableJson(terminalSuccessorAnchorScope.files) === stableJson(terminalSuccessorSubject.changedPaths) && terminalSuccessorAnchorScope.additions === terminalSuccessorSubject.additions && terminalSuccessorAnchorScope.deletions === terminalSuccessorSubject.deletions && terminalSuccessorAnchorScope.additions + terminalSuccessorAnchorScope.deletions === terminalSuccessorSubject.canonicalChangedLines && terminalSuccessorAnchorScope.diffHash === terminalSuccessorSubject.diffHash);
+  const terminalAuthorityBaseAdvancement = terminalReceiptLifecycleCorrection ? verifyFiniteTaskTerminalBaseAdvancement({ repository: identity?.repository, baseRef: identity?.baseRef, historicalImplementationMerge: terminalSuccessorSubject?.protectedBase, currentProtectedBase: identity?.baseSha, expectedCurrentProtectedBase: identity?.baseSha, root }) : { ok: false };
+  const terminalSuccessorValid = Boolean(terminalSuccessorAnchorValid
+    && terminalSuccessorSubject.repository === identity?.repository && terminalSuccessorSubject.pr === identity?.pr && terminalSuccessorSubject.branch === identity?.branch
+    && terminalAuthorityBaseAdvancement.ok && gitAncestor(root, terminalSuccessorSubject.currentHead, identity?.headSha) && gitAncestor(root, identity?.baseSha, identity?.headSha)
+    && strictNumstat(identity?.baseSha, identity?.headSha) && /^[0-9a-f]{40}$/u.test(tree ?? "") && terminalSuccessorCurrentTree.status === 0 && terminalSuccessorCurrentTree.stdout.trim() === tree
+    && terminalSuccessorCurrentScope && stableJson(terminalSuccessorCurrentScope.files) === stableJson(FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS) && stableJson(exactScope(scope).changedPaths) === stableJson(terminalSuccessorCurrentScope.files)
+    && Number.isSafeInteger(Number(scope?.additions)) && Number(scope.additions) >= 0 && Number.isSafeInteger(Number(scope?.deletions)) && Number(scope.deletions) >= 0
+    && Number(scope.additions) === terminalSuccessorCurrentScope.additions && Number(scope.deletions) === terminalSuccessorCurrentScope.deletions && scope?.diffHash === terminalSuccessorCurrentScope.diffHash
+    && Number(scope.additions) + Number(scope.deletions) <= 900 && /^[0-9a-f]{64}$/u.test(scope?.diffHash ?? ""));
+  const effectiveTerminalAuthority = terminalSuccessorValid ? { normalized: normalizedTerminalSuccessor, payload: terminalSuccessorPayload, subject: terminalSuccessorSubject } : { normalized: normalizedOriginal, payload: originalPayload, subject: originalSubject };
   const finalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
   const dependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${PRE_ADMISSION_DEPENDENCY_AMENDMENT_MARKER}\n`));
   const architectureDependencyAmendmentMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER}\n`));
@@ -4026,11 +4350,12 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     : null;
   const architectureDependencyAmendmentActive = architectureDependencyAmendment?.valid === true;
   const architectureDependencyProjection = dependencyAmendmentProjection(architectureDependencyAmendment);
-  const companionRequired = authorityControlCurrentTruthCompanionV2Required({ identity, root });
+  const phase1ControlAuthority = phase1ControlProfile(originalSubject?.objective);
+  const companionRequired = (!phase1ControlAuthority || terminalReceiptLifecycleCorrection) && authorityControlCurrentTruthCompanionV2Required({ identity, root });
   let expectedCompanion = null;
-  try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root }); } catch { expectedCompanion = null; }
+  try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection }); } catch { expectedCompanion = null; }
   let originalCompanion = null;
-  try { originalCompanion = authorityControlCurrentTruthCompanionV2({ identity: { ...identity, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead }, root }); } catch { originalCompanion = null; }
+  try { originalCompanion = authorityControlCurrentTruthCompanionV2({ identity: { ...identity, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead }, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection, historicalEmbeddedCompanion: historicalTerminalAuthorityValid }); } catch { originalCompanion = null; }
   const subjectHasCompanion = Object.hasOwn(originalSubject ?? {}, "currentTruthCompanion");
   const requiredCompanionPaths = originalCompanion?.requiredChangedPaths ?? [];
   const protectedBaseAdvanced = originalSubject?.protectedBase !== identity?.baseSha
@@ -4040,6 +4365,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       && stableJson(originalSubject?.currentTruthCompanion) === stableJson(originalCompanion)
       && expectedCompanion
       && (stableJson(expectedCompanion) === stableJson(originalCompanion)
+        || terminalReceiptLifecycleCorrection && terminalAuthorityBaseAdvancement.ok
         || architectureDependencyAmendmentActive && protectedBaseAdvanced)
       && requiredCompanionPaths.every((file) => observed.changedPaths.includes(file) && originalSubject?.changedPaths?.includes(file)))
     : !subjectHasCompanion;
@@ -4070,13 +4396,23 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1,
     FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
     IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1,
+    PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
+    PHASE1_ADMISSION_RULESET_CUTOVER_V1,
+    PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
+    FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject?.objective)) {
     const jurisdictionModel = originalSubject?.objective === "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession";
     const amendmentControlRepair = originalSubject?.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
     const testAdaptationOverlay = originalSubject?.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
     const immutableEvidenceLifecycleConvergence = originalSubject?.objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
-    const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence;
-    const architecturePaths = immutableEvidenceLifecycleConvergence
+    const phase1RiskBasedAdmissionReform = originalSubject?.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
+    const phase1Profile = phase1ControlProfile(originalSubject?.objective);
+    const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile;
+    const architecturePaths = terminalReceiptLifecycleCorrection
+      ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS
+      : phase1Profile
+      ? phase1Profile.paths
+      : immutableEvidenceLifecycleConvergence
       ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS
       : ownerJurisdictionProfile
       ? [
@@ -4084,23 +4420,28 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           ...(architectureDependencyAmendmentActive ? architectureDependencyAmendment.effectiveAddedPaths ?? DEPENDENCY_AMENDMENT_ADDED_PATHS : []),
         ]
       : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
-    const maximumFiles = immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12;
-    const maximumNetLines = immutableEvidenceLifecycleConvergence ? 2000 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200;
-    const originalMaximumFiles = immutableEvidenceLifecycleConvergence ? 8 : ownerJurisdictionProfile ? 15 : 12;
-    const originalMaximumNetLines = immutableEvidenceLifecycleConvergence ? 2000 : ownerJurisdictionProfile ? 3500 : 3200;
+    const maximumFiles = terminalReceiptLifecycleCorrection ? 6 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12);
+    const maximumNetLines = terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200);
+    const originalMaximumFiles = terminalReceiptLifecycleCorrection ? 5 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : ownerJurisdictionProfile ? 15 : 12);
+    const originalMaximumNetLines = terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : ownerJurisdictionProfile ? 3500 : 3200);
     const expectedCapabilities = amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
       : testAdaptationOverlay
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1]
       : immutableEvidenceLifecycleConvergence
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1]
+      : terminalReceiptLifecycleCorrection
+      ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION]
+      : phase1Profile
+      ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", originalSubject.objective]
       : jurisdictionModel
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]
       : [TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1];
     const payloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
-    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : null;
+    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : phase1Profile ? originalSubject.objective : null;
     const reviewSelection = selectCurrentArchitectureRepositoryReview({ comments: allComments, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution: architectureDependencyAmendmentActive ? architectureDependencyAmendment : null, root });
-    const requiredFinalKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, finalHead: identity?.headSha, finalTree: tree, objective: originalSubject?.objective, originalCommentId: normalizedOriginal?.id ?? null };
+    const currentAuthorityCommentId = terminalReceiptLifecycleCorrection && terminalSuccessorValid ? normalizedTerminalSuccessor.id : normalizedOriginal?.id ?? null;
+    const requiredFinalKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, finalHead: identity?.headSha, finalTree: tree, objective: originalSubject?.objective, originalCommentId: currentAuthorityCommentId };
     const finalSelection = selectCurrentImmutableEvidence({
       candidates: finalMatches,
       requiredKey: requiredFinalKey,
@@ -4134,23 +4475,35 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           && (ownerJurisdictionProfile || !finalMatches.some((candidate) => candidate.id === 5289720389) || claimedHistoricalIds.includes(5289720389));
         let phase1 = null;
         try { phase1 = phase1EvidenceResolver({ runId: subject.phase1?.runId, identity, tree, root }); } catch {}
+        let publisherProvisioningReadback = null;
+        if (phase1RiskBasedAdmissionReform) {
+          try { publisherProvisioningReadback = publisherProvisioningReadbackResolver({ identity, root }); } catch {}
+        }
         const expected = architectureFinalSourceSubject({
           identity,
           tree,
           scope,
           originalRaw: raw,
+          historicalRaw: terminalReceiptLifecycleCorrection ? normalizedTerminalSuccessor : null,
           historicalAttestationRaws: claimedHistoricalRaws,
           historicalRepositoryReviewRaws: claimedHistoricalReviewRaws,
           repositoryReviewRaw: reviewSelection.raw,
           phase1Evidence: phase1,
+          admissionPublisherProvisioningReadback: subject.admissionPublisherProvisioningReadback,
           dependencyAmendmentResolution: architectureDependencyAmendmentActive ? architectureDependencyAmendment : null,
           root,
         });
+        const phase1Current = storedPhase1MatchesLive({ stored: subject.phase1, live: phase1, identity, tree, root });
+        const publisherProvisioningCurrent = !phase1RiskBasedAdmissionReform || (phase1AdmissionPublisherProvisioningReadbackValid(subject.admissionPublisherProvisioningReadback)
+          && subject.admissionPublisherProvisioningReadback?.ruleset?.stage === "PRE_CUTOVER_13_RAW"
+          && verifyProtectedPhase1PublisherProvisioningReadback(publisherProvisioningReadback)
+          && stableJson(subject.admissionPublisherProvisioningReadback) === stableJson(publisherProvisioningReadback));
         const currentValid = historyBinding
           && reviewSelection.ok
           && reviewSelection.review?.valid === true
           && subject.repositoryReview?.commentId === reviewSelection.review.commentId
-          && phase1?.valid === true
+          && phase1Current
+          && publisherProvisioningCurrent
           && subject.receiptLifecycleContract === ASSURANCE_RECEIPT_LIFECYCLE_V2
           && stableJson(subject) === stableJson(expected)
           && normalized.body === architectureFinalSourceOwnerCommentBody(expected);
@@ -4159,15 +4512,15 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     });
     const currentFinal = finalSelection.selected?.value ?? null;
     const ancestry = ancestryVerified ?? (originalSubject?.currentHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.currentHead, identity?.headSha]).status === 0);
-    const canonicalOriginalSubject = architectureMaintenanceSubject({
-      identity: { repository: originalSubject?.repository, pr: originalSubject?.pr, branch: originalSubject?.branch, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead },
+    const canonicalOriginalSubject = terminalReceiptLifecycleCorrection ? (historicalTerminalAuthorityValid ? originalSubject : null) : architectureMaintenanceSubject({
+      identity: { repository: originalSubject?.repository, pr: originalSubject?.pr, branch: originalSubject?.branch, baseRef: identity?.baseRef, baseSha: originalSubject?.protectedBase, headSha: originalSubject?.currentHead },
       tree: originalSubject?.currentTree,
-      scope: { files: originalSubject?.changedPaths, additions: originalSubject?.additions, deletions: originalSubject?.deletions, netChangedLines: originalSubject?.netChangedLines },
+      scope: { files: originalSubject?.changedPaths, additions: originalSubject?.additions, deletions: originalSubject?.deletions, netChangedLines: originalSubject?.netChangedLines, diffHash: originalSubject?.diffHash },
       profile: ownerJurisdictionProfile ? "OWNER_JURISDICTION_CANONICAL_MODEL_V2" : "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
-      objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : null,
+      objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : phase1Profile ? originalSubject.objective : null,
       root,
     });
-    const canonicalProfile = stableJson(originalSubject) === stableJson(canonicalOriginalSubject);
+    const canonicalProfile = stableJson(originalSubject) === stableJson(canonicalOriginalSubject) && (!terminalReceiptLifecycleCorrection || terminalSuccessorValid);
     const assuranceOnlyNonDomainMaintenance = canonicalProfile
       && Array.isArray(originalSubject?.objectiveDomains)
       && originalSubject.objectiveDomains.length === 0
@@ -4179,21 +4532,25 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       currentTruthCompanion: companionValid,
       body: normalizedOriginal?.body === architectureMaintenanceOwnerCommentBody(originalSubject),
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
-      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === originalMaximumFiles && originalSubject?.budget?.maximumNetLines === originalMaximumNetLines,
-      ancestry,
-      cardinality: paginationComplete && suppliedOriginalIsSoleDiscoveredAuthority && successorMatches.length === 0 && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
+      binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || terminalReceiptLifecycleCorrection && terminalAuthorityBaseAdvancement.ok || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === originalMaximumFiles && (terminalReceiptLifecycleCorrection
+        ? terminalSuccessorValid && effectiveTerminalAuthority.subject?.budget?.maximumFiles === maximumFiles && effectiveTerminalAuthority.subject?.budget?.maximumChangedLines === 900
+        : phase1Profile
+        ? originalSubject?.budget?.maximumChangedLines === originalMaximumNetLines && originalSubject?.budget?.maximumHandAuthoredNetLines === originalMaximumNetLines
+        : originalSubject?.budget?.maximumNetLines === originalMaximumNetLines),
+      ancestry: terminalReceiptLifecycleCorrection ? terminalSuccessorValid : ancestry,
+      cardinality: paginationComplete && suppliedOriginalIsSoleDiscoveredAuthority && successorMatches.length === (terminalReceiptLifecycleCorrection ? 1 : 0) && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
       dependencyAmendment: immutableEvidenceLifecycleConvergence
         ? architectureDependencyAmendmentMatches.length === 0 && architectureDependencyWitnessAmendmentMatches.length === 0
         : architectureDependencyAmendmentMatches.length === 0
         ? architectureDependencyWitnessAmendmentMatches.length === 0
         : architectureDependencyAmendmentActive,
-      exactPaths: (immutableEvidenceLifecycleConvergence ? stableJson(observed.changedPaths) === stableJson(architecturePaths) : observed.changedPaths.every((file) => architecturePaths.includes(file))) && (architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
-      budget: observed.changedPaths.length <= maximumFiles && observed.netChangedLines <= maximumNetLines,
+      exactPaths: ((immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile) ? stableJson(observed.changedPaths) === stableJson(architecturePaths) : observed.changedPaths.every((file) => architecturePaths.includes(file))) && (terminalReceiptLifecycleCorrection ? terminalSuccessorValid : architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
+      budget: observed.changedPaths.length <= maximumFiles && (terminalReceiptLifecycleCorrection || phase1Profile ? Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) : observed.netChangedLines) <= maximumNetLines,
       authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && (noCompetingDomainOwner || assuranceOnlyNonDomainMaintenance),
       capability: canonicalProfile
         && stableJson(originalSubject?.capabilities) === stableJson(expectedCapabilities)
         && originalSubject?.terminalTruthRequired === false
-        && originalSubject?.reusableByAnotherPr === (amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence ? false : true),
+        && originalSubject?.reusableByAnotherPr === (amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile ? false : true),
     };
     const authorizationOk = Object.values(authorizationChecks).every(Boolean);
     const attestationChecks = {
@@ -4201,7 +4558,8 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         || dependencyAmendmentReadyForFinalEvidence(architectureDependencyAmendment),
       exactlyOneCurrent: finalSelection.currentCount === 1,
       currentReview: reviewSelection.ok && currentFinal?.payload?.subject?.repositoryReview?.valid === true && currentFinal.payload.subject.repositoryReview.commentId === reviewSelection.review?.commentId,
-      currentPhase1: currentFinal?.payload?.subject?.phase1?.valid === true && currentFinal?.payload?.subject?.phase1?.result === "PASS_13_OF_13",
+      currentPhase1: storedPhase1MatchesLive({ stored: currentFinal?.payload?.subject?.phase1, live: currentFinal?.phase1, identity, tree, root }),
+      ...(phase1RiskBasedAdmissionReform ? { publisherProvisioningReadback: finalSelection.ok } : {}),
     };
     const mergeEligible = authorizationOk && Object.values(attestationChecks).every(Boolean);
     return {
@@ -4220,11 +4578,15 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       historicalWaiverPath: null,
       authoritySource: "IMMUTABLE_OWNER_ARCHITECTURE_MAINTENANCE",
       bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`,
-      budget: { maximumFiles, maximumHandAuthoredNetLines: maximumNetLines },
-      commentId: normalizedOriginal?.id ?? null,
-      commentBodyHash: normalizedOriginal?.bodyHash ?? null,
-      subjectHash: originalPayload?.subjectHash ?? null,
-      subject: originalSubject,
+      budget: terminalReceiptLifecycleCorrection
+        ? { maximumFiles, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 }
+        : phase1Profile
+        ? { maximumFiles, maximumChangedLines: maximumNetLines, maximumHandAuthoredNetLines: maximumNetLines }
+        : { maximumFiles, maximumHandAuthoredNetLines: maximumNetLines },
+      commentId: effectiveTerminalAuthority.normalized?.id ?? null,
+      commentBodyHash: effectiveTerminalAuthority.normalized?.bodyHash ?? null,
+      subjectHash: effectiveTerminalAuthority.payload?.subjectHash ?? null,
+      subject: effectiveTerminalAuthority.subject,
       originalCommentId: normalizedOriginal?.id ?? null,
       originalBodyHash: normalizedOriginal?.bodyHash ?? null,
       originalSubjectHash: originalPayload?.subjectHash ?? null,
@@ -4619,17 +4981,7 @@ export function finiteTaskTerminalTruthFinalSourceSubject({ identity, tree, scop
       profile: FINITE_TASK_TERMINAL_TRUTH_V1,
       valid: review.valid,
     },
-    phase1: phase1Evidence ? {
-      runId: phase1Evidence.runId,
-      runAttempt: phase1Evidence.runAttempt,
-      sourceHead: phase1Evidence.sourceHead,
-      sourceTree: phase1Evidence.sourceTree,
-      requiredJobs: phase1Evidence.requiredJobs,
-      passedJobs: phase1Evidence.passedJobs,
-      result: phase1Evidence.result,
-      evidenceHash: phase1Evidence.evidenceHash,
-      valid: phase1Evidence.valid,
-    } : null,
+    phase1: phase1Evidence ? projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree }) : null,
     authority: ownerPayload?.subject?.authority ?? null,
     ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
     immutableCommentRequired: true,
@@ -4638,6 +4990,68 @@ export function finiteTaskTerminalTruthFinalSourceSubject({ identity, tree, scop
   };
 }
 export const finiteTaskTerminalTruthFinalSourceOwnerCommentBody = (subject) => ownerCommentBody(ARCHITECTURE_FINAL_SOURCE_MARKER, subject.type, subject);
+
+const exactCommitAt = (root, sha) => {
+  if (!/^[0-9a-f]{40}$/u.test(sha ?? "")) return false;
+  const resolved = typedGit(root, ["rev-parse", "--verify", `${sha}^{commit}`]);
+  return resolved.status === 0 && resolved.stdout.trim() === sha;
+};
+
+export function verifyFiniteTaskTerminalBaseAdvancement({ repository, baseRef, historicalImplementationMerge, currentProtectedBase, expectedCurrentProtectedBase, root = REPOSITORY_ROOT } = {}) {
+  const exactIdentity = repository === "Chillywood2025/chillywood-mobile" && baseRef === "main" && currentProtectedBase === expectedCurrentProtectedBase;
+  const commitsExist = exactCommitAt(root, historicalImplementationMerge) && exactCommitAt(root, currentProtectedBase);
+  const ancestorRun = commitsExist ? typedGit(root, ["merge-base", "--is-ancestor", historicalImplementationMerge, currentProtectedBase]) : { status: 1 };
+  const historyRun = commitsExist ? typedGit(root, ["rev-list", "--first-parent", currentProtectedBase]) : { status: 1, stdout: "" };
+  const firstParentHistory = historyRun.status === 0 ? historyRun.stdout.trim().split(/\r?\n/gu).filter(Boolean) : [];
+  const checks = { identity: exactIdentity, commitsExist, ancestor: ancestorRun.status === 0, firstParent: historyRun.status === 0 && firstParentHistory.length === new Set(firstParentHistory).size && firstParentHistory.includes(historicalImplementationMerge) };
+  const ok = Object.values(checks).every(Boolean);
+  return { ok, relationship: ok ? historicalImplementationMerge === currentProtectedBase ? "IDENTICAL" : "FIRST_PARENT_ANCESTOR" : "INVALID", historicalImplementationMerge, currentProtectedBase, checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `FINITE_TASK_TERMINAL_BASE_ADVANCEMENT_INVALID:${key}`) };
+}
+
+const terminalTruthReceiptKey = (subject) => ({ repository: subject?.repository ?? null, pr: subject?.pr ?? null, branch: subject?.branch ?? null, protectedBase: subject?.protectedBase ?? null, startingHead: subject?.startingHead ?? null, startingTree: subject?.startingTree ?? null, changedPathHash: subject?.changedPathHash ?? null, diffHash: subject?.diffHash ?? null, priorCurrentTruthHash: subject?.priorCurrentTruthHash ?? null, implementationTerminalEvidenceHash: subject?.implementationTerminalEvidenceHash ?? null, subjectHash: subject ? hashValue(subject) : null });
+
+const terminalEvidenceHashValid = (evidence) => {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
+  const body = { ...evidence }; delete body.evidenceHash;
+  return /^[0-9a-f]{64}$/u.test(evidence.evidenceHash ?? "") && evidence.evidenceHash === hashValue(body);
+};
+
+const historicalTerminalTruthReceiptValid = ({ subject, terminalEvidence, identity, root }) => {
+  const historicalIdentity = { repository: subject?.repository, pr: subject?.pr, branch: subject?.branch, baseSha: subject?.protectedBase, headSha: subject?.startingHead };
+  const historicalScope = gitScope(root, subject?.protectedBase, subject?.startingHead);
+  const priorTruthRun = /^[0-9a-f]{40}$/u.test(subject?.protectedBase ?? "") ? typedGit(root, ["show", `${subject.protectedBase}:config/assurance/current-truth-v1.json`]) : { status: 1, stdout: "" };
+  const historicalExpected = historicalScope ? finiteTaskTerminalTruthSubject({ identity: historicalIdentity, tree: subject.startingTree, scope: historicalScope, terminalTransition: { terminalEvidence: subject.implementationTerminalEvidence }, priorTruthHash: priorTruthRun.status === 0 ? hashValue(priorTruthRun.stdout) : null }) : null;
+  const implementationToReceiptBase = verifyFiniteTaskTerminalBaseAdvancement({ repository: identity?.repository, baseRef: identity?.baseRef, historicalImplementationMerge: terminalEvidence?.mergeSha, currentProtectedBase: subject?.protectedBase, expectedCurrentProtectedBase: subject?.protectedBase, root });
+  const receiptBaseToCurrent = verifyFiniteTaskTerminalBaseAdvancement({ repository: identity?.repository, baseRef: identity?.baseRef, historicalImplementationMerge: subject?.protectedBase, currentProtectedBase: identity?.baseSha, expectedCurrentProtectedBase: identity?.baseSha, root });
+  return Boolean(historicalExpected && stableJson(subject) === stableJson(historicalExpected) && stableJson(subject.implementationTerminalEvidence) === stableJson(terminalEvidence) && terminalEvidenceHashValid(subject.implementationTerminalEvidence) && typedGit(root, ["rev-parse", `${subject.startingHead}^{tree}`]).stdout.trim() === subject.startingTree && gitAncestor(root, subject.protectedBase, subject.startingHead) && gitAncestor(root, subject.startingHead, identity?.headSha) && implementationToReceiptBase.ok && receiptBaseToCurrent.ok);
+};
+
+export function selectFiniteTaskTerminalTruthOwnerReceipts({ comments = [], paginationComplete = false, identity, tree, scope, terminalTransition, priorTruthHash, root = REPOSITORY_ROOT } = {}) {
+  const candidates = (Array.isArray(comments) ? comments : []).filter(({ body }) => typeof body === "string" && body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
+  const terminalEvidence = terminalTransition?.terminalEvidence ?? null;
+  const expected = finiteTaskTerminalTruthSubject({ identity, tree, scope, terminalTransition, priorTruthHash });
+  const requiredKey = terminalTruthReceiptKey(expected);
+  const selection = selectCurrentImmutableEvidence({
+    candidates,
+    requiredKey,
+    classify: (item) => {
+      const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
+      const payload = parseExactOwnerBody(normalized, TERMINAL_TRUTH_SUCCESSOR_MARKER);
+      const payloadWithoutHash = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+      const subject = payload?.subject;
+      const canonical = Boolean(normalized && payload?.schemaVersion === 1 && payload?.evidenceClass === "OWNER_INTENT" && payload?.authorizationId === FINITE_TASK_TERMINAL_TRUTH_V1.toLowerCase() && payload?.type === FINITE_TASK_TERMINAL_TRUTH_V1 && payload?.repository === identity?.repository && payload?.pr === identity?.pr && subject?.type === FINITE_TASK_TERMINAL_TRUTH_V1 && subject?.repository === identity?.repository && subject?.pr === identity?.pr && subject?.branch === identity?.branch && payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(payloadWithoutHash) && normalized.body === finiteTaskTerminalTruthOwnerCommentBody(subject) && terminalEvidenceHashValid(subject?.implementationTerminalEvidence) && Object.values(subject?.authority ?? {}).every((value) => value === false));
+      if (!canonical) return { valid: false, key: null, value: { raw: item, normalized, payload }, disposition: "INVALID_TERMINAL_RECEIPT" };
+      const key = terminalTruthReceiptKey(subject);
+      const currentKey = stableJson(key) === stableJson(requiredKey);
+      const currentValid = currentKey && stableJson(subject) === stableJson(expected);
+      const historicalValid = !currentKey && historicalTerminalTruthReceiptValid({ subject, terminalEvidence, identity, root });
+      return { valid: currentValid || historicalValid, key, value: { raw: item, normalized, payload }, disposition: historicalValid ? "HISTORICAL_VALID" : "INVALID_CURRENT_OR_HISTORICAL_TERMINAL_RECEIPT" };
+    },
+  });
+  const classifications = selection.classifications.map((classification) => ({ commentId: candidates[classification.index]?.id ?? null, status: classification.disposition, valid: classification.valid, current: classification.current, key: classification.key })).sort((left, right) => (left.commentId ?? 0) - (right.commentId ?? 0));
+  const historyValid = paginationComplete === true && classifications.every(({ valid }) => valid);
+  return { ...selection, ok: selection.ok && historyValid, historyValid, requiredKey, current: selection.selected?.value ?? null, classifications };
+}
 
 export function verifyFiniteTaskTerminalTruthAuthority({
   raw,
@@ -4661,32 +5075,15 @@ export function verifyFiniteTaskTerminalTruthAuthority({
 } = {}) {
   const observed = exactScope(scope);
   const terminalEvidence = terminalTransition?.terminalEvidence;
-  const ownerMatches = allComments.filter(({ body }) => typeof body === "string" && body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
-  const owner = normalizeGitHubCommentIdentity(raw, { repository: identity?.repository, pr: identity?.pr, commentId: raw?.id });
-  const ownerPayload = parseExactOwnerBody(owner, TERMINAL_TRUTH_SUCCESSOR_MARKER);
+  const ownerSelection = selectFiniteTaskTerminalTruthOwnerReceipts({ comments: allComments, paginationComplete, identity, tree, scope, terminalTransition, priorTruthHash, root });
+  const owner = ownerSelection.current?.normalized ?? null;
+  const ownerPayload = ownerSelection.current?.payload ?? null;
   const ownerSubject = ownerPayload?.subject;
-  const ownerPayloadWithoutHash = Object.fromEntries(Object.entries(ownerPayload ?? {}).filter(([key]) => key !== "bodyHash"));
   const ancestry = ancestryVerified ?? (ownerSubject?.startingHead === identity?.headSha || typedGit(root, ["merge-base", "--is-ancestor", ownerSubject?.startingHead, identity?.headSha]).status === 0);
-  const ownerCanonical = Boolean(owner
-    && ownerSubject?.type === FINITE_TASK_TERMINAL_TRUTH_V1
-    && ownerPayload?.subjectHash === hashValue(ownerSubject)
-    && ownerPayload?.bodyHash === hashValue(ownerPayloadWithoutHash)
-    && owner.body === finiteTaskTerminalTruthOwnerCommentBody(ownerSubject));
-  const ownerBinding = ownerCanonical
-    && ownerSubject.repository === identity?.repository
-    && ownerSubject.pr === identity?.pr
-    && ownerSubject.branch === identity?.branch
-    && ownerSubject.protectedBase === identity?.baseSha
-    && stableJson(ownerSubject.changedPaths) === stableJson(TERMINAL_TRUTH_PATHS)
-    && ownerSubject.budget?.maximumFiles === 3
-    && ownerSubject.budget?.maximumNetLines === 1200
-    && ownerSubject.priorCurrentTruthHash === priorTruthHash
-    && stableJson(ownerSubject.implementationTerminalEvidence) === stableJson(terminalEvidence)
-    && ownerSubject.implementationTerminalEvidenceHash === terminalEvidence?.evidenceHash
-    && ownerSubject.expectedNextTask === terminalEvidence?.nextTask
-    && ownerSubject.immutableBaseLeaseRequired === true
-    && ownerSubject.exactThreePathTransition === true
-    && Object.values(ownerSubject.authority ?? {}).every((value) => value === false);
+  const expectedOwnerSubject = finiteTaskTerminalTruthSubject({ identity, tree, scope, terminalTransition, priorTruthHash });
+  const ownerCanonical = Boolean(owner && stableJson(ownerSubject) === stableJson(expectedOwnerSubject));
+  const ownerBinding = ownerCanonical && ownerSelection.ok;
+  const baseAdvancement = verifyFiniteTaskTerminalBaseAdvancement({ repository: identity?.repository, baseRef: identity?.baseRef, historicalImplementationMerge: terminalEvidence?.mergeSha, currentProtectedBase: identity?.baseSha, expectedCurrentProtectedBase: currentMain, root });
   const reviewSelection = selectCurrentArchitectureRepositoryReview({ comments: allComments, identity, tree, scope, profile: FINITE_TASK_TERMINAL_TRUTH_V1, root });
   const review = reviewSelection.review;
   const finalMatches = allComments.filter(({ body }) => typeof body === "string" && body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_MARKER}\n`));
@@ -4713,11 +5110,12 @@ export function verifyFiniteTaskTerminalTruthAuthority({
       if (stableJson(key) !== stableJson(requiredFinalKey)) return { valid: true, key, value: { normalized, payload, phase1: null }, disposition: "HISTORICAL_STALE_TERMINAL_FINAL_SOURCE" };
       let phase1 = null;
       try { phase1 = phase1EvidenceResolver({ runId: subject.phase1?.runId, identity, tree }); } catch {}
-      const expected = finiteTaskTerminalTruthFinalSourceSubject({ identity, tree, scope, ownerRaw: raw, repositoryReviewRaw: reviewSelection.raw, phase1Evidence: phase1, terminalTransition });
+      const expected = finiteTaskTerminalTruthFinalSourceSubject({ identity, tree, scope, ownerRaw: ownerSelection.current?.raw, repositoryReviewRaw: reviewSelection.raw, phase1Evidence: phase1, terminalTransition });
+      const phase1Current = storedPhase1MatchesLive({ stored: subject.phase1, live: phase1, identity, tree, root });
       const currentValid = reviewSelection.ok
         && review?.valid === true
         && subject.repositoryReview?.commentId === review.commentId
-        && phase1?.valid === true
+        && phase1Current
         && stableJson(subject) === stableJson(expected)
         && normalized.body === finiteTaskTerminalTruthFinalSourceOwnerCommentBody(expected);
       return { valid: currentValid, key, value: { normalized, payload, phase1 }, disposition: "INVALID_CURRENT_TERMINAL_FINAL_SOURCE" };
@@ -4759,10 +5157,10 @@ export function verifyFiniteTaskTerminalTruthAuthority({
   const checks = {
     identity: ownerCanonical && identity?.baseSha === currentMain,
     ownerBinding,
-    ownerCardinality: paginationComplete && ownerMatches.length === 1 && ownerMatches[0]?.id === raw?.id,
+    ownerCardinality: ownerSelection.ok && ownerSelection.historyValid && ownerSelection.currentCount === 1,
     ancestry,
     exactPaths: stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_PATHS) && observed.netChangedLines <= 1200,
-    transition: finiteTaskPostMergeTransitionAuthorityValid(terminalTransition) && terminalEvidence?.mergeSha === identity?.baseSha,
+    transition: finiteTaskPostMergeTransitionAuthorityValid(terminalTransition) && baseAdvancement.ok,
     immutableBaseLease: Boolean(baseLease && priorBaseLease && stableJson(baseLease) === stableJson(priorBaseLease) && hashValue(baseLease) === terminalEvidence?.baseLeaseHash),
     terminalFeatureIdentity,
     terminalProjection: stableJson(truthRecord?.finiteTaskRuntime?.terminalOutcome) === stableJson(terminalEvidence)
@@ -4783,7 +5181,7 @@ export function verifyFiniteTaskTerminalTruthAuthority({
       && currentStateText === canonicalCurrent
       && nextTaskText === canonicalNext,
     review: reviewSelection.ok && stableJson(review?.disposition) === stableJson({ P0: 0, P1: 0, launchImpactingP2: 0 }),
-    phase1: phase1?.valid === true && phase1?.result === "PASS_13_OF_13" && phase1?.sourceHead === identity?.headSha && phase1?.sourceTree === tree,
+    phase1: storedPhase1MatchesLive({ stored: currentFinal?.payload?.subject?.phase1, live: phase1, identity, tree, root }),
     finalSource: finalValid,
     singleUse: openTerminalSuccessorCount === 1 && transitionPreviouslyConsumed === false,
     authorityClosed: Object.values(ownerSubject?.authority ?? {}).every((value) => value === false)
@@ -4812,6 +5210,9 @@ export function verifyFiniteTaskTerminalTruthAuthority({
     budget: { maximumFiles: 3, maximumHandAuthoredNetLines: 1200 },
     commentId: owner?.id ?? null,
     currentFinalSourceReceiptId: currentFinal?.normalized?.id ?? null,
+    terminalOwnerReceiptClassifications: ownerSelection.classifications,
+    historicalOwnerReceiptIds: ownerSelection.classifications.filter(({ status }) => status === "HISTORICAL_VALID").map(({ commentId }) => commentId),
+    baseAdvancement,
     repositoryReviewClassifications: reviewSelection.classifications,
     finalSourceReceiptClassifications: finalSelection.classifications.map((classification) => ({ commentId: finalMatches[classification.index]?.id ?? null, status: classification.disposition, valid: classification.valid, current: classification.current, key: classification.key })),
     subjectHash: ownerPayload?.subjectHash ?? null,
@@ -4862,30 +5263,81 @@ export function terminalTruthSuccessorSubject({ identity, tree, scope, predecess
 }
 export const terminalTruthSuccessorOwnerCommentBody = (subject) => ownerCommentBody(TERMINAL_TRUTH_SUCCESSOR_MARKER, subject.type, subject);
 
-const TERMINAL_REPAIR_CLASSIFICATION = "CANONICAL_PREDECESSOR_RECEIPT_SELECTION_REPAIR_V1";
 const TERMINAL_REPAIR_HISTORICAL_COMMENT_ID = 5280368893;
 const REJECTED_PREDECESSOR_RECEIPT = Object.freeze({
   commentId: 5277679438,
   diffHash: "ea1b96e5c6515b05b7499ff7a528c0440a409e064d65fe0a7e65d44ec64b619b",
   disposition: "HISTORICAL_REJECTED_CANONICALIZATION",
 });
+const TERMINAL_REPAIR_CLOSED_AUTHORITY = Object.freeze({ product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false });
+const historicalTerminalVerifierRepairProfile = Object.freeze({ maximumFiles: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, maximumNetLines: 1800 });
+const TERMINAL_REPAIR_PRELIMINARY_RECEIPT_STAGE = "PRELIMINARY_HISTORY_BINDING";
 
-export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw } = {}) {
+const terminalRepairPreliminaryInputValid = ({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw, terminalVerifierRepairInstanceId, repairProfile, consumedPendingTransitions, historicalRepair }) => {
+  const observed = exactScope(scope);
+  const canonicalReceipt = predecessorAuthority?.canonicalFinalSourceReceipt;
+  return historicalRepair === false
+    && originalRaw == null
+    && terminalVerifierRepairInstanceId === undefined
+    && stableJson(repairProfile) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE)
+    && identity?.repository === "Chillywood2025/chillywood-mobile"
+    && Number.isInteger(identity?.pr) && identity.pr > 0
+    && /^codex\/[a-z0-9][a-z0-9._/-]*$/u.test(identity?.branch ?? "")
+    && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "")
+    && /^[0-9a-f]{40}$/u.test(identity?.baseSha ?? "")
+    && /^[0-9a-f]{40}$/u.test(tree ?? "")
+    && /^[0-9a-f]{64}$/u.test(priorTruthHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(scope?.diffHash ?? "")
+    && stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS)
+    && Number.isInteger(scope?.netChangedLines) && scope.netChangedLines >= 0
+    && observed.netChangedLines <= repairProfile.maximumNetLines
+    && predecessor?.valid === true
+    && predecessor?.protectedBaseAncestor === true
+    && Number.isInteger(predecessor?.pr) && predecessor.pr > 0
+    && /^[0-9a-f]{40}$/u.test(predecessor?.mergeSha ?? "")
+    && /^[0-9a-f]{40}$/u.test(predecessor?.firstParent ?? "")
+    && /^[0-9a-f]{40}$/u.test(predecessor?.sourceHead ?? "")
+    && /^[0-9a-f]{40}$/u.test(predecessor?.sourceTree ?? "")
+    && predecessorAuthority?.ok === true
+    && predecessorAuthority?.authorizationOk === true
+    && predecessorAuthority?.mergeEligible === true
+    && predecessorAuthority?.currentHead === predecessor.sourceHead
+    && predecessorAuthority?.currentTree === predecessor.sourceTree
+    && Number.isInteger(predecessorAuthority?.commentId) && predecessorAuthority.commentId > 0
+    && /^[0-9a-f]{64}$/u.test(predecessorAuthority?.subjectHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(predecessorAuthority?.commentBodyHash ?? "")
+    && Number.isInteger(canonicalReceipt?.commentId) && canonicalReceipt.commentId > 0
+    && predecessorAuthority?.currentFinalSourceReceiptId === canonicalReceipt.commentId
+    && /^[0-9a-f]{64}$/u.test(canonicalReceipt?.subjectHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(canonicalReceipt?.commentBodyHash ?? "")
+    && /^[0-9a-f]{64}$/u.test(canonicalReceipt?.diffHash ?? "")
+    && Array.isArray(consumedPendingTransitions)
+    && consumedPendingTransitions.length === 1
+    && stableJson(consumedPendingTransitions[0]) === stableJson({ pr: predecessor.pr, mergeSha: predecessor.mergeSha, sourceHead: predecessor.sourceHead, sourceTree: predecessor.sourceTree, authorityCommentId: predecessorAuthority.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" });
+};
+
+export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw, terminalVerifierRepairInstanceId, repairProfile = TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, consumedPendingTransitions, historicalRepair = identity?.pr === 228 && repairProfile.maximumFiles === HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.length, preliminaryReceipt = false } = {}) {
+  if (preliminaryReceipt && !terminalRepairPreliminaryInputValid({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw, terminalVerifierRepairInstanceId, repairProfile, consumedPendingTransitions, historicalRepair })) {
+    throw new TypeError("ASSURANCE_TERMINAL_REPAIR_PRELIMINARY_RECEIPT_INVALID");
+  }
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, TERMINAL_TRUTH_SUCCESSOR_MARKER);
   const observed = exactScope(scope);
+  const canonicalPredecessorAuthority = historicalRepair ? predecessorAuthority : predecessorAuthority?.canonicalFinalSourceReceipt;
   return {
     type: "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1",
-    classification: TERMINAL_REPAIR_CLASSIFICATION,
+    classification: TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION,
     repository: identity?.repository,
     pr: identity?.pr,
     branch: identity?.branch,
     head: identity?.headSha,
     tree,
     baseMerge: identity?.baseSha,
-    originalTerminalReceipt: { commentId: original?.id, subjectHash: originalPayload?.subjectHash, bodyHash: originalPayload?.bodyHash },
-    canonicalPredecessorReceipt: { commentId: predecessorAuthority?.commentId, subjectHash: predecessorAuthority?.subjectHash, bodyHash: predecessorAuthority?.commentBodyHash },
-    rejectedPredecessorReceipt: { ...REJECTED_PREDECESSOR_RECEIPT },
+    ...(preliminaryReceipt
+      ? { receiptStage: TERMINAL_REPAIR_PRELIMINARY_RECEIPT_STAGE }
+      : { originalTerminalReceipt: { commentId: original?.id, subjectHash: originalPayload?.subjectHash, bodyHash: originalPayload?.bodyHash } }),
+    canonicalPredecessorReceipt: { commentId: canonicalPredecessorAuthority?.commentId, subjectHash: canonicalPredecessorAuthority?.subjectHash, bodyHash: canonicalPredecessorAuthority?.commentBodyHash },
+    ...(historicalRepair ? { rejectedPredecessorReceipt: { ...REJECTED_PREDECESSOR_RECEIPT } } : {}),
     predecessorPr: predecessor?.pr,
     predecessorSourceHead: predecessor?.sourceHead,
     predecessorSourceTree: predecessor?.sourceTree,
@@ -4893,7 +5345,7 @@ export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, sc
     doctrinePr: 226,
     doctrineMerge: TYPED_CONTEXT_DOCTRINE_MERGE,
     pendingTransitionPolicyId: PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId,
-    pendingTransitions: [
+    pendingTransitions: consumedPendingTransitions ?? [
       { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, sourceHead: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceHead, sourceTree: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.sourceTree, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
       { pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, sourceHead: predecessor?.sourceHead, sourceTree: predecessor?.sourceTree, authorityCommentId: predecessorAuthority?.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
     ],
@@ -4903,26 +5355,112 @@ export function terminalTruthSuccessorVerifierRepairSubject({ identity, tree, sc
     changedPathHash: observed.changedPathHash,
     diffHash: scope?.diffHash ?? null,
     netChangedLines: observed.netChangedLines,
-    budget: { maximumFiles: 8, maximumNetLines: 1800 },
+    budget: { maximumFiles: repairProfile.maximumFiles, maximumNetLines: repairProfile.maximumNetLines },
     expectedDoctrineStatus: "ACTIVE",
     expectedNextTask: TYPED_CONTEXT_NEXT_TASK,
-    authority: { product: false, nativeProduct: false, database: false, providerMutation: false, build: false, submission: false, ota: false, publicRelease: false },
+    authority: { ...TERMINAL_REPAIR_CLOSED_AUTHORITY },
     ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
     immutableCommentRequired: true,
     createdAtEqualsUpdatedAtRequired: true,
     singleUse: true,
     expiresOn: `PR_${identity?.pr}_MERGE`,
+    ...(preliminaryReceipt || terminalVerifierRepairInstanceId === undefined ? {} : { terminalVerifierRepairInstanceId }),
   };
 }
 export const terminalTruthSuccessorVerifierRepairOwnerCommentBody = (subject) => ownerCommentBody(TERMINAL_TRUTH_SUCCESSOR_MARKER, subject.type, subject);
 
-export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText, nextTaskText, currentMain, openTerminalSuccessorCount = 1, transitionPreviouslyConsumed = false } = {}) {
+const canonicalTerminalRepairPreliminaryReceipt = ({ payload, identity, predecessor, predecessorAuthority, priorTruthHash, repairProfile, consumedPendingTransitions }) => {
+  const candidate = payload?.subject;
+  if (candidate?.receiptStage !== TERMINAL_REPAIR_PRELIMINARY_RECEIPT_STAGE
+    || Object.hasOwn(candidate ?? {}, "originalTerminalReceipt")
+    || Object.hasOwn(candidate ?? {}, "terminalVerifierRepairInstanceId")
+    || candidate?.head === identity?.headSha
+    || !/^[0-9a-f]{40}$/u.test(candidate?.head ?? "")
+    || !/^[0-9a-f]{40}$/u.test(candidate?.tree ?? "")
+    || !/^[0-9a-f]{64}$/u.test(candidate?.diffHash ?? "")
+    || !Number.isInteger(candidate?.netChangedLines)) return false;
+  let expected;
+  try {
+    expected = terminalTruthSuccessorVerifierRepairSubject({
+      identity: { ...identity, headSha: candidate.head },
+      tree: candidate.tree,
+      scope: { files: candidate.changedPaths, netChangedLines: candidate.netChangedLines, diffHash: candidate.diffHash },
+      predecessor,
+      predecessorAuthority,
+      priorTruthHash,
+      repairProfile,
+      consumedPendingTransitions,
+      historicalRepair: false,
+      preliminaryReceipt: true,
+    });
+  } catch {
+    return false;
+  }
+  return stableJson(candidate) === stableJson(expected)
+    && payload?.subjectHash === hashValue(expected);
+};
+
+const legacyTerminalVerifierRepairRecordValid = (repairRecord) => repairRecord?.classification === TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION
+  && repairRecord?.historicalTerminalReceipt === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID
+  && repairRecord?.rejectedPredecessorReceipt === REJECTED_PREDECESSOR_RECEIPT.commentId
+  && repairRecord?.canonicalPredecessorReceipt === 5280109323
+  && repairRecord?.rawPredecessorDiffHash === REJECTED_PREDECESSOR_RECEIPT.diffHash
+  && repairRecord?.canonicalPredecessorDiffHash === "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea"
+  && stableJson(repairRecord?.changedVerifierPaths) === stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.filter((file) => !TERMINAL_TRUTH_PATHS.includes(file)))
+  && repairRecord?.singleUse === true
+  && stableJson(repairRecord?.authority) === stableJson(TERMINAL_REPAIR_CLOSED_AUTHORITY);
+
+const priorTerminalVerifierRepairInstances = (priorTruth) => {
+  const repairRecord = priorTruth?.taskContextArchitecture?.terminalVerifierRepair;
+  if (repairRecord?.history) {
+    const evaluated = evaluateTerminalVerifierRepairHistory({ repair: repairRecord });
+    return evaluated.ok ? evaluated.instances : null;
+  }
+  return legacyTerminalVerifierRepairRecordValid(repairRecord)
+    ? [...HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY.instances]
+    : null;
+};
+
+export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], paginationComplete = false, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText, nextTaskText, currentMain, openTerminalSuccessorCount = 1, transitionPreviouslyConsumed = false } = {}) {
   const matches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
   const observed = exactScope(scope);
-  const repairMode = stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
-  const originalRaw = matches.find(({ id }) => id === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID);
+  const historicalRepairMode = identity?.pr === 228 && stableJson(observed.changedPaths) === stableJson(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
+  const currentRepairMode = stableJson(observed.changedPaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
+  const repairMode = historicalRepairMode || currentRepairMode;
+  const architecture = truthRecord?.taskContextArchitecture;
+  const doctrine = truthRecord?.engineeringDoctrine;
+  const repairRecord = architecture?.terminalVerifierRepair;
+  const expectedRepairPendingTransitions = currentRepairMode && !historicalRepairMode
+    ? [{ pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }]
+    : [
+      { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    ];
+  const expectedPriorInstances = currentRepairMode && !historicalRepairMode ? priorTerminalVerifierRepairInstances(priorTruth) : null;
+  const repairHistory = currentRepairMode && !historicalRepairMode && expectedPriorInstances
+    ? evaluateTerminalVerifierRepairHistory({
+      repair: repairRecord,
+      expectedPriorInstances,
+      expectedCurrent: {
+        repository: identity?.repository,
+        pullRequest: identity?.pr,
+        branch: identity?.branch,
+        protectedBase: identity?.baseSha,
+        priorCurrentTruthHash: priorTruthHash,
+        pendingTransitions: expectedRepairPendingTransitions,
+        expectedNextTask: TYPED_CONTEXT_NEXT_TASK,
+      },
+    })
+    : { ok: false, current: null, instances: [] };
+  const repairInstance = repairHistory.ok ? repairHistory.current : null;
+  const originalReceiptId = repairInstance?.receiptBindings?.historicalTerminalReceipt?.commentId ?? (historicalRepairMode ? TERMINAL_REPAIR_HISTORICAL_COMMENT_ID : null);
+  const originalRaw = matches.find(({ id }) => id === originalReceiptId);
+  const repairProfile = historicalRepairMode ? historicalTerminalVerifierRepairProfile : TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE;
+  const consumedPendingTransitions = currentRepairMode && !historicalRepairMode
+    ? [{ pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, sourceHead: predecessor?.sourceHead, sourceTree: predecessor?.sourceTree, authorityCommentId: predecessorAuthority?.commentId, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" }]
+    : undefined;
   const subject = repairMode
-    ? terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw })
+    ? terminalTruthSuccessorVerifierRepairSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, originalRaw, terminalVerifierRepairInstanceId: repairInstance?.instanceId, repairProfile, consumedPendingTransitions, historicalRepair: historicalRepairMode })
     : terminalTruthSuccessorSubject({ identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash });
   const expectedBody = repairMode ? terminalTruthSuccessorVerifierRepairOwnerCommentBody(subject) : terminalTruthSuccessorOwnerCommentBody(subject);
   const requiredReceiptKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, head: identity?.headSha, tree, type: subject.type, subjectHash: hashValue(subject) };
@@ -4956,30 +5494,79 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
     status: classification.disposition,
   }));
   const current = receiptSelection.selected?.value ?? null;
-  const architecture = truthRecord?.taskContextArchitecture;
-  const doctrine = truthRecord?.engineeringDoctrine;
   const canonicalCurrent = truthRecord ? renderCurrentState(truthRecord) : null;
   const canonicalNext = truthRecord ? renderNextTask(truthRecord) : null;
-  const repairRecord = architecture?.terminalVerifierRepair;
-  const repairRecordValid = !repairMode || (repairRecord?.classification === TERMINAL_REPAIR_CLASSIFICATION
-    && repairRecord?.historicalTerminalReceipt === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID
-    && repairRecord?.rejectedPredecessorReceipt === REJECTED_PREDECESSOR_RECEIPT.commentId
-    && repairRecord?.canonicalPredecessorReceipt === 5280109323
-    && repairRecord?.rawPredecessorDiffHash === REJECTED_PREDECESSOR_RECEIPT.diffHash
-    && repairRecord?.canonicalPredecessorDiffHash === "ce2b3dd4004f7fb8a8a2af4e1a6d83a6c2e17453f714b1eb9ff26a62588490ea"
-    && stableJson(repairRecord?.changedVerifierPaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.filter((file) => !TERMINAL_TRUTH_PATHS.includes(file)))
-    && repairRecord?.singleUse === true
-    && stableJson(repairRecord?.authority) === stableJson(subject.authority));
-  const expectedPaths = repairMode ? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS;
-  const maximumLines = repairMode ? 1800 : 1200;
+  const originalNormalized = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalReceiptId });
+  const originalPayload = parseExactOwnerBody(originalNormalized, TERMINAL_TRUTH_SUCCESSOR_MARKER);
+  const historicalReceiptBinding = repairInstance?.receiptBindings?.historicalTerminalReceipt;
+  const canonicalPredecessorReceipt = repairInstance?.receiptBindings?.predecessorReceipts?.find(({ disposition }) => disposition === "CANONICAL_CURRENT");
+  const ownerArchitecturePredecessorReceipt = repairInstance?.receiptBindings?.predecessorReceipts?.find(({ disposition }) => disposition === "OWNER_ARCHITECTURE_AUTHORITY");
+  const liveCanonicalPredecessorReceipt = predecessorAuthority?.canonicalFinalSourceReceipt;
+  const originalPreliminaryReceiptValid = currentRepairMode && !historicalRepairMode
+    ? canonicalTerminalRepairPreliminaryReceipt({ payload: originalPayload, identity, predecessor, predecessorAuthority, priorTruthHash, repairProfile, consumedPendingTransitions })
+    : true;
+  const currentRepairRecordValid = Boolean(repairHistory.ok
+    && repairInstance
+    && legacyTerminalVerifierRepairRecordValid(repairRecord)
+    && subject.terminalVerifierRepairInstanceId === repairInstance.instanceId
+    && originalNormalized?.id === historicalReceiptBinding?.commentId
+    && originalPayload?.subjectHash === historicalReceiptBinding?.subjectHash
+    && originalNormalized?.bodyHash === historicalReceiptBinding?.commentBodyHash
+    && historicalReceiptBinding?.disposition === "HISTORICAL_STALE_TERMINAL_RECEIPT"
+    && originalPreliminaryReceiptValid
+    && repairInstance.predecessor?.pullRequest === predecessor?.pr
+    && repairInstance.predecessor?.mergeSha === predecessor?.mergeSha
+    && repairInstance.predecessor?.firstParent === predecessor?.firstParent
+    && repairInstance.predecessor?.sourceHead === predecessor?.sourceHead
+    && repairInstance.predecessor?.sourceTree === predecessor?.sourceTree
+    && repairInstance.predecessor?.authorityCommentId === predecessorAuthority?.commentId
+    && repairInstance.predecessor?.authoritySubjectHash === predecessorAuthority?.subjectHash
+    && repairInstance.predecessor?.authorityBodyHash === predecessorAuthority?.commentBodyHash
+    && ownerArchitecturePredecessorReceipt?.commentId === predecessorAuthority?.commentId
+    && ownerArchitecturePredecessorReceipt?.subjectHash === predecessorAuthority?.subjectHash
+    && ownerArchitecturePredecessorReceipt?.commentBodyHash === predecessorAuthority?.commentBodyHash
+    && ownerArchitecturePredecessorReceipt?.diffHash === undefined
+    && canonicalPredecessorReceipt?.commentId === liveCanonicalPredecessorReceipt?.commentId
+    && canonicalPredecessorReceipt?.subjectHash === liveCanonicalPredecessorReceipt?.subjectHash
+    && canonicalPredecessorReceipt?.commentBodyHash === liveCanonicalPredecessorReceipt?.commentBodyHash
+    && canonicalPredecessorReceipt?.diffHash === liveCanonicalPredecessorReceipt?.diffHash
+    && architecture?.authorityCommentId === predecessorAuthority?.commentId
+    && architecture?.authoritySubjectHash === predecessorAuthority?.subjectHash
+    && architecture?.authorityBodyHash === predecessorAuthority?.commentBodyHash
+    && stableJson(repairInstance.authority) === stableJson(subject.authority));
+  const repairRecordValid = !repairMode
+    || (historicalRepairMode ? legacyTerminalVerifierRepairRecordValid(repairRecord) : currentRepairRecordValid);
+  const expectedPaths = historicalRepairMode
+    ? HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS
+    : repairMode ? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS;
+  const maximumLines = repairMode ? repairProfile.maximumNetLines : 1200;
+  const expectedArchitecturePendingTransitions = currentRepairMode && !historicalRepairMode
+    ? [
+      { pr: 226, mergeSha: HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+      { pr: predecessor?.pr, mergeSha: predecessor?.mergeSha, status: "CONSUMED_BY_THIS_TERMINAL_TRUTH" },
+    ]
+    : subject.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }));
   const checks = {
     identity: Boolean(current?.normalized) && identity?.baseSha === currentMain,
     body: current?.normalized?.body === expectedBody,
     hashes: current?.payload?.subjectHash === hashValue(subject) && current?.payload?.bodyHash === hashValue(Object.fromEntries(Object.entries(current?.payload ?? {}).filter(([key]) => key !== "bodyHash"))),
-    singleComment: paginationComplete && receiptSelection.currentCount === 1 && (!repairMode || receipts.some(({ normalized, status }) => normalized?.id === TERMINAL_REPAIR_HISTORICAL_COMMENT_ID && status === "HISTORICAL_STALE_TERMINAL_RECEIPT")),
+    singleComment: paginationComplete && receiptSelection.currentCount === 1 && (!repairMode || receipts.some(({ normalized, status }) => normalized?.id === originalReceiptId && status === "HISTORICAL_STALE_TERMINAL_RECEIPT")),
     exactPaths: stableJson(observed.changedPaths) === stableJson(expectedPaths) && observed.netChangedLines <= maximumLines,
-    predecessor: predecessor?.valid === true && predecessor?.mergeSha === identity?.baseSha && predecessor?.firstParent === TYPED_CONTEXT_DOCTRINE_MERGE && predecessor?.sourceHead === predecessorAuthority?.subject?.currentHead && predecessor?.sourceTree === predecessorAuthority?.subject?.currentTree && predecessorAuthority?.ok === true && predecessorAuthority?.subject?.terminalTruthRequired === true,
-    generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && architecture?.pendingTransitionPolicyId === PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId && architecture?.pendingTransitionCountAfterSynchronization === 0 && stableJson(architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) === stableJson(subject.pendingTransitions.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext && repairRecordValid,
+    predecessor: predecessor?.valid === true
+      && (currentRepairMode && !historicalRepairMode
+        ? predecessor?.protectedBaseAncestor === true
+          && predecessor?.sourceHead === predecessorAuthority?.currentHead
+          && predecessor?.sourceTree === predecessorAuthority?.currentTree
+          && predecessorAuthority?.authorizationOk === true
+          && predecessorAuthority?.mergeEligible === true
+          && Number.isInteger(predecessorAuthority?.currentFinalSourceReceiptId)
+        : predecessor?.mergeSha === identity?.baseSha
+          && predecessor?.firstParent === TYPED_CONTEXT_DOCTRINE_MERGE
+          && predecessor?.sourceHead === predecessorAuthority?.subject?.currentHead
+          && predecessor?.sourceTree === predecessorAuthority?.subject?.currentTree
+          && predecessorAuthority?.subject?.terminalTruthRequired === true)
+      && predecessorAuthority?.ok === true,
+    generatedTruth: doctrine?.status === "ACTIVE" && doctrine?.nextPermittedAction === TYPED_CONTEXT_NEXT_TASK && architecture?.architecturePr === predecessor?.pr && architecture?.sourceHead === predecessor?.sourceHead && architecture?.sourceTree === predecessor?.sourceTree && architecture?.mergeSha === predecessor?.mergeSha && architecture?.terminalTransitionConsumed === true && architecture?.pendingTransitionPolicyId === PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1.policyId && architecture?.pendingTransitionCountAfterSynchronization === 0 && stableJson(architecture?.pendingTransitions?.map(({ pr, mergeSha, status }) => ({ pr, mergeSha, status }))) === stableJson(expectedArchitecturePendingTransitions) && Array.isArray(truthRecord?.openImplementationPrs) && truthRecord.openImplementationPrs.length === 0 && currentStateText === canonicalCurrent && nextTaskText === canonicalNext && repairRecordValid,
     authorityClosed: Object.values(subject.authority ?? {}).every((value) => value === false) && architecture?.authority?.build === false && architecture?.authority?.submission === false && architecture?.authority?.ota === false && architecture?.authority?.publicRelease === false,
     singleUse: openTerminalSuccessorCount === 1 && transitionPreviouslyConsumed === false,
   };
@@ -4994,7 +5581,7 @@ export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSy
   const endpoint = args.at(-1);
   const paginated = args.includes("--paginate") && args.includes("--slurp");
   const pathname = typeof endpoint === "string" ? endpoint.split("?", 1)[0] : "";
-  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/(?:files|commits))?)?|issues\/[1-9]\d*\/(?:comments|timeline)|commits\/[0-9a-f]{40}\/pulls)$/u.test(pathname);
+  const allowedPath = /^repos\/Chillywood2025\/chillywood-mobile\/(?:pulls(?:\/[1-9]\d*(?:\/(?:files|commits))?)?|issues\/[1-9]\d*\/(?:comments|timeline)|commits\/[0-9a-f]{40}\/(?:pulls|check-runs)|actions\/runs\/[1-9]\d*(?:\/jobs)?)$/u.test(pathname);
   if (!allowedPath || /(?:\.\.|%2e|%2f|#)/iu.test(endpoint)) return authenticated;
   const pages = [];
   for (let page = 1; page <= 20; page += 1) {
@@ -5024,27 +5611,37 @@ const paginatedIssueComments = (root, repository, pr) => { const result = pagina
 const paginatedPullCommits = (root, repository, pr) => { const result = paginatedArray(root, `repos/${repository}/pulls/${pr}/commits?per_page=100`); return { complete: result.complete, commits: result.values }; };
 export function observePhase1RunEvidence({ runId, identity, tree, root = REPOSITORY_ROOT } = {}) {
   if (!Number.isInteger(runId) || runId < 1 || identity?.repository !== "Chillywood2025/chillywood-mobile") return verifyPhase1RunEvidence({ identity, tree });
+  if (phase1AdmissionPolicyForBase({ identity, root }) === "RISK_BASED_AGGREGATE_V1") return null;
   const run = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}`]), null);
   const jobsPayload = parsedResponse(typedGh(root, [`repos/${identity.repository}/actions/runs/${runId}/jobs?per_page=100`]), null);
   const jobs = Array.isArray(jobsPayload?.jobs) && jobsPayload.total_count === jobsPayload.jobs.length ? jobsPayload.jobs : [];
+  let durablePullRequestProvenance = null;
+  if (run?.event === "pull_request"
+    && Array.isArray(run.pull_requests)
+    && run.pull_requests.length === 0
+    && run.head_sha === identity?.headSha
+    && /^[0-9a-f]{40}$/u.test(run.head_sha ?? "")) {
+    const directResponse = typedGh(root, [`repos/${identity.repository}/pulls/${identity.pr}`]);
+    const directPullRequest = parsedResponse(directResponse, null);
+    const commitAssociation = paginatedArray(root, `repos/${identity.repository}/commits/${run.head_sha}/pulls?per_page=100`);
+    durablePullRequestProvenance = {
+      directPullRequestReadComplete: directResponse.status === 0 && directPullRequest !== null && !Array.isArray(directPullRequest),
+      directPullRequest,
+      commitAssociationPaginationComplete: commitAssociation.complete,
+      commitAssociatedPullRequests: commitAssociation.values,
+    };
+    trustedDurablePhase1PullRequestProvenance.add(durablePullRequestProvenance);
+  }
   const pullRequest = parsedResponse(typedGh(root, [`repos/${identity.repository}/pulls/${identity.pr}`]), null);
   const lifecycle = paginatedArray(root, `repos/${identity.repository}/issues/${identity.pr}/timeline?per_page=100`);
   const workflowAtHead = typedGit(root, ["show", `${identity.headSha}:.github/workflows/phase1-ci.yml`]);
   const workflowAtBase = typedGit(root, ["show", `${identity.baseSha}:.github/workflows/phase1-ci.yml`]);
-  // The policy carrier activates itself from its head. Once merged, protected
-  // bases retain activation even if a later PR tries to delete or obfuscate the
-  // trigger declaration. Only history whose head and protected base both
-  // verifiably predate activation receives merged-only compatibility.
   const lifecyclePolicyRequired = phase1LifecyclePolicyRequired({
     headWorkflowSource: workflowAtHead.stdout,
     baseWorkflowSource: workflowAtBase.stdout,
     headWorkflowReadable: workflowAtHead.status === 0,
     baseWorkflowReadable: workflowAtBase.status === 0,
   });
-  // The protected base durably activates the lifecycle policy, but cannot
-  // substitute for current-head provenance. Policy-bound evidence is valid
-  // only when the exact head workflow still triggers every lifecycle edge and
-  // derives its display title from the immutable GitHub event fields.
   const lifecycleDisplayProvenanceConfigured = workflowAtHead.status === 0
     && phase1WorkflowProvidesLifecycleRunProvenance(workflowAtHead.stdout);
   return verifyPhase1RunEvidence({
@@ -5052,12 +5649,331 @@ export function observePhase1RunEvidence({ runId, identity, tree, root = REPOSIT
     jobs,
     identity,
     tree,
+    expectedRunId: runId,
+    durablePullRequestProvenance,
     pullRequest,
     lifecycleEvents: lifecycle.values,
     lifecyclePaginationComplete: lifecycle.complete,
     lifecyclePolicyRequired,
     lifecycleDisplayProvenanceConfigured,
   });
+}
+
+const phase1PublisherAnchorProof = ({ repository, anchorType, sourcePr = null, sourceBranch = null, anchorHash = null, provisioningReadback = null, paginationComplete = false, immutableOwnerEvidence = false, configurationSourceVerified = false, cutoverLock = null, stageReceiptChainHash = null, findings = [] } = {}) => ({
+  schemaVersion: 1,
+  contract: "PHASE1_ADMISSION_PUBLISHER_ANCHOR_RESOLUTION_V1",
+  producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1",
+  repository,
+  anchorType,
+  sourcePr,
+  sourceBranch,
+  anchorHash,
+  provisioningReadbackHash: provisioningReadback?.readbackHash ?? null,
+  currentRulesetStage: provisioningReadback?.ruleset?.stage ?? null,
+  appId: provisioningReadback?.app?.id ?? null,
+  clientId: provisioningReadback?.app?.clientId ?? null,
+  installationId: provisioningReadback?.installation?.id ?? null,
+  environmentId: provisioningReadback?.environment?.id ?? null,
+  aggregateCheckIntegrationId: provisioningReadback?.aggregate?.integrationId ?? null,
+  paginationComplete,
+  immutableOwnerEvidence,
+  configurationSourceVerified,
+  cutoverLock,
+  stageReceiptChainHash,
+  findings: [...new Set(findings)].sort(),
+});
+
+const exactOwnerPayload = (raw, { repository, pr, marker, expectedBody } = {}) => {
+  const normalized = normalizeGitHubCommentIdentity(raw, { repository, pr, commentId: raw?.id });
+  const payload = parseExactOwnerBody(normalized, marker);
+  const body = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+  const subject = payload?.subject;
+  return normalized && subject
+    && payload?.schemaVersion === 1 && payload?.evidenceClass === "OWNER_INTENT"
+    && payload?.repository === repository && payload?.pr === pr && payload?.type === subject.type
+    && payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(body)
+    && normalized.body === expectedBody(subject)
+    ? { normalized, payload, subject }
+    : null;
+};
+
+const phase1PublisherAnchorSummaryMatches = (anchor, readback) => Boolean(
+  anchor?.provisioningReadbackHash === readback?.readbackHash
+  && anchor?.appId === readback?.app?.id
+  && anchor?.clientId === readback?.app?.clientId
+  && anchor?.installationId === readback?.installation?.id
+  && anchor?.environmentId === readback?.environment?.id
+  && anchor?.aggregateCheckIntegrationId === readback?.aggregate?.integrationId
+  && anchor?.rulesetNodeId === readback?.ruleset?.nodeId
+  && anchor?.rulesetProviderUpdatedAt === readback?.ruleset?.providerUpdatedAt
+  && anchor?.prestatePutPayloadSha256 === readback?.ruleset?.prestatePutPayloadSha256
+  && anchor?.stage1PutPayloadSha256 === readback?.ruleset?.stage1PutPayloadSha256
+  && anchor?.finalPutPayloadSha256 === readback?.ruleset?.finalPutPayloadSha256
+  && anchor?.rollbackPutPayloadSha256 === readback?.ruleset?.rollbackPutPayloadSha256
+  && anchor?.currentRulesetStage === readback?.ruleset?.stage
+);
+
+const phase1PublisherStableProvisioningProjection = (readback) => ({
+  schemaVersion: readback?.schemaVersion,
+  contract: readback?.contract,
+  repository: readback?.repository,
+  owner: readback?.owner,
+  originalContractHash: readback?.originalContractHash,
+  app: readback?.app,
+  installation: readback?.installation,
+  environment: readback?.environment,
+  aggregate: readback?.aggregate,
+  ruleset: {
+    id: readback?.ruleset?.id,
+    nodeId: readback?.ruleset?.nodeId,
+    prestatePutPayloadSha256: readback?.ruleset?.prestatePutPayloadSha256,
+    stage1PutPayloadSha256: readback?.ruleset?.stage1PutPayloadSha256,
+    finalPutPayloadSha256: readback?.ruleset?.finalPutPayloadSha256,
+    rollbackPutPayloadSha256: readback?.ruleset?.rollbackPutPayloadSha256,
+  },
+  authority: readback?.authority,
+});
+
+export function verifyPhase1AdmissionPublisherImmutableAnchor({ anchor, liveProvisioningReadback, comments = [], paginationComplete = false, repository = "Chillywood2025/chillywood-mobile" } = {}) {
+  const findings = [];
+  const policy = PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.r2ImmutableAnchor;
+  const required = policy.requiredFields;
+  if (!anchor || typeof anchor !== "object" || Array.isArray(anchor)
+    || stableJson(Object.keys(anchor).sort()) !== stableJson([...required].sort())
+    || required.some((field) => anchor[field] === undefined)) findings.push("PHASE1_PUBLISHER_ANCHOR_SCHEMA_INVALID");
+  const anchorBody = Object.fromEntries(Object.entries(anchor ?? {}).filter(([key]) => key !== "anchorHash"));
+  if (anchor?.schemaVersion !== 1 || anchor?.contract !== policy.contract
+    || !/^[0-9a-f]{64}$/u.test(anchor?.anchorHash ?? "") || anchor?.anchorHash !== hashValue(anchorBody)) findings.push("PHASE1_PUBLISHER_ANCHOR_HASH_INVALID");
+  if (!phase1AdmissionPublisherProvisioningReadbackValid(anchor?.provisioningReadback)
+    || anchor?.provisioningReadback?.ruleset?.bypassReadback !== "EXPLICIT_EMPTY"
+    || !phase1AdmissionPublisherProvisioningReadbackValid(liveProvisioningReadback)
+    || stableJson(phase1PublisherStableProvisioningProjection(anchor?.provisioningReadback)) !== stableJson(phase1PublisherStableProvisioningProjection(liveProvisioningReadback))
+    || !phase1PublisherAnchorSummaryMatches(anchor, anchor?.provisioningReadback)) findings.push("PHASE1_PUBLISHER_ANCHOR_PROVISIONING_READBACK_INVALID");
+  if (!paginationComplete || !Array.isArray(comments)) findings.push("PHASE1_PUBLISHER_ANCHOR_COMMENT_PAGINATION_INCOMPLETE");
+  const intentRaws = comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${policy.sourceIntentMarker}\n`));
+  const intentCandidates = intentRaws.map((raw) => exactOwnerPayload(raw, { repository, pr: anchor?.sourcePr, marker: policy.sourceIntentMarker, expectedBody: architectureMaintenanceOwnerCommentBody })).filter((value) => value?.subject?.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1);
+  const intent = intentCandidates.find(({ normalized }) => normalized.id === anchor?.originalIntentCommentId) ?? null;
+  let canonicalIntent = null;
+  try { canonicalIntent = intent ? architectureMaintenanceSubject({ identity: { repository, pr: intent.subject.pr, branch: intent.subject.branch, baseSha: intent.subject.protectedBase, headSha: intent.subject.currentHead }, tree: intent.subject.currentTree, scope: { files: intent.subject.changedPaths, additions: intent.subject.additions, deletions: intent.subject.deletions, netChangedLines: intent.subject.netChangedLines }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_RISK_BASED_ADMISSION_REFORM_V1 }) : null; } catch {}
+  if (!Number.isInteger(anchor?.sourcePr) || anchor.sourcePr < 1 || typeof anchor?.sourceBranch !== "string" || !anchor.sourceBranch
+    || intentRaws.length !== 1 || intentCandidates.length !== 1 || !intent
+    || intent.subject.repository !== repository || intent.subject.pr !== anchor.sourcePr || intent.subject.branch !== anchor.sourceBranch
+    || stableJson(intent.subject) !== stableJson(canonicalIntent)
+    || intent.normalized.bodyHash !== anchor.originalIntentBodyHash || intent.payload.subjectHash !== anchor.originalIntentSubjectHash) findings.push("PHASE1_PUBLISHER_ANCHOR_OWNER_INTENT_INVALID");
+  const finalRaws = comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${policy.sourceFinalMarker}\n`));
+  const finals = finalRaws.map((raw) => exactOwnerPayload(raw, { repository, pr: anchor?.sourcePr, marker: policy.sourceFinalMarker, expectedBody: architectureFinalSourceOwnerCommentBody })).filter(Boolean);
+  const selectedFinal = finals.find(({ normalized }) => normalized.id === anchor?.finalSourceCommentId) ?? null;
+  const selectedKey = selectedFinal ? stableJson({ pr: selectedFinal.subject.pr, branch: selectedFinal.subject.branch, head: selectedFinal.subject.finalHead, tree: selectedFinal.subject.finalTree, objective: selectedFinal.subject.objective, originalCommentId: selectedFinal.subject.originalCommentId }) : null;
+  const sameKey = selectedKey === null ? [] : finals.filter(({ subject }) => stableJson({ pr: subject.pr, branch: subject.branch, head: subject.finalHead, tree: subject.finalTree, objective: subject.objective, originalCommentId: subject.originalCommentId }) === selectedKey);
+  if (finals.length !== finalRaws.length || !selectedFinal || sameKey.length !== 1
+    || selectedFinal.subject.repository !== repository || selectedFinal.subject.pr !== anchor?.sourcePr || selectedFinal.subject.branch !== anchor?.sourceBranch
+    || selectedFinal.subject.finalHead !== anchor?.sourceHead || selectedFinal.subject.finalTree !== anchor?.sourceTree || selectedFinal.subject.protectedBase !== anchor?.sourceBase
+    || selectedFinal.subject.objective !== PHASE1_RISK_BASED_ADMISSION_REFORM_V1 || selectedFinal.subject.originalCommentId !== anchor?.originalIntentCommentId
+    || selectedFinal.normalized.bodyHash !== anchor?.finalSourceBodyHash || selectedFinal.payload.subjectHash !== anchor?.finalSourceSubjectHash
+    || selectedFinal.subject.ownerIdentity?.login !== policy.exactOwnerLogin || selectedFinal.subject.ownerIdentity?.association !== policy.exactOwnerAssociation
+    || selectedFinal.subject.immutableCommentRequired !== true || selectedFinal.subject.createdAtEqualsUpdatedAtRequired !== true
+    || !/^[0-9a-f]{40}$/u.test(selectedFinal.subject.finalHead ?? "") || selectedFinal.subject.currentHead !== selectedFinal.subject.finalHead
+    || !/^[0-9a-f]{40}$/u.test(selectedFinal.subject.finalTree ?? "") || selectedFinal.subject.currentTree !== selectedFinal.subject.finalTree
+    || selectedFinal.subject.protectedBase !== intent?.subject?.protectedBase
+    || stableJson(selectedFinal.subject.changedPaths) !== stableJson(PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS)
+    || selectedFinal.subject.budget?.maximumFiles !== 14 || selectedFinal.subject.budget?.maximumChangedLines !== 4200
+    || selectedFinal.subject.repositoryReview?.valid !== true || selectedFinal.subject.repositoryReview?.profile !== PHASE1_RISK_BASED_ADMISSION_REFORM_V1
+    || !phase1AdmissionPublisherProvisioningReadbackValid(selectedFinal.subject.admissionPublisherProvisioningReadback)
+    || stableJson(phase1PublisherStableProvisioningProjection(selectedFinal.subject.admissionPublisherProvisioningReadback)) !== stableJson(phase1PublisherStableProvisioningProjection(anchor?.provisioningReadback))) findings.push("PHASE1_PUBLISHER_ANCHOR_FINAL_SOURCE_INVALID");
+  return {
+    ok: findings.length === 0,
+    findings: [...new Set(findings)].sort(),
+    anchor: findings.length === 0 ? structuredClone(anchor) : null,
+    intentCommentId: intent?.normalized.id ?? null,
+    finalSourceCommentId: selectedFinal?.normalized.id ?? null,
+  };
+}
+
+const phase1PublisherBootstrapAnchor = ({ repository, identity, tree, scope, liveProvisioningReadback, comments, paginationComplete, requireFinalSource } = {}) => {
+  const policy = PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.r2ImmutableAnchor;
+  const intentRaws = (comments ?? []).filter((item) => typeof item?.body === "string" && item.body.startsWith(`${policy.sourceIntentMarker}\n`));
+  const intentCandidates = intentRaws.map((raw) => exactOwnerPayload(raw, { repository, pr: identity?.pr, marker: policy.sourceIntentMarker, expectedBody: architectureMaintenanceOwnerCommentBody })).filter((value) => value?.subject?.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1);
+  const intent = intentRaws.length === 1 && intentCandidates.length === 1 ? intentCandidates[0] : null;
+  if (!intent) return null;
+  const findings = [];
+  const observed = exactScope(scope);
+  if (!paginationComplete || intent.subject.repository !== repository || intent.subject.pr !== identity?.pr || intent.subject.branch !== identity?.headRef
+    || intent.subject.currentHead !== identity?.headSha || intent.subject.currentTree !== tree || intent.subject.protectedBase !== identity?.baseSha
+    || stableJson(intent.subject.changedPaths) !== stableJson(observed.changedPaths)) findings.push("PHASE1_PUBLISHER_BOOTSTRAP_INTENT_INVALID");
+  const bootstrapBody = {
+    schemaVersion: 1,
+    contract: "PHASE1_ADMISSION_PUBLISHER_R1_BOOTSTRAP_ANCHOR_V1",
+    repository,
+    sourcePr: identity?.pr,
+    sourceBranch: identity?.headRef,
+    originalIntentCommentId: intent.normalized.id,
+    originalIntentBodyHash: intent.normalized.bodyHash,
+    originalIntentSubjectHash: intent.payload.subjectHash,
+    stableProvisioningIdentity: phase1PublisherStableProvisioningProjection(liveProvisioningReadback),
+    appId: liveProvisioningReadback?.app?.id,
+    clientId: liveProvisioningReadback?.app?.clientId,
+    installationId: liveProvisioningReadback?.installation?.id,
+    environmentId: liveProvisioningReadback?.environment?.id,
+    aggregateCheckIntegrationId: liveProvisioningReadback?.aggregate?.integrationId,
+  };
+  if (requireFinalSource) {
+    const finalRaws = (comments ?? []).filter((item) => typeof item?.body === "string" && item.body.startsWith(`${policy.sourceFinalMarker}\n`));
+    const parsedFinals = finalRaws.map((raw) => exactOwnerPayload(raw, { repository, pr: identity?.pr, marker: policy.sourceFinalMarker, expectedBody: architectureFinalSourceOwnerCommentBody })).filter(Boolean);
+    const finals = parsedFinals.filter(({ subject }) => subject?.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1 && subject?.originalCommentId === intent.normalized.id && subject?.finalHead === identity?.headSha && subject?.finalTree === tree);
+    const final = finals.length === 1 ? finals[0] : null;
+    if (parsedFinals.length !== finalRaws.length || !final || final.subject.branch !== identity?.headRef || final.subject.protectedBase !== identity?.baseSha
+      || final.subject.ownerIdentity?.login !== policy.exactOwnerLogin || final.subject.ownerIdentity?.association !== policy.exactOwnerAssociation
+      || final.subject.immutableCommentRequired !== true || final.subject.createdAtEqualsUpdatedAtRequired !== true
+      || !phase1AdmissionPublisherProvisioningReadbackValid(final.subject.admissionPublisherProvisioningReadback)
+      || stableJson(final.subject.admissionPublisherProvisioningReadback) !== stableJson(liveProvisioningReadback)) findings.push("PHASE1_PUBLISHER_BOOTSTRAP_FINAL_SOURCE_INVALID");
+  }
+  return phase1PublisherAnchorProof({ repository, anchorType: "R1_CURRENT_PR_BOOTSTRAP", sourcePr: identity?.pr, sourceBranch: identity?.headRef, anchorHash: hashValue(bootstrapBody), provisioningReadback: liveProvisioningReadback, paginationComplete, immutableOwnerEvidence: findings.length === 0, configurationSourceVerified: false, findings });
+};
+
+async function resolveInstalledPhase1CutoverState({ repository, identity, anchor, liveProvisioningReadback } = {}) {
+  const spec = PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.r2ImmutableAnchor.protectedStageResolver;
+  try {
+    if (gitText(REPOSITORY_ROOT, ["rev-parse", "HEAD"]) !== identity?.baseSha) throw new Error("PROTECTED_BASE_MISMATCH");
+    const module = await import(`${pathToFileURL(path.join(REPOSITORY_ROOT, spec.path)).href}?base=${identity.baseSha}`);
+    const result = await module?.[spec.export]?.({ repository, identity, anchor, liveProvisioningReadback });
+    return result?.schemaVersion === 1 && result?.contract === spec.contract && result?.producer === spec.producer && result?.repository === repository && result?.anchorHash === anchor?.anchorHash && result?.rulesetId === PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.ruleset.id && result?.currentRulesetStage === liveProvisioningReadback?.ruleset?.stage && result?.publisherProvisioningReadbackHash === liveProvisioningReadback?.readbackHash && /^[0-9a-f]{64}$/u.test(result?.stageReceiptChainHash ?? "") && result?.cutoverLock === "OPEN" && result?.paginationComplete === true && Array.isArray(result?.findings) && result.findings.length === 0 ? result : null;
+  } catch { return null; }
+}
+
+export async function resolvePhase1AdmissionPublisherAnchor({ repository, identity, publisherProvisioningReadback, requireFinalSource = false, root = REPOSITORY_ROOT } = {}) {
+  const baseFindings = [];
+  if (repository !== "Chillywood2025/chillywood-mobile" || identity?.repository !== repository || identity?.baseRef !== "main") baseFindings.push("PHASE1_PUBLISHER_ANCHOR_IDENTITY_INVALID");
+  if (!verifyProtectedPhase1PublisherProvisioningReadback(publisherProvisioningReadback)) baseFindings.push("PHASE1_PUBLISHER_PROVISIONING_LIVE_READBACK_INVALID");
+  if (baseFindings.length) return phase1PublisherAnchorProof({ repository, anchorType: "INVALID", provisioningReadback: publisherProvisioningReadback, findings: baseFindings });
+  const policy = PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.r2ImmutableAnchor;
+  const installed = readTaskArtifactAtGitHead(policy.configurationPath, identity.baseSha, root)?.artifact?.[policy.configurationProperty] ?? null;
+  if (installed) {
+    const sourceComments = paginatedIssueComments(root, repository, installed.sourcePr);
+  const verified = verifyPhase1AdmissionPublisherImmutableAnchor({ anchor: installed, liveProvisioningReadback: publisherProvisioningReadback, comments: sourceComments.comments, paginationComplete: sourceComments.complete, repository });
+  const mergeParents = gitText(root, ["show", "-s", "--format=%P", installed.sourceMergeSha]).split(/\s+/u).filter(Boolean);
+  const mergeTree = gitText(root, ["rev-parse", `${installed.sourceMergeSha}^{tree}`]);
+  const mergeSubject = parseProtectedPullRequestMergeSubject(gitText(root, ["show", "-s", "--format=%s", installed.sourceMergeSha]));
+  const installedGitValid = stableJson(mergeParents) === stableJson([installed.sourceBase, installed.sourceHead]) && mergeTree === installed.sourceMergeTree && mergeTree === installed.sourceTree && mergeSubject.ok && mergeSubject.prNumber === installed.sourcePr && mergeSubject.sourceBranch === installed.sourceBranch && gitAncestor(root, installed.sourceMergeSha, identity.baseSha);
+  const cutoverState = installedGitValid && verified.ok ? await resolveInstalledPhase1CutoverState({ repository, identity, anchor: installed, liveProvisioningReadback: publisherProvisioningReadback }) : null;
+  const findings = [...verified.findings, ...(!installedGitValid ? ["PHASE1_PUBLISHER_ANCHOR_SOURCE_MERGE_INVALID"] : []), ...(!cutoverState ? ["PHASE1_PUBLISHER_RULESET_CUTOVER_STATE_INVALID"] : [])];
+  return phase1PublisherAnchorProof({ repository, anchorType: "R2_INSTALLED", sourcePr: installed.sourcePr, sourceBranch: installed.sourceBranch, anchorHash: installed.anchorHash, provisioningReadback: publisherProvisioningReadback, paginationComplete: sourceComments.complete, immutableOwnerEvidence: findings.length === 0, configurationSourceVerified: findings.length === 0, cutoverLock: cutoverState?.cutoverLock ?? null, stageReceiptChainHash: cutoverState?.stageReceiptChainHash ?? null, findings });
+  }
+  const currentComments = paginatedIssueComments(root, repository, identity.pr);
+  const tree = gitText(root, ["rev-parse", `${identity.headSha}^{tree}`]);
+  const scope = observeFiniteTaskGitScope(root, identity.baseSha, identity.headSha);
+  const bootstrap = scope && tree === identity.sourceTree ? phase1PublisherBootstrapAnchor({ repository, identity, tree, scope, liveProvisioningReadback: publisherProvisioningReadback, comments: currentComments.comments, paginationComplete: currentComments.complete, requireFinalSource }) : null;
+  if (bootstrap) return bootstrap;
+  const candidateAnchor = readTaskArtifactAtGitHead(policy.configurationPath, identity.headSha, root)?.artifact?.[policy.configurationProperty] ?? null;
+  if (candidateAnchor && scope && stableJson(scope.changedPaths) === stableJson(PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS) && candidateAnchor.currentRulesetStage === "PRE_CUTOVER_13_RAW" && publisherProvisioningReadback?.ruleset?.stage === "PRE_CUTOVER_13_RAW" && publisherProvisioningReadback?.ruleset?.currentPutPayloadSha256 === PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1.ruleset.prestatePutPayloadSha256) {
+    const sourceComments = paginatedIssueComments(root, repository, candidateAnchor.sourcePr);
+    const verified = verifyPhase1AdmissionPublisherImmutableAnchor({ anchor: candidateAnchor, liveProvisioningReadback: publisherProvisioningReadback, comments: sourceComments.comments, paginationComplete: sourceComments.complete, repository });
+    const parents = gitText(root, ["show", "-s", "--format=%P", candidateAnchor.sourceMergeSha]).split(/\s+/u).filter(Boolean); const mergeTree = gitText(root, ["rev-parse", `${candidateAnchor.sourceMergeSha}^{tree}`]);
+    const sourceValid = stableJson(parents) === stableJson([candidateAnchor.sourceBase, candidateAnchor.sourceHead]) && mergeTree === candidateAnchor.sourceTree && mergeTree === candidateAnchor.sourceMergeTree && gitAncestor(root, candidateAnchor.sourceMergeSha, identity.baseSha);
+    const findings = [...verified.findings, ...(!sourceValid ? ["PHASE1_PUBLISHER_R2_BOOTSTRAP_SOURCE_INVALID"] : [])];
+    return phase1PublisherAnchorProof({ repository, anchorType: "R2_ANCHOR_INSTALLATION_PR_BOOTSTRAP", sourcePr: candidateAnchor.sourcePr, sourceBranch: candidateAnchor.sourceBranch, anchorHash: candidateAnchor.anchorHash, provisioningReadback: publisherProvisioningReadback, paginationComplete: sourceComments.complete, immutableOwnerEvidence: findings.length === 0, configurationSourceVerified: false, findings });
+  }
+  return phase1PublisherAnchorProof({ repository, anchorType: "R2_INSTALLED", provisioningReadback: publisherProvisioningReadback, findings: ["PHASE1_PUBLISHER_IMMUTABLE_TRUST_ANCHOR_NOT_INSTALLED"] });
+}
+
+export async function executeProtectedPhase1AppOnlyMergeGate({ repository, identity, publisherProvisioningReadback, mergeExact, root = REPOSITORY_ROOT } = {}) {
+  const anchor = await resolvePhase1AdmissionPublisherAnchor({ repository, identity, publisherProvisioningReadback, requireFinalSource: true, root });
+  if (typeof mergeExact !== "function" || anchor?.anchorType !== "R2_INSTALLED"
+    || anchor?.currentRulesetStage !== "FINAL_AGGREGATE_ONLY" || anchor?.cutoverLock !== "OPEN"
+    || !/^[0-9a-f]{64}$/u.test(anchor?.stageReceiptChainHash ?? "")
+    || anchor?.configurationSourceVerified !== true || anchor?.immutableOwnerEvidence !== true
+    || anchor?.paginationComplete !== true || !Array.isArray(anchor?.findings) || anchor.findings.length !== 0) throw new Error("PHASE1_APP_MERGE_R2_GATE_INVALID");
+  let used = false;
+  return mergeExact(Object.freeze({
+    schemaVersion: 1,
+    contract: "PHASE1_APP_ONLY_MERGE_EXACT_CALLBACK_V1",
+    repository,
+    pr: identity?.pr,
+    headSha: identity?.headSha,
+    sourceTree: identity?.sourceTree,
+    baseSha: identity?.baseSha,
+    publisherAnchorHash: anchor.anchorHash,
+    publisherProvisioningReadbackHash: anchor.provisioningReadbackHash,
+    stageReceiptChainHash: anchor.stageReceiptChainHash,
+    invokeOnce() {
+      if (used) throw new Error("PHASE1_APP_MERGE_CALLBACK_REPLAY");
+      used = true;
+      return true;
+    },
+  }));
+}
+
+export function resolvePhase1SourceAuthorityEligibility({ repository, identity, root = REPOSITORY_ROOT } = {}) {
+  const tree = gitText(root, ["rev-parse", `${identity?.headSha}^{tree}`]); const scope = observeFiniteTaskGitScope(root, identity?.baseSha, identity?.headSha);
+  let currentTruth = null; try { currentTruth = readJson(root, "config/assurance/current-truth-v1.json"); } catch {}
+  const engineIdentity = { repository, pr: identity?.pr, branch: identity?.headRef, headSha: identity?.headSha, baseRef: identity?.baseRef, baseSha: identity?.baseSha };
+  const authorities = currentTruth && scope ? observeTypedTaskAuthorities({ identity: engineIdentity, tree, scope, currentTruth, root }) : {};
+  const candidates = [
+    ["ARCHITECTURE", authorities?.architectureAuthority?.authorizationOk === true],
+    ["TERMINAL_TRUTH", authorities?.terminalTruthAuthority?.authorizationOk === true],
+    ["FINITE_TASK_ADMISSION", authorities?.finiteTaskAdmissionAuthority?.authorizationOk === true],
+    ["FINITE_TASK_IMPLEMENTATION", authorities?.finiteTaskAuthority?.ok === true],
+  ].filter(([, ok]) => ok).map(([type]) => type);
+  const findings = repository === "Chillywood2025/chillywood-mobile" && identity?.repository === repository && identity?.baseRef === "main" && tree === identity?.sourceTree && scope && candidates.length === 1 ? [] : [candidates.length > 1 ? "PHASE1_SOURCE_AUTHORITY_AMBIGUOUS" : "PHASE1_SOURCE_AUTHORITY_INVALID"];
+  return { schemaVersion: 1, producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1", repository, pr: identity?.pr, headSha: identity?.headSha, sourceTree: tree, baseSha: identity?.baseSha, authorityType: candidates[0] ?? null, findings };
+}
+
+export async function resolvePhase1AdmissionMergeEligibility({ repository, pr, identity, phase1Evidence, publisherProvisioningReadback, token, root = REPOSITORY_ROOT } = {}) {
+  const findings = [];
+  const engineIdentity = { repository, pr, branch: identity?.headRef, headSha: identity?.headSha, baseRef: identity?.baseRef, baseSha: identity?.baseSha };
+  const tree = gitText(root, ["rev-parse", `${identity?.headSha}^{tree}`]);
+  const scope = observeFiniteTaskGitScope(root, identity?.baseSha, identity?.headSha);
+  if (repository !== "Chillywood2025/chillywood-mobile" || pr !== identity?.pr || identity?.baseRef !== "main"
+    || tree !== identity?.sourceTree || !scope || typeof token !== "string" || !token) findings.push("PHASE1_MERGE_ELIGIBILITY_IDENTITY_INVALID");
+  if (!verifyProtectedPhase1PublisherProvisioningReadback(publisherProvisioningReadback)) findings.push("PHASE1_PUBLISHER_PROVISIONING_LIVE_READBACK_INVALID");
+  const publisherAnchor = await resolvePhase1AdmissionPublisherAnchor({ repository, identity, publisherProvisioningReadback, requireFinalSource: true, root });
+  if (publisherAnchor.findings.length > 0 || publisherAnchor.immutableOwnerEvidence !== true
+    || !/^[0-9a-f]{64}$/u.test(publisherAnchor.anchorHash ?? "")
+    || publisherAnchor.currentRulesetStage !== publisherProvisioningReadback?.ruleset?.stage) findings.push(...publisherAnchor.findings, "PHASE1_PUBLISHER_IMMUTABLE_TRUST_ANCHOR_INVALID");
+  if (publisherAnchor.anchorType === "R2_ANCHOR_INSTALLATION_PR_BOOTSTRAP") findings.push("PHASE1_PUBLISHER_R2_BOOTSTRAP_MERGE_AUTHORITY_FORBIDDEN");
+  let live = null;
+  try {
+    live = (await resolveProtectedPhase1AdmissionEvidence({ repository, identity, stage: PHASE1_EVIDENCE_STAGES.SOURCE, token, expectedRulesetStage: publisherAnchor.currentRulesetStage, expectedPublisherAnchorHash: publisherAnchor.anchorHash, expectedPublisherProvisioningReadbackHash: publisherAnchor.provisioningReadbackHash })).evidence;
+  } catch { findings.push("PHASE1_MERGE_ELIGIBILITY_PROTECTED_SOURCE_INVALID"); }
+  if (!live || stableJson(live) !== stableJson(phase1Evidence)) findings.push("PHASE1_MERGE_ELIGIBILITY_SOURCE_DECISION_MISMATCH");
+  if (phase1Evidence?.currentRulesetStage !== publisherAnchor.currentRulesetStage
+    || phase1Evidence?.publisherAnchorHash !== publisherAnchor.anchorHash
+    || phase1Evidence?.publisherProvisioningReadbackHash !== publisherAnchor.provisioningReadbackHash) findings.push("PHASE1_MERGE_ELIGIBILITY_PUBLISHER_ANCHOR_MISMATCH");
+  const phase1EvidenceResolver = ({ runId } = {}) => live?.runId === runId ? live : null;
+  let currentTruth = null;
+  try { currentTruth = scope && tree ? readJson(root, "config/assurance/current-truth-v1.json") : null; } catch {}
+  if (!currentTruth) findings.push("PHASE1_MERGE_ELIGIBILITY_CURRENT_TRUTH_INVALID");
+  const publisherProvisioningReadbackResolver = () => publisherProvisioningReadback;
+  const authorities = currentTruth ? observeTypedTaskAuthorities({ identity: engineIdentity, tree, scope, currentTruth, phase1EvidenceResolver, publisherProvisioningReadbackResolver, root }) : {};
+  const lifecycle = authorities?.finiteTaskAuthority?.ok === true
+    ? observeFiniteTaskImplementationLifecycle({ identity: engineIdentity, tree, scope, currentTruth, authorities, phase1EvidenceResolver, root }) : null;
+  const candidates = [authorities?.architectureAuthority, authorities?.terminalTruthAuthority, authorities?.finiteTaskAdmissionAuthority, lifecycle]
+    .filter((value) => value && (value.authorizationOk !== undefined || value.mergeEligible !== undefined));
+  if (candidates.length !== 1) findings.push(candidates.length ? "PHASE1_MERGE_ELIGIBILITY_AUTHORITY_AMBIGUOUS" : "PHASE1_MERGE_ELIGIBILITY_AUTHORITY_MISSING");
+  const selected = candidates.length === 1 ? candidates[0] : null;
+  const reviewClasses = selected?.repositoryReviewClassifications ?? selected?.finalSource?.reviewClassifications ?? [];
+  const finalClasses = selected?.finalSourceAttestationClassifications ?? selected?.finalSourceReceiptClassifications ?? selected?.finalSource?.classifications ?? [];
+  const reviewCurrentCount = reviewClasses.filter(({ current }) => current).length;
+  const finalCurrentCount = finalClasses.filter(({ current }) => current).length;
+  const exactReview = reviewClasses.length
+    ? reviewCurrentCount === 1 && reviewClasses.every(({ valid }) => valid)
+    : selected?.repositoryReview?.valid === true;
+  const exactFinal = finalClasses.length
+    ? finalCurrentCount === 1 && finalClasses.every(({ valid }) => valid)
+    : selected?.finalSource?.mergeEligible === true || selected?.finalSource?.ok === true;
+  const selectedHead = selected?.currentHead ?? selected?.candidateHead;
+  const selectedTree = selected?.currentTree ?? selected?.candidateTree;
+  const ownerScopeValid = Boolean(selected && (selected.authorizationOk === true || selected.ok === true)
+    && selectedHead === identity?.headSha && selectedTree === tree);
+  const exactHeadReviewValid = Boolean(exactReview && (selected?.checks?.currentReview === true || selected?.checks?.review === true || selected?.repositoryReview?.valid === true || selected?.finalSource?.checks?.review === true));
+  const finalSourceValid = Boolean(exactFinal && selected?.mergeEligible === true);
+  const lifecycleValid = Boolean(selected?.mergeEligible === true && live?.mode === PHASE1_MODES.READY && live?.mergeAuthorityGranted === false);
+  if (!ownerScopeValid) findings.push("PHASE1_OWNER_SCOPE_INVALID");
+  if (!exactHeadReviewValid) findings.push("PHASE1_EXACT_HEAD_REVIEW_INVALID");
+  if (!finalSourceValid) findings.push("PHASE1_FINAL_SOURCE_INVALID");
+  if (!lifecycleValid) findings.push("PHASE1_LIFECYCLE_INVALID");
+  const unique = [...new Set(findings)].sort();
+  const ambiguous = candidates.length !== 1 || reviewCurrentCount > 1 || finalCurrentCount > 1;
+  return { schemaVersion: "PHASE1_MERGE_ELIGIBILITY_V1", producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1", repository, pr, headSha: identity?.headSha, sourceTree: tree, baseSha: identity?.baseSha, phase1SourceDecisionHash: phase1Evidence?.phase1SourceDecisionHash, publisherAnchorHash: publisherAnchor.anchorHash, publisherProvisioningReadbackHash: publisherAnchor.provisioningReadbackHash, currentRulesetStage: publisherAnchor.currentRulesetStage, ownerScopeValid, exactHeadReviewValid, finalSourceValid, lifecycleValid, paginationComplete: unique.length === 0, ambiguous, findings: unique };
 }
 export const observeFiniteTaskGitScope = (root, base, head) => {
   const pathsRun = typedGit(root, ["diff", "--name-only", `${base}...${head}`]);
@@ -5071,14 +5987,14 @@ export const observeFiniteTaskGitScope = (root, base, head) => {
   return { files, additions, deletions, netChangedLines: Math.max(0, additions - deletions), diffHash: diffRun.status === 0 ? canonicalGitDiffHash(diffRun.stdout) : null };
 };
 const gitScope = observeFiniteTaskGitScope;
-export function observeTypedTaskAuthorities({ identity, tree, scope, currentTruth, root = REPOSITORY_ROOT } = {}) {
+export function observeTypedTaskAuthorities({ identity, tree, scope, currentTruth, phase1EvidenceResolver = observePhase1RunEvidence, publisherProvisioningReadbackResolver = () => null, root = REPOSITORY_ROOT } = {}) {
   if (!identity || !/^[0-9a-f]{40}$/u.test(tree ?? "")) return { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null };
   const commentsRead = paginatedIssueComments(root, identity.repository, identity.pr);
   const commitsRead = paginatedPullCommits(root, identity.repository, identity.pr);
   const architectureComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
   const noCompetingDomainOwner = Array.isArray(currentTruth?.openImplementationPrs) && currentTruth.openImplementationPrs.length === 0;
   const architectureAuthority = architectureComments.length
-    ? verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, allCommits: commitsRead.commits, commitsPaginationComplete: commitsRead.complete, identity, tree, scope, noCompetingDomainOwner })
+    ? verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, allCommits: commitsRead.commits, commitsPaginationComplete: commitsRead.complete, identity, tree, scope, noCompetingDomainOwner, phase1EvidenceResolver, publisherProvisioningReadbackResolver, root })
     : null;
 
   const activeLeaseStates = new Set(["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "IMPLEMENTATION", "VERIFY", "NATIVE_PROVIDER_PROOF", "MERGE_ELIGIBLE", "ACTIVE_IMPLEMENTATION"]);
@@ -5321,7 +6237,7 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
           : verifyTaskJurisdictionAuthorityV2({ binding: candidateBinding, policyRaws, paginationComplete: policyRead.complete, repository: identity.repository, registry, expectedScope: CHILLYWOOD_US_PRE_RELEASE_JURISDICTION_SCOPE_V2, expectedTaskIdentity, expectedTaskEvidence, expectedDomainIds });
         if (!admissionBinding.ok || (embedded && stableJson(jurisdictionAuthority.taskBinding) !== stableJson(candidateBinding))) jurisdictionAuthority = { ...jurisdictionAuthority, ok: false, findings: [...(jurisdictionAuthority.findings ?? []), "ADMISSION_OWNER_JURISDICTION_BINDING_MISMATCH"] };
         const currentAdmissionRaw = commentsRead.comments.find(({ id }) => id === admissionBinding.chain?.currentCommentId) ?? admissionRaw;
-        finiteTaskAdmissionAuthority = evaluateFiniteTaskAdmissionSuccessorV2({ raw: currentAdmissionRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete, identity, tree, scope, implementation, taskArtifact, taskArtifactHash, truthRecord: currentTruth, priorTruth, ownerApproval, ownerJurisdictionAuthority: jurisdictionAuthority, seedIsAncestor, implementationBaseIsAncestor, registry });
+        finiteTaskAdmissionAuthority = evaluateFiniteTaskAdmissionSuccessorV2({ raw: currentAdmissionRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete, identity, tree, scope, implementation, taskArtifact, taskArtifactHash, truthRecord: currentTruth, priorTruth, ownerApproval, ownerJurisdictionAuthority: jurisdictionAuthority, seedIsAncestor, implementationBaseIsAncestor, registry, phase1EvidenceResolver, root });
       } else {
         finiteTaskAdmissionAuthority = evaluateFiniteTaskAdmissionSuccessor({ raw: admissionRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete, identity, tree, scope, implementation, taskArtifact, taskArtifactHash, truthRecord: currentTruth, priorTruth, ownerApproval, seedIsAncestor, implementationBaseIsAncestor });
       }
@@ -5330,11 +6246,27 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
   if (!admissionCommentPresent && [TERMINAL_TRUTH_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS].some((paths) => stableJson(terminalScopePaths) === stableJson(paths))) {
     const currentMainRun = typedGit(root, ["rev-parse", "origin/main"]);
     const currentMain = currentMainRun.status === 0 ? currentMainRun.stdout.trim() : null;
-    const parentRun = typedGit(root, ["rev-list", "--parents", "-n", "1", identity.baseSha]);
+    const truthRecord = readJson(root, "config/assurance/current-truth-v1.json");
+    const currentRepairScope = stableJson(terminalScopePaths) === stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS);
+    const embeddedRepairInstance = currentRepairScope ? truthRecord?.taskContextArchitecture?.terminalVerifierRepair?.history?.instances?.at(-1) : null;
+    const embeddedPredecessorPr = Number.isInteger(embeddedRepairInstance?.predecessor?.pullRequest) && embeddedRepairInstance.predecessor.pullRequest > 0 ? embeddedRepairInstance.predecessor.pullRequest : null;
+    const embeddedPredecessorMerge = /^[0-9a-f]{40}$/u.test(embeddedRepairInstance?.predecessor?.mergeSha ?? "") ? embeddedRepairInstance.predecessor.mergeSha : null;
+    const predecessorMerge = currentRepairScope ? embeddedPredecessorMerge : identity.baseSha;
+    const parentRun = predecessorMerge ? typedGit(root, ["rev-list", "--parents", "-n", "1", predecessorMerge]) : { status: 1, stdout: "" };
     const parentParts = parentRun.stdout.trim().split(/\s+/u);
-    const associatedRead = paginatedArray(root, `repos/${identity.repository}/commits/${identity.baseSha}/pulls?per_page=100`);
+    const associatedRead = predecessorMerge ? paginatedArray(root, `repos/${identity.repository}/commits/${predecessorMerge}/pulls?per_page=100`) : { complete: false, values: [] };
     const associated = associatedRead.values;
-    const predecessorPull = associatedRead.complete && associated.length === 1 ? associated[0] : null;
+    const associatedPredecessorPull = associatedRead.complete && associated.length === 1 ? associated[0] : null;
+    const directPredecessorResponse = currentRepairScope && embeddedPredecessorPr
+      ? typedGh(root, [`repos/${identity.repository}/pulls/${embeddedPredecessorPr}`])
+      : null;
+    const directPredecessorPull = directPredecessorResponse ? parsedResponse(directPredecessorResponse, null) : null;
+    const directPredecessorExact = !currentRepairScope || Boolean(directPredecessorResponse?.status === 0
+      && directPredecessorPull
+      && !Array.isArray(directPredecessorPull)
+      && directPredecessorPull.number === embeddedPredecessorPr
+      && stableJson(phase1PullRequestProvenance(directPredecessorPull)) === stableJson(phase1PullRequestProvenance(associatedPredecessorPull)));
+    const predecessorPull = currentRepairScope ? directPredecessorPull : associatedPredecessorPull;
     const predecessorPr = predecessorPull?.number;
     const firstParent = parentParts.length === 3 ? parentParts[1] : null;
     const sourceHead = parentParts.length === 3 ? parentParts[2] : null;
@@ -5343,28 +6275,57 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     const predecessorIdentity = predecessorPull ? { repository: identity.repository, pr: predecessorPr, branch: predecessorPull.head?.ref, baseSha: predecessorPull.base?.sha, headSha: predecessorPull.head?.sha } : null;
     const predecessorComments = predecessorPr ? paginatedIssueComments(root, identity.repository, predecessorPr) : { complete: false, comments: [] };
     const predecessorRaw = predecessorComments.comments.find((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
-    const predecessorAuthority = predecessorIdentity && predecessorScope ? verifyArchitectureMaintenanceAuthority({ raw: predecessorRaw, allComments: predecessorComments.comments, paginationComplete: predecessorComments.complete, identity: predecessorIdentity, tree: sourceTreeRun.stdout.trim(), scope: predecessorScope, noCompetingDomainOwner: true }) : { ok: false };
+    let predecessorAuthority = predecessorIdentity && predecessorScope ? verifyArchitectureMaintenanceAuthority({ raw: predecessorRaw, allComments: predecessorComments.comments, paginationComplete: predecessorComments.complete, identity: predecessorIdentity, tree: sourceTreeRun.stdout.trim(), scope: predecessorScope, noCompetingDomainOwner: true, phase1EvidenceResolver, publisherProvisioningReadbackResolver, root }) : { ok: false };
+    if (currentRepairScope && Number.isInteger(predecessorAuthority?.currentFinalSourceReceiptId)) {
+      const finalSourceRaw = predecessorComments.comments.find(({ id }) => id === predecessorAuthority.currentFinalSourceReceiptId);
+      const finalSourceNormalized = normalizeGitHubCommentIdentity(finalSourceRaw, { repository: identity.repository, pr: predecessorPr, commentId: predecessorAuthority.currentFinalSourceReceiptId });
+      const finalSourcePayload = parseExactOwnerBody(finalSourceNormalized, ARCHITECTURE_FINAL_SOURCE_MARKER);
+      predecessorAuthority = {
+        ...predecessorAuthority,
+        canonicalFinalSourceReceipt: finalSourceNormalized && finalSourcePayload ? {
+          commentId: finalSourceNormalized.id,
+          subjectHash: finalSourcePayload.subjectHash,
+          commentBodyHash: finalSourceNormalized.bodyHash,
+          diffHash: finalSourcePayload.subject?.diffHash ?? null,
+        } : null,
+      };
+    }
+    const protectedBaseAncestorRun = predecessorMerge ? typedGit(root, ["merge-base", "--is-ancestor", predecessorMerge, identity.baseSha]) : { status: 1 };
     const predecessor = {
-      valid: parentParts.length === 3 && associatedRead.complete && associated.length === 1 && predecessorPull?.merged_at && predecessorPull?.merge_commit_sha === identity.baseSha && predecessorPull?.base?.ref === "main" && predecessorPull?.head?.sha === sourceHead && predecessorPull?.base?.sha === firstParent && sourceTreeRun.status === 0,
+      valid: parentParts.length === 3
+        && associatedRead.complete
+        && associated.length === 1
+        && directPredecessorExact
+        && predecessorPull?.merged_at
+        && predecessorPull?.merge_commit_sha === predecessorMerge
+        && predecessorPull?.base?.ref === "main"
+        && predecessorPull?.base?.repo?.full_name === identity.repository
+        && predecessorPull?.head?.repo?.full_name === identity.repository
+        && predecessorPull?.head?.sha === sourceHead
+        && predecessorPull?.base?.sha === firstParent
+        && sourceTreeRun.status === 0,
       pr: predecessorPr,
-      mergeSha: identity.baseSha,
+      mergeSha: predecessorMerge,
       firstParent,
       sourceHead,
       sourceTree: sourceTreeRun.stdout.trim(),
+      protectedBaseAncestor: protectedBaseAncestorRun.status === 0,
     };
     const priorTruthRun = typedGit(root, ["show", `${identity.baseSha}:config/assurance/current-truth-v1.json`]);
     const priorTruthHash = priorTruthRun.status === 0 ? hashValue(priorTruthRun.stdout) : null;
     let priorTruth = null;
     try { priorTruth = priorTruthRun.status === 0 ? JSON.parse(priorTruthRun.stdout) : null; } catch {}
-    const truthRecord = readJson(root, "config/assurance/current-truth-v1.json");
     const openPullsRead = paginatedArray(root, `repos/${identity.repository}/pulls?state=open&base=main&per_page=100`);
     const openPulls = openPullsRead.values;
+    const terminalSuccessorScope = currentRepairScope ? TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS : TERMINAL_TRUTH_PATHS;
     let openTerminalSuccessorCount = 0;
+    let openTerminalSuccessorFilesComplete = true;
     for (const pull of openPulls) {
       if (pull?.base?.sha !== identity.baseSha) continue;
       const filesRead = paginatedArray(root, `repos/${identity.repository}/pulls/${pull.number}/files?per_page=100`);
+      if (!filesRead.complete) openTerminalSuccessorFilesComplete = false;
       const names = filesRead.complete ? filesRead.values.map(({ filename }) => filename).sort() : [];
-      if ([TERMINAL_TRUTH_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS].some((paths) => stableJson(names) === stableJson(paths))) openTerminalSuccessorCount += 1;
+      if (stableJson(names) === stableJson(terminalSuccessorScope)) openTerminalSuccessorCount += 1;
     }
     const truthComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${TERMINAL_TRUTH_SUCCESSOR_MARKER}\n`));
     const finiteTerminalRaw = truthComments.find((item) => {
@@ -5373,9 +6334,9 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     });
     if (finiteTerminalRaw && priorTruth) {
       const terminalTransition = observeFiniteTaskPostMergeTransition({ record: priorTruth, currentProtectedMain: identity.baseSha, root });
-      terminalTruthAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: finiteTerminalRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, terminalTransition, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: (priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []).some(({ mergeSha }) => mergeSha === identity.baseSha), root });
+      terminalTruthAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: finiteTerminalRaw, allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete && openTerminalSuccessorFilesComplete, identity, tree, scope, terminalTransition, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: (priorTruth?.finiteTaskLeases?.completedLeaseOutcomes ?? []).some(({ mergeSha }) => mergeSha === identity.baseSha), phase1EvidenceResolver, root });
     } else {
-      terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.taskContextArchitecture?.mergeSha === identity.baseSha });
+      terminalTruthAuthority = verifyTerminalTruthSuccessorAuthority({ raw: truthComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete && openPullsRead.complete && openTerminalSuccessorFilesComplete, identity, tree, scope, predecessor, predecessorAuthority, priorTruthHash, priorTruth, truthRecord, currentStateText: fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8"), nextTaskText: fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8"), currentMain, openTerminalSuccessorCount, transitionPreviouslyConsumed: priorTruth?.taskContextArchitecture?.mergeSha === identity.baseSha });
     }
   }
   return { architectureAuthority, terminalTruthAuthority, finiteTaskAuthority, finiteTaskAdmissionAuthority };
@@ -5441,6 +6402,7 @@ export function verifyFiniteTaskImplementationLifecycle({
         finiteTaskPrRiskAuthority,
         repositoryReview: review,
         phase1Evidence,
+        livePhase1Evidence: phase1Evidence,
       };
     },
     effectiveReservationResolution: resolution,
@@ -5448,10 +6410,7 @@ export function verifyFiniteTaskImplementationLifecycle({
     commentsPaginationComplete,
   });
   const phase1Evidence = phase1ByCommentId.get(finalSource.receipt?.commentId ?? null) ?? null;
-  if (phase1Evidence?.valid !== true
-    || phase1Evidence?.result !== "PASS_13_OF_13"
-    || phase1Evidence?.sourceHead !== identity?.headSha
-    || phase1Evidence?.sourceTree !== tree) findings.push("FINITE_TASK_LIFECYCLE_PHASE1_INVALID");
+  if (!verifyPhase1SourceReadinessEvidence({ phase1Evidence, identity, tree, root }).ok) findings.push("FINITE_TASK_LIFECYCLE_PHASE1_INVALID");
   if (!finalSource.ok) findings.push(...finalSource.findings);
   const unique = [...new Set(findings)].sort();
   return {

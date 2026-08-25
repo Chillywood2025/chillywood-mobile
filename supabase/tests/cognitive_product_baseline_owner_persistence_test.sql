@@ -26,6 +26,11 @@ insert into public.intelligence_tasks(
   transaction_timestamp() + interval '2 days'
 );
 
+insert into auth.users(id, is_sso_user, is_anonymous, email_confirmed_at)
+values
+  ('a3000000-0000-4000-8000-000000000001', false, false, now()),
+  ('a3000000-0000-4000-8000-000000000002', false, false, now());
+
 insert into public.platform_role_memberships(user_id, email, role, status)
 values
   ('a3000000-0000-4000-8000-000000000001', null, 'owner', 'active'),

@@ -770,11 +770,11 @@ select is(
   'service-owned request creates a pending approval, not an approval'
 );
 
-insert into auth.users(id,email,is_sso_user,is_anonymous)
+insert into auth.users(id,email,is_sso_user,is_anonymous,email_confirmed_at)
 values (
   'a5000000-0000-0000-0000-000000000001',
   'governance-owner@example.invalid',
-  false,false
+  false,false,now()
 );
 insert into public.platform_role_memberships(role,user_id,email,status)
 values (
@@ -1344,6 +1344,12 @@ select throws_ok(
   'user-derived retention cannot be enabled without an approved policy'
 );
 
+insert into auth.users(id,email,is_sso_user,is_anonymous,email_confirmed_at)
+values (
+  'a5000000-0000-0000-0000-000000000099',
+  'governance-original-owner@example.invalid',
+  false,false,now()
+);
 insert into public.platform_role_memberships(role,user_id,email,status)
 values (
   'owner',
@@ -1351,11 +1357,11 @@ values (
   'governance-recycled@example.invalid',
   'active'
 );
-insert into auth.users(id,email,is_sso_user,is_anonymous)
+insert into auth.users(id,email,is_sso_user,is_anonymous,email_confirmed_at)
 values (
   'a5000000-0000-0000-0000-000000000002',
   'governance-recycled@example.invalid',
-  false,false
+  false,false,now()
 );
 select set_config(
   'request.jwt.claims',

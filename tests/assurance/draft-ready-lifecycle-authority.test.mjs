@@ -154,6 +154,23 @@ test("reopened requires fresh Phase 1 even when the source head did not change",
   assert.equal(verify({ createdAt: "2026-08-23T10:11:00Z", lifecycleEvents }).valid, true);
 });
 
+test("edited preserves the current ready epoch but cannot substitute foreign live PR identity", () => {
+  const edited = verify({
+    run: runAt("2026-08-23T10:11:00Z", { display_title: `phase1 pr=${identity.pr} action=edited draft=false` }),
+  });
+  assert.equal(edited.valid, true);
+  for (const pullRequest of [
+    pull({ number: identity.pr + 1 }),
+    pull({ head: { ref: identity.branch, sha: "d".repeat(40), repo: { full_name: repository } } }),
+    pull({ base: { ref: "main", sha: "e".repeat(40), repo: { full_name: repository } } }),
+    pull({ head: { ref: identity.branch, sha: head, repo: { full_name: "attacker/fork" } } }),
+  ]) {
+    const result = verify({ run: runAt("2026-08-23T10:11:00Z"), pullRequest });
+    assert.equal(result.valid, false);
+    assert.equal(result.pullRequestLifecycle.reason, "PHASE1_PULL_REQUEST_LIFECYCLE_IDENTITY_INVALID");
+  }
+});
+
 test("policy-bound evidence rejects missing, wrong-PR, or converted-to-draft run display provenance", () => {
   const lifecycleEvents = [{ event: "ready_for_review", created_at: "2026-08-23T10:05:00Z" }];
   for (const display_title of [
@@ -226,14 +243,14 @@ test("merged pre-policy historical exact-head evidence remains durable but futur
 
 test("workflow lifecycle policy activation requires the exact generic trigger set", () => {
   const exactRunName = 'run-name: "phase1 pr=${{ github.event.pull_request.number }} action=${{ github.event.action }} draft=${{ github.event.pull_request.draft }}"';
-  const policyWorkflow = `${exactRunName}\non:\n  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]\n`;
+  const policyWorkflow = `${exactRunName}\non:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]\n`;
   const legacyWorkflow = `on:\n  pull_request:\n`;
   assert.equal(phase1WorkflowRequiresLifecycleBinding(policyWorkflow), true);
-  assert.equal(phase1WorkflowRequiresLifecycleBinding(`on:\n  pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n      - ready_for_review\n      - converted_to_draft\n  push:\n    branches: [main]\n`), true);
+  assert.equal(phase1WorkflowRequiresLifecycleBinding(`on:\n  pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n      - edited\n      - ready_for_review\n      - converted_to_draft\n  push:\n    branches: [main]\n`), true);
   assert.equal(phase1WorkflowRequiresLifecycleBinding(legacyWorkflow), false);
   assert.equal(phase1WorkflowRequiresLifecycleBinding(`on:\n  pull_request:\n    # ready_for_review converted_to_draft\n`), false);
-  assert.equal(phase1WorkflowRequiresLifecycleBinding(`on:\n  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, labeled]\n`), false);
-  assert.equal(phase1WorkflowRequiresLifecycleBinding(`on:\n  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, opened]\n`), false);
+  assert.equal(phase1WorkflowRequiresLifecycleBinding(`on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft, labeled]\n`), false);
+  assert.equal(phase1WorkflowRequiresLifecycleBinding(`on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft, opened]\n`), false);
   assert.equal(
     phase1WorkflowRequiresLifecycleBinding(readFileSync(".github/workflows/phase1-ci.yml", "utf8")),
     true,
@@ -267,8 +284,8 @@ test("workflow lifecycle policy activation requires the exact generic trigger se
 
 test("a canonical protected base cannot substitute for current-head lifecycle provenance", () => {
   const exactRunName = 'run-name: "phase1 pr=${{ github.event.pull_request.number }} action=${{ github.event.action }} draft=${{ github.event.pull_request.draft }}"';
-  const policyWorkflow = `${exactRunName}\non:\n  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]\n`;
-  const hardcodedHead = `run-name: "phase1 pr=901 action=ready_for_review draft=false"\non:\n  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]\n`;
+  const policyWorkflow = `${exactRunName}\non:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]\n`;
+  const hardcodedHead = `run-name: "phase1 pr=901 action=ready_for_review draft=false"\non:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]\n`;
   const missingTypesHead = `${exactRunName}\non:\n  pull_request:\n`;
 
   for (const headWorkflowSource of [hardcodedHead, missingTypesHead]) {

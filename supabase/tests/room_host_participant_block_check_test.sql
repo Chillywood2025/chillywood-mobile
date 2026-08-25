@@ -639,7 +639,7 @@ select throws_ok(
       '46666666-6666-4666-8666-666666666666'
     )$$,
   'P0001',
-  'blocked_from_room',
+  'room_membership_access_required',
   '31. a blocked participant membership insert is denied'
 );
 

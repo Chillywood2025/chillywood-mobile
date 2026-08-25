@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+
+const root = process.cwd();
+const subjectGit = (argv, options = {}) => execFileSync("git", argv, {
+  cwd: root,
+  encoding: "utf8",
+  shell: false,
+  maxBuffer: options.maxBuffer ?? 64 * 1024 * 1024,
+  stdio: ["ignore", "pipe", "pipe"],
+});
 
 const core = new URL("./guard-autonomous-systems-contract-core.mjs", import.meta.url);
 const result = spawnSync(process.execPath, [core.pathname], {
@@ -22,13 +31,27 @@ try {
   event = null;
 }
 
-// GITHUB_EVENT_PATH is GitHub-owned immutable event input. Draft is the only
-// lifecycle state that may defer final admission; all ready/non-PR contexts
-// preserve the core guard's strict result.
-const sourceReadiness = event?.pull_request?.draft === true
-  && typeof event?.number === "number"
-  && typeof event?.repository?.full_name === "string"
-  && event?.repository?.full_name === event?.pull_request?.base?.repo?.full_name;
+// This wrapper can grant only a non-authoritative draft lane result. Accept its
+// event projection only in the exact GitHub pull-request Actions context; the
+// protected aggregate separately re-reads live PR state before any authority.
+const pull = event?.pull_request;
+const sourceReadinessActions = new Set(["opened", "synchronize", "reopened", "edited", "converted_to_draft"]);
+const sourceReadiness = process.env.GITHUB_ACTIONS === "true"
+  && process.env.GITHUB_EVENT_NAME === "pull_request"
+  && sourceReadinessActions.has(event?.action)
+  && event?.repository?.full_name === "Chillywood2025/chillywood-mobile"
+  && Number.isInteger(event?.number)
+  && event.number > 0
+  && pull?.number === event.number
+  && pull?.state === "open"
+  && pull?.draft === true
+  && pull?.base?.ref === "main"
+  && pull?.base?.repo?.full_name === event.repository.full_name
+  && pull?.head?.repo?.full_name === event.repository.full_name
+  && typeof pull?.head?.ref === "string"
+  && pull.head.ref.length > 0
+  && /^[0-9a-f]{40}$/u.test(pull?.base?.sha ?? "")
+  && /^[0-9a-f]{40}$/u.test(pull?.head?.sha ?? "");
 
 const parseStructuredPayload = (output) => {
   try {
@@ -43,16 +66,19 @@ const exactCommit = (value) => (
   typeof value === "string" && /^[0-9a-f]{40}$/u.test(value) ? value : null
 );
 
-const gitResult = (args) => spawnSync("git", args, {
-  cwd: process.cwd(),
-  encoding: "utf8",
-  maxBuffer: 64 * 1024 * 1024,
-});
+const gitResult = ({ args, gitCommand }) => {
+  try {
+    return { status: 0, stdout: gitCommand(args, { maxBuffer: 64 * 1024 * 1024 }) };
+  } catch (error) {
+    return { status: Number.isInteger(error?.status) ? error.status : 1, stdout: error?.stdout ?? "" };
+  }
+};
 
 const trackedTestInventory = (ref) => {
-  const inventory = gitResult([
-    "ls-tree", "-r", "-z", ref, "--", "tests", "supabase/tests",
-  ]);
+  const inventory = gitResult({
+    args: ["ls-tree", "-r", "-z", ref, "--", "tests", "supabase/tests"],
+    gitCommand: subjectGit,
+  });
   if (inventory.status !== 0) return null;
   const rows = new Map();
   for (const entry of String(inventory.stdout ?? "").split("\0").filter(Boolean)) {
@@ -64,7 +90,7 @@ const trackedTestInventory = (ref) => {
 };
 
 const exactGitBlobText = (ref, file) => {
-  const blob = gitResult(["show", `${ref}:${file}`]);
+  const blob = gitResult({ args: ["show", `${ref}:${file}`], gitCommand: subjectGit });
   return blob.status === 0 ? String(blob.stdout ?? "") : null;
 };
 
