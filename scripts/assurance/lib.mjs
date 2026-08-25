@@ -1770,7 +1770,7 @@ export function observeLiveTerminalRepairTaskContext({ environment = process.env
 
 export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
   Object.freeze({
-    profileId: "FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION",
+    profileId: "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION",
     paths: Object.freeze(["config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
     maximumFiles: 6,
     maximumChangedLines: 900,
@@ -2937,7 +2937,7 @@ export function evaluateProtectedMainAdvancement({
     const parsedMergeSubject = parseProtectedPullRequestMergeSubject(observation.subject);
     const subjectFormatAllowed = policy.ordinaryAdvancement?.acceptedMergeSubjectFormats?.includes(parsedMergeSubject.format);
     const observedRepairPaths = [...(observation.changedPaths ?? [])].sort();
-    const projectedRepairReplay = parsedMergeSubject.variant === "GITHUB_MERGE_PR_TITLE"
+    const projectedRepairReplay = ["GITHUB_MERGE_PR_TITLE", "GITHUB_CLASSIC_MERGE_PULL_REQUEST"].includes(parsedMergeSubject.variant)
       && repairHistoryInstances.length + 1 === projectedRepair?.ordinal
       && parsedMergeSubject.prNumber === projectedRepair?.pullRequest
       && observation.parents?.[0] === projectedRepair?.protectedBase

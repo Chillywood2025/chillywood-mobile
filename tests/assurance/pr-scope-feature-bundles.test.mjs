@@ -935,7 +935,9 @@ test("assurance-control observer accepts only exact protected source-only profil
   const gitCommand = (argv) => argv[0] === "rev-parse" && argv[1] === "HEAD" ? merge : argv[0] === "rev-parse" && argv[1] === `${head}^{tree}` ? sourceTree : argv[0] === "rev-parse" ? mergeTree : argv[0] === "show" ? `${base} ${head}` : argv[0] === "merge-tree" ? mergeTree : argv[0] === "diff" && argv[1] === "--name-only" ? observedPaths.join("\n") : argv[0] === "diff" && argv[1] === "--numstat" ? `${observedAdditions}\t${observedDeletions}\t${observedPaths[0]}` : "";
   const identity = { repository, pr: 247, branch: "codex/control", headSha: head, baseRef: "main", baseSha: base }; const executionIdentity = classifyGitHubExecutionIdentity({ event, livePullRequest: { repository, number: 247, headRef: identity.branch, headSha: head, headRepository: repository, baseRef: "main", baseSha: base, baseRepository: repository, draft: false, state: "open" }, authoritativeSourceIdentity: identity, environment, gitCommand });
   const metadataProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1");
+  const terminalLifecycleProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION");
   assert.deepEqual(metadataProfile, { profileId: "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1", paths: ["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"], maximumFiles: 2, maximumChangedLines: 80 });
+  assert.deepEqual(terminalLifecycleProfile, { profileId: "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION", paths: ["config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"], maximumFiles: 6, maximumChangedLines: 900 });
   assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: metadataProfile.paths, budget: { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, changedFiles: 2 })?.profileId, metadataProfile.profileId);
   assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: metadataProfile.paths, budget: { maximumFiles: 2, maximumChangedLines: 81, maximumHandAuthoredNetLines: 81 }, changedFiles: 2 }), null);
   for (const profile of ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES) {
@@ -1055,6 +1057,29 @@ test("protected-main history accepts independently bound repair instances and re
   const malformedCheckpoint = protectedMainMultiRepairEvaluation({ stopAfterIntervening: true, mutateCheckpointHistory: (instances) => { instances[0] = { ...instances[0], instanceId: "0".repeat(64) }; } });
   assert.ok(malformedCheckpoint.findings.includes("CURRENT_TRUTH_TERMINAL_VERIFIER_REPAIR_HISTORY_INVALID"), stableJson(malformedCheckpoint));
   assert.equal(malformedCheckpoint.authorityControlEligible, false);
+});
+
+test("projected terminal-repair replay accepts the exact classic PR256 merge and rejects wrong authority identity", () => {
+  const record = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
+  const observation = {
+    commit: "b2398df819067a4dea18a1cb9d49dcede0f455ee",
+    parents: ["2d40bc75cfad9a28d7534f3dd8593dab63318769", "2201b91c6dd7efb103d6b3a1c5e86ee76b4055b7"],
+    tree: "b861f4ff6b57c7c7a7a8dd0bbd2b6c3a424a22b0",
+    subject: "Merge pull request #256 from Chillywood2025/codex/current-truth-successor-repair-v3",
+    changedPaths: [...TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS],
+  };
+  const evaluate = (candidate) => evaluateProtectedMainAdvancement({ record, contract: currentTruthContract, observedProtectedMainSha: observation.commit, candidateHead: "f".repeat(40), finiteTaskRuntime: { sourceOnlyEligible: true, providerDependentEligible: true }, advancementObservations: [candidate], checkpointTreeObservation: record.protectedMainAuthority.checkpointTree, checkpointIsAncestor: true, candidateContainsObservedMain: true });
+  const exact = evaluate(observation);
+  assert.deepEqual(exact.findings, []);
+  assert.deepEqual([exact.advancementClassifications[0].mergeSubjectFormat, exact.advancementClassifications[0].terminalVerifierRepair, exact.terminalVerifierRepairHistory.at(-1).pullRequest], ["GITHUB_CLASSIC_MERGE_PULL_REQUEST", true, 256]);
+  for (const mutation of [
+    { ...observation, subject: "Merge pull request #255 from Chillywood2025/codex/current-truth-successor-repair-v3" },
+    { ...observation, parents: ["0".repeat(40), observation.parents[1]] },
+  ]) {
+    const denied = evaluate(mutation);
+    assert.equal(denied.advancementClassifications[0].terminalVerifierRepair, false);
+    assert.ok(denied.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(denied));
+  }
 });
 
 test("canonical Git diff identity is newline-independent and shared by both authority callers", () => {

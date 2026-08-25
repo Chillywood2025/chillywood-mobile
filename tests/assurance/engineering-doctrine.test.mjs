@@ -23,7 +23,7 @@ import {
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
   verifyArchitectureDependencyAmendment, verifyArchitectureDependencyWitnessAmendment, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
-  phase1AdmissionPolicyForBase, phase1AdmissionPublisherProvisioningReadback, phase1AdmissionPublisherProvisioningReadbackValid, PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1, projectPhase1AdmissionFinalSourceEvidence, verifyFiniteTaskTerminalTruthAuthority, verifyPhase1AdmissionEvidenceForMerge, verifyPhase1RunEvidence,
+  phase1AdmissionPolicyForBase, phase1AdmissionPublisherProvisioningReadback, phase1AdmissionPublisherProvisioningReadbackValid, PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1, projectPhase1AdmissionFinalSourceEvidence, selectFiniteTaskTerminalTruthOwnerReceipts, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyPhase1AdmissionEvidenceForMerge, verifyPhase1RunEvidence,
   verifyTaskLocalGoverningEdgeClosure, verifyVerificationDependencyClosure
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
@@ -1428,6 +1428,27 @@ test("dependency compatibility witness amendment rejects non-exact source and de
     assert.equal(verifyArchitectureDependencyWitnessAmendment(fixture.common).valid, false);
   });
 });
+test("finite terminal receipts retain valid history across protected first-parent advancement", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "finite-terminal-history-"));
+  try {
+    fixtureGit(cwd, "init", "-q"); fixtureGit(cwd, "config", "user.name", "Fixture"); fixtureGit(cwd, "config", "user.email", "fixture@example.test");
+    fixtureWrite(cwd, "config/assurance/current-truth-v1.json", "{\"state\":\"before\"}\n"); fixtureWrite(cwd, "CURRENT_STATE.md", "before\n"); fixtureWrite(cwd, "NEXT_TASK.md", "before\n"); fixtureCommit(cwd, "before");
+    fixtureWrite(cwd, "implementation.txt", "verified\n"); const implementationMerge = fixtureCommit(cwd, "implementation"); fixtureGit(cwd, "branch", "protected-main", implementationMerge);
+    fixtureGit(cwd, "switch", "-qc", "terminal", implementationMerge); fixtureWrite(cwd, "CURRENT_STATE.md", "historical\n"); fixtureWrite(cwd, "NEXT_TASK.md", "historical\n"); fixtureWrite(cwd, "config/assurance/current-truth-v1.json", "{\"state\":\"historical\"}\n"); const historicalHead = fixtureCommit(cwd, "historical terminal");
+    fixtureGit(cwd, "switch", "-q", "protected-main"); fixtureWrite(cwd, "assurance.txt", "advance\n"); const currentBase = fixtureCommit(cwd, "protected advance");
+    fixtureGit(cwd, "switch", "-q", "terminal"); fixtureGit(cwd, "merge", "-q", "--no-edit", currentBase); fixtureWrite(cwd, "CURRENT_STATE.md", "current\n"); fixtureWrite(cwd, "NEXT_TASK.md", "current\n"); fixtureWrite(cwd, "config/assurance/current-truth-v1.json", "{\"state\":\"current\"}\n"); const currentHead = fixtureCommit(cwd, "current terminal");
+    const repository = "Chillywood2025/chillywood-mobile"; const pr = 999; const branch = "codex/finite-task-terminal-truth-v1";
+    const evidenceBody = { schemaVersion: 1, classification: "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", repository, taskId: "task-v1", leaseId: "task-v1", implementationPr: 800, implementationBranch: "codex/task-v1", mergeSha: implementationMerge, nextTask: "NEXT", authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false } };
+    const terminalEvidence = { ...evidenceBody, evidenceHash: hashValue(evidenceBody) }; const terminalTransition = { terminalEvidence }; const identity = { repository, pr, branch, baseRef: "main", baseSha: currentBase, headSha: currentHead };
+    const receipt = ({ id, base, head }) => { const tree = fixtureTree(cwd, head); const scope = fixtureScope(cwd, base, head); const prior = execFileSync("git", ["show", `${base}:config/assurance/current-truth-v1.json`], { cwd, encoding: "utf8" }); const subject = finiteTaskTerminalTruthSubject({ identity: { ...identity, baseSha: base, headSha: head }, tree, scope, terminalTransition, priorTruthHash: hashValue(prior) }); return { raw: taskLocalArchitectureComment({ id, pr, body: finiteTaskTerminalTruthOwnerCommentBody(subject) }), subject, tree, scope }; };
+    const historical = receipt({ id: 880001, base: implementationMerge, head: historicalHead }); const current = receipt({ id: 880002, base: currentBase, head: currentHead });
+    const selected = selectFiniteTaskTerminalTruthOwnerReceipts({ comments: [historical.raw, current.raw], paginationComplete: true, identity, tree: current.tree, scope: current.scope, terminalTransition, priorTruthHash: current.subject.priorCurrentTruthHash, root: cwd });
+    assert.equal(selected.ok, true, stableJson(selected.classifications)); assert.deepEqual(selected.classifications.map(({ status }) => status).sort(), ["CURRENT_VALID", "HISTORICAL_VALID"]);
+    assert.equal(selectFiniteTaskTerminalTruthOwnerReceipts({ comments: [current.raw, { ...current.raw, id: 880003 }], paginationComplete: true, identity, tree: current.tree, scope: current.scope, terminalTransition, priorTruthHash: current.subject.priorCurrentTruthHash, root: cwd }).ok, false);
+    assert.equal(verifyFiniteTaskTerminalBaseAdvancement({ repository, baseRef: "main", historicalImplementationMerge: implementationMerge, currentProtectedBase: currentBase, expectedCurrentProtectedBase: currentBase, root: cwd }).ok, true);
+  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+});
+
 const receiptLifecycleFixture = ({ phase1Mutator = null, reviewMutator = null, currentIdentityMutator = null, extraHistorical = [] } = {}) => {
   const paths = ["scripts/assurance/engineering-closure.mjs"];
   const originalIdentity = { repository: "Chillywood2025/chillywood-mobile", pr: 230, branch: "codex/task-local-edge-fixture", headSha: "a".repeat(40), baseSha: PHASE1_LEGACY_PRE_CUTOVER_BASE };
