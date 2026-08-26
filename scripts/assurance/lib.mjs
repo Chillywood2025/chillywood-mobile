@@ -19,6 +19,207 @@ export const stableValue = (value) => Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]))
     : value;
 export const stableJson = (value, space = 0) => JSON.stringify(stableValue(value), null, space);
+
+export const RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS = Object.freeze({
+  CANONICAL_CURRENT: "CANONICAL_CURRENT",
+  COMPATIBLE_LEGACY_REPRESENTATION: "COMPATIBLE_LEGACY_REPRESENTATION",
+  HISTORICAL_NON_AUTHORITATIVE: "HISTORICAL_NON_AUTHORITATIVE",
+  SEMANTIC_MISMATCH_BLOCKING: "SEMANTIC_MISMATCH_BLOCKING",
+  MALFORMED_BLOCKING: "MALFORMED_BLOCKING",
+});
+
+const FINAL_SOURCE_RECEIPT_TYPE_V1 = "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1";
+const FINAL_SOURCE_RECEIPT_LIFECYCLE_V2 = "ASSURANCE_RECEIPT_LIFECYCLE_V2";
+const PHASE1_ADMISSION_EVIDENCE_SCHEMA_V1 = "PHASE1_ADMISSION_EVIDENCE_V1";
+const FINAL_SOURCE_RECEIPT_ENVELOPE_SCHEMA_VERSION = 1;
+
+/**
+ * Frozen, append-only allowlist for representation compatibility. A field is
+ * normalized only when every receipt/evidence schema selector below matches.
+ * Identity, authority, lifecycle, and every unlisted field remain untouched.
+ */
+export const RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1 = Object.freeze({
+  schemaVersion: 1,
+  contract: "RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1",
+  receiptSchemaVersionRange: Object.freeze({ minimum: 1, maximum: 1 }),
+  unknownSchemaDisposition: RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING,
+  fields: Object.freeze([
+    Object.freeze({
+      policyId: "PHASE1_MAINTENANCE_STATUS_NO_STATUS_V1",
+      receiptType: FINAL_SOURCE_RECEIPT_TYPE_V1,
+      receiptSchemaVersionRange: Object.freeze({ minimum: 1, maximum: 1 }),
+      lifecycleContractPath: "receiptLifecycleContract",
+      lifecycleContracts: Object.freeze([FINAL_SOURCE_RECEIPT_LIFECYCLE_V2]),
+      evidenceSchemaPath: "phase1.schemaVersion",
+      evidenceSchemaVersions: Object.freeze([PHASE1_ADMISSION_EVIDENCE_SCHEMA_V1]),
+      strictLegacyEvidenceClassifications: Object.freeze(["PHASE1_EXACT_HEAD_EVIDENCE_V1"]),
+      strictLegacyEvidenceResults: Object.freeze(["PASS_13_OF_13"]),
+      fieldPath: "phase1.maintenanceStatus",
+      allowedLegacyRepresentation: "EXPLICIT_NULL",
+      compatibleRepresentations: Object.freeze(["OMITTED", "EXPLICIT_NULL"]),
+      canonicalCurrentRepresentation: "OMITTED",
+      normalizedSemanticValue: null,
+      normalizedSemanticLabel: "NO_MAINTENANCE_STATUS",
+      authoritySensitivity: "REPRESENTATION_ONLY_NON_AUTHORITY_CHANGING",
+      authorityChanging: false,
+      cutoverBoundary: Object.freeze({
+        receiptType: FINAL_SOURCE_RECEIPT_TYPE_V1,
+        receiptSchemaVersionMinimum: 1,
+        receiptSchemaVersionMaximum: 1,
+        lifecycleContract: FINAL_SOURCE_RECEIPT_LIFECYCLE_V2,
+        evidenceSchemaVersion: PHASE1_ADMISSION_EVIDENCE_SCHEMA_V1,
+      }),
+    }),
+  ]),
+});
+
+const receiptObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+const cloneReceiptRepresentation = (value) => {
+  try { return { ok: true, value: structuredClone(value) }; }
+  catch { return { ok: false, value }; }
+};
+const receiptPathParts = (fieldPath) => fieldPath.split(".");
+const receiptPathState = (value, fieldPath) => {
+  const parts = receiptPathParts(fieldPath);
+  let cursor = value;
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    if (!receiptObject(cursor) || !Object.hasOwn(cursor, parts[index])) return { representation: "OMITTED", value: undefined };
+    cursor = cursor[parts[index]];
+  }
+  const key = parts.at(-1);
+  if (!receiptObject(cursor) || !Object.hasOwn(cursor, key)) return { representation: "OMITTED", value: undefined };
+  if (cursor[key] === undefined) return { representation: "PRESENT_UNDEFINED", value: undefined };
+  if (cursor[key] === null) return { representation: "EXPLICIT_NULL", value: null };
+  return { representation: "PRESENT_NON_NULL", value: cursor[key] };
+};
+const setReceiptPath = (value, fieldPath, fieldValue) => {
+  const parts = receiptPathParts(fieldPath);
+  let cursor = value;
+  for (let index = 0; index < parts.length - 1; index += 1) cursor = cursor[parts[index]];
+  cursor[parts.at(-1)] = structuredClone(fieldValue);
+};
+const deleteReceiptPath = (value, fieldPath) => {
+  const parts = receiptPathParts(fieldPath);
+  let cursor = value;
+  for (let index = 0; index < parts.length - 1; index += 1) cursor = cursor[parts[index]];
+  delete cursor[parts.at(-1)];
+};
+const receiptSchemaVersionInRange = (schemaVersion, range) => Number.isSafeInteger(schemaVersion)
+  && schemaVersion >= range.minimum
+  && schemaVersion <= range.maximum;
+const receiptPolicyApplies = ({ rawRepresentation, schemaVersion, policy }) => {
+  if (!receiptObject(rawRepresentation)
+    || rawRepresentation.type !== policy.receiptType
+    || !receiptSchemaVersionInRange(schemaVersion, policy.receiptSchemaVersionRange)) return false;
+  const lifecycle = receiptPathState(rawRepresentation, policy.lifecycleContractPath);
+  const evidenceSchema = receiptPathState(rawRepresentation, policy.evidenceSchemaPath);
+  return lifecycle.representation === "PRESENT_NON_NULL"
+    && policy.lifecycleContracts.includes(lifecycle.value)
+    && evidenceSchema.representation === "PRESENT_NON_NULL"
+    && policy.evidenceSchemaVersions.includes(evidenceSchema.value);
+};
+const receiptPolicyFamilyMalformed = ({ rawRepresentation, schemaVersion, policy }) => {
+  if (!receiptObject(rawRepresentation) || rawRepresentation.type !== policy.receiptType || !receiptObject(rawRepresentation.phase1)) return false;
+  if (!receiptSchemaVersionInRange(schemaVersion, policy.receiptSchemaVersionRange)) return true;
+  const lifecycle = receiptPathState(rawRepresentation, policy.lifecycleContractPath);
+  const evidenceSchema = receiptPathState(rawRepresentation, policy.evidenceSchemaPath);
+  if (evidenceSchema.representation === "OMITTED"
+    && (policy.strictLegacyEvidenceClassifications.includes(rawRepresentation.phase1.classification)
+      || policy.strictLegacyEvidenceResults.includes(rawRepresentation.phase1.result))) return false;
+  return lifecycle.representation !== "PRESENT_NON_NULL"
+    || !policy.lifecycleContracts.includes(lifecycle.value)
+    || evidenceSchema.representation !== "PRESENT_NON_NULL"
+    || !policy.evidenceSchemaVersions.includes(evidenceSchema.value);
+};
+const receiptNormalizationResult = ({ rawRepresentation, schemaVersion, normalizedSemantics, compatibilityDisposition }) => ({
+  rawRepresentation,
+  schemaVersion,
+  normalizedSemantics,
+  compatibilityDisposition,
+});
+
+export function normalizeReceiptEvidenceSemantics({ rawRepresentation, schemaVersion = FINAL_SOURCE_RECEIPT_ENVELOPE_SCHEMA_VERSION, authorityClassification = "CURRENT" } = {}) {
+  const raw = cloneReceiptRepresentation(rawRepresentation);
+  if (!raw.ok
+    || !receiptObject(raw.value)
+    || !receiptSchemaVersionInRange(schemaVersion, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1.receiptSchemaVersionRange)
+    || !["CURRENT", "HISTORICAL"].includes(authorityClassification)) {
+    return receiptNormalizationResult({ rawRepresentation: raw.value, schemaVersion, normalizedSemantics: null, compatibilityDisposition: RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING });
+  }
+  const policies = RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1.fields;
+  if (policies.some((policy) => receiptPolicyFamilyMalformed({ rawRepresentation: raw.value, schemaVersion, policy }))) {
+    return receiptNormalizationResult({ rawRepresentation: raw.value, schemaVersion, normalizedSemantics: null, compatibilityDisposition: RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING });
+  }
+  const normalized = cloneReceiptRepresentation(raw.value);
+  if (!normalized.ok) {
+    return receiptNormalizationResult({ rawRepresentation: raw.value, schemaVersion, normalizedSemantics: null, compatibilityDisposition: RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING });
+  }
+  let compatibleLegacyRepresentation = false;
+  for (const policy of policies) {
+    if (!receiptPolicyApplies({ rawRepresentation: raw.value, schemaVersion, policy })) continue;
+    const field = receiptPathState(raw.value, policy.fieldPath);
+    if (field.representation === "PRESENT_UNDEFINED") {
+      return receiptNormalizationResult({ rawRepresentation: raw.value, schemaVersion, normalizedSemantics: null, compatibilityDisposition: RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING });
+    }
+    if (!policy.compatibleRepresentations.includes(field.representation)) continue;
+    setReceiptPath(normalized.value, policy.fieldPath, policy.normalizedSemanticValue);
+    compatibleLegacyRepresentation ||= field.representation === policy.allowedLegacyRepresentation;
+  }
+  return receiptNormalizationResult({
+    rawRepresentation: raw.value,
+    schemaVersion,
+    normalizedSemantics: normalized.value,
+    compatibilityDisposition: authorityClassification === "HISTORICAL"
+      ? RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.HISTORICAL_NON_AUTHORITATIVE
+      : compatibleLegacyRepresentation
+      ? RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.COMPATIBLE_LEGACY_REPRESENTATION
+      : RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.CANONICAL_CURRENT,
+  });
+}
+
+export function compareReceiptEvidenceSemantics({ left, right, leftSchemaVersion = FINAL_SOURCE_RECEIPT_ENVELOPE_SCHEMA_VERSION, rightSchemaVersion = FINAL_SOURCE_RECEIPT_ENVELOPE_SCHEMA_VERSION, authorityClassification = "CURRENT" } = {}) {
+  const leftNormalization = normalizeReceiptEvidenceSemantics({ rawRepresentation: left, schemaVersion: leftSchemaVersion, authorityClassification });
+  const rightNormalization = normalizeReceiptEvidenceSemantics({ rawRepresentation: right, schemaVersion: rightSchemaVersion, authorityClassification });
+  const malformed = [leftNormalization, rightNormalization].some(({ compatibilityDisposition }) => compatibilityDisposition === RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING);
+  let equal = false;
+  if (!malformed) {
+    try { equal = stableJson(leftNormalization.normalizedSemantics) === stableJson(rightNormalization.normalizedSemantics); }
+    catch { equal = false; }
+  }
+  const compatibilityDisposition = malformed
+    ? RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING
+    : !equal
+    ? RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.SEMANTIC_MISMATCH_BLOCKING
+    : authorityClassification === "HISTORICAL"
+    ? RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.HISTORICAL_NON_AUTHORITATIVE
+    : [leftNormalization, rightNormalization].some(({ compatibilityDisposition: disposition }) => disposition === RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.COMPATIBLE_LEGACY_REPRESENTATION)
+    ? RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.COMPATIBLE_LEGACY_REPRESENTATION
+    : RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.CANONICAL_CURRENT;
+  return { equal, semanticallyEquivalent: equal, compatibilityDisposition, left: leftNormalization, right: rightNormalization };
+}
+
+export function canonicalReceiptEvidenceWireProjection({ rawRepresentation, schemaVersion = FINAL_SOURCE_RECEIPT_ENVELOPE_SCHEMA_VERSION } = {}) {
+  const normalized = normalizeReceiptEvidenceSemantics({ rawRepresentation, schemaVersion });
+  if (normalized.compatibilityDisposition === RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS.MALFORMED_BLOCKING) throw new Error("RECEIPT_SEMANTIC_COMPATIBILITY_SCHEMA_INVALID");
+  const projected = cloneReceiptRepresentation(rawRepresentation);
+  if (!projected.ok) throw new Error("RECEIPT_SEMANTIC_COMPATIBILITY_REPRESENTATION_INVALID");
+  for (const policy of RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1.fields) {
+    if (!receiptPolicyApplies({ rawRepresentation: projected.value, schemaVersion, policy })) continue;
+    const field = receiptPathState(projected.value, policy.fieldPath);
+    if (!policy.compatibleRepresentations.includes(field.representation)) continue;
+    if (policy.canonicalCurrentRepresentation === "OMITTED") deleteReceiptPath(projected.value, policy.fieldPath);
+    else if (policy.canonicalCurrentRepresentation === "EXPLICIT_NULL") setReceiptPath(projected.value, policy.fieldPath, null);
+    else throw new Error("RECEIPT_SEMANTIC_COMPATIBILITY_CANONICAL_REPRESENTATION_INVALID");
+  }
+  return projected.value;
+}
+
+export const phase1FinalSourceSemanticEnvelope = (value) => ({
+  type: FINAL_SOURCE_RECEIPT_TYPE_V1,
+  receiptLifecycleContract: FINAL_SOURCE_RECEIPT_LIFECYCLE_V2,
+  phase1: structuredClone(value),
+});
+
 export function phase1AdmissionEvidenceValid({ evidence, liveEvidence = null, repository = "Chillywood2025/chillywood-mobile", pr, branch, head, tree, base } = {}) {
   if (evidence?.valid === true && evidence?.result === "PASS_13_OF_13") {
     const { valid: _valid, evidenceHash: suppliedHash, ...body } = evidence;
@@ -42,7 +243,7 @@ export function phase1AdmissionEvidenceValid({ evidence, liveEvidence = null, re
   const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity, mode: PHASE1_MODES.READY, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
   const verified = verifyPhase1AggregateEvidence({ aggregate: live, identity, mode: PHASE1_MODES.READY, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
   return inspected.ok === true && verified.ok === true
-    && stableJson(inspected.evidence) === stableJson(verified.evidence)
+    && compareReceiptEvidenceSemantics({ left: phase1FinalSourceSemanticEnvelope(inspected.evidence), right: phase1FinalSourceSemanticEnvelope(verified.evidence) }).equal
     && stored.headRef === branch && stored.result === "PHASE_1_ACCEPTABLE"
     && stored.acceptable === true && stored.mergeAuthorityGranted === false;
 }

@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { canonicalGitText, classifyGitHubExecutionIdentity, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
@@ -64,6 +64,7 @@ export {
   verifyTaskJurisdictionBindingV2,
 };
 export { evaluateDraftSourceReadinessScope };
+export { canonicalReceiptEvidenceWireProjection, compareReceiptEvidenceSemantics, normalizeReceiptEvidenceSemantics, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1 };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -3266,36 +3267,9 @@ const aggregatePhase1EvidenceValue = (value) => value?.evidence ?? value?.decisi
 const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "maintenanceStatus", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
 export const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
 
-export const ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1 = Object.freeze({
-  repository: "Chillywood2025/chillywood-mobile",
-  pr: 268,
-  branch: "codex/pr264-prerequisite-closure-v2",
-  protectedBase: "4749eb9e56c2c60b35cf52ced525de60b46bb6f6",
-  objective: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
-  originalCommentId: 5419003005,
-  receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
-  phase1SchemaVersion: "PHASE1_ADMISSION_EVIDENCE_V1",
-});
-
-const phase1MaintenanceStatusCutoverIdentity = ({ identity, evidence } = {}) => {
-  const cutover = ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1;
-  return identity?.repository === cutover.repository
-    && identity?.pr === cutover.pr
-    && identity?.branch === cutover.branch
-    && identity?.baseSha === cutover.protectedBase
-    && evidence?.schemaVersion === cutover.phase1SchemaVersion
-    && evidence?.repository === cutover.repository
-    && evidence?.pr === cutover.pr
-    && evidence?.headRef === cutover.branch
-    && evidence?.baseSha === cutover.protectedBase
-    && evidence?.evaluatorSha === cutover.protectedBase;
-};
-
-export const canonicalPhase1FinalSourceWireProjection = ({ value, identity } = {}) => {
-  const projected = compactAggregatePhase1Evidence(value);
-  if (phase1MaintenanceStatusCutoverIdentity({ identity, evidence: projected }) && projected.maintenanceStatus === null) delete projected.maintenanceStatus;
-  return projected;
-};
+export const canonicalPhase1FinalSourceWireProjection = ({ value } = {}) => canonicalReceiptEvidenceWireProjection({
+  rawRepresentation: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(value)),
+}).phase1;
 
 export function phase1AdmissionPolicyForBase({ identity, root = REPOSITORY_ROOT } = {}) {
   const base = identity?.baseSha;
@@ -3328,7 +3302,10 @@ const verifyPhase1AdmissionEvidence = ({ phase1Evidence, identity, tree, root = 
   } catch {
     verified = { ok: false, findings: ["PHASE1_AGGREGATE_VERIFICATION_EXCEPTION"] };
   }
-  const evidence = canonicalPhase1FinalSourceWireProjection({ value: aggregatePhase1EvidenceValue(verified?.evidence ?? phase1Evidence), identity });
+  if (verified?.ok !== true) return { ok: false, policy, evidence: null, findings: [...new Set(verified?.findings ?? ["PHASE1_AGGREGATE_INVALID"])].sort() };
+  let evidence;
+  try { evidence = canonicalPhase1FinalSourceWireProjection({ value: aggregatePhase1EvidenceValue(verified.evidence) }); }
+  catch { return { ok: false, policy, evidence: null, findings: ["PHASE1_AGGREGATE_SEMANTIC_COMPATIBILITY_INVALID"] }; }
   const valid = Boolean(verified?.ok === true
     && evidence?.result === PHASE1_ACCEPTABLE_RESULT
     && evidence?.mode === PHASE1_READY_MODE
@@ -3349,9 +3326,10 @@ const storedPhase1MatchesLive = ({ stored, live, identity, tree, root = REPOSITO
   if (!verified.ok) return false;
   if (verified.policy === "LEGACY_EXACT_13_OF_13") return true;
   const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity: { ...identity, tree }, mode: PHASE1_READY_MODE, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
-  return inspected.ok
-    && stableJson(canonicalPhase1FinalSourceWireProjection({ value: inspected.evidence, identity }))
-      === stableJson(canonicalPhase1FinalSourceWireProjection({ value: verified.evidence, identity }));
+  return inspected.ok && compareReceiptEvidenceSemantics({
+    left: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(inspected.evidence)),
+    right: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(verified.evidence)),
+  }).equal;
 };
 
 export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree, root = REPOSITORY_ROOT } = {}) {
@@ -3636,37 +3614,8 @@ const historicalArchitectureReviewProjection = (raws, identity) => (raws ?? []).
     : null;
 }).filter(Boolean).sort((left, right) => left.commentId - right.commentId);
 
-const architectureFinalSourceMaintenanceStatusCutoverSubject = (subject) => {
-  const cutover = ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1;
-  const phase1 = subject?.phase1;
-  return subject?.type === "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1"
-    && subject?.repository === cutover.repository
-    && subject?.pr === cutover.pr
-    && subject?.branch === cutover.branch
-    && subject?.protectedBase === cutover.protectedBase
-    && subject?.objective === cutover.objective
-    && subject?.originalCommentId === cutover.originalCommentId
-    && subject?.receiptLifecycleContract === cutover.receiptLifecycleContract
-    && phase1?.schemaVersion === cutover.phase1SchemaVersion
-    && phase1?.repository === cutover.repository
-    && phase1?.pr === cutover.pr
-    && phase1?.headRef === cutover.branch
-    && phase1?.baseSha === cutover.protectedBase
-    && phase1?.evaluatorSha === cutover.protectedBase
-    && (!Object.hasOwn(phase1, "maintenanceStatus") || phase1.maintenanceStatus === null);
-};
-
-const normalizeArchitectureFinalSourceMaintenanceStatusCutover = (subject) => {
-  const normalized = structuredClone(subject);
-  if (architectureFinalSourceMaintenanceStatusCutoverSubject(normalized) && normalized.phase1.maintenanceStatus === null) delete normalized.phase1.maintenanceStatus;
-  return normalized;
-};
-
 export function architectureFinalSourceSubjectsWireEquivalent(left, right) {
-  if (stableJson(left) === stableJson(right)) return true;
-  if (!architectureFinalSourceMaintenanceStatusCutoverSubject(left) || !architectureFinalSourceMaintenanceStatusCutoverSubject(right)) return false;
-  return stableJson(normalizeArchitectureFinalSourceMaintenanceStatusCutover(left))
-    === stableJson(normalizeArchitectureFinalSourceMaintenanceStatusCutover(right));
+  return compareReceiptEvidenceSemantics({ left, right }).equal;
 }
 
 export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], historicalRepositoryReviewRaws = [], repositoryReviewRaw, phase1Evidence, admissionPublisherProvisioningReadback = null, dependencyAmendmentRaw, dependencyAmendmentResolution = null, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
@@ -4610,7 +4559,15 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         if (!ownerJurisdictionProfile && normalized?.id === 5289720389) return { valid: true, key: { ...requiredFinalKey, historicalPreCiAttestationId: normalized.id }, value: { normalized, payload, phase1: null }, disposition: "HISTORICAL_PRE_CI_FINAL_SOURCE_ATTESTATION" };
         if (!structurallyValid) return { valid: false, key: null, value: { normalized, payload, phase1: null }, disposition: "MALFORMED_INVALID" };
         const key = { repository: subject.repository, pr: subject.pr, branch: subject.branch, finalHead: subject.finalHead ?? null, finalTree: subject.finalTree ?? null, objective: subject.objective ?? null, originalCommentId: subject.originalCommentId ?? null };
-        if (stableJson(key) !== stableJson(requiredFinalKey)) return { valid: true, key, value: { normalized, payload, phase1: null }, disposition: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION" };
+        if (stableJson(key) !== stableJson(requiredFinalKey)) {
+          const historicalSemantics = normalizeReceiptEvidenceSemantics({ rawRepresentation: subject, schemaVersion: payload?.schemaVersion, authorityClassification: "HISTORICAL" });
+          return {
+            valid: true,
+            key,
+            value: { normalized, payload, phase1: null, ...historicalSemantics },
+            disposition: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION",
+          };
+        }
         const claimedHistoricalIds = (subject.historicalAttestations ?? []).map(({ commentId }) => commentId);
         const claimedHistoricalRaws = claimedHistoricalIds.map((commentId) => finalMatches.find((candidate) => candidate.id === commentId));
         const claimedHistoricalReviewIds = (subject.historicalRepositoryReviews ?? []).map(({ commentId }) => commentId);
@@ -4647,6 +4604,11 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           && subject.admissionPublisherProvisioningReadback?.ruleset?.stage === "PRE_CUTOVER_13_RAW"
           && verifyProtectedPhase1PublisherProvisioningReadback(publisherProvisioningReadback)
           && stableJson(subject.admissionPublisherProvisioningReadback) === stableJson(publisherProvisioningReadback));
+        const semanticComparison = compareReceiptEvidenceSemantics({
+          left: subject,
+          right: expected,
+          leftSchemaVersion: payload?.schemaVersion,
+        });
         const currentValid = historyBinding
           && reviewSelection.ok
           && reviewSelection.review?.valid === true
@@ -4654,11 +4616,21 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           && phase1Current
           && publisherProvisioningCurrent
           && subject.receiptLifecycleContract === ASSURANCE_RECEIPT_LIFECYCLE_V2
-          && architectureFinalSourceSubjectsWireEquivalent(subject, expected)
-          && (normalized.body === architectureFinalSourceOwnerCommentBody(expected)
-            || architectureFinalSourceMaintenanceStatusCutoverSubject(subject)
-              && architectureFinalSourceMaintenanceStatusCutoverSubject(expected));
-        return { valid: currentValid, key, value: { normalized, payload, phase1 }, disposition: "INVALID_CURRENT_FINAL_SOURCE_ATTESTATION" };
+          && semanticComparison.equal;
+        return {
+          valid: currentValid,
+          key,
+          value: {
+            normalized,
+            payload,
+            phase1,
+            rawRepresentation: semanticComparison.left.rawRepresentation,
+            schemaVersion: semanticComparison.left.schemaVersion,
+            normalizedSemantics: semanticComparison.left.normalizedSemantics,
+            compatibilityDisposition: semanticComparison.compatibilityDisposition,
+          },
+          disposition: "INVALID_CURRENT_FINAL_SOURCE_ATTESTATION",
+        };
       },
     });
     const currentFinal = finalSelection.selected?.value ?? null;
@@ -4742,12 +4714,28 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       originalBodyHash: normalizedOriginal?.bodyHash ?? null,
       originalSubjectHash: originalPayload?.subjectHash ?? null,
       currentFinalSourceReceiptId: currentFinal?.normalized?.id ?? null,
+      currentFinalSourceSemanticAudit: currentFinal ? {
+        rawRepresentation: currentFinal.rawRepresentation,
+        schemaVersion: currentFinal.schemaVersion,
+        normalizedSemantics: currentFinal.normalizedSemantics,
+        compatibilityDisposition: currentFinal.compatibilityDisposition,
+      } : null,
       dependencyAmendment: dependencyAmendmentProjection(architectureDependencyAmendment),
       taskAuthorization: authorizationOk ? "VALID" : "INVALID",
       finalSourceAttestationRequiredAtThisStage: false,
       receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
       repositoryReviewClassifications: reviewSelection.classifications,
-      finalSourceAttestationClassifications: finalSelection.classifications.map((classification) => ({ commentId: finalMatches[classification.index]?.id ?? null, status: classification.disposition, valid: classification.valid, current: classification.current, key: classification.key })).sort((left, right) => (left.commentId ?? 0) - (right.commentId ?? 0)),
+      finalSourceAttestationClassifications: finalSelection.classifications.map((classification) => ({
+        commentId: finalMatches[classification.index]?.id ?? null,
+        status: classification.disposition,
+        valid: classification.valid,
+        current: classification.current,
+        key: classification.key,
+        rawRepresentation: classification.value?.rawRepresentation ?? null,
+        schemaVersion: classification.value?.schemaVersion ?? null,
+        normalizedSemantics: classification.value?.normalizedSemantics ?? null,
+        compatibilityDisposition: classification.value?.compatibilityDisposition ?? null,
+      })).sort((left, right) => (left.commentId ?? 0) - (right.commentId ?? 0)),
       checks: { ...authorizationChecks, ...attestationChecks },
       findings: authorizationOk ? [] : Object.entries(authorizationChecks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`),
       mergeFindings: mergeEligible ? [] : Object.entries(attestationChecks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MERGE_INELIGIBLE:${key}`),
