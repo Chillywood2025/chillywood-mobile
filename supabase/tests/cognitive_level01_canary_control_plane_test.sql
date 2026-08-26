@@ -1,5 +1,19 @@
 begin;
 select no_plan();
+
+create function pg_temp.set_service_role_test_context()
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claim.sub','',true);
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  if auth.uid() is not null or auth.jwt() ? 'session_id' then
+    raise exception 'service_role_fixture_retained_user_session';
+  end if;
+  return current_setting('request.jwt.claims',true);
+end;
+$$;
+
 insert into public.cognitive_service_identities(
   service_identity,credential_hash,status,expires_at
 )
@@ -61,7 +75,7 @@ select ok(
   'service role cannot bypass the canary RPC with direct inserts'
 );
 
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select pg_temp.set_level01_test_actor('governance_canary_scheduler');
 create temporary table level01_fixture(task_id uuid, project_id uuid);
 insert into level01_fixture
@@ -181,6 +195,11 @@ values (
   false,
   now()
 );
+insert into auth.sessions(id,user_id)
+values (
+  'b5100000-0000-4000-8000-000000000001',
+  'b5000000-0000-0000-0000-000000000001'
+);
 insert into public.platform_role_memberships(role,user_id,email,status)
 values (
   'owner',
@@ -192,6 +211,7 @@ select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','b5000000-0000-0000-0000-000000000001',
+    'session_id','b5100000-0000-4000-8000-000000000001',
     'role','authenticated',
     'email','level01-owner@example.invalid',
     'app_metadata','{}'::jsonb
@@ -308,7 +328,7 @@ select
   transaction_timestamp(),transaction_timestamp()
 from level01_fixture fixture;
 set local session_replication_role=origin;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select pg_temp.set_level01_test_actor('research_source_broker');
 
 create temporary table level01_source(source_id uuid);
@@ -433,6 +453,7 @@ select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','b5000000-0000-0000-0000-000000000001',
+    'session_id','b5100000-0000-4000-8000-000000000001',
     'role','authenticated',
     'email','level01-owner@example.invalid',
     'app_metadata','{}'::jsonb
@@ -471,7 +492,7 @@ set enabled = excluded.enabled,
     enabled_by = excluded.enabled_by,
     enabled_at = excluded.enabled_at,
     updated_at = excluded.updated_at;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select pg_temp.set_level01_test_actor('deliberation_orchestrator');
 
 select lives_ok(
@@ -505,6 +526,7 @@ select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','b5000000-0000-0000-0000-000000000001',
+    'session_id','b5100000-0000-4000-8000-000000000001',
     'role','authenticated',
     'email','level01-owner@example.invalid',
     'app_metadata','{}'::jsonb

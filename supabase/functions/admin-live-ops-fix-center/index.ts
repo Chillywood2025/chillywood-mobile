@@ -4,6 +4,12 @@ import {
   securityContextAuditMetadata,
   type SecurityRequestContextResult,
 } from "../_shared/security-request-context.ts";
+import {
+  readExactBreakGlassSessionId,
+  readExactCurrentSessionAuthority,
+  readExactPermissionKeys,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -85,57 +91,14 @@ const shouldWriteAppAudit = (user: AuthenticatedUser) =>
 const hasActiveStaffPermission = async (
   adminClient: SupabaseClientLike,
   userId: string,
-  email: string | null,
   permissionKey: string,
-) => {
-  const normalizedEmail = toText(email).toLowerCase();
-  let query = adminClient
-    .from("platform_staff_permission_grants")
-    .select("id,expires_at")
-    .eq("status", "active")
-    .eq("permission_key", permissionKey);
-
-  if (normalizedEmail) {
-    query = query.or(`target_user_id.eq.${userId},target_email.ilike.${normalizedEmail}`);
-  } else {
-    query = query.eq("target_user_id", userId);
-  }
-
-  const { data, error } = await query.limit(10);
-  if (error) throw new Error(`Platform permission lookup failed: ${error.message}`);
-  const now = Date.now();
-  return ((data ?? []) as JsonObject[]).some((row) => {
-    const expiresAt = toText(row.expires_at);
-    return !expiresAt || Date.parse(expiresAt) > now;
-  });
-};
+) => (await readExactPermissionKeys(adminClient, userId, [permissionKey]))
+  .has(permissionKey);
 
 const readActiveBreakGlassSessionId = async (
   adminClient: SupabaseClientLike,
   userId: string,
-  email: string | null,
-) => {
-  const normalizedEmail = toText(email).toLowerCase();
-  let query = adminClient
-    .from("platform_break_glass_sessions")
-    .select("id,expires_at")
-    .eq("status", "active");
-
-  if (normalizedEmail) {
-    query = query.or(`actor_user_id.eq.${userId},actor_email.ilike.${normalizedEmail}`);
-  } else {
-    query = query.eq("actor_user_id", userId);
-  }
-
-  const { data, error } = await query.order("activated_at", { ascending: false }).limit(5);
-  if (error) throw new Error(`Break Glass lookup failed: ${error.message}`);
-  const now = Date.now();
-  const active = ((data ?? []) as JsonObject[]).find((row) => {
-    const expiresAt = toText(row.expires_at);
-    return !expiresAt || Date.parse(expiresAt) > now;
-  });
-  return toText(active?.id) || null;
-};
+) => readExactBreakGlassSessionId(adminClient, userId);
 
 const authenticate = async (
   req: Request,
@@ -154,51 +117,17 @@ const authenticate = async (
   });
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) {
+  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
     return { error: json(401, { error: "invalid_session" }) };
   }
 
-  const normalizedEmail = toText(data.user?.email).toLowerCase();
-  const userLookup = await adminClient
-    .from("platform_role_memberships")
-    .select("role")
-    .eq("status", "active")
-    .in("role", ["owner", "operator"])
-    .eq("user_id", userId)
-    .order("role", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (userLookup.error) throw new Error(`Platform role lookup failed: ${userLookup.error.message}`);
-  const userRole = toText((userLookup.data as JsonObject | null)?.role);
+  const userRole = await readExactPlatformRole(adminClient, userId, ["owner", "operator"]);
   if (userRole === "owner" || userRole === "operator") {
-    if (userRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, data.user?.email ?? null, "live_ops"))) {
+    if (userRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, "live_ops"))) {
       return { error: json(403, { error: "live_ops_permission_required" }) };
     }
-    const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, data.user?.email ?? null);
+    const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId);
     return { user: { activeBreakGlassSessionId, email: data.user?.email ?? null, id: userId, role: userRole } };
-  }
-
-  if (normalizedEmail) {
-    const emailLookup = await adminClient
-      .from("platform_role_memberships")
-      .select("role")
-      .eq("status", "active")
-      .in("role", ["owner", "operator"])
-      .ilike("email", normalizedEmail)
-      .order("role", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (emailLookup.error) throw new Error(`Platform role email lookup failed: ${emailLookup.error.message}`);
-    const emailRole = toText((emailLookup.data as JsonObject | null)?.role);
-    if (emailRole === "owner" || emailRole === "operator") {
-      if (emailRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, data.user?.email ?? null, "live_ops"))) {
-        return { error: json(403, { error: "live_ops_permission_required" }) };
-      }
-      const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, data.user?.email ?? null);
-      return { user: { activeBreakGlassSessionId, email: data.user?.email ?? null, id: userId, role: emailRole } };
-    }
   }
 
   return { error: json(403, { error: "owner_operator_required" }) };

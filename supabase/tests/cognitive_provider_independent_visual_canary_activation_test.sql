@@ -224,6 +224,11 @@ values
   ('f1000000-0000-4000-8000-000000000001', false, false, now()),
   ('f1000000-0000-4000-8000-000000000002', false, false, now());
 
+insert into auth.sessions(id, user_id)
+values
+  ('f1100000-0000-4000-8000-000000000001', 'f1000000-0000-4000-8000-000000000001'),
+  ('f1100000-0000-4000-8000-000000000002', 'f1000000-0000-4000-8000-000000000002');
+
 insert into public.platform_role_memberships(user_id, email, role, status)
 values
   ('f1000000-0000-4000-8000-000000000001', null, 'owner', 'active'),
@@ -238,7 +243,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000002"}',
+  '{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000002","session_id":"f1100000-0000-4000-8000-000000000002"}',
   true
 );
 select throws_ok(
@@ -266,7 +271,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000001","session_id":"f1100000-0000-4000-8000-000000000001"}',
   true
 );
 select throws_ok(

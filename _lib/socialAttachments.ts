@@ -6,6 +6,7 @@ import {
   getMediaStorageProviderBucket,
   normalizeMediaStorageProvider,
   uploadFileToMediaStorage,
+  usesPrivateOriginMediaGateway,
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { supabase } from "./supabase";
@@ -112,7 +113,7 @@ type SocialAttachmentInsert = TablesInsert<"social_attachments">;
 const SOCIAL_ATTACHMENT_SELECT =
   "id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,size_bytes,original_file_name,moderation_status,moderation_reason,moderated_at,moderated_by,scan_status,scan_provider,scan_result,scanned_at,scan_error,created_at,updated_at";
 
-const SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES = ["clean", "manual_review"] as const;
+const SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES = ["clean"] as const;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -320,7 +321,7 @@ async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAt
     && moderationStatus !== "removed"
     && isSocialAttachmentScanPublicSafe(scanStatus);
   const signedUrl = canDisplayAttachment
-    ? storageProvider === "s3" && storageObjectKey
+    ? usesPrivateOriginMediaGateway(storageProvider) && storageObjectKey
       ? await createSignedMediaDownload({
         surfaceType: "social_attachment",
         provider: storageProvider,
@@ -415,6 +416,8 @@ export async function createSocialAttachmentForSurface(input: {
         mimeType,
         fileName,
         sizeBytes: normalized.file.size,
+        maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,
+        tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
       });
 
       return {
@@ -427,7 +430,7 @@ export async function createSocialAttachmentForSurface(input: {
       await normalized.cleanup();
     }
   })();
-  const { file, fileName, mimeType, uploadedObject } = preparedUpload;
+  const { fileName, mimeType, uploadedObject } = preparedUpload;
 
   const payload: SocialAttachmentInsert & Record<string, unknown> = {
     id,
@@ -439,7 +442,7 @@ export async function createSocialAttachmentForSurface(input: {
     storage_object_key: uploadedObject.objectKey,
     storage_path: uploadedObject.objectKey,
     mime_type: mimeType,
-    size_bytes: Math.max(0, Number(file.size ?? 0) || 0),
+    size_bytes: uploadedObject.sizeBytes,
     original_file_name: fileName,
     moderation_status: "clean",
     scan_status: "pending_scan",
@@ -476,23 +479,26 @@ export async function deleteSocialAttachment(
   const id = toText(attachment.id);
   if (!id) return;
 
-  const { error } = await supabase
-    .from("social_attachments")
-    .delete()
-    .eq("id", id);
-
-  if (error) throw error;
   const provider = normalizeMediaStorageProvider(attachment.storageProvider);
   const objectKey = toText(attachment.storageObjectKey) || toText(attachment.storagePath);
-  if (provider === "s3" && objectKey) {
+  if (usesPrivateOriginMediaGateway(provider) && objectKey) {
     await deleteStoredMediaObject({
       surfaceType: "social_attachment",
       provider,
       bucket: toText(attachment.storageBucket),
       objectKey,
       recordId: id,
-    }).catch(() => undefined);
+    });
   } else if (objectKey) {
-    await supabase.storage.from(SOCIAL_ATTACHMENT_BUCKET).remove([objectKey]).catch(() => undefined);
+    const { error: storageError } = await supabase.storage.from(SOCIAL_ATTACHMENT_BUCKET).remove([objectKey]);
+    if (storageError) throw storageError;
   }
+
+
+  const { error } = await supabase
+    .from("social_attachments")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
 }

@@ -5,7 +5,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   AppState,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -34,6 +33,7 @@ import {
 } from "../../_lib/livekit/react-native-module";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { emitLiveKitRenderTelemetryEvent } from "../../_lib/livekit/livekitRenderTelemetry";
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 export type LiveKitStageParticipantRosterEntry = {
   identity: string;

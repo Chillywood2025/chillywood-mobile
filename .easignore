@@ -32,6 +32,10 @@ ios/build/
 *.tsbuildinfo
 
 # Local-only env files and signing material
+.env
+.env.*
+!.env.example
+!.env.*.example
 .env*.local
 app-store-connect.env
 app-store-connect.*.env
@@ -46,6 +50,8 @@ app-store-connect.*.env
 *.key
 *.mobileprovision
 credentials.json
+*service-account*.json
+firebase-adminsdk-*.json
 *.signing-password
 *.keystore-password
 GoogleService-Info.plist

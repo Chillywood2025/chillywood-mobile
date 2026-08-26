@@ -11,11 +11,12 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
   Vibration,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 
 import { trackEvent } from "../../_lib/analytics";
 import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";

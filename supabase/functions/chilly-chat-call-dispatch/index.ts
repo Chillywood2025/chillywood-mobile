@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
+import { readExactCurrentSessionAuthority } from "../_shared/exact-subject-authority.ts";
 
 import {
   IOS_NOTIFICATION_CATEGORIES,
@@ -223,7 +224,11 @@ async function readAuthenticatedUser(req: Request): Promise<AuthResult> {
   });
   const { data, error } = await userClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) return { error: jsonResponse(401, { error: "unauthenticated" }) };
+  if (
+    error
+    || !userId
+    || !(await readExactCurrentSessionAuthority(userClient, userId))
+  ) return { error: jsonResponse(401, { error: "unauthenticated" }) };
 
   return {
     user: {

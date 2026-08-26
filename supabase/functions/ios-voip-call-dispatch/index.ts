@@ -37,10 +37,14 @@ type ThreadMember = {
 };
 
 type VoipToken = {
+  account_id: string;
   id: string;
+  install_id: string;
+  session_generation: string;
   token: string;
   token_fingerprint: string;
   apns_environment: "development" | "production";
+  user_id: string;
 };
 
 const CORS_HEADERS = {
@@ -90,7 +94,7 @@ const sha256Hex = async (value: string) => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
-const readAuthenticatedUserId = async (req: Request) => {
+const readAuthenticatedAuthority = async (req: Request) => {
   const authorization = req.headers.get("authorization") ?? "";
   if (!authorization.toLowerCase().startsWith("bearer ")) return null;
   const userClient = createClient(
@@ -101,8 +105,17 @@ const readAuthenticatedUserId = async (req: Request) => {
       global: { headers: { Authorization: authorization } },
     },
   );
-  const { data, error } = await userClient.auth.getUser();
-  return error ? null : toText(data.user?.id) || null;
+  const { data: userData, error: userError } = await userClient.auth.getUser();
+  const userId = toText(userData.user?.id);
+  if (userError || !userId) return null;
+  const { data, error } = await userClient.rpc("wave1_session_authority_readback");
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) return null;
+  const authority = data as Record<string, unknown>;
+  const accountId = toText(authority.accountId);
+  const sessionGeneration = toText(authority.sessionGeneration);
+  if (authority.authoritative !== true || authority.state !== "ACTIVE" || authority.restoreOnly !== false
+    || toText(authority.userId) !== userId || accountId !== userId || !sessionGeneration) return null;
+  return { accountId, sessionGeneration, userId };
 };
 
 const readInvite = async (adminClient: SupabaseClientLike, inviteId: string) => {
@@ -300,8 +313,9 @@ Deno.serve(async (req): Promise<Response> => {
       serviceRoleKey,
       { auth: { persistSession: false } },
     );
-    const callerUserId = await readAuthenticatedUserId(req) ?? "";
-    if (!callerUserId) return jsonResponse(401, { error: "unauthenticated" });
+    const callerAuthority = await readAuthenticatedAuthority(req);
+    const callerUserId = callerAuthority?.userId ?? "";
+    if (!callerAuthority || !callerUserId) return jsonResponse(401, { error: "unauthenticated" });
     const invite = await readInvite(adminClient, inviteId);
     if (!invite) return jsonResponse(404, { error: "invite_not_found" });
     const inviteCallerUserId = toText(invite.caller_user_id);
@@ -365,14 +379,10 @@ Deno.serve(async (req): Promise<Response> => {
     if (!topic) return jsonResponse(503, { error: "apns_topic_unavailable" });
     const authorization = await createApnsAuthorization({ keyId, privateKey, teamId });
 
-    const { data: tokenRows, error: tokenError } = await adminClient
-      .from("user_voip_push_tokens")
-      .select("id,token,token_fingerprint,apns_environment")
-      .eq("user_id", recipientUserId)
-      .eq("enabled", true)
-      .is("revoked_at", null)
-      .order("last_seen_at", { ascending: false })
-      .limit(5);
+    const { data: tokenRows, error: tokenError } = await adminClient.rpc(
+      "whole_app_read_deliverable_ios_voip_tokens",
+      { p_recipient_user_id: recipientUserId },
+    );
     if (tokenError) return jsonResponse(500, { error: "voip_token_read_failed" });
     const tokens = (tokenRows ?? []) as VoipToken[];
     if (!tokens.length) {
@@ -387,14 +397,6 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     const caller = members.find((member) => toText(member.user_id) === inviteCallerUserId);
-    const payload = buildIosVoipApnsPayload({
-      action,
-      callInviteId: invite.id,
-      callerName: toText(caller?.display_name) || "Chi'llywood caller",
-      callType: invite.call_type,
-      expiresAt: invite.expires_at,
-      threadId: invite.thread_id,
-    }) as JsonObject;
     // A zero APNs expiration prevents stale incoming-call pushes from being
     // stored and delivered after the caller has already stopped ringing.
     const expiration = 0;
@@ -403,6 +405,18 @@ Deno.serve(async (req): Promise<Response> => {
     let skippedCount = 0;
 
     for (const tokenRow of tokens) {
+      const payload = buildIosVoipApnsPayload({
+        action,
+        callInviteId: invite.id,
+        callerName: toText(caller?.display_name) || "Chi'llywood caller",
+        callType: invite.call_type,
+        expiresAt: invite.expires_at,
+        recipientAccountId: tokenRow.account_id,
+        recipientInstallId: tokenRow.install_id,
+        recipientSessionGeneration: tokenRow.session_generation,
+        recipientUserId: tokenRow.user_id,
+        threadId: invite.thread_id,
+      }) as JsonObject;
       const dispatchKey = await sha256Hex(`ios_voip:${invite.id}:${tokenRow.id}:${action}`);
       let { data: attempt, error: attemptError } = await adminClient
         .from("voip_push_delivery_attempts")
@@ -495,7 +509,13 @@ Deno.serve(async (req): Promise<Response> => {
           const revokedAt = new Date().toISOString();
           await adminClient
             .from("user_voip_push_tokens")
-            .update({ enabled: false, revoked_at: revokedAt, updated_at: revokedAt })
+            .update({
+              enabled: false,
+              last_revocation_reason: "provider_invalid",
+              ownership_state: "INVALID",
+              revoked_at: revokedAt,
+              updated_at: revokedAt,
+            })
             .eq("id", tokenRow.id);
         }
       }

@@ -113,6 +113,13 @@ export type CommunicationParticipantView = CommunicationParticipantPresence & {
   connectionState: "waiting" | "connecting" | "connected" | "disconnected" | "failed";
 };
 
+export type CommunicationRoomSignalEvent =
+  | "webrtc:offer"
+  | "webrtc:answer"
+  | "webrtc:ice"
+  | "media:update"
+  | "room:end";
+
 type CommunicationRoomBaseRow = Pick<
   Tables<"communication_rooms">,
   | "room_id"
@@ -163,7 +170,6 @@ type CommunicationRoomBaseInsert = Pick<
   | "linked_room_mode"
 >;
 type CommunicationRoomUpdate = TablesUpdate<"communication_rooms">;
-type CommunicationMembershipInsert = TablesInsert<"communication_room_memberships">;
 type CommunicationMembershipUpdate = TablesUpdate<"communication_room_memberships">;
 
 type CommunicationRoomCreateOptions = {
@@ -347,6 +353,41 @@ export const getCommunicationRTCModule = (): RTCModule | null => {
 };
 
 export const buildCommunicationChannelName = (roomId: string) => `${COMMUNICATION_CHANNEL_PREFIX}${roomId}`;
+
+export async function broadcastCommunicationRoomSignal(options: {
+  roomId: string;
+  event: CommunicationRoomSignalEvent;
+  payload: Record<string, unknown>;
+}): Promise<boolean> {
+  const roomId = formatCommunicationRoomCode(options.roomId);
+  if (!roomId) return false;
+
+  const rpc = supabase.rpc as unknown as (
+    fn: "broadcast_communication_room_signal",
+    args: {
+      p_room_id: string;
+      p_event: CommunicationRoomSignalEvent;
+      p_payload: Record<string, unknown>;
+    },
+  ) => PromiseLike<{
+    data: {
+      sent?: unknown;
+      event?: unknown;
+      roomId?: unknown;
+    } | null;
+    error: { message?: string } | null;
+  }>;
+  const { data, error } = await rpc("broadcast_communication_room_signal", {
+    p_room_id: roomId,
+    p_event: options.event,
+    p_payload: options.payload,
+  });
+
+  return !error
+    && data?.sent === true
+    && String(data.event ?? "") === options.event
+    && formatCommunicationRoomCode(data.roomId) === roomId;
+}
 
 const isMissingColumnError = (error: unknown, column: string) => {
   const message =
@@ -660,7 +701,6 @@ export async function evaluateCommunicationRoomAccess(options: {
   userId?: string;
 }): Promise<RoomAccessDecision> {
   const writableUserId = await getWritablePartyUserId();
-  const safeUserId = String(options.userId ?? writableUserId ?? "").trim();
   const membership = options.membership ?? null;
 
   return evaluateRoomAccess({
@@ -680,50 +720,33 @@ export async function joinCommunicationRoomSession(options: {
   micEnabled?: boolean;
 }): Promise<CommunicationRoomMembership | null> {
   const roomId = formatCommunicationRoomCode(options.roomId);
-  const writableUserId = String(options.userId ?? await getWritablePartyUserId()).trim();
-  if (!roomId || !writableUserId) return null;
+  const writableUserId = String(await getWritablePartyUserId()).trim();
+  const requestedUserId = String(options.userId ?? writableUserId).trim();
+  if (!roomId || !writableUserId || requestedUserId !== writableUserId) return null;
 
-  const snapshot = await getCommunicationRoomSnapshot(roomId);
-  if (!snapshot || snapshot.room.status !== "active") return null;
-
-  const existingMembership = snapshot.memberships.find((membership) => membership.userId === writableUserId) ?? null;
-  const access = await evaluateCommunicationRoomAccess({
-    room: snapshot.room,
-    membership: existingMembership,
-    userId: writableUserId,
+  const rpc = supabase.rpc as unknown as (
+    fn: "join_communication_room_session",
+    args: {
+      p_room_id: string;
+      p_display_name: string | null;
+      p_avatar_url: string | null;
+      p_camera_enabled: boolean;
+      p_mic_enabled: boolean;
+    },
+  ) => PromiseLike<{
+    data: CommunicationMembershipRow[] | CommunicationMembershipRow | null;
+    error: { message?: string } | null;
+  }>;
+  const { data, error } = await rpc("join_communication_room_session", {
+    p_room_id: roomId,
+    p_display_name: String(options.displayName ?? "").trim() || null,
+    p_avatar_url: String(options.avatarUrl ?? "").trim() || null,
+    p_camera_enabled: !!options.cameraEnabled,
+    p_mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
   });
-
-  if (!access.canJoin) return null;
-
-  const activeMemberships = getActiveCommunicationMemberships(snapshot.memberships);
-  const hasExistingSeat = activeMemberships.some((membership) => membership.userId === writableUserId);
-  if (!hasExistingSeat && activeMemberships.length >= COMMUNICATION_ROOM_MAX_PARTICIPANTS) return null;
-
-  const now = new Date().toISOString();
-  const payload: CommunicationMembershipInsert = {
-    room_id: roomId,
-    user_id: writableUserId,
-    role: writableUserId === snapshot.room.hostUserId ? "host" : "participant",
-    membership_state: "active",
-    camera_enabled: !!options.cameraEnabled,
-    mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
-    display_name: String(options.displayName ?? "").trim() || null,
-    avatar_url: String(options.avatarUrl ?? "").trim() || null,
-    joined_at: now,
-    last_seen_at: now,
-    left_at: null,
-    updated_at: now,
-  };
-
-  const { data, error } = await supabase
-    .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
-    .upsert(payload, { onConflict: "room_id,user_id" })
-    .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
-    .returns<CommunicationMembershipRow>()
-    .single();
-
-  if (error || !data) return null;
-  return parseCommunicationMembershipPayload(data);
+  const row = Array.isArray(data) ? data[0] ?? null : data;
+  if (error || !row) return null;
+  return parseCommunicationMembershipPayload(row);
 }
 
 export async function touchCommunicationRoomSession(options: {

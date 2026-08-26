@@ -1,5 +1,7 @@
 import React from "react";
-import { Image, StyleSheet, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
+
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 export type MoneyTone = "neutral" | "premium" | "success" | "warning" | "danger" | "vip";
 

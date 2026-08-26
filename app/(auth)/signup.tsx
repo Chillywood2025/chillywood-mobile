@@ -32,7 +32,7 @@ import {
 import { AppStatusPill } from "../../components/ui/app-surface";
 
 const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
-const EMAIL_CONFIRM_REDIRECT_URL = "chillywoodmobile://auth/callback";
+const EMAIL_CONFIRM_REDIRECT_URL = "https://chillywoodstream.com/auth-callback";
 const SIGNUP_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 
 function getSignupErrorMessage(error: unknown) {

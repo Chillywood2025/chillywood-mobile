@@ -6,6 +6,22 @@ import {
   type SecurityRequestContextResult,
 } from "../_shared/security-request-context.ts";
 import {
+  readExactBreakGlassSessionId,
+  readExactCurrentSessionAuthority,
+  readExactPermissionKeys,
+  readExactPlatformRole,
+  readExactTargetStaffSubject,
+  normalizeExactSubjectId,
+} from "../_shared/exact-subject-authority.ts";
+import {
+  createCanaryProofScope,
+  recordCanaryProofGrant,
+  recordCanaryProofRole,
+  recordCanaryProofUser,
+  type CanaryProofLabel,
+  type CanaryProofScope,
+} from "../_shared/canary-proof-scope.ts";
+import {
   CREATOR_UPLOAD_ACKNOWLEDGEMENT,
   LEGAL_POLICIES,
   LIVE_REPLAY_ACKNOWLEDGEMENT,
@@ -245,58 +261,12 @@ const resolveAdminReason = (user: AuthenticatedUser, value: unknown, fallback: s
 const readActivePermissions = async (
   adminClient: SupabaseClientLike,
   userId: string,
-  email: string | null,
-) => {
-  const normalizedEmail = normalizeEmail(email);
-  let query = adminClient
-    .from("platform_staff_permission_grants")
-    .select("permission_key,expires_at")
-    .eq("status", "active");
-
-  if (normalizedEmail) {
-    query = query.or(`target_user_id.eq.${userId},target_email.ilike.${normalizedEmail}`);
-  } else {
-    query = query.eq("target_user_id", userId);
-  }
-
-  const { data, error } = await query.limit(200);
-  if (error) throw new Error(`Permission lookup failed: ${error.message}`);
-  const now = Date.now();
-  return new Set(
-    ((data ?? []) as JsonObject[])
-      .filter((row) => {
-        const expiresAt = toText(row.expires_at);
-        return !expiresAt || Date.parse(expiresAt) > now;
-      })
-      .map((row) => normalizePermission(row.permission_key))
-      .filter(Boolean),
-  );
-};
+) => readExactPermissionKeys(adminClient, userId, CONTROL_PERMISSION_KEYS);
 
 const readActiveBreakGlassSessionId = async (
   adminClient: SupabaseClientLike,
   userId: string,
-  email: string | null,
-) => {
-  const normalizedEmail = normalizeEmail(email);
-  let query = adminClient
-    .from("platform_break_glass_sessions")
-    .select("id,expires_at")
-    .eq("status", "active");
-  if (normalizedEmail) {
-    query = query.or(`actor_user_id.eq.${userId},actor_email.ilike.${normalizedEmail}`);
-  } else {
-    query = query.eq("actor_user_id", userId);
-  }
-  const { data, error } = await query.order("activated_at", { ascending: false }).limit(5);
-  if (error) throw new Error(`Break Glass lookup failed: ${error.message}`);
-  const now = Date.now();
-  const active = ((data ?? []) as JsonObject[]).find((row) => {
-    const expiresAt = toText(row.expires_at);
-    return !expiresAt || Date.parse(expiresAt) > now;
-  });
-  return toText(active?.id) || null;
-};
+) => readExactBreakGlassSessionId(adminClient, userId);
 
 const authenticate = async (
   req: Request,
@@ -315,43 +285,23 @@ const authenticate = async (
   });
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId) return { error: json(401, { error: "invalid_session" }) };
+  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
+    return { error: json(401, { error: "invalid_session" }) };
+  }
 
   const email = data.user?.email ?? null;
-  const normalizedEmail = normalizeEmail(email);
-  const roleLookup = await adminClient
-    .from("platform_role_memberships")
-    .select("role")
-    .eq("status", "active")
-    .in("role", ["owner", "operator", "moderator"])
-    .eq("user_id", userId)
-    .order("role", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (roleLookup.error) throw new Error(`Role lookup failed: ${roleLookup.error.message}`);
-  let role = toText((roleLookup.data as JsonObject | null)?.role);
-
-  if (!role && normalizedEmail) {
-    const emailLookup = await adminClient
-      .from("platform_role_memberships")
-      .select("role")
-      .eq("status", "active")
-      .in("role", ["owner", "operator", "moderator"])
-      .ilike("email", normalizedEmail)
-      .order("role", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (emailLookup.error) throw new Error(`Role email lookup failed: ${emailLookup.error.message}`);
-    role = toText((emailLookup.data as JsonObject | null)?.role);
-  }
+  const role = await readExactPlatformRole(
+    adminClient,
+    userId,
+    ["owner", "operator", "moderator"],
+  );
 
   if (role !== "owner" && role !== "operator" && role !== "moderator") {
     return { error: json(403, { error: "staff_role_required" }) };
   }
 
-  const permissions = await readActivePermissions(adminClient, userId, email);
-  const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, email);
+  const permissions = await readActivePermissions(adminClient, userId);
+  const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId);
   let isFirstOwner = false;
   if (role === "owner") {
     const firstOwner = await adminClient.rpc("is_first_owner", {
@@ -566,18 +516,36 @@ const firstOwnerStartStepDown = async (
     return json(403, { error: "password_reauth_failed" });
   }
 
+  const successorSubject = await readExactTargetStaffSubject(
+    adminClient,
+    successorEmail,
+    "owner",
+  );
+  if (!successorSubject) return json(409, { error: "successor_owner_required" });
+
   const ownerRows = await adminClient
     .from("platform_role_memberships")
-    .select("id,user_id,email")
+    .select("id,user_id,email,expires_at")
     .eq("role", "owner")
     .eq("status", "active")
     .limit(100);
   if (ownerRows.error) throw new Error(`Owner succession lookup failed: ${ownerRows.error.message}`);
   const activeOwners = (ownerRows.data ?? []) as JsonObject[];
-  const actorOwner = activeOwners.find((row) => toText(row.user_id) === user.id || normalizeEmail(row.email) === normalizeEmail(user.email));
-  const successor = activeOwners.find((row) => normalizeEmail(row.email) === successorEmail);
-  const targetMembershipId = toText(actorOwner?.id);
-  const successorMembershipId = toText(successor?.id);
+  const now = Date.now();
+  const unexpiredExactOwners = activeOwners.filter((row) => {
+    const expiresAt = toText(row.expires_at);
+    const expiresAtMs = expiresAt ? Date.parse(expiresAt) : null;
+    return !expiresAt || (Number.isFinite(expiresAtMs) && (expiresAtMs as number) > now);
+  });
+  const actorOwners = unexpiredExactOwners.filter((row) => toText(row.user_id) === user.id);
+  const successors = unexpiredExactOwners.filter((row) =>
+    toText(row.user_id) === successorSubject.userId
+  );
+  if (actorOwners.length !== 1 || successors.length !== 1) {
+    return json(409, { error: "successor_owner_membership_ambiguous" });
+  }
+  const targetMembershipId = toText(actorOwners[0].id);
+  const successorMembershipId = toText(successors[0].id);
   if (!targetMembershipId || !successorMembershipId) return json(409, { error: "successor_owner_required" });
   const passcode = generatePasscode();
   const salt = randomHex(16);
@@ -627,17 +595,10 @@ const firstOwnerCompleteStepDown = async (adminClient: SupabaseClientLike, actor
   return json(200, { result: sanitizeObject(result.data) });
 };
 
-const targetHasAdminRole = async (adminClient: SupabaseClientLike, email: string) => {
-  const { data, error } = await adminClient
-    .from("platform_role_memberships")
-    .select("id")
-    .eq("status", "active")
-    .eq("role", "operator")
-    .ilike("email", email)
-    .limit(1);
-  if (error) throw new Error(`Target role lookup failed: ${error.message}`);
-  return (data ?? []).length > 0;
-};
+const resolveTargetAdminSubject = async (
+  adminClient: SupabaseClientLike,
+  email: string,
+) => readExactTargetStaffSubject(adminClient, email, "operator");
 
 const templateList = async () => json(200, {
   templates: TEMPLATE_KEYS.map((key) => ({
@@ -668,7 +629,9 @@ const templateApply = async (adminClient: SupabaseClientLike, user: Authenticate
 
   const targetEmail = normalizeEmail(payload.targetEmail ?? payload.target_email);
   if (!targetEmail) return json(400, { error: "target_email_required" });
-  if (user.role !== "owner" && targetEmail === normalizeEmail(user.email)) {
+  const target = await resolveTargetAdminSubject(adminClient, targetEmail);
+  if (!target) return json(409, { error: "target_admin_required" });
+  if (user.role !== "owner" && target.userId === user.id) {
     await writePlatformAudit(adminClient, user, {
       action: "staff_permission_template_blocked",
       metadata: { blocked_reason: "self_grant_blocked", template_key: templateKey },
@@ -680,44 +643,54 @@ const templateApply = async (adminClient: SupabaseClientLike, user: Authenticate
     return json(403, { error: "self_grant_denied" });
   }
 
-  if (!(await targetHasAdminRole(adminClient, targetEmail))) {
-    return json(409, { error: "target_admin_required" });
-  }
-
   const reason = resolveAdminReason(user, payload.reason, `Owner applied ${template.label} permission template.`);
   const expiresAt = resolveExpiresAt(payload.expiresAt ?? payload.expires_at ?? payload.duration);
   const now = new Date().toISOString();
   const results: JsonObject[] = [];
 
   for (const permissionKey of template.permissions) {
-    const update = await adminClient
+    const existing = await adminClient
       .from("platform_staff_permission_grants")
-      .update({
-        expires_at: expiresAt,
-        granted_at: now,
-        granted_by: user.id,
-        metadata: {
-          audit_required: shouldWriteAppAudit(user),
-          break_glass_active: !!user.activeBreakGlassSessionId,
-          break_glass_session_id: user.activeBreakGlassSessionId,
-          granted_actor_role: user.role,
-          template_key: templateKey,
-        },
-        reason,
-        revoked_at: null,
-        revoked_by: null,
-        status: "active",
-        target_email: targetEmail,
-        updated_at: now,
-      })
+      .select("id,target_user_id,permission_key,status,expires_at")
+      .eq("target_user_id", target.userId)
       .eq("permission_key", permissionKey)
-      .ilike("target_email", targetEmail)
-      .select("id,permission_key,status,expires_at")
-      .maybeSingle();
+      .eq("status", "active")
+      .order("granted_at", { ascending: false })
+      .limit(2);
+    if (existing.error) {
+      throw new Error(`Template permission lookup failed: ${existing.error.message}`);
+    }
+    if ((existing.data ?? []).length > 1) {
+      throw new Error("Template permission lookup failed: target_permission_ambiguous");
+    }
 
-    if (update.error) throw new Error(`Template permission update failed: ${update.error.message}`);
-
-    if (update.data) {
+    if (existing.data?.[0]) {
+      const update = await adminClient
+        .from("platform_staff_permission_grants")
+        .update({
+          expires_at: expiresAt,
+          granted_at: now,
+          granted_by: user.id,
+          metadata: {
+            audit_required: shouldWriteAppAudit(user),
+            break_glass_active: !!user.activeBreakGlassSessionId,
+            break_glass_session_id: user.activeBreakGlassSessionId,
+            granted_actor_role: user.role,
+            template_key: templateKey,
+          },
+          reason,
+          revoked_at: null,
+          revoked_by: null,
+          status: "active",
+          target_email: target.email,
+          target_user_id: target.userId,
+          updated_at: now,
+        })
+        .eq("id", toText((existing.data[0] as JsonObject).id))
+        .eq("target_user_id", target.userId)
+        .select("id,target_user_id,permission_key,status,expires_at")
+        .single();
+      if (update.error) throw new Error(`Template permission update failed: ${update.error.message}`);
       results.push(sanitizeObject(update.data));
       continue;
     }
@@ -737,9 +710,10 @@ const templateApply = async (adminClient: SupabaseClientLike, user: Authenticate
         permission_key: permissionKey,
         reason,
         status: "active",
-        target_email: targetEmail,
+        target_email: target.email,
+        target_user_id: target.userId,
       })
-      .select("id,permission_key,status,expires_at")
+      .select("id,target_user_id,permission_key,status,expires_at")
       .single();
     if (insert.error) throw new Error(`Template permission insert failed: ${insert.error.message}`);
     results.push(sanitizeObject(insert.data));
@@ -750,7 +724,7 @@ const templateApply = async (adminClient: SupabaseClientLike, user: Authenticate
     category: "role",
     metadata: { expires_at: expiresAt, permissions: template.permissions, template_key: templateKey },
     reason,
-    targetId: targetEmail,
+    targetId: target.userId,
     targetType: "staff_permission_template",
   });
   if (user.activeBreakGlassSessionId) {
@@ -758,7 +732,7 @@ const templateApply = async (adminClient: SupabaseClientLike, user: Authenticate
       action: user.role === "owner" ? "owner_action" : "admin_action",
       metadata: { permissions: template.permissions, template_key: templateKey },
       reason,
-      targetId: targetEmail,
+      targetId: target.userId,
       targetType: "staff_permission_template",
     });
   }
@@ -776,7 +750,9 @@ const templateRevoke = async (adminClient: SupabaseClientLike, user: Authenticat
 
   const targetEmail = normalizeEmail(payload.targetEmail ?? payload.target_email);
   if (!targetEmail) return json(400, { error: "target_email_required" });
-  if (user.role !== "owner" && targetEmail === normalizeEmail(user.email)) return json(403, { error: "self_revoke_denied" });
+  const target = await resolveTargetAdminSubject(adminClient, targetEmail);
+  if (!target) return json(409, { error: "target_admin_required" });
+  if (user.role !== "owner" && target.userId === user.id) return json(403, { error: "self_revoke_denied" });
 
   const reason = resolveAdminReason(user, payload.reason, `Owner revoked ${template.label} permission template.`);
   const { data, error } = await adminClient
@@ -789,9 +765,9 @@ const templateRevoke = async (adminClient: SupabaseClientLike, user: Authenticat
       updated_at: new Date().toISOString(),
     })
     .eq("status", "active")
-    .ilike("target_email", targetEmail)
+    .eq("target_user_id", target.userId)
     .in("permission_key", template.permissions)
-    .select("id,permission_key,status");
+    .select("id,target_user_id,permission_key,status");
   if (error) throw new Error(`Template revoke failed: ${error.message}`);
 
   await writePlatformAudit(adminClient, user, {
@@ -799,7 +775,7 @@ const templateRevoke = async (adminClient: SupabaseClientLike, user: Authenticat
     category: "role",
     metadata: { permissions: template.permissions, template_key: templateKey, revoked_count: (data ?? []).length },
     reason,
-    targetId: targetEmail,
+    targetId: target.userId,
     targetType: "staff_permission_template",
   });
   if (user.activeBreakGlassSessionId) {
@@ -807,7 +783,7 @@ const templateRevoke = async (adminClient: SupabaseClientLike, user: Authenticat
       action: user.role === "owner" ? "owner_action" : "admin_action",
       metadata: { permissions: template.permissions, template_key: templateKey },
       reason,
-      targetId: targetEmail,
+      targetId: target.userId,
       targetType: "staff_permission_template",
     });
   }
@@ -818,11 +794,10 @@ const templateRevoke = async (adminClient: SupabaseClientLike, user: Authenticat
 const breakGlassStatus = async (adminClient: SupabaseClientLike, user: AuthenticatedUser) => {
   const firstOwnerError = await requireFirstOwner(adminClient, user, "break_glass_status", "Break Glass requires First Owner.");
   if (firstOwnerError) return firstOwnerError;
-  let query = adminClient
+  const query = adminClient
     .from("platform_break_glass_sessions")
-    .select("*");
-  const email = normalizeEmail(user.email);
-  query = email ? query.or(`actor_user_id.eq.${user.id},actor_email.ilike.${email}`) : query.eq("actor_user_id", user.id);
+    .select("*")
+    .eq("actor_user_id", user.id);
   const { data, error } = await query
     .order("activated_at", { ascending: false })
     .limit(5);
@@ -841,6 +816,9 @@ const breakGlassActivate = async (adminClient: SupabaseClientLike, user: Authent
   const duration = toText(payload.duration).toLowerCase();
   const requestedExpiry = duration || payload.expiresAt || payload.expires_at;
   const expiresAt = resolveExpiresAt(requestedExpiry || "1h");
+  if (!expiresAt || Date.parse(expiresAt) <= Date.now()) {
+    return json(400, { error: "break_glass_expiry_required" });
+  }
   const { data, error } = await adminClient.from("platform_break_glass_sessions").insert({
     actor_email: user.email,
     actor_role: user.role,
@@ -2410,13 +2388,6 @@ type CanaryResultInput = {
 const DEFAULT_SUPPORT_EMAIL = "support@chillywoodstream.com";
 const DEFAULT_PRIVACY_URL = "https://live.chillywoodstream.com/privacy";
 const DEFAULT_TERMS_URL = "https://live.chillywoodstream.com/terms";
-const PROOF_EMAILS = {
-  admin: "liveops.proof+admin@chillywoodstream.com",
-  grantedAdmin: "liveops.proof+granted-admin@chillywoodstream.com",
-  moderator: "liveops.proof+moderator@chillywoodstream.com",
-  targetModerator: "liveops.proof+target-moderator@chillywoodstream.com",
-  viewer: "liveops.proof+viewer@chillywoodstream.com",
-} as const;
 const PREMIUM_ENTITLEMENT_KEYS = ["premium", "premium_watch_party", "premium_live", "paid_content"] as const;
 
 const canaryResult = (input: CanaryResultInput) => ({
@@ -2449,53 +2420,29 @@ const randomProofPassword = () => {
   return `Canary!${Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("")}aA1`;
 };
 
-const listAuthUserByEmail = async (adminClient: SupabaseClientLike, email: string) => {
-  for (let page = 1; page <= 10; page += 1) {
-    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw new Error(`Proof auth list failed: ${error.message}`);
-    const users = Array.isArray(data?.users) ? data.users : [];
-    const user = users.find((entry: JsonObject) => normalizeEmail(entry.email) === email);
-    if (user) return user as JsonObject;
-    if (users.length < 1000) break;
-  }
-  return null;
-};
-
 const ensureProofUser = async (
   adminClient: SupabaseClientLike,
   anonClient: SupabaseClientLike,
-  email: string,
-  label: string,
+  scope: CanaryProofScope,
+  emailLabel: CanaryProofLabel,
+  label: string = emailLabel,
 ) => {
+  const email = scope.emails[emailLabel];
   const password = randomProofPassword();
-  let user: JsonObject | null = null;
   const created = await adminClient.auth.admin.createUser({
     email,
     email_confirm: true,
     password,
-    user_metadata: { canary_proof: true, proof_label: label },
+    user_metadata: {
+      canary_proof: true,
+      canary_proof_run_id: scope.runId,
+      proof_label: label,
+    },
   });
-
-  if (created.error) {
-    const message = toText(created.error.message).toLowerCase();
-    if (!message.includes("already") && !message.includes("registered") && !message.includes("exists")) {
-      throw new Error(`Proof auth create failed for ${label}: ${created.error.message}`);
-    }
-    user = await listAuthUserByEmail(adminClient, email);
-    if (!user) throw new Error(`Proof auth reuse failed for ${label}: user not found`);
-    const update = await adminClient.auth.admin.updateUserById(toText(user.id), {
-      email_confirm: true,
-      password,
-      user_metadata: { ...(isRecord(user.user_metadata) ? user.user_metadata : {}), canary_proof: true, proof_label: label },
-    });
-    if (update.error) throw new Error(`Proof auth update failed for ${label}: ${update.error.message}`);
-    user = update.data?.user as JsonObject;
-  } else {
-    user = created.data?.user as JsonObject;
-  }
-
-  const userId = toText(user?.id);
-  if (!userId) throw new Error(`Proof auth user id missing for ${label}`);
+  if (created.error) throw new Error(`Proof auth create failed for ${label}: ${created.error.message}`);
+  const userId = normalizeExactSubjectId(created.data?.user?.id);
+  if (!userId) throw new Error(`Proof auth exact user id missing for ${label}`);
+  recordCanaryProofUser(scope, userId);
   const signedIn = await anonClient.auth.signInWithPassword({ email, password });
   const accessToken = toText(signedIn.data?.session?.access_token);
   if (signedIn.error || !accessToken) throw new Error(`Proof auth sign-in failed for ${label}: ${signedIn.error?.message ?? "missing session"}`);
@@ -2507,34 +2454,58 @@ const proofClientForToken = (supabaseUrl: string, anonKey: string, accessToken: 
   global: { headers: { Authorization: `Bearer ${accessToken}` } },
 });
 
-const cleanupProofAccess = async (adminClient: SupabaseClientLike, reason: string) => {
+const cleanupProofAccess = async (
+  adminClient: SupabaseClientLike,
+  scope: CanaryProofScope,
+  reason: string,
+) => {
   const now = new Date().toISOString();
-  const roles = await adminClient
-    .from("platform_role_memberships")
-    .update({ notes: reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
-    .eq("status", "active")
-    .ilike("email", "liveops.proof+%")
-    .select("id,role,email");
-  const grants = await adminClient
-    .from("platform_staff_permission_grants")
-    .update({ reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
-    .eq("status", "active")
-    .ilike("target_email", "liveops.proof+%")
-    .select("id,permission_key,target_email");
-  const activeRoles = await adminClient
-    .from("platform_role_memberships")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "active")
-    .ilike("email", "liveops.proof+%");
-  const activeGrants = await adminClient
-    .from("platform_staff_permission_grants")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "active")
-    .ilike("target_email", "liveops.proof+%");
+  const exactRoleIds = [...scope.roleIds];
+  const exactGrantIds = [...scope.grantIds];
+  const emptyResult = { count: 0, data: [] as JsonObject[], error: null };
+  const roles = exactRoleIds.length
+    ? await adminClient
+      .from("platform_role_memberships")
+      .update({ notes: reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
+      .eq("status", "active")
+      .in("id", exactRoleIds)
+      .select("id,role,user_id")
+    : emptyResult;
+  const grants = exactGrantIds.length
+    ? await adminClient
+      .from("platform_staff_permission_grants")
+      .update({ reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
+      .eq("status", "active")
+      .in("id", exactGrantIds)
+      .select("id,permission_key,target_user_id")
+    : emptyResult;
+  const activeRoles = exactRoleIds.length
+    ? await adminClient
+      .from("platform_role_memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active")
+      .in("id", exactRoleIds)
+    : emptyResult;
+  const activeGrants = exactGrantIds.length
+    ? await adminClient
+      .from("platform_staff_permission_grants")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active")
+      .in("id", exactGrantIds)
+    : emptyResult;
+
+  const authDeleteErrors: string[] = [];
+  let deletedUsers = 0;
+  for (const userId of scope.userIds) {
+    const deleted = await adminClient.auth.admin.deleteUser(userId);
+    if (deleted.error) authDeleteErrors.push(redactText(deleted.error.message, 220));
+    else deletedUsers += 1;
+  }
 
   const errors = [roles.error, grants.error, activeRoles.error, activeGrants.error]
     .filter(Boolean)
-    .map((error: { message?: string }) => redactText(error.message, 220));
+    .map((error: { message?: string }) => redactText(error.message, 220))
+    .concat(authDeleteErrors);
   const activeCount = (activeRoles.count ?? 0) + (activeGrants.count ?? 0);
   return {
     activeCount,
@@ -2543,80 +2514,62 @@ const cleanupProofAccess = async (adminClient: SupabaseClientLike, reason: strin
     summary: errors.length
       ? `cleanup failed: ${errors.join("; ")}`
       : activeCount === 0
-        ? `cleanup passed; revoked ${(roles.data ?? []).length} proof roles and ${(grants.data ?? []).length} proof grants`
+        ? `cleanup passed for run ${scope.runId}; revoked ${(roles.data ?? []).length} proof roles and ${(grants.data ?? []).length} proof grants; deleted ${deletedUsers} exact proof users`
         : `cleanup incomplete; ${activeCount} active proof role/grant rows remain`,
   };
 };
 
 const ensureProofRole = async (
   adminClient: SupabaseClientLike,
+  scope: CanaryProofScope,
   proofUser: { email: string; userId: string },
   role: "operator" | "moderator",
 ) => {
-  const now = new Date().toISOString();
-  let existing = await adminClient
-    .from("platform_role_memberships")
-    .select("id")
-    .eq("role", role)
-    .ilike("email", proofUser.email)
-    .limit(1)
-    .maybeSingle();
-  if (existing.error) throw new Error(`Proof role lookup failed: ${existing.error.message}`);
-  if (!existing.data?.id) {
-    existing = await adminClient
-      .from("platform_role_memberships")
-      .select("id")
-      .eq("role", role)
-      .eq("user_id", proofUser.userId)
-      .limit(1)
-      .maybeSingle();
-    if (existing.error) throw new Error(`Proof role lookup failed: ${existing.error.message}`);
-  }
-  if (existing.data?.id) {
-    const update = await adminClient
-      .from("platform_role_memberships")
-      .update({
-        email: proofUser.email,
-        granted_at: now,
-        granted_by: "admin-owner-controls-canary",
-        notes: "CANARY PROOF temporary role; revoke during canary cleanup.",
-        revoked_at: null,
-        revoked_by: null,
-        status: "active",
-        updated_at: now,
-        user_id: proofUser.userId,
-      })
-      .eq("id", existing.data.id);
-    if (update.error) throw new Error(`Proof role update failed: ${update.error.message}`);
-    return;
-  }
   const insert = await adminClient.from("platform_role_memberships").insert({
     email: proofUser.email,
+    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     granted_by: "admin-owner-controls-canary",
-    notes: "CANARY PROOF temporary role; revoke during canary cleanup.",
+    notes: `CANARY PROOF run ${scope.runId}; temporary role; revoke during exact canary cleanup.`,
     role,
     status: "active",
     user_id: proofUser.userId,
-  });
+  }).select("id,user_id").single();
   if (insert.error) throw new Error(`Proof role insert failed: ${insert.error.message}`);
+  const roleId = Number(insert.data?.id);
+  if (!Number.isSafeInteger(roleId) || roleId <= 0 || normalizeExactSubjectId(insert.data?.user_id) !== proofUser.userId) {
+    throw new Error("Proof role exact insert readback failed");
+  }
+  recordCanaryProofRole(scope, roleId);
 };
 
 const ensureProofPermission = async (
   adminClient: SupabaseClientLike,
+  scope: CanaryProofScope,
   proofUser: { email: string; userId: string },
   permissionKey: string,
 ) => {
+  const grantId = crypto.randomUUID();
+  recordCanaryProofGrant(scope, grantId);
   const insert = await adminClient.from("platform_staff_permission_grants").insert({
     expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     granted_by: "admin-owner-controls-canary",
-    metadata: { canary_proof: true, cleanup_required: true, granted_actor_role: "system" },
+    id: grantId,
+    metadata: {
+      canary_proof: true,
+      canary_proof_run_id: scope.runId,
+      cleanup_required: true,
+      granted_actor_role: "system",
+    },
     permission_key: permissionKey,
     reason: "CANARY PROOF temporary scoped permission; revoke during canary cleanup.",
     status: "active",
     target_email: proofUser.email,
     target_user_id: proofUser.userId,
-  });
+  }).select("id,target_user_id").single();
   if (insert.error) throw new Error(`Proof permission insert failed: ${insert.error.message}`);
+  if (toText(insert.data?.id) !== grantId || normalizeExactSubjectId(insert.data?.target_user_id) !== proofUser.userId) {
+    throw new Error("Proof permission exact insert readback failed");
+  }
 };
 
 const countOwnerNormalAuditRows = async (adminClient: SupabaseClientLike) => {
@@ -2959,6 +2912,7 @@ const dmcaAdminCanaryResults = async (
   anonClient: SupabaseClientLike,
   grantedDmcaClient: SupabaseClientLike,
   viewerClient: SupabaseClientLike,
+  scope: CanaryProofScope,
   grantedProof: { email: string; userId: string },
   viewerProof: { userId: string },
 ) => {
@@ -3099,16 +3053,10 @@ const dmcaAdminCanaryResults = async (
     testedSurface: "storage: dmca-evidence public-intake + rpc: submit_dmca_attachment_metadata + anon download denial",
   }));
 
-  const dmcaScopedGrant = await safeSupabaseCall(() => adminClient.from("platform_staff_permission_grants").insert({
-    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-    granted_by: "admin-owner-controls-canary",
-    metadata: { canary_proof: true, cleanup_required: true, granted_actor_role: "system" },
-    permission_key: "dmca_review",
-    reason: "CANARY PROOF temporary DMCA scoped permission; revoke during canary cleanup.",
-    status: "active",
-    target_email: grantedProof.email,
-    target_user_id: grantedProof.userId,
-  }));
+  const dmcaScopedGrant = await safeSupabaseCall(async () => {
+    await ensureProofPermission(adminClient, scope, grantedProof, "dmca_review");
+    return { data: { ok: true }, error: null };
+  });
   results.push(canaryResult({
     actor: "system",
     actual: dmcaScopedGrant.error ? "dmca_review scoped grant failed." : "dmca_review scoped permission key accepted.",
@@ -3543,9 +3491,9 @@ const canaryRun = async (
 ) => {
   if (!hasAnyPermission(user, ["audit_review", "security_review"])) return json(403, { error: "audit_review_required" });
   const results: JsonObject[] = [];
+  const proofScope = createCanaryProofScope();
   const ownerAuditBefore = await countOwnerNormalAuditRows(adminClient);
   let cleanupStatus = "not needed";
-  await cleanupProofAccess(adminClient, "CANARY PROOF pre-run cleanup.");
 
   const ownerLookup = await adminClient
     .from("platform_role_memberships")
@@ -3646,18 +3594,18 @@ const canaryRun = async (
 
   try {
     const [viewer, adminProof, grantedAdmin, moderatorProof] = await Promise.all([
-      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.viewer, "viewer"),
-      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.admin, "admin_without_grants"),
-      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.grantedAdmin, "admin_with_legal_review"),
-      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.moderator, "moderator"),
+      ensureProofUser(adminClient, anonClient, proofScope, "viewer"),
+      ensureProofUser(adminClient, anonClient, proofScope, "admin", "admin_without_grants"),
+      ensureProofUser(adminClient, anonClient, proofScope, "granted-admin", "admin_with_legal_review"),
+      ensureProofUser(adminClient, anonClient, proofScope, "moderator"),
     ]);
-    await Promise.all([
-      ensureProofUser(adminClient, anonClient, PROOF_EMAILS.targetModerator, "moderator_target"),
-      ensureProofRole(adminClient, adminProof, "operator"),
-      ensureProofRole(adminClient, grantedAdmin, "operator"),
-      ensureProofRole(adminClient, moderatorProof, "moderator"),
+    const [targetModerator] = await Promise.all([
+      ensureProofUser(adminClient, anonClient, proofScope, "target-moderator", "moderator_target"),
+      ensureProofRole(adminClient, proofScope, adminProof, "operator"),
+      ensureProofRole(adminClient, proofScope, grantedAdmin, "operator"),
+      ensureProofRole(adminClient, proofScope, moderatorProof, "moderator"),
     ]);
-    await ensureProofPermission(adminClient, grantedAdmin, "legal_review");
+    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "legal_review");
     await adminClient.from("user_entitlements").delete().eq("user_id", viewer.userId).in("entitlement_key", [...PREMIUM_ENTITLEMENT_KEYS]);
 
     const viewerClient = createTimedClient(supabaseUrl, anonKey, viewer.accessToken);
@@ -3709,7 +3657,7 @@ const canaryRun = async (
     const moderatorGrant = await safeSupabaseCall(() => moderatorClient.rpc("admin_grant_platform_role_by_email", {
       p_reason: "CANARY PROOF moderator grant denial.",
       p_role: "moderator",
-      p_target_email: PROOF_EMAILS.targetModerator,
+      p_target_email: targetModerator.email,
     }));
     results.push(canaryResult({
       actor: "proof moderator",
@@ -3736,9 +3684,9 @@ const canaryRun = async (
     const grantedPreview = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "preview");
     const exportBeforeGrant = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "export");
     const holdBeforeGrant = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" });
-    await ensureProofPermission(adminClient, grantedAdmin, "evidence_export");
+    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "evidence_export");
     const grantedExport = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "export");
-    await ensureProofPermission(adminClient, grantedAdmin, "legal_hold");
+    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "legal_hold");
     const grantedHold = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" });
     const deniedOk = deniedCalls.every((call) => call.status === 401 || call.status === 403);
     const scopedOk = grantedPreview.ok
@@ -3768,7 +3716,7 @@ const canaryRun = async (
       testedSurface: "function: admin-legal-evidence preview/export/hold",
     }));
 
-    await ensureProofPermission(adminClient, grantedAdmin, "legal_request_intake");
+    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "legal_request_intake");
     const legalList = await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_list", { limit: 10 });
     const legalCreate = await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_create", {
       canaryProof: true,
@@ -3957,13 +3905,21 @@ const canaryRun = async (
     }));
 
     const grantedDmcaClient = createTimedClient(supabaseUrl, anonKey, grantedAdmin.accessToken);
-    results.push(...await dmcaAdminCanaryResults(adminClient, anonClient, grantedDmcaClient, viewerClient, grantedAdmin, viewer));
+    results.push(...await dmcaAdminCanaryResults(
+      adminClient,
+      anonClient,
+      grantedDmcaClient,
+      viewerClient,
+      proofScope,
+      grantedAdmin,
+      viewer,
+    ));
   } catch (error) {
     results.push(canaryResult({
       actor: "system",
       actual: `Proof harness setup failed: ${redactText(error instanceof Error ? error.message : error, 420)}`,
       cleanupStatus: "cleanup attempted after setup failure",
-      expected: "Proof accounts can be created/reused and temporary roles granted safely.",
+      expected: "Run-specific proof accounts can be created once and exact UUID-bound temporary authority granted safely.",
       key: "proof_harness_setup",
       label: "Proof harness setup",
       section: "Cleanup / Proof Hygiene",
@@ -4156,22 +4112,30 @@ const canaryRun = async (
     }));
   }
 
-  const cleanup = await cleanupProofAccess(adminClient, "CANARY PROOF post-run cleanup.");
+  const cleanup = await cleanupProofAccess(
+    adminClient,
+    proofScope,
+    `CANARY PROOF run ${proofScope.runId} post-run cleanup.`,
+  );
   cleanupStatus = cleanup.summary;
   for (const row of results) {
     if (isRecord(row) && toText(row.cleanupStatus) === "pending proof cleanup") row.cleanupStatus = cleanupStatus;
     if (isRecord(row) && toText(row.cleanupStatus).includes("pending proof cleanup")) row.cleanupStatus = cleanupStatus;
   }
 
-  const activeProofRoles = await adminClient.from("platform_role_memberships").select("id", { count: "exact", head: true }).eq("status", "active").ilike("email", "liveops.proof+%");
-  const activeProofGrants = await adminClient.from("platform_staff_permission_grants").select("id", { count: "exact", head: true }).eq("status", "active").ilike("target_email", "liveops.proof+%");
+  const activeProofRoles = proofScope.roleIds.length
+    ? await adminClient.from("platform_role_memberships").select("id", { count: "exact", head: true }).eq("status", "active").in("id", proofScope.roleIds)
+    : { count: 0, error: null };
+  const activeProofGrants = proofScope.grantIds.length
+    ? await adminClient.from("platform_staff_permission_grants").select("id", { count: "exact", head: true }).eq("status", "active").in("id", proofScope.grantIds)
+    : { count: 0, error: null };
   const proofCount = (activeProofRoles.count ?? 0) + (activeProofGrants.count ?? 0);
   results.push(canaryResult({
     actor: "system",
-    actual: activeProofRoles.error || activeProofGrants.error ? "Proof role/grant cleanup query failed." : proofCount === 0 ? "No active liveops.proof role/grant rows remain." : `${proofCount} active liveops.proof role/grant rows remain.`,
+    actual: activeProofRoles.error || activeProofGrants.error ? "Exact proof role/grant cleanup query failed." : proofCount === 0 ? `No active authority rows created by canary run ${proofScope.runId} remain.` : `${proofCount} active role/grant rows created by canary run ${proofScope.runId} remain.`,
     cleanupStatus,
     details: { active_proof_grants: activeProofGrants.count ?? null, active_proof_roles: activeProofRoles.count ?? null },
-    expected: "No active elevated proof role/grant rows remain.",
+    expected: "No active elevated role/grant rows created by this exact canary run remain; unrelated and historical rows are untouched.",
     key: "proof_roles_cleaned",
     label: "Proof roles/grants cleaned up",
     section: "Cleanup / Proof Hygiene",

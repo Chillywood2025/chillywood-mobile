@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
   Share,
   StyleSheet,
@@ -71,6 +70,7 @@ import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 
 type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked";
 

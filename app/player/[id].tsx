@@ -145,6 +145,7 @@ import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
+import { ProfileMediaImage } from "../../components/ui/ProfileMediaImage";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
@@ -8338,7 +8339,7 @@ export default function PlayerScreen() {
                   </>
                 ) : (
                   <>
-                    <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
+                    <ProfileMediaImage source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
                     {isCurrentUser && liveFaceFilter !== "none" ? (
                       <View
                         pointerEvents="none"
@@ -8682,7 +8683,7 @@ export default function PlayerScreen() {
                     participant.canSpeak && participant.role !== "host" && styles.watchPartyRosterPlaceholderAvatarSpeaker,
                   ]}>
                     {avatarUri ? (
-                      <Image source={{ uri: avatarUri }} style={styles.watchPartyRosterPlaceholderAvatarImage} />
+                      <ProfileMediaImage source={{ uri: avatarUri }} style={styles.watchPartyRosterPlaceholderAvatarImage} />
                     ) : (
                       <Text style={styles.watchPartyRosterPlaceholderInitials}>{getInitials(label)}</Text>
                     )}
@@ -8967,7 +8968,7 @@ export default function PlayerScreen() {
         <View key={comment.id} style={[styles.creatorCommentCard, nested && styles.creatorCommentReplyCard]}>
           <View style={styles.creatorCommentAvatar}>
             {comment.authorAvatarUrl ? (
-              <Image source={{ uri: comment.authorAvatarUrl }} style={styles.creatorCommentAvatarImage} />
+              <ProfileMediaImage source={{ uri: comment.authorAvatarUrl }} style={styles.creatorCommentAvatarImage} />
             ) : (
               <Text style={styles.creatorCommentAvatarText}>{getInitials(comment.authorName)}</Text>
             )}
@@ -9901,7 +9902,7 @@ export default function PlayerScreen() {
                         <View style={styles.liveSpeakerAvatarWrap}>
                         <View style={[styles.participantAvatar, styles.participantAvatarLive, styles.liveSpeakerAvatar, participant.muted && styles.participantAvatarMuted]}>
                           {participant.avatarUrl ? (
-                            <Image source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
+                            <ProfileMediaImage source={{ uri: participant.avatarUrl }} style={styles.participantAvatarImage} />
                           ) : (
                             <Text style={[styles.participantInitials, styles.participantInitialsLive, styles.liveSpeakerInitials]}>{initials}</Text>
                           )}

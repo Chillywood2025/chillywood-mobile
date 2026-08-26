@@ -9,12 +9,18 @@ type RegistrationAction = Extract<TokenAction, "register" | "rotate">;
 type SupabaseClientLike = any;
 
 type TokenPayload = {
+  accountId?: unknown;
   action?: unknown;
   apnsEnvironment?: unknown;
   appVersion?: unknown;
   buildVersion?: unknown;
   installId?: unknown;
+  operationKey?: unknown;
+  reason?: unknown;
+  revocationCredential?: unknown;
+  sessionGeneration?: unknown;
   token?: unknown;
+  userId?: unknown;
 };
 
 const CORS_HEADERS = {
@@ -28,6 +34,17 @@ const JSON_HEADERS = {
   "Content-Type": "application/json",
 } as const;
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const REVOCATION_REASONS = new Set([
+  "account_deletion",
+  "account_switch",
+  "auth_invalidation",
+  "auth_loss",
+  "provider_invalid",
+  "recovery_replacement",
+  "sign_out",
+  "user_request",
+]);
 const encoder = new TextEncoder();
 const toText = (value: unknown) => String(value ?? "").trim();
 const jsonResponse = (status: number, body: JsonObject) => (
@@ -48,6 +65,7 @@ const normalizeAction = (value: unknown): TokenAction | null => {
 };
 
 const isValidInstallId = (value: string) => value.length >= 8 && value.length <= 200;
+const isValidOperationKey = (value: string) => value.length >= 8 && value.length <= 160;
 const isValidVoipToken = (value: string) => /^[0-9a-f]{64,200}$/u.test(value);
 
 const sha256Hex = async (value: string) => {
@@ -66,7 +84,7 @@ const parseBody = async (req: Request): Promise<TokenPayload | null> => {
   }
 };
 
-const readAuthenticatedUserId = async (req: Request) => {
+const readAuthenticatedContext = async (req: Request) => {
   const authorization = req.headers.get("authorization") ?? "";
   if (!authorization.toLowerCase().startsWith("bearer ")) return null;
 
@@ -79,7 +97,8 @@ const readAuthenticatedUserId = async (req: Request) => {
     },
   );
   const { data, error } = await userClient.auth.getUser();
-  return error ? null : toText(data.user?.id) || null;
+  const userId = toText(data.user?.id);
+  return error || !UUID_PATTERN.test(userId) ? null : { userClient, userId };
 };
 
 const enforceTokenRateLimit = async (
@@ -89,20 +108,9 @@ const enforceTokenRateLimit = async (
   installId: string,
 ) => {
   const scopes = [
-    {
-      action: "ios_voip_token_lifecycle",
-      limit: 40,
-      target: "account",
-      windowSeconds: 3600,
-    },
-    {
-      action: `ios_voip_token_${action}`,
-      limit: 12,
-      target: `install:${installId}`,
-      windowSeconds: 600,
-    },
+    { action: "ios_voip_token_lifecycle", limit: 40, target: "account", windowSeconds: 3600 },
+    { action: `ios_voip_token_${action}`, limit: 12, target: `install:${installId}`, windowSeconds: 600 },
   ];
-
   for (const scope of scopes) {
     const { error } = await adminClient.rpc("enforce_abuse_rate_limit", {
       p_action_key: scope.action,
@@ -120,125 +128,181 @@ const enforceTokenRateLimit = async (
   return true;
 };
 
+const exactBinding = (body: TokenPayload) => {
+  const accountId = toText(body.accountId);
+  const operationKey = toText(body.operationKey);
+  const revocationCredential = toText(body.revocationCredential).toLowerCase();
+  const sessionGeneration = toText(body.sessionGeneration);
+  const userId = toText(body.userId);
+  return {
+    accountId,
+    operationKey,
+    revocationCredential,
+    sessionGeneration,
+    userId,
+    valid: UUID_PATTERN.test(userId)
+      && accountId === userId
+      && UUID_PATTERN.test(sessionGeneration)
+      && isValidOperationKey(operationKey)
+      && /^[0-9a-f]{64}$/u.test(revocationCredential),
+  };
+};
+
 Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
   try {
-    const userId = await readAuthenticatedUserId(req);
-    if (!userId) return jsonResponse(401, { error: "unauthenticated" });
-
     const body = await parseBody(req);
     if (!body) return jsonResponse(400, { error: "invalid_json_body" });
-
     const action = normalizeAction(body.action);
     if (!action) return jsonResponse(400, { error: "invalid_action" });
 
     const installId = toText(body.installId);
     if (!isValidInstallId(installId)) return jsonResponse(400, { error: "invalid_install_id" });
-
-    const apnsEnvironment = normalizeApnsEnvironment(body.apnsEnvironment);
+    const apnsEnvironment = action === "revoke" && toText(body.apnsEnvironment).toLowerCase() === "all"
+      ? "all"
+      : normalizeApnsEnvironment(body.apnsEnvironment);
     const adminClient = createClient(
       readRequiredEnv("SUPABASE_URL"),
       readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
       { auth: { persistSession: false } },
     );
 
-    // Status and revoke remain available to any authenticated account so a
-    // restricted user can inspect and disable an existing device binding.
-    // Both operations are install-scoped and idempotent.
-    if (action === "status") {
-      const { data, error } = await adminClient
-        .from("user_voip_push_tokens")
-        .select("token_fingerprint,apns_environment,enabled,last_seen_at,revoked_at")
-        .eq("user_id", userId)
-        .eq("install_id", installId)
-        .eq("apns_environment", apnsEnvironment)
-        .eq("enabled", true)
-        .is("revoked_at", null)
-        .order("last_seen_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) return jsonResponse(500, { error: "status_failed" });
-
+    // A still-valid JWT is deliberately not required for revocation. The
+    // request is bound to the exact old account/session/install and a 256-bit
+    // device credential, so logout can persist and retry it after teardown.
+    if (action === "revoke") {
+      const binding = exactBinding(body);
+      const reason = toText(body.reason).toLowerCase();
+      if (!binding.valid || !REVOCATION_REASONS.has(reason)) {
+        return jsonResponse(400, { requestAccepted: false, status: "invalid" });
+      }
+      const { data, error } = await adminClient.rpc("whole_app_revoke_ios_voip_push_ownership", {
+        p_apns_environment: apnsEnvironment,
+        p_expected_account_id: binding.accountId,
+        p_expected_user_id: binding.userId,
+        p_install_id: installId,
+        p_operation_key: binding.operationKey,
+        p_reason: reason,
+        p_revocation_credential_hash: await sha256Hex(binding.revocationCredential),
+        p_session_generation: binding.sessionGeneration,
+      });
+      const result = data && typeof data === "object" && !Array.isArray(data) ? data as JsonObject : {};
+      const disposition = toText(result.disposition);
+      const exactReceipt = !error
+        && result.requestAccepted === true
+        && result.status === "revoked"
+        && ["revoked", "already_revoked", "already_detached"].includes(disposition)
+        && toText(result.userId) === binding.userId
+        && toText(result.accountId) === binding.accountId
+        && toText(result.sessionGeneration) === binding.sessionGeneration
+        && toText(result.installId) === installId
+        && toText(result.platform) === "ios"
+        && toText(result.provider) === "apns_voip"
+        && toText(result.operationKey) === binding.operationKey;
+      if (!exactReceipt) return jsonResponse(503, { error: "revocation_retry_required" });
       return jsonResponse(200, {
-        apnsEnvironment,
-        lastSeenAt: data?.last_seen_at ?? null,
-        registered: !!data,
-        status: data ? "registered" : "not_registered",
-        tokenFingerprint: data?.token_fingerprint ?? null,
+        accountId: result.accountId,
+        disposition,
+        installId: result.installId,
+        operationKey: result.operationKey,
+        platform: result.platform,
+        provider: result.provider,
+        requestAccepted: true,
+        sessionGeneration: result.sessionGeneration,
+        status: "revoked",
+        userId: result.userId,
       });
     }
 
-    const now = new Date().toISOString();
-    if (action === "revoke") {
-      const { data, error } = await adminClient
-        .from("user_voip_push_tokens")
-        .update({ enabled: false, revoked_at: now, updated_at: now })
-        .eq("user_id", userId)
-        .eq("install_id", installId)
-        .eq("apns_environment", apnsEnvironment)
-        .eq("enabled", true)
-        .is("revoked_at", null)
-        .select("id");
-      if (error) return jsonResponse(500, { error: "revoke_failed" });
-      return jsonResponse(200, { revokedCount: data?.length ?? 0, status: "revoked" });
+    const auth = await readAuthenticatedContext(req);
+    if (!auth) return jsonResponse(401, { error: "unauthenticated" });
+    const binding = exactBinding(body);
+    if (!binding.valid || binding.userId !== auth.userId) {
+      return jsonResponse(400, { error: "session_binding_invalid" });
     }
 
-    // Only registration/rotation creates delivery authority. Keep those
-    // actions behind account-status enforcement and abuse-rate limits.
-    const { data: accessRestricted, error: accessError } = await adminClient.rpc(
-      "is_account_access_restricted",
-      { p_user_id: userId },
-    );
-    if (accessError) return jsonResponse(503, { error: "account_status_unavailable" });
-    if (accessRestricted === true) return jsonResponse(403, { error: "account_access_restricted" });
+    if (action === "status") {
+      const { data, error } = await auth.userClient.rpc("whole_app_ios_voip_push_readback", {
+        p_apns_environment: apnsEnvironment,
+        p_expected_account_id: binding.accountId,
+        p_expected_user_id: binding.userId,
+        p_install_id: installId,
+        p_session_generation: binding.sessionGeneration,
+      });
+      const result = data && typeof data === "object" && !Array.isArray(data) ? data as JsonObject : {};
+      const exactReceipt = !error
+        && result.requestAccepted === true
+        && toText(result.userId) === binding.userId
+        && toText(result.accountId) === binding.accountId
+        && toText(result.sessionGeneration) === binding.sessionGeneration
+        && toText(result.installId) === installId
+        && toText(result.platform) === "ios"
+        && toText(result.provider) === "apns_voip";
+      if (!exactReceipt) return jsonResponse(503, { error: "status_unavailable" });
+      return jsonResponse(200, {
+        accountId: result.accountId,
+        installId: result.installId,
+        lastSeenAt: result.lastSeenAt ?? null,
+        platform: result.platform,
+        provider: result.provider,
+        registered: result.registered === true,
+        requestAccepted: true,
+        sessionGeneration: result.sessionGeneration,
+        status: result.registered === true ? "registered" : "not_registered",
+        tokenFingerprint: result.tokenFingerprint ?? null,
+        userId: result.userId,
+      });
+    }
 
-    if (!await enforceTokenRateLimit(adminClient, userId, action, installId)) {
+    if (!await enforceTokenRateLimit(adminClient, auth.userId, action, installId)) {
       return jsonResponse(429, { error: "rate_limited" });
     }
-
     const token = toText(body.token).toLowerCase();
     if (!isValidVoipToken(token)) return jsonResponse(400, { error: "invalid_voip_token" });
 
-    const tokenHash = await sha256Hex(`apns_voip:${apnsEnvironment}:${token}`);
-    const tokenFingerprint = tokenHash.slice(0, 12);
-    const { data: registered, error: registerError } = await adminClient
-      .from("user_voip_push_tokens")
-      .upsert({
-        apns_environment: apnsEnvironment,
-        app_version: toText(body.appVersion) || null,
-        build_version: toText(body.buildVersion) || null,
-        enabled: true,
-        install_id: installId,
-        last_seen_at: now,
-        revoked_at: null,
-        token,
-        token_fingerprint: tokenFingerprint,
-        token_hash: tokenHash,
-        updated_at: now,
-        user_id: userId,
-      }, { onConflict: "apns_environment,token_hash" })
-      .select("id,token_fingerprint,last_seen_at")
-      .maybeSingle();
-    if (registerError || !registered) return jsonResponse(500, { error: "register_failed" });
-
-    const { error: staleTokenError } = await adminClient
-      .from("user_voip_push_tokens")
-      .update({ enabled: false, revoked_at: now, updated_at: now })
-      .eq("user_id", userId)
-      .eq("install_id", installId)
-      .eq("apns_environment", apnsEnvironment)
-      .eq("enabled", true)
-      .is("revoked_at", null)
-      .neq("token_hash", tokenHash);
-    if (staleTokenError) return jsonResponse(500, { error: "rotation_cleanup_failed" });
+    const { data, error } = await auth.userClient.rpc("whole_app_register_ios_voip_push_token", {
+      p_apns_environment: apnsEnvironment,
+      p_app_version: toText(body.appVersion) || null,
+      p_build_version: toText(body.buildVersion) || null,
+      p_expected_account_id: binding.accountId,
+      p_expected_user_id: binding.userId,
+      p_install_id: installId,
+      p_operation_key: binding.operationKey,
+      p_revocation_credential_hash: await sha256Hex(binding.revocationCredential),
+      p_session_generation: binding.sessionGeneration,
+      p_token: token,
+    });
+    const result = data && typeof data === "object" && !Array.isArray(data) ? data as JsonObject : {};
+    const exactReceipt = !error
+      && result.requestAccepted === true
+      && result.status === "registered"
+      && result.ownershipState === "ACCOUNT_BOUND"
+      && toText(result.userId) === binding.userId
+      && toText(result.accountId) === binding.accountId
+      && toText(result.sessionGeneration) === binding.sessionGeneration
+      && toText(result.installId) === installId
+      && toText(result.platform) === "ios"
+      && toText(result.provider) === "apns_voip"
+      && toText(result.apnsEnvironment) === apnsEnvironment
+      && toText(result.operationKey) === binding.operationKey
+      && /^[0-9a-f]{12}$/u.test(toText(result.tokenFingerprint));
+    if (!exactReceipt) return jsonResponse(409, { error: "registration_rejected" });
 
     return jsonResponse(200, {
-      apnsEnvironment,
-      lastSeenAt: registered.last_seen_at,
-      status: action === "rotate" ? "rotated" : "registered",
-      tokenFingerprint: registered.token_fingerprint,
+      accountId: result.accountId,
+      apnsEnvironment: result.apnsEnvironment,
+      installId: result.installId,
+      operationKey: result.operationKey,
+      ownershipState: result.ownershipState,
+      platform: result.platform,
+      provider: result.provider,
+      requestAccepted: true,
+      sessionGeneration: result.sessionGeneration,
+      status: "registered",
+      tokenFingerprint: result.tokenFingerprint,
+      userId: result.userId,
     });
   } catch {
     return jsonResponse(500, { error: "ios_voip_token_lifecycle_error" });

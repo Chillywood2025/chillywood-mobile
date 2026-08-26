@@ -45,11 +45,14 @@ for (const file of requiredTemplates.filter((file) => file.endsWith(".html") || 
   const isSignupTemplate = file === "confirm-signup.html" || file === "confirm-signup.txt";
   const isDirectTokenTemplate = isResetTemplate || isSignupTemplate;
 
-  if (isResetTemplate && !contents.includes("chillywoodmobile://reset-password?token_hash={{ .TokenHash }}")) {
-    fail(`${relativePath} must build a direct reset-password TokenHash app link`);
+  if (/chillywoodmobile:\/\/[^\s"'<]*(?:access_token|code|refresh_token|token(?:_hash)?)[^\s"'<]*/iu.test(contents)) {
+    fail(`${relativePath} must not expose Auth credentials through a claimable custom URL scheme`);
   }
-  if (isSignupTemplate && !contents.includes("chillywoodmobile://auth/callback?token_hash={{ .TokenHash }}")) {
-    fail(`${relativePath} must build a direct auth callback TokenHash app link`);
+  if (isResetTemplate && !contents.includes("https://chillywoodstream.com/reset-password?token_hash={{ .TokenHash }}")) {
+    fail(`${relativePath} must build the verified HTTPS reset-password TokenHash link`);
+  }
+  if (isSignupTemplate && !contents.includes("https://chillywoodstream.com/auth-callback?token_hash={{ .TokenHash }}")) {
+    fail(`${relativePath} must build the verified HTTPS auth callback TokenHash link`);
   }
   if (!isDirectTokenTemplate && file !== "reauthentication.html" && file !== "reauthentication.txt" && !contents.includes("{{ .ConfirmationURL }}")) {
     fail(`${relativePath} must use {{ .ConfirmationURL }}`);
@@ -57,12 +60,8 @@ for (const file of requiredTemplates.filter((file) => file.endsWith(".html") || 
 }
 
 const signup = read("app/(auth)/signup.tsx");
-const SIGNUP_REDIRECT_OK = [
-  "chillywoodmobile://auth/confirm",
-  "chillywoodmobile://auth/callback",
-].some((token) => signup.includes(token));
-if (!SIGNUP_REDIRECT_OK) {
-  fail("signup must pass a Chi'llywood confirm redirect");
+if (!signup.includes('https://chillywoodstream.com/auth-callback')) {
+  fail("signup must pass the verified HTTPS auth callback redirect");
 }
 if (!signup.includes("emailRedirectTo")) {
   fail("signup must use emailRedirectTo");
@@ -76,8 +75,8 @@ if (!login.includes("/forgot-password")) {
 if (!forgotPassword.includes("resetPasswordForEmail")) {
   fail("forgot password must use resetPasswordForEmail");
 }
-if (!forgotPassword.includes("chillywoodmobile://reset-password")) {
-  fail("forgot password must pass reset-password redirect");
+if (!forgotPassword.includes("https://chillywoodstream.com/reset-password")) {
+  fail("forgot password must pass the verified HTTPS reset-password redirect");
 }
 
 const layout = read("app/_layout.tsx");
@@ -89,9 +88,9 @@ const runbook = read("docs/SUPABASE_AUTH_EMAIL_BRANDING_RUNBOOK.md");
 for (const requiredText of [
   "no-reply@chillywoodstream.com",
   "auth@chillywoodstream.com",
-  "chillywoodmobile://auth/confirm",
-  "chillywoodmobile://auth/callback",
-  "chillywoodmobile://reset-password",
+  "https://chillywoodstream.com/auth-callback",
+  "https://chillywoodstream.com/reset-password",
+  "navigation-only",
   "Do not commit",
 ]) {
   if (!runbook.includes(requiredText)) fail(`runbook missing ${requiredText}`);

@@ -650,6 +650,16 @@ values
   false,
   now()
 );
+insert into auth.sessions(id,user_id)
+values
+(
+  '09100000-0000-4000-8000-000000000009',
+  '09000000-0000-0000-0000-000000000009'
+),
+(
+  '09100000-0000-4000-8000-000000000008',
+  '09000000-0000-0000-0000-000000000008'
+);
 insert into public.platform_role_memberships(role,user_id,email,status)
 values
 (
@@ -677,6 +687,7 @@ select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','09000000-0000-0000-0000-000000000009',
+    'session_id','09100000-0000-4000-8000-000000000009',
     'email','recycled-cognitive-owner@example.invalid',
     'role','authenticated',
     'app_metadata','{}'::jsonb
@@ -702,6 +713,11 @@ select set_config('request.jwt.claims','{}',true);
 
 insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
 values ('09000000-0000-0000-0000-000000000001',false,false,now());
+insert into auth.sessions(id,user_id)
+values (
+  '09100000-0000-4000-8000-000000000001',
+  '09000000-0000-0000-0000-000000000001'
+);
 insert into public.platform_role_memberships(role,user_id,email,status)
 values (
   'operator','09000000-0000-0000-0000-000000000001',
@@ -718,6 +734,7 @@ select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','09000000-0000-0000-0000-000000000001',
+    'session_id','09100000-0000-4000-8000-000000000001',
     'email','cognitive-review@example.invalid',
     'role','authenticated',
     'app_metadata',jsonb_build_object(

@@ -22,8 +22,10 @@ const importTypeScriptModule = async (relativePath) => {
 };
 
 const {
+  consumeApplicationAuthInput,
   isCreatorReplayApplicationLink,
   parseApplicationLink,
+  registerVerifiedApplicationAuthInput,
   resolveApplicationRoute,
   resolveApplicationRouteByKind,
 } = await importTypeScriptModule("_lib/appLinks.ts");
@@ -71,7 +73,7 @@ for (const alias of [
   assert.equal(parsed?.pathname, "/auth-callback");
 }
 
-const callback = parseApplicationLink("chillywoodmobile://auth-callback?code=proof-code&type=signup");
+const callback = parseApplicationLink("https://chillywoodstream.com/auth-callback?code=proof-code&type=signup");
 assert.equal(callback?.kind, "auth_callback");
 assert.equal(callback?.route, "/auth-callback?code=proof-code&type=signup");
 
@@ -83,6 +85,55 @@ assert.equal(reset?.pathname, "/reset-password");
 assert.ok(reset?.route.startsWith("/reset-password?"));
 assert.equal(resolveApplicationRouteByKind("chillywoodmobile://reset-password", "password_reset"), "/reset-password");
 assert.equal(resolveApplicationRouteByKind("chillywoodmobile://reset-password", "auth_callback"), null);
+assert.equal(resolveApplicationRouteByKind("chillywoodmobile://auth/callback", "auth_callback"), "/auth-callback");
+assert.equal(
+  resolveApplicationRouteByKind("chillywoodmobile://reset-password?type=recovery", "password_reset"),
+  "/reset-password?type=recovery",
+  "credential-free custom auth links remain navigation-only",
+);
+assert.equal(
+  registerVerifiedApplicationAuthInput("chillywoodmobile://reset-password?type=recovery"),
+  null,
+  "a custom-scheme navigation link must not be recorded as verified provenance",
+);
+
+for (const claimableAuthLink of [
+  "chillywoodmobile://auth/callback?code=claimable-code&type=signup",
+  "chillywoodmobile://auth/callback?token_hash=claimable-hash&type=email",
+  "chillywoodmobile://reset-password?token_hash=claimable-recovery&type=recovery",
+  "chillywoodmobile://reset-password#access_token=claimable-access&refresh_token=claimable-refresh&type=recovery",
+]) {
+  assert.equal(parseApplicationLink(claimableAuthLink), null, `claimable Auth link must fail closed: ${claimableAuthLink}`);
+}
+
+assert.equal(
+  consumeApplicationAuthInput("/auth-callback?code=untrusted-local-code&type=signup", "auth_callback"),
+  null,
+  "an origin-less route must not establish Auth credential provenance",
+);
+
+const verifiedCallbackUrl = "https://chillywoodstream.com/auth-callback?type=email&token_hash=verified-callback-hash";
+const verifiedCallback = registerVerifiedApplicationAuthInput(verifiedCallbackUrl);
+assert.equal(verifiedCallback?.source, "universal_link");
+assert.equal(
+  consumeApplicationAuthInput("/auth-callback?token_hash=verified-callback-hash&type=email", "auth_callback")?.kind,
+  "auth_callback",
+  "the exact route produced by a verified HTTPS input may be consumed after Expo removes its origin",
+);
+assert.equal(
+  consumeApplicationAuthInput("/auth-callback?type=email&token_hash=verified-callback-hash", "auth_callback"),
+  null,
+  "verified Auth input must remain one-time even when query parameter order changes",
+);
+
+assert.equal(
+  consumeApplicationAuthInput(
+    "https://chillywoodstream.com/reset-password?token_hash=direct-universal-recovery&type=recovery",
+    "password_reset",
+  )?.source,
+  "universal_link",
+  "a verified HTTPS recovery input can be consumed directly",
+);
 
 assert.equal(
   resolveApplicationRoute("https://chillywoodstream.com/PLAYER/CaseSensitiveId?from=proof"),
@@ -108,6 +159,8 @@ const rejectedInputs = [
   "https://chillywoodstream.com/profile/profile%2Fsettings",
   "ftp://chillywoodstream.com/profile/profile-proof",
   "chillywoodmobile://unknown/route",
+  "chillywoodmobile://auth-callback?code=claimable-code&type=signup",
+  "chillywoodmobile://reset-password?token_hash=claimable-recovery&type=recovery",
 ];
 
 for (const input of rejectedInputs) {
@@ -115,16 +168,29 @@ for (const input of rejectedInputs) {
 }
 
 const appLayoutSource = readFileSync(path.join(root, "app/_layout.tsx"), "utf8");
+const authCallbackSource = readFileSync(path.join(root, "app/auth-callback.tsx"), "utf8");
+const resetPasswordSource = readFileSync(path.join(root, "app/reset-password.tsx"), "utf8");
 const notificationsSource = readFileSync(path.join(root, "_lib/notifications.ts"), "utf8");
 assert.ok(
   appLayoutSource.includes('resolveApplicationRouteByKind(url, "password_reset")')
     && appLayoutSource.includes('resolveApplicationRouteByKind(url, "auth_callback")')
+    && appLayoutSource.includes("registerVerifiedApplicationAuthInput(url)")
     && appLayoutSource.includes('parsed?.kind === "legal" ? parsed.pathname : null'),
   "root layout must use the canonical parser for authentication and legal application links",
+);
+assert.ok(
+  authCallbackSource.includes("registerVerifiedApplicationAuthInput(url)")
+    && authCallbackSource.includes('consumeApplicationAuthInput(callbackRoute, "auth_callback")'),
+  "auth callback must bind origin-less route credentials to a verified HTTPS input",
+);
+assert.ok(
+  resetPasswordSource.includes("registerVerifiedApplicationAuthInput(initialUrl)")
+    && resetPasswordSource.includes('consumeApplicationAuthInput(route, "password_reset")'),
+  "password reset must bind origin-less route credentials to a verified HTTPS input",
 );
 assert.ok(
   notificationsSource.includes("resolveApplicationRoute(value)"),
   "notification navigation must use the canonical parser",
 );
 
-console.log(`Application link proof passed (${routeCases.length + rejectedInputs.length + 14} checks).`);
+console.log(`Application link proof passed (${routeCases.length + rejectedInputs.length + 32} checks).`);

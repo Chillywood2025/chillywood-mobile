@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  readExactCurrentSessionAuthority,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -194,32 +198,24 @@ const authorizeOwnerOrSuperAdmin = async (request: Request, client: SupabaseClie
   const bearer = readBearerToken(request);
   if (!bearer) return { ok: false as const, error: "owner_authorization_required" };
 
-  const { data: userData, error: userError } = await client.auth.getUser(bearer);
+  const actorClient = createClient(
+    readRequiredEnv("SUPABASE_URL"),
+    readRequiredEnv("SUPABASE_ANON_KEY"),
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: `Bearer ${bearer}` } },
+    },
+  );
+  const { data: userData, error: userError } = await actorClient.auth.getUser();
   const user = userData?.user;
-  if (userError || !user?.id) return { ok: false as const, error: "owner_authorization_invalid" };
+  if (
+    userError ||
+    !user?.id ||
+    !(await readExactCurrentSessionAuthority(actorClient, user.id))
+  ) return { ok: false as const, error: "owner_authorization_invalid" };
 
   const userId = user.id;
-  const email = toText(user.email).toLowerCase();
-
-  const userRows = await client
-    .from("platform_role_memberships")
-    .select("role,status")
-    .eq("status", "active")
-    .in("role", ["owner", "super_admin"])
-    .eq("user_id", userId)
-    .limit(1);
-
-  let role = toText(userRows.data?.[0]?.role);
-  if (!role && email) {
-    const emailRows = await client
-      .from("platform_role_memberships")
-      .select("role,status")
-      .eq("status", "active")
-      .in("role", ["owner", "super_admin"])
-      .eq("email", email)
-      .limit(1);
-    role = toText(emailRows.data?.[0]?.role);
-  }
+  const role = await readExactPlatformRole(client, userId, ["owner", "super_admin"]);
 
   if (role !== "owner" && role !== "super_admin") {
     return { ok: false as const, error: "owner_or_super_admin_required", userId };

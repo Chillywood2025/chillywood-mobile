@@ -16,6 +16,7 @@ import {
   type AuthenticatedUser,
   type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
+import { readExactBetaAccess } from "../_shared/exact-subject-authority.ts";
 
 const FUNCTION_NAME = "stripe-merch-checkout";
 const STRIPE_API_BASE_URL = "https://api.stripe.com/v1";
@@ -153,52 +154,10 @@ const assertPhysicalSandboxMerchProduct = (product: MerchProductRow) => {
   if (!/^[a-z]{3}$/.test(product.currency ?? "")) throw new Error("Merch product currency is invalid.");
 };
 
-const readConfiguredSandboxTesterEmails = () => {
-  const raw = [
-    Deno.env.get("INTERNAL_SANDBOX_TESTER_EMAILS"),
-    Deno.env.get("EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST"),
-  ]
-    .map((value) => toText(value))
-    .filter(Boolean)
-    .join(",");
-
-  return new Set(
-    raw
-      .split(/[,\s]+/)
-      .map((entry) => entry.trim().toLowerCase())
-      .filter((entry) => entry.includes("@")),
-  );
-};
-
-const userHasConfiguredSandboxTesterAccess = (currentUser: AuthenticatedUser) => {
-  const email = toText(currentUser.email).toLowerCase();
-  if (!email) return false;
-  return readConfiguredSandboxTesterEmails().has(email);
-};
-
 const userHasActiveSandboxTesterAccess = async (
   adminClient: SupabaseClientLike,
   currentUser: AuthenticatedUser,
-) => {
-  const email = toText(currentUser.email).toLowerCase();
-  const byUser = await adminClient
-    .from("beta_access_memberships")
-    .select("id")
-    .eq("user_id", currentUser.id)
-    .eq("access_status", "active")
-    .maybeSingle();
-  if (!byUser.error && byUser.data) return true;
-
-  if (!email) return false;
-  const byEmail = await adminClient
-    .from("beta_access_memberships")
-    .select("id")
-    .eq("access_status", "active")
-    .ilike("email", email)
-    .maybeSingle();
-
-  return !byEmail.error && !!byEmail.data;
-};
+) => readExactBetaAccess(adminClient, currentUser.id);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return optionsResponse();
@@ -232,11 +191,10 @@ Deno.serve(async (req) => {
       userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]),
       userHasActiveSandboxTesterAccess(adminClient, currentUser),
     ]);
-    const isConfiguredTester = userHasConfiguredSandboxTesterAccess(currentUser);
-    if (!isOperator && !isSandboxTester && !isConfiguredTester) {
+    if (!isOperator && !isSandboxTester) {
       return jsonResponse(403, {
         error: "sandbox_tester_required",
-        message: "Sandbox physical merch checkout is limited to owner/operator accounts, active beta testers, or server-configured internal tester sandbox accounts.",
+        message: "Sandbox physical merch checkout is limited to exact owner/operator subjects or active exact-subject beta testers.",
         liveMoneyAction: false,
         checkoutCreated: false,
       });

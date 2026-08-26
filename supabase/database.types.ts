@@ -13537,6 +13537,7 @@ export type Database = {
       platform_role_memberships: {
         Row: {
           email: string | null
+          expires_at: string | null
           granted_at: string
           granted_by: string | null
           id: number
@@ -13550,6 +13551,7 @@ export type Database = {
         }
         Insert: {
           email?: string | null
+          expires_at?: string | null
           granted_at?: string
           granted_by?: string | null
           id?: number
@@ -13563,6 +13565,7 @@ export type Database = {
         }
         Update: {
           email?: string | null
+          expires_at?: string | null
           granted_at?: string
           granted_by?: string | null
           id?: number

@@ -1,7 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React from "react";
 import {
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,6 +19,7 @@ import type {
 } from "../_lib/profileSocialFeed";
 import { LinkedText } from "./social/linked-text";
 import { SocialAttachmentCard } from "./social/social-attachment-card";
+import { ProfileMediaImage as Image } from "./ui/ProfileMediaImage";
 
 type ProfileSocialFeedCardProps = {
   item: ProfileSocialFeedItem;

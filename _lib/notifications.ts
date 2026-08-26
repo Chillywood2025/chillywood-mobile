@@ -1506,7 +1506,7 @@ const buildClientId = () =>
     return next.toString(16);
   });
 
-const getNotificationInstallId = async () => {
+export const getNotificationInstallId = async () => {
   const existing = await AsyncStorage.getItem(NOTIFICATION_INSTALL_ID_STORAGE_KEY);
   if (existing) return existing;
   const next = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -1525,13 +1525,17 @@ const randomHex = (byteCount: number) => {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
-const getNotificationRevocationCredential = async () => {
+export const getNotificationRevocationCredential = async () => {
   const existing = await AsyncStorage.getItem(NOTIFICATION_REVOCATION_CREDENTIAL_STORAGE_KEY);
   if (existing && /^[0-9a-f]{64}$/u.test(existing)) return existing;
   const credential = randomHex(32);
   await AsyncStorage.setItem(NOTIFICATION_REVOCATION_CREDENTIAL_STORAGE_KEY, credential);
   return credential;
 };
+
+export const createPushOwnershipOperationKey = (prefix: "register" | "revoke" | "status") => (
+  `${prefix}:${randomHex(16)}`
+);
 
 type PendingPushRevocation = PushSessionBinding & {
   installId: string;
@@ -2273,6 +2277,23 @@ const invokePendingPushRevocation = (entry: PendingPushRevocation) => supabase.f
   },
 );
 
+const invokePendingIosVoipRevocation = (entry: PendingPushRevocation) => supabase.functions.invoke(
+  "ios-voip-push-tokens",
+  {
+    body: {
+      accountId: entry.accountId,
+      action: "revoke",
+      apnsEnvironment: "all",
+      installId: entry.installId,
+      operationKey: entry.operationKey,
+      reason: entry.reason,
+      revocationCredential: entry.revocationCredential,
+      sessionGeneration: entry.sessionGeneration,
+      userId: entry.userId,
+    },
+  },
+);
+
 const isExactPushRevocationResponse = (entry: PendingPushRevocation, data: unknown) => {
   if (!data || typeof data !== "object" || Array.isArray(data)) return false;
   const response = data as Record<string, unknown>;
@@ -2292,8 +2313,14 @@ const retryPendingPushRevocationsInternal = async () => {
   const remaining: PendingPushRevocation[] = [];
   for (const entry of pending) {
     try {
-      const { data, error } = await invokePendingPushRevocation(entry);
-      if (error || !isExactPushRevocationResponse(entry, data)) remaining.push(entry);
+      const pushResult = await invokePendingPushRevocation(entry);
+      const pushRevoked = !pushResult.error && isExactPushRevocationResponse(entry, pushResult.data);
+      const voipResult = entry.platform === "ios"
+        ? await invokePendingIosVoipRevocation(entry)
+        : null;
+      const voipRevoked = voipResult === null
+        || (!voipResult.error && isExactPushRevocationResponse(entry, voipResult.data));
+      if (!pushRevoked || !voipRevoked) remaining.push(entry);
     } catch {
       remaining.push(entry);
     }

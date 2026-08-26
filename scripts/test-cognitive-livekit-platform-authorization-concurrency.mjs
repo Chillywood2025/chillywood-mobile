@@ -14,6 +14,7 @@ const literal = (value) =>
   `'${String(value).replaceAll("'", "''")}'`;
 const ids = {
   owner: uuid(),
+  ownerSession: uuid(),
   project: uuid(),
   sharedTask: uuid(),
   androidTask: uuid(),
@@ -197,6 +198,8 @@ where user_id in (
 );
 delete from public.platform_role_memberships
 where user_id=${literal(ids.owner)};
+delete from auth.sessions
+where id=${literal(ids.ownerSession)}::uuid;
 delete from auth.users
 where id in (
   ${literal(ids.owner)}::uuid,
@@ -242,11 +245,13 @@ begin;
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub',${literal(ids.owner)},true);
+select set_config('request.jwt.claim.session_id',${literal(ids.ownerSession)},true);
 select set_config(
   'request.jwt.claims',
   ${literal(JSON.stringify({
     role: "authenticated",
     sub: ids.owner,
+    session_id: ids.ownerSession,
   }))},
   true
 );
@@ -289,11 +294,17 @@ const capabilityRows = (task, platform, collect, issue, consume, triage) => `
 const setup = admin(`
 begin;
 set local session_replication_role=replica;
-insert into auth.users(id,is_sso_user,is_anonymous)
+insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
 values
-  (${literal(ids.owner)}::uuid,false,false),
-  (${literal(ids.canaryA)}::uuid,false,false),
-  (${literal(ids.canaryB)}::uuid,false,false);
+  (${literal(ids.owner)}::uuid,false,false,transaction_timestamp()),
+  (${literal(ids.canaryA)}::uuid,false,false,transaction_timestamp()),
+  (${literal(ids.canaryB)}::uuid,false,false,transaction_timestamp());
+insert into auth.sessions(id,user_id,not_after)
+values (
+  ${literal(ids.ownerSession)}::uuid,
+  ${literal(ids.owner)}::uuid,
+  transaction_timestamp()+interval '4 hours'
+);
 insert into public.platform_role_memberships(user_id,email,role,status)
 values (${literal(ids.owner)}::uuid,null,'owner','active');
 insert into public.chat_call_livekit_canary_users(

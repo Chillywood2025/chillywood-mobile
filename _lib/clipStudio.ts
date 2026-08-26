@@ -3,11 +3,11 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 import { CREATOR_VIDEO_BUCKET, formatCreatorVideoFileSize, type CreatorVideoFile } from "./creatorVideos";
 import {
-  createSignedMediaDownload,
   deleteStoredMediaObject,
   getMediaStorageProviderBucket,
   normalizeMediaStorageProvider,
   uploadFileToMediaStorage,
+  usesPrivateOriginMediaGateway,
 } from "./mediaStorage";
 import { supabase } from "./supabase";
 
@@ -457,7 +457,10 @@ export async function uploadClipStudioCoverImage(input: {
   const mimeType = inferCoverMimeType(input.file);
   const storagePath = `${ownerUserId}/${normalizedVideoId}/cover-${createClientId()}.${getCoverExtension(input.file)}`;
   const preparedCover = await prepareCoverUploadUri(input.file);
-  let signedUrl = "";
+  // Newly uploaded covers are malware-pending. Use the already-selected local
+  // image for the immediate editor preview; remote delivery remains blocked
+  // until the exact cover scan job is clean.
+  const signedUrl = toText(input.file.uri);
   let uploadedObject: Awaited<ReturnType<typeof uploadFileToMediaStorage>> | null = null;
 
   try {
@@ -468,13 +471,8 @@ export async function uploadClipStudioCoverImage(input: {
       mimeType,
       fileName: input.file.name,
       sizeBytes: input.file.size,
-    });
-    signedUrl = await createSignedMediaDownload({
-      surfaceType: "creator_video",
-      provider: uploadedObject.provider,
-      bucket: uploadedObject.bucket,
-      objectKey: uploadedObject.objectKey,
-      recordId: normalizedVideoId,
+      maximumSizeBytes: CLIP_STUDIO_COVER_MAX_BYTES,
+      tooLargeMessage: `Cover images support up to ${getClipStudioCoverLimitLabel()}.`,
     });
   } catch (error) {
     if (uploadedObject) {
@@ -483,7 +481,6 @@ export async function uploadClipStudioCoverImage(input: {
         provider: uploadedObject.provider,
         bucket: uploadedObject.bucket,
         objectKey: uploadedObject.objectKey,
-        recordId: normalizedVideoId,
       }).catch(() => undefined);
     }
     throw error;
@@ -493,35 +490,62 @@ export async function uploadClipStudioCoverImage(input: {
   if (!uploadedObject) throw new Error("Cover upload failed. Try again.");
 
   const previousCoverPath = toText(videoRow.thumb_storage_path);
-  const update: TablesUpdate<"videos"> = {
-    thumb_storage_path: uploadedObject.objectKey,
-    thumb_url: null,
-    updated_at: new Date().toISOString(),
-  };
-  const { error: updateError } = await supabase
-    .from("videos")
-    .update(update)
-    .eq("id", normalizedVideoId);
-
-  if (updateError) {
-    await deleteStoredMediaObject({
-      surfaceType: "creator_video",
-      provider: uploadedObject.provider,
-      bucket: uploadedObject.bucket,
-      objectKey: uploadedObject.objectKey,
-      recordId: normalizedVideoId,
-    }).catch(() => undefined);
-    throw updateError;
+  let coverMetadataCommitted = false;
+  try {
+    const update: TablesUpdate<"videos"> = {
+      thumb_storage_path: uploadedObject.objectKey,
+      thumb_url: null,
+      updated_at: new Date().toISOString(),
+    };
+    const updateRequest = supabase
+      .from("videos")
+      .update(update)
+      .eq("id", normalizedVideoId);
+    const guardedUpdateRequest = previousCoverPath
+      ? updateRequest.eq("thumb_storage_path", previousCoverPath)
+      : updateRequest.is("thumb_storage_path", null);
+    const { data: updatedVideo, error: updateError } = await guardedUpdateRequest
+      .select("thumb_storage_path")
+      .single()
+      .returns<{ thumb_storage_path: string | null }>();
+    if (updateError || toText(updatedVideo?.thumb_storage_path) !== uploadedObject.objectKey) {
+      throw updateError ?? new Error("The creator video cover changed before this upload completed.");
+    }
+    coverMetadataCommitted = true;
+  } catch (error) {
+    // A response can fail after Postgres commits. Re-read before deleting the
+    // new object so a lost response cannot leave the row pointing at bytes we
+    // then remove.
+    const { data: currentVideo } = await supabase
+      .from("videos")
+      .select("thumb_storage_path")
+      .eq("id", normalizedVideoId)
+      .maybeSingle()
+      .returns<{ thumb_storage_path: string | null }>();
+    coverMetadataCommitted = toText(currentVideo?.thumb_storage_path) === uploadedObject.objectKey;
+    if (!coverMetadataCommitted) {
+      await deleteStoredMediaObject({
+        surfaceType: "creator_video",
+        provider: uploadedObject.provider,
+        bucket: uploadedObject.bucket,
+        objectKey: uploadedObject.objectKey,
+      }).catch(() => undefined);
+      throw error;
+    }
   }
 
-  if (previousCoverPath && previousCoverPath !== uploadedObject.objectKey) {
+  // The new cover is authoritative before the old one is retired. Old-object
+  // cleanup is best-effort: gateway delivery no longer recognizes a detached
+  // key, so a provider failure cannot break the newly committed cover or make
+  // the previous private object newly readable.
+  if (coverMetadataCommitted && previousCoverPath && previousCoverPath !== uploadedObject.objectKey) {
     const previousProvider = normalizeMediaStorageProvider(videoRow.storage_provider);
     const previousBucket = getMediaStorageProviderBucket({
       provider: previousProvider,
       bucket: videoRow.storage_bucket,
       fallbackBucket: CREATOR_VIDEO_BUCKET,
     });
-    if (previousProvider === "s3") {
+    if (usesPrivateOriginMediaGateway(previousProvider)) {
       await deleteStoredMediaObject({
         surfaceType: "creator_video",
         provider: previousProvider,
@@ -530,14 +554,17 @@ export async function uploadClipStudioCoverImage(input: {
         recordId: normalizedVideoId,
       }).catch(() => undefined);
     } else if (previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
-      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([previousCoverPath]).catch(() => undefined);
+      await supabase.storage
+        .from(CREATOR_VIDEO_BUCKET)
+        .remove([previousCoverPath])
+        .catch(() => undefined);
     }
   }
 
   return {
     storagePath: uploadedObject.objectKey,
     mimeType,
-    fileSizeBytes: Math.max(0, Number(input.file.size ?? 0) || 0),
+    fileSizeBytes: uploadedObject.sizeBytes,
     signedUrl,
   };
 }

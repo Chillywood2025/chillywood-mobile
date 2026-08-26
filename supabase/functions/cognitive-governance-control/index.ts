@@ -1,5 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 import {
+  readExactCurrentSessionAuthority,
+  readExactPermissionKeys,
+  readExactPlatformRole,
+} from "../_shared/exact-subject-authority.ts";
+import {
   type CanonicalSecurityPolicy,
   classifyCanonicalSecurityPayload,
 } from "../../../_lib/cognitivePolicyEngine.ts";
@@ -118,32 +123,23 @@ const authenticate = async (
   }
   const userResult = await actorClient.auth.getUser();
   const userId = userResult.data.user?.id ?? "";
-  if (userResult.error || !userId) {
+  if (userResult.error || !userId || !(await readExactCurrentSessionAuthority(actorClient, userId))) {
     return json(401, { error: "invalid_authorization" });
   }
-  const membership = await adminClient
-    .from("platform_role_memberships")
-    .select("role")
-    .eq("status", "active")
-    .eq("user_id", userId)
-    .in("role", ["owner", "super_admin"])
-    .order("role", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const role = toText(membership.data?.role);
-  if (!membership.error && (role === "owner" || role === "super_admin")) {
+  const role = await readExactPlatformRole(adminClient, userId, ["owner", "super_admin"]);
+  if (role === "owner" || role === "super_admin") {
     return Object.freeze({ id: userId, role: role as StaffRole });
   }
-  const permission = await adminClient
-    .from("platform_staff_permission_grants")
-    .select("id")
-    .eq("status", "active")
-    .eq("target_user_id", userId)
-    .eq("permission_key", "admin.cognitive.read")
-    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-    .limit(1)
-    .maybeSingle();
-  if (!permission.error && permission.data?.id) {
+  const scopedRole = await readExactPlatformRole(
+    adminClient,
+    userId,
+    ["operator", "moderator"],
+  );
+  if (
+    (scopedRole === "operator" || scopedRole === "moderator") &&
+    (await readExactPermissionKeys(adminClient, userId, ["admin.cognitive.read"]))
+      .has("admin.cognitive.read")
+  ) {
     return Object.freeze({ id: userId, role: "scoped_admin" });
   }
   return json(403, { error: "cognitive_read_scope_required" });

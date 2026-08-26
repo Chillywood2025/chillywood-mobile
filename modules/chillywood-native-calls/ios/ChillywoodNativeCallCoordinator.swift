@@ -24,6 +24,13 @@ private struct ActiveNativeCall {
   var timeoutWorkItem: DispatchWorkItem?
 }
 
+private struct NativeVoipAuthority: Codable, Equatable, Sendable {
+  let userId: String
+  let accountId: String
+  let sessionGeneration: String
+  let installId: String
+}
+
 public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistryDelegate, @unchecked Sendable {
   public static let shared = ChillywoodNativeCallCoordinator()
 
@@ -32,6 +39,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private let pendingEventsDefaultsKey = "com.chillywood.native-calls.pending-events.v1"
   private let terminalInvitesDefaultsKey = "com.chillywood.native-calls.terminal-invites.v1"
   private let activeCallsDefaultsKey = "com.chillywood.native-calls.active-descriptors.v1"
+  private let voipAuthorityDefaultsKey = "com.chillywood.native-calls.session-authority.v1"
   private var provider: CXProvider?
   private var pushRegistry: PKPushRegistry?
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
@@ -64,7 +72,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   public func prepareIfEnabled() {
     guard isBuildEnabled else { return }
     prepare()
-    guard isRuntimeDefaultEnabled else { return }
+    guard isRuntimeDefaultEnabled, persistedVoipAuthority() != nil else { return }
     startVoipRegistrationOnMain()
   }
 
@@ -87,7 +95,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     let nextProvider = CXProvider(configuration: configuration)
     nextProvider.setDelegate(self, queue: .main)
     provider = nextProvider
-    restoreActiveCallDescriptors()
+    if persistedVoipAuthority() == nil {
+      UserDefaults.standard.removeObject(forKey: activeCallsDefaultsKey)
+    } else {
+      restoreActiveCallDescriptors()
+    }
 
     let notificationCenter = NotificationCenter.default
     audioSessionObservers = [
@@ -108,14 +120,36 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     ]
   }
 
-  public func startVoipRegistration() throws {
+  public func startVoipRegistration(
+    userId: String,
+    accountId: String,
+    sessionGeneration: String,
+    installId: String
+  ) throws {
     guard isBuildEnabled else { throw ChillywoodNativeCallError.buildDisabled }
     guard isRuntimeDefaultEnabled else { throw ChillywoodNativeCallError.runtimeDisabled }
-    DispatchQueue.main.async { [weak self] in
+    let authority = NativeVoipAuthority(
+      userId: userId.trimmingCharacters(in: .whitespacesAndNewlines),
+      accountId: accountId.trimmingCharacters(in: .whitespacesAndNewlines),
+      sessionGeneration: sessionGeneration.trimmingCharacters(in: .whitespacesAndNewlines),
+      installId: installId.trimmingCharacters(in: .whitespacesAndNewlines)
+    )
+    guard isValidVoipAuthority(authority) else { throw ChillywoodNativeCallError.invalidPayload }
+    let configure = { [weak self] in
       guard let self else { return }
+      let previousAuthority = self.persistedVoipAuthority()
+      if previousAuthority != nil && previousAuthority != authority {
+        self.resetAccountContextOnMain()
+        self.pushRegistry?.desiredPushTypes = []
+        self.pushRegistry?.delegate = nil
+        self.pushRegistry = nil
+      }
+      self.persistVoipAuthority(authority)
       self.prepare()
       self.startVoipRegistrationOnMain()
     }
+    if Thread.isMainThread { configure() }
+    else { DispatchQueue.main.sync(execute: configure) }
   }
 
   private func startVoipRegistrationOnMain() {
@@ -128,11 +162,72 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func stopVoipRegistration() {
-    DispatchQueue.main.async { [weak self] in
-      self?.pushRegistry?.desiredPushTypes = []
-      self?.pushRegistry?.delegate = nil
-      self?.pushRegistry = nil
+    let stop = { [weak self] in
+      guard let self else { return }
+      UserDefaults.standard.removeObject(forKey: self.voipAuthorityDefaultsKey)
+      self.resetAccountContextOnMain()
+      self.pushRegistry?.desiredPushTypes = []
+      self.pushRegistry?.delegate = nil
+      self.pushRegistry = nil
     }
+    if Thread.isMainThread { stop() }
+    else { DispatchQueue.main.sync(execute: stop) }
+  }
+
+  private func isValidVoipAuthority(_ authority: NativeVoipAuthority) -> Bool {
+    authority.accountId == authority.userId
+      && UUID(uuidString: authority.userId) != nil
+      && UUID(uuidString: authority.sessionGeneration) != nil
+      && authority.installId.count >= 8
+      && authority.installId.count <= 200
+  }
+
+  private func persistedVoipAuthority() -> NativeVoipAuthority? {
+    guard
+      let data = UserDefaults.standard.data(forKey: voipAuthorityDefaultsKey),
+      let authority = try? JSONDecoder().decode(NativeVoipAuthority.self, from: data),
+      isValidVoipAuthority(authority)
+    else { return nil }
+    return authority
+  }
+
+  private func persistVoipAuthority(_ authority: NativeVoipAuthority) {
+    guard let encoded = try? JSONEncoder().encode(authority) else {
+      UserDefaults.standard.removeObject(forKey: voipAuthorityDefaultsKey)
+      return
+    }
+    UserDefaults.standard.set(encoded, forKey: voipAuthorityDefaultsKey)
+  }
+
+  private func resetAccountContextOnMain() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    let calls = Array(activeCalls.values)
+    calls.forEach { call in
+      call.timeoutWorkItem?.cancel()
+      failPendingAnswer(call.uuid)
+      provider?.reportCall(with: call.uuid, endedAt: Date(), reason: .remoteEnded)
+    }
+    activeCalls.removeAll()
+    pendingAnswerActions.values.forEach { $0.fail() }
+    pendingAnswerActions.removeAll()
+    pendingAnswerTimeouts.values.forEach { $0.cancel() }
+    pendingAnswerTimeouts.removeAll()
+    requestedEndReasons.removeAll()
+    UserDefaults.standard.removeObject(forKey: activeCallsDefaultsKey)
+    UserDefaults.standard.removeObject(forKey: terminalInvitesDefaultsKey)
+    stateQueue.sync {
+      pendingEvents.removeAll()
+      UserDefaults.standard.removeObject(forKey: pendingEventsDefaultsKey)
+    }
+    deactivateAudioSession()
+  }
+
+  private func voipPayloadMatchesPersistedAuthority(_ payload: [String: Any]) -> Bool {
+    guard let authority = persistedVoipAuthority() else { return false }
+    return toText(payload["recipientUserId"]) == authority.userId
+      && toText(payload["recipientAccountId"]) == authority.accountId
+      && toText(payload["recipientSessionGeneration"]) == authority.sessionGeneration
+      && toText(payload["recipientInstallId"]) == authority.installId
   }
 
   public func reportIncomingCall(payload: [String: Any]) async throws -> String {
@@ -649,7 +744,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     didUpdate pushCredentials: PKPushCredentials,
     for type: PKPushType
   ) {
-    guard type == .voIP else { return }
+    guard type == .voIP, persistedVoipAuthority() != nil else { return }
     let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
     emitRaw(["type": "voipTokenUpdated", "token": token])
   }
@@ -677,6 +772,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       let normalizedPayload = payload.dictionaryPayload.reduce(into: [String: Any]()) { result, entry in
         guard let key = entry.key as? String else { return }
         result[key] = entry.value
+      }
+      guard voipPayloadMatchesPersistedAuthority(normalizedPayload) else {
+        reportInvalidVoipPushOnMain(completion: completion)
+        return
       }
       let action = callActionLabel(normalizedPayload)
       if action == "incoming" {
