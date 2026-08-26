@@ -17,20 +17,33 @@ const easJson = readJson("eas.json");
 const packageJson = readJson("package.json");
 const expoImageManipulatorModuleConfig = readJson("node_modules/expo-image-manipulator/expo-module.config.json");
 const compatibility = computeAndroidNativeCompatibility();
+const appConfig = read("app.config.ts");
 
 assert.equal(productionOtaGeneration.schemaVersion, 1);
 assert.equal(productionOtaGeneration.generation, "production-v2");
 assert.equal(productionOtaGeneration.channel, "production-v2");
 assert.equal(productionOtaGeneration.supersedes?.channel, "production");
 assert.equal(productionOtaGeneration.policy?.requireFreshChannelForNewProductionGeneration, true);
-assert.equal(productionOtaGeneration.policy?.allowRuntimeReuseWhenNativeCompatibilityUnchanged, true);
+assert.equal(productionOtaGeneration.policy?.requireFreshRuntimeForNewProductionGeneration, true);
 assert.notEqual(productionOtaGeneration.channel, productionOtaGeneration.supersedes?.channel);
-assert.equal(productionOtaGeneration.iosRuntimeVersion, appJson.runtimeVersion);
-assert.equal(productionOtaGeneration.androidRuntimeVersion, manifest.runtimeVersion);
+assert.notEqual(productionOtaGeneration.iosRuntimeVersion, productionOtaGeneration.supersedes?.iosRuntimeVersion);
+assert.notEqual(productionOtaGeneration.androidRuntimeVersion, productionOtaGeneration.supersedes?.androidRuntimeVersion);
+assert.notEqual(productionOtaGeneration.iosRuntimeVersion, productionOtaGeneration.androidRuntimeVersion);
+assert.equal(productionOtaGeneration.nativeCompatibility?.androidDigest, manifest.nativeCompatibility?.digest);
+assert.equal(productionOtaGeneration.nativeCompatibility?.androidSurfaceChanged, false);
+assert.equal(productionOtaGeneration.nativeCompatibility?.iosSurfaceChanged, false);
 assert.equal(easJson.build?.production?.channel, productionOtaGeneration.channel);
 assert.equal(easJson.build?.["production-apk"]?.channel, productionOtaGeneration.channel);
 assert.notEqual(easJson.build?.["android-chat-livekit-qa"]?.channel, productionOtaGeneration.channel);
 assert.notEqual(easJson.build?.["ios-qa"]?.channel, productionOtaGeneration.channel);
+assert.notEqual(productionOtaGeneration.iosRuntimeVersion, appJson.runtimeVersion);
+assert.notEqual(productionOtaGeneration.androidRuntimeVersion, manifest.runtimeVersion);
+assert.match(appConfig, /checkAutomatically:\s*"NEVER"/u,
+  "native Expo automatic update activation must remain disabled so the app gate owns activation");
+assert.match(appConfig, /runtimeVersion:\s*androidChatQaRuntimeVersion\s*\|\|\s*productionAndroidRuntimeVersion/u);
+assert.match(appConfig, /runtimeVersion:\s*iosQaRuntimeVersion\s*\|\|\s*productionIosRuntimeVersion/u);
+assert.match(appConfig, /PRODUCTION_OTA_GENERATION_PATH/u);
+assert.match(appConfig, /otaGeneration:\s*\{/u);
 
 assert.equal(manifest.platform, "android");
 assert.equal(manifest.packageIdentifier, "com.chillywood.mobile");
@@ -43,7 +56,7 @@ assert.ok(Number.parseInt(manifest.nativeBuild, 10) > 82, "the replacement nativ
 assert.match(manifest.expectedBinarySourceCommit, /^[0-9a-f]{40}$/u);
 assert.equal(manifest.releaseStatus, "android_image_manipulator_incident_closed_internal_only");
 assert.equal(manifest.distributionSource, "google_play_internal");
-assert.equal(appJson.runtimeVersion, "1.0.0", "the shared/iOS runtime baseline must remain unchanged");
+assert.equal(appJson.runtimeVersion, "1.0.0", "the historical shared/iOS runtime baseline must remain unchanged in app.json");
 assert.equal(packageJson.dependencies?.["expo-image-manipulator"], "~14.0.8");
 assert.equal(compatibility.summary.expoImageManipulatorVersion, "14.0.8");
 assert.equal(compatibility.summary.expoImageManipulatorIntegrityPresent, true);
@@ -155,13 +168,13 @@ assert.equal(playUpgradeEvidence.backgroundForeground, "review_resumed_and_saved
 assert.equal(playUpgradeEvidence.historicalFatalObservedCount, 0);
 assert.equal(playUpgradeEvidence.javascriptFatalObservedCount, 0);
 
-const appConfig = read("app.config.ts");
 assert.match(appConfig, /ANDROID_RELEASE_MANIFEST_PATH/u);
 assert.match(appConfig, /ANDROID_CHAT_QA_RELEASE_MANIFEST_PATH/u);
-assert.match(appConfig, /runtimeVersion:\s*androidChatQaRuntimeVersion\s*\|\|\s*androidRuntimeVersion/u);
 assert.match(appConfig, /"config",\s*"release",\s*"android-production\.json"/u);
-assert.doesNotMatch(appConfig, /1\.0\.0-android-imagemanipulator-v1/u,
-  "the Android runtime must be sourced from the canonical release manifest, not duplicated in app.config.ts");
+assert.doesNotMatch(appConfig, /1\.0\.0-android-production-v2/u,
+  "the production-v2 Android runtime must be sourced from the canonical generation contract, not duplicated in app.config.ts");
+assert.doesNotMatch(appConfig, /1\.0\.0-ios-production-v2/u,
+  "the production-v2 iOS runtime must be sourced from the canonical generation contract, not duplicated in app.config.ts");
 
 const ci = read(".github/workflows/phase1-ci.yml");
 assert.match(ci, /npm run guard:android-native-runtime-compatibility/u);
