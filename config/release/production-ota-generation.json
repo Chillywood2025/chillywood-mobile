@@ -7,18 +7,21 @@
   "supersedes": {
     "channel": "production",
     "iosRuntimeVersion": "1.0.0",
-    "androidRuntimeVersion": "1.0.0-android-imagemanipulator-v1"
+    "androidRuntimeVersion": "1.0.0-android-imagemanipulator-v1",
+    "androidCompatibilityDigest": "ec451b19425b216249e63f225d5cb0c0c82327e813f89733f6d4501fa2fdfe93"
   },
   "nativeCompatibility": {
-    "androidDigest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a",
-    "androidSurfaceChanged": false,
-    "iosSurfaceChanged": false
+    "androidDigest": "659c4a322c4b05f0c7db7cf6532df913fa3f7ea6b446a298c573d49b9ac41178",
+    "historicalInstalledAndroidDigest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a",
+    "compatibilityInputsChanged": true,
+    "nativeModuleSetChanged": false,
+    "iosNativeModuleSetChanged": false
   },
   "policy": {
     "requireFreshChannelForNewProductionGeneration": true,
     "requireFreshRuntimeForNewProductionGeneration": true,
     "nativeAutomaticActivationDisabled": true,
     "appOwnedUpdateGateRequired": true,
-    "reason": "Quarantine replacement store binaries from both legacy production-channel history and already-downloaded legacy-runtime updates after the cross-platform installed-runtime failure; runtime generation rotation is a delivery quarantine boundary, not a claim that the native module surface changed."
+    "reason": "Quarantine replacement store binaries from both legacy production-channel history and already-downloaded legacy-runtime updates after the cross-platform installed-runtime failure; the Android compatibility digest transition records the production profile/channel input change without falsely claiming a native-module-set change."
   }
 }
