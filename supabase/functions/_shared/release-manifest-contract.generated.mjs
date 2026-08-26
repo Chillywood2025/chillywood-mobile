@@ -22,14 +22,14 @@ export const IOS_QA_RELEASE_MANIFEST = Object.freeze({
 });
 
 export const ANDROID_PRODUCTION_RELEASE_MANIFEST = Object.freeze({
-  "manifestVersion": 3,
+  "manifestVersion": 4,
   "platform": "android",
   "packageIdentifier": "com.chillywood.mobile",
   "appVersion": "1.0.0",
-  "nativeBuild": "84",
-  "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
-  "channel": "production",
+  "nativeBuild": "88",
+  "runtimeVersion": "1.0.0-android-production-v2",
+  "channel": "production-v2",
   "distributionSource": "google_play_internal",
-  "sourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
+  "sourceCommit": null,
   "nativeCompatibilityDigest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a"
 });
