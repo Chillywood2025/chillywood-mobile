@@ -2,17 +2,14 @@
   "schemaVersion": 1,
   "generation": "production-v2",
   "channel": "production-v2",
-  "iosRuntimeVersion": "1.0.0-ios-production-v2",
-  "androidRuntimeVersion": "1.0.0-android-production-v2",
+  "iosRuntimeVersion": "1.0.0",
+  "androidRuntimeVersion": "1.0.0-android-imagemanipulator-v1",
   "supersedes": {
-    "channel": "production",
-    "iosRuntimeVersion": "1.0.0",
-    "androidRuntimeVersion": "1.0.0-android-imagemanipulator-v1"
+    "channel": "production"
   },
   "policy": {
-    "reuseLegacyChannel": false,
-    "reuseLegacyRuntimeVersion": false,
-    "requirePlatformRuntimeIsolation": true,
-    "reason": "Isolate new production binaries from legacy production OTA history after cross-platform installed-runtime navigation failure."
+    "requireFreshChannelForNewProductionGeneration": true,
+    "allowRuntimeReuseWhenNativeCompatibilityUnchanged": true,
+    "reason": "Isolate new production store binaries from legacy production OTA history without changing runtimeVersion unless the native compatibility surface changes."
   }
 }
