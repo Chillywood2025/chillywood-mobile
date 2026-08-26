@@ -794,6 +794,8 @@ test("Phase 1 aggregate final-source compactor preserves only the exact maintena
 
   const omittedMaintenance = compactAggregatePhase1Evidence({ ...aggregate, maintenanceStatus: undefined });
   assert.equal(Object.hasOwn(omittedMaintenance, "maintenanceStatus"), false);
+  assert.notDeepEqual(nullMaintenance, omittedMaintenance);
+  assert.notEqual(hashValue(nullMaintenance), hashValue(omittedMaintenance));
 });
 
 const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, objective = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, branch = "codex/finite-task-lease-amendment-control-plane-repair-v1" } = {}) => {
