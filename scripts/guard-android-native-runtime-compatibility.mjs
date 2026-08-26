@@ -25,13 +25,29 @@ assert.equal(productionOtaGeneration.channel, "production-v2");
 assert.equal(productionOtaGeneration.supersedes?.channel, "production");
 assert.equal(productionOtaGeneration.policy?.requireFreshChannelForNewProductionGeneration, true);
 assert.equal(productionOtaGeneration.policy?.requireFreshRuntimeForNewProductionGeneration, true);
+assert.equal(productionOtaGeneration.policy?.nativeAutomaticActivationDisabled, true);
+assert.equal(productionOtaGeneration.policy?.appOwnedUpdateGateRequired, true);
 assert.notEqual(productionOtaGeneration.channel, productionOtaGeneration.supersedes?.channel);
 assert.notEqual(productionOtaGeneration.iosRuntimeVersion, productionOtaGeneration.supersedes?.iosRuntimeVersion);
 assert.notEqual(productionOtaGeneration.androidRuntimeVersion, productionOtaGeneration.supersedes?.androidRuntimeVersion);
 assert.notEqual(productionOtaGeneration.iosRuntimeVersion, productionOtaGeneration.androidRuntimeVersion);
-assert.equal(productionOtaGeneration.nativeCompatibility?.androidDigest, manifest.nativeCompatibility?.digest);
-assert.equal(productionOtaGeneration.nativeCompatibility?.androidSurfaceChanged, false);
-assert.equal(productionOtaGeneration.nativeCompatibility?.iosSurfaceChanged, false);
+assert.equal(
+  productionOtaGeneration.supersedes?.androidCompatibilityDigest,
+  d2bContract.target?.correctedNativeCompatibilityDigest,
+  "production-v2 must explicitly supersede the reviewed pre-rotation Android compatibility digest",
+);
+assert.equal(
+  productionOtaGeneration.nativeCompatibility?.historicalInstalledAndroidDigest,
+  manifest.nativeCompatibility?.digest,
+  "historical installed Android digest must remain bound to the existing production manifest",
+);
+assert.equal(productionOtaGeneration.nativeCompatibility?.androidDigest, compatibility.digest,
+  "production-v2 must bind the exact current Android compatibility input digest");
+assert.equal(productionOtaGeneration.nativeCompatibility?.compatibilityInputsChanged, true);
+assert.equal(productionOtaGeneration.nativeCompatibility?.nativeModuleSetChanged, false);
+assert.equal(productionOtaGeneration.nativeCompatibility?.iosNativeModuleSetChanged, false);
+assert.notEqual(compatibility.digest, d2bContract.target?.correctedNativeCompatibilityDigest,
+  "rotating the production profile/channel must create a new compatibility-input digest");
 assert.equal(easJson.build?.production?.channel, productionOtaGeneration.channel);
 assert.equal(easJson.build?.["production-apk"]?.channel, productionOtaGeneration.channel);
 assert.notEqual(easJson.build?.["android-chat-livekit-qa"]?.channel, productionOtaGeneration.channel);
@@ -84,14 +100,14 @@ assert.equal(
   "the installed Chat QA manifest must remain bound to its historical native source",
 );
 assert.equal(
-  compatibility.digest,
+  productionOtaGeneration.supersedes?.androidCompatibilityDigest,
   d2bContract.target?.correctedNativeCompatibilityDigest,
-  "the corrected Android native inputs must bind to the reviewed D2B source digest",
+  "the pre-rotation corrected Android inputs must remain preserved as superseded evidence",
 );
 assert.notEqual(
   compatibility.digest,
   chatQaManifest.nativeCompatibility?.digest,
-  "D2B changes native source and must not be represented as present in build 86",
+  "production-v2 must not be represented as the installed build-86 compatibility state",
 );
 assert.equal(chatQaManifest.expectedNativeBuild, d2bContract.target?.historicalInstalledNativeBuild);
 assert.equal(d2bContract.target?.historicalInstalledBuildContainsFix, false);
