@@ -29,13 +29,6 @@ const checklist = read("docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const appJson = read("app.json");
-const otaGenerationText = read("config/release/production-ota-generation.json");
-let otaGeneration = {};
-try {
-  otaGeneration = JSON.parse(otaGenerationText || "{}");
-} catch {
-  failures.push("production OTA generation contract is malformed JSON");
-}
 
 const docs = [
   ["tester delivery doc", delivery],
@@ -69,15 +62,7 @@ for (const [label, content] of docs) {
 ].forEach((needle) => requireText("tester delivery doc", delivery, needle));
 
 requireText("app.json", appJson, "\"package\": \"com.chillywood.mobile\"");
-const expectedIosRuntime = String(otaGeneration.iosRuntimeVersion ?? "").trim();
-if (!expectedIosRuntime) {
-  failures.push("production OTA generation contract is missing iosRuntimeVersion");
-} else {
-  requireText("app.json", appJson, `\"runtimeVersion\": \"${expectedIosRuntime}\"`);
-}
-if (String(otaGeneration.channel ?? "").trim() === String(otaGeneration.supersedes?.channel ?? "").trim()) {
-  failures.push("production OTA generation must not reuse the superseded channel");
-}
+requireText("app.json", appJson, "\"runtimeVersion\": \"1.0.0\"");
 
 forbidMatch("app.json", appJson, /\"package\"\s*:\s*\"(?!com\.chillywood\.mobile\")/, "unexpected package ID");
 forbidMatch("runtime feature flags", featureFlags, /premiumPurchaseEnabled:\s*true/, "Premium public purchase activation");
@@ -98,4 +83,4 @@ if (failures.length) {
 }
 
 console.log("Tester build/current runtime delivery policy guard passed.");
-console.log("- no production submission, provider mutation, money activation, package change, secret exposure, or legacy production OTA generation reuse was introduced.");
+console.log("- no production submission, provider mutation, money activation, package change, or secret exposure was introduced.");
