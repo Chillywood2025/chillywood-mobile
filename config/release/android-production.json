@@ -1,26 +1,19 @@
 {
-  "manifestVersion": 4,
+  "manifestVersion": 3,
   "platform": "android",
   "packageIdentifier": "com.chillywood.mobile",
   "appVersion": "1.0.0",
-  "nativeBuild": "88",
-  "runtimeVersion": "1.0.0-android-production-v2",
-  "channel": "production-v2",
+  "nativeBuild": "84",
+  "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+  "channel": "production",
   "distributionSource": "google_play_internal",
-  "buildProfile": "production",
-  "nativeBuildSource": "eas_cloud_build",
-  "expectedBinarySourceCommit": null,
+  "buildProfile": "android-production-local-recovery",
+  "nativeBuildSource": "local_eas_build",
+  "expectedBinarySourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
   "nativeBuildId": null,
-  "releaseStatus": "build_pending",
+  "releaseStatus": "android_image_manipulator_incident_closed_internal_only",
   "expoSdkVersion": "54.0.36",
   "expoImageManipulatorVersion": "14.0.8",
-  "previousRelease": {
-    "nativeBuild": "84",
-    "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
-    "channel": "production",
-    "sourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
-    "releaseStatus": "android_image_manipulator_incident_closed_internal_only"
-  },
   "legacyBuild": {
     "nativeBuild": "80",
     "runtimeVersion": "1.0.0",
@@ -44,19 +37,12 @@
         "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
         "digest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a",
         "status": "reviewed_replacement_built_and_validated"
-      },
-      {
-        "runtimeVersion": "1.0.0-android-production-v2",
-        "digest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a",
-        "status": "production_v2_runtime_generation_pending_build"
       }
     ],
     "requiredModules": {
       "expo-image-manipulator": "14.0.8"
     }
   },
-  "artifactEvidenceNativeBuild": "84",
-  "artifactEvidenceStatus": "historical_previous_release",
   "artifactEvidence": {
     "productionAabSha256": "de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30",
     "qaApksSha256": "d5f36daf6e60947428c05bebfa8d7eac16f6e67c19d04822a006183fbde36bce",
@@ -145,9 +131,6 @@
     "allImageSurfaces": "not_observed"
   },
   "otaNativeCompatibility": {
-    "generation": "production-v2",
-    "legacyChannelBlocked": "production",
-    "legacyRuntimeBlocked": "1.0.0-android-imagemanipulator-v1",
     "optionalDeferredPackages": [
       {
         "package": "expo-image-manipulator",
