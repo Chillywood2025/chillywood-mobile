@@ -53,6 +53,7 @@ const evaluate = (overrides = {}) => evaluateRiskBasedClosureFallback({
   highRiskDomains: ["release-OTA"],
   protectedReadyDecision: releaseDecision,
   protectedMainRuntime: runtime,
+  bootstrapAllowed: false,
   ...overrides,
 });
 
@@ -93,37 +94,46 @@ test("pending terminal truth remains blocking", () => {
   assert.ok(result.findings.includes("PHASE1_RISK_CLOSURE_PENDING_TERMINAL_TRUTH"));
 });
 
-test("assurance-control bootstrap is allowed only for the exact closed no-high-risk file set", () => {
-  const scope = {
-    files: [
-      ".github/workflows/phase1-ci.yml",
-      "scripts/assurance/phase1-risk-based-closure-gate.mjs",
-      "scripts/assurance/pr-scope.mjs",
-      "tests/assurance/phase1-risk-based-closure-gate.test.mjs",
-    ].sort(),
-    additions: 300,
-    deletions: 20,
-    netChangedLines: 280,
-  };
-  const result = evaluate({ scope, highRiskDomains: [], protectedReadyDecision: null });
+const bootstrapScope = {
+  files: [
+    ".github/workflows/phase1-ci.yml",
+    "scripts/assurance/phase1-risk-based-closure-gate.mjs",
+    "scripts/assurance/pr-scope.mjs",
+    "tests/assurance/phase1-risk-based-closure-gate.test.mjs",
+  ].sort(),
+  additions: 300,
+  deletions: 20,
+  netChangedLines: 280,
+};
+
+test("one-time assurance-control bootstrap is allowed only for the exact closed no-high-risk file set", () => {
+  const result = evaluate({ scope: bootstrapScope, highRiskDomains: [], protectedReadyDecision: null, bootstrapAllowed: true });
   assert.equal(result.ok, true);
   assert.equal(result.classification, "ASSURANCE_CONTROL_SOURCE_ONLY_BOOTSTRAP_V1");
   assert.equal(result.mergeAuthorityGranted, false);
 });
 
+test("bootstrap expires after the gate is protected", () => {
+  assert.equal(evaluate({ scope: bootstrapScope, highRiskDomains: [], protectedReadyDecision: null, bootstrapAllowed: false }).ok, false);
+  const protectedDecision = { ...releaseDecision };
+  const result = evaluate({ scope: bootstrapScope, highRiskDomains: [], protectedReadyDecision: protectedDecision, bootstrapAllowed: false });
+  assert.equal(result.ok, true);
+  assert.equal(result.classification, "PROTECTED_RISK_BASED_READY_CLOSURE_V1");
+});
+
 test("bootstrap cannot hide release, product, unknown or extra control scope", () => {
-  const baseScope = {
+  const releaseScope = {
     files: ["scripts/assurance/pr-scope.mjs", "config/release/android-production.json"].sort(),
     additions: 10,
     deletions: 0,
     netChangedLines: 10,
   };
-  assert.equal(evaluate({ scope: baseScope, highRiskDomains: ["release-OTA"], protectedReadyDecision: null }).ok, false);
+  assert.equal(evaluate({ scope: releaseScope, highRiskDomains: ["release-OTA"], protectedReadyDecision: null, bootstrapAllowed: true }).ok, false);
   const extra = { files: ["scripts/assurance/pr-scope.mjs", "scripts/assurance/lib.mjs"].sort(), additions: 10, deletions: 0, netChangedLines: 10 };
-  assert.equal(evaluate({ scope: extra, highRiskDomains: [], protectedReadyDecision: null }).ok, false);
+  assert.equal(evaluate({ scope: extra, highRiskDomains: [], protectedReadyDecision: null, bootstrapAllowed: true }).ok, false);
 });
 
 test("bootstrap file and line budgets fail closed", () => {
   const overLines = { files: ["scripts/assurance/pr-scope.mjs"], additions: 801, deletions: 0, netChangedLines: 801 };
-  assert.equal(evaluate({ scope: overLines, highRiskDomains: [], protectedReadyDecision: null }).ok, false);
+  assert.equal(evaluate({ scope: overLines, highRiskDomains: [], protectedReadyDecision: null, bootstrapAllowed: true }).ok, false);
 });
