@@ -29,6 +29,13 @@ const checklist = read("docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const appJson = read("app.json");
+const otaGenerationText = read("config/release/production-ota-generation.json");
+let otaGeneration = {};
+try {
+  otaGeneration = JSON.parse(otaGenerationText || "{}");
+} catch {
+  failures.push("production OTA generation contract is malformed JSON");
+}
 
 const docs = [
   ["tester delivery doc", delivery],
@@ -47,7 +54,7 @@ for (const [label, content] of docs) {
   forbidMatch(label, content, /Stripe Connect (?:is|now|currently)\s*(?:enabled|live|available)/i, "Stripe Connect live claim");
   forbidMatch(label, content, /merch checkout (?:is|now|currently)\s*(?:enabled|live|available)/i, "merch checkout live claim");
   forbidMatch(label, content, /provider refunds? (?:are|is|now|currently)\s*(?:automatic|automated|executable|enabled|live)/i, "provider refund automation claim");
-  forbidMatch(label, content, /(?:password|token|service-role key|api key|webhook secret)\s*[:=]\s*[`'"]?[A-Za-z0-9_!@#$%^&*().+=/-]{8,}/i, "credential assignment");
+  forbidMatch(label, content, /(?:password|token|service-role key|api key|webhook secret)\s*[:=]\s*[`'\"]?[A-Za-z0-9_!@#$%^&*().+=/-]{8,}/i, "credential assignment");
   forbidMatch(label, content, /(?:https?:\/\/[^\s)]*(?:X-Goog-Signature|token=|signature=|signed)[^\s)]*)/i, "signed URL");
   forbidMatch(label, content, /\b(?:\d{1,3}\.){3}\d{1,3}\b/, "raw IPv4 address");
   forbidMatch(label, content, /(?:AIza[0-9A-Za-z_-]{20,}|sk_(?:live|test)_[0-9A-Za-z]{16,}|rk_(?:live|test)_[0-9A-Za-z]{16,}|-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----|\"private_key\"\s*:|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,})/, "credential-like material");
@@ -62,7 +69,15 @@ for (const [label, content] of docs) {
 ].forEach((needle) => requireText("tester delivery doc", delivery, needle));
 
 requireText("app.json", appJson, "\"package\": \"com.chillywood.mobile\"");
-requireText("app.json", appJson, "\"runtimeVersion\": \"1.0.0\"");
+const expectedIosRuntime = String(otaGeneration.iosRuntimeVersion ?? "").trim();
+if (!expectedIosRuntime) {
+  failures.push("production OTA generation contract is missing iosRuntimeVersion");
+} else {
+  requireText("app.json", appJson, `\"runtimeVersion\": \"${expectedIosRuntime}\"`);
+}
+if (String(otaGeneration.channel ?? "").trim() === String(otaGeneration.supersedes?.channel ?? "").trim()) {
+  failures.push("production OTA generation must not reuse the superseded channel");
+}
 
 forbidMatch("app.json", appJson, /\"package\"\s*:\s*\"(?!com\.chillywood\.mobile\")/, "unexpected package ID");
 forbidMatch("runtime feature flags", featureFlags, /premiumPurchaseEnabled:\s*true/, "Premium public purchase activation");
@@ -83,4 +98,4 @@ if (failures.length) {
 }
 
 console.log("Tester build/current runtime delivery policy guard passed.");
-console.log("- no production submission, provider mutation, money activation, package change, or secret exposure was introduced.");
+console.log("- no production submission, provider mutation, money activation, package change, secret exposure, or legacy production OTA generation reuse was introduced.");
