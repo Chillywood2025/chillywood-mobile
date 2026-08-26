@@ -22,6 +22,12 @@ const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 const IOS_ASSOCIATED_DOMAIN = "applinks:chillywoodstream.com";
 const IOS_PRIVACY_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "ios", "privacy-manifest.json");
 const ANDROID_RELEASE_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "release", "android-production.json");
+const PRODUCTION_OTA_GENERATION_PATH = path.join(
+  CONFIG_DIR,
+  "config",
+  "release",
+  "production-ota-generation.json",
+);
 const ANDROID_CHAT_QA_RELEASE_MANIFEST_PATH = path.join(
   CONFIG_DIR,
   "config",
@@ -197,21 +203,50 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     "./GoogleService-Info.plist",
   );
   const iosQaRuntimeVersion = normalizeText(process.env.IOS_QA_RUNTIME_VERSION);
+  const productionOtaGeneration = JSON.parse(
+    fs.readFileSync(PRODUCTION_OTA_GENERATION_PATH, "utf8"),
+  ) as {
+    schemaVersion?: unknown;
+    generation?: unknown;
+    channel?: unknown;
+    iosRuntimeVersion?: unknown;
+    androidRuntimeVersion?: unknown;
+  };
+  const productionOtaGenerationName = normalizeText(productionOtaGeneration.generation);
+  const productionOtaChannel = normalizeText(productionOtaGeneration.channel);
+  const productionIosRuntimeVersion = normalizeText(productionOtaGeneration.iosRuntimeVersion);
+  const productionAndroidRuntimeVersion = normalizeText(productionOtaGeneration.androidRuntimeVersion);
+  if (
+    productionOtaGeneration.schemaVersion !== 1
+    || !productionOtaGenerationName
+    || !productionOtaChannel
+    || !productionIosRuntimeVersion
+    || !productionAndroidRuntimeVersion
+  ) {
+    throw new Error("Production OTA generation contract is incomplete.");
+  }
   const androidReleaseManifest = JSON.parse(
     fs.readFileSync(ANDROID_RELEASE_MANIFEST_PATH, "utf8"),
   ) as { packageIdentifier?: unknown; runtimeVersion?: unknown };
   const androidChatQaReleaseManifest = JSON.parse(
     fs.readFileSync(ANDROID_CHAT_QA_RELEASE_MANIFEST_PATH, "utf8"),
   ) as { packageIdentifier?: unknown; runtimeVersion?: unknown };
-  const androidRuntimeVersion = normalizeText(androidReleaseManifest.runtimeVersion);
+  const historicalAndroidRuntimeVersion = normalizeText(androidReleaseManifest.runtimeVersion);
   const androidChatQaRuntimeVersion = normalizeText(
     process.env.ANDROID_CHAT_LIVEKIT_QA_RUNTIME_VERSION,
   );
   if (normalizeText(androidReleaseManifest.packageIdentifier) !== normalizeText(existingAndroid.package)) {
     throw new Error("Android release manifest packageIdentifier does not match app.json.");
   }
-  if (!androidRuntimeVersion || androidRuntimeVersion === normalizeText(base.runtimeVersion)) {
+  if (!historicalAndroidRuntimeVersion || historicalAndroidRuntimeVersion === normalizeText(base.runtimeVersion)) {
     throw new Error("Android release manifest must define a dedicated native runtime different from the shared legacy runtime.");
+  }
+  if (
+    productionIosRuntimeVersion === normalizeText(base.runtimeVersion)
+    || productionAndroidRuntimeVersion === historicalAndroidRuntimeVersion
+    || productionAndroidRuntimeVersion === normalizeText(base.runtimeVersion)
+  ) {
+    throw new Error("Production OTA generation must use fresh platform runtimes that quarantine legacy cached updates.");
   }
   if (
     normalizeText(androidChatQaReleaseManifest.packageIdentifier)
@@ -223,7 +258,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     androidChatQaRuntimeVersion
     && (
       androidChatQaRuntimeVersion !== normalizeText(androidChatQaReleaseManifest.runtimeVersion)
-      || androidChatQaRuntimeVersion === androidRuntimeVersion
+      || androidChatQaRuntimeVersion === productionAndroidRuntimeVersion
+      || androidChatQaRuntimeVersion === historicalAndroidRuntimeVersion
       || androidChatQaRuntimeVersion === normalizeText(base.runtimeVersion)
     )
   ) {
@@ -246,12 +282,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...base,
     updates: {
       ...base.updates,
-      checkAutomatically: "ON_LOAD",
+      checkAutomatically: "NEVER",
       fallbackToCacheTimeout: 0,
     },
     android: {
       ...base.android,
-      runtimeVersion: androidChatQaRuntimeVersion || androidRuntimeVersion,
+      runtimeVersion: androidChatQaRuntimeVersion || productionAndroidRuntimeVersion,
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
       intentFilters: [
         ...(Array.isArray(existingAndroid.intentFilters) ? existingAndroid.intentFilters : []),
@@ -260,7 +296,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     ios: {
       ...base.ios,
-      ...(iosQaRuntimeVersion ? { runtimeVersion: iosQaRuntimeVersion } : {}),
+      runtimeVersion: iosQaRuntimeVersion || productionIosRuntimeVersion,
       ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
       associatedDomains: iosAssociatedDomains,
       privacyManifests: iosPrivacyManifests,
@@ -307,6 +343,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...existingExtra,
       runtime: {
         ...existingRuntime,
+        otaGeneration: {
+          generation: productionOtaGenerationName,
+          channel: productionOtaChannel,
+          iosRuntimeVersion: productionIosRuntimeVersion,
+          androidRuntimeVersion: productionAndroidRuntimeVersion,
+        },
         supabaseUrl: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_URL || existingRuntime.supabaseUrl),
         supabaseFunctionsUrl: normalizeText(
           process.env.EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL
