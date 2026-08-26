@@ -215,8 +215,6 @@ const phase1RulesetRecoveryBypassActor = Object.freeze({
 });
 const phase1RulesetRecoveryPaths = Object.freeze([
   "scripts/assurance/github-main-ruleset-readback.mjs",
-  "supabase/tests/revenuecat_verified_transfer_reconciliation_test.sql",
-  "supabase/tests/room_host_participant_block_check_test.sql",
   "tests/assurance/github-main-ruleset-readback.test.mjs",
 ].sort());
 export const phase1RulesetRecoveryPolicy = Object.freeze({
@@ -242,6 +240,7 @@ export const phase1RulesetRecoveryPolicy = Object.freeze({
       headSha: "39a1ced9137a3af3eb8c92e0d0fbf078a46ac0cd",
       headRef: "codex/phase1-draft-source-finalizer-closeout",
       mergeSha: "15cfb08d06d9d0cdd90767b025c3ad798e299bc5",
+      mergeCommittedAt: "2026-08-25T11:25:46.000Z",
       mergedAt: "2026-08-25T11:25:47.000Z",
       openedVersionId: 47582678,
       openedAt: "2026-08-25T11:25:41.141Z",
@@ -258,6 +257,7 @@ export const phase1RulesetRecoveryPolicy = Object.freeze({
       headSha: "36f98930ab88e855f6b4f6838c74355e65efc92c",
       headRef: "codex/phase1-run-workflow-identity-fix",
       mergeSha: "0f4354fce5097be478ed83d86f2e4dead6391bef",
+      mergeCommittedAt: "2026-08-25T12:02:03.000Z",
       mergedAt: "2026-08-25T12:02:03.000Z",
       openedVersionId: 47585578,
       openedAt: "2026-08-25T12:02:01.652Z",
@@ -268,10 +268,27 @@ export const phase1RulesetRecoveryPolicy = Object.freeze({
     }),
     Object.freeze({
       ordinal: 3,
-      kind: "SELF_BOOTSTRAP_EXACT_PR",
+      kind: "HISTORICAL_EXACT",
       pr: 266,
       baseSha: "0f4354fce5097be478ed83d86f2e4dead6391bef",
+      headSha: "9661b13578475a4cc023d05395889f73be140639",
       headRef: "codex/emergency-stale-supabase-fixture-repair-v1",
+      mergeSha: "c751c2689f440f50b6dce096252318c050e07046",
+      mergeCommittedAt: "2026-08-25T23:26:28.000Z",
+      mergedAt: "2026-08-25T23:26:29.000Z",
+      openedVersionId: 47658161,
+      openedAt: "2026-08-25T23:26:21.868Z",
+      restoredVersionId: 47658168,
+      restoredAt: "2026-08-25T23:26:31.601Z",
+      ruleSuiteId: 3820215667,
+      ruleSuitePushedAt: "2026-08-25T23:26:29.000Z",
+    }),
+    Object.freeze({
+      ordinal: 4,
+      kind: "SELF_BOOTSTRAP_EXACT_PR",
+      pr: 267,
+      baseSha: "c751c2689f440f50b6dce096252318c050e07046",
+      headRef: "codex/ruleset-recovery-provider-chronology-v1",
       allowedPaths: phase1RulesetRecoveryPaths,
     }),
   ]),
@@ -786,12 +803,13 @@ function evaluateRulesetRecoveryWindows({ chain, canonicalFinalState, observatio
       && mergeIdentity?.currentBaseContainsMerge === true);
     if (!mergeIdentityValid) findings.push("PHASE1_RULESET_RECOVERY_MERGE_IDENTITY_INVALID");
     const chronologyValid = [openedAt, pushedAt, mergedAt, committedAt, restoredAt].every(Number.isFinite)
-      && openedAt < pushedAt && pushedAt <= mergedAt && committedAt === pushedAt && mergedAt < restoredAt
+      && openedAt < committedAt && committedAt <= pushedAt && pushedAt <= mergedAt && mergedAt < restoredAt
       && (previousRestoredAt === null || previousRestoredAt < openedAt);
     if (!chronologyValid) findings.push("PHASE1_RULESET_RECOVERY_CHRONOLOGY_INVALID");
     if (window.kind === "HISTORICAL_EXACT") {
       if (opened?.version_id !== window.openedVersionId || !sameRecoveryTimestamp(opened?.updated_at, window.openedAt)
         || restored?.version_id !== window.restoredVersionId || !sameRecoveryTimestamp(restored?.updated_at, window.restoredAt)
+        || !sameRecoveryTimestamp(mergeIdentity?.committedAt, window.mergeCommittedAt)
         || !sameRecoveryTimestamp(pullRequest?.merged_at, window.mergedAt) || ruleSuite?.id !== window.ruleSuiteId
         || !sameRecoveryTimestamp(ruleSuite?.pushed_at, window.ruleSuitePushedAt)) {
         findings.push("PHASE1_RULESET_RECOVERY_HISTORICAL_BINDING_INVALID");
