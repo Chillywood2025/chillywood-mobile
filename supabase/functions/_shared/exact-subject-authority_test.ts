@@ -1,6 +1,7 @@
 import {
   normalizeExactSubjectId,
   parseExactCurrentSessionAuthority,
+  readExactCurrentSessionAuthority,
   resolveExactBetaAccess,
   resolveExactBreakGlassSessionId,
   resolveExactPermissionKeys,
@@ -42,6 +43,63 @@ Deno.test("exact live-session authority accepts only the immutable current subje
     assertEquals(parseExactCurrentSessionAuthority(authority, expectedUserId), null, label);
   }
   assertEquals(normalizeExactSubjectId(null), null, "missing user id");
+});
+
+Deno.test("shared Edge session reader fails closed before privileged mutation", async () => {
+  const read = async (data: unknown, error: unknown = null) => {
+    let privilegedMutationCalls = 0;
+    const authority = await readExactCurrentSessionAuthority({
+      rpc: async (functionName: string) => {
+        assertEquals(
+          functionName,
+          "wave1_session_authority_readback",
+          "shared root RPC",
+        );
+        return { data, error };
+      },
+    }, EXACT_USER);
+    if (authority) privilegedMutationCalls += 1;
+    return { authority, privilegedMutationCalls };
+  };
+
+  const active = await read({
+    accountId: EXACT_USER,
+    authoritative: true,
+    restoreOnly: false,
+    sessionGeneration: SESSION_ID,
+    state: "ACTIVE",
+    userId: EXACT_USER,
+  });
+  assertEquals(
+    active,
+    {
+      authority: { sessionGeneration: SESSION_ID, userId: EXACT_USER },
+      privilegedMutationCalls: 1,
+    },
+    "valid shared authority may continue",
+  );
+
+  for (const [label, data, error] of [
+    ["expired retained session", {
+      accountId: EXACT_USER,
+      authoritative: true,
+      restoreOnly: false,
+      sessionGeneration: SESSION_ID,
+      state: "TERMINATED",
+      userId: EXACT_USER,
+    }, null],
+    ["malformed readback", {
+      authoritative: true,
+      state: "ACTIVE",
+    }, null],
+    ["readback error", null, { message: "rpc unavailable" }],
+  ] as const) {
+    assertEquals(
+      await read(data, error),
+      { authority: null, privilegedMutationCalls: 0 },
+      `${label} stops before privileged mutation`,
+    );
+  }
 });
 
 Deno.test("recycled email and email-only rows cannot grant platform role or permission", () => {
