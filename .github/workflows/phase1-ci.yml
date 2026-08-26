@@ -143,8 +143,9 @@ jobs:
             node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
           fi
           npm run test:engineering-doctrine; DOCTRINE=$?
-          npm run assurance:engineering-closure; CLOSURE=$?
-          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE" -eq 0
+          node --test tests/assurance/phase1-risk-based-closure-gate.test.mjs; CLOSURE_GATE_TEST=$?
+          node scripts/assurance/phase1-risk-based-closure-gate.mjs; CLOSURE=$?
+          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE_GATE_TEST" -eq 0 -a "$CLOSURE" -eq 0
 
       - name: Validate non-authoritative assurance display projection
         env:
@@ -214,8 +215,9 @@ jobs:
             node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
           fi
           npm run test:engineering-doctrine; DOCTRINE=$?
-          npm run assurance:engineering-closure; CLOSURE=$?
-          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE" -eq 0
+          node --test tests/assurance/phase1-risk-based-closure-gate.test.mjs; CLOSURE_GATE_TEST=$?
+          node scripts/assurance/phase1-risk-based-closure-gate.mjs; CLOSURE=$?
+          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE_GATE_TEST" -eq 0 -a "$CLOSURE" -eq 0
 
       - name: Validate non-authoritative assurance display projection
         env:
@@ -274,8 +276,9 @@ jobs:
             node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
           fi
           npm run test:engineering-doctrine; DOCTRINE=$?
-          npm run assurance:engineering-closure; CLOSURE=$?
-          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE" -eq 0
+          node --test tests/assurance/phase1-risk-based-closure-gate.test.mjs; CLOSURE_GATE_TEST=$?
+          node scripts/assurance/phase1-risk-based-closure-gate.mjs; CLOSURE=$?
+          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE_GATE_TEST" -eq 0 -a "$CLOSURE" -eq 0
 
       - name: Validate non-authoritative assurance display projection
         env:
