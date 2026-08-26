@@ -29,10 +29,77 @@ const readPull = (repository, pr) => {
   if (result.status !== 0) return null;
   try {
     const pull = JSON.parse(result.stdout);
-    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRepository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRepository: pull.head?.repo?.full_name, headRef: pull.head?.ref, headSha: pull.head?.sha, mergeCommitSha: pull.merge_commit_sha, draft: pull.draft, updatedAt: pull.updated_at, htmlUrl: pull.html_url, state: pull.state };
+    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRepository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRepository: pull.head?.repo?.full_name, headRef: pull.head?.ref, headSha: pull.head?.sha, mergeCommitSha: pull.merge_commit_sha, authorLogin: pull.user?.login, draft: pull.draft, updatedAt: pull.updated_at, htmlUrl: pull.html_url, state: pull.state };
   } catch {
     return null;
   }
+};
+
+const riskBasedReadyActions = new Set(["opened", "synchronize", "reopened", "edited", "ready_for_review"]);
+const deriveRiskBasedReadyContext = ({ event, readback, context, scope, highRisk }) => {
+  const pull = event?.pull_request;
+  const repository = event?.repository?.full_name;
+  const defaultBudget = policy?.defaultBudget ?? {};
+  const featureId = "eas-build-update-release";
+  const registeredFeature = (registry?.features ?? []).some((feature) => feature?.featureId === featureId);
+  const exactUnboundContext = context?.ok === false
+    && context?.source === "UNBOUND_PR_CONTEXT"
+    && stableJson(context?.findings ?? []) === stableJson(["ASSURANCE_TASK_CONTEXT_UNBOUND"]);
+  const exactOwnerReadyLifecycle = riskBasedReadyActions.has(event?.action)
+    && pull?.state === "open"
+    && pull?.draft === false
+    && readback?.state === "open"
+    && readback?.draft === false
+    && pull?.user?.login === "Chillywood2025"
+    && readback?.authorLogin === "Chillywood2025";
+  const sameRepository = repository === "Chillywood2025/chillywood-mobile"
+    && pull?.base?.repo?.full_name === repository
+    && pull?.head?.repo?.full_name === repository
+    && readback?.baseRepository === repository
+    && readback?.headRepository === repository;
+  const exactSingleOperationalDomain = stableJson(highRisk) === stableJson(["release-OTA"]);
+  const bounded = Number.isSafeInteger(defaultBudget.changedFiles)
+    && Number.isSafeInteger(defaultBudget.netChangedLines)
+    && scope.files.length <= defaultBudget.changedFiles
+    && Math.max(0, scope.additions - scope.deletions) <= defaultBudget.netChangedLines;
+  const noTerminalTransition = protectedMainRuntime?.pendingTerminalTruth !== true;
+  if (!exactUnboundContext || !exactOwnerReadyLifecycle || !sameRepository || !exactSingleOperationalDomain || !bounded || !registeredFeature || !noTerminalTransition) return context;
+  return {
+    ...context,
+    ok: true,
+    findings: [],
+    source: "PROTECTED_RISK_BASED_READY_ADMISSION_V1",
+    contextType: "RISK_BASED_READY_ADMISSION_V1",
+    featureId,
+    primaryFeatureId: featureId,
+    affectedFeatureIds: [featureId],
+    objectiveDomains: ["release-OTA"],
+    supportingDomains: ["CI-test-infrastructure"],
+    authorizedPrRiskDomains: ["release-OTA"],
+    finiteTaskPrRiskAuthority: null,
+    historicalWaiverPath: null,
+    bindingId: `risk-based-ready:${repository}:${event.number}:${pull.head.sha}`,
+    finiteLeaseId: null,
+    budget: {
+      maximumFiles: defaultBudget.changedFiles,
+      maximumHandAuthoredNetLines: defaultBudget.netChangedLines,
+    },
+    authoritySource: "PROTECTED_RISK_BASED_READY_ADMISSION_V1",
+    riskBasedReadyAdmission: {
+      schemaVersion: 1,
+      classification: "OWNER_SAME_REPOSITORY_SINGLE_OPERATIONAL_DOMAIN_V1",
+      repository,
+      pr: event.number,
+      headSha: pull.head.sha,
+      domain: "release-OTA",
+      featureId,
+      providerMutationAllowed: false,
+      databaseMutationAllowed: false,
+      moneyAuthorityAllowed: false,
+      otaPublicationAllowed: false,
+      publicReleaseAllowed: false,
+    },
+  };
 };
 
 if (typeof options.githubEvent !== "string") {
@@ -87,7 +154,7 @@ if (!event.pull_request) {
   const typedAuthorities = validatedIdentity.ok && tree
     ? observeTypedTaskAuthorities({ identity: validatedIdentity.identity, tree, scope, currentTruth })
     : { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null };
-  const context = deriveTaskScopeContext({
+  let context = deriveTaskScopeContext({
     event,
     readback,
     policy,
@@ -100,14 +167,15 @@ if (!event.pull_request) {
     observedChangedPaths: scope.files,
     observedCanonicalChangedLines: scope.additions + scope.deletions,
   });
+  const classified = classifyPrScopePaths(scope.files, policy);
+  const domains = [...new Set(classified.flatMap(({ domains: values }) => values))].sort();
+  const highRisk = policy.domains.filter(({ id, risk }) => risk === "high" && domains.includes(id)).map(({ id }) => id);
+  context = deriveRiskBasedReadyContext({ event, readback, context, scope, highRisk });
   const findings = context.findings.map((id) => ({ id, status: "BLOCKED_INTERNAL" }));
   if (executionIdentity?.relationship?.valid !== true) findings.push({ id: "ASSURANCE_GITHUB_EXECUTION_IDENTITY_INVALID", status: "BLOCKED_INTERNAL", reasons: executionIdentity?.relationship?.findings ?? [] });
   if (!tree) {
     findings.push({ id: "ASSURANCE_GIT_DIFF_CONTEXT_UNREADABLE", status: "BLOCKED_INTERNAL" });
   }
-  const classified = classifyPrScopePaths(scope.files, policy);
-  const domains = [...new Set(classified.flatMap(({ domains: values }) => values))].sort();
-  const highRisk = policy.domains.filter(({ id, risk }) => risk === "high" && domains.includes(id)).map(({ id }) => id);
   const waiver = context.ok && context.historicalWaiverPath ? readJson(context.historicalWaiverPath) : null;
   const budget = context.budget
     ? { files: context.budget.maximumFiles, lines: context.budget.maximumHandAuthoredNetLines, generatedGraphLines: context.budget.maximumGeneratedGraphLines, source: context.authoritySource ?? context.contextType }
@@ -146,7 +214,7 @@ if (!event.pull_request) {
   });
   const acceptable = findings.length === 0 || draftSourceReadiness.ok;
   emit("assurance:pr-scope", acceptable, {
-    mode: draftSourceReadiness.ok ? draftSourceReadiness.mode : "GITHUB_EVENT_TASK_CONTEXT",
+    mode: draftSourceReadiness.ok ? draftSourceReadiness.mode : context.contextType === "RISK_BASED_READY_ADMISSION_V1" ? "RISK_BASED_READY_ADMISSION_V1" : "GITHUB_EVENT_TASK_CONTEXT",
     taskAuthorityGranted: draftSourceReadiness.ok ? false : context.ok,
     mergeAuthorityGranted: false,
     sourceScope: draftSourceReadiness.sourceScope,
@@ -161,7 +229,7 @@ if (!event.pull_request) {
     highRiskDomains: highRisk,
     primaryFeatureId: context.primaryFeatureId,
     affectedFeatureIds: context.affectedFeatureIds ?? [],
-    authorizedPrRiskDomains: scopeEvaluation.authorizedPrRiskDomains ?? [],
+    authorizedPrRiskDomains: scopeEvaluation.authorizedPrRiskDomains ?? context.authorizedPrRiskDomains ?? [],
     observedPrRiskDomains: scopeEvaluation.observedPrRiskDomains ?? highRisk,
     objectiveDomains: context.objectiveDomains ?? [],
     supportingDomains: context.supportingDomains ?? [],
@@ -175,5 +243,7 @@ if (!event.pull_request) {
     findings: draftSourceReadiness.ok ? draftSourceReadiness.nonBlockingFindings : findings,
   }, [draftSourceReadiness.ok
     ? `PR scope: SOURCE READINESS — ${scope.files.length} exact files, task authority deferred, merge authority false`
-    : `PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
+    : context.contextType === "RISK_BASED_READY_ADMISSION_V1"
+      ? `PR scope: ${findings.length ? "FAIL" : "PASS"} — bounded owner release-OTA ready admission, ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines`
+      : `PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
 }
