@@ -17,6 +17,8 @@
   "policy": {
     "requireFreshChannelForNewProductionGeneration": true,
     "requireFreshRuntimeForNewProductionGeneration": true,
-    "reason": "Quarantine new store binaries from both legacy production-channel updates and already-cached legacy-runtime updates after cross-platform installed-runtime failure."
+    "nativeAutomaticActivationDisabled": true,
+    "appOwnedUpdateGateRequired": true,
+    "reason": "Quarantine replacement store binaries from both legacy production-channel history and already-downloaded legacy-runtime updates after the cross-platform installed-runtime failure; runtime generation rotation is a delivery quarantine boundary, not a claim that the native module surface changed."
   }
 }
