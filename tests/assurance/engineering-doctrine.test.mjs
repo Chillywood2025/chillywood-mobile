@@ -7,14 +7,14 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, PHASE1_ADMISSION_RULESET_CUTOVER_V1, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1, PHASE1_REQUIRED_JOB_NAMES, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
+  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, PHASE1_ADMISSION_RULESET_CUTOVER_V1, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1, PHASE1_REQUIRED_JOB_NAMES, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
-  architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
+  architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureFinalSourceSubjectsWireEquivalent, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
-  canonicalGitDiffArgs, canonicalGitDiffHash, compactAggregatePhase1Evidence,
+  canonicalGitDiffArgs, canonicalGitDiffHash, canonicalPhase1FinalSourceWireProjection, compactAggregatePhase1Evidence,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
@@ -28,7 +28,7 @@ import {
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -796,6 +796,115 @@ test("Phase 1 aggregate final-source compactor preserves only the exact maintena
   assert.equal(Object.hasOwn(omittedMaintenance, "maintenanceStatus"), false);
   assert.notDeepEqual(nullMaintenance, omittedMaintenance);
   assert.notEqual(hashValue(nullMaintenance), hashValue(omittedMaintenance));
+});
+
+test("PR268 final-source maintenanceStatus dual-read cutover regression matrix 29/29", async (t) => {
+  const cutover = ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1;
+  const identity = { repository: cutover.repository, pr: cutover.pr, branch: cutover.branch, baseSha: cutover.protectedBase };
+  const phase1WithNull = {
+    schemaVersion: cutover.phase1SchemaVersion,
+    checkName: "Phase 1 / Admission Decision",
+    result: "PHASE_1_ACCEPTABLE",
+    mode: "READY_MERGE_AUTHORITY",
+    acceptable: true,
+    mergeAuthorityGranted: false,
+    repository: cutover.repository,
+    pr: cutover.pr,
+    headRef: cutover.branch,
+    headSha: "1".repeat(40),
+    sourceTree: "2".repeat(40),
+    baseRef: "main",
+    baseSha: cutover.protectedBase,
+    evaluatorSha: cutover.protectedBase,
+    action: "ready_for_review",
+    eventUpdatedAt: "2026-08-26T01:12:01Z",
+    draft: false,
+    runId: 32919958584,
+    runAttempt: 1,
+    lifecycleGeneration: "3".repeat(64),
+    requiredLanes: 13,
+    rawPassedLanes: 13,
+    rawFailedLanes: 0,
+    blockingFindingCount: 0,
+    nonBlockingAssuranceFindingCount: 0,
+    deferredExternalCount: 0,
+    affectedRiskDomains: ["CI-test-infrastructure"],
+    maintenanceStatus: null,
+    currentRulesetStage: "FINAL_AGGREGATE_ONLY",
+    publisherAnchorHash: "4".repeat(64),
+    publisherProvisioningReadbackHash: "5".repeat(64),
+    phase1SourceDecisionHash: "6".repeat(64),
+    decisionHash: "7".repeat(64),
+  };
+  const canonicalPhase1 = canonicalPhase1FinalSourceWireProjection({ value: phase1WithNull, identity });
+  const canonical = {
+    type: "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1",
+    repository: cutover.repository,
+    pr: cutover.pr,
+    branch: cutover.branch,
+    protectedBase: cutover.protectedBase,
+    objective: cutover.objective,
+    originalCommentId: cutover.originalCommentId,
+    originalSubjectHash: "d".repeat(64),
+    receiptLifecycleContract: cutover.receiptLifecycleContract,
+    finalHead: phase1WithNull.headSha,
+    finalTree: phase1WithNull.sourceTree,
+    repositoryReview: { commentId: 5419433297, subjectHash: "8".repeat(64), disposition: { P0: 0, P1: 0, launchImpactingP2: 0 }, valid: true },
+    phase1: canonicalPhase1,
+    authority: { product: false, database: false, provider: false, build: false, submission: false, ota: false, publicRelease: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+  };
+  const explicitNull = structuredClone(canonical);
+  explicitNull.phase1.maintenanceStatus = null;
+  const mutate = (change) => { const value = structuredClone(canonical); change(value); return value; };
+  const keyOf = (subject) => ({ repository: subject.repository, pr: subject.pr, branch: subject.branch, finalHead: subject.finalHead, finalTree: subject.finalTree, objective: subject.objective, originalCommentId: subject.originalCommentId });
+  const requiredKey = keyOf(canonical);
+  const classify = (subject) => {
+    const key = keyOf(subject);
+    if (stableJson(key) !== stableJson(requiredKey)) return { valid: true, key, disposition: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION" };
+    return { valid: architectureFinalSourceSubjectsWireEquivalent(subject, canonical), key, disposition: "INVALID_CURRENT_FINAL_SOURCE_ATTESTATION" };
+  };
+  const canonicalBody = architectureFinalSourceOwnerCommentBody(canonical);
+  const explicitNullBody = architectureFinalSourceOwnerCommentBody(explicitNull);
+  const nonNull = mutate((value) => { value.phase1.maintenanceStatus = "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED"; });
+  const wrongMaintenance = mutate((value) => { value.phase1.maintenanceStatus = "UNTRUSTED_MAINTENANCE_CLASSIFICATION"; });
+  const arbitraryNull = mutate((value) => { value.repositoryReview.profile = null; });
+  const arbitraryOmission = mutate((value) => { delete value.repositoryReview.profile; });
+  const stale = mutate((value) => { value.finalHead = "9".repeat(40); value.phase1.headSha = value.finalHead; });
+  const canonicalPlusStale = selectCurrentImmutableEvidence({ candidates: [stale, canonical], requiredKey, classify });
+  const cases = [
+    ["01 canonical writer omits semantic null", () => assert.equal(Object.hasOwn(canonicalPhase1, "maintenanceStatus"), false)],
+    ["02 explicit null is accepted at the exact boundary", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(explicitNull, canonical), true)],
+    ["03 omitted and null normalize symmetrically", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(canonical, explicitNull), true)],
+    ["04 canonical issuance is deterministic", () => assert.equal(canonicalBody, architectureFinalSourceOwnerCommentBody(structuredClone(canonical)))],
+    ["05 raw immutable bodies remain representation-distinct", () => assert.notEqual(canonicalBody, explicitNullBody)],
+    ["06 non-null maintenance status is preserved", () => assert.equal(canonicalPhase1FinalSourceWireProjection({ value: { ...phase1WithNull, maintenanceStatus: nonNull.phase1.maintenanceStatus }, identity }).maintenanceStatus, nonNull.phase1.maintenanceStatus)],
+    ["07 non-null maintenance mismatch is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(nonNull, canonical), false)],
+    ["08 wrong maintenance value is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(wrongMaintenance, canonical), false)],
+    ["09 arbitrary null/omission mismatch is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(arbitraryNull, arbitraryOmission), false)],
+    ["10 wrong repository is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.repository = "Elsewhere/repository"; }), canonical), false)],
+    ["11 wrong PR is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.pr = 269; }), canonical), false)],
+    ["12 wrong protected base is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.protectedBase = "a".repeat(40); }), canonical), false)],
+    ["13 wrong branch is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.branch = "codex/other"; }), canonical), false)],
+    ["14 wrong task objective is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.objective = PHASE1_ADMISSION_RULESET_CUTOVER_V1; }), canonical), false)],
+    ["15 wrong Owner receipt binding is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.originalCommentId += 1; }), canonical), false)],
+    ["16 wrong Owner identity is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.ownerIdentity.login = "attacker"; }), canonical), false)],
+    ["17 wrong review binding is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.repositoryReview.commentId += 1; }), canonical), false)],
+    ["18 stale head is rejected as current", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(stale, canonical), false)],
+    ["19 wrong tree is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.finalTree = "b".repeat(40); }), canonical), false)],
+    ["20 lifecycle epoch mismatch is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.phase1.lifecycleGeneration = "c".repeat(64); }), canonical), false)],
+    ["21 rollback across the schema boundary is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.phase1.schemaVersion = "PHASE1_ADMISSION_EVIDENCE_V0"; }), canonical), false)],
+    ["22 blocking-status mutation is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.phase1.blockingFindingCount = 1; }), canonical), false)],
+    ["23 merge-authority mutation is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.phase1.mergeAuthorityGranted = true; }), canonical), false)],
+    ["24 duplicate identical current receipts are rejected", () => { const selected = selectCurrentImmutableEvidence({ candidates: [canonical, structuredClone(canonical)], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 2); }],
+    ["25 semantically equivalent null/omission current receipts are rejected", () => { const selected = selectCurrentImmutableEvidence({ candidates: [canonical, explicitNull], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 2); }],
+    ["26 stale history remains non-authoritative beside one canonical current receipt", () => { assert.equal(canonicalPlusStale.ok, true); assert.equal(canonicalPlusStale.currentCount, 1); assert.equal(canonicalPlusStale.classifications.find(({ disposition }) => disposition === "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION")?.current, false); }],
+    ["27 source-authority mutation is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.phase1.phase1SourceDecisionHash = "e".repeat(64); }), canonical), false)],
+    ["28 task-authority mutation is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.originalSubjectHash = "f".repeat(64); }), canonical), false)],
+    ["29 publisher-authority mutation is rejected", () => assert.equal(architectureFinalSourceSubjectsWireEquivalent(mutate((value) => { value.phase1.publisherAnchorHash = "0".repeat(64); }), canonical), false)],
+  ];
+  assert.equal(cases.length, 29);
+  for (const [name, assertion] of cases) await t.test(name, assertion);
 });
 
 const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, objective = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, branch = "codex/finite-task-lease-amendment-control-plane-repair-v1" } = {}) => {

@@ -3266,6 +3266,37 @@ const aggregatePhase1EvidenceValue = (value) => value?.evidence ?? value?.decisi
 const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "maintenanceStatus", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
 export const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
 
+export const ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1 = Object.freeze({
+  repository: "Chillywood2025/chillywood-mobile",
+  pr: 268,
+  branch: "codex/pr264-prerequisite-closure-v2",
+  protectedBase: "4749eb9e56c2c60b35cf52ced525de60b46bb6f6",
+  objective: FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
+  originalCommentId: 5419003005,
+  receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
+  phase1SchemaVersion: "PHASE1_ADMISSION_EVIDENCE_V1",
+});
+
+const phase1MaintenanceStatusCutoverIdentity = ({ identity, evidence } = {}) => {
+  const cutover = ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1;
+  return identity?.repository === cutover.repository
+    && identity?.pr === cutover.pr
+    && identity?.branch === cutover.branch
+    && identity?.baseSha === cutover.protectedBase
+    && evidence?.schemaVersion === cutover.phase1SchemaVersion
+    && evidence?.repository === cutover.repository
+    && evidence?.pr === cutover.pr
+    && evidence?.headRef === cutover.branch
+    && evidence?.baseSha === cutover.protectedBase
+    && evidence?.evaluatorSha === cutover.protectedBase;
+};
+
+export const canonicalPhase1FinalSourceWireProjection = ({ value, identity } = {}) => {
+  const projected = compactAggregatePhase1Evidence(value);
+  if (phase1MaintenanceStatusCutoverIdentity({ identity, evidence: projected }) && projected.maintenanceStatus === null) delete projected.maintenanceStatus;
+  return projected;
+};
+
 export function phase1AdmissionPolicyForBase({ identity, root = REPOSITORY_ROOT } = {}) {
   const base = identity?.baseSha;
   if (!/^[0-9a-f]{40}$/u.test(base ?? "") || typedGit(root, ["cat-file", "-e", `${base}^{commit}`]).status !== 0) return "BASE_IDENTITY_UNAVAILABLE";
@@ -3297,7 +3328,7 @@ const verifyPhase1AdmissionEvidence = ({ phase1Evidence, identity, tree, root = 
   } catch {
     verified = { ok: false, findings: ["PHASE1_AGGREGATE_VERIFICATION_EXCEPTION"] };
   }
-  const evidence = compactAggregatePhase1Evidence(aggregatePhase1EvidenceValue(verified?.evidence ?? phase1Evidence));
+  const evidence = canonicalPhase1FinalSourceWireProjection({ value: aggregatePhase1EvidenceValue(verified?.evidence ?? phase1Evidence), identity });
   const valid = Boolean(verified?.ok === true
     && evidence?.result === PHASE1_ACCEPTABLE_RESULT
     && evidence?.mode === PHASE1_READY_MODE
@@ -3318,7 +3349,9 @@ const storedPhase1MatchesLive = ({ stored, live, identity, tree, root = REPOSITO
   if (!verified.ok) return false;
   if (verified.policy === "LEGACY_EXACT_13_OF_13") return true;
   const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity: { ...identity, tree }, mode: PHASE1_READY_MODE, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
-  return inspected.ok && stableJson(compactAggregatePhase1Evidence(inspected.evidence)) === stableJson(compactAggregatePhase1Evidence(verified.evidence));
+  return inspected.ok
+    && stableJson(canonicalPhase1FinalSourceWireProjection({ value: inspected.evidence, identity }))
+      === stableJson(canonicalPhase1FinalSourceWireProjection({ value: verified.evidence, identity }));
 };
 
 export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree, root = REPOSITORY_ROOT } = {}) {
@@ -3339,7 +3372,7 @@ export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, iden
     evidenceHash: phase1Evidence.evidenceHash,
     valid: true,
   };
-  return structuredClone(verified.evidence);
+  return canonicalPhase1FinalSourceWireProjection({ value: verified.evidence, identity });
 }
 
 export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1", objective = null, root = REPOSITORY_ROOT } = {}) {
@@ -3602,6 +3635,40 @@ const historicalArchitectureReviewProjection = (raws, identity) => (raws ?? []).
     ? { commentId: normalized.id, commentBodyHash: normalized.bodyHash, subjectHash: payload.subjectHash, reviewedHead: payload.subject.reviewedHead, reviewedTree: payload.subject.reviewedTree, disposition: payload.subject.disposition, status: "HISTORICAL_EXACT_HEAD_REVIEW" }
     : null;
 }).filter(Boolean).sort((left, right) => left.commentId - right.commentId);
+
+const architectureFinalSourceMaintenanceStatusCutoverSubject = (subject) => {
+  const cutover = ARCHITECTURE_FINAL_SOURCE_MAINTENANCE_STATUS_CUTOVER_V1;
+  const phase1 = subject?.phase1;
+  return subject?.type === "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_V1"
+    && subject?.repository === cutover.repository
+    && subject?.pr === cutover.pr
+    && subject?.branch === cutover.branch
+    && subject?.protectedBase === cutover.protectedBase
+    && subject?.objective === cutover.objective
+    && subject?.originalCommentId === cutover.originalCommentId
+    && subject?.receiptLifecycleContract === cutover.receiptLifecycleContract
+    && phase1?.schemaVersion === cutover.phase1SchemaVersion
+    && phase1?.repository === cutover.repository
+    && phase1?.pr === cutover.pr
+    && phase1?.headRef === cutover.branch
+    && phase1?.baseSha === cutover.protectedBase
+    && phase1?.evaluatorSha === cutover.protectedBase
+    && (!Object.hasOwn(phase1, "maintenanceStatus") || phase1.maintenanceStatus === null);
+};
+
+const normalizeArchitectureFinalSourceMaintenanceStatusCutover = (subject) => {
+  const normalized = structuredClone(subject);
+  if (architectureFinalSourceMaintenanceStatusCutoverSubject(normalized) && normalized.phase1.maintenanceStatus === null) delete normalized.phase1.maintenanceStatus;
+  return normalized;
+};
+
+export function architectureFinalSourceSubjectsWireEquivalent(left, right) {
+  if (stableJson(left) === stableJson(right)) return true;
+  if (!architectureFinalSourceMaintenanceStatusCutoverSubject(left) || !architectureFinalSourceMaintenanceStatusCutoverSubject(right)) return false;
+  return stableJson(normalizeArchitectureFinalSourceMaintenanceStatusCutover(left))
+    === stableJson(normalizeArchitectureFinalSourceMaintenanceStatusCutover(right));
+}
+
 export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], historicalRepositoryReviewRaws = [], repositoryReviewRaw, phase1Evidence, admissionPublisherProvisioningReadback = null, dependencyAmendmentRaw, dependencyAmendmentResolution = null, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
@@ -4587,8 +4654,10 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           && phase1Current
           && publisherProvisioningCurrent
           && subject.receiptLifecycleContract === ASSURANCE_RECEIPT_LIFECYCLE_V2
-          && stableJson(subject) === stableJson(expected)
-          && normalized.body === architectureFinalSourceOwnerCommentBody(expected);
+          && architectureFinalSourceSubjectsWireEquivalent(subject, expected)
+          && (normalized.body === architectureFinalSourceOwnerCommentBody(expected)
+            || architectureFinalSourceMaintenanceStatusCutoverSubject(subject)
+              && architectureFinalSourceMaintenanceStatusCutoverSubject(expected));
         return { valid: currentValid, key, value: { normalized, payload, phase1 }, disposition: "INVALID_CURRENT_FINAL_SOURCE_ATTESTATION" };
       },
     });
