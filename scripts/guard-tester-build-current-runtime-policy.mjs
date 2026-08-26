@@ -47,7 +47,7 @@ for (const [label, content] of docs) {
   forbidMatch(label, content, /Stripe Connect (?:is|now|currently)\s*(?:enabled|live|available)/i, "Stripe Connect live claim");
   forbidMatch(label, content, /merch checkout (?:is|now|currently)\s*(?:enabled|live|available)/i, "merch checkout live claim");
   forbidMatch(label, content, /provider refunds? (?:are|is|now|currently)\s*(?:automatic|automated|executable|enabled|live)/i, "provider refund automation claim");
-  forbidMatch(label, content, /(?:password|token|service-role key|api key|webhook secret)\s*[:=]\s*[`'\"]?[A-Za-z0-9_!@#$%^&*().+=/-]{8,}/i, "credential assignment");
+  forbidMatch(label, content, /(?:password|token|service-role key|api key|webhook secret)\s*[:=]\s*[`'"]?[A-Za-z0-9_!@#$%^&*().+=/-]{8,}/i, "credential assignment");
   forbidMatch(label, content, /(?:https?:\/\/[^\s)]*(?:X-Goog-Signature|token=|signature=|signed)[^\s)]*)/i, "signed URL");
   forbidMatch(label, content, /\b(?:\d{1,3}\.){3}\d{1,3}\b/, "raw IPv4 address");
   forbidMatch(label, content, /(?:AIza[0-9A-Za-z_-]{20,}|sk_(?:live|test)_[0-9A-Za-z]{16,}|rk_(?:live|test)_[0-9A-Za-z]{16,}|-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----|\"private_key\"\s*:|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,})/, "credential-like material");
