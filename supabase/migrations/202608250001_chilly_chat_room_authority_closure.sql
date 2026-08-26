@@ -1048,6 +1048,7 @@ alter table public."watch_party_room_memberships"
   add column if not exists "host_muted" boolean not null default false,
   add column if not exists "self_muted" boolean not null default false;
 
+begin;
 alter table public."watch_party_room_memberships"
   disable trigger "enforce_watch_party_room_membership_block_guard";
 update public."watch_party_room_memberships" membership
@@ -1078,6 +1079,19 @@ where room."party_id" = membership."party_id"
 -- Existing non-host presence admitted before a paid offer became authoritative
 -- is not carried forward. Exact current ticket holders remain present but are
 -- normalized to viewer/listener; everyone else must re-enter after proof.
+-- The bounded block check requires the same two-part service provenance as its
+-- runtime callers. Supply that provenance only for this trusted cutover DML;
+-- the explicit transaction, temporary grant, and resets prevent it becoming
+-- ambient authority for later statements or application sessions.
+grant execute on function
+  public."watch_party_room_self_access_allowed_internal"(text, text)
+  to service_role;
+set local role service_role;
+select pg_catalog.set_config(
+  'request.jwt.claims',
+  '{"role":"service_role"}',
+  true
+);
 update public."watch_party_room_memberships" membership
 set
   "role" = 'viewer',
@@ -1116,8 +1130,14 @@ where room."party_id" = membership."party_id"
         'sandbox', 'active', 'paused', 'sold_out', 'blocked'
       )
   );
+set local role postgres;
+select pg_catalog.set_config('request.jwt.claims', '{}', true);
+revoke execute on function
+  public."watch_party_room_self_access_allowed_internal"(text, text)
+  from service_role;
 alter table public."watch_party_room_memberships"
   enable trigger "enforce_watch_party_room_membership_block_guard";
+commit;
 
 create or replace function public."enforce_watch_party_membership_identity"()
 returns trigger

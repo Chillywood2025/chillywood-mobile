@@ -1,5 +1,5 @@
 begin;
-select plan(142);
+select plan(144);
 
 -- Contract and ACL surface (1-15).
 select has_function('public', 'can_access_chat_thread', array['uuid'], '1. exact chat membership helper exists');
@@ -32,6 +32,23 @@ select ok(
   and not has_column_privilege('authenticated', 'public.communication_rooms', 'content_access_rule', 'UPDATE')
   and has_column_privilege('authenticated', 'public.communication_rooms', 'last_activity_at', 'UPDATE'),
   '15a. communication room identity/access scope is immutable while bounded heartbeat remains writable'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.watch_party_room_self_access_allowed_internal(text,text)',
+    'EXECUTE'
+  ),
+  '15b. the paid-room internal authority helper remains private after cutover'
+);
+select is(
+  (select trigger_state.tgenabled::text
+   from pg_trigger trigger_state
+   where trigger_state.tgrelid = 'public.watch_party_room_memberships'::regclass
+     and trigger_state.tgname = 'enforce_watch_party_room_membership_block_guard'
+     and not trigger_state.tgisinternal),
+  'O',
+  '15c. the membership block guard is enabled after cutover'
 );
 
 insert into auth.users (id, is_sso_user, is_anonymous)
