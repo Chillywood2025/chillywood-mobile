@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(52);
+select plan(55);
 
 select is(public.media_scan_public_safe('clean'), true,
   'only an explicit clean result is public-safe');
@@ -688,6 +688,38 @@ select is(
   1,
   'legacy revocation leaves one exact single-use deleted reservation'
 );
+
+select is(
+  (select trigger_state.tgenabled::text
+   from pg_trigger trigger_state
+   where trigger_state.tgrelid = 'public.videos'::regclass
+     and trigger_state.tgname = 'enforce_videos_account_access_guard'
+     and not trigger_state.tgisinternal),
+  'O',
+  'the restricted-account video guard is enabled after cutover remediation'
+);
+
+select is(
+  (select trigger_state.tgenabled::text
+   from pg_trigger trigger_state
+   where trigger_state.tgrelid = 'public.user_profiles'::regclass
+     and trigger_state.tgname = 'zz_guard_profile_media_client_authority'
+     and not trigger_state.tgisinternal),
+  'O',
+  'the profile-media runtime guard is enabled after cutover remediation'
+);
+
+update auth.users
+set banned_until = transaction_timestamp() + interval '1 hour'
+where id = '11111111-1111-4111-8111-111111111111';
+
+select throws_ok($sql$
+  update public.videos
+  set title = 'Restricted owner runtime write',
+      updated_at = transaction_timestamp()
+  where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+$sql$, 'P0001', 'account_access_restricted',
+  'restricted owners remain unable to mutate creator video rows after cutover');
 
 reset role;
 select * from finish();

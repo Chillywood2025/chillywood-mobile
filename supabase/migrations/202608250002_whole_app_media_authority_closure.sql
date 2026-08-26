@@ -1184,6 +1184,16 @@ begin
 end;
 $$;
 
+-- These are trusted, one-time security reductions for existing rows. The
+-- ordinary account-access trigger rejects every write owned by a restricted
+-- account, including platform-authored quarantine. Disable only that named
+-- trigger for the two cutover updates; ALTER TABLE holds the table lock until
+-- this migration transaction restores it, while every other integrity trigger
+-- remains active.
+begin;
+alter table public.videos
+  disable trigger "enforce_videos_account_access_guard";
+
 -- Existing rows that cannot prove source ownership are quarantined rather than
 -- silently grandfathered into public delivery.
 update public.videos video
@@ -1225,6 +1235,10 @@ set thumb_url = null,
     updated_at = transaction_timestamp()
 where video.thumb_url is not null
    or video.thumb_storage_path is not null;
+
+alter table public.videos
+  enable trigger "enforce_videos_account_access_guard";
+commit;
 
 -- The social metadata policy had schema support for R2 but omitted the exact
 -- private-origin provider/bucket pair, causing every current-origin attachment
@@ -1760,7 +1774,13 @@ create trigger zz_guard_profile_media_client_authority
 
 -- Convert only exact current-project profile-media objects to the private
 -- gated proxy. Unknown/external origins are removed, because a URL itself is
--- never scan or profile authority.
+-- never scan or profile authority. Existing rows may have independently stale
+-- avatar/background values, so the new runtime guard cannot validate either
+-- field until both reductions finish. Disable only that newly-created guard in
+-- one explicit transaction and restore it before the transaction is visible.
+begin;
+alter table public.user_profiles
+  disable trigger "zz_guard_profile_media_client_authority";
 update public.user_profiles
 set avatar_url = case
       when public.profile_media_storage_object_valid(
@@ -1804,6 +1824,10 @@ set profile_background_url = case
     end,
     updated_at = now()
 where profile_background_url is not null;
+
+alter table public.user_profiles
+  enable trigger "zz_guard_profile_media_client_authority";
+commit;
 
 alter table public.media_security_audit_events
   drop constraint if exists media_security_audit_events_action_check;
