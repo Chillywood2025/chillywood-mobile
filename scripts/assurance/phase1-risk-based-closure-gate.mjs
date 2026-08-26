@@ -17,6 +17,7 @@ const TRUST_PATHS = new Set([
 ]);
 const BOOTSTRAP_MAXIMUM_FILES = 4;
 const BOOTSTRAP_MAXIMUM_NET_LINES = 800;
+const GATE_PATH = "scripts/assurance/phase1-risk-based-closure-gate.mjs";
 
 const stableJson = (value) => {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
@@ -78,6 +79,7 @@ export function evaluateRiskBasedClosureFallback({
   highRiskDomains,
   protectedReadyDecision = null,
   protectedMainRuntime = null,
+  bootstrapAllowed = false,
 } = {}) {
   const findings = [];
   const pull = event?.pull_request;
@@ -121,7 +123,7 @@ export function evaluateRiskBasedClosureFallback({
   if (protectedMainRuntime?.pendingTerminalTruth === true) findings.push("PHASE1_RISK_CLOSURE_PENDING_TERMINAL_TRUTH");
 
   const touchesTrust = files.some((file) => TRUST_PATHS.has(file));
-  const bootstrap = touchesTrust;
+  const bootstrap = touchesTrust && bootstrapAllowed === true;
   if (bootstrap) {
     const exactBootstrapScope = files.length <= BOOTSTRAP_MAXIMUM_FILES
       && scope.netChangedLines <= BOOTSTRAP_MAXIMUM_NET_LINES
@@ -168,6 +170,7 @@ const readProtectedJson = (baseSha, repoPath) => {
   if (result.status !== 0) return null;
   try { return JSON.parse(result.stdout); } catch { return null; }
 };
+const protectedPathExists = (baseSha, repoPath) => git(["cat-file", "-e", `${baseSha}:${repoPath}`]).status === 0;
 
 const runProtectedPrScope = ({ baseSha, eventPath }) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "phase1-risk-base-"));
@@ -208,9 +211,11 @@ export function runPhase1RiskBasedClosureGate({ eventPath = process.env.GITHUB_E
   if (!readback) return 1;
 
   const touchesTrust = scope.files.some((file) => TRUST_PATHS.has(file));
-  const protectedReadyDecision = touchesTrust ? null : runProtectedPrScope({ baseSha, eventPath });
-  const decision = evaluateRiskBasedClosureFallback({ closureResult, event, readback, scope, highRiskDomains, protectedReadyDecision, protectedMainRuntime });
-  process.stdout.write(`${JSON.stringify({ command: "phase1:risk-based-closure-gate", ...decision, changedFiles: scope.files.length, highRiskDomains })}\n`);
+  const gateAlreadyProtected = protectedPathExists(baseSha, GATE_PATH);
+  const bootstrapAllowed = touchesTrust && !gateAlreadyProtected;
+  const protectedReadyDecision = bootstrapAllowed ? null : runProtectedPrScope({ baseSha, eventPath });
+  const decision = evaluateRiskBasedClosureFallback({ closureResult, event, readback, scope, highRiskDomains, protectedReadyDecision, protectedMainRuntime, bootstrapAllowed });
+  process.stdout.write(`${JSON.stringify({ command: "phase1:risk-based-closure-gate", ...decision, changedFiles: scope.files.length, highRiskDomains, gateAlreadyProtected })}\n`);
   return decision.ok ? 0 : 1;
 }
 
