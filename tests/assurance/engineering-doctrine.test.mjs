@@ -7,20 +7,20 @@ import path from "node:path";
 import test from "node:test";
 import {
   CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
-  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, PHASE1_ADMISSION_RULESET_CUTOVER_V1, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1, PHASE1_REQUIRED_JOB_NAMES, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
+  ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, PHASE1_ADMISSION_RULESET_CUTOVER_V1, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1, PHASE1_REQUIRED_JOB_NAMES, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, PHASE1_RISK_BASED_ADMISSION_REFORM_V1, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
-  architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
+  architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureFinalSourceSubjectsWireEquivalent, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject,
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
-  canonicalGitDiffArgs, canonicalGitDiffHash,
+  canonicalGitDiffArgs, canonicalGitDiffHash, canonicalPhase1FinalSourceWireProjection, canonicalReceiptEvidenceWireProjection, compactAggregatePhase1Evidence, compareReceiptEvidenceSemantics,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
   createTaskLocalDomainGraphDelta, createTaskLocalEdgeDisposition,
   evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
-  inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit,
+  inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, normalizeReceiptEvidenceSemantics, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
   verifyArchitectureDependencyAmendment, verifyArchitectureDependencyWitnessAmendment, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
   phase1AdmissionPolicyForBase, phase1AdmissionPublisherProvisioningReadback, phase1AdmissionPublisherProvisioningReadbackValid, PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1, projectPhase1AdmissionFinalSourceEvidence, selectFiniteTaskTerminalTruthOwnerReceipts, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyPhase1AdmissionEvidenceForMerge, verifyPhase1RunEvidence,
@@ -28,7 +28,7 @@ import {
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -776,6 +776,199 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...metadataScope, additions: 73 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE/u);
 });
 
+test("Phase 1 aggregate final-source compactor preserves only the exact maintenance-aware projection", () => {
+  const expectedKeys = [
+    "acceptable", "action", "affectedRiskDomains", "baseRef", "baseSha", "blockingFindingCount", "checkName", "currentRulesetStage", "decisionHash", "deferredExternalCount", "draft", "evaluatorSha", "eventUpdatedAt", "headRef", "headSha", "lifecycleGeneration", "maintenanceStatus", "mergeAuthorityGranted", "mode", "nonBlockingAssuranceFindingCount", "phase1SourceDecisionHash", "pr", "publisherAnchorHash", "publisherProvisioningReadbackHash", "rawFailedLanes", "rawPassedLanes", "repository", "requiredLanes", "result", "runAttempt", "runId", "schemaVersion", "sourceTree",
+  ];
+  const aggregate = Object.fromEntries(expectedKeys.map((key) => [key, `value:${key}`]));
+  aggregate.maintenanceStatus = "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED";
+  aggregate.foreignAuthority = "MUST_NOT_PROJECT";
+  const projected = compactAggregatePhase1Evidence(aggregate);
+  assert.deepEqual(Object.keys(projected).sort(), expectedKeys);
+  assert.equal(projected.maintenanceStatus, "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED");
+  assert.equal(Object.hasOwn(projected, "foreignAuthority"), false);
+
+  const nullMaintenance = compactAggregatePhase1Evidence({ ...aggregate, maintenanceStatus: null });
+  assert.equal(Object.hasOwn(nullMaintenance, "maintenanceStatus"), true);
+  assert.equal(nullMaintenance.maintenanceStatus, null);
+
+  const omittedMaintenance = compactAggregatePhase1Evidence({ ...aggregate, maintenanceStatus: undefined });
+  assert.equal(Object.hasOwn(omittedMaintenance, "maintenanceStatus"), false);
+  assert.notDeepEqual(nullMaintenance, omittedMaintenance);
+  assert.notEqual(hashValue(nullMaintenance), hashValue(omittedMaintenance));
+});
+
+test("generic receipt semantic-normalization adversarial matrix 52/52", async (t) => {
+  const D = RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS;
+  const policy = RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1;
+  const rule = policy.fields[0];
+  const schemaVersion = rule.receiptSchemaVersionRange.maximum;
+  const identity = {
+    repository: "Chillywood2025/chillywood-mobile",
+    pr: 900,
+    branch: "codex/generic-receipt-semantics-fixture",
+    baseSha: "a".repeat(40),
+    headSha: "b".repeat(40),
+  };
+  const phase1WithNull = {
+    schemaVersion: rule.evidenceSchemaVersions[0],
+    checkName: "Phase 1 / Admission Decision",
+    result: "PHASE_1_ACCEPTABLE",
+    mode: "READY_MERGE_AUTHORITY",
+    acceptable: true,
+    mergeAuthorityGranted: false,
+    repository: identity.repository,
+    pr: identity.pr,
+    headRef: identity.branch,
+    headSha: identity.headSha,
+    sourceTree: "c".repeat(40),
+    baseRef: "main",
+    baseSha: identity.baseSha,
+    evaluatorSha: identity.baseSha,
+    action: "ready_for_review",
+    eventUpdatedAt: "2026-08-26T03:00:00Z",
+    draft: false,
+    runId: 33000000000,
+    runAttempt: 1,
+    lifecycleGeneration: "d".repeat(64),
+    requiredLanes: 13,
+    rawPassedLanes: 13,
+    rawFailedLanes: 0,
+    blockingFindingCount: 0,
+    nonBlockingAssuranceFindingCount: 0,
+    deferredExternalCount: 0,
+    affectedRiskDomains: ["CI-test-infrastructure"],
+    maintenanceStatus: null,
+    currentRulesetStage: "FINAL_AGGREGATE_ONLY",
+    publisherAnchorHash: "e".repeat(64),
+    publisherProvisioningReadbackHash: "f".repeat(64),
+    phase1SourceDecisionHash: "1".repeat(64),
+    decisionHash: "2".repeat(64),
+  };
+  const canonicalPhase1 = canonicalPhase1FinalSourceWireProjection({ value: phase1WithNull, identity });
+  const canonical = {
+    type: rule.receiptType,
+    repository: identity.repository,
+    pr: identity.pr,
+    branch: identity.branch,
+    protectedBase: identity.baseSha,
+    objective: "GENERIC_RECEIPT_SEMANTIC_NORMALIZATION_FIXTURE_V1",
+    scope: { changedPaths: ["scripts/assurance/engineering-closure.mjs"], diffHash: "3".repeat(64) },
+    originalCommentId: 910001,
+    originalSubjectHash: "4".repeat(64),
+    receiptLifecycleContract: rule.lifecycleContracts[0],
+    finalHead: identity.headSha,
+    finalTree: phase1WithNull.sourceTree,
+    repositoryReview: {
+      commentId: 910002,
+      subjectHash: "5".repeat(64),
+      disposition: { P0: 0, P1: 0, launchImpactingP2: 0, P3: 0 },
+      securityDisposition: "NO_BLOCKING_FINDINGS",
+      valid: true,
+    },
+    phase1: canonicalPhase1,
+    authority: { product: false, database: false, provider: false, build: false, submission: false, ota: false, publicRelease: false, moneyMovement: false },
+    ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
+  };
+  const legacyNull = structuredClone(canonical);
+  legacyNull.phase1.maintenanceStatus = null;
+  const mutate = (change, source = canonical) => { const value = structuredClone(source); change(value); return value; };
+  const compare = (left, right = canonical, options = {}) => compareReceiptEvidenceSemantics({ left, right, leftSchemaVersion: schemaVersion, rightSchemaVersion: schemaVersion, ...options });
+  const normalize = (rawRepresentation, options = {}) => normalizeReceiptEvidenceSemantics({ rawRepresentation, schemaVersion, ...options });
+  const keyOf = (subject) => ({
+    repository: subject.repository,
+    pr: subject.pr,
+    branch: subject.branch,
+    protectedBase: subject.protectedBase,
+    finalHead: subject.finalHead,
+    finalTree: subject.finalTree,
+    objective: subject.objective,
+    scope: subject.scope,
+    originalCommentId: subject.originalCommentId,
+    ownerIdentity: subject.ownerIdentity,
+    repositoryReviewCommentId: subject.repositoryReview?.commentId,
+    lifecycleGeneration: subject.phase1?.lifecycleGeneration,
+  });
+  const requiredKey = keyOf(canonical);
+  const classify = (candidate) => {
+    const authorityClassification = candidate.authorityClassification ?? "CURRENT";
+    const normalized = normalize(candidate.subject, { authorityClassification });
+    const key = keyOf(candidate.subject);
+    if (normalized.compatibilityDisposition === D.MALFORMED_BLOCKING) return { valid: false, key: null, value: normalized, disposition: D.MALFORMED_BLOCKING };
+    if (authorityClassification === "HISTORICAL") return { valid: true, key, value: normalized, disposition: D.HISTORICAL_NON_AUTHORITATIVE };
+    const comparison = compare(candidate.subject);
+    return { valid: comparison.equal, key, value: comparison, disposition: comparison.compatibilityDisposition };
+  };
+  const current = (subject) => ({ subject, authorityClassification: "CURRENT" });
+  const historical = (subject) => ({ subject, authorityClassification: "HISTORICAL" });
+  const staleOmitted = mutate((value) => { value.finalHead = "6".repeat(40); value.phase1.headSha = value.finalHead; });
+  const staleNull = mutate((value) => { value.finalHead = "7".repeat(40); value.phase1.headSha = value.finalHead; value.phase1.maintenanceStatus = null; });
+  const canonicalNormalization = normalize(canonical);
+  const legacyNormalization = normalize(legacyNull);
+  const compatibleComparison = compare(legacyNull);
+  const canonicalBody = architectureFinalSourceOwnerCommentBody(canonical);
+  const legacyBody = architectureFinalSourceOwnerCommentBody(legacyNull);
+  const unapprovedOmitted = structuredClone(canonical);
+  const unapprovedNull = mutate((value) => { value.repositoryReview.unapprovedOptionalField = null; });
+  const nonNull = mutate((value) => { value.phase1.maintenanceStatus = "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED"; });
+  const cases = [
+    ["01 policy is generic and has no repository, PR, branch, base, head, or tree exception", () => assert.deepEqual(["repository", "pr", "branch", "protectedBase", "head", "tree"].filter((field) => Object.hasOwn(rule.cutoverBoundary, field)), [])],
+    ["02 policy approves only the explicit maintenanceStatus field", () => assert.deepEqual(policy.fields.map(({ fieldPath }) => fieldPath), ["phase1.maintenanceStatus"])],
+    ["03 policy declares version, legacy, canonical, normalized, and authority sensitivity", () => assert.deepEqual({ range: rule.receiptSchemaVersionRange, legacy: rule.allowedLegacyRepresentation, current: rule.canonicalCurrentRepresentation, normalized: rule.normalizedSemanticValue, authorityChanging: rule.authorityChanging }, { range: { minimum: 1, maximum: 1 }, legacy: "EXPLICIT_NULL", current: "OMITTED", normalized: null, authorityChanging: false })],
+    ["04 policy and nested selectors are immutable", () => assert.equal([policy, policy.fields, rule, rule.receiptSchemaVersionRange, rule.lifecycleContracts, rule.evidenceSchemaVersions, rule.cutoverBoundary].every(Object.isFrozen), true)],
+    ["05 all five required compatibility dispositions are exact", () => assert.deepEqual(Object.values(D).sort(), ["CANONICAL_CURRENT", "COMPATIBLE_LEGACY_REPRESENTATION", "HISTORICAL_NON_AUTHORITATIVE", "MALFORMED_BLOCKING", "SEMANTIC_MISMATCH_BLOCKING"].sort())],
+    ["06 normalizer exposes the exact audit envelope", () => assert.deepEqual(Object.keys(canonicalNormalization).sort(), ["compatibilityDisposition", "normalizedSemantics", "rawRepresentation", "schemaVersion"])],
+    ["07 rawRepresentation remains exact and separately cloned", () => { assert.deepEqual(legacyNormalization.rawRepresentation, legacyNull); assert.notEqual(legacyNormalization.rawRepresentation, legacyNull); assert.equal(Object.hasOwn(legacyNormalization.rawRepresentation.phase1, "maintenanceStatus"), true); }],
+    ["08 schemaVersion remains explicit in the audit envelope", () => assert.equal(legacyNormalization.schemaVersion, schemaVersion)],
+    ["09 canonical omitted representation classifies CANONICAL_CURRENT", () => assert.equal(canonicalNormalization.compatibilityDisposition, D.CANONICAL_CURRENT)],
+    ["10 compatible explicit-null representation classifies COMPATIBLE_LEGACY_REPRESENTATION", () => assert.equal(legacyNormalization.compatibilityDisposition, D.COMPATIBLE_LEGACY_REPRESENTATION)],
+    ["11 historical representation classifies HISTORICAL_NON_AUTHORITATIVE", () => assert.equal(normalize(legacyNull, { authorityClassification: "HISTORICAL" }).compatibilityDisposition, D.HISTORICAL_NON_AUTHORITATIVE)],
+    ["12 semantic difference classifies SEMANTIC_MISMATCH_BLOCKING", () => assert.equal(compare(nonNull).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["13 malformed schema classifies MALFORMED_BLOCKING", () => assert.equal(normalizeReceiptEvidenceSemantics({ rawRepresentation: canonical, schemaVersion: "1" }).compatibilityDisposition, D.MALFORMED_BLOCKING)],
+    ["14 A approved omission and null are semantically equivalent", () => { assert.equal(compatibleComparison.equal, true); assert.equal(compatibleComparison.semanticallyEquivalent, true); assert.equal(compatibleComparison.compatibilityDisposition, D.COMPATIBLE_LEGACY_REPRESENTATION); }],
+    ["15 approved omission and null normalize to the same semantic object", () => { assert.deepEqual(canonicalNormalization.normalizedSemantics, legacyNormalization.normalizedSemantics); assert.equal(legacyNormalization.normalizedSemantics.phase1.maintenanceStatus, null); }],
+    ["16 exact final-source comparator is symmetric across approved representations", () => { assert.equal(architectureFinalSourceSubjectsWireEquivalent(canonical, legacyNull), true); assert.equal(architectureFinalSourceSubjectsWireEquivalent(legacyNull, canonical), true); }],
+    ["17 canonical writer deterministically omits the approved semantic null", () => { const first = canonicalReceiptEvidenceWireProjection({ rawRepresentation: legacyNull, schemaVersion }); const second = canonicalReceiptEvidenceWireProjection({ rawRepresentation: structuredClone(legacyNull), schemaVersion }); assert.deepEqual(first, second); assert.equal(Object.hasOwn(first.phase1, "maintenanceStatus"), false); }],
+    ["18 aggregate writer uses the same canonical representation", () => assert.equal(Object.hasOwn(canonicalPhase1FinalSourceWireProjection({ value: phase1WithNull, identity }), "maintenanceStatus"), false)],
+    ["19 immutable raw bodies and hashes remain representation-distinct", () => { assert.notEqual(canonicalBody, legacyBody); assert.notEqual(hashValue(canonicalBody), hashValue(legacyBody)); }],
+    ["20 B omitted versus null on an unapproved field blocks", () => { const result = compare(unapprovedNull, unapprovedOmitted); assert.equal(result.equal, false); assert.equal(result.compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING); }],
+    ["21 C approved-field null versus non-null blocks", () => assert.equal(compare(legacyNull, nonNull).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["22 non-null maintenance value is preserved exactly by the canonical writer", () => assert.equal(canonicalReceiptEvidenceWireProjection({ rawRepresentation: nonNull, schemaVersion }).phase1.maintenanceStatus, nonNull.phase1.maintenanceStatus)],
+    ["23 D false versus omitted blocks", () => assert.equal(compare(mutate((value) => { value.phase1.maintenanceStatus = false; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["24 E zero versus omitted blocks", () => assert.equal(compare(mutate((value) => { value.phase1.maintenanceStatus = 0; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["25 F empty string versus null blocks", () => assert.equal(compare(mutate((value) => { value.phase1.maintenanceStatus = ""; }), legacyNull).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["26 present undefined is malformed rather than normalized", () => assert.equal(normalize(mutate((value) => { value.phase1.maintenanceStatus = undefined; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
+    ["27 wrong repository remains a semantic mismatch", () => assert.equal(compare(mutate((value) => { value.repository = "attacker/fork"; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["28 wrong PR remains a semantic mismatch", () => assert.equal(compare(mutate((value) => { value.pr += 1; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["29 wrong branch remains a semantic mismatch", () => assert.equal(compare(mutate((value) => { value.branch = "attacker/branch"; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["30 I wrong protected base remains a semantic mismatch", () => assert.equal(compare(mutate((value) => { value.protectedBase = "8".repeat(40); })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["31 H wrong current head cannot grant current authority", () => { const forged = mutate((value) => { value.finalHead = "9".repeat(40); value.phase1.headSha = value.finalHead; }); const comparison = compare(forged); const selected = selectCurrentImmutableEvidence({ candidates: [current(forged)], requiredKey, classify }); assert.equal(comparison.compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 0); }],
+    ["32 wrong tree remains a semantic mismatch", () => assert.equal(compare(mutate((value) => { value.finalTree = "0".repeat(40); })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["33 wrong task and scope remain semantic mismatches", () => { assert.equal(compare(mutate((value) => { value.objective = "ATTACKER_TASK"; })).equal, false); assert.equal(compare(mutate((value) => { value.scope.diffHash = "0".repeat(64); })).equal, false); }],
+    ["34 wrong Owner identity, receipt, or authority remains strict", () => { assert.equal(compare(mutate((value) => { value.ownerIdentity.login = "attacker"; })).equal, false); assert.equal(compare(mutate((value) => { value.originalCommentId += 1; })).equal, false); assert.equal(compare(mutate((value) => { value.authority.product = true; })).equal, false); }],
+    ["35 wrong exact-head review or security disposition remains strict", () => { assert.equal(compare(mutate((value) => { value.repositoryReview.commentId += 1; })).equal, false); assert.equal(compare(mutate((value) => { value.repositoryReview.securityDisposition = "BLOCKING"; })).equal, false); }],
+    ["36 stale lifecycle and draft-ready changes remain strict", () => { assert.equal(compare(mutate((value) => { value.phase1.lifecycleGeneration = "0".repeat(64); })).equal, false); assert.equal(compare(mutate((value) => { value.phase1.draft = true; })).equal, false); }],
+    ["37 blocking, risk, and maintenance classification changes remain strict", () => { assert.equal(compare(mutate((value) => { value.phase1.blockingFindingCount = 1; })).equal, false); assert.equal(compare(mutate((value) => { value.phase1.affectedRiskDomains = ["database-runtime"]; })).equal, false); assert.equal(compare(nonNull).equal, false); }],
+    ["38 source, publisher, and merge authority changes remain strict", () => { assert.equal(compare(mutate((value) => { value.phase1.phase1SourceDecisionHash = "0".repeat(64); })).equal, false); assert.equal(compare(mutate((value) => { value.phase1.publisherAnchorHash = "0".repeat(64); })).equal, false); assert.equal(compare(mutate((value) => { value.phase1.mergeAuthorityGranted = true; })).equal, false); }],
+    ["39 G stale-head compatible receipt is historical only", () => { const result = normalize(staleNull, { authorityClassification: "HISTORICAL" }); const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleNull)], requiredKey, classify }); assert.equal(result.compatibilityDisposition, D.HISTORICAL_NON_AUTHORITATIVE); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 0); }],
+    ["40 J duplicate exact-current receipts block cardinality", () => { const selected = selectCurrentImmutableEvidence({ candidates: [current(canonical), current(structuredClone(canonical))], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 2); }],
+    ["41 two semantically equivalent current wire variants still block cardinality", () => { const selected = selectCurrentImmutableEvidence({ candidates: [current(canonical), current(legacyNull)], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 2); }],
+    ["42 K one current plus multiple compatible historical receipts passes", () => { const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleOmitted), current(canonical), historical(staleNull)], requiredKey, classify }); assert.equal(selected.ok, true); assert.equal(selected.currentCount, 1); assert.equal(selected.classifications.filter(({ disposition }) => disposition === D.HISTORICAL_NON_AUTHORITATIVE).length, 2); }],
+    ["43 historical receipts remain raw, visible, immutable, and non-current", () => { const audit = normalize(staleNull, { authorityClassification: "HISTORICAL" }); const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleNull), current(canonical)], requiredKey, classify }); const record = selected.classifications.find(({ disposition }) => disposition === D.HISTORICAL_NON_AUTHORITATIVE); assert.equal(record.current, false); assert.deepEqual(audit.rawRepresentation, staleNull); assert.notEqual(audit.rawRepresentation, staleNull); assert.equal(Object.hasOwn(audit.rawRepresentation.phase1, "maintenanceStatus"), true); }],
+    ["44 historical receipt cannot grant current authority by itself", () => { const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleOmitted), historical(staleNull)], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 0); }],
+    ["45 L malformed schema version blocks", () => assert.equal(normalizeReceiptEvidenceSemantics({ rawRepresentation: canonical, schemaVersion: NaN }).compatibilityDisposition, D.MALFORMED_BLOCKING)],
+    ["46 M future unknown receipt schema blocks", () => assert.equal(normalizeReceiptEvidenceSemantics({ rawRepresentation: canonical, schemaVersion: rule.receiptSchemaVersionRange.maximum + 1 }).compatibilityDisposition, D.MALFORMED_BLOCKING)],
+    ["47 future unknown evidence schema blocks", () => assert.equal(normalize(mutate((value) => { value.phase1.schemaVersion = "PHASE1_ADMISSION_EVIDENCE_V999"; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
+    ["48 N downgraded receipt schema cannot regain authority", () => { const result = compareReceiptEvidenceSemantics({ left: legacyNull, right: canonical, leftSchemaVersion: rule.receiptSchemaVersionRange.minimum - 1, rightSchemaVersion: schemaVersion }); assert.equal(result.equal, false); assert.equal(result.compatibilityDisposition, D.MALFORMED_BLOCKING); }],
+    ["49 downgraded evidence schema cannot regain authority", () => assert.equal(normalize(mutate((value) => { value.phase1.schemaVersion = "PHASE1_ADMISSION_EVIDENCE_V0"; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
+    ["50 missing lifecycle selector is malformed and fail-closed", () => assert.equal(normalize(mutate((value) => { delete value.receiptLifecycleContract; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
+    ["51 O compatibility field with changed authority meaning blocks", () => { const attack = mutate((value) => { value.phase1.maintenanceStatus = null; value.phase1.blockingFindingCount = 1; value.authority.product = true; }); const result = compare(attack); assert.equal(result.equal, false); assert.equal(result.compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING); }],
+    ["52 canonical and legacy representations both preserve every non-policy field exactly", () => { const normalized = legacyNormalization.normalizedSemantics; const expected = structuredClone(legacyNull); expected.phase1.maintenanceStatus = null; assert.deepEqual(normalized, expected); assert.equal(normalized.originalSubjectHash, canonical.originalSubjectHash); assert.deepEqual(normalized.authority, canonical.authority); }],
+  ];
+  assert.equal(cases.length, 52);
+  for (const [name, assertion] of cases) await t.test(name, assertion);
+});
+
 const amendmentControlLifecycleFixture = ({ reviewProfile = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, objective = FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, branch = "codex/finite-task-lease-amendment-control-plane-repair-v1" } = {}) => {
   const paths = [
     "CURRENT_STATE.md",
@@ -866,6 +1059,37 @@ test("finite-task implementation exact-head review binds the effective reservati
   assert.ok(subject.lanes.some((lane) => lane.includes("exact effective lease reservation")));
   assert.ok(Object.values(subject.authority).every((value) => value === false));
   assert.equal(result.valid, false);
+});
+
+test("finite-task implementation exact-head review accepts only an exact zero-amendment BASE_ONLY reservation", () => {
+  const registry = structuredClone(json("config/assurance/current-truth-v1.json").finiteTaskLeases);
+  registry.completedLeaseOutcomes = [];
+  const lease = registry.tasks.find(({ implementationPr }) => implementationPr === 229);
+  lease.amendmentMaximum = { maximumAmendments: 0, maximumChangedLines: lease.scopeBudget.maximumChangedLines, maximumFiles: lease.scopeBudget.maximumFiles };
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: lease.implementationPr, branch: lease.implementationBranch, headSha: "8".repeat(40), baseSha: "9".repeat(40) };
+  const tree = "a".repeat(40);
+  const scope = { files: ["_lib/session.tsx"], additions: 20, deletions: 2, netChangedLines: 18, diffHash: "b".repeat(64) };
+  const resolution = resolveFiniteTaskEffectiveReservation({
+    registry,
+    lease,
+    candidate: { head: identity.headSha, tree },
+    comments: [],
+    commentsPaginationComplete: true,
+  });
+  const subject = architectureRepositoryReviewSubject({ identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
+  const raw = taskLocalArchitectureComment({ id: 700042, pr: identity.pr, body: architectureRepositoryReviewCommentBody(subject) });
+  assert.equal(subject.finiteTaskEffectiveReservation.status, "BASE_ONLY");
+  assert.equal(subject.finiteTaskEffectiveReservation.amendmentsConsumed, 0);
+  assert.equal(subject.finiteTaskEffectiveReservation.amendmentReceipt, null);
+  assert.equal(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.ok, true, stableJson(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.findings));
+  assert.equal(verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution }).valid, true);
+
+  const forgedReceipt = structuredClone(resolution);
+  forgedReceipt.amendmentReceipt = { commentId: 700043, subjectHash: "1".repeat(64), bodyHash: "2".repeat(64), rawBodyHash: "3".repeat(64) };
+  assert.equal(verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: forgedReceipt }).valid, false);
+  const mixedReservation = structuredClone(resolution);
+  mixedReservation.effectiveReservation.maximumLines += 1;
+  assert.equal(verifyArchitectureRepositoryReview({ raw, identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: mixedReservation }).valid, false);
 });
 
 test("finite-task terminal truth projection preserves the base lease but synthetic transition authority fails closed", () => {

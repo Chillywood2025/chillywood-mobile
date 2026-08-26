@@ -279,6 +279,13 @@ assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.properties.unauthorizedObse
 assert.equal(schemas.$defs.finiteTaskTerminalOutcome.properties.finiteTaskPrRiskAuthority.$ref, "#/$defs/finiteTaskPrRiskAuthority");
 assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].then.required.includes("finiteTaskPrRiskAuthority"), true);
 assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.not.anyOf.some(({ required }) => required?.includes("finiteTaskPrRiskAuthority")), true);
+assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.classification.enum.includes("FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1"));
+assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.amendmentReceipt.oneOf.some(({ type }) => type === "null"));
+assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.finalSourceReceipt.properties.amendmentCommentId.oneOf.some(({ type }) => type === "null"));
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[1].if.properties.classification.const, "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1");
+const finiteTaskLeaseSchema = schemas.$defs.currentTruthRecord.properties.finiteTaskLeases.properties.tasks.items;
+assert.deepEqual(finiteTaskLeaseSchema.allOf[0].if, { required: ["amendmentMaximum"] });
+assert.ok(finiteTaskLeaseSchema.allOf[0].then.required.includes("artifactReservation"));
 const malformedProjectionPolicy = structuredClone(projectionPolicy);
 malformedProjectionPolicy.currentDiffCreatesAuthority = true;
 assert.notDeepEqual(malformedProjectionPolicy, prScopePolicy.finiteTaskFeatureRiskProjection);
@@ -287,6 +294,7 @@ invalidOverlayRegistry.testAdaptationPolicy.maximumFiles = 2;
 assert.equal(validateFiniteTaskLeaseRegistry(invalidOverlayRegistry).includes("FINITE_TASK_TEST_ADAPTATION_POLICY_MALFORMED"), true);
 const historicalNoOverlayRegistry = structuredClone(truthRecord.finiteTaskLeases);
 delete historicalNoOverlayRegistry.testAdaptationPolicy;
+historicalNoOverlayRegistry.completedLeaseOutcomes = [];
 assert.deepEqual(validateFiniteTaskLeaseRegistry(historicalNoOverlayRegistry), []);
 
 const wave1Lease = truthRecord.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 229);
