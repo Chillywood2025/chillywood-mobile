@@ -40,6 +40,27 @@ const parseLastJsonObject = (text) => {
   }
   return null;
 };
+const parseJsonResponse = (result) => {
+  if (result?.status !== 0) return null;
+  try { return JSON.parse(result.stdout); } catch { return null; }
+};
+const readPull = (pr) => {
+  const authenticated = run("gh", ["api", "--method=GET", `repos/${REPOSITORY}/pulls/${pr}`]);
+  const authenticatedPull = parseJsonResponse(authenticated);
+  if (authenticatedPull) return authenticatedPull;
+  const publicRead = run("curl", [
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--connect-timeout", "5",
+    "--max-time", "20",
+    "--header", "Accept: application/vnd.github+json",
+    "--header", "X-GitHub-Api-Version: 2022-11-28",
+    "--header", "User-Agent: chillywood-assurance-readonly",
+    `https://api.github.com/repos/${REPOSITORY}/pulls/${pr}`,
+  ]);
+  return parseJsonResponse(publicRead);
+};
 const prefixPattern = (pattern) => {
   const escaped = String(pattern).split("*").map((part) => part.replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&")).join(".*");
   return new RegExp(`^${escaped}`, "u");
@@ -183,9 +204,7 @@ export function runPhase1RiskBasedClosureGate({ eventPath = process.env.GITHUB_E
   const protectedMainRuntime = evaluateProtectedMainAdvancement({ record: currentTruth, contract: currentTruthContract });
   const highRiskDomains = classifyHighRisk(scope.files, policy);
 
-  const gh = run("gh", ["api", "--method=GET", `repos/${REPOSITORY}/pulls/${event.number}`]);
-  let readback = null;
-  try { readback = gh.status === 0 ? JSON.parse(gh.stdout) : null; } catch {}
+  const readback = readPull(event.number);
   if (!readback) return 1;
 
   const touchesTrust = scope.files.some((file) => TRUST_PATHS.has(file));
