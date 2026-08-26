@@ -40,7 +40,11 @@ const deriveRiskBasedReadyContext = ({ event, readback, context, scope, highRisk
   const pull = event?.pull_request;
   const repository = event?.repository?.full_name;
   const defaultBudget = policy?.defaultBudget ?? {};
-  const featureId = "eas-build-update-release";
+  const releaseFeatureId = "eas-build-update-release";
+  const lowRiskFeatureId = "assurance-efficiency-e0";
+  const noHighRisk = highRisk.length === 0;
+  const exactSingleOperationalDomain = stableJson(highRisk) === stableJson(["release-OTA"]);
+  const featureId = exactSingleOperationalDomain ? releaseFeatureId : lowRiskFeatureId;
   const registeredFeature = (registry?.features ?? []).some((feature) => feature?.featureId === featureId);
   const exactUnboundContext = context?.ok === false
     && context?.source === "UNBOUND_PR_CONTEXT"
@@ -57,13 +61,18 @@ const deriveRiskBasedReadyContext = ({ event, readback, context, scope, highRisk
     && pull?.head?.repo?.full_name === repository
     && readback?.baseRepository === repository
     && readback?.headRepository === repository;
-  const exactSingleOperationalDomain = stableJson(highRisk) === stableJson(["release-OTA"]);
+  const admittedRiskShape = noHighRisk || exactSingleOperationalDomain;
   const bounded = Number.isSafeInteger(defaultBudget.changedFiles)
     && Number.isSafeInteger(defaultBudget.netChangedLines)
     && scope.files.length <= defaultBudget.changedFiles
     && Math.max(0, scope.additions - scope.deletions) <= defaultBudget.netChangedLines;
   const noTerminalTransition = protectedMainRuntime?.pendingTerminalTruth !== true;
-  if (!exactUnboundContext || !exactOwnerReadyLifecycle || !sameRepository || !exactSingleOperationalDomain || !bounded || !registeredFeature || !noTerminalTransition) return context;
+  if (!exactUnboundContext || !exactOwnerReadyLifecycle || !sameRepository || !admittedRiskShape || !bounded || !registeredFeature || !noTerminalTransition) return context;
+  const objectiveDomains = exactSingleOperationalDomain ? ["release-OTA"] : [];
+  const authorizedPrRiskDomains = exactSingleOperationalDomain ? ["release-OTA"] : [];
+  const classification = exactSingleOperationalDomain
+    ? "OWNER_SAME_REPOSITORY_SINGLE_OPERATIONAL_DOMAIN_V1"
+    : "OWNER_SAME_REPOSITORY_NO_HIGH_RISK_DOMAIN_V1";
   return {
     ...context,
     ok: true,
@@ -73,9 +82,9 @@ const deriveRiskBasedReadyContext = ({ event, readback, context, scope, highRisk
     featureId,
     primaryFeatureId: featureId,
     affectedFeatureIds: [featureId],
-    objectiveDomains: ["release-OTA"],
+    objectiveDomains,
     supportingDomains: ["CI-test-infrastructure"],
-    authorizedPrRiskDomains: ["release-OTA"],
+    authorizedPrRiskDomains,
     finiteTaskPrRiskAuthority: null,
     historicalWaiverPath: null,
     bindingId: `risk-based-ready:${repository}:${event.number}:${pull.head.sha}`,
@@ -87,11 +96,11 @@ const deriveRiskBasedReadyContext = ({ event, readback, context, scope, highRisk
     authoritySource: "PROTECTED_RISK_BASED_READY_ADMISSION_V1",
     riskBasedReadyAdmission: {
       schemaVersion: 1,
-      classification: "OWNER_SAME_REPOSITORY_SINGLE_OPERATIONAL_DOMAIN_V1",
+      classification,
       repository,
       pr: event.number,
       headSha: pull.head.sha,
-      domain: "release-OTA",
+      domain: exactSingleOperationalDomain ? "release-OTA" : null,
       featureId,
       providerMutationAllowed: false,
       databaseMutationAllowed: false,
@@ -244,6 +253,6 @@ if (!event.pull_request) {
   }, [draftSourceReadiness.ok
     ? `PR scope: SOURCE READINESS — ${scope.files.length} exact files, task authority deferred, merge authority false`
     : context.contextType === "RISK_BASED_READY_ADMISSION_V1"
-      ? `PR scope: ${findings.length ? "FAIL" : "PASS"} — bounded owner release-OTA ready admission, ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines`
+      ? `PR scope: ${findings.length ? "FAIL" : "PASS"} — bounded owner risk-based ready admission, ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines`
       : `PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
 }
