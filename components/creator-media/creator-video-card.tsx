@@ -17,15 +17,18 @@ import { StableImage } from "../ui/StableImage";
 import { AppText } from "../ui/typography";
 
 type CreatorVideoCardMode = "owner" | "public";
+type CreatorVideoCardVariant = "compact" | "detail";
 
 type CreatorVideoCardProps = {
   video: CreatorVideo;
   mode: CreatorVideoCardMode;
+  variant?: CreatorVideoCardVariant;
   clipEdit?: ClipStudioEdit | null;
   featured?: boolean;
   accessLabel?: string | null;
   busy?: boolean;
   onOpen: () => void;
+  testID?: string;
   onEdit?: () => void;
   onEditClip?: () => void;
   onSetFeatured?: () => void;
@@ -131,11 +134,13 @@ const formatPublicClipTemplateLabel = (
 export function CreatorVideoCard({
   video,
   mode,
+  variant = "compact",
   clipEdit,
   featured = false,
   accessLabel = null,
   busy = false,
   onOpen,
+  testID,
   onEdit,
   onEditClip,
   onSetFeatured,
@@ -176,6 +181,68 @@ export function CreatorVideoCard({
   const publicDescription = isOfficialRachiInternalProofFixture
     ? "Official Chi'llywood Original from Rachi."
     : (video.description || "Open this creator video in the Chi'llywood Player.");
+
+  if (variant === "compact") {
+    const compactStatus = accessLabel
+      || (featured ? "Featured" : formatVisibilityLabel(video, ownerMode));
+    const compactSecondary = moderationLabel
+      || (!playable ? "Media unavailable" : null);
+
+    return (
+      <View style={[styles.compactCard, !playable && styles.cardUnavailable]}>
+        <TouchableOpacity
+          style={styles.compactPreview}
+          activeOpacity={0.9}
+          onPress={playable ? onOpen : ownerMode ? onOpenActions : undefined}
+          onLongPress={ownerMode ? onOpenActions : onShare}
+          disabled={!playable && !ownerMode}
+          accessibilityRole="button"
+          accessibilityLabel={ownerMode ? `Open ${displayTitle}. Hold for content actions.` : `Open ${publicDisplayTitle}`}
+          testID={testID}
+        >
+          <StableImage
+            expectedWidth="100%"
+            expectedHeight="100%"
+            source={video.thumbnailUrl ? { uri: video.thumbnailUrl } : null}
+            containerStyle={styles.thumbnailFrame}
+            borderRadius={0}
+            resizeMode="cover"
+          />
+          {!video.thumbnailUrl ? (
+            <View style={styles.compactFallbackPreview}>
+              <AppText scale="caption" style={styles.compactFallbackKicker}>{"Chi'llywood"}</AppText>
+              <AppText scale="subhead" style={styles.compactFallbackTitle} numberOfLines={2}>{publicDisplayTitle}</AppText>
+            </View>
+          ) : null}
+          <View style={styles.compactShade} />
+          <View style={styles.compactStatusPill}>
+            <AppText scale="caption" style={styles.compactStatusText} numberOfLines={1}>{compactStatus}</AppText>
+          </View>
+          {ownerMode && onOpenActions ? (
+            <TouchableOpacity
+              style={styles.compactOverflowButton}
+              activeOpacity={0.84}
+              onPress={onOpenActions}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Open actions for ${displayTitle}`}
+              testID="creator-video-card-overflow-button"
+            >
+              <AppText scale="subhead" style={styles.compactOverflowText}>•••</AppText>
+            </TouchableOpacity>
+          ) : null}
+          <View pointerEvents="none" style={styles.compactBottomCopy}>
+            <AppText scale="subhead" style={styles.compactTitle} numberOfLines={2}>{publicDisplayTitle}</AppText>
+            {compactSecondary ? (
+              <AppText scale="caption" style={styles.compactMeta} numberOfLines={1}>{compactSecondary}</AppText>
+            ) : ownerMode && updatedDate ? (
+              <AppText scale="caption" style={styles.compactMeta} numberOfLines={1}>{`Updated ${updatedDate}`}</AppText>
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.card, !playable && styles.cardUnavailable]}>
@@ -406,6 +473,102 @@ const styles = StyleSheet.create({
   cardUnavailable: {
     borderColor: "rgba(255,255,255,0.08)",
     opacity: 0.92,
+  },
+  compactCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(8,10,16,0.96)",
+    overflow: "hidden",
+  },
+  compactPreview: {
+    width: "100%",
+    aspectRatio: 9 / 16,
+    backgroundColor: "#080A10",
+  },
+  compactFallbackPreview: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    padding: 11,
+    paddingBottom: 52,
+    backgroundColor: "#10141E",
+  },
+  compactFallbackKicker: {
+    color: "#A6B0C4",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  compactFallbackTitle: {
+    color: "#F4F7FC",
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  compactShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.13)",
+  },
+  compactStatusPill: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    maxWidth: "64%",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(5,7,12,0.76)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  compactStatusText: {
+    color: "#F8FAFF",
+    fontSize: 9.5,
+    fontWeight: "900",
+  },
+  compactOverflowButton: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(5,7,12,0.76)",
+  },
+  compactOverflowText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    lineHeight: 17,
+    fontWeight: "900",
+    marginTop: -4,
+  },
+  compactBottomCopy: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 10,
+    paddingTop: 28,
+    paddingBottom: 10,
+    gap: 2,
+    backgroundColor: "rgba(4,6,10,0.72)",
+  },
+  compactTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  compactMeta: {
+    color: "#C7D0E0",
+    fontSize: 9.5,
+    lineHeight: 13,
+    fontWeight: "700",
   },
   preview: {
     minHeight: 168,

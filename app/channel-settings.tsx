@@ -91,6 +91,7 @@ import {
   listMyCreatorVipPassOffers,
   listMyCreatorVipTransactions,
   saveCreatorVipPassOffer,
+  setCreatorVideoVipAccess,
   type CreatorVipPassOffer,
   type CreatorVipTransaction,
 } from "../_lib/creatorVipPasses";
@@ -4372,6 +4373,21 @@ export function ChannelStudioScreen() {
     void runVideoVisibilityUpdate(video, visibility);
   };
 
+  const onSetContentActionVipAccess = async (video: CreatorVideo, required: boolean) => {
+    setSelectedContentActionVideo(null);
+    setVideoSaving(true);
+    setVideoNotice(null);
+    try {
+      await setCreatorVideoVipAccess(video.id, required);
+      await loadCreatorVideos();
+      setVideoNotice(required ? "Added to the VIP shelf. Per-video paid unlock was disabled for this video." : "Removed from the VIP shelf.");
+    } catch (error) {
+      setVideoNotice(error instanceof Error ? error.message : "VIP video access could not be updated.");
+    } finally {
+      setVideoSaving(false);
+    }
+  };
+
   const onSetContentActionPrice = (video: CreatorVideo) => {
     setSelectedContentActionVideo(null);
     router.push({
@@ -5332,356 +5348,241 @@ export function ChannelStudioScreen() {
   ];
 
   const renderContentPanel = () => {
-    const filteredEmptyCopy = contentStatusFilter === "published"
-      ? "No published videos yet. Publish a draft when it is ready."
-      : contentStatusFilter === "circle"
-        ? "No Chi'lly Circle videos yet. Use Make Private for Chi'lly Circle on owned content when it should be member-only."
-      : contentStatusFilter === "drafts"
-        ? "No drafts right now."
-      : contentStatusFilter === "replays"
-        ? "No saved replays yet. Host-ended live sessions can be saved to Content Library when recording is backed."
-      : contentStatusFilter === "processing"
-        ? "No replay processing jobs right now."
-      : contentStatusFilter === "needs_attention"
-        ? "No Content Library items need attention right now."
-        : "No platform videos yet. Use Clip Studio to add your first video.";
-    const hasContentRows = filteredCreatorVideos.length > 0 || filteredCreatorReplays.length > 0;
+    const query = contentSearchQuery.trim().toLowerCase();
+    const sortedVideos = [...creatorVideos]
+      .filter((video) => !query || `${video.title} ${video.description}`.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const diff = getCreatorVideoCreatedTimestamp(a) - getCreatorVideoCreatedTimestamp(b);
+        return contentSort === "oldest" ? diff : -diff;
+      });
+    const featuredVideos = activeBrandProfile?.spotlightVideoId
+      ? sortedVideos.filter((video) => video.id === activeBrandProfile.spotlightVideoId)
+      : [];
+    const publishedVideos = sortedVideos.filter((video) => video.visibility === "public");
+    const draftVideos = sortedVideos.filter((video) => video.visibility === "draft");
+    const circleVideos = sortedVideos.filter((video) => video.visibility === "circle");
+    const vipVideos = sortedVideos.filter((video) => video.vipAccessRequired);
+    const paidVideos = sortedVideos.filter((video) => {
+      const offer = paidVideoOfferByVideoId.get(video.id);
+      return !!offer?.isPaid && (offer.status === "sandbox" || offer.status === "active");
+    });
+    const needsAttentionVideos = sortedVideos.filter((video) => (
+      ["hidden", "removed", "banned"].includes(video.moderationStatus)
+      || video.renditionStatuses.some((rendition) => rendition.status === "failed")
+    ));
+    const searchedReplays = creatorReplays.filter((replay) => (
+      !query || `${replay.title} ${replay.description ?? ""}`.toLowerCase().includes(query)
+    ));
+    const processingReplays = searchedReplays.filter((replay) => (
+      ["requested", "recording_active", "recording_stopping", "processing_replay"].includes(replay.saveStatus)
+    ));
+    const attentionReplays = searchedReplays.filter((replay) => (
+      ["failed", "recording_not_started"].includes(replay.saveStatus) || replay.moderationStatus === "hidden"
+    ));
+    const searchedEvents = creatorEvents.filter((event) => (
+      !query || `${event.eventTitle} ${formatEventTypeLabel(event.eventType)}`.toLowerCase().includes(query)
+    ));
+    const videoShelves = [
+      { key: "recent", title: "Recent Uploads", items: sortedVideos },
+      { key: "featured", title: "Featured", items: featuredVideos },
+      { key: "published", title: "Published", items: publishedVideos },
+      { key: "drafts", title: "Drafts", items: draftVideos },
+      { key: "paid", title: "Paid Videos", items: paidVideos },
+      { key: "vip", title: "VIP", items: vipVideos },
+      { key: "circle", title: "Chi'lly Circle", items: circleVideos },
+      { key: "attention", title: "Needs Attention", items: needsAttentionVideos },
+    ].filter((shelf) => shelf.items.length > 0);
+    const totalContentItems = creatorVideos.length + creatorReplays.length + creatorEvents.length;
+    const hasVisibleRows = videoShelves.length > 0 || searchedReplays.length > 0 || searchedEvents.length > 0;
+
+    const renderOwnedContentTile = (video: CreatorVideo) => (
+      <View key={video.id} style={styles.contentShelfCard}>
+        <CreatorVideoCard
+          video={video}
+          mode="owner"
+          clipEdit={creatorVideoClipEdits[video.id] ?? null}
+          featured={activeBrandProfile?.spotlightVideoId === video.id}
+          accessLabel={(() => {
+            const offer = paidVideoOfferByVideoId.get(video.id);
+            return offer?.isPaid && (offer.status === "sandbox" || offer.status === "active") ? "Paid Video" : null;
+          })()}
+          busy={videoSaving || brandSaving}
+          onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
+          onEdit={() => openClipStudioForVideo(video)}
+          onEditClip={() => openClipStudioForVideo(video)}
+          onSetFeatured={() => { void publishSpotlightVideo(video); }}
+          onClearFeatured={() => { void publishSpotlightVideo(null); }}
+          onToggleVisibility={() => onToggleVideoVisibility(video)}
+          onDelete={() => onDeleteVideo(video)}
+          onOpenActions={() => setSelectedContentActionVideo(video)}
+        />
+      </View>
+    );
+
+    const openReplayVisibility = (replay: CreatorReplayLibraryItem) => {
+      Alert.alert(
+        "Replay visibility",
+        "Choose where this replay belongs.",
+        [
+          { text: "Draft", onPress: () => { void updateReplayVisibility(replay, "draft"); } },
+          { text: "Chi'lly Circle", onPress: () => { void updateReplayVisibility(replay, "circle"); } },
+          { text: "Public", onPress: () => { if (replay.saveStatus === "ready") void updateReplayVisibility(replay, "public"); } },
+        ],
+      );
+    };
+
+    const openReplayActions = (replay: CreatorReplayLibraryItem) => {
+      Alert.alert(
+        replay.title,
+        `${formatCreatorReplayVisibilityLabel(replay.visibility)} · ${formatCreatorReplayStatusLabel(replay.saveStatus)}`,
+        [
+          {
+            text: replay.saveStatus === "ready" ? "Open" : "View State",
+            onPress: () => router.push({ pathname: "/player/replay/[replayId]", params: { replayId: replay.id } } as unknown as Parameters<typeof router.push>[0]),
+          },
+          { text: "Visibility", onPress: () => openReplayVisibility(replay) },
+          { text: "Delete", style: "destructive", onPress: () => deleteReplay(replay) },
+        ],
+      );
+    };
+
+    const renderReplayShelf = (title: string, rows: CreatorReplayLibraryItem[]) => {
+      if (!rows.length) return null;
+      return (
+        <View style={styles.contentShelf}>
+          <View style={styles.contentShelfHeader}>
+            <Text style={styles.contentShelfTitle}>{title}</Text>
+            <Text style={styles.contentShelfCount}>{rows.length}</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.contentShelfRow}>
+            {rows.map((replay) => (
+              <TouchableOpacity
+                key={replay.id}
+                style={styles.contentReplayCard}
+                activeOpacity={0.88}
+                onPress={() => openReplayActions(replay)}
+                accessibilityRole="button"
+                accessibilityLabel={`Manage replay ${replay.title}`}
+              >
+                <View style={styles.contentReplayPoster}>
+                  <Text style={styles.contentReplayKicker}>REPLAY</Text>
+                  <Text style={styles.contentReplayTitle} numberOfLines={3}>{replay.title}</Text>
+                  <View style={styles.contentReplayBottom}>
+                    <Text style={styles.contentReplayMeta} numberOfLines={1}>{formatCreatorReplayVisibilityLabel(replay.visibility)}</Text>
+                    <Text style={styles.contentReplayMeta} numberOfLines={1}>{formatCreatorReplayStatusLabel(replay.saveStatus)}</Text>
+                  </View>
+                </View>
+                <View style={styles.contentShelfOverflow}><Text style={styles.contentShelfOverflowText}>•••</Text></View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      );
+    };
 
     return (
-    <View style={[styles.panel, styles.creatorContentPanel]}>
-      <View style={styles.panelHeader}>
-        <View style={styles.panelHeaderCopy}>
-          <Text style={styles.panelTitle}>Content Library</Text>
-          <Text style={styles.panelSubtitle}>Manage uploads, saved live replays, drafts, Chi’lly Circle media, paid videos, clips, and event content.</Text>
+      <View style={[styles.panel, styles.creatorContentPanel]}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Content</Text>
+            <Text style={styles.panelSubtitle}>A clean library of your uploads, drafts, paid videos, Circle media, replays, and events.</Text>
+          </View>
+          <AppActionButton
+            accessibilityLabel="Add Video to Content Library"
+            label="Add Video"
+            onPress={openClipStudioForNew}
+            testID="content-library-add-video-button"
+            variant="primary"
+          />
         </View>
-      </View>
-      <Text style={styles.permissionCopy}>
-        Add and publish Platform videos through Clip Studio. Save Replay sends host replays here first. Drafts stay visible only to you; Chi’lly Circle items stay member-only, not public discovery; public ready media can appear as Featured and Latest Uploads.
-      </Text>
 
-      <View style={styles.studioHeaderActions}>
-        <AppActionButton
-          accessibilityLabel="Add Video to Content Library"
-          label="Add Video"
-          onPress={openClipStudioForNew}
-          testID="content-library-add-video-button"
-          variant="primary"
-        />
-        <Text style={styles.studioActionButtonCopy}>Clip Studio · up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
-      </View>
+        {videoNotice ? <View style={styles.noticeCard}><Text style={styles.noticeText}>{videoNotice}</Text></View> : null}
 
-      {videoNotice ? (
-        <View style={styles.noticeCard}>
-          <Text style={styles.noticeText}>{videoNotice}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.summaryGrid}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Items</Text>
-          <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length + replayCount)}</Text>
-          <Text style={styles.summaryBody}>uploads and saved replays in Content Library</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Published</Text>
-          <Text style={styles.summaryValue}>
-            {videosLoading ? "..." : String(publishedVideoCount)}
-          </Text>
-          <Text style={styles.summaryBody}>visible on your public Platform</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Replays</Text>
-          <Text style={styles.summaryValue}>
-            {videosLoading ? "..." : String(replayCount)}
-          </Text>
-          <Text style={styles.summaryBody}>{processingReplayCount ? `${processingReplayCount} processing` : "saved host replay items"}</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Needs Attention</Text>
-          <Text style={styles.summaryValue}>
-            {videosLoading ? "..." : String(needsAttentionReplayCount)}
-          </Text>
-          <Text style={styles.summaryBody}>failed, hidden, or unrecorded replay items</Text>
-        </View>
-      </View>
-
-      <Text style={styles.sectionLabel}>Status</Text>
-      <View style={styles.segmentRow}>
-        {CONTENT_STATUS_FILTERS.map((filter) => (
-          <TouchableOpacity
-            key={filter.id}
-            style={[styles.segmentButton, contentStatusFilter === filter.id && styles.segmentButtonActive]}
-            activeOpacity={0.86}
-            onPress={() => setContentStatusFilter(filter.id)}
-          >
-            <Text style={[styles.segmentButtonText, contentStatusFilter === filter.id && styles.segmentButtonTextActive]}>
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.sectionLabel}>Search videos</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Search videos"
-        placeholderTextColor="#8d8d8d"
-        value={contentSearchQuery}
-        onChangeText={setContentSearchQuery}
-        autoCapitalize="none"
-      />
-
-      <Text style={styles.sectionLabel}>Sort</Text>
-      <View style={styles.segmentRow}>
-        {CONTENT_SORT_OPTIONS.map((option) => (
-          <TouchableOpacity
-            key={option.id}
-            style={[styles.segmentButton, contentSort === option.id && styles.segmentButtonActive]}
-            activeOpacity={0.86}
-            onPress={() => setContentSort(option.id)}
-          >
-            <Text style={[styles.segmentButtonText, contentSort === option.id && styles.segmentButtonTextActive]}>
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.sectionLabel}>Content Library</Text>
-      {videosLoading ? (
-        <View style={styles.loadingCard}>
-          <ActivityIndicator color="#fff" />
-          <Text style={styles.loadingText}>Loading Content Library...</Text>
-        </View>
-      ) : videosLoadError ? (
-        <AppEmptyState
-          actionLabel="Retry"
-          body={videosLoadError}
-          onAction={() => {
-            void loadCreatorVideos();
-          }}
-          title="Creator videos couldn't refresh"
-        />
-      ) : hasContentRows ? (
-        <View style={styles.eventList}>
-          {filteredCreatorVideos.map((video) => (
-            <CreatorVideoCard
-              key={video.id}
-              video={video}
-              mode="owner"
-              clipEdit={creatorVideoClipEdits[video.id] ?? null}
-              featured={activeBrandProfile?.spotlightVideoId === video.id}
-              accessLabel={(() => {
-                const offer = paidVideoOfferByVideoId.get(video.id);
-                return offer?.isPaid && (offer.status === "sandbox" || offer.status === "active")
-                  ? "Paid Video"
-                  : null;
-              })()}
-              busy={videoSaving || brandSaving}
-              onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
-              onEdit={() => onEditVideo(video)}
-              onEditClip={() => openClipStudioForVideo(video)}
-              onSetFeatured={() => {
-                void publishSpotlightVideo(video);
-              }}
-              onClearFeatured={() => {
-                void publishSpotlightVideo(null);
-              }}
-              onToggleVisibility={() => onToggleVideoVisibility(video)}
-              onDelete={() => onDeleteVideo(video)}
-              onOpenActions={() => setSelectedContentActionVideo(video)}
-            />
-          ))}
-          {filteredCreatorReplays.map((replay) => (
-            <View key={replay.id} style={styles.creatorReplayCard}>
-              <View style={styles.creatorReplayHeader}>
-                <View style={styles.creatorReplayThumb}>
-                  <Text style={styles.creatorReplayThumbText}>Replay</Text>
-                </View>
-                <View style={styles.creatorReplayCopy}>
-                  <Text style={styles.creatorReplayKicker}>{formatCreatorReplaySourceLabel(replay.sourceType)}</Text>
-                  <Text style={styles.creatorReplayTitle} numberOfLines={2}>{replay.title}</Text>
-                  <Text style={styles.creatorReplayMeta}>
-                    {formatCreatorReplayVisibilityLabel(replay.visibility)} · {formatCreatorReplayStatusLabel(replay.saveStatus)} · {replay.moneyStatus === "paid" ? "Paid" : "Free"}
-                  </Text>
-                  <Text style={styles.creatorReplayBody} numberOfLines={2}>
-                    {replay.saveStatus === "ready" && replay.playbackRecordId
-                      ? "Ready with a controlled playback reference. Raw HLS stays server-side."
-                      : replay.saveStatus === "failed"
-                        ? "Replay processing failed. Retry appears only when backend retry is available."
-                        : replay.saveStatus === "recording_not_started"
-                          ? "Replay was not recording for this session."
-                          : "Replay is processing. You'll see it here when it's ready."}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.creatorReplayActions}>
-                <TouchableOpacity
-                  style={styles.segmentButton}
-                  activeOpacity={0.86}
-                  onPress={() => router.push({ pathname: "/player/replay/[replayId]", params: { replayId: replay.id } } as unknown as Parameters<typeof router.push>[0])}
-                >
-                  <Text style={styles.segmentButtonText}>{replay.saveStatus === "ready" ? "Open" : "View State"}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.segmentButton}
-                  activeOpacity={0.86}
-                  onPress={() => { void updateReplayVisibility(replay, "draft"); }}
-                  disabled={videoSaving}
-                >
-                  <Text style={styles.segmentButtonText}>Move to Draft</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.segmentButton}
-                  activeOpacity={0.86}
-                  onPress={() => { void updateReplayVisibility(replay, "circle"); }}
-                  disabled={videoSaving}
-                >
-                  <Text style={styles.segmentButtonText}>Chi’lly Circle</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.segmentButton}
-                  activeOpacity={0.86}
-                  onPress={() => { void updateReplayVisibility(replay, "public"); }}
-                  disabled={videoSaving || replay.saveStatus !== "ready"}
-                >
-                  <Text style={styles.segmentButtonText}>Make Public</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.segmentButton, styles.segmentButtonDanger]}
-                  activeOpacity={0.86}
-                  onPress={() => deleteReplay(replay)}
-                  disabled={videoSaving}
-                >
-                  <Text style={styles.segmentButtonText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        <View style={styles.contentLibraryStatsRow}>
+          {[
+            `All ${totalContentItems}`,
+            `Published ${publishedVideoCount}`,
+            `Drafts ${draftVideoCount}`,
+            `Paid ${paidVideos.length}`,
+            `Circle ${circleVideoCount}`,
+            `Replays ${replayCount}`,
+          ].map((label) => (
+            <View key={label} style={styles.contentLibraryStatPill}><Text style={styles.contentLibraryStatText}>{label}</Text></View>
           ))}
         </View>
-      ) : creatorVideos.length || creatorReplays.length ? (
-        <AppEmptyState title="No matching videos" body={filteredEmptyCopy} />
-      ) : (
-        <AppEmptyState title="No Content Library items yet" body="Use Clip Studio to add your first Platform video or save a host replay when recording is backed." />
-      )}
 
-      {videoEditor.editingVideoId ? (
-        <>
-          <Text style={styles.sectionLabel}>Edit Video</Text>
-          <View
-            style={[
-              styles.uploadLifecycleInline,
-              videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleInlineReady,
-              videoLifecycleCopy.tone === "active" && styles.uploadLifecycleInlineActive,
-              videoLifecycleCopy.tone === "success" && styles.uploadLifecycleInlineSuccess,
-              videoLifecycleCopy.tone === "error" && styles.uploadLifecycleInlineError,
-            ]}
-          >
-            <View style={styles.uploadLifecycleHeader}>
-              <Text style={styles.uploadLifecycleLabel}>Edit Status</Text>
-              <Text
-                style={[
-                  styles.uploadLifecycleStatus,
-                  videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleStatusReady,
-                  videoLifecycleCopy.tone === "active" && styles.uploadLifecycleStatusActive,
-                  videoLifecycleCopy.tone === "success" && styles.uploadLifecycleStatusSuccess,
-                  videoLifecycleCopy.tone === "error" && styles.uploadLifecycleStatusError,
-                ]}
-              >
-                {videoLifecycleCopy.label}
-              </Text>
-            </View>
-            <Text style={styles.uploadLifecycleBody}>{videoLifecycleCopy.body}</Text>
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder="Video title"
-            placeholderTextColor="#8d8d8d"
-            value={videoEditor.title}
-            onChangeText={(text) => updateVideoEditor({ title: text })}
-          />
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Description"
-            placeholderTextColor="#8d8d8d"
-            value={videoEditor.description}
-            onChangeText={(text) => updateVideoEditor({ description: text })}
-            multiline
-          />
-          <Text style={styles.sectionLabel}>Visibility</Text>
-          <View style={styles.chipRow}>
-            {(["draft", "circle", "public"] as const).map((value) => (
-              <TouchableOpacity
-                key={value}
-                style={[styles.chip, videoEditor.visibility === value && styles.chipActive]}
-                onPress={() => updateVideoEditor({ visibility: value })}
-                disabled={videoSaving}
-              >
-                <Text style={[styles.chipText, videoEditor.visibility === value && styles.chipTextActive]}>
-                  {value === "circle" ? "CHI'LLY CIRCLE" : value.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.sectionLabel}>Access</Text>
-          <View style={styles.chipRow}>
-            {(["free", "paid"] as const).map((value) => (
-              <TouchableOpacity
-                key={value}
-                style={[styles.chip, videoEditor.accessMode === value && styles.chipActive]}
-                onPress={() => updateVideoEditor({ accessMode: value })}
-                disabled={videoSaving}
-              >
-                <Text style={[styles.chipText, videoEditor.accessMode === value && styles.chipTextActive]}>
-                  {value === "paid" ? "PAID UNLOCK" : "FREE"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {videoEditor.accessMode === "paid" ? (
-            <>
-              <TextInput
-                style={styles.input}
-                placeholder="Paid unlock price, for example 0.99"
-                placeholderTextColor="#8d8d8d"
-                value={videoEditor.priceDollars}
-                onChangeText={(text) => updateVideoEditor({ priceDollars: text })}
-                keyboardType="decimal-pad"
-              />
-              <Text style={styles.noticeText}>
-                Paid Videos use {storeProviderPair} sandbox testing. This unlocks this creator video only and does not include Premium, subscriptions, VIP, live rooms, Watch-Party Seat Passes, or other creator content.
-              </Text>
-            </>
-          ) : null}
-          {videoSubmitRequirement ? (
-            <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
-          ) : null}
-          <AppStickyActionBar helper="Save stays disabled until the current title, visibility, and safety state are valid.">
-            <AppActionButton
-              disabled={isVideoSubmitDisabled}
-              label={videoSaving ? "Saving..." : "Update Video"}
-              loading={videoSaving}
-              onPress={onSaveVideo}
-              style={styles.studioStickyAction}
-              variant="primary"
-            />
-            <AppActionButton
-              disabled={videoSaving}
-              label="Clear"
-              onPress={() => resetVideoEditor()}
-              style={styles.studioStickyAction}
-            />
-          </AppStickyActionBar>
-        </>
-      ) : (
-        <AppEmptyState
-          actionLabel="Open Clip Studio"
-          body={`Clip Studio is the upload path for Platform videos, covers, title cards, drafts, and publishing. Current long-form target: ${CREATOR_VIDEO_MAX_RUNTIME_LABEL}.`}
-          onAction={openClipStudioForNew}
-          title="Add videos in Clip Studio"
+        <TextInput
+          style={[styles.input, styles.contentSearchInput]}
+          placeholder="Search your content"
+          placeholderTextColor="#8d8d8d"
+          value={contentSearchQuery}
+          onChangeText={setContentSearchQuery}
+          autoCapitalize="none"
         />
-      )}
-    </View>
+
+        {videosLoading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color="#fff" />
+            <Text style={styles.loadingText}>Loading content...</Text>
+          </View>
+        ) : videosLoadError ? (
+          <AppEmptyState actionLabel="Retry" body={videosLoadError} onAction={() => { void loadCreatorVideos(); }} title="Content couldn't refresh" />
+        ) : hasVisibleRows ? (
+          <>
+            {videoShelves.map((shelf) => (
+              <View key={shelf.key} style={styles.contentShelf} testID={`content-shelf-${shelf.key}`}>
+                <View style={styles.contentShelfHeader}>
+                  <Text style={styles.contentShelfTitle}>{shelf.title}</Text>
+                  <Text style={styles.contentShelfCount}>{shelf.items.length}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.contentShelfRow}>
+                  {shelf.items.map(renderOwnedContentTile)}
+                </ScrollView>
+              </View>
+            ))}
+
+            {renderReplayShelf("Replays", searchedReplays)}
+            {processingReplays.length !== searchedReplays.length ? renderReplayShelf("Processing", processingReplays) : null}
+            {attentionReplays.length ? renderReplayShelf("Replay Needs Attention", attentionReplays) : null}
+
+            {searchedEvents.length ? (
+              <View style={styles.contentShelf} testID="content-shelf-events">
+                <View style={styles.contentShelfHeader}>
+                  <Text style={styles.contentShelfTitle}>Events</Text>
+                  <Text style={styles.contentShelfCount}>{searchedEvents.length}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.contentShelfRow}>
+                  {searchedEvents.map((event) => (
+                    <TouchableOpacity
+                      key={event.id}
+                      style={styles.contentEventCard}
+                      activeOpacity={0.88}
+                      onPress={() => router.push(`/event/${event.id}`)}
+                    >
+                      <Text style={styles.contentReplayKicker}>{formatEventStatusLabel(event.status).toUpperCase()}</Text>
+                      <Text style={styles.contentReplayTitle} numberOfLines={3}>{event.eventTitle}</Text>
+                      <View style={styles.contentReplayBottom}>
+                        <Text style={styles.contentReplayMeta} numberOfLines={1}>{formatEventTypeLabel(event.eventType)}</Text>
+                        <Text style={styles.contentReplayMeta} numberOfLines={1}>{formatIsoDate(event.startsAt)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <AppEmptyState title={query ? "No matching content" : "No content yet"} body={query ? "Try another search." : "Open Clip Studio to add your first Platform video."} />
+        )}
+
+        <View style={styles.contentCreateFooter}>
+          <View style={styles.studioActionRowCopy}>
+            <Text style={styles.studioActionRowTitle}>Create something new</Text>
+            <Text style={styles.studioActionRowBody}>Clip Studio handles video, cover, title card, draft, and publish.</Text>
+          </View>
+          <AppActionButton label="Open Clip Studio" onPress={openClipStudioForNew} />
+        </View>
+      </View>
     );
   };
 
@@ -10390,10 +10291,11 @@ export function ChannelStudioScreen() {
       }}
       onEditDetails={(video) => {
         setSelectedContentActionVideo(null);
-        onEditVideo(video);
+        openClipStudioForVideo(video);
       }}
       onSetVisibility={onSetContentActionVisibility}
       onSetPrice={onSetContentActionPrice}
+      onSetVipAccess={onSetContentActionVipAccess}
       onCreateEvent={onCreateEventFromVideo}
       onFeature={onFeatureContentActionVideo}
       onShare={(video) => {
@@ -11684,6 +11586,136 @@ const styles = StyleSheet.create({
   creatorContentPanel: {
     borderColor: "rgba(220,20,60,0.26)",
     backgroundColor: "rgba(30,13,24,0.92)",
+  },
+  contentLibraryStatsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  contentLibraryStatPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  contentLibraryStatText: {
+    color: "#DCE3F1",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  contentSearchInput: {
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  contentShelf: {
+    marginTop: 14,
+    gap: 8,
+  },
+  contentShelfHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  contentShelfTitle: {
+    color: "#F7F9FF",
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  contentShelfCount: {
+    color: "#8E9AAF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  contentShelfRow: {
+    gap: 9,
+    paddingRight: 8,
+  },
+  contentShelfCard: {
+    width: 150,
+  },
+  contentReplayCard: {
+    width: 150,
+    aspectRatio: 9 / 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(126,215,255,0.18)",
+    backgroundColor: "rgba(10,14,22,0.94)",
+    overflow: "hidden",
+  },
+  contentEventCard: {
+    width: 150,
+    aspectRatio: 9 / 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(18,10,18,0.94)",
+    padding: 11,
+    justifyContent: "flex-end",
+    gap: 7,
+  },
+  contentReplayPoster: {
+    flex: 1,
+    padding: 11,
+    paddingTop: 44,
+    justifyContent: "flex-end",
+    gap: 7,
+  },
+  contentReplayKicker: {
+    color: "#AAB5C9",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  contentReplayTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  contentReplayBottom: {
+    gap: 2,
+  },
+  contentReplayMeta: {
+    color: "#B7C1D4",
+    fontSize: 9.5,
+    lineHeight: 13,
+    fontWeight: "700",
+  },
+  contentShelfOverflow: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(5,7,12,0.74)",
+  },
+  contentShelfOverflowText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    lineHeight: 16,
+    fontWeight: "900",
+    marginTop: -4,
+  },
+  contentCreateFooter: {
+    marginTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
   clipStudioPanel: {
     borderColor: "rgba(126,215,255,0.2)",

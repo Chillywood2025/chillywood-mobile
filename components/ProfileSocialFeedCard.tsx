@@ -17,6 +17,7 @@ import type {
   ProfileSocialFeedActor,
   ProfileSocialFeedItem,
 } from "../_lib/profileSocialFeed";
+import { CreatorVideoCard } from "./creator-media/creator-video-card";
 import { LinkedText } from "./social/linked-text";
 import { SocialAttachmentCard } from "./social/social-attachment-card";
 import { ProfileMediaImage as Image } from "./ui/ProfileMediaImage";
@@ -134,95 +135,46 @@ export function ProfileSocialFeedCard({
 
   if (item.type === "creator_video" || item.type === "public_profile_creator_video") {
     return (
-      <View style={styles.card}>
-        <TouchableOpacity style={styles.mediaPreview} activeOpacity={0.88} onPress={() => onOpenCreatorVideo(item.video)}>
-          {item.video.thumbnailUrl ? (
-            <Image source={{ uri: item.video.thumbnailUrl }} style={styles.mediaImage} />
-          ) : (
-            <View style={styles.mediaFallback}>
-              <MaterialIcons name="movie" size={28} color="#EAF0FF" />
-            </View>
-          )}
-          <View style={styles.mediaScrim} />
-          <View style={styles.badgeRow}>
-            <Text style={styles.mediaBadge}>{getVideoKicker(item)}</Text>
-            <Text style={styles.mediaBadge}>{item.video.visibility === "public" ? "Public" : "Draft"}</Text>
-          </View>
-        </TouchableOpacity>
-        <View style={styles.contentStack}>
-          {item.actor ? (
-            <Text style={styles.kicker}>{item.actor.displayName}</Text>
-          ) : (
-            <Text style={styles.kicker}>{getVideoKicker(item)}</Text>
-          )}
-          <Text style={styles.title} numberOfLines={2}>{item.video.title || "Creator Video"}</Text>
-          {item.video.description ? (
-            <Text style={styles.bodyText} numberOfLines={3}>{item.video.description}</Text>
-          ) : (
-            <Text style={styles.bodyText} numberOfLines={2}>{"Open this public creator video in the Chi'llywood Player."}</Text>
-          )}
-          <Text style={styles.meta}>{formatDate(item.video.updatedAt || item.video.createdAt)}</Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.primaryAction} activeOpacity={0.86} onPress={() => onOpenCreatorVideo(item.video)}>
-              <MaterialIcons name="play-arrow" size={17} color="#fff" />
-              <Text style={styles.primaryActionText}>Watch</Text>
-            </TouchableOpacity>
-            {item.actor ? (
-              <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={() => onOpenActorChannel(item.actor!)}>
-                <Text style={styles.secondaryActionText}>Platform</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
+      <View style={styles.compactMediaTile}>
+        <CreatorVideoCard
+          video={item.video}
+          mode="public"
+          onOpen={() => onOpenCreatorVideo(item.video)}
+        />
       </View>
     );
   }
 
   if (item.type === "spectator_entry" || item.type === "public_profile_spectator_entry") {
     const title = String(item.discoveryItem.title ?? "").trim() || "Public live entry";
-    const subtitle = String(item.discoveryItem.subtitle ?? "").trim();
-    const schedule = formatDate(item.discoveryItem.starts_at ?? item.discoveryItem.published_at ?? item.discoveryItem.created_at);
-    const actionLabel = item.discoveryItem.item_type === "creator_upload" ? "Open" : "Watch";
-    const routeLabel = item.discoveryItem.item_type === "creator_upload" ? "Player" : "Watch-only";
 
     return (
-      <View style={styles.card}>
-        <TouchableOpacity style={styles.mediaPreview} activeOpacity={0.88} onPress={() => onOpenDiscoveryItem(item.discoveryItem)}>
-          {item.discoveryItem.thumbnail_url ? (
-            <Image source={{ uri: item.discoveryItem.thumbnail_url }} style={styles.mediaImage} />
-          ) : (
-            <View style={styles.mediaFallback}>
-              <MaterialIcons name="live-tv" size={28} color="#EAF0FF" />
-            </View>
-          )}
-          <View style={styles.mediaScrim} />
-          <View style={styles.badgeRow}>
-            <Text style={[styles.mediaBadge, item.discoveryItem.live_state === "live" && styles.liveBadge]}>
-              {getDiscoveryLiveLabel(item.discoveryItem)}
-            </Text>
-            <Text style={styles.mediaBadge}>{getDiscoveryAccessLabel(item.discoveryItem)}</Text>
+      <TouchableOpacity
+        style={styles.compactDiscoveryTile}
+        activeOpacity={0.9}
+        onPress={() => onOpenDiscoveryItem(item.discoveryItem)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${title}`}
+      >
+        {item.discoveryItem.thumbnail_url ? (
+          <Image source={{ uri: item.discoveryItem.thumbnail_url }} style={styles.mediaImage} />
+        ) : (
+          <View style={styles.compactMediaFallback}>
+            <MaterialIcons name="live-tv" size={28} color="#EAF0FF" />
           </View>
-        </TouchableOpacity>
-        <View style={styles.contentStack}>
-          <Text style={styles.kicker}>{getDiscoveryKicker(item)}</Text>
-          <Text style={styles.title} numberOfLines={2}>{title}</Text>
-          {subtitle ? <Text style={styles.bodyText} numberOfLines={3}>{subtitle}</Text> : null}
-          <Text style={styles.meta} numberOfLines={1}>
-            {schedule || "Public metadata"} · {routeLabel}
+        )}
+        <View style={styles.mediaScrim} />
+        <View style={styles.compactBadgeRow}>
+          <Text style={[styles.mediaBadge, item.discoveryItem.live_state === "live" && styles.liveBadge]}>
+            {getDiscoveryLiveLabel(item.discoveryItem)}
           </Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.primaryAction} activeOpacity={0.86} onPress={() => onOpenDiscoveryItem(item.discoveryItem)}>
-              <MaterialIcons name="visibility" size={17} color="#fff" />
-              <Text style={styles.primaryActionText}>{actionLabel}</Text>
-            </TouchableOpacity>
-            {item.actor ? (
-              <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={() => onOpenActorChannel(item.actor!)}>
-                <Text style={styles.secondaryActionText}>Platform</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <Text style={styles.mediaBadge}>{getDiscoveryAccessLabel(item.discoveryItem)}</Text>
         </View>
-      </View>
+        <View style={styles.compactMediaCopy}>
+          <Text style={styles.compactMediaKicker}>{getDiscoveryKicker(item)}</Text>
+          <Text style={styles.compactMediaTitle} numberOfLines={2}>{title}</Text>
+        </View>
+      </TouchableOpacity>
     );
   }
 
@@ -259,6 +211,57 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(9,12,18,0.96)",
     overflow: "hidden",
+  },
+  compactMediaTile: {
+    width: 150,
+  },
+  compactDiscoveryTile: {
+    width: 150,
+    aspectRatio: 9 / 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#111723",
+    overflow: "hidden",
+  },
+  compactMediaFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#121824",
+  },
+  compactBadgeRow: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    right: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  compactMediaCopy: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 10,
+    paddingTop: 26,
+    paddingBottom: 10,
+    gap: 3,
+    backgroundColor: "rgba(4,6,10,0.72)",
+  },
+  compactMediaKicker: {
+    color: "#C7D0E0",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  compactMediaTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
   },
   identityRow: {
     flexDirection: "row",

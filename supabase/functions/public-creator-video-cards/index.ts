@@ -29,6 +29,7 @@ type PublicCreatorVideoRow = {
   mime_type: string | null;
   file_size_bytes: number | null;
   updated_at: string | null;
+  vip_access_required: boolean | null;
 };
 
 type OfficialRachiOriginalVideoLinkRow = {
@@ -86,6 +87,7 @@ const PUBLIC_CREATOR_VIDEO_SELECT = [
   "mime_type",
   "file_size_bytes",
   "updated_at",
+  "vip_access_required",
 ].join(",");
 const PUBLIC_CLIP_EDIT_SELECT = [
   "video_id",
