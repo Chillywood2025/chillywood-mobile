@@ -1,0 +1,259 @@
+name: Temporary Live room entry source repair
+
+on:
+  push:
+    branches:
+      - chatgpt/live-room-entry-end-to-end-v1
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/live-room-entry-end-to-end-v1
+          fetch-depth: 0
+      - name: Apply bounded source repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              text = path.read_text()
+              if old not in text:
+                  raise SystemExit(f"{label}: anchor not found")
+              path.write_text(text.replace(old, new, 1))
+
+          # Short six-character room codes are text identifiers. The route-backed
+          # monetization projection is UUID-keyed, so never send a room code into
+          # that UUID column.
+          proof = Path("_lib/routeBackedMonetizationVisualProof.ts")
+          replace_once(
+              proof,
+              '''const normalizeText = (value: unknown) => String(value ?? "").trim();''',
+              '''const normalizeText = (value: unknown) => String(value ?? "").trim();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuidSourceId = (value: string) => UUID_PATTERN.test(value);''',
+              "uuid helper",
+          )
+          replace_once(
+              proof,
+              '''  if (!sourceId || !sourceTypes.length) return null;''',
+              '''  if (!sourceId || !sourceTypes.length || !isUuidSourceId(sourceId)) return null;''',
+              "uuid guard",
+          )
+
+          watch = Path("_lib/watchParty.ts")
+          replace_once(
+              watch,
+              '''    if (error || !data) return [];
+    return data.map(rowToMembership).filter(isDefined);''',
+              '''    if (error) {
+      reportRuntimeError("watch-party-membership-read", error, { partyId: normalizedPartyId });
+      return [];
+    }
+    if (!data) return [];
+    return data.map(rowToMembership).filter(isDefined);''',
+              "membership read observability",
+          )
+          replace_once(
+              watch,
+              '''  if (result.error || !row || String(row.user_id ?? "").trim() !== writableUserId) return null;
+  return rowToMembership(row);''',
+              '''  if (result.error) {
+    reportRuntimeError("watch-party-membership-rpc", result.error, {
+      partyId,
+      operation: isJoining ? "join" : "heartbeat",
+      writableUserId,
+    });
+    return null;
+  }
+  if (!row || String(row.user_id ?? "").trim() !== writableUserId) return null;
+  return rowToMembership(row);''',
+              "membership rpc observability",
+          )
+          anchor = '''export async function getPartyRoom(partyId: string): Promise<WatchPartyState | null> {
+  const row = await fetchPartyRoomRow(partyId);
+  if (!row) return null;
+  const room = rowToState(row);
+  return isWatchPartyRoomActive(room) ? room : null;
+}
+'''
+          addition = anchor + '''
+export async function touchOwnedPartyRoomActivity(partyId: string): Promise<boolean> {
+  const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
+  const writableUserId = await getWritablePartyUserId();
+  if (!normalizedPartyId || !writableUserId) return false;
+
+  const { error } = await supabase
+    .from(PARTY_ROOMS_TABLE)
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq("party_id", normalizedPartyId)
+    .eq("host_user_id", writableUserId)
+    .eq("is_active", true);
+
+  if (error) {
+    reportRuntimeError("watch-party-room-owner-heartbeat", error, {
+      partyId: normalizedPartyId,
+      writableUserId,
+    });
+    return false;
+  }
+  return true;
+}
+'''
+          replace_once(watch, anchor, addition, "owner heartbeat helper")
+
+          index = Path("app/watch-party/index.tsx")
+          replace_once(
+              index,
+              '''import { debugLog, reportRuntimeError } from "../../_lib/logger";''',
+              '''import { debugLog, reportRuntimeError } from "../../_lib/logger";
+import { ROOM_HEARTBEAT_MS } from "../../_lib/performancePolicy";''',
+              "heartbeat policy import",
+          )
+          replace_once(
+              index,
+              '''  createPartyRoom,
+  getPartyRoom,
+  getSafePartyUserId,''',
+              '''  createPartyRoom,
+  getPartyRoom,
+  getSafePartyUserId,
+  touchOwnedPartyRoomActivity,''',
+              "heartbeat helper import",
+          )
+          create_callback_end = '''  }, [buildRoomPreview, canUseBetaRooms, requirePremiumRoomEntry]);
+
+  useEffect(() => {
+    if (!canUseBetaRooms) return;'''
+          heartbeat_effect = '''  }, [buildRoomPreview, canUseBetaRooms, requirePremiumRoomEntry]);
+
+  useEffect(() => {
+    const liveRoom = preparedRoom?.room;
+    if (
+      !canUseBetaRooms
+      || embeddedLiveStageEntry
+      || !liveRoom
+      || liveRoom.roomType !== "live"
+    ) return undefined;
+
+    let active = true;
+    const heartbeat = () => {
+      if (!active) return;
+      void touchOwnedPartyRoomActivity(liveRoom.partyId);
+    };
+    heartbeat();
+    const interval = setInterval(heartbeat, ROOM_HEARTBEAT_MS * 2);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [canUseBetaRooms, embeddedLiveStageEntry, preparedRoom?.room]);
+
+  useEffect(() => {
+    if (!canUseBetaRooms) return;'''
+          replace_once(index, create_callback_end, heartbeat_effect, "waiting room heartbeat")
+
+          stage = Path("app/watch-party/live-stage/[partyId].tsx")
+          replace_once(
+              stage,
+              '''  const blockedRoomAccessPrimaryLabel = blockedRoomAccessSheetReason
+    ? blockedRoomAccessSheetReason === "premium_required"
+      ? "View Premium"
+      : activeLiveAccessPresentation?.actionLabel ?? "View Room Access"
+    : "Open Party Room";''',
+              '''  const shouldRouteAccessFailureHome = !!roomEntryError || blockedRoomAccess?.reason === "removed";
+  const blockedRoomAccessPrimaryLabel = shouldRouteAccessFailureHome
+    ? "Home"
+    : blockedRoomAccessSheetReason
+      ? blockedRoomAccessSheetReason === "premium_required"
+        ? "View Premium"
+        : activeLiveAccessPresentation?.actionLabel ?? "View Room Access"
+      : "Open Party Room";''',
+              "home-only decision",
+          )
+          replace_once(
+              stage,
+              '''            This live room could not be found anymore. Open Party Room if you want to re-check the canonical room route.''',
+              '''            This live room could not be found anymore. Return Home and reopen Live when you are ready.''',
+              "room missing copy",
+          )
+          replace_once(
+              stage,
+              '''              onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
+                router.replace({
+                  pathname: "/watch-party/[partyId]",
+                  params: { partyId },
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessPrimaryLabel}</Text>''',
+              '''              onPress={() => router.replace("/(tabs)")}
+              accessibilityRole="button"
+              accessibilityLabel="Home"
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>Home</Text>''',
+              "room missing home action",
+          )
+          replace_once(
+              stage,
+              '''              onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
+                router.replace({
+                  pathname: "/watch-party/[partyId]",
+                  params: { partyId },
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}</Text>''',
+              '''              onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
+                if (shouldRouteAccessFailureHome) {
+                  router.replace("/(tabs)");
+                  return;
+                }
+                router.replace({
+                  pathname: "/watch-party/[partyId]",
+                  params: { partyId },
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={blockedRoomAccessPrimaryLabel}
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessPrimaryLabel}</Text>''',
+              "blocked room home action",
+          )
+
+          workflow = Path(".github/workflows/_temporary-live-room-entry-patch.yml")
+          workflow.unlink()
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Close Live room entry lifecycle gaps"
+          git push origin HEAD:chatgpt/live-room-entry-end-to-end-v1
