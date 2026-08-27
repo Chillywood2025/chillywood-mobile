@@ -16,6 +16,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: python3 scripts/patch-content-transform.py
       - run: python3 scripts/apply-content-card-density-v1.py
       - run: npm run typecheck
       - run: npm run guard:clip-studio-policy
