@@ -8962,37 +8962,11 @@ export function ChannelStudioScreen() {
       );
     };
 
-    const moneyCenterFocusTabs: readonly { id: MoneyCenterFocusSection; label: string }[] = [
-      { id: "overview", label: "Overview" },
-      { id: "ways_to_earn", label: "Ways to Earn" },
-      { id: "transactions", label: "Transactions" },
-      { id: "payouts", label: "Cashout" },
-    ];
-    const renderMoneyCenterFocusTabs = () => (
-      <View style={styles.filterRow} testID="money-center-focus-tabs">
-        {moneyCenterFocusTabs.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[styles.filterChip, activeMoneyCenterFocusSection === item.id && styles.filterChipActive]}
-            activeOpacity={0.86}
-            onPress={() => focusMoneyCenterSection(item.id)}
-            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-            accessibilityRole="button"
-            accessibilityState={{ selected: activeMoneyCenterFocusSection === item.id }}
-            accessibilityLabel={`Open ${item.label}`}
-            testID={`money-center-focus-${item.id}-button`}
-          >
-            <Text style={[styles.filterChipText, activeMoneyCenterFocusSection === item.id && styles.filterChipTextActive]}>
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
     const openWaysToEarn = () => {
       setActiveMoneyManageTarget(null);
       setMoneyManageNotice(null);
       focusMoneyCenterSection("ways_to_earn");
+      setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
       router.setParams({
         tab: "monetization",
         focus: "ways_to_earn",
@@ -9004,8 +8978,8 @@ export function ChannelStudioScreen() {
           {[
             { label: "Available balance", value: "Not payable" },
             { label: "Ways to Earn", value: `${monetizationFeatureCards.filter((card) => card.status === "Setup mode" || card.status === "Active").length} setup` },
-            { label: "Live Money", value: "Off" },
-            { label: "Payouts", value: "Off" },
+            { label: "Transactions", value: creatorMoneyAuditEvents.length ? `${creatorMoneyAuditEvents.length} recorded` : "None yet" },
+            { label: "Payout readiness", value: canReviewCashoutReadiness ? "Review" : payoutsStatus },
           ].map((item) => (
             <View key={item.label} style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>{item.label}</Text>
@@ -9039,17 +9013,9 @@ export function ChannelStudioScreen() {
       </View>
     );
     const renderWaysToEarnContent = (
-      testID = "money-center-ways-to-earn-focused-panel",
-      testIdSuffix = "",
-      includeManagerPanel = true,
+      testID = "money-center-ways-to-earn-panel",
     ) => (
       <View testID={testID}>
-        <View style={styles.sandboxSafetyBanner}>
-          <Text style={styles.sandboxSafetyTitle}>Creator setup mode</Text>
-          <Text style={styles.sandboxSafetyBody}>
-            Creator monetization setup is usable in sandbox/not-payable mode. Production sales require owner/provider activation.
-          </Text>
-        </View>
         <View style={styles.eventEmptyCard}>
           <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
           <Text style={styles.eventEmptyBody}>
@@ -9059,9 +9025,9 @@ export function ChannelStudioScreen() {
         </View>
         <View style={styles.summaryGrid}>
           {monetizationFeatureCards.map((feature) => (
-            <React.Fragment key={`money-feature-with-manager-${feature.key}${testIdSuffix}`}>
-              {renderFeatureCard(feature, testIdSuffix)}
-              {includeManagerPanel && activeMoneyManageTarget === feature.key ? (
+            <React.Fragment key={`money-feature-with-manager-${feature.key}`}>
+              {renderFeatureCard(feature)}
+              {activeMoneyManageTarget === feature.key ? (
                 <View style={styles.moneyFeatureManagerInline}>
                   {renderActiveMoneyManagerPanel()}
                 </View>
@@ -9069,39 +9035,6 @@ export function ChannelStudioScreen() {
             </React.Fragment>
           ))}
         </View>
-        <View style={styles.eventActionRow}>
-          <TouchableOpacity
-            style={[styles.eventPrimaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
-            activeOpacity={0.88}
-            disabled={sandboxSetupBusy}
-            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-            onPress={handleSetupSandboxTesterExperience}
-            testID="money-center-creator-setup-button"
-            accessibilityRole="button"
-            accessibilityLabel="Set up creator monetization"
-          >
-            {sandboxSetupBusy ? (
-              <View style={styles.eventPrimaryButtonBusyRow}>
-                <ActivityIndicator color="#fff" />
-                <Text style={styles.eventPrimaryButtonText}>Setting up</Text>
-              </View>
-            ) : (
-              <Text style={styles.eventPrimaryButtonText}>Set up creator monetization</Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.eventSecondaryButton}
-            activeOpacity={0.88}
-            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-            onPress={handleReviewCashoutReadiness}
-            testID={`money-center-cashout-readiness-button${testIdSuffix}`}
-            accessibilityRole="button"
-            accessibilityLabel="Review cashout readiness"
-          >
-            <Text style={styles.eventSecondaryButtonText}>Review cashout readiness</Text>
-          </TouchableOpacity>
-        </View>
-        {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
       </View>
     );
     const renderMoneyTransactionsContent = (testID = "money-center-transactions-panel") => (
@@ -9200,13 +9133,6 @@ export function ChannelStudioScreen() {
         )}
       </View>
     );
-    const renderActiveMoneyCenterFocusContent = () => {
-      if (activeMoneyCenterFocusSection === "ways_to_earn") return renderWaysToEarnContent();
-      if (activeMoneyCenterFocusSection === "transactions") return renderMoneyTransactionsContent();
-      if (activeMoneyCenterFocusSection === "payouts") return renderPayoutReadinessContent();
-      return renderMoneyCenterOverviewContent();
-    };
-
     if (moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "locked" || moneyCenterFeatureFlag.state === "maintenance") {
       const unavailableStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked" : "Disabled";
       return (
@@ -9260,15 +9186,14 @@ export function ChannelStudioScreen() {
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>Money Center</Text>
-              <Text style={styles.panelSubtitle}>Creator dashboard for setup mode, cashout readiness, offers, transactions, and payouts.</Text>
+              <Text style={styles.panelSubtitle}>Creator earnings, offers, transactions, payout readiness, and setup.</Text>
             </View>
             {renderStudioStatusPill(`Sandbox ${sandboxSetupStatus}`, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted")}
           </View>
           <Text style={styles.permissionCopy}>
-            Setup mode: sandbox/test, not payable yet, no real payouts, no cashout, no withdrawals.
+            Sandbox/test mode. No real charges, payouts, cashout, or withdrawals.
           </Text>
-          {renderMoneyCenterFocusTabs()}
-          {renderActiveMoneyCenterFocusContent()}
+          {renderMoneyCenterOverviewContent()}
         </View>
 
         <View
@@ -9281,41 +9206,7 @@ export function ChannelStudioScreen() {
             summary: "The six creator monetization setup flows in one actionable view.",
             status: monetizationActive ? "Active" : creatorSetupModeActive ? "Setup mode" : "Needs attention",
             statusTone: monetizationActive || creatorSetupModeActive ? "default" : "muted",
-            children: renderWaysToEarnContent("money-center-ways-to-earn-accordion-panel", "-accordion", false),
-          })}
-
-          {renderMonetizationAccordion({
-            id: "overview",
-            title: "Overview",
-            summary: "A quick read on what is active and what is locked.",
-            status: topStatus,
-            statusTone: sectionTone(topStatus),
-            children: (
-              <>
-                {renderSummaryMetricCards([
-                  { label: "Available balance", value: "Not payable", body: "Tips V1 is test mode. No dollar amount is withdrawable until live money and payouts are approved.", tone: "unavailable" },
-                  { label: "Pending balance", value: tipPendingTransactions.length ? `${tipPendingTransactions.length} pending` : "None", body: "Pending checkout rows are not creator earnings until the Stripe webhook verifies payment.", tone: "unavailable" },
-                  { label: "This month", value: paidTipTransactions.length ? formatMonetizationCurrency(tipGrossCents, creatorTipSettings?.currency ?? "usd") : "No verified tips yet", body: "Verified test tips appear here, but payouts remain unavailable.", tone: paidTipTransactions.length ? "default" : "unavailable" },
-                  { label: "Lifetime earnings", value: paidTipTransactions.length ? formatMonetizationCurrency(tipGrossCents, creatorTipSettings?.currency ?? "usd") : "No verified tips yet", body: "This is test-mode tip history, not a withdrawable live balance.", tone: paidTipTransactions.length ? "default" : "unavailable" },
-                  { label: "Pending payout", value: "Not active", body: "No payout, cash-out, withdrawal, transfer, or payout release action is available.", tone: "unavailable" },
-                  { label: "Payout status", value: payoutsStatus === "Disabled" ? "Not active" : payoutsStatus, body: "Set up payouts before you can receive creator earnings.", tone: sectionTone(payoutsStatus) === "default" && creatorPayoutSummary.providerReady ? "default" : "unavailable" },
-                  { label: "Monetization status", value: topStatus, body: "Creator earnings are sandbox/readback only until live money and payout approvals pass.", tone: monetizationActive ? "default" : "unavailable" },
-                  { label: "Setup progress", value: providerOverallStatus, body: "Provider checks are the source of readiness truth.", tone: providerOverallStatus === "Sandbox ready" ? "default" : "unavailable" },
-                ])}
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Warnings</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    Set up payouts before you can receive creator earnings. Payments are unavailable right now. Creator earnings are temporarily disabled. Premium is separate from creator purchases.
-                  </Text>
-                </View>
-                {renderCreatorMoneyEventRows(
-                  overviewEvents,
-                  "No creator money events yet",
-                  "Setup, sandbox, readiness, and ledger details will appear here when there is safe activity for this creator.",
-                  5,
-                )}
-              </>
-            ),
+            children: renderWaysToEarnContent("money-center-ways-to-earn-panel"),
           })}
 
           {renderMonetizationAccordion({
