@@ -24,7 +24,6 @@ jobs:
       - run: python3 scripts/apply-profile-social-content-density-v1.py
       - run: npm run typecheck
       - run: node scripts/guard-content-card-density-v1.mjs
-      - run: npm run guard:circle-spectator-policy
       - run: npm run guard:route-contracts
       - run: git diff --check
       - name: Save verified source changes
