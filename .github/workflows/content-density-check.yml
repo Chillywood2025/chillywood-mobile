@@ -19,6 +19,18 @@ jobs:
       - run: npm ci --prefix ops/alert-automation
       - run: python3 scripts/patch-content-transform.py
       - run: python3 scripts/apply-content-card-density-v1.py
+      - name: Align Clip Studio guard with compact Content Library UI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/guard-clip-studio-policy.mjs')
+          text = path.read_text()
+          old = '  "Add videos in Clip Studio",\n'
+          new = '  "Content Library",\n'
+          if old not in text:
+              raise SystemExit('expected legacy Clip Studio copy guard not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
       - run: npm run typecheck
       - run: npm run guard:clip-studio-policy
       - run: npm run guard:circle-spectator-policy
