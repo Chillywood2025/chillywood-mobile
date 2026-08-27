@@ -1,0 +1,31 @@
+name: Content density check
+on:
+  push:
+    branches: [chatgpt/content-card-rows-home-density-v1]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/content-card-rows-home-density-v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: python3 scripts/apply-content-card-density-v1.py
+      - run: npm run typecheck
+      - run: npm run guard:clip-studio-policy
+      - run: npm run guard:circle-spectator-policy
+      - run: npm run guard:route-contracts
+      - run: git diff --check
+      - name: Save verified source changes
+        run: |
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add app/channel-settings.tsx 'app/(tabs)/index.tsx' components/creator-media/creator-video-card.tsx scripts/guard-clip-studio-policy.mjs
+          git commit -m "Compact content cards and organize creator shelves"
+          git push
