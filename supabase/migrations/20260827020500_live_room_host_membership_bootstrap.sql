@@ -10,7 +10,9 @@ security definer
 set search_path = ''
 as $function$
 begin
-  if new."room_type" <> 'live' or auth.role() <> 'authenticated' then
+  if new."room_type" <> 'live'
+    or auth.role() is distinct from 'authenticated'
+  then
     return new;
   end if;
 
