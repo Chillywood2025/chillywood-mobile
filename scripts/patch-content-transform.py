@@ -7,10 +7,12 @@ selector_new = "home = replace_once(home, '  feedActivityCard: {\\n    width: 15
 if s.count(selector_old) != 1:
     raise SystemExit(f"selector patch expected 1 match, found {s.count(selector_old)}")
 s = s.replace(selector_old, selector_new, 1)
-quote_old = "  'title: \\\"Chi\\\\'lly Circle\\\"',"
-quote_new = "  \"title: \\\"Chi'lly Circle\\\"\","
-if s.count(quote_old) != 1:
-    raise SystemExit(f"quote patch expected 1 match, found {s.count(quote_old)}")
-s = s.replace(quote_old, quote_new, 1)
+lines = s.splitlines()
+quote_matches = [i for i, line in enumerate(lines) if "title:" in line and "Chi" in line and "Circle" in line and "Paid Videos" not in line]
+if len(quote_matches) != 1:
+    raise SystemExit(f"quote patch expected 1 candidate, found {len(quote_matches)}")
+i = quote_matches[0]
+lines[i] = '  "title: \\"Chi' + "'" + 'lly Circle\\"",'
+s = "\n".join(lines) + ("\n" if s.endswith("\n") else "")
 p.write_text(s)
 print("Patched content transform selectors and guard quoting")
