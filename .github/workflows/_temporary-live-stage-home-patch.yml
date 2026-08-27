@@ -1,0 +1,115 @@
+name: Temporary Live Stage blocked-home patch
+
+on:
+  push:
+    branches:
+      - chatgpt/live-stage-blocked-home-only
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/live-stage-blocked-home-only
+          fetch-depth: 0
+      - name: Patch Live Stage unavailable routing
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("app/watch-party/live-stage/[partyId].tsx")
+          text = path.read_text()
+
+          old_body = '''            This live room could not be found anymore. Open Party Room if you want to re-check the canonical room route.'''
+          new_body = '''            This live room could not be found anymore. Return Home and try again from the Live entry point.'''
+          if old_body not in text:
+              raise SystemExit("room-missing copy anchor not found")
+          text = text.replace(old_body, new_body, 1)
+
+          old_missing_press = '''              onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
+                router.replace({
+                  pathname: "/watch-party/[partyId]",
+                  params: { partyId },
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessPrimaryLabel}</Text>'''
+          new_missing_press = '''              onPress={() => router.replace("/(tabs)")}
+              accessibilityRole="button"
+              accessibilityLabel="Home"
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>Home</Text>'''
+          if old_missing_press not in text:
+              raise SystemExit("room-missing action anchor not found")
+          text = text.replace(old_missing_press, new_missing_press, 1)
+
+          old_label = '''  const blockedRoomAccessPrimaryLabel = blockedRoomAccessSheetReason
+    ? blockedRoomAccessSheetReason === "premium_required"
+      ? "View Premium"
+      : activeLiveAccessPresentation?.actionLabel ?? "View Room Access"
+    : "Open Party Room";'''
+          new_label = '''  const blockedRoomAccessPrimaryLabel = blockedRoomAccess?.reason === "removed"
+    ? "Home"
+    : blockedRoomAccessSheetReason
+      ? blockedRoomAccessSheetReason === "premium_required"
+        ? "View Premium"
+        : activeLiveAccessPresentation?.actionLabel ?? "View Room Access"
+      : "Home";'''
+          if old_label not in text:
+              raise SystemExit("blocked-room label anchor not found")
+          text = text.replace(old_label, new_label, 1)
+
+          old_blocked_press = '''              onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
+                router.replace({
+                  pathname: "/watch-party/[partyId]",
+                  params: { partyId },
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}</Text>'''
+          new_blocked_press = '''              onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
+                router.replace("/(tabs)");
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={blockedRoomAccessPrimaryLabel}
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+            >
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessPrimaryLabel}</Text>'''
+          if old_blocked_press not in text:
+              raise SystemExit("blocked-room action anchor not found")
+          text = text.replace(old_blocked_press, new_blocked_press, 1)
+
+          path.write_text(text)
+
+          workflow = Path(".github/workflows/_temporary-live-stage-home-patch.yml")
+          workflow.unlink()
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Route blocked Live Stage users home"
+          git push origin HEAD:chatgpt/live-stage-blocked-home-only
