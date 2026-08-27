@@ -1,5 +1,5 @@
 begin;
-select plan(71);
+select plan(75);
 select is((select count(*)::int from pg_class where relnamespace='public'::regnamespace and relname in
   ('wave1_authority_audit_events','wave1_legal_document_versions','wave1_legal_acceptances','wave1_push_installation_ownership','wave1_creator_eligibility')),5,'all Wave 1 authority tables exist');
 select is((select count(*)::int from pg_proc where pronamespace='public'::regnamespace and proname in
@@ -39,14 +39,67 @@ select ok((select (public.wave1_accept_legal_documents((select jsonb_object_agg(
 update public.wave1_legal_acceptances set invalidated_at=now() where user_id in (select id from rollout_fixture) and document_key='terms' and capability='account';
 select public.wave1_accept_legal_documents((select jsonb_object_agg(document_key,version) from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='account'),'UNITED_STATES',id,id,'11111111-1111-4111-8111-111111111111','account') from rollout_fixture;
 select ok((public.wave1_legal_requirements_readback('account')->>'allAccepted')::boolean and (select count(*)=2 and count(*) filter(where invalidated_at is null)=1 from public.wave1_legal_acceptances where user_id in (select id from rollout_fixture) and document_key='terms' and capability='account') and exists(select 1 from public.wave1_authority_audit_events where domain='LEGAL_ACCEPTANCE' and reason='acceptance_invalidated' and subject_hash=(select public.wave1_sha256(id::text) from rollout_fixture)) and (select count(*)=2 from public.wave1_authority_audit_events where domain='LEGAL_ACCEPTANCE' and reason='exact_versions_accepted' and subject_hash=(select public.wave1_sha256(id::text) from rollout_fixture)),'invalidated evidence and a new acceptance receipt are retained while the same current version can be reaccepted');
+insert into auth.sessions(id,user_id) select '22222222-2222-4222-8222-222222222222',id from rollout_fixture;
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'session_id','22222222-2222-4222-8222-222222222222')::text from rollout_fixture),true);
+select is(public.wave1_legal_requirements_readback('account')->>'sessionGeneration','22222222-2222-4222-8222-222222222222','legal readback follows the replacement live session generation');
+select ok(not (public.wave1_legal_requirements_readback('account')->>'allAccepted')::boolean,'prior-session legal evidence cannot authorize a replacement session');
+select ok((select (public.wave1_accept_legal_documents((select jsonb_object_agg(document_key,version) from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='account'),'UNITED_STATES',id,id,'22222222-2222-4222-8222-222222222222','account')->>'allAccepted')::boolean from rollout_fixture),'replacement session must accept exact current legal versions itself');
+select is((select count(distinct session_generation)::int from public.wave1_legal_acceptances where user_id in (select id from rollout_fixture) and invalidated_at is null and capability='account'),2,'active legal receipts preserve both exact session generations without laundering either');
+delete from auth.sessions where id='22222222-2222-4222-8222-222222222222';
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'session_id','11111111-1111-4111-8111-111111111111')::text from rollout_fixture),true);
 select is(public.wave1_entitlement_authority_readback('premium')->>'state','INACTIVE','no entitlement row is authoritative inactive');
 select is(public.wave1_entitlement_authority_readback('premium')->>'sessionGeneration','11111111-1111-4111-8111-111111111111','entitlement readback binds exact session generation');
-insert into public.user_entitlements(user_id,entitlement_key,status,source,expires_at) select id::text,'premium','active','test_grant',now()+interval '1 day' from rollout_fixture;
+insert into public.provider_events (
+  id,provider_event_id,provider,product_id,product_key,user_id,app_user_id,
+  environment,event_type,status,occurred_at,idempotency_key,raw_payload_hash,metadata
+)
+select
+  '55555555-5555-4555-8555-555555555555','wave1-premium-fixture','revenuecat_app_store',
+  mapping.product_id,product.product_key,fixture.id,fixture.id::text,
+  'sandbox','INITIAL_PURCHASE','processed',now()-interval '1 hour',
+  'INITIAL_PURCHASE:wave1-premium-fixture',repeat('a',64),jsonb_build_object(
+    'provider_product_id',mapping.provider_product_id,
+    'provider_base_plan_id',mapping.provider_base_plan_id,
+    'store_mapping_id',mapping.id,'entitlement_key','premium',
+    'original_transaction_id','wave1-premium-original','provider_payload_stored',false
+  )
+from rollout_fixture fixture
+cross join lateral (
+  select * from public.monetization_product_store_mappings
+  where provider='revenuecat_app_store' and provider_product_id='com.chillywood.premium.monthly'
+    and environment='sandbox' limit 1
+) mapping
+join public.monetization_products product on product.id=mapping.product_id;
+insert into public.revenuecat_premium_transaction_authority (
+  provider,original_transaction_id,user_id,environment,current_product_id,
+  current_provider_product_id,current_provider_base_plan_id,first_event_id,first_event_hash,
+  latest_event_id,latest_event_hash,latest_event_type,latest_occurred_at,latest_event_rank,authority_state
+)
+select
+  event.provider,'wave1-premium-original',event.user_id,event.environment,event.product_id,
+  event.metadata->>'provider_product_id',event.metadata->>'provider_base_plan_id',
+  event.provider_event_id,event.raw_payload_hash,event.provider_event_id,event.raw_payload_hash,
+  event.event_type,event.occurred_at,2,'active'
+from public.provider_events event where event.provider_event_id='wave1-premium-fixture';
+insert into public.user_entitlements(user_id,entitlement_key,status,source,starts_at,expires_at,metadata)
+select id::text,'premium','active','revenuecat',now()-interval '1 day',now()+interval '1 day',jsonb_build_object(
+  'environment','sandbox','revenuecat_event_id','wave1-premium-fixture','revenuecat_event_hash',repeat('a',64)
+) from rollout_fixture;
+insert into public.access_grants (
+  user_id,grant_type,source_type,product_id,provider,provider_event_id,environment,
+  status,starts_at,expires_at,metadata
+)
+select
+  event.user_id,'premium','provider_event',event.product_id,event.provider,event.id,'sandbox',
+  'sandbox_only',now()-interval '1 day',now()+interval '1 day',jsonb_build_object(
+    'authority_granted',false,'provider_payload_stored',false
+  )
+from public.provider_events event where event.provider_event_id='wave1-premium-fixture';
 select is(public.wave1_entitlement_authority_readback('premium')->>'state','ACTIVE','active entitlement grants');
 update public.user_entitlements set status='trialing' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','ACTIVE','trialing entitlement grants');
 update public.user_entitlements set status='grace_period' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','GRACE','grace entitlement grants');
 update public.user_entitlements set status='pending' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','UNKNOWN','pending entitlement stays unknown');
-update public.user_entitlements set status='active',expires_at=now()-interval '1 day' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','EXPIRED','expiry overrides active status');
+update public.user_entitlements set status='active',starts_at=now()-interval '2 days',expires_at=now()-interval '1 day' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','EXPIRED','expiry overrides active status');
 update public.user_entitlements set expires_at=now()+interval '1 day',revoked_at=now() where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','REVOKED','revocation overrides active status');
 update public.user_entitlements set metadata='{"revenuecat_event_type":"REFUND"}' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','REFUNDED','refund overrides revocation');
 update auth.users set banned_until=now()+interval '1 hour' where id in (select id from rollout_fixture); select throws_ok($$select public.wave1_entitlement_authority_readback('premium')$$,'P0001','account_access_restricted','restricted account cannot read entitlement authority');
@@ -55,7 +108,7 @@ select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus"
 insert into public.account_deletion_requests(user_id,status,delete_after,restore_deadline) select id,'scheduled',now()+interval '30 days',now()+interval '30 days' from rollout_fixture; update auth.users set banned_until=null where id in (select id from rollout_fixture); select is((select state from public.wave1_creator_eligibility where creator_user_id in (select id from rollout_fixture)),'SUSPENDED','lifting one overlapping restriction cannot restore creator authority');
 update public.account_deletion_requests set status='restored',restored_at=now() where user_id in (select id from rollout_fixture) and status='scheduled'; select is((select state from public.wave1_creator_eligibility where creator_user_id in (select id from rollout_fixture)),'PENDING_VERIFICATION','lifting the final restriction requires creator reevaluation'); select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"UNITED_STATES","age18Plus":true,"legalAccepted":true,"creatorRole":true,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":5}}','post-restriction-v5','local_pgtap')->>'state' from rollout_fixture),'VERIFIED','only a newer post-lift evaluation restores creator authority');
 select ok((select (public.wave1_accept_legal_documents((select jsonb_object_agg(document_key,version) from public.wave1_legal_document_versions where active and market='UNITED_STATES'),'UNITED_STATES',id,id,'11111111-1111-4111-8111-111111111111','creator_money')->>'allAccepted')::boolean from rollout_fixture),'creator-money acceptance covers the complete active legal set');
-insert into public.money_purchase_intents(user_id,product_id,product_key,product_type,provider,provider_product_id,source_type,idempotency_key,expires_at) select id,(select id from public.monetization_products limit 1),'pgtap','paid_content_access','revenuecat','pgtap','paid_content','wave1-pgtap-null-creator',now()+interval '1 hour' from rollout_fixture;
+insert into public.money_purchase_intents(user_id,product_id,product_key,product_type,provider,provider_product_id,source_type,idempotency_key,expires_at,session_generation) select id,(select id from public.monetization_products limit 1),'pgtap','paid_content_access','revenuecat','pgtap','paid_content','wave1-pgtap-null-creator',now()+interval '1 hour','11111111-1111-4111-8111-111111111111' from rollout_fixture;
 update public.wave1_legal_document_versions set active=false where document_key='money_terms' and market='UNITED_STATES' and capability='creator_money';
 select throws_ok($$update public.money_purchase_intents set creator_id=(select id from rollout_fixture) where idempotency_key='wave1-pgtap-null-creator'$$,'42501','creator_eligibility_required','a missing required active legal document and mutable creator id both fail closed');
 update public.wave1_legal_document_versions set active=true where document_key='money_terms' and market='UNITED_STATES' and capability='creator_money';
@@ -97,7 +150,12 @@ select is((select ownership_state from public.wave1_push_installation_ownership 
 select ok(not (select enabled from public.user_push_tokens where install_id='pgtap-install'),'auth session deletion disables exact-generation token delivery');
 select is((select count(*)::int from public.wave1_legal_document_versions where document_key in ('terms','privacy','community_guidelines','creator_terms','money_terms') and market='UNITED_STATES'),5,'five legal documents are independently versioned for the US');
 select is((select count(*)::int from pg_trigger where not tgisinternal and tgname in ('wave1_creator_config_eligibility','wave1_purchase_intent_creator_eligibility','wave1_revoke_push_on_session_delete','wave1_revoke_push_on_account_deletion','wave1_recheck_creator_on_auth_restriction')),5,'server triggers enforce creator eligibility and auth-loss push cleanup');
-select ok(pg_get_functiondef('public.wave1_enforce_creator_money_exposure()'::regprocedure) like '%is_account_access_restricted%' and pg_get_functiondef('public.wave1_enforce_creator_money_exposure()'::regprocedure) like '%wave1_legal_document_versions%','final creator exposure rechecks current account and legal authority');
+select ok(
+  pg_get_functiondef('public.wave1_enforce_creator_money_exposure()'::regprocedure) like '%wave1_creator_money_subject_authorized_internal%'
+  and pg_get_functiondef('public.wave1_creator_money_subject_authorized_internal(uuid)'::regprocedure) like '%is_account_access_restricted%'
+  and pg_get_functiondef('public.wave1_creator_money_subject_authorized_internal(uuid)'::regprocedure) like '%wave1_user_has_active_legal_requirements_internal%',
+  'final creator exposure rechecks current account and exact-session legal authority'
+);
 select ok((select column_default like '%7 years%' from information_schema.columns where table_schema='public' and table_name='wave1_authority_audit_events' and column_name='retention_expires_at'),'audit retention is bounded');
 select ok(pg_get_functiondef('public.wave1_register_push_token(uuid,uuid,text,text,text,text,text,text,text,text,text,text,jsonb)'::regprocedure) like '%revocation_credential_hash%','push registration binds a revocation credential');
 select ok(pg_get_functiondef('public.wave1_revoke_push_ownership(uuid,uuid,text,text,text,text,text,text)'::regprocedure) like '%session_generation%','push revocation binds the captured session generation');

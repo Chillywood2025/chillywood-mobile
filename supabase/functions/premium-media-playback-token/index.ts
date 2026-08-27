@@ -1,4 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  creatorContentResolutionAllowed,
+  creatorVideoParentResolutionAllowed,
+  isCrossOwnerCreatorContentStaffAccess,
+} from "../_shared/media-download-authority.ts";
 
 type PremiumRenditionLabel = "720p" | "1080p";
 type SupabaseClient = any;
@@ -13,6 +18,8 @@ type RequestPayload = {
 
 type PremiumRenditionRow = {
   id: string;
+  video_id: string | null;
+  creator_id: string | null;
   source_type: string | null;
   source_id: string | null;
   rendition_label: string | null;
@@ -31,6 +38,14 @@ type PremiumRenditionRow = {
   is_original: boolean | null;
   is_public_playback_safe: boolean | null;
   is_protected_playback_safe: boolean | null;
+};
+
+type CreatorVideoParentRow = {
+  id: string;
+  owner_id: string;
+  moderation_status: string | null;
+  scan_status: string | null;
+  quarantined_at: string | null;
 };
 
 const CORS_HEADERS = {
@@ -63,6 +78,7 @@ const readEnv = (name: string) => toText(Deno.env.get(name));
 const readRequiredEnv = () => {
   const env = {
     SUPABASE_URL: readEnv("SUPABASE_URL"),
+    SUPABASE_ANON_KEY: readEnv("SUPABASE_ANON_KEY"),
     SUPABASE_SERVICE_ROLE_KEY: readEnv("SUPABASE_SERVICE_ROLE_KEY"),
     PREMIUM_CDN_TOKEN_SECRET: readEnv("PREMIUM_CDN_TOKEN_SECRET"),
     PREMIUM_MEDIA_WORKER_BASE_URL: readEnv("PREMIUM_MEDIA_WORKER_BASE_URL"),
@@ -90,6 +106,15 @@ const isProtectedPremiumPath = (path: string) => (
 const isUuid = (value: string) => (
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 );
+
+const hasScopedCrossOwnerPlaybackAuthority = async (actorClient: SupabaseClient) => {
+  const [moderation, reports] = await Promise.all([
+    actorClient.rpc("has_platform_permission", { p_permission_key: "content_moderation" }),
+    actorClient.rpc("has_platform_permission", { p_permission_key: "reports_review" }),
+  ]);
+  if (moderation.error || reports.error) return false;
+  return moderation.data === true || reports.data === true;
+};
 
 const normalizeTtlSeconds = (value: unknown) => {
   const parsed = Number(value);
@@ -149,7 +174,11 @@ const pathMatchesSource = (path: string, sourceType: string, sourceId: string) =
     || path.startsWith(`playback/premium/${encodedSourceType}/${encodedSourceId}/`);
 };
 
-const validateRenditionRow = (row: PremiumRenditionRow, requestedPath: string) => {
+const validateRenditionRow = (
+  row: PremiumRenditionRow,
+  requestedPath: string,
+  parent: CreatorVideoParentRow,
+) => {
   const sourceType = toText(row.source_type);
   const sourceId = toText(row.source_id);
   const renditionLabel = toLowerText(row.rendition_label);
@@ -157,6 +186,10 @@ const validateRenditionRow = (row: PremiumRenditionRow, requestedPath: string) =
 
   if (sourceType !== "creator_video") return "unsupported_source_type";
   if (!sourceId || !isUuid(sourceId)) return "invalid_source_id";
+  if (toText(row.video_id) !== sourceId || sourceId !== toText(parent.id)) return "source_parent_binding_mismatch";
+  if (!isUuid(toText(parent.owner_id)) || toText(row.creator_id) !== toText(parent.owner_id)) {
+    return "creator_parent_binding_mismatch";
+  }
   if (!PREMIUM_RENDITIONS.has(renditionLabel)) return "unsupported_rendition";
   if (toLowerText(row.visibility) !== "premium") return "unsupported_visibility";
   if (row.is_ready !== true) return "rendition_not_ready";
@@ -178,7 +211,22 @@ const validateRenditionRow = (row: PremiumRenditionRow, requestedPath: string) =
   return null;
 };
 
-const readPremiumRendition = async (adminClient: SupabaseClient, payload: RequestPayload) => {
+const readCreatorVideoParent = async (adminClient: SupabaseClient, sourceId: string) => {
+  const { data, error } = await adminClient
+    .from("videos")
+    .select("id,owner_id,moderation_status,scan_status,quarantined_at")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (error) return { error: json(503, { ok: false, reason: "source_parent_check_failed" }) };
+  if (!data) return { error: json(403, { ok: false, reason: "source_parent_unavailable" }) };
+  return { row: data as CreatorVideoParentRow };
+};
+
+const readPremiumRendition = async (
+  adminClient: SupabaseClient,
+  payload: RequestPayload,
+  parent: CreatorVideoParentRow,
+) => {
   const sourceType = toText(payload.source_type);
   const sourceId = toText(payload.source_id);
   const requestedLabel = toLowerText(payload.rendition_label);
@@ -197,6 +245,8 @@ const readPremiumRendition = async (adminClient: SupabaseClient, payload: Reques
     .from("media_renditions")
     .select([
       "id",
+      "video_id",
+      "creator_id",
       "source_type",
       "source_id",
       "rendition_label",
@@ -218,6 +268,8 @@ const readPremiumRendition = async (adminClient: SupabaseClient, payload: Reques
     ].join(","))
     .eq("source_type", sourceType)
     .eq("source_id", sourceId)
+    .eq("video_id", sourceId)
+    .eq("creator_id", parent.owner_id)
     .eq("delivery_format", "hls")
     .eq("delivery_provider", "cloudflare_r2_premium_token")
     .eq("storage_provider", "cloudflare_r2")
@@ -237,10 +289,57 @@ const readPremiumRendition = async (adminClient: SupabaseClient, payload: Reques
   if (error) return { error: json(500, { ok: false, reason: "rendition_query_failed" }) };
   const rows = (data ?? []) as PremiumRenditionRow[];
   const validRows = rows
-    .map((row) => ({ row, blockedReason: validateRenditionRow(row, requestedPath) }))
+    .map((row) => ({ row, blockedReason: validateRenditionRow(row, requestedPath, parent) }))
     .filter((entry) => !entry.blockedReason);
   if (!validRows.length) return { error: json(404, { ok: false, reason: "premium_hd_rendition_unavailable" }) };
   return { row: validRows[0].row };
+};
+
+const rereadExactPremiumRendition = async (
+  adminClient: SupabaseClient,
+  renditionId: string,
+  payload: RequestPayload,
+  parent: CreatorVideoParentRow,
+) => {
+  const requestedPath = normalizePath(payload.path || payload.manifest_path);
+  const { data, error } = await adminClient
+    .from("media_renditions")
+    .select([
+      "id",
+      "video_id",
+      "creator_id",
+      "source_type",
+      "source_id",
+      "rendition_label",
+      "delivery_format",
+      "delivery_provider",
+      "storage_provider",
+      "bucket_role",
+      "visibility",
+      "public_playback_path",
+      "protected_playback_path",
+      "manifest_path",
+      "variant_playlist_path",
+      "scan_status",
+      "moderation_status",
+      "is_ready",
+      "is_original",
+      "is_public_playback_safe",
+      "is_protected_playback_safe",
+    ].join(","))
+    .eq("id", renditionId)
+    .eq("source_type", "creator_video")
+    .eq("source_id", parent.id)
+    .eq("video_id", parent.id)
+    .eq("creator_id", parent.owner_id)
+    .maybeSingle();
+  if (error) return { error: json(503, { ok: false, reason: "rendition_recheck_failed" }) };
+  if (!data) return { error: json(403, { ok: false, reason: "rendition_changed_before_signing" }) };
+  const row = data as PremiumRenditionRow;
+  if (validateRenditionRow(row, requestedPath, parent) !== null) {
+    return { error: json(403, { ok: false, reason: "rendition_changed_before_signing" }) };
+  }
+  return { row };
 };
 
 Deno.serve(async (req) => {
@@ -256,16 +355,22 @@ Deno.serve(async (req) => {
   const jwt = readBearerToken(req);
   if (!jwt) return json(401, { ok: false, reason: "missing_auth" });
 
-  const adminClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  const authorization = `Bearer ${jwt}`;
+  const actorClient = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { "X-Client-Info": "premium-media-playback-token" } },
+    global: {
+      headers: {
+        Authorization: authorization,
+        "X-Client-Info": "premium-media-playback-token",
+      },
+    },
   });
 
-  const { data: authData, error: authError } = await adminClient.auth.getUser(jwt);
+  const { data: authData, error: authError } = await actorClient.auth.getUser();
   const userId = toText(authData?.user?.id);
   if (authError || !userId || !isUuid(userId)) return json(401, { ok: false, reason: "invalid_auth" });
 
-  const { data: premiumActive, error: premiumError } = await adminClient
+  const { data: premiumActive, error: premiumError } = await actorClient
     .rpc("monetization_has_active_premium", { p_user_id: userId });
   if (premiumError) return json(503, { ok: false, reason: "premium_entitlement_check_failed" });
   if (premiumActive !== true) return json(403, { ok: false, reason: "premium_entitlement_required" });
@@ -277,10 +382,128 @@ Deno.serve(async (req) => {
     return json(400, { ok: false, reason: "invalid_json" });
   }
 
-  const renditionRead = await readPremiumRendition(adminClient, payload);
+  const sourceType = toText(payload.source_type);
+  const sourceId = toText(payload.source_id);
+  if (sourceType !== "creator_video") return json(400, { ok: false, reason: "unsupported_source_type" });
+  if (!sourceId || !isUuid(sourceId)) return json(400, { ok: false, reason: "invalid_source_id" });
+
+  const { data: sourceAccess, error: sourceAccessError } = await actorClient.rpc(
+    "resolve_creator_content_access",
+    {
+      p_content_id: sourceId,
+      p_content_type: sourceType,
+    },
+  );
+  if (sourceAccessError) return json(503, { ok: false, reason: "source_access_check_failed" });
+  if (!creatorContentResolutionAllowed(sourceAccess)) {
+    return json(403, { ok: false, reason: "source_access_required" });
+  }
+
+  const adminClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { "X-Client-Info": "premium-media-playback-token" } },
+  });
+  // The commerce resolver intentionally lets an exact owner/operator inspect
+  // classification state. That authority cannot override malware quarantine
+  // or moderation for playback. Read only parent safety/binding fields before
+  // any service-role rendition path is selected.
+  const parentRead = await readCreatorVideoParent(adminClient, sourceId);
+  if (parentRead.error) return parentRead.error;
+  const parent = parentRead.row;
+  if (!creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: sourceAccess,
+    requestedSourceId: sourceId,
+    parent,
+  })) {
+    return json(403, { ok: false, reason: "source_parent_not_safe" });
+  }
+
+  const crossOwnerStaffAccess = isCrossOwnerCreatorContentStaffAccess({
+    sourceAccessResolution: sourceAccess,
+    viewerUserId: userId,
+    parentOwnerId: toText(parent.owner_id),
+  });
+  if (
+    crossOwnerStaffAccess
+    && !(await hasScopedCrossOwnerPlaybackAuthority(actorClient))
+  ) {
+    return json(403, { ok: false, reason: "scoped_staff_permission_required" });
+  }
+  if (crossOwnerStaffAccess) {
+    const { error: auditError } = await adminClient.from("platform_admin_audit_logs").insert({
+      action: "premium_creator_video_playback_token",
+      action_category: "content",
+      actor_email: toText(authData?.user?.email).toLowerCase() || null,
+      actor_role: "owner_or_operator",
+      actor_user_id: userId,
+      metadata: {
+        source_type: sourceType,
+        rendition_label: toLowerText(payload.rendition_label) || null,
+        protected_source_metadata_disclosed: false,
+      },
+      reason: "Cross-owner staff Premium playback access.",
+      severity: "notice",
+      target_id: sourceId,
+      target_type: "creator_video",
+      target_user_id: toText(parent.owner_id),
+    });
+    if (auditError) return json(503, { ok: false, reason: "staff_access_audit_failed" });
+  }
+
+  const renditionRead = await readPremiumRendition(adminClient, payload, parent);
   if (renditionRead.error) return renditionRead.error;
   const row = renditionRead.row;
-  const path = normalizePath(row.protected_playback_path || row.manifest_path);
+
+  // Do not sign from a stale first read. Refund/revocation, account restriction,
+  // moderation, or Premium expiry may commit while the rendition is resolved.
+  const [latestPremium, latestSourceAccess, latestParentRead] = await Promise.all([
+    actorClient.rpc("monetization_has_active_premium", { p_user_id: userId }),
+    actorClient.rpc("resolve_creator_content_access", {
+      p_content_id: sourceId,
+      p_content_type: sourceType,
+    }),
+    readCreatorVideoParent(adminClient, sourceId),
+  ]);
+  if (latestPremium.error || latestSourceAccess.error || latestParentRead.error) {
+    return json(503, { ok: false, reason: "authority_recheck_failed" });
+  }
+  const latestParent = latestParentRead.row;
+  const latestCrossOwnerStaffAccess = isCrossOwnerCreatorContentStaffAccess({
+    sourceAccessResolution: latestSourceAccess.data,
+    viewerUserId: userId,
+    parentOwnerId: toText(latestParent.owner_id),
+  });
+  if (
+    latestPremium.data !== true
+    || !creatorVideoParentResolutionAllowed({
+      sourceAccessResolution: latestSourceAccess.data,
+      requestedSourceId: sourceId,
+      parent: latestParent,
+    })
+    || toText(latestParent.owner_id) !== toText(parent.owner_id)
+    || latestCrossOwnerStaffAccess !== crossOwnerStaffAccess
+    || (
+      latestCrossOwnerStaffAccess
+      && !(await hasScopedCrossOwnerPlaybackAuthority(actorClient))
+    )
+  ) {
+    return json(403, { ok: false, reason: "authority_changed_before_signing" });
+  }
+
+  // Re-read the selected immutable identity after every authority check. A
+  // worker or moderator may revoke readiness, scan/moderation safety, binding,
+  // or the protected path while the earlier row is in memory. Signing derives
+  // only from this fresh exact-id snapshot.
+  const latestRenditionRead = await rereadExactPremiumRendition(
+    adminClient,
+    toText(row.id),
+    payload,
+    latestParent,
+  );
+  if (latestRenditionRead.error) return latestRenditionRead.error;
+  const latestRow = latestRenditionRead.row;
+  const path = normalizePath(latestRow.protected_playback_path || latestRow.manifest_path);
+
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
   const expiresInSeconds = normalizeTtlSeconds(env.PREMIUM_CDN_TOKEN_TTL_SECONDS);
   const claims = {
@@ -288,9 +511,9 @@ Deno.serve(async (req) => {
     version: 1,
     premiumEntitlement: true,
     userId,
-    sourceType: toText(row.source_type),
-    sourceId: toText(row.source_id),
-    renditionLabel: toLowerText(row.rendition_label) as PremiumRenditionLabel,
+    sourceType: toText(latestRow.source_type),
+    sourceId: toText(latestRow.source_id),
+    renditionLabel: toLowerText(latestRow.rendition_label) as PremiumRenditionLabel,
     path,
     issuedAtEpochSeconds: nowEpochSeconds,
     expiresAtEpochSeconds: nowEpochSeconds + expiresInSeconds,

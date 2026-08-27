@@ -1,5 +1,5 @@
 begin;
-select plan(5);
+select plan(7);
 
 select ok(
   position(
@@ -43,6 +43,32 @@ select is(
   ),
   'O',
   '5. Live room authority trigger remains enabled'
+);
+
+select ok(
+  position(
+    'wave1_creator_eligibility'
+    in pg_get_functiondef(
+      'public.watch_party_room_self_access_allowed_internal(text,text)'::regprocedure
+    )
+  ) = 0,
+  '6. ordinary Live membership/access no longer reintroduces creator-money eligibility after room creation'
+);
+
+select ok(
+  position(
+    'v_room."host_user_id"=v_user and v_allowed'
+    in pg_get_functiondef(
+      'public.resolve_money_access_room_entry(uuid,uuid,text)'::regprocedure
+    )
+  ) > 0
+  and position(
+    'v_room."host_user_id"=v_user::text'
+    in pg_get_functiondef(
+      'public.resolve_money_access_room_entry(uuid,uuid,text)'::regprocedure
+    )
+  ) = 0,
+  '7. room-entry host identity compares the exact UUID subject without a runtime type mismatch'
 );
 
 select * from finish();

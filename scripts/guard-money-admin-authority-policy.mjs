@@ -42,9 +42,9 @@ const packageJson = exists("package.json") ? read("package.json") : "";
 assertIncludes(packageJson, "guard:money-admin-authority-policy", "package guard script");
 assertIncludes(flags, "live_money_enabled: \"off\"", "live_money_enabled default off");
 assertIncludes(flags, "payouts_enabled: \"off\"", "payouts_enabled default off");
-assertIncludes(flags, "digital_sales_enabled: \"off\"", "digital sales default off");
-assertIncludes(flags, "paid_content_enabled: \"off\"", "paid content default off");
-assertIncludes(flags, "tips_enabled: \"off\"", "tips default off");
+assertIncludes(flags, "digital_sales_enabled: \"sandbox_only\"", "digital sales default sandbox-only");
+assertIncludes(flags, "paid_content_enabled: \"sandbox_only\"", "paid content default sandbox-only");
+assertIncludes(flags, "tips_enabled: \"sandbox_only\"", "tips default sandbox-only");
 assertIncludes(flags, "stripe_connect_enabled: \"sandbox_only\"", "Stripe Connect sandbox-only default");
 assertIncludes(flags, "revenuecat_google_play_enabled: \"sandbox_only\"", "RevenueCat/Google Play sandbox-only default");
 

@@ -4,7 +4,6 @@ import type { MoneyFeatureFlagKey } from "./moneyFeatureFlags";
 
 const IOS_STORE = Platform.OS === "ios";
 const REVENUECAT_STORE_LABEL = IOS_STORE ? "App Store / RevenueCat" : "Google Play / RevenueCat";
-const IOS_DYNAMIC_PRODUCT_DISABLED = "ios_dynamic_product_disabled";
 
 export type SevenMoneyFlowKey =
   | "premium"
@@ -46,6 +45,7 @@ export type SevenFlowSwitchboardRow = {
   emergencyStopSwitch: MoneyFeatureFlagKey;
   provider: "App Store / RevenueCat" | "Google Play / RevenueCat";
   productId: string;
+  productCatalog?: readonly string[];
   productionProductId?: string;
   productionBasePlanId?: string;
   productType: "subscription" | "one_time_consumable" | "one_time_non_consumable";
@@ -71,6 +71,15 @@ export type CreatorMoneyProductionProviderProductRow = {
   revenueCatStatus: CreatorMoneyProductionProviderStatus;
 };
 
+const iosTierIds = (stem: string) => [1, 2, 3, 4].map((tier) => `com.chillywood.${stem}.tier${tier}`);
+const IOS_PAID_VIDEO_PRODUCTS = iosTierIds("paidvideo");
+const IOS_EVENT_PASS_PRODUCTS = iosTierIds("eventpass");
+const IOS_VIP_PRODUCTS = iosTierIds("vip");
+const IOS_CHANNEL_SUBSCRIPTION_PRODUCTS = Array.from(
+  { length: 8 },
+  (_, index) => `com.chillywood.channel.subscription.slot${index + 1}`,
+);
+
 export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
   {
     flowKey: "premium",
@@ -82,6 +91,9 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: REVENUECAT_STORE_LABEL,
     productId: IOS_STORE ? "com.chillywood.premium.monthly" : "premium_subscription",
+    productCatalog: IOS_STORE
+      ? ["com.chillywood.premium.monthly", "com.chillywood.premium.yearly"]
+      : ["premium_subscription"],
     productType: "subscription",
     accessCreated: "user_entitlements row for entitlement_key premium when RevenueCat verifies an active subscription.",
     accessNotCreated: "No creator access grant, creator earning, payout, paid content unlock, VIP, Seat Pass, event pass, room authority, or LiveKit publish authority.",
@@ -98,9 +110,10 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: REVENUECAT_STORE_LABEL,
     productId: IOS_STORE ? "com.chillywood.tip.tier1" : "cw_creator_tip_sandbox_099",
+    productCatalog: IOS_STORE ? iosTierIds("tip") : ["cw_creator_tip_sandbox_099"],
     productionProductId: IOS_STORE ? "" : "cw_creator_tip_099",
     productType: "one_time_consumable",
-    accessCreated: "No durable access. Sandbox ledger/readback row only.",
+    accessCreated: "No durable access. Provider-backed ledger/readback only.",
     accessNotCreated: "No Premium, paid video, Seat Pass, subscription, VIP, event, badge, ranking, LiveKit, host, moderator, payable balance, or payout access.",
     appSurface: "Public Platform support/tip sheet and Money Center",
     providerReadiness: "sandbox_proved",
@@ -114,10 +127,11 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
     provider: REVENUECAT_STORE_LABEL,
-    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "cw_paid_content_access_sandbox_099",
+    productId: IOS_STORE ? IOS_PAID_VIDEO_PRODUCTS[0] : "cw_paid_content_access_sandbox_099",
+    productCatalog: IOS_STORE ? IOS_PAID_VIDEO_PRODUCTS : ["cw_paid_content_access_sandbox_099"],
     productionProductId: IOS_STORE ? "" : "cw_paid_content_access_099",
     productType: "one_time_consumable",
-    accessCreated: "paid_content_access grant bound to one creator video/source id.",
+    accessCreated: "paid_content_access grant bound to one creator video/source id after verified provider reconciliation.",
     accessNotCreated: "No Premium, channel subscription, VIP, Seat Pass, event pass, other video unlock, LiveKit authority, payout, or payable balance.",
     appSurface: "/player/[id]",
     providerReadiness: "sandbox_proved",
@@ -132,6 +146,7 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: REVENUECAT_STORE_LABEL,
     productId: IOS_STORE ? "com.chillywood.seatpass.tier1" : "cw_watch_party_live_ticket_sandbox_099",
+    productCatalog: IOS_STORE ? iosTierIds("seatpass") : ["cw_watch_party_live_ticket_sandbox_099"],
     productionProductId: IOS_STORE ? "" : "cw_watch_party_ticket_099",
     productType: "one_time_consumable",
     accessCreated: "watch_party_live_ticket grant bound to one Party Room / Watch-Party target.",
@@ -148,11 +163,12 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
     provider: REVENUECAT_STORE_LABEL,
-    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "channel_subscription_sandbox_monthly_499:monthly",
+    productId: IOS_STORE ? IOS_CHANNEL_SUBSCRIPTION_PRODUCTS[0] : "channel_subscription_sandbox_monthly_499:monthly",
+    productCatalog: IOS_STORE ? IOS_CHANNEL_SUBSCRIPTION_PRODUCTS : ["channel_subscription_sandbox_monthly_499:monthly"],
     productionProductId: IOS_STORE ? "" : "cw_channel_subscription_monthly_499",
     productionBasePlanId: IOS_STORE ? undefined : "monthly",
     productType: "subscription",
-    accessCreated: "channel_subscription grant/subscription state for one creator channel.",
+    accessCreated: "channel_subscription grant/subscription state for one creator channel. iOS uses one independently reusable subscription slot per concurrently subscribed creator.",
     accessNotCreated: "No Premium, VIP, paid video, Seat Pass, event pass, other creator subscription, LiveKit authority, payout, or payable balance.",
     appSurface: "/channel-subscription/[creatorId]",
     providerReadiness: "sandbox_proved",
@@ -166,10 +182,11 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
     provider: REVENUECAT_STORE_LABEL,
-    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "cw_vip_pass_sandbox_499",
+    productId: IOS_STORE ? IOS_VIP_PRODUCTS[0] : "cw_vip_pass_sandbox_499",
+    productCatalog: IOS_STORE ? IOS_VIP_PRODUCTS : ["cw_vip_pass_sandbox_499"],
     productionProductId: IOS_STORE ? "" : "cw_vip_pass_499",
-    productType: "one_time_non_consumable",
-    accessCreated: "vip_pass grant/pass state for one creator.",
+    productType: "one_time_consumable",
+    accessCreated: "vip_pass grant/pass state for one creator after verified provider reconciliation.",
     accessNotCreated: "No Premium, channel subscription, paid video, Seat Pass, event pass, other creator VIP, LiveKit authority, payout, or payable balance.",
     appSurface: "/vip-pass/[creatorId]",
     providerReadiness: "sandbox_proved",
@@ -183,10 +200,11 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
     provider: REVENUECAT_STORE_LABEL,
-    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "cw_event_pass_sandbox_099",
+    productId: IOS_STORE ? IOS_EVENT_PASS_PRODUCTS[0] : "cw_event_pass_sandbox_099",
+    productCatalog: IOS_STORE ? IOS_EVENT_PASS_PRODUCTS : ["cw_event_pass_sandbox_099"],
     productionProductId: IOS_STORE ? "" : "cw_event_pass_099",
     productType: "one_time_consumable",
-    accessCreated: "event_pass grant/pass bound to one creator event.",
+    accessCreated: "event_pass grant/pass bound to one creator event after verified provider reconciliation.",
     accessNotCreated: "No Premium, VIP, subscription, paid video, Seat Pass, other event, LiveKit authority, payout, or payable balance.",
     appSurface: "/event/[eventId]",
     providerReadiness: "sandbox_proved",
@@ -204,7 +222,7 @@ export const CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS: readonly CreatorMoneyPr
     productionProductId: flow.productionProductId ?? "",
     productionBasePlanId: flow.productionBasePlanId ?? null,
     productType: flow.productType,
-    launchPriceUsd: flow.flowKey === "channel_subscription" ? "$4.99/month" : flow.flowKey === "vip" ? "$4.99" : "$0.99",
+    launchPriceUsd: flow.flowKey === "channel_subscription" ? "$4.99/month" : flow.flowKey === "vip" ? "$4.99" : "$0.99+ finite tiers",
     launchRegion: "United States only first" as const,
     customPricingPolicy: "provider_backed_fail_closed" as const,
     switchName: flow.switchName,

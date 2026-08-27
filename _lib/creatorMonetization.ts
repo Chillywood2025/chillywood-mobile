@@ -179,23 +179,24 @@ const toCents = (value: unknown) => {
   return Math.max(0, Math.trunc(normalized));
 };
 
-const CREATOR_CONTENT_ALLOW_REASONS = new Set([
+const CREATOR_CONTENT_ACCESS_ALLOWED_REASONS = new Set([
   "owner",
   "free_content",
   "purchase_grant",
-  "active_grant",
   "sandbox_grant",
+  "active_grant",
 ]);
-const CREATOR_CONTENT_DENY_REASONS = new Set([
-  "unsupported_content_type",
+const CREATOR_CONTENT_ACCESS_DENIED_REASONS = new Set([
   "content_unavailable",
-  "purchase_required",
+  "unsupported_content_type",
 ]);
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CREATOR_CONTENT_ACCESS_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-const createUnknownCreatorContentAccessResolution = (): CreatorContentAccessResolution => ({
+const unavailableCreatorContentAccessResolution = (
+  reason: "resolver_unavailable" | "resolver_malformed",
+): CreatorContentAccessResolution => ({
   allowed: false,
-  reason: "resolver_unavailable",
+  reason,
   requiresPurchase: false,
   priceCents: null,
   currency: null,
@@ -207,49 +208,89 @@ export const normalizeCreatorContentAccessResolution = (
   payload: unknown,
 ): CreatorContentAccessResolution => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return createUnknownCreatorContentAccessResolution();
+    return unavailableCreatorContentAccessResolution("resolver_malformed");
   }
 
   const body = payload as Record<string, unknown>;
-  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
-  const allowed = body.allowed;
-  const requiresPurchase = body.requiresPurchase;
-  const priceCents = body.priceCents;
-  const currency = body.currency;
-  const creatorId = body.creatorId;
-  const optionalFieldsAreWellFormed = (
-    (priceCents == null || (typeof priceCents === "number" && Number.isSafeInteger(priceCents) && priceCents >= 0))
-    && (currency == null || (typeof currency === "string" && /^[a-z]{3}$/.test(currency.trim())))
-    && (creatorId == null || (typeof creatorId === "string" && UUID_PATTERN.test(creatorId.trim())))
-  );
-  const reasonMatchesDecision = allowed === true
-    ? CREATOR_CONTENT_ALLOW_REASONS.has(reason) && requiresPurchase === false
-    : allowed === false
-      ? CREATOR_CONTENT_DENY_REASONS.has(reason)
-        && (requiresPurchase == null || typeof requiresPurchase === "boolean")
-        && (reason !== "purchase_required" || (
-          requiresPurchase === true
-          && typeof priceCents === "number"
-          && Number.isSafeInteger(priceCents)
-          && priceCents > 0
-          && typeof currency === "string"
-          && /^[a-z]{3}$/.test(currency.trim())
-          && typeof creatorId === "string"
-          && UUID_PATTERN.test(creatorId.trim())
-        ))
-      : false;
-
-  if (!reasonMatchesDecision || !optionalFieldsAreWellFormed) {
-    return createUnknownCreatorContentAccessResolution();
+  if (typeof body.allowed !== "boolean" || typeof body.reason !== "string" || body.reason.trim() !== body.reason) {
+    return unavailableCreatorContentAccessResolution("resolver_malformed");
   }
 
+  const reason = body.reason;
+  if (body.allowed) {
+    if (!CREATOR_CONTENT_ACCESS_ALLOWED_REASONS.has(reason) || body.requiresPurchase !== false) {
+      return unavailableCreatorContentAccessResolution("resolver_malformed");
+    }
+    return {
+      allowed: true,
+      reason,
+      requiresPurchase: false,
+      priceCents: null,
+      currency: null,
+      creatorId: null,
+      resolverStatus: "resolved",
+    };
+  }
+
+  if (reason === "purchase_required") {
+    const provider = typeof body.provider === "string" && body.provider === body.provider.trim()
+      ? body.provider
+      : "";
+    const providerProductId = typeof body.providerProductId === "string"
+      && body.providerProductId === body.providerProductId.trim()
+      && body.providerProductId.length <= 512
+      && !/[\u0000-\u001f\u007f]/u.test(body.providerProductId)
+      ? body.providerProductId
+      : "";
+    const providerProductKey = typeof body.providerProductKey === "string"
+      && body.providerProductKey === body.providerProductKey.trim()
+      && body.providerProductKey.length <= 512
+      && !/[\u0000-\u001f\u007f]/u.test(body.providerProductKey)
+      ? body.providerProductKey
+      : "";
+    const offerStatus = typeof body.offerStatus === "string" && body.offerStatus === body.offerStatus.trim()
+      ? body.offerStatus
+      : "";
+    if (
+      body.requiresPurchase !== true
+      || typeof body.priceCents !== "number"
+      || !Number.isSafeInteger(body.priceCents)
+      || body.priceCents <= 0
+      || typeof body.currency !== "string"
+      || !/^[a-z]{3}$/.test(body.currency)
+      || typeof body.creatorId !== "string"
+      || !CREATOR_CONTENT_ACCESS_UUID_PATTERN.test(body.creatorId)
+      || (provider !== "revenuecat_app_store" && provider !== "revenuecat_google_play")
+      || !providerProductId
+      || !providerProductKey
+      || (offerStatus !== "sandbox" && offerStatus !== "active")
+    ) {
+      return unavailableCreatorContentAccessResolution("resolver_malformed");
+    }
+    return {
+      allowed: false,
+      reason,
+      requiresPurchase: true,
+      priceCents: body.priceCents,
+      currency: body.currency,
+      creatorId: body.creatorId,
+      resolverStatus: "resolved",
+    };
+  }
+
+  if (
+    !CREATOR_CONTENT_ACCESS_DENIED_REASONS.has(reason)
+    || (body.requiresPurchase !== undefined && body.requiresPurchase !== false)
+  ) {
+    return unavailableCreatorContentAccessResolution("resolver_malformed");
+  }
   return {
-    allowed: allowed === true,
+    allowed: false,
     reason,
-    requiresPurchase: requiresPurchase === true,
-    priceCents: typeof priceCents === "number" ? priceCents : null,
-    currency: typeof currency === "string" ? currency.trim() : null,
-    creatorId: typeof creatorId === "string" ? creatorId.trim() : null,
+    requiresPurchase: false,
+    priceCents: null,
+    currency: null,
+    creatorId: null,
     resolverStatus: "resolved",
   };
 };
@@ -443,21 +484,14 @@ export async function resolveCreatorContentAccess(options: {
   contentId: string;
 }): Promise<CreatorContentAccessResolution> {
   try {
-    const result = await withAuthorityReadDeadline<unknown>(
-      monetizationClient.rpc("resolve_creator_content_access", {
-        p_content_type: options.contentType,
-        p_content_id: options.contentId,
-      }),
-      null,
-    );
-    if (!result || typeof result !== "object" || Array.isArray(result)) {
-      return createUnknownCreatorContentAccessResolution();
-    }
-    const { data, error } = result as { data?: unknown; error?: unknown };
-    if (error) return createUnknownCreatorContentAccessResolution();
+    const { data, error } = await monetizationClient.rpc("resolve_creator_content_access", {
+      p_content_type: options.contentType,
+      p_content_id: options.contentId,
+    });
+    if (error) throw error;
     return normalizeCreatorContentAccessResolution(data);
   } catch {
-    return createUnknownCreatorContentAccessResolution();
+    return unavailableCreatorContentAccessResolution("resolver_unavailable");
   }
 }
 

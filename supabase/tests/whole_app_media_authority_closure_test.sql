@@ -65,14 +65,57 @@ insert into auth.users (
   transaction_timestamp(), transaction_timestamp(), false, false
 ) on conflict (id) do nothing;
 
-insert into public.user_entitlements (
-  user_id, entitlement_key, status, source, starts_at, expires_at, metadata
-) values (
-  '11111111-1111-4111-8111-111111111111', 'premium', 'active', 'test_grant',
-  transaction_timestamp(), transaction_timestamp() + interval '1 day',
-  '{"fixture":"whole_app_media_authority_closure"}'::jsonb
-) on conflict (user_id, entitlement_key) do update
-set status = excluded.status, source = excluded.source, expires_at = excluded.expires_at;
+insert into auth.sessions (id,user_id,not_after) values
+  ('11111111-1111-4111-8111-111111111101','11111111-1111-4111-8111-111111111111',now()+interval '1 day'),
+  ('22222222-2222-4222-8222-222222222202','22222222-2222-4222-8222-222222222222',now()+interval '1 day');
+
+insert into public.wave1_legal_acceptances (
+  user_id,subject_hash,document_key,document_version,market,
+  role_key,capability,session_generation,authority_source
+)
+select
+  authority.user_id,
+  public.wave1_sha256(authority.user_id::text),
+  document.document_key,
+  document.version,
+  document.market,
+  'member',document.capability,authority.session_generation,'service_reconciliation'
+from (
+  values
+    ('11111111-1111-4111-8111-111111111111'::uuid,'11111111-1111-4111-8111-111111111101'::text),
+    ('22222222-2222-4222-8222-222222222222'::uuid,'22222222-2222-4222-8222-222222222202'::text)
+) authority(user_id,session_generation)
+cross join public.wave1_legal_document_versions document
+where document.active
+  and document.market='UNITED_STATES'
+  and document.capability='account';
+
+update public.platform_money_kill_switches
+set state='sandbox_only'
+where key in ('revenuecat_app_store_enabled','provider_webhooks_enabled');
+
+do $premium_fixture$
+declare
+  v_result jsonb;
+begin
+  select public.process_revenuecat_premium_event_atomic(
+    'revenuecat_app_store','wholeapp-media-premium-initial','INITIAL_PURCHASE',
+    '11111111-1111-4111-8111-111111111111',mapping.provider_product_id,
+    mapping.provider_base_plan_id,'sandbox','active',now()-interval '1 day',
+    now()+interval '30 days',now(),mapping.reference_price_minor,
+    mapping.reference_currency,repeat('e',64),'NORMAL','app_store','ios',
+    mapping.id,mapping.product_id,'wholeapp-media-premium-original'
+  ) into v_result
+  from public.monetization_product_store_mappings mapping
+  where mapping.provider='revenuecat_app_store'
+    and mapping.provider_product_id='com.chillywood.premium.monthly'
+    and mapping.environment='sandbox'
+  limit 1;
+  if coalesce(v_result->>'status','') not in ('processed','applied','idempotent') then
+    raise exception 'provider_backed_premium_fixture_failed';
+  end if;
+end;
+$premium_fixture$;
 
 insert into public.media_upload_reservations (
   owner_user_id, surface_type, storage_provider, storage_bucket,
@@ -96,7 +139,7 @@ values (
 ) on conflict (bucket_id, name) do nothing;
 
 set local request.jwt.claims =
-  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test"}';
+  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test","session_id":"11111111-1111-4111-8111-111111111101"}';
 set local role authenticated;
 
 select lives_ok($sql$
@@ -258,7 +301,7 @@ where user_id = '11111111-1111-4111-8111-111111111111';
 
 reset role;
 set local request.jwt.claims =
-  '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated","email":"wholeapp-media-viewer@example.test"}';
+  '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated","email":"wholeapp-media-viewer@example.test","session_id":"22222222-2222-4222-8222-222222222202"}';
 set local role authenticated;
 select is(
   public.resolve_profile_media_delivery(
@@ -294,7 +337,7 @@ select is(
 );
 
 set local request.jwt.claims =
-  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test"}';
+  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test","session_id":"11111111-1111-4111-8111-111111111101"}';
 set local role authenticated;
 
 select throws_ok($sql$
@@ -443,7 +486,7 @@ insert into public.content_access_grants (
 );
 
 set local request.jwt.claims =
-  '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated","email":"wholeapp-media-viewer@example.test"}';
+  '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated","email":"wholeapp-media-viewer@example.test","session_id":"22222222-2222-4222-8222-222222222202"}';
 set local role authenticated;
 select is(
   (public.resolve_creator_content_access(
@@ -468,8 +511,8 @@ select is(
   public.resolve_creator_content_access(
     'creator_video', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   )->>'reason',
-  'sandbox_grant',
-  'a current exact sandbox grant authorizes only its bound viewer and content'
+  'content_unavailable',
+  'a bare sandbox grant without provider event, consumed intent, and transaction binding grants nothing'
 );
 
 reset role;
@@ -491,7 +534,7 @@ select is(
 );
 
 set local request.jwt.claims =
-  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test"}';
+  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test","session_id":"11111111-1111-4111-8111-111111111101"}';
 set local role authenticated;
 select throws_ok($sql$
   update public.videos
@@ -583,7 +626,7 @@ select is(
 
 reset role;
 set local request.jwt.claims =
-  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test"}';
+  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test","session_id":"11111111-1111-4111-8111-111111111101"}';
 set local role authenticated;
 select is(
   public.consume_verified_media_upload(

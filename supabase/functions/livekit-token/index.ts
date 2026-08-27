@@ -13,6 +13,7 @@ import {
   normalizeLiveKitRoutingRoomType,
   resolveLiveKitAssignment,
 } from "../_shared/livekit-routing.ts";
+import { readLiveKitParticipantSessionGeneration } from "../_shared/livekit-session-generation.ts";
 import { readLiveCostGuardTokenDecision } from "../_shared/live-cost-guard.ts";
 import {
   parseWatchPartyLiveKitAuthorityDecision,
@@ -422,14 +423,14 @@ async function enforceParticipantState(
     }
   }
 
-  const targetSessionGeneration = actorUserId === targetUserId
+  const targetAuthoritySessionGeneration = actorUserId === targetUserId
     ? actorSessionGeneration
     : null;
   const targetAuthority = await resolveCurrentWatchPartyLiveKitAuthority(
     adminClient,
     room,
     targetUserId,
-    targetSessionGeneration,
+    targetAuthoritySessionGeneration,
   );
   if (!targetAuthority) {
     return json(503, {
@@ -538,16 +539,42 @@ async function enforceParticipantState(
     }
   }
 
+  const assignmentEndpoint = await fetchExistingLiveKitAssignmentEndpoint(adminClient, room.roomName);
+  let roomService: RoomServiceClient | null = null;
+  let targetConnected = false;
+  let targetSessionGeneration: string | null = null;
+  let participantLookupFailed = false;
+  if (assignmentEndpoint?.apiUrl) {
+    roomService = new RoomServiceClient(assignmentEndpoint.apiUrl, livekitApiKey, livekitApiSecret);
+    try {
+      const participants = await roomService.listParticipants(room.roomName);
+      const targetParticipant = participants.find((participant) => (
+        sanitizeText(participant.identity) === targetUserId
+      )) ?? null;
+      targetConnected = targetParticipant !== null;
+      targetSessionGeneration = targetParticipant
+        ? readLiveKitParticipantSessionGeneration(targetParticipant.metadata, {
+          participantIdentity: targetUserId,
+          roomName: room.roomName,
+        })
+        : null;
+    } catch {
+      // A failed participant read cannot justify retaining publish authority.
+      // The removal attempt below is the fail-closed enforcement action.
+      participantLookupFailed = true;
+    }
+  }
+
   const roomActive = isWatchPartyRoomCurrentlyActive(room);
-  const roleResolution = roomActive
+  const roleResolution = roomActive && targetConnected && targetSessionGeneration
     ? await resolveEffectiveParticipantRole(
       adminClient,
       room,
       surface,
       "speaker",
       targetUserId,
-      {},
       targetSessionGeneration,
+      {},
     )
     : null;
   const participantRole = roleResolution?.ok ? roleResolution.participantRole : "viewer";
@@ -564,8 +591,7 @@ async function enforceParticipantState(
     });
   }
 
-  const assignmentEndpoint = await fetchExistingLiveKitAssignmentEndpoint(adminClient, room.roomName);
-  if (!assignmentEndpoint?.apiUrl) {
+  if (!roomService) {
     return json(200, {
       ok: true,
       disconnected: false,
@@ -575,8 +601,17 @@ async function enforceParticipantState(
     });
   }
 
+  if (!targetConnected && !participantLookupFailed) {
+    return json(200, {
+      ok: true,
+      disconnected: false,
+      participantRole,
+      requestedGrants,
+      reason: "target_participant_not_connected",
+    });
+  }
+
   try {
-    const roomService = new RoomServiceClient(assignmentEndpoint.apiUrl, livekitApiKey, livekitApiSecret);
     await roomService.removeParticipant(room.roomName, targetUserId);
     return json(200, {
       ok: true,
@@ -809,8 +844,8 @@ async function resolveEffectiveParticipantRole(
   surface: LiveKitJoinSurface,
   requestedParticipantRole: LiveKitParticipantRole | null,
   userId: string,
-  payload: TokenRequestPayload,
   sessionGeneration: string | null,
+  payload: TokenRequestPayload,
 ) : Promise<EffectiveRoleResolution> {
   if (room.kind === "communication" && surface === "chat-call") {
     if (!room.chatThreadId) {
@@ -1060,6 +1095,16 @@ async function resolveEffectiveParticipantRole(
       membership: currentMembership,
       reason: currentMembership?.isMuted ? "approved_speaker_muted" : "approved_speaker",
       watchPartyAuthority: authority.allowed ? authority : undefined,
+    };
+  }
+
+  if (room.hostUserId === userId) {
+    return {
+      ok: true,
+      participantRole: "host",
+      canPublish: true,
+      membership: null,
+      reason: "room_host",
     };
   }
 
@@ -1349,8 +1394,8 @@ Deno.serve(async (req): Promise<Response> => {
       surface,
       participantRole,
       userId,
-      payload,
       authResult.sessionGeneration,
+      payload,
     );
 
     if (!effectiveRole.ok) {
@@ -1437,6 +1482,7 @@ Deno.serve(async (req): Promise<Response> => {
         roomKind: room.kind,
         roomType: room.kind === "watch-party" ? room.roomType : null,
         roomName: room.roomName,
+        sessionGeneration: authResult.sessionGeneration,
         surface,
         userId,
         participantRole: effectiveParticipantRole,
@@ -1451,6 +1497,7 @@ Deno.serve(async (req): Promise<Response> => {
       canPublish: requestedGrants.canPublish,
       canPublishData: requestedGrants.canPublishData,
       canSubscribe: requestedGrants.canSubscribe,
+      canUpdateOwnMetadata: false,
       room: room.roomName,
       roomJoin: requestedGrants.roomJoin,
     });

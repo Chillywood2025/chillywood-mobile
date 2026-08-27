@@ -1,6 +1,12 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  prepareCreatorMoneyPurchaseSubject,
+  revalidateCreatorMoneyPurchaseSubject,
+  validateCreatorMoneyPurchaseIntent,
+  type CreatorMoneyPurchaseIntentExpectation,
+} from "./creatorMoneyPurchaseAuthority";
+import {
   getRevenueCatProductionReadiness,
   purchaseRevenueCatStoreProduct,
   readRevenueCatCustomerInfo,
@@ -8,7 +14,6 @@ import {
 } from "./revenuecat";
 import {
   findIosStoreProductByProductId,
-  resolveIosFiniteAppStoreTier,
   type IosStoreProductRecord,
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
@@ -103,6 +108,18 @@ type RpcClient = {
 const rpcClient = supabase as unknown as RpcClient;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const ACCESS_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const accessText = (value: unknown) => (
+  typeof value === "string"
+    && value === value.trim()
+    && value.length <= 512
+    && !/[\u0000-\u001f\u007f]/u.test(value)
+    ? value
+    : ""
+);
+const isAccessProvider = (value: string) => (
+  value === "revenuecat_app_store" || value === "revenuecat_google_play"
+);
 const resolveRevenueCatProvider = () => Platform.OS === "ios" ? "revenuecat_app_store" : "revenuecat_google_play";
 const toCents = (value: unknown) => {
   const parsed = Number(value);
@@ -192,24 +209,115 @@ const parseTransaction = (row: Record<string, unknown>): PaidWatchPartyTransacti
   };
 };
 
-const normalizeAccess = (value: unknown): PaidWatchPartyTicketAccess => {
-  const row = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-  const offer = row.offer && typeof row.offer === "object" && !Array.isArray(row.offer)
-    ? parseOffer(row.offer as Record<string, unknown>)
+const unavailableTicketAccess = (reason = "malformed_access_response"): PaidWatchPartyTicketAccess => ({
+  allowed: false,
+  reason,
+  requiresPurchase: false,
+  ticketId: null,
+  priceCents: null,
+  currency: null,
+  creatorId: null,
+  provider: null,
+  providerProductId: null,
+  providerProductKey: null,
+  offer: null,
+});
+
+const parseAuthoritativeTicketOffer = (
+  value: unknown,
+  expectedPartyId: string,
+): PaidWatchPartyOffer | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const offer = parseOffer(row);
+  if (!offer) return null;
+  const status = accessText(row.status);
+  return ACCESS_UUID_PATTERN.test(accessText(row.id))
+    && accessText(row.partyId) === expectedPartyId
+    && ACCESS_UUID_PATTERN.test(accessText(row.creatorId))
+    && ACCESS_UUID_PATTERN.test(accessText(row.hostId))
+    && typeof row.priceCents === "number"
+    && Number.isSafeInteger(row.priceCents)
+    && row.priceCents > 0
+    && /^[a-z]{3}$/.test(accessText(row.currency))
+    && isAccessProvider(accessText(row.provider))
+    && !!accessText(row.providerProductId)
+    && !!accessText(row.providerProductKey)
+    && ["sandbox", "active", "paused", "sold_out"].includes(status)
+    ? offer
     : null;
+};
+
+const normalizeAccess = (value: unknown, expectedPartyId: string): PaidWatchPartyTicketAccess => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return unavailableTicketAccess();
+  const row = value as Record<string, unknown>;
+  const reason = accessText(row.reason);
+  if (typeof row.allowed !== "boolean" || typeof row.requiresPurchase !== "boolean" || !reason) {
+    return unavailableTicketAccess();
+  }
+  const offer = row.offer == null ? null : parseAuthoritativeTicketOffer(row.offer, expectedPartyId);
+  if (row.allowed) {
+    if (row.requiresPurchase) return unavailableTicketAccess();
+    if (reason === "free_room" && row.offer == null && accessText(row.ticketId) === "") {
+      return { ...unavailableTicketAccess(reason), allowed: true };
+    }
+    if (
+      reason === "host_or_admin"
+      && row.previewAuthority === true
+      && offer
+      && accessText(row.ticketId) === ""
+    ) {
+      return { ...unavailableTicketAccess(reason), allowed: true, creatorId: offer.creatorId, offer };
+    }
+    if (reason === "ticket_confirmed" && offer && ACCESS_UUID_PATTERN.test(accessText(row.ticketId))) {
+      return {
+        allowed: true,
+        reason,
+        requiresPurchase: false,
+        ticketId: accessText(row.ticketId),
+        priceCents: offer.priceCents,
+        currency: offer.currency,
+        creatorId: offer.creatorId,
+        provider: offer.provider,
+        providerProductId: offer.providerProductId,
+        providerProductKey: offer.providerProductKey,
+        offer,
+      };
+    }
+    return unavailableTicketAccess();
+  }
+  if (reason !== "ticket_required") return unavailableTicketAccess(reason);
+  const priceCents = row.priceCents;
+  const currency = accessText(row.currency);
+  const creatorId = accessText(row.creatorId);
+  const provider = accessText(row.provider);
+  const providerProductId = accessText(row.providerProductId);
+  const providerProductKey = accessText(row.providerProductKey);
+  if (
+    row.requiresPurchase !== true
+    || !offer
+    || (offer.status !== "sandbox" && offer.status !== "active")
+    || typeof priceCents !== "number"
+    || !Number.isSafeInteger(priceCents)
+    || priceCents <= 0
+    || priceCents !== offer.priceCents
+    || currency !== offer.currency
+    || creatorId !== offer.creatorId
+    || provider !== offer.provider
+    || providerProductId !== offer.providerProductId
+    || providerProductKey !== offer.providerProductKey
+  ) return unavailableTicketAccess();
   return {
-    allowed: row.allowed === true,
-    reason: toText(row.reason) || "unknown",
-    requiresPurchase: row.requiresPurchase === true || toText(row.reason) === "ticket_required",
-    ticketId: toText(row.ticketId) || null,
-    priceCents: row.priceCents == null ? offer?.priceCents ?? null : toCents(row.priceCents),
-    currency: toText(row.currency) || offer?.currency || null,
-    creatorId: toText(row.creatorId) || offer?.creatorId || null,
-    provider: toText(row.provider) || offer?.provider || null,
-    providerProductId: toText(row.providerProductId) || offer?.providerProductId || null,
-    providerProductKey: toText(row.providerProductKey) || offer?.providerProductKey || null,
+    allowed: false,
+    reason,
+    requiresPurchase: true,
+    ticketId: null,
+    priceCents,
+    currency,
+    creatorId,
+    provider,
+    providerProductId,
+    providerProductKey,
     offer,
   };
 };
@@ -332,27 +440,39 @@ export async function resolvePaidWatchPartyTicketAccess(partyId: string): Promis
       offer: null,
     };
   }
-  return normalizeAccess(data);
+  return normalizeAccess(data, partyId);
 }
 
-export async function createPaidWatchPartyTicketPurchaseIntent(offerId: string) {
+export async function createPaidWatchPartyTicketPurchaseIntent(
+  offerId: string,
+  expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+) {
   const { data, error } = await rpcClient.rpc("create_paid_watch_party_ticket_purchase_intent", {
     p_offer_id: offerId,
   });
   if (error) throw new Error("Seat Pass checkout is not available right now.");
-  const row = data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : {};
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Seat Pass checkout authority could not be verified.");
+  }
+  const row = data as Record<string, unknown>;
+  if (typeof row.alreadyPurchased !== "boolean") {
+    throw new Error("Seat Pass checkout authority could not be verified.");
+  }
+  const validated = validateCreatorMoneyPurchaseIntent(data, {
+    ...expected,
+    status: row.alreadyPurchased ? "consumed" : "pending",
+  });
+  if (!validated) throw new Error("Seat Pass checkout authority could not be verified.");
   return {
-    id: toText(row.id),
-    providerProductId: toText(row.providerProductId) || PAID_WATCH_PARTY_TICKET_SANDBOX_PROVIDER_PRODUCT_ID,
-    alreadyPurchased: row.alreadyPurchased === true,
+    ...validated,
+    alreadyPurchased: row.alreadyPurchased,
   };
 }
 
 const createIosPaidWatchPartyTicketPurchaseIntent = async (
   offerId: string,
   product: IosStoreProductRecord,
+  expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
 ) => {
   const { data, error } = await rpcClient.rpc("create_ios_app_store_purchase_intent", {
     p_metadata: {
@@ -369,13 +489,23 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
     p_source_type: "watch_party_live",
   });
   if (error) throw new Error("App Store Seat Pass checkout is not available right now.");
-  const row = data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : {};
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("App Store Seat Pass checkout authority could not be verified.");
+  }
+  const row = data as Record<string, unknown>;
+  if (typeof row.alreadyPurchased !== "boolean") {
+    throw new Error("App Store Seat Pass checkout authority could not be verified.");
+  }
+  const validated = validateCreatorMoneyPurchaseIntent(data, {
+    ...expected,
+    status: row.alreadyPurchased ? "consumed" : "pending",
+  });
+  if (!validated || validated.providerProductId !== product.productId) {
+    throw new Error("App Store Seat Pass checkout authority could not be verified.");
+  }
   return {
-    id: toText(row.id),
-    providerProductId: product.productId,
-    alreadyPurchased: row.alreadyPurchased === true,
+    ...validated,
+    alreadyPurchased: row.alreadyPurchased,
   };
 };
 
@@ -401,20 +531,28 @@ export async function purchasePaidWatchPartyTicket(input: {
   if (!access.requiresPurchase || !access.offer?.id) {
     return { ok: false, message: "This Seat Pass is not available right now.", access };
   }
+  if (
+    !access.creatorId
+    || (access.provider !== "revenuecat_app_store" && access.provider !== "revenuecat_google_play")
+    || !access.providerProductId
+    || typeof access.priceCents !== "number"
+    || !access.currency
+  ) return { ok: false, message: "This Seat Pass is not available right now.", access };
 
-  const iosLegacyTier = Platform.OS === "ios"
-    ? resolveIosFiniteAppStoreTier("seat_pass", access.priceCents ?? access.offer.priceCents)
-    : null;
-  const iosLegacyProduct = iosLegacyTier
-    ? findIosStoreProductByProductId(iosLegacyTier.productId)
-    : null;
   const iosProduct = Platform.OS === "ios"
-    ? (access.offer?.providerProductId
+    ? access.offer.providerProductId
       ? findIosStoreProductByProductId(access.offer.providerProductId)
-      : null) ?? iosLegacyProduct
+      : null
     : null;
   if (Platform.OS === "ios") {
-    if (!iosProduct || iosProduct.concept !== "seat_pass") {
+    if (
+      !iosProduct
+      || iosProduct.concept !== "seat_pass"
+      || iosProduct.productType !== "consumable"
+      || iosProduct.referencePriceMinor !== access.offer.priceCents
+      || access.priceCents !== access.offer.priceCents
+      || access.providerProductId !== iosProduct.productId
+    ) {
       return {
         ok: false,
         message: "This Seat Pass does not match an approved App Store tier. Nothing was charged.",
@@ -442,9 +580,28 @@ export async function purchasePaidWatchPartyTicket(input: {
     }
   }
 
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  if (!purchaseSubject) {
+    return {
+      ok: false,
+      message: "Sign in again before starting Seat Pass checkout. Nothing was charged.",
+      access,
+    };
+  }
+  const expectedIntent: Omit<CreatorMoneyPurchaseIntentExpectation, "status"> = {
+    userId: purchaseSubject.userId,
+    sourceType: "watch_party_live",
+    sourceId: access.offer.id,
+    creatorId: access.creatorId,
+    provider: access.provider,
+    providerProductId: access.providerProductId,
+    environment: access.offer.status === "active" ? "production" : "sandbox",
+    amountMinor: access.priceCents,
+    currency: access.currency,
+  };
   const intent = Platform.OS === "ios" && iosProduct
-    ? await createIosPaidWatchPartyTicketPurchaseIntent(access.offer.id, iosProduct)
-    : await createPaidWatchPartyTicketPurchaseIntent(access.offer.id);
+    ? await createIosPaidWatchPartyTicketPurchaseIntent(access.offer.id, iosProduct, expectedIntent)
+    : await createPaidWatchPartyTicketPurchaseIntent(access.offer.id, expectedIntent);
   if (intent.alreadyPurchased) {
     const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
     return {
@@ -455,11 +612,9 @@ export async function purchasePaidWatchPartyTicket(input: {
     };
   }
 
-  const productId = intent.providerProductId
-    || (Platform.OS === "ios" ? iosProduct?.productId : access.providerProductId)
-    || PAID_WATCH_PARTY_TICKET_SANDBOX_PROVIDER_PRODUCT_ID;
+  const productId = access.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
-  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? products[0] ?? null;
+  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
   if (!product) {
     return {
       ok: false,
@@ -479,8 +634,18 @@ export async function purchasePaidWatchPartyTicket(input: {
     source_surface: input.sourceSurface,
   });
 
+  if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    return {
+      ok: false,
+      message: "Your session changed before Seat Pass checkout. Nothing was charged.",
+      access,
+      intentId: intent.id,
+      productId,
+    };
+  }
+
   try {
-    await purchaseRevenueCatStoreProduct(product);
+    await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
     await readRevenueCatCustomerInfo({ refresh: true });
     const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);

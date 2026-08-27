@@ -185,7 +185,9 @@ export function TipSheet({
       && amountCents >= minAmount
       && amountCents <= maxAmount;
   const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
-  const canTipInSandbox = sandboxTester || tipStatus?.canTip === true;
+  // Tester mode changes copy only. Exact server-normalized creator authority
+  // remains mandatory before any store purchase can be attempted.
+  const canTipInSandbox = tipStatus?.canTip === true;
 
   const startCheckout = async () => {
     if (!user?.id) {

@@ -1,5 +1,21 @@
 begin;
-select plan(120);
+select plan(121);
+
+-- This proof exercises the sandbox provider rail only.  Keep production money
+-- and payouts disabled while enabling exact sandbox webhook reconciliation for
+-- the duration of this rolled-back fixture.
+update public.platform_money_kill_switches
+set state = case
+  when key in ('revenuecat_app_store_enabled', 'provider_webhooks_enabled')
+    then 'sandbox_only'
+  when key in ('live_money_enabled', 'payouts_enabled') then 'off'
+  else state
+end
+where key in (
+  'revenuecat_app_store_enabled', 'provider_webhooks_enabled',
+  'live_money_enabled', 'payouts_enabled'
+);
+
 insert into auth.users (id)
 values
   ('c0000000-0000-4000-8000-000000000001'), ('d0000000-0000-4000-8000-000000000002'),
@@ -80,7 +96,8 @@ as $$
     'app_store',
     'ios',
     mapping.id,
-    mapping.product_id
+    mapping.product_id,
+    'transfer-fixture-original:' || p_user_id::text
   )
   from public.monetization_product_store_mappings mapping
   where mapping.provider = 'revenuecat_app_store'
@@ -106,24 +123,67 @@ returns boolean language plpgsql as $$
 declare
   v_before jsonb := pg_temp.transfer_state(p_source, p_target);
   v_after jsonb;
+  v_normalized_before integer := (
+    select count(*)::integer
+    from public.provider_events
+    where provider_event_id like 'transfer:' || p_event_id || ':%'
+  );
+  v_normalized_after integer;
+  v_result jsonb;
   v_error_matched boolean := false;
+  v_recorded_denial boolean := false;
 begin
   begin
     if p_failpoint is null then
-      perform public.process_revenuecat_premium_transfer_atomic(p_event_id, p_source, p_target, p_environment, p_occurred_at, p_hash);
+      v_result := public.process_revenuecat_premium_transfer_atomic(
+        p_event_id, p_source, p_target, p_environment, p_occurred_at, p_hash
+      );
     else
       perform public.process_revenuecat_premium_transfer_atomic_internal(p_event_id, p_source, p_target, p_environment, p_occurred_at, p_hash, p_failpoint);
     end if;
-    raise exception 'transfer_denial_not_raised';
+    if p_failpoint is null
+      and v_result->>'status' = 'ignored'
+      and v_result->>'reason' = p_expected_error
+    then
+      v_error_matched := true;
+      v_recorded_denial := true;
+    else
+      raise exception 'transfer_denial_not_raised';
+    end if;
   exception when others then
     if sqlerrm = p_expected_error then v_error_matched := true;
     elsif sqlerrm <> 'transfer_denial_not_raised' then raise;
     end if;
   end;
   v_after := pg_temp.transfer_state(p_source, p_target);
+  select count(*)::integer into v_normalized_after
+  from public.provider_events
+  where provider_event_id like 'transfer:' || p_event_id || ':%';
   return v_error_matched
-    and v_before = v_after
-    and (select count(*) from public.provider_events where provider_event_id like 'transfer:' || p_event_id || ':%') <> 1
+    and (
+      (not v_recorded_denial and v_before = v_after)
+      or (
+        v_recorded_denial
+        and (v_before - 'events') = (v_after - 'events')
+        and jsonb_array_length(v_after->'events') = jsonb_array_length(v_before->'events') + 1
+        and 1 = (
+          select count(*)
+          from public.provider_events event
+          where event.provider = 'revenuecat_app_store'
+            and event.provider_event_id = p_event_id
+            and event.event_type = 'TRANSFER'
+            and event.status = 'ignored'
+            and event.user_id = p_target
+            and event.raw_payload_hash = p_hash
+            and event.metadata->>'source_user_id' = p_source::text
+            and event.metadata->>'target_user_id' = p_target::text
+            and coalesce((event.metadata->>'transfer_applied')::boolean, false) = false
+            and coalesce((event.metadata->>'authority_granted')::boolean, false) = false
+            and coalesce((event.metadata->>'money_action')::boolean, false) = false
+        )
+      )
+    )
+    and v_normalized_after = v_normalized_before
     and not exists (select 1 from public.money_access_ledger_events where user_id in (p_source, p_target) and payable_state not in ('not_payable', 'refunded', 'reversed', 'chargeback'))
     and not exists (select 1 from public.access_grants where user_id in (p_source, p_target) and (
       coalesce((metadata->>'authority_granted')::boolean, false) or coalesce((metadata->>'payout_access')::boolean, false)
@@ -164,7 +224,19 @@ as $$
     'app_store',
     'ios',
     mapping.id,
-    mapping.product_id
+    mapping.product_id,
+    coalesce(
+      (
+        select authority.original_transaction_id
+        from public.revenuecat_premium_transaction_authority authority
+        where authority.provider = 'revenuecat_app_store'
+          and authority.user_id = p_user_id
+          and authority.environment = 'sandbox'
+        order by authority.updated_at desc, authority.id
+        limit 1
+      ),
+      'transfer-fixture-original:' || p_user_id::text
+    )
   )
   from public.monetization_product_store_mappings mapping
   where mapping.provider = 'revenuecat_app_store'
@@ -266,6 +338,22 @@ select lives_ok(
   )$$,
   'duplicate transfer delivery is retry safe'
 );
+set local timezone to 'America/Chicago';
+select lives_ok(
+  $$select public.process_revenuecat_premium_transfer_atomic(
+    'transfer-event-1',
+    'c0000000-0000-4000-8000-000000000001',
+    'd0000000-0000-4000-8000-000000000002',
+    'sandbox',
+    (select (metadata->>'reported_occurred_at')::timestamptz
+     from public.provider_events
+     where provider = 'revenuecat_app_store'
+       and provider_event_id = 'transfer-event-1'),
+    repeat('d', 64)
+  )$$,
+  'exact duplicate transfer remains retry safe across database session timezones'
+);
+set local timezone to 'UTC';
 select ok(pg_temp.transfer_denial_is_atomic(
     'transfer-event-1',
     'c0000000-0000-4000-8000-000000000001',
@@ -273,7 +361,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     date_trunc('hour', now()),
     repeat('e', 64),
-    'transfer_duplicate_identity_mismatch'
+    'revenuecat_premium_transfer_event_id_identity_mismatch'
   ),
   'transfer duplicate requires the exact immutable payload identity'
 );
@@ -296,7 +384,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     now(),
     repeat('f', 64),
-    'transfer_users_must_differ'
+    'revenuecat_premium_transfer_identity_invalid'
   ),
   'transfer to the same user fails closed'
 );
@@ -307,7 +395,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'production',
     now(),
     repeat('1', 64),
-    'transfer_environment_must_be_sandbox'
+    'revenuecat_premium_transfer_identity_invalid'
   ),
   'production transfer is outside this bounded reconciliation'
 );
@@ -319,7 +407,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     now(),
     repeat('2', 64),
-    'transfer_auth_user_missing'
+    'revenuecat_premium_transfer_user_missing'
   ),
   'transfer requires both exact auth users'
 );
@@ -438,7 +526,7 @@ select throws_ok(
     'cd000000-0000-4000-8000-000000000002',
     'active', now(), now() + interval '30 days', '{"raw":"payload"}'
   )$$,
-  'payload_hash_invalid',
+  'revenuecat_premium_transaction_identity_invalid',
   'ordinary lifecycle wrapper also rejects raw JSON in its hash field'
 );
 select lives_ok(
@@ -450,7 +538,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'cd000000-0000-4000-8000-000000000001',
     'cd000000-0000-4000-8000-000000000002',
     'sandbox', now() + interval '1 day', repeat('3', 64),
-    'transfer_occurred_at_invalid'
+    'premium_transfer_occurred_at_invalid'
   ),
   'far-future provider occurrence time fails closed'
 );
@@ -466,7 +554,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'ce000000-0000-4000-8000-000000000001',
     'ce000000-0000-4000-8000-000000000002',
     'sandbox', now(), repeat('4', 64),
-    'transfer_source_entitlement_not_active'
+    'premium_transfer_source_transaction_authority_missing'
   ),
   'expired source entitlement cannot transfer'
 );
@@ -481,7 +569,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'cf000000-0000-4000-8000-000000000001',
     'cf000000-0000-4000-8000-000000000002',
     'sandbox', now(), repeat('5', 64),
-    'transfer_source_provider_grant_ambiguous'
+    'premium_transfer_source_transaction_authority_missing'
   ),
   'missing source provider grant fails closed before mutation'
 );
@@ -500,7 +588,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'd1000000-0000-4000-8000-000000000001',
     'd1000000-0000-4000-8000-000000000002',
     'sandbox', now(), repeat('6', 64),
-    'transfer_source_provider_grant_not_active'
+    'premium_transfer_source_transaction_authority_missing'
   ),
   'invalid source provider event cannot authorize a transfer'
 );
@@ -511,7 +599,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     null,
     repeat('4', 64),
-    'transfer_occurred_at_required'
+    'premium_transfer_occurred_at_invalid'
   ),
   'transfer authority requires an exact provider occurrence time'
 );
@@ -520,7 +608,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'c1000000-0000-4000-8000-000000000001',
     'c1000000-0000-4000-8000-000000000002',
     'sandbox', now(), '',
-    'transfer_payload_hash_invalid'
+    'revenuecat_premium_transfer_identity_invalid'
   ),
   'transfer rejects a missing payload digest before any write'
 );
@@ -529,7 +617,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'c1000000-0000-4000-8000-000000000001',
     'c1000000-0000-4000-8000-000000000002',
     'sandbox', now(), '{"raw":"payload"}',
-    'transfer_payload_hash_invalid'
+    'revenuecat_premium_transfer_identity_invalid'
   ),
   'transfer cannot persist raw JSON in the payload-hash field'
 );
@@ -552,7 +640,7 @@ end;
 $setup$;
 select ok(pg_temp.transfer_denial_is_atomic(
   'source-revocation-delayed', 'd3000000-0000-4000-8000-000000000001', 'd3000000-0000-4000-8000-000000000002',
-  'sandbox', now() - interval '2 hours', repeat('8', 64), 'transfer_source_provider_grant_ambiguous'
+  'sandbox', now() - interval '2 hours', repeat('8', 64), 'premium_transfer_source_transaction_authority_missing'
 ), 'newer source revocation removes provider authority before a delayed transfer');
 insert into public.user_entitlements(user_id, entitlement_key, status, source, starts_at, expires_at, metadata)
 values
@@ -561,15 +649,15 @@ values
   ('d6000000-0000-4000-8000-000000000001', 'premium', 'active', 'test_grant', now() - interval '1 day', now() + interval '30 days', '{"denial_fixture":"test"}');
 select ok(pg_temp.transfer_denial_is_atomic(
   'manual-source-denial', 'd4000000-0000-4000-8000-000000000001', 'd4000000-0000-4000-8000-000000000002',
-  'sandbox', now(), repeat('9', 64), 'transfer_source_provider_grant_ambiguous'
+  'sandbox', now(), repeat('9', 64), 'premium_transfer_source_transaction_authority_missing'
 ), 'manual Premium entitlement cannot substitute for provider-backed source authority');
 select ok(pg_temp.transfer_denial_is_atomic(
   'migration-source-denial', 'd5000000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000002',
-  'sandbox', now(), repeat('a', 64), 'transfer_source_provider_grant_ambiguous'
+  'sandbox', now(), repeat('a', 64), 'premium_transfer_source_transaction_authority_missing'
 ), 'migration Premium entitlement cannot substitute for provider-backed source authority');
 select ok(pg_temp.transfer_denial_is_atomic(
   'test-source-denial', 'd6000000-0000-4000-8000-000000000001', 'd6000000-0000-4000-8000-000000000002',
-  'sandbox', now(), repeat('b', 64), 'transfer_source_provider_grant_ambiguous'
+  'sandbox', now(), repeat('b', 64), 'premium_transfer_source_transaction_authority_missing'
 ), 'test-only Premium entitlement cannot substitute for provider-backed source authority');
 do $setup$
 begin
@@ -580,7 +668,7 @@ end;
 $setup$;
 select ok(pg_temp.transfer_denial_is_atomic(
   'google-play-source-denial', 'd7000000-0000-4000-8000-000000000001', 'd7000000-0000-4000-8000-000000000002',
-  'sandbox', now(), repeat('c', 64), 'transfer_source_provider_grant_not_active'
+  'sandbox', now(), repeat('c', 64), 'premium_transfer_source_transaction_authority_missing'
 ), 'Google Play source grant cannot authorize the App Store-only transfer wrapper');
 do $setup$
 begin
@@ -623,7 +711,7 @@ end;
 $setup$;
 select ok(pg_temp.transfer_denial_is_atomic(
   'equal-revocation-transfer-a', 'da000000-0000-4000-8000-000000000001', 'da000000-0000-4000-8000-000000000002',
-  'sandbox', date_trunc('hour', now()), repeat('f', 64), 'transfer_source_provider_grant_ambiguous'
+  'sandbox', date_trunc('hour', now()), repeat('f', 64), 'premium_transfer_source_transaction_authority_missing'
 ), 'equal-time revocation-first schedule denies transfer without partial state');
 do $setup$
 begin
@@ -647,11 +735,11 @@ end;
 $setup$;
 select ok(pg_temp.transfer_denial_is_atomic(
   'duplicate-participant-event', 'dc000000-0000-4000-8000-000000000003', 'dc000000-0000-4000-8000-000000000002',
-  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'transfer_partial_or_identity_mismatch'
+  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'revenuecat_premium_transfer_event_id_identity_mismatch'
 ), 'same transfer event identity cannot substitute a different source user');
 select ok(pg_temp.transfer_denial_is_atomic(
   'duplicate-participant-event', 'dc000000-0000-4000-8000-000000000001', 'dc000000-0000-4000-8000-000000000004',
-  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'transfer_partial_or_identity_mismatch'
+  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'revenuecat_premium_transfer_event_id_identity_mismatch'
 ), 'same transfer event identity cannot substitute a different target user');
 select lives_ok(
   $$select pg_temp.apply_premium_event(
@@ -752,7 +840,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     date_trunc('hour', now()) - interval '2 hours',
     repeat('7', 64),
-    'transfer_source_provider_grant_ambiguous'
+    'premium_transfer_source_transaction_authority_missing'
   ),
   'newer source expiration removes provider authority before a delayed transfer'
 );
@@ -779,7 +867,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'sandbox',
     now() - interval '2 hours',
     repeat('8', 64),
-    'transfer_source_provider_grant_ambiguous'
+    'premium_transfer_source_transaction_authority_missing'
   ),
   'delayed transfer cannot replace a newer refund or revocation'
 );
@@ -861,17 +949,17 @@ select throws_ok(
     'c6000000-0000-4000-8000-000000000001',
     'active', timestamptz '2026-07-30 13:00:00+00', timestamptz '2099-09-30 12:00:00+00'
   )$$,
-  'revenuecat_event_stale',
-  'older source renewal cannot overwrite a newer committed transfer'
+  'revenuecat_premium_original_transaction_subject_mismatch',
+  'an older source renewal cannot rebind the transferred original transaction'
 );
-select throws_ok(
-  $$select pg_temp.apply_premium_event(
+select is(
+  (select pg_temp.apply_premium_event(
     'reverse-refund-6', 'REFUND',
     'c6000000-0000-4000-8000-000000000002',
     'revoked', timestamptz '2026-07-30 13:00:00+00', timestamptz '2099-08-30 12:00:00+00'
-  )$$,
-  'revenuecat_event_stale',
-  'older target refund cannot overwrite a newer committed transfer'
+  )->>'reason'),
+  'terminal_dispatch_stale_premium_event',
+  'an older target refund is consumed without overwriting newer transfer authority'
 );
 select is(
   (select status from public.user_entitlements
@@ -887,13 +975,14 @@ select is(
   'active',
   'rejected older ordinary events preserve the transferred target state'
 );
-select lives_ok(
+select throws_ok(
   $$select pg_temp.apply_premium_event(
     'reverse-source-6', 'INITIAL_PURCHASE',
     'c6000000-0000-4000-8000-000000000001',
     'active', timestamptz '2026-07-30 12:00:00+00', timestamptz '2099-08-30 12:00:00+00'
   )$$,
-  'exact ordinary duplicate after a newer transfer is a no-mutation acknowledgement'
+  'revenuecat_premium_original_transaction_subject_mismatch',
+  'an exact old source delivery cannot rebind the transferred original transaction'
 );
 select is(
   (select status from public.user_entitlements
@@ -908,7 +997,7 @@ select throws_ok(
     'c6000000-0000-4000-8000-000000000002',
     'active', timestamptz '2026-07-30 12:00:00+00', timestamptz '2099-08-30 12:00:00+00'
   )$$,
-  'revenuecat_event_duplicate_identity_mismatch',
+  'revenuecat_premium_event_id_identity_mismatch',
   'duplicate event identity cannot move between transfer participants'
 );
 select lives_ok(
@@ -958,8 +1047,8 @@ select throws_ok(
     'c8000000-0000-4000-8000-000000000001',
     'active', date_trunc('hour', now()), now() + interval '60 days'
   )$$,
-  'revenuecat_event_stale',
-  'equal-time renewal cannot replace higher-ranked transfer authority'
+  'revenuecat_premium_original_transaction_subject_mismatch',
+  'equal-time renewal cannot rebind transferred original-transaction authority'
 );
 select is(
   (select status from public.user_entitlements
@@ -985,7 +1074,7 @@ select ok(pg_temp.transfer_denial_is_atomic(
     'c9000000-0000-4000-8000-000000000001',
     'c9000000-0000-4000-8000-000000000002',
     'sandbox', date_trunc('hour', now()), repeat('d', 64),
-    'transfer_source_provider_grant_ambiguous'
+    'premium_transfer_source_transaction_authority_missing'
   ),
   'equal-time transfer cannot reactivate a refunded source'
 );
@@ -1086,9 +1175,9 @@ select ok(
 );
 select ok(
   pg_get_functiondef(
-    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)'::regprocedure
-  ) like '%process_revenuecat_premium_event_ordered_internal%',
-  'service-accessible ordinary Premium RPC uses the ordered wrapper'
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)'::regprocedure
+  ) like '%revenuecat_premium_transaction_authority%',
+  'service-accessible Premium RPC binds exact original-transaction authority'
 );
 select ok(
   not has_function_privilege(
@@ -1109,7 +1198,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)',
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)',
     'EXECUTE'
   ),
   'anon cannot execute ordinary Premium reconciliation'
@@ -1117,7 +1206,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)',
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)',
     'EXECUTE'
   ),
   'authenticated clients cannot execute ordinary Premium reconciliation'
@@ -1125,10 +1214,10 @@ select ok(
 select ok(
   has_function_privilege(
     'service_role',
-    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid)',
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)',
     'EXECUTE'
   ),
-  'service role reaches ordinary Premium only through the ordered public wrapper'
+  'service role reaches Premium only through the exact original-transaction wrapper'
 );
 select ok(
   not has_function_privilege('anon', 'public.process_revenuecat_premium_transfer_atomic(text,uuid,uuid,text,timestamptz,text)', 'EXECUTE'),

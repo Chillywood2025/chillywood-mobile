@@ -175,7 +175,7 @@ assertNotIncludes(profileMedia, `platform_brand_assets`, "Profile media helper m
 assertNotIncludes(profileMedia, `platform-brand-assets`, "Profile media helper must stay separate from Brand Studio storage");
 assertNotIncludes(profileMediaSheets, `storage_path`, "Profile media sheets must not render raw storage paths");
 assertNotIncludes(profileMediaSheets, `objectKey`, "Profile media sheets must not render raw object keys");
-assertIncludes(userData, `handle: officialAccount?.handle ?? formatUsernameHandle(options.username ?? profile?.username)`, "Profile/Platform backed @username handle");
+assertIncludes(userData, `handle: officialAccount?.handle ?? formatUsernameHandle(profile?.username ?? options.username)`, "Profile/Platform backed @username handle");
 assertIncludes(userData, `const generatedUsername = normalizeUsernameHandle(\`user`, "Profile fallback does not use email local-part");
 assertNotIncludes(userData, `split("@")`, "Profile fallback must not derive username from email");
 assertIncludes(usernameHelper, `RESERVED_USERNAMES`, "shared reserved username list");

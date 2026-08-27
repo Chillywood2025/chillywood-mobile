@@ -70,6 +70,10 @@ const normalizeIdentityText = (value: unknown) => {
   if (!normalized) return "";
   return INVALID_IDENTITY_LITERALS.has(normalized.toLowerCase()) ? "" : normalized;
 };
+const exactIdentityText = (value: unknown) => {
+  const normalized = normalizeIdentityText(value);
+  return typeof value === "string" && value === normalized ? normalized : "";
+};
 
 const normalizeRevenueCatIdentityState = (
   appUserId: unknown,
@@ -105,8 +109,27 @@ const isOffering = (value: unknown) => record(value) && !!normalizeIdentityText(
 const isOfferings = (value: unknown): value is PurchasesOfferings => record(value) && record(value.all)
   && Object.entries(value.all).every(([key, offering]) => !!normalizeIdentityText(key) && isOffering(offering))
   && (value.current === null || isOffering(value.current));
-const isPurchaseResult = (value: unknown): value is MakePurchaseResult => record(value)
-  && !!normalizeIdentityText(value.productIdentifier) && isCustomerInfo(value.customerInfo) && record(value.transaction);
+const isPurchaseResult = (value: unknown): value is MakePurchaseResult => {
+  if (!record(value) || !isCustomerInfo(value.customerInfo) || !record(value.transaction)) return false;
+  const productIdentifier = exactIdentityText(value.productIdentifier);
+  const transactionProductIdentifier = exactIdentityText(value.transaction.productIdentifier);
+  const transactionIdentifier = exactIdentityText(value.transaction.transactionIdentifier);
+  const purchaseDate = exactIdentityText(value.transaction.purchaseDate);
+  const purchaseToken = value.transaction.purchaseToken;
+  return !!productIdentifier
+    && transactionProductIdentifier === productIdentifier
+    && !!transactionIdentifier
+    && !!purchaseDate
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(purchaseDate)
+    && Number.isFinite(Date.parse(purchaseDate))
+    && (purchaseToken === null || !!exactIdentityText(purchaseToken));
+};
+
+const isPurchaseResultForProduct = (
+  value: unknown,
+  expectedProductIdentifier: string,
+): value is MakePurchaseResult => isPurchaseResult(value)
+  && normalizeIdentityText(value.productIdentifier) === expectedProductIdentifier;
 
 const serializeRevenueCatIdentityOperation = <T>(operation: () => Promise<T>) => {
   const result = revenueCatIdentityQueue.then(operation, operation);
@@ -503,7 +526,15 @@ export function purchaseRevenueCatPackage(pkg: PurchasesPackage, options?: Reven
   if (!state.shouldConfigure) return Promise.reject(new Error(state.reason ?? "RevenueCat is not configured."));
   if (!appStorePurchasesEnabled()) return Promise.reject(new Error("App Store purchases are disabled for this build."));
   if (!isPackage(pkg)) return Promise.reject(new Error("RevenueCat package is malformed."));
-  return runRevenueCatMutation(options, () => Purchases.purchasePackage(pkg), isPurchaseResult);
+  const expectedProductIdentifier = normalizeIdentityText(pkg.product.identifier);
+  if (pkg.product.identifier !== expectedProductIdentifier) {
+    return Promise.reject(new Error("RevenueCat package product identity is malformed."));
+  }
+  return runRevenueCatMutation(
+    options,
+    () => Purchases.purchasePackage(pkg),
+    (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
+  );
 }
 
 export function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct, options?: RevenueCatMutationOptions): Promise<MakePurchaseResult> {
@@ -511,7 +542,15 @@ export function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct, o
   if (!state.shouldConfigure) return Promise.reject(new Error(state.reason ?? "RevenueCat is not configured."));
   if (!appStorePurchasesEnabled()) return Promise.reject(new Error("App Store purchases are disabled for this build."));
   if (!isStoreProduct(product)) return Promise.reject(new Error("RevenueCat product is malformed."));
-  return runRevenueCatMutation(options, () => Purchases.purchaseStoreProduct(product), isPurchaseResult);
+  const expectedProductIdentifier = normalizeIdentityText(product.identifier);
+  if (product.identifier !== expectedProductIdentifier) {
+    return Promise.reject(new Error("RevenueCat product identity is malformed."));
+  }
+  return runRevenueCatMutation(
+    options,
+    () => Purchases.purchaseStoreProduct(product),
+    (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
+  );
 }
 
 export function restoreRevenueCatPurchases(options?: RevenueCatMutationOptions): Promise<CustomerInfo> {

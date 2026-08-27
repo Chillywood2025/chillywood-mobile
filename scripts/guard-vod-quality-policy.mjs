@@ -693,7 +693,7 @@ assertIncludes(creatorVideos, "recordOriginalVideoRendition(id)", "creator uploa
 assertIncludes(creatorVideos, "legacyQualityEnforcement === \"resolver_unavailable\"", "legacy resolver fallback");
 
 assertIncludes(mediaStorageFunction, "readCreatorVideoRenditionForObject", "media storage rendition authorization");
-assertIncludes(mediaStorageFunction, "userHasActiveEntitlement", "media storage premium entitlement");
+assertIncludes(mediaStorageFunction, 'actorClient.rpc("monetization_has_active_premium"', "media storage exact Premium entitlement");
 assertIncludes(mediaStorageFunction, "rendition.qualityLabel === \"original\"", "media storage original guard");
 
 assertIncludes(player, "readCreatorVideoForPlayer", "Player stays on creator video resolver path");

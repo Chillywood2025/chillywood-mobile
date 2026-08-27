@@ -258,6 +258,8 @@
     "guard:money-access-grants-policy": "node ./scripts/guard-money-access-grants-policy.mjs",
     "guard:refund-credit-payout-hold-policy": "node ./scripts/guard-refund-credit-payout-hold-policy.mjs",
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",
+    "test:paid-video-cross-store-concurrency": "node ./scripts/test-paid-video-cross-store-concurrency.mjs",
+    "test:stripe-tip-webhook-concurrency": "node ./scripts/test-stripe-tip-webhook-concurrency.mjs",
     "guard:provider-readiness-policy": "node ./scripts/guard-provider-readiness-policy.mjs",
     "guard:premium-sandbox-policy": "node ./scripts/guard-premium-sandbox-policy.mjs",
     "guard:brand-spelling-policy": "node ./scripts/guard-brand-spelling-policy.mjs",

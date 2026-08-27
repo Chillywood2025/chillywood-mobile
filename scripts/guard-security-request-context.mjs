@@ -142,7 +142,7 @@ if (/livekit_token_request_audit[\s\S]{0,600}participantToken/i.test(livekitToke
 
 [
   "formatOwnerSecurityNetworkProof",
-  "Network proof",
+  "Network Verification",
   "No security context linked",
 ].forEach((needle) => {
   if (!adminUi.includes(needle)) fail(`missing Owner Security masked network proof UI marker: ${needle}`);

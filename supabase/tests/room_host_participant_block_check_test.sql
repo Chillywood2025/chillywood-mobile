@@ -88,14 +88,14 @@ select is(
   '8. no unexpected non-owner role has execute privilege'
 );
 
-insert into auth.users (id, is_sso_user, is_anonymous)
+insert into auth.users (id, is_sso_user, is_anonymous, email_confirmed_at)
 values
-  ('46111111-1111-4111-8111-111111111111', false, false),
-  ('46222222-2222-4222-8222-222222222222', false, false),
-  ('46333333-3333-4333-8333-333333333333', false, false),
-  ('46444444-4444-4444-8444-444444444444', false, false),
-  ('46555555-5555-4555-8555-555555555555', false, false),
-  ('46666666-6666-4666-8666-666666666666', false, false)
+  ('46111111-1111-4111-8111-111111111111', false, false, transaction_timestamp()),
+  ('46222222-2222-4222-8222-222222222222', false, false, transaction_timestamp()),
+  ('46333333-3333-4333-8333-333333333333', false, false, transaction_timestamp()),
+  ('46444444-4444-4444-8444-444444444444', false, false, transaction_timestamp()),
+  ('46555555-5555-4555-8555-555555555555', false, false, transaction_timestamp()),
+  ('46666666-6666-4666-8666-666666666666', false, false, transaction_timestamp())
 on conflict (id) do nothing;
 
 insert into auth.sessions (id, user_id)
@@ -283,7 +283,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select lives_ok(
@@ -342,7 +342,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select is(
@@ -373,7 +373,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444"}',
+  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444","session_id":"56444444-4444-4444-8444-444444444444"}',
   true
 );
 select throws_ok(
@@ -393,7 +393,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
   true
 );
 select is(
@@ -421,7 +421,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46333333-3333-4333-8333-333333333333"}',
+  '{"role":"authenticated","sub":"46333333-3333-4333-8333-333333333333","session_id":"56333333-3333-4333-8333-333333333333"}',
   true
 );
 select throws_ok(
@@ -441,7 +441,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444"}',
+  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444","session_id":"56444444-4444-4444-8444-444444444444"}',
   true
 );
 select throws_ok(
@@ -461,7 +461,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select throws_ok(
@@ -481,7 +481,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
   true
 );
 select throws_ok(
@@ -864,7 +864,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
   true
 );
 select is(
@@ -903,7 +903,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444"}',
+  '{"role":"authenticated","sub":"46444444-4444-4444-8444-444444444444","session_id":"56444444-4444-4444-8444-444444444444"}',
   true
 );
 select is(

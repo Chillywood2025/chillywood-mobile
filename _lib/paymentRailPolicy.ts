@@ -107,8 +107,15 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
 
   if (input.useCase === "creator_paid_digital_content") {
     if (platform === "ios") {
-      return blocked("disabled", "ios_dynamic_digital_content_not_in_finite_app_store_catalog", {
+      // Client policy only permits the request to reach the server-authoritative
+      // finite App Store catalog. It does not activate a SKU, grant access, or
+      // bypass provider/Owner/Wave-1 production gates.
+      return blocked("revenuecat_app_store", "ios_creator_paid_digital_uses_finite_app_store_catalog_server_authority", {
+        allowed: input.store === "app_store" && input.liveMoneyEnabled !== true,
+        requiresProviderProof: true,
+        revenueCatAllowed: true,
         unlocksDigitalAccess: true,
+        createsPayableBalance: false,
       });
     }
 
@@ -133,9 +140,7 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
 
   if (input.useCase === "creator_tip_support") {
     if (input.unlocksDigitalAccess === true) {
-      return blocked("disabled", "tips_cannot_unlock_digital_access", {
-        unlocksDigitalAccess: true,
-      });
+      return blocked("disabled", "tips_cannot_unlock_digital_access", { unlocksDigitalAccess: true });
     }
 
     if (platform === "ios") {
@@ -185,26 +190,17 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
 
   if (input.useCase === "creator_physical_product") {
     return blocked("stripe_checkout", "merch_checkout_disabled_until_provider_proof", {
-      allowed: providerReady(input),
-      requiresProviderProof: !providerReady(input),
-      stripeAllowed: providerReady(input),
-      unlocksDigitalAccess: false,
+      allowed: providerReady(input), requiresProviderProof: !providerReady(input), stripeAllowed: providerReady(input), unlocksDigitalAccess: false,
     });
   }
 
   if (input.useCase === "creator_payout_cashout") {
     return blocked("stripe_connect", "payouts_disabled_until_connect_proof", {
-      allowed: providerReady(input),
-      requiresProviderProof: !providerReady(input),
-      stripeAllowed: providerReady(input),
-      unlocksDigitalAccess: false,
+      allowed: providerReady(input), requiresProviderProof: !providerReady(input), stripeAllowed: providerReady(input), unlocksDigitalAccess: false,
     });
   }
 
   return blocked("stripe_connect", "sponsor_payments_disabled_until_provider_proof", {
-    allowed: providerReady(input),
-    requiresProviderProof: !providerReady(input),
-    stripeAllowed: providerReady(input),
-    unlocksDigitalAccess: false,
+    allowed: providerReady(input), requiresProviderProof: !providerReady(input), stripeAllowed: providerReady(input), unlocksDigitalAccess: false,
   });
 }

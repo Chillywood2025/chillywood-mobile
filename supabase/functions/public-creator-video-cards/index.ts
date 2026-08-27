@@ -19,15 +19,13 @@ type PublicCreatorVideoRow = {
   created_at: string | null;
   visibility: string | null;
   moderation_status: string | null;
-  moderation_reason: string | null;
-  moderated_at: string | null;
-  moderated_by: string | null;
   scan_status: string | null;
+  quarantined_at: string | null;
   storage_provider: string | null;
   storage_bucket: string | null;
   thumb_storage_path: string | null;
-  mime_type: string | null;
-  file_size_bytes: number | null;
+  thumb_scan_status: string | null;
+  thumb_quarantined_at: string | null;
   updated_at: string | null;
   vip_access_required: boolean | null;
 };
@@ -61,7 +59,6 @@ const JSON_HEADERS = {
   "Content-Type": "application/json",
 };
 
-const CREATOR_VIDEO_BUCKET = "creator-videos";
 const RACHI_OFFICIAL_USER_ID = "platform_rachi_official";
 const SIGNED_URL_SECONDS = 60 * 60;
 const CLIP_TITLE_MAX_LENGTH = 80;
@@ -77,15 +74,13 @@ const PUBLIC_CREATOR_VIDEO_SELECT = [
   "created_at",
   "visibility",
   "moderation_status",
-  "moderation_reason",
-  "moderated_at",
-  "moderated_by",
   "scan_status",
+  "quarantined_at",
   "storage_provider",
   "storage_bucket",
   "thumb_storage_path",
-  "mime_type",
-  "file_size_bytes",
+  "thumb_scan_status",
+  "thumb_quarantined_at",
   "updated_at",
   "vip_access_required",
 ].join(",");
@@ -117,6 +112,39 @@ const readRequiredEnv = (name: string) => {
   const value = toText(Deno.env.get(name));
   if (!value) throw new Error(`Missing required environment variable ${name}`);
   return value;
+};
+
+const readOptionalEnv = (name: string) => toText(Deno.env.get(name));
+
+const readMediaOriginStorageConfig = () => {
+  const provider = readOptionalEnv("MEDIA_ORIGIN_PROVIDER").toLowerCase();
+  if (provider === "cloudflare_r2") {
+    if (
+      readOptionalEnv("MEDIA_ORIGIN_PRIVATE_ONLY").toLowerCase() !== "true"
+      || readOptionalEnv("MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED").toLowerCase() !== "true"
+    ) {
+      throw new Error("Cloudflare R2 media origin must be private-only with public playback disabled.");
+    }
+    return {
+      provider: "cloudflare_r2" as const,
+      bucket: readRequiredEnv("MEDIA_ORIGIN_BUCKET"),
+      endpoint: readRequiredEnv("MEDIA_ORIGIN_R2_ENDPOINT"),
+      region: readOptionalEnv("MEDIA_ORIGIN_R2_REGION") || "auto",
+      accessKeyId: readRequiredEnv("MEDIA_ORIGIN_R2_ACCESS_KEY_ID"),
+      secretAccessKey: readRequiredEnv("MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY"),
+    };
+  }
+  if (readRequiredEnv("S3_PROVIDER").toLowerCase() !== "hetzner") {
+    throw new Error("Media storage provider is not configured for launch.");
+  }
+  return {
+    provider: "s3" as const,
+    bucket: readRequiredEnv("S3_BUCKET"),
+    endpoint: readRequiredEnv("S3_ENDPOINT"),
+    region: readRequiredEnv("S3_REGION"),
+    accessKeyId: readRequiredEnv("S3_ACCESS_KEY_ID"),
+    secretAccessKey: readRequiredEnv("S3_SECRET_ACCESS_KEY"),
+  };
 };
 
 const normalizeAction = (value: unknown): PublicCreatorVideoCardAction | null => {
@@ -251,11 +279,36 @@ const readOfficialRachiOwnerOverrides = async (
   return new Map(rows.map((row) => [toText(row.video_id), RACHI_OFFICIAL_USER_ID]));
 };
 
+const filterRowsWithCurrentOwnerAuthority = async (
+  adminClient: SupabaseAdminClient,
+  rows: PublicCreatorVideoRow[],
+) => {
+  const ownerIds = Array.from(new Set(rows.map((row) => toText(row.owner_id)).filter(Boolean)));
+  const decisions = await Promise.all(ownerIds.map(async (ownerId) => {
+    const { data, error } = await adminClient.rpc("is_account_access_restricted", {
+      p_user_id: ownerId,
+    });
+    return [ownerId, !error && data === false] as const;
+  }));
+  const allowedOwnerIds = new Set(decisions.filter(([, allowed]) => allowed).map(([ownerId]) => ownerId));
+  return rows.filter((row) => allowedOwnerIds.has(toText(row.owner_id)));
+};
+
 const isSafeVideoThumbnailPath = (row: PublicCreatorVideoRow, thumbnailPath: string) => {
   const ownerId = toText(row.owner_id);
   const videoId = toText(row.id);
   return !!ownerId && !!videoId && thumbnailPath.startsWith(`${ownerId}/${videoId}/`);
 };
+
+const isPublicCreatorVideoRowSafe = (row: PublicCreatorVideoRow) =>
+  toText(row.visibility) === "public"
+  && PUBLIC_MODERATION_STATUSES.includes(toText(row.moderation_status))
+  && PUBLIC_SCAN_STATUSES.includes(toText(row.scan_status))
+  && !toText(row.quarantined_at);
+
+const isPublicCreatorVideoThumbnailSafe = (row: PublicCreatorVideoRow) =>
+  PUBLIC_SCAN_STATUSES.includes(toText(row.thumb_scan_status))
+  && !toText(row.thumb_quarantined_at);
 
 const encodeS3Path = (objectKey: string) => objectKey
   .split("/")
@@ -367,9 +420,9 @@ const isReadableImageUrl = async (url: string) => {
 };
 
 const createThumbnailUrl = async (
-  adminClient: SupabaseAdminClient,
   row: PublicCreatorVideoRow,
-  s3Config: {
+  originConfig: {
+    provider: "s3" | "cloudflare_r2";
     bucket: string;
     endpoint: string;
     region: string;
@@ -377,6 +430,7 @@ const createThumbnailUrl = async (
     secretAccessKey: string;
   },
 ) => {
+  if (!isPublicCreatorVideoRowSafe(row) || !isPublicCreatorVideoThumbnailSafe(row)) return "";
   const thumbnailPath = toText(row.thumb_storage_path);
   if (!thumbnailPath) {
     const legacyThumbUrl = toText(row.thumb_url);
@@ -384,37 +438,31 @@ const createThumbnailUrl = async (
   }
   if (!isSafeVideoThumbnailPath(row, thumbnailPath)) return "";
 
-  if (toText(row.storage_provider).toLowerCase() === "s3") {
-    const bucket = toText(row.storage_bucket) || s3Config.bucket;
-    if (bucket !== s3Config.bucket) return "";
-    for (const forcePathStyle of [false, true]) {
-      const signedUrl = await createPresignedS3GetUrl({
-        endpoint: s3Config.endpoint,
-        region: s3Config.region,
-        bucket,
-        objectKey: thumbnailPath,
-        accessKeyId: s3Config.accessKeyId,
-        secretAccessKey: s3Config.secretAccessKey,
-        expiresSeconds: SIGNED_URL_SECONDS,
-        forcePathStyle,
-      });
-      if (await isReadableImageUrl(signedUrl)) return signedUrl;
-    }
-    return "";
+  const rowProvider = toText(row.storage_provider).toLowerCase();
+  const rowBucket = toText(row.storage_bucket);
+  if (rowProvider !== originConfig.provider || rowBucket !== originConfig.bucket) return "";
+  for (const forcePathStyle of [false, true]) {
+    const signedUrl = await createPresignedS3GetUrl({
+      endpoint: originConfig.endpoint,
+      region: originConfig.region,
+      bucket: originConfig.bucket,
+      objectKey: thumbnailPath,
+      accessKeyId: originConfig.accessKeyId,
+      secretAccessKey: originConfig.secretAccessKey,
+      expiresSeconds: SIGNED_URL_SECONDS,
+      forcePathStyle,
+    });
+    if (await isReadableImageUrl(signedUrl)) return signedUrl;
   }
-
-  const { data } = await adminClient.storage
-    .from(CREATOR_VIDEO_BUCKET)
-    .createSignedUrl(thumbnailPath, SIGNED_URL_SECONDS);
-  return toText(data?.signedUrl);
+  return "";
 };
 
 const mapPublicVideo = async (
-  adminClient: SupabaseAdminClient,
   row: PublicCreatorVideoRow,
   publicClipMetadata: PublicClipMetadata | undefined,
   ownerIdOverride: string | undefined,
-  s3Config: {
+  originConfig: {
+    provider: "s3" | "cloudflare_r2";
     bucket: string;
     endpoint: string;
     region: string;
@@ -430,12 +478,8 @@ const mapPublicVideo = async (
   moderationStatus: PUBLIC_MODERATION_STATUSES.includes(toText(row.moderation_status))
     ? toText(row.moderation_status)
     : "clean",
-  moderationReason: toText(row.moderation_reason) || null,
-  moderatedAt: toText(row.moderated_at) || null,
-  moderatedBy: toText(row.moderated_by) || null,
-  thumbnailUrl: await createThumbnailUrl(adminClient, row, s3Config),
-  mimeType: toText(row.mime_type),
-  fileSizeBytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null,
+  thumbnailUrl: await createThumbnailUrl(row, originConfig),
+  vipAccessRequired: row.vip_access_required === true,
   createdAt: toText(row.created_at) || new Date().toISOString(),
   updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
   ...(publicClipMetadata ?? EMPTY_PUBLIC_CLIP_METADATA),
@@ -464,13 +508,7 @@ Deno.serve(async (req): Promise<Response> => {
 
     const supabaseUrl = readRequiredEnv("SUPABASE_URL");
     const supabaseServiceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const s3Config = {
-      bucket: readRequiredEnv("S3_BUCKET"),
-      endpoint: readRequiredEnv("S3_ENDPOINT"),
-      region: readRequiredEnv("S3_REGION"),
-      accessKeyId: readRequiredEnv("S3_ACCESS_KEY_ID"),
-      secretAccessKey: readRequiredEnv("S3_SECRET_ACCESS_KEY"),
-    };
+    const originConfig = readMediaOriginStorageConfig();
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
@@ -497,6 +535,7 @@ Deno.serve(async (req): Promise<Response> => {
         .eq("visibility", "public")
         .in("moderation_status", PUBLIC_MODERATION_STATUSES)
         .in("scan_status", PUBLIC_SCAN_STATUSES)
+        .is("quarantined_at", null)
         .order("created_at", { ascending: false })
         .limit(limit);
 
@@ -524,6 +563,7 @@ Deno.serve(async (req): Promise<Response> => {
           .eq("visibility", "public")
           .in("moderation_status", PUBLIC_MODERATION_STATUSES)
           .in("scan_status", PUBLIC_SCAN_STATUSES)
+          .is("quarantined_at", null)
           .in("owner_id", regularOwnerIds)
           .order("created_at", { ascending: false })
           .limit(limit)
@@ -539,6 +579,7 @@ Deno.serve(async (req): Promise<Response> => {
             .eq("visibility", "public")
             .in("moderation_status", PUBLIC_MODERATION_STATUSES)
             .in("scan_status", PUBLIC_SCAN_STATUSES)
+            .is("quarantined_at", null)
             .in("id", officialRachiVideoIds)
             .order("created_at", { ascending: false })
             .limit(limit)
@@ -567,6 +608,7 @@ Deno.serve(async (req): Promise<Response> => {
         .eq("visibility", "public")
         .in("moderation_status", PUBLIC_MODERATION_STATUSES)
         .in("scan_status", PUBLIC_SCAN_STATUSES)
+        .is("quarantined_at", null)
         .order("created_at", { ascending: false })
         .limit(limit)
         .returns<PublicCreatorVideoRow[]>();
@@ -577,14 +619,17 @@ Deno.serve(async (req): Promise<Response> => {
       rows = data ?? [];
     }
 
+    rows = await filterRowsWithCurrentOwnerAuthority(
+      adminClient,
+      rows.filter(isPublicCreatorVideoRowSafe),
+    );
     const metadataByVideoId = await readPublicClipMetadata(adminClient, rows.map((row) => row.id));
     const ownerOverridesByVideoId = await readOfficialRachiOwnerOverrides(adminClient, rows.map((row) => row.id));
     const videos = await Promise.all(rows.map((row) => mapPublicVideo(
-      adminClient,
       row,
       metadataByVideoId.get(toText(row.id)),
       ownerOverridesByVideoId.get(toText(row.id)),
-      s3Config,
+      originConfig,
     )));
     return json(200, { videos });
   } catch (error) {

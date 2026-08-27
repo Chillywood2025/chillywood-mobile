@@ -1,11 +1,24 @@
 import { trackEvent } from "./analytics";
-import { formatMonetizationCurrency } from "./creatorMonetization";
+import {
+  formatMonetizationCurrency,
+  normalizeCreatorContentAccessResolution,
+} from "./creatorMonetization";
+import {
+  prepareCreatorMoneyPurchaseSubject,
+  revalidateCreatorMoneyPurchaseSubject,
+  validateCreatorMoneyPurchaseIntent,
+  validateHistoricalCreatorMoneyPurchaseIntent,
+  type CreatorMoneyPurchaseIntentExpectation,
+} from "./creatorMoneyPurchaseAuthority";
 import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
 import { Platform } from "react-native";
-import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import {
+  IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
+  resolveIosFiniteAppStoreTier,
+} from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
@@ -160,17 +173,72 @@ const normalizeAccess = (value: unknown): PaidVideoAccessResolution => {
   const row = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+  const authority = normalizeCreatorContentAccessResolution(value);
+  if (authority.allowed) {
+    return {
+      ...authority,
+      provider: null,
+      providerProductId: null,
+      providerProductKey: null,
+      offerStatus: null,
+    };
+  }
+  if (authority.reason === "purchase_required" && authority.resolverStatus === "resolved") {
+    const provider = typeof row.provider === "string" && row.provider === row.provider.trim()
+      ? row.provider
+      : "";
+    const providerProductId = typeof row.providerProductId === "string" && row.providerProductId === row.providerProductId.trim()
+      ? row.providerProductId
+      : "";
+    const providerProductKey = typeof row.providerProductKey === "string" && row.providerProductKey === row.providerProductKey.trim()
+      ? row.providerProductKey
+      : "";
+    const offerStatus = typeof row.offerStatus === "string" && row.offerStatus === row.offerStatus.trim()
+      ? row.offerStatus
+      : "";
+    if (
+      (provider !== "revenuecat_app_store" && provider !== "revenuecat_google_play")
+      || !providerProductId
+      || !providerProductKey
+      || (offerStatus !== "sandbox" && offerStatus !== "active")
+    ) {
+      return {
+        allowed: false,
+        reason: "malformed_access_response",
+        requiresPurchase: false,
+        priceCents: null,
+        currency: null,
+        creatorId: null,
+        provider: null,
+        providerProductId: null,
+        providerProductKey: null,
+        offerStatus: null,
+      };
+    }
+    return {
+      allowed: false,
+      reason: authority.reason,
+      requiresPurchase: true,
+      priceCents: authority.priceCents,
+      currency: authority.currency,
+      creatorId: authority.creatorId,
+      provider,
+      providerProductId,
+      providerProductKey,
+      offerStatus,
+    };
+  }
   return {
-    allowed: row.allowed === true,
-    reason: toText(row.reason) || "unknown",
-    requiresPurchase: row.requiresPurchase === true || toText(row.reason) === "purchase_required",
-    priceCents: row.priceCents == null ? null : toCents(row.priceCents),
-    currency: toText(row.currency) || null,
-    creatorId: toText(row.creatorId) || null,
-    provider: toText(row.provider) || null,
-    providerProductId: toText(row.providerProductId) || null,
-    providerProductKey: toText(row.providerProductKey) || null,
-    offerStatus: toText(row.offerStatus) || null,
+    allowed: false,
+    reason: authority.reason,
+    requiresPurchase: false,
+    priceCents: null,
+    currency: null,
+    creatorId: null,
+    provider: null,
+    providerProductId: null,
+    providerProductKey: null,
+    offerStatus: null,
   };
 };
 
@@ -237,7 +305,7 @@ export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideo
     return {
       allowed: false,
       reason: "access_check_failed",
-      requiresPurchase: true,
+      requiresPurchase: false,
       priceCents: null,
       currency: null,
       creatorId: null,
@@ -255,7 +323,7 @@ export async function createPaidVideoPurchaseIntent(input: {
   creatorId: string;
   amountCents: number;
   currency?: string | null;
-}) {
+}, expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">) {
   const { data, error } = await paidVideoClient.rpc("create_money_purchase_intent", {
     p_product_key: PAID_VIDEO_SANDBOX_PRODUCT_KEY,
     p_source_type: "paid_content",
@@ -271,12 +339,34 @@ export async function createPaidVideoPurchaseIntent(input: {
     },
   });
   if (error) throw new Error("Paid video checkout is not available right now.");
-  const row = data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : {};
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Paid video checkout authority could not be verified.");
+  }
+  const row = data as Record<string, unknown>;
+  if (typeof row.alreadyPurchased !== "boolean") {
+    throw new Error("Paid video checkout authority could not be verified.");
+  }
+  const validated = row.alreadyPurchased
+    ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
+    : Platform.OS === "ios"
+      ? (() => {
+          const tier = expected.currency === "usd"
+            ? resolveIosFiniteAppStoreTier("paid_video", expected.amountMinor)
+            : null;
+          return tier ? validateCreatorMoneyPurchaseIntent(data, {
+            ...expected,
+            provider: "revenuecat_app_store",
+            providerProductId: tier.productId,
+            status: "pending",
+          }) : null;
+        })()
+      : Platform.OS === "android" && expected.provider === "revenuecat_google_play"
+        ? validateCreatorMoneyPurchaseIntent(data, { ...expected, status: "pending" })
+        : null;
+  if (!validated) throw new Error("Paid video checkout authority could not be verified.");
   return {
-    id: toText(row.id),
-    providerProductId: toText(row.providerProductId) || PAID_VIDEO_SANDBOX_PROVIDER_PRODUCT_ID,
+    ...validated,
+    alreadyPurchased: row.alreadyPurchased,
   };
 }
 
@@ -302,10 +392,34 @@ export async function purchasePaidVideoAccess(input: {
     return { ok: true, message: "You already unlocked this video.", access };
   }
   if (!access.requiresPurchase) {
-    return { ok: true, message: "This video is available.", access };
+    return { ok: false, message: "Paid video access could not be verified.", access };
   }
   if (!access.creatorId || access.creatorId !== input.creatorId) {
     return { ok: false, message: "This paid video offer is not ready.", access };
+  }
+  const requestedAmount = Math.trunc(input.amountCents);
+  const requestedCurrency = toText(input.currency).toLowerCase() || "usd";
+  if (
+    !Number.isSafeInteger(requestedAmount)
+    || requestedAmount !== access.priceCents
+    || requestedCurrency !== access.currency
+    || (access.provider !== "revenuecat_app_store" && access.provider !== "revenuecat_google_play")
+    || !access.providerProductId
+  ) {
+    return { ok: false, message: "This paid video offer is not ready.", access };
+  }
+
+  if (Platform.OS !== "ios" && Platform.OS !== "android") {
+    return { ok: false, message: "Paid video access is not available on this device.", access };
+  }
+  if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
+    return { ok: false, message: "This paid video offer is not ready.", access };
+  }
+  if (Platform.OS === "ios" && (
+    access.currency !== "usd"
+    || !resolveIosFiniteAppStoreTier("paid_video", access.priceCents)
+  )) {
+    return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
   }
 
   if (Platform.OS === "ios") {
@@ -322,10 +436,46 @@ export async function purchasePaidVideoAccess(input: {
     }
   }
 
-  const intent = await createPaidVideoPurchaseIntent(input);
-  const productId = intent.providerProductId || access.providerProductId || PAID_VIDEO_SANDBOX_PROVIDER_PRODUCT_ID;
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  if (!purchaseSubject) {
+    return {
+      ok: false,
+      message: "Sign in again before starting Paid Video checkout. Nothing was charged.",
+      access,
+    };
+  }
+  const intent = await createPaidVideoPurchaseIntent(input, {
+    userId: purchaseSubject.userId,
+    sourceType: "paid_content",
+    sourceId: input.videoId,
+    creatorId: access.creatorId,
+    provider: access.provider,
+    providerProductId: access.providerProductId,
+    environment: access.offerStatus === "active" ? "production" : "sandbox",
+    amountMinor: access.priceCents,
+    currency: access.currency,
+  });
+  if (intent.alreadyPurchased) {
+    const restoredAccess = await waitForPaidVideoAccess(input.videoId);
+    return restoredAccess.allowed
+      ? {
+        ok: true,
+        message: "You already unlocked this video.",
+        access: restoredAccess,
+        intentId: intent.id,
+        productId: intent.providerProductId,
+      }
+      : {
+        ok: false,
+        message: "Your existing Paid Video purchase is recorded, but access could not be verified. Nothing was charged.",
+        access: restoredAccess,
+        intentId: intent.id,
+        productId: intent.providerProductId,
+      };
+  }
+  const productId = intent.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
-  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? products[0] ?? null;
+  const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
   if (!product) {
     return {
       ok: false,
@@ -344,8 +494,18 @@ export async function purchasePaidVideoAccess(input: {
     source_surface: "video_player_locked_state",
   });
 
+  if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    return {
+      ok: false,
+      message: "Your session changed before Paid Video checkout. Nothing was charged.",
+      access,
+      intentId: intent.id,
+      productId,
+    };
+  }
+
   try {
-    await purchaseRevenueCatStoreProduct(product);
+    await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
     return {
       ok: false,

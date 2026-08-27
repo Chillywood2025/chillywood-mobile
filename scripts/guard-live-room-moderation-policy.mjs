@@ -16,6 +16,7 @@ const assertNotIncludes = (source, needle, label) => {
 
 const doc = read("docs/live/LIVE_ROOM_MODERATION_INCIDENT_RESPONSE.md");
 const livekitToken = read("supabase/functions/livekit-token/index.ts");
+const roomAccessClosure = read("supabase/migrations/20260827235000_live_room_access_independence_closure.sql");
 const tokenContract = read("_lib/livekit/token-contract.ts");
 const participantPermissions = read("_lib/livekit/participant-permissions.ts");
 const watchParty = read("_lib/watchParty.ts");
@@ -62,8 +63,11 @@ const packageJson = read("package.json");
 assertIncludes(tokenContract, "The mobile app never mints LiveKit credentials", "client LiveKit token minting boundary");
 assertIncludes(livekitToken, "is_account_access_restricted", "account-restricted token denial");
 assertIncludes(livekitToken, "account_access_restricted", "account-restricted safe error");
-assertIncludes(livekitToken, "channel_audience_blocks", "blocked-user room denial");
-assertIncludes(livekitToken, "blocked_from_room", "blocked-user token denial");
+assertIncludes(livekitToken, "resolve_watch_party_livekit_viewer_authority", "server-authoritative room access resolution before token issuance");
+assertIncludes(roomAccessClosure, 'join public."channel_audience_blocks" block_row', "blocked-user room denial");
+assertIncludes(roomAccessClosure, 'public."watch_party_room_actor_blocked_by_host"(', "blocked-user admission denial");
+assertIncludes(roomAccessClosure, "then\n    return false;", "blocked-user admission fails closed");
+assertIncludes(roomAccessClosure, 'set search_path = \'\'', "room access resolver fixed search path");
 assertIncludes(livekitToken, "isFreshWatchPartyMembership(currentMembership, nowMillis)", "fresh membership token gate");
 assertIncludes(livekitToken, "LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS = 4", "four-seat token cap");
 assertIncludes(livekitToken, "speaker_not_approved_or_over_cap", "over-cap/unapproved speaker downgrade");

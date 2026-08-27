@@ -93,24 +93,29 @@ export function shouldProcessRevenueCatAppStoreEvent(
     || isTerminalRevenueCatLifecycleEvent(eventTypeValue);
 }
 
+export function resolveRevenueCatTransferUserId(value) {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const userIds = [];
+  for (const candidate of value) {
+    if (typeof candidate !== "string" || candidate !== candidate.trim() || !candidate) return null;
+    if (candidate.startsWith("$RCAnonymousID:")) continue;
+    if (!UUID_PATTERN.test(candidate)) return null;
+    userIds.push(candidate.toLowerCase());
+  }
+  const uniqueUserIds = Array.from(new Set(userIds));
+  return uniqueUserIds.length === 1 ? uniqueUserIds[0] : null;
+}
+
 export function resolveRevenueCatTransferUsers(event) {
   if (!event || typeof event !== "object") return null;
   if (normalizeText(event.type).toUpperCase() !== "TRANSFER") return null;
 
-  const sourceCandidates = Array.isArray(event.transferred_from) ? event.transferred_from : [];
-  const targetCandidates = Array.isArray(event.transferred_to) ? event.transferred_to : [];
-  const sourceUserIds = Array.from(new Set(
-    sourceCandidates.map(normalizeText).filter((value) => UUID_PATTERN.test(value)).map((value) => value.toLowerCase()),
-  ));
-  const targetUserIds = Array.from(new Set(
-    targetCandidates.map(normalizeText).filter((value) => UUID_PATTERN.test(value)).map((value) => value.toLowerCase()),
-  ));
-
-  if (sourceUserIds.length !== 1 || targetUserIds.length !== 1) return null;
-  if (sourceUserIds[0] === targetUserIds[0]) return null;
+  const sourceUserId = resolveRevenueCatTransferUserId(event.transferred_from);
+  const targetUserId = resolveRevenueCatTransferUserId(event.transferred_to);
+  if (!sourceUserId || !targetUserId || sourceUserId === targetUserId) return null;
   return Object.freeze({
-    sourceUserId: sourceUserIds[0],
-    targetUserId: targetUserIds[0],
+    sourceUserId,
+    targetUserId,
   });
 }
 

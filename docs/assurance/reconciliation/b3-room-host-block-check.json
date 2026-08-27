@@ -259,7 +259,7 @@
   },
   "focusedTest": {
     "file": "supabase/tests/room_host_participant_block_check_test.sql",
-    "fileRawSha256": "3c34a8b9b69d987d4b396e7bd890410363e9d41a58aa1086eeab1e86a35da069",
+    "fileRawSha256": "7b02b17cb0bd4923b467fcb044c06387969cfe2ea49142e88e7810d58c10dbfd",
     "mode": "local-focused-pgTap",
     "assertions": 48,
     "executionStatus": "PASS_LOCAL_INTEGRATION",

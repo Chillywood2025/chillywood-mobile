@@ -44,8 +44,8 @@ assertNotIncludes(actionSheet, "Needs backed Circle-only video access", "Make Pr
 assertIncludes(channel, "Private to your Chi'lly Circle. Circle members can see it where Circle content is backed. It is not public discovery.", "Platform Circle readback");
 assertIncludes(channel, "includeDrafts: showOwnerControls", "owner Platform draft/circle/public read");
 assertIncludes(studio, "Private to your Chi'lly Circle. Circle members can see it where Circle content is backed. It is not public discovery.", "Studio Circle readback");
-assertIncludes(studio, '["draft", "circle", "public"]', "Studio visibility options");
-assertIncludes(studio, "member-only, not public discovery", "Studio Circle distribution copy");
+assertIncludes(studio, "visibility: CreatorContentActionSheetVisibilityAction", "Studio typed visibility action boundary");
+assertIncludes(studio, "onSetVisibility={onSetContentActionVisibility}", "Studio draft/Circle/public action-sheet integration");
 assertIncludes(player, "Private to Chi'lly Circle", "Player Circle locked title");
 assertIncludes(player, "Approved Circle members can watch it where Circle content is backed.", "Player Circle locked body");
 
