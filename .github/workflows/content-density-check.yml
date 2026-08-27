@@ -28,6 +28,6 @@ jobs:
         run: |
           git config user.name "chatgpt-codex-connector[bot]"
           git config user.email "chatgpt-codex-connector[bot]@users.noreply.github.com"
-          git add _lib/creatorVipPasses.ts _lib/creatorVideos.ts app/channel-settings.tsx app/channel/'[userId].tsx components/creator-media/creator-video-card.tsx components/creator-media/CreatorContentActionSheet.tsx supabase/functions/public-creator-video-cards/index.ts supabase/migrations/20260827171500_creator_vip_video_shelf_v1.sql
+          git add "_lib/creatorVipPasses.ts" "_lib/creatorVideos.ts" "app/channel-settings.tsx" "app/channel/[userId].tsx" "components/creator-media/creator-video-card.tsx" "components/creator-media/CreatorContentActionSheet.tsx" "supabase/functions/public-creator-video-cards/index.ts" "supabase/migrations/20260827171500_creator_vip_video_shelf_v1.sql"
           git commit -m "Add VIP video shelf and protected playback"
           git push
