@@ -1,0 +1,30 @@
+name: post274-truth-repair2
+on:
+  push:
+    branches:
+      - chatgpt/post-274-assurance-closure
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply and validate truth repair
+        run: node scripts/assurance/post274-truth-repair-runner.mjs
+      - name: Commit repair
+        run: |
+          rm .github/workflows/post274-truth-repair.yml
+          rm .github/workflows/post274-truth-repair2.yml
+          rm scripts/assurance/post274-truth-repair-runner.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Repair protected-main truth advancement semantics'
+          git push origin HEAD:chatgpt/post-274-assurance-closure
