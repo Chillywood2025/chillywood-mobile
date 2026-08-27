@@ -107,9 +107,12 @@ const manifestFiniteTierIds = new Set(manifest.catalog.filter((entry) => finiteC
 assert.deepEqual(runtimeTierIds, manifestFiniteTierIds, "runtime finite-tier IDs must match the permanent manifest");
 assert.equal(runtimeTierIds.size, 20);
 assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("creator_tip", 99)?.productId, "com.chillywood.tip.tier1");
-assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("creator_tip", 300)?.productId, "com.chillywood.tip.tier2",
-  "legacy round-dollar display amounts may resolve only to their corresponding fixed Apple tier");
-assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("seat_pass", 1000)?.productId, "com.chillywood.seatpass.tier4");
+assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("creator_tip", 299)?.productId, "com.chillywood.tip.tier2");
+assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("creator_tip", 300), null,
+  "legacy round-dollar aliases must fail closed instead of selecting a differently priced Apple tier");
+assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("seat_pass", 999)?.productId, "com.chillywood.seatpass.tier4");
+assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("seat_pass", 1000), null,
+  "round-dollar Seat Pass aliases must fail closed");
 assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("paid_video", 499)?.productId, "com.chillywood.paidvideo.tier3");
 assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("event_pass", 999)?.productId, "com.chillywood.eventpass.tier4");
 assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("vip_pass", 299)?.productId, "com.chillywood.vip.tier2");
