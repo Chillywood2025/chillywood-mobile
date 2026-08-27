@@ -20,7 +20,7 @@ s = "\n".join(lines) + ("\n" if s.endswith("\n") else "")
 
 channel_patch_marker = "# Public Platform content uses the same compact native media-card contract."
 if channel_patch_marker not in s:
-    s += r'''
+    s += r"""
 
 # Public Platform content uses the same compact native media-card contract.
 channel_path = Path("app/channel/[userId].tsx")
@@ -105,7 +105,7 @@ channel = replace_once(
 )
 channel_path.write_text(channel)
 print("Applied compact native content cards to the public Platform surface.")
-'''
+"""
 
 p.write_text(s)
 print("Patched content transform selectors, shelf guards, and public Platform card coverage")
