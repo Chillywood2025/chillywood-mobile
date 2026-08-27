@@ -36,6 +36,9 @@ jobs:
       - name: Align Money Center guard expectations
         run: node scripts/fix-money-center-guard-expectations.mjs
 
+      - name: Align Money Center route proof expectations
+        run: node scripts/fix-money-center-route-proof-expectations.mjs
+
       - name: Verify Money Center policy
         run: node scripts/guard-money-center-policy.mjs
 
@@ -50,6 +53,7 @@ jobs:
           rm scripts/apply-money-center-ui-closure.mjs
           rm scripts/fix-money-center-transformer-anchor.mjs
           rm scripts/fix-money-center-guard-expectations.mjs
+          rm scripts/fix-money-center-route-proof-expectations.mjs
           rm .github/workflows/money-center-ui-closure.yml
 
       - name: Commit verified UI closure
