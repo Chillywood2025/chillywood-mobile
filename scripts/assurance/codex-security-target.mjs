@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 import { emit, git, sha256 } from "./lib.mjs";
 
 const gitSha = (value) => typeof value === "string" && /^[0-9a-f]{40}$/u.test(value);
@@ -64,6 +65,22 @@ function changedPathRows(baseHead, targetHead, runGit) {
   return rows;
 }
 
+function protectedMainPushBase() {
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventPath) return null;
+  try {
+    const event = JSON.parse(fs.readFileSync(eventPath, "utf8"));
+    const before = String(event?.before ?? "").trim();
+    const after = String(event?.after ?? "").trim();
+    const ref = String(event?.ref ?? "").trim();
+    if (ref !== "refs/heads/main" || !gitSha(before) || /^0{40}$/u.test(before)) return null;
+    if (gitSha(after) && process.env.GITHUB_SHA && after !== process.env.GITHUB_SHA) return null;
+    return before;
+  } catch {
+    return null;
+  }
+}
+
 export function repositorySnapshotDigest(descriptor) {
   return sha256({
     schemaVersion: descriptor.schemaVersion,
@@ -78,7 +95,7 @@ export function repositorySnapshotDigest(descriptor) {
 }
 
 export function targetDescriptor({
-  base = "origin/main",
+  base = protectedMainPushBase() ?? "origin/main",
   target = "HEAD",
   expectedRepository = "Chillywood2025/chillywood-mobile",
   policy = "config/assurance/codex-security-reliability-s0-v1.json",

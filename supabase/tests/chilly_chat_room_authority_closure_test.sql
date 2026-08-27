@@ -1,5 +1,5 @@
 begin;
-select plan(144);
+select plan(145);
 
 -- Contract and ACL surface (1-15).
 select has_function('public', 'can_access_chat_thread', array['uuid'], '1. exact chat membership helper exists');
