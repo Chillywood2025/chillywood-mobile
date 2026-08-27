@@ -18,6 +18,7 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix ops/alert-automation
       - run: python3 scripts/apply-vip-video-shelf-v1.py
+      - run: python3 scripts/fix-vip-video-shelf-typecheck-v1.py
       - run: npm run typecheck
       - run: node scripts/guard-content-card-density-v1.mjs
       - run: node scripts/guard-vip-video-shelf-v1.mjs
