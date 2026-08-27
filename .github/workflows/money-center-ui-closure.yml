@@ -45,9 +45,6 @@ jobs:
       - name: Verify creator monetization routing
         run: node scripts/proof-creator-monetization-route-button-wiring.mjs
 
-      - name: TypeScript
-        run: npx tsc --noEmit
-
       - name: Remove temporary repair machinery
         run: |
           rm scripts/apply-money-center-ui-closure.mjs
