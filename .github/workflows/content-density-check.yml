@@ -17,11 +17,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm ci --prefix ops/alert-automation
-      - run: python3 scripts/patch-content-transform.py
-      - run: python3 scripts/apply-content-card-density-v1.py
-      - run: python3 scripts/apply-explore-content-density-v1.py
-      - run: python3 scripts/apply-profile-content-density-v1.py
-      - run: python3 scripts/apply-profile-social-content-density-v1.py
       - run: python3 scripts/apply-content-card-route-selectors-v1.py
       - run: python3 scripts/apply-vip-video-shelf-v1.py
       - run: npm run typecheck
@@ -32,6 +27,6 @@ jobs:
         run: |
           git config user.name "chatgpt-codex-connector[bot]"
           git config user.email "chatgpt-codex-connector[bot]@users.noreply.github.com"
-          git add _lib/creatorVipPasses.ts _lib/creatorVideos.ts app/channel-settings.tsx app/channel/'[userId].tsx' app/profile/'[userId].tsx' 'app/(tabs)/index.tsx' 'app/(tabs)/explore.tsx components/creator-media/creator-video-card.tsx components/creator-media/CreatorContentActionSheet.tsx components/ProfileSocialFeedCard.tsx supabase/functions/public-creator-video-cards/index.ts supabase/migrations/20260827171500_creator_vip_video_shelf_v1.sql
-          git commit -m "Compact content cards and add VIP video shelf"
+          git add _lib/creatorVipPasses.ts _lib/creatorVideos.ts app/channel-settings.tsx app/channel/'[userId].tsx components/creator-media/creator-video-card.tsx components/creator-media/CreatorContentActionSheet.tsx supabase/functions/public-creator-video-cards/index.ts supabase/migrations/20260827171500_creator_vip_video_shelf_v1.sql
+          git commit -m "Add VIP video shelf and protected playback"
           git push
