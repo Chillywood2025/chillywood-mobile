@@ -1,0 +1,59 @@
+name: Reconcile PR 245 current main fix
+on:
+  push:
+    branches: [chatgpt/creator-money-production-readiness-ios-parity-v1]
+permissions:
+  contents: write
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/creator-money-production-readiness-ios-parity-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Merge current main and apply bounded reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git fetch origin main
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -ne 0 ]; then
+            python3 scripts/reconcile-pr245-current-main.py
+          fi
+          git add -A
+          test -z "$(git diff --name-only --diff-filter=U)"
+      - run: npm ci
+      - run: npm ci --prefix ops/alert-automation
+      - name: Verify money and entitlement reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          node tests/creator-money/client-access-normalizers.test.mjs
+          node tests/creator-money/client-precharge-authority.test.mjs
+          node tests/creator-money/ios-production-readiness.test.mjs
+          node tests/creator-money/paid-video-playback-authority.test.mjs
+          node tests/creator-money/revenuecat-google-play-provenance.test.mjs
+          node tests/wave1/paid-watch-party-ticket-admission.test.mjs
+          node scripts/guard-vip-video-shelf-v1.mjs
+          node scripts/guard-creator-monetization-policy.mjs
+          npm run guard:route-contracts
+          git diff --check
+      - name: Commit reconciled source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/reconcile-245-current-main.yml .github/workflows/reconcile-245-current-main-fix.yml scripts/reconcile-pr245-current-main.py
+          git add -A
+          git commit -m "Reconcile creator money with current entitlement truth"
+          git push origin HEAD:chatgpt/creator-money-production-readiness-ios-parity-v1
