@@ -22,6 +22,7 @@ jobs:
       - run: python3 scripts/apply-explore-content-density-v1.py
       - run: python3 scripts/apply-profile-content-density-v1.py
       - run: python3 scripts/apply-profile-social-content-density-v1.py
+      - run: python3 scripts/apply-content-card-route-selectors-v1.py
       - run: npm run typecheck
       - run: node scripts/guard-content-card-density-v1.mjs
       - run: npm run guard:route-contracts
