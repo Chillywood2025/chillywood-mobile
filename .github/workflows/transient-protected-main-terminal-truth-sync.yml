@@ -1,0 +1,48 @@
+name: Transient protected-main terminal-truth sync
+
+on:
+  push:
+    branches:
+      - chatgpt/protected-main-terminal-truth-sync-20260827
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Synchronize exact protected-main terminal truth
+        env:
+          CHECKPOINT_SHA: 180dfb89e038574779fa1f681c4a67234475b5a9
+          CHECKPOINT_TREE: a684ca818942e64527856175b886d0ad2d26353b
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$CHECKPOINT_SHA"
+          test "$(git rev-parse "$CHECKPOINT_SHA^{tree}")" = "$CHECKPOINT_TREE"
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'config/assurance/current-truth-v1.json';
+          const record = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const checkpointSha = process.env.CHECKPOINT_SHA;
+          const checkpointTree = process.env.CHECKPOINT_TREE;
+          if (!record.protectedMainAuthority || typeof record.protectedMainAuthority !== 'object') throw new Error('protectedMainAuthority missing');
+          record.mainSha = checkpointSha;
+          record.protectedMainAuthority.checkpointSha = checkpointSha;
+          record.protectedMainAuthority.checkpointTree = checkpointTree;
+          fs.writeFileSync(path, JSON.stringify(record) + '\n');
+          NODE
+          node scripts/assurance/current-truth.mjs --write-docs || true
+          for path in config/assurance/current-truth-v1.json CURRENT_STATE.md NEXT_TASK.md; do
+            git diff --quiet -- "$path" && { echo "Expected terminal truth path unchanged: $path"; exit 1; }
+          done
+          git diff --check
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add config/assurance/current-truth-v1.json CURRENT_STATE.md NEXT_TASK.md
+          git commit -m "fix: synchronize protected-main terminal truth"
+          git push origin HEAD:chatgpt/protected-main-terminal-truth-sync-20260827
