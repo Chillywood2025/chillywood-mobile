@@ -50,6 +50,7 @@ import {
 } from "../../_lib/publicPeopleSearch";
 import { supabase } from "../../_lib/supabase";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
+import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import type { Tables } from "../../supabase/database.types";
 
@@ -779,17 +780,17 @@ export default function ExploreScreen() {
     const label = labelOverride ?? getDiscoveryLiveLabel(item);
     const accessLabel = getDiscoveryAccessLabel(item);
     const rankingReason = scoreDiscoveryFeedItem(item, sections.discoverySignals).reason;
-    const rankingLabel = getDiscoveryRankingReasonLabel(rankingReason);
     const title = String(item.title ?? "").trim() || "Untitled";
-    const subtitle = String(item.subtitle ?? "").trim() || String(item.category_key ?? "").trim() || "Public discovery";
 
     return (
       <TouchableOpacity
         key={`feed-${item.id}`}
         testID={`explore-discovery-card-${rankingReason}-${item.id}`}
         style={styles.discoveryCard}
-        activeOpacity={0.88}
+        activeOpacity={0.9}
         onPress={() => openDiscoveryFeedItem(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${title}`}
       >
         <View style={styles.discoveryThumb}>
           {thumbnail ? (
@@ -797,68 +798,54 @@ export default function ExploreScreen() {
           ) : (
             <Text style={styles.discoveryThumbInitial}>{title.slice(0, 1).toUpperCase()}</Text>
           )}
+          <View style={styles.discoveryScrim} />
+          <View style={styles.discoveryOverlayBadgeRow}>
+            <Text style={[styles.smallBadge, label === "Live" && styles.smallBadgeLive]}>{label}</Text>
+            <Text style={styles.smallBadge}>{accessLabel}</Text>
+          </View>
+          <View style={styles.discoveryOverlayCopy}>
+            <Text style={styles.discoveryCardTitle} numberOfLines={2}>{title}</Text>
+          </View>
         </View>
-        <View style={styles.smallBadgeRow}>
-          <Text style={[styles.smallBadge, label === "Live" && styles.smallBadgeLive]}>{label}</Text>
-          <Text style={styles.smallBadge}>{accessLabel}</Text>
-          <Text style={styles.smallBadge}>{rankingLabel}</Text>
-        </View>
-        <Text style={styles.discoveryCardTitle} numberOfLines={2}>{title}</Text>
-        <Text style={styles.discoveryCardBody} numberOfLines={2}>{subtitle}</Text>
       </TouchableOpacity>
     );
   };
 
-  const renderCreatorVideoCard = (video: CreatorVideo, label = "Creator Video") => {
-    const thumbnail = remoteImageSource(video.thumbnailUrl);
-    const title = video.title || "Untitled Video";
-
-    return (
-      <TouchableOpacity
-        key={`${label}-${video.id}`}
-        style={styles.discoveryCard}
-        activeOpacity={0.88}
-        onPress={() => openCreatorVideo(video)}
-      >
-        <View style={styles.discoveryThumb}>
-          {thumbnail ? (
-            <Image source={thumbnail} style={styles.discoveryThumbImage} />
-          ) : (
-            <Text style={styles.discoveryThumbInitial}>{title.slice(0, 1).toUpperCase()}</Text>
-          )}
-        </View>
-        <View style={styles.smallBadgeRow}>
-          <Text style={styles.smallBadge}>Public</Text>
-          <Text style={styles.smallBadge}>{label}</Text>
-        </View>
-        <Text style={styles.discoveryCardTitle} numberOfLines={2}>{title}</Text>
-        <Text style={styles.discoveryCardBody} numberOfLines={2}>
-          {video.publicClipMetadata?.subtitleText || video.description || "Public creator video card."}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+  const renderCreatorVideoCard = (video: CreatorVideo, label = "Creator Video") => (
+    <View key={`${label}-${video.id}`} style={styles.creatorVideoTile}>
+      <CreatorVideoCard
+        video={video}
+        mode="public"
+        onOpen={() => openCreatorVideo(video)}
+      />
+    </View>
+  );
 
   const renderEventCard = (event: CreatorEventSummary, replay = false) => (
     <TouchableOpacity
       key={`${replay ? "replay-event" : "event"}-${event.id}`}
       style={styles.discoveryCard}
-      activeOpacity={0.88}
+      activeOpacity={0.9}
       onPress={() => openChannel(event.hostUserId)}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${event.eventTitle}`}
     >
-      <View style={[styles.eventThumb, event.isLiveNow && styles.eventThumbLive]}>
+      <View style={[styles.discoveryThumb, styles.eventThumb, event.isLiveNow && styles.eventThumbLive]}>
         <Text style={styles.eventThumbText}>{event.isLiveNow ? "LIVE" : replay ? "REPLAY" : "EVENT"}</Text>
+        <View style={styles.discoveryScrim} />
+        <View style={styles.discoveryOverlayBadgeRow}>
+          <Text style={[styles.smallBadge, event.isLiveNow && styles.smallBadgeLive]}>
+            {event.isLiveNow ? "Live" : replay ? "Replay" : "Upcoming"}
+          </Text>
+          <Text style={styles.smallBadge}>{formatEventMode(event)}</Text>
+        </View>
+        <View style={styles.discoveryOverlayCopy}>
+          <Text style={styles.discoveryCardTitle} numberOfLines={2}>{event.eventTitle}</Text>
+          <Text style={styles.discoveryCardBody} numberOfLines={1}>
+            {replay ? formatDateTime(event.replay.replayAvailableAt) : formatDateTime(event.startsAt)}
+          </Text>
+        </View>
       </View>
-      <View style={styles.smallBadgeRow}>
-        <Text style={[styles.smallBadge, event.isLiveNow && styles.smallBadgeLive]}>
-          {event.isLiveNow ? "Live" : replay ? "Replay" : "Upcoming"}
-        </Text>
-        <Text style={styles.smallBadge}>{formatEventMode(event)}</Text>
-      </View>
-      <Text style={styles.discoveryCardTitle} numberOfLines={2}>{event.eventTitle}</Text>
-      <Text style={styles.discoveryCardBody} numberOfLines={2}>
-        {replay ? formatDateTime(event.replay.replayAvailableAt) : formatDateTime(event.startsAt)}
-      </Text>
     </TouchableOpacity>
   );
 
@@ -1533,22 +1520,48 @@ const styles = StyleSheet.create({
     paddingRight: 6,
   },
   discoveryCard: {
-    width: 158,
-    minHeight: 202,
-    borderRadius: 8,
+    width: 150,
+    aspectRatio: 9 / 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(10,12,18,0.88)",
-    padding: 10,
-    gap: 8,
+    overflow: "hidden",
+  },
+  creatorVideoTile: {
+    width: 150,
   },
   discoveryThumb: {
-    height: 82,
-    borderRadius: 8,
+    width: "100%",
+    height: "100%",
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  discoveryScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(3,5,10,0.24)",
+  },
+  discoveryOverlayBadgeRow: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    right: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  discoveryOverlayCopy: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 10,
+    paddingTop: 28,
+    paddingBottom: 10,
+    gap: 3,
+    backgroundColor: "rgba(3,5,10,0.72)",
   },
   discoveryThumbImage: {
     width: "100%",
@@ -1560,10 +1573,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   eventThumb: {
-    height: 82,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
     backgroundColor: "rgba(115,134,255,0.2)",
   },
   eventThumbLive: {

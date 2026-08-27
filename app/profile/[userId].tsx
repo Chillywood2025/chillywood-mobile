@@ -4332,19 +4332,24 @@ export default function ProfileScreen() {
               {!creatorVideosReady ? (
                 <AppText scale="body" style={styles.sectionBody}>Loading creator videos...</AppText>
               ) : creatorVideos.length ? (
-                <View style={styles.creatorVideoGrid}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.creatorVideoGrid}
+                >
                   {creatorVideos.map((video) => (
-                    <CreatorVideoCard
-                      key={video.id}
-                      video={video}
-                      mode={isSelfProfile ? "owner" : "public"}
-                      onOpen={() => openCreatorVideo(video)}
-                      onShare={!isSelfProfile && isCreatorVideoPubliclyShareable(video) ? () => {
-                        void shareCreatorVideo(video);
-                      } : undefined}
-                    />
+                    <View key={video.id} style={styles.profileCreatorVideoTile}>
+                      <CreatorVideoCard
+                        video={video}
+                        mode={isSelfProfile ? "owner" : "public"}
+                        onOpen={() => openCreatorVideo(video)}
+                        onShare={!isSelfProfile && isCreatorVideoPubliclyShareable(video) ? () => {
+                          void shareCreatorVideo(video);
+                        } : undefined}
+                      />
+                    </View>
                   ))}
-                </View>
+                </ScrollView>
               ) : isSelfProfile ? (
                 <View style={styles.creatorVideoEmptyCard}>
                   <AppText scale="subhead" style={styles.creatorVideoTitle}>Create platform content in Platform Studio</AppText>
@@ -5441,7 +5446,11 @@ const styles = StyleSheet.create({
   },
   feedEmptyButtonText: { color: "#fff", fontSize: 12.5, fontWeight: "900" },
   creatorVideoGrid: {
-    gap: 10,
+    gap: 9,
+    paddingRight: 4,
+  },
+  profileCreatorVideoTile: {
+    width: 150,
   },
   creatorVideoCard: {
     flexBasis: "47%",
