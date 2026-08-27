@@ -735,11 +735,11 @@ end;
 $setup$;
 select ok(pg_temp.transfer_denial_is_atomic(
   'duplicate-participant-event', 'dc000000-0000-4000-8000-000000000003', 'dc000000-0000-4000-8000-000000000002',
-  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'transfer_partial_or_identity_mismatch'
+  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'revenuecat_premium_transfer_event_id_identity_mismatch'
 ), 'same transfer event identity cannot substitute a different source user');
 select ok(pg_temp.transfer_denial_is_atomic(
   'duplicate-participant-event', 'dc000000-0000-4000-8000-000000000001', 'dc000000-0000-4000-8000-000000000004',
-  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'transfer_partial_or_identity_mismatch'
+  'sandbox', date_trunc('hour', now()), repeat('2', 64), 'revenuecat_premium_transfer_event_id_identity_mismatch'
 ), 'same transfer event identity cannot substitute a different target user');
 select lives_ok(
   $$select pg_temp.apply_premium_event(

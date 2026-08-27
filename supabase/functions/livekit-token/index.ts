@@ -13,14 +13,7 @@ import {
   normalizeLiveKitRoutingRoomType,
   resolveLiveKitAssignment,
 } from "../_shared/livekit-routing.ts";
-import {
-  normalizeWatchPartyViewerAuthority,
-  resolveLiveKitTokenTtlSeconds,
-} from "../_shared/livekit-seat-token-authority.ts";
-import {
-  readLiveKitParticipantSessionGeneration,
-  readVerifiedSupabaseSessionGeneration,
-} from "../_shared/livekit-session-generation.ts";
+import { readLiveKitParticipantSessionGeneration } from "../_shared/livekit-session-generation.ts";
 import { readLiveCostGuardTokenDecision } from "../_shared/live-cost-guard.ts";
 import {
   parseWatchPartyLiveKitAuthorityDecision,
@@ -430,14 +423,14 @@ async function enforceParticipantState(
     }
   }
 
-  const targetSessionGeneration = actorUserId === targetUserId
+  const targetAuthoritySessionGeneration = actorUserId === targetUserId
     ? actorSessionGeneration
     : null;
   const targetAuthority = await resolveCurrentWatchPartyLiveKitAuthority(
     adminClient,
     room,
     targetUserId,
-    targetSessionGeneration,
+    targetAuthoritySessionGeneration,
   );
   if (!targetAuthority) {
     return json(503, {
@@ -573,15 +566,15 @@ async function enforceParticipantState(
   }
 
   const roomActive = isWatchPartyRoomCurrentlyActive(room);
-  const roleResolution = roomActive
+  const roleResolution = roomActive && targetConnected && targetSessionGeneration
     ? await resolveEffectiveParticipantRole(
       adminClient,
       room,
       surface,
       "speaker",
       targetUserId,
-      {},
       targetSessionGeneration,
+      {},
     )
     : null;
   const participantRole = roleResolution?.ok ? roleResolution.participantRole : "viewer";
@@ -845,45 +838,6 @@ async function resolveCurrentWatchPartyLiveKitAuthority(
   return parseWatchPartyLiveKitAuthorityDecision(result.data);
 }
 
-async function readWatchPartyViewerAuthority(
-  adminClient: SupabaseClientLike,
-  partyId: string,
-  userId: string,
-  sessionGeneration: string | null,
-) {
-  const { data, error } = await adminClient.rpc("resolve_watch_party_livekit_viewer_authority", {
-    p_party_id: partyId,
-    p_session_generation: sessionGeneration,
-    p_user_id: userId,
-  });
-  if (error) {
-    return {
-      ok: false as const,
-      error: "watch_party_authority_lookup_failed",
-      message: "Chi'llywood could not verify current room access before issuing a LiveKit token.",
-      status: 503,
-    };
-  }
-  const authority = normalizeWatchPartyViewerAuthority(data);
-  if (!authority) {
-    return {
-      ok: false as const,
-      error: "watch_party_authority_malformed",
-      message: "Current room access evidence was incomplete, so no LiveKit token was issued.",
-      status: 503,
-    };
-  }
-  if (!authority.allowed) {
-    return {
-      ok: false as const,
-      error: "watch_party_access_required",
-      message: "Current authoritative room access is required before a LiveKit token can be issued.",
-      status: 403,
-    };
-  }
-  return { ok: true as const, authority };
-}
-
 async function resolveEffectiveParticipantRole(
   adminClient: SupabaseClientLike,
   room: ResolvedRoomRecord,
@@ -892,7 +846,6 @@ async function resolveEffectiveParticipantRole(
   userId: string,
   sessionGeneration: string | null,
   payload: TokenRequestPayload,
-  sessionGeneration: string | null,
 ) : Promise<EffectiveRoleResolution> {
   if (room.kind === "communication" && surface === "chat-call") {
     if (!room.chatThreadId) {
@@ -1443,7 +1396,6 @@ Deno.serve(async (req): Promise<Response> => {
       userId,
       authResult.sessionGeneration,
       payload,
-      authResult.sessionGeneration,
     );
 
     if (!effectiveRole.ok) {

@@ -686,17 +686,6 @@ select ok(
   '60. clients cannot insert or raw-update Watch-Party authority rows'
 );
 
-insert into public.user_entitlements (
-  user_id, entitlement_key, status, source, starts_at
-) values (
-  'b2222222-2222-4222-8222-222222222222',
-  'premium_watch_party',
-  'active',
-  'test_grant',
-  now() - interval '1 minute'
-) on conflict (user_id, entitlement_key) do update
-set status = excluded.status, revoked_at = null, expires_at = null;
-
 set local role service_role;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 insert into public.watch_party_rooms (
@@ -706,7 +695,7 @@ insert into public.watch_party_rooms (
 ) values (
   'CLOSUREPAID',
   'a7777777-7777-4777-8777-777777777777',
-  'live', 'open', 'party_pass', true, 'paused', 0, now(), now()
+  'live', 'open', 'open', true, 'paused', 0, now(), now()
 );
 reset role;
 
@@ -714,7 +703,7 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"b2222222-2222-4222-8222-222222222222","session_id":"b2222222-2222-4222-8222-222222222201"}', true);
 select lives_ok(
   $$select public.join_watch_party_room_session('CLOSUREPAID', 'Paid Viewer', null, null, true, true, false)$$,
-  '61. entitled paid-room member joins through the canonical RPC'
+  '61. ordinary open-room member joins through the canonical RPC'
 );
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"b2222222-2222-4222-8222-222222222222"}', true);
 select throws_ok(
@@ -768,9 +757,28 @@ select ok(
   '66. fail-closed membership identity trigger is installed'
 );
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"c3333333-3333-4333-8333-333333333333","session_id":"c3333333-3333-4333-8333-333333333301"}', true);
-select lives_ok(
-  $$insert into public.watch_party_rooms (party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,playback_state,playback_position_millis,started_at,last_activity_at) values ('UNVERIFIEDLIVE','c3333333-3333-4333-8333-333333333333','live','open','open',true,'paused',0,now(),now())$$,
-  '67. exact-current-session ordinary Live creation does not require creator-money eligibility'
+insert into public.watch_party_rooms (
+  party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,
+  playback_state,playback_position_millis,started_at,last_activity_at
+) values (
+  'UNVERIFIEDLIVE','c3333333-3333-4333-8333-333333333333','live','open','open',true,
+  'paused',0,now(),now()
+);
+select pass('67. exact-current-session ordinary Live creation does not require creator-money eligibility');
+select ok(
+  exists (
+    select 1
+    from public.watch_party_room_memberships membership
+    where membership.party_id='UNVERIFIEDLIVE'
+      and membership.user_id='c3333333-3333-4333-8333-333333333333'
+      and membership.role='host'
+      and membership.stage_role='host'
+      and membership.can_speak
+      and membership.membership_state='active'
+      and not membership.camera_enabled
+      and not membership.mic_enabled
+  ),
+  '67aa. ordinary Live creation atomically bootstraps only the exact canonical host membership'
 );
 reset role;
 update public.wave1_creator_eligibility
@@ -1059,6 +1067,8 @@ select ok(
   '80. caller-supplied compatibility hints cannot forge target profile metadata'
 );
 
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select set_config('app.watch_party_membership_authority', 'server', true);
 update public.watch_party_room_memberships
 set
@@ -1069,6 +1079,7 @@ set
 where party_id = 'CLOSUREPAID'
   and user_id = 'b2222222-2222-4222-8222-222222222222';
 select set_config('app.watch_party_membership_authority', '', true);
+reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"b2222222-2222-4222-8222-222222222222","session_id":"b2222222-2222-4222-8222-222222222201"}', true);
 do $$

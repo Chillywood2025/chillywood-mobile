@@ -40,7 +40,7 @@ begin
   if v_creator=v_user then raise exception 'creator_cannot_purchase_own_offer'; end if;
   if v_currency<>'usd' then raise exception 'ios_creator_money_usd_catalog_required'; end if;
   if p_amount_minor<>v_price then raise exception 'ios_creator_money_exact_store_price_required'; end if;
-  if public."has_paid_content_access"(v_user,p_source_id) then return jsonb_build_object('alreadyPurchased',true,'providerProductId',null); end if;
+  if coalesce((public."has_paid_content_access"(v_user,p_source_id)->>'allowed')::boolean,false) then return jsonb_build_object('alreadyPurchased',true,'providerProductId',null); end if;
   if exists (select 1 from public."channel_audience_blocks" where ("channel_user_id"=v_creator::text and "blocked_user_id"=v_user::text) or ("channel_user_id"=v_user::text and "blocked_user_id"=v_creator::text)) then raise exception 'creator_money_blocked_by_audience_policy'; end if;
 
   select "state" into v_app_store from public."platform_money_kill_switches" where "key"='revenuecat_app_store_enabled';

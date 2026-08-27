@@ -7,6 +7,7 @@ import {
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
   validateCreatorMoneyPurchaseIntent,
+  validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
 } from "./creatorMoneyPurchaseAuthority";
 import {
@@ -14,7 +15,10 @@ import {
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
 import { Platform } from "react-native";
-import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import {
+  IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
+  resolveIosFiniteAppStoreTier,
+} from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
@@ -319,7 +323,7 @@ export async function createPaidVideoPurchaseIntent(input: {
   creatorId: string;
   amountCents: number;
   currency?: string | null;
-}, expected: CreatorMoneyPurchaseIntentExpectation) {
+}, expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">) {
   const { data, error } = await paidVideoClient.rpc("create_money_purchase_intent", {
     p_product_key: PAID_VIDEO_SANDBOX_PRODUCT_KEY,
     p_source_type: "paid_content",
@@ -335,11 +339,35 @@ export async function createPaidVideoPurchaseIntent(input: {
     },
   });
   if (error) throw new Error("Paid video checkout is not available right now.");
-  const validated = validateCreatorMoneyPurchaseIntent(data, expected);
-  if (!validated) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Paid video checkout authority could not be verified.");
   }
-  return validated;
+  const row = data as Record<string, unknown>;
+  if (typeof row.alreadyPurchased !== "boolean") {
+    throw new Error("Paid video checkout authority could not be verified.");
+  }
+  const validated = row.alreadyPurchased
+    ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
+    : Platform.OS === "ios"
+      ? (() => {
+          const tier = expected.currency === "usd"
+            ? resolveIosFiniteAppStoreTier("paid_video", expected.amountMinor)
+            : null;
+          return tier ? validateCreatorMoneyPurchaseIntent(data, {
+            ...expected,
+            provider: "revenuecat_app_store",
+            providerProductId: tier.productId,
+            status: "pending",
+          }) : null;
+        })()
+      : Platform.OS === "android" && expected.provider === "revenuecat_google_play"
+        ? validateCreatorMoneyPurchaseIntent(data, { ...expected, status: "pending" })
+        : null;
+  if (!validated) throw new Error("Paid video checkout authority could not be verified.");
+  return {
+    ...validated,
+    alreadyPurchased: row.alreadyPurchased,
+  };
 }
 
 export async function waitForPaidVideoAccess(videoId: string): Promise<PaidVideoAccessResolution> {
@@ -381,6 +409,19 @@ export async function purchasePaidVideoAccess(input: {
     return { ok: false, message: "This paid video offer is not ready.", access };
   }
 
+  if (Platform.OS !== "ios" && Platform.OS !== "android") {
+    return { ok: false, message: "Paid video access is not available on this device.", access };
+  }
+  if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
+    return { ok: false, message: "This paid video offer is not ready.", access };
+  }
+  if (Platform.OS === "ios" && (
+    access.currency !== "usd"
+    || !resolveIosFiniteAppStoreTier("paid_video", access.priceCents)
+  )) {
+    return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+  }
+
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
       environment: "sandbox",
@@ -411,11 +452,28 @@ export async function purchasePaidVideoAccess(input: {
     provider: access.provider,
     providerProductId: access.providerProductId,
     environment: access.offerStatus === "active" ? "production" : "sandbox",
-    status: "pending",
     amountMinor: access.priceCents,
     currency: access.currency,
   });
-  const productId = access.providerProductId;
+  if (intent.alreadyPurchased) {
+    const restoredAccess = await waitForPaidVideoAccess(input.videoId);
+    return restoredAccess.allowed
+      ? {
+        ok: true,
+        message: "You already unlocked this video.",
+        access: restoredAccess,
+        intentId: intent.id,
+        productId: intent.providerProductId,
+      }
+      : {
+        ok: false,
+        message: "Your existing Paid Video purchase is recorded, but access could not be verified. Nothing was charged.",
+        access: restoredAccess,
+        intentId: intent.id,
+        productId: intent.providerProductId,
+      };
+  }
+  const productId = intent.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
   const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
   if (!product) {

@@ -4,6 +4,7 @@ import {
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
   validateCreatorMoneyPurchaseIntent,
+  validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
 } from "./creatorMoneyPurchaseAuthority";
 import {
@@ -14,7 +15,10 @@ import {
   type PurchasesPackage,
 } from "./revenuecat";
 import { Platform } from "react-native";
-import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import {
+  findIosStoreProductByProductId,
+  IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
+} from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
@@ -370,6 +374,27 @@ const findSubscriptionStoreProduct = async (productId: string) => {
   return products.find((product) => productIds.includes(toText(product.identifier))) ?? null;
 };
 
+const isExactIosChannelSubscriptionProduct = (
+  productId: unknown,
+  amountMinor: number,
+  currency: string,
+) => {
+  const product = findIosStoreProductByProductId(productId);
+  if (!product || product.concept !== "channel_subscription") return false;
+  const slotNumber = product.slotNumber;
+  return currency === "usd"
+    && product.productType === "auto_renewable_subscription"
+    && product.subscriptionPeriod === "P1M"
+    && Number.isSafeInteger(slotNumber)
+    && !!slotNumber
+    && slotNumber >= 1
+    && slotNumber <= 8
+    && product.referencePriceMinor === amountMinor
+    && product.conceptTier === `slot${slotNumber}`
+    && product.productId === `com.chillywood.channel.subscription.slot${slotNumber}`
+    && product.subscriptionGroup === `chillywood_channel_slot_${slotNumber}`;
+};
+
 export const formatChannelSubscriptionPrice = (amountCents: number, currency = "usd") =>
   `${formatMonetizationCurrency(amountCents, currency)}/month`;
 
@@ -483,10 +508,22 @@ export async function createChannelSubscriptionPurchaseIntent(
   if (typeof row.alreadySubscribed !== "boolean") {
     throw new Error("Channel Subscription checkout authority could not be verified.");
   }
-  const validated = validateCreatorMoneyPurchaseIntent(data, {
-    ...expected,
-    status: row.alreadySubscribed ? "consumed" : "pending",
-  });
+  const validated = row.alreadySubscribed
+    ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
+    : Platform.OS === "ios" && isExactIosChannelSubscriptionProduct(
+      row.providerProductId,
+      expected.amountMinor,
+      expected.currency,
+    )
+      ? validateCreatorMoneyPurchaseIntent(data, {
+          ...expected,
+          provider: "revenuecat_app_store",
+          providerProductId: accessText(row.providerProductId),
+          status: "pending",
+        })
+      : Platform.OS === "android" && expected.provider === "revenuecat_google_play"
+        ? validateCreatorMoneyPurchaseIntent(data, { ...expected, status: "pending" })
+        : null;
   if (!validated) throw new Error("Channel Subscription checkout authority could not be verified.");
   return {
     ...validated,
@@ -523,6 +560,16 @@ export async function purchaseChannelSubscription(input: {
     || typeof access.priceCents !== "number"
     || !access.currency
   ) return { ok: false, message: "This creator subscription is not available right now.", access };
+
+  if (Platform.OS !== "ios" && Platform.OS !== "android") {
+    return { ok: false, message: "This creator subscription is not available on this device.", access };
+  }
+  if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
+    return { ok: false, message: "This creator subscription is not available right now.", access };
+  }
+  if (Platform.OS === "ios" && (access.currency !== "usd" || access.priceCents !== 499)) {
+    return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+  }
 
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
@@ -567,7 +614,7 @@ export async function purchaseChannelSubscription(input: {
     };
   }
 
-  const productId = access.providerProductId;
+  const productId = intent.providerProductId;
   const pkg = await findSubscriptionPackage(productId);
   const storeProduct = pkg ? null : await findSubscriptionStoreProduct(productId);
   if (!pkg && !storeProduct) {

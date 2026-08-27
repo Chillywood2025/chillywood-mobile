@@ -3900,8 +3900,8 @@ export function ChannelStudioScreen() {
       if (savedVideoId) {
         const paidVideoPriceCents = parseDollarInputToCents(videoEditor.priceDollars);
         const paidVideoEnabled = videoEditor.accessMode === "paid";
-        if (paidVideoEnabled && paidVideoPriceCents < 99) {
-          setVideoNotice("Video saved. Paid video price must be at least $0.99 before sandbox unlock can be enabled.");
+        if (paidVideoEnabled && paidVideoPriceCents !== 99) {
+          setVideoNotice("Video saved. The current Paid Video sandbox catalog supports the exact $0.99 tier only.");
         } else {
           const result = await savePaidVideoOffer({
             videoId: savedVideoId,

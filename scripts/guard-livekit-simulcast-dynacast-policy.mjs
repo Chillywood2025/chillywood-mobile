@@ -58,7 +58,7 @@ assertIncludes(
 );
 assertIncludes(
   liveStage,
-  "video={publishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}",
+  "video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}",
   "Live Stage camera publish prop",
 );
 assertNotIncludes(livekitSurface, "dynacast: false", "Watch-Party Live dynacast disable");

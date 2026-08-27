@@ -4,6 +4,7 @@ import {
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
   validateCreatorMoneyPurchaseIntent,
+  validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
 } from "./creatorMoneyPurchaseAuthority";
 import {
@@ -11,7 +12,10 @@ import {
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
 import { Platform } from "react-native";
-import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import {
+  IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
+  resolveIosFiniteAppStoreTier,
+} from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
@@ -410,10 +414,23 @@ export async function createPaidCreatorEventPassPurchaseIntent(
   if (typeof row.alreadyPurchased !== "boolean") {
     throw new Error("Event pass checkout authority could not be verified.");
   }
-  const validated = validateCreatorMoneyPurchaseIntent(data, {
-    ...expected,
-    status: row.alreadyPurchased ? "consumed" : "pending",
-  });
+  const validated = row.alreadyPurchased
+    ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
+    : Platform.OS === "ios"
+      ? (() => {
+          const tier = expected.currency === "usd"
+            ? resolveIosFiniteAppStoreTier("event_pass", expected.amountMinor)
+            : null;
+          return tier ? validateCreatorMoneyPurchaseIntent(data, {
+            ...expected,
+            provider: "revenuecat_app_store",
+            providerProductId: tier.productId,
+            status: "pending",
+          }) : null;
+        })()
+      : Platform.OS === "android" && expected.provider === "revenuecat_google_play"
+        ? validateCreatorMoneyPurchaseIntent(data, { ...expected, status: "pending" })
+        : null;
   if (!validated) throw new Error("Event pass checkout authority could not be verified.");
   return {
     ...validated,
@@ -450,6 +467,19 @@ export async function purchasePaidCreatorEventPass(input: {
     || typeof access.priceCents !== "number"
     || !access.currency
   ) return { ok: false, message: "This event pass is not available right now.", access };
+
+  if (Platform.OS !== "ios" && Platform.OS !== "android") {
+    return { ok: false, message: "This event pass is not available on this device.", access };
+  }
+  if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
+    return { ok: false, message: "This event pass is not available right now.", access };
+  }
+  if (Platform.OS === "ios" && (
+    access.currency !== "usd"
+    || !resolveIosFiniteAppStoreTier("event_pass", access.priceCents)
+  )) {
+    return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+  }
 
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
@@ -494,7 +524,7 @@ export async function purchasePaidCreatorEventPass(input: {
     };
   }
 
-  const productId = access.providerProductId;
+  const productId = intent.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
   const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
   if (!product) {

@@ -32,6 +32,7 @@ const CREATOR_CONTENT_ALLOW_REASONS = new Set([
   "purchase_grant",
   "active_grant",
   "sandbox_grant",
+  "vip_active",
 ]);
 
 export const creatorContentResolutionAllowed = (value: unknown) => {
@@ -40,6 +41,45 @@ export const creatorContentResolutionAllowed = (value: unknown) => {
   return resolution.allowed === true
     && resolution.requiresPurchase === false
     && CREATOR_CONTENT_ALLOW_REASONS.has(String(resolution.reason ?? "").trim());
+};
+
+export const creatorVideoParentResolutionAllowed = (input: {
+  sourceAccessResolution: unknown;
+  requestedSourceId: string;
+  parent: {
+    id?: unknown;
+    owner_id?: unknown;
+    moderation_status?: unknown;
+    scan_status?: unknown;
+    quarantined_at?: unknown;
+  } | null;
+}) => {
+  if (!creatorContentResolutionAllowed(input.sourceAccessResolution) || !input.parent) return false;
+  const requestedSourceId = String(input.requestedSourceId ?? "").trim();
+  const parentId = String(input.parent.id ?? "").trim();
+  const parentOwnerId = String(input.parent.owner_id ?? "").trim();
+  if (!requestedSourceId || parentId !== requestedSourceId || !parentOwnerId) return false;
+  if (input.parent.quarantined_at != null && String(input.parent.quarantined_at).trim()) return false;
+  if (String(input.parent.scan_status ?? "").trim().toLowerCase() !== "clean") return false;
+  if (!["clean", "reported"].includes(String(input.parent.moderation_status ?? "").trim().toLowerCase())) {
+    return false;
+  }
+  const resolution = input.sourceAccessResolution as Record<string, unknown>;
+  const resolvedCreatorId = String(resolution.creatorId ?? "").trim();
+  return !resolvedCreatorId || resolvedCreatorId === parentOwnerId;
+};
+
+export const isCrossOwnerCreatorContentStaffAccess = (input: {
+  sourceAccessResolution: unknown;
+  viewerUserId: string;
+  parentOwnerId: string;
+}) => {
+  if (!creatorContentResolutionAllowed(input.sourceAccessResolution)) return false;
+  const resolution = input.sourceAccessResolution as Record<string, unknown>;
+  return String(resolution.reason ?? "").trim() === "owner"
+    && !!input.viewerUserId.trim()
+    && !!input.parentOwnerId.trim()
+    && input.viewerUserId.trim() !== input.parentOwnerId.trim();
 };
 
 export const canDeliverExternalMediaObject = (input: {
@@ -66,15 +106,27 @@ export const canIssueCreatorVideoDownload = (input: {
   visibilityAllowed: boolean;
   contentAccessAllowed: boolean;
   renditionTierAllowed?: boolean;
+  scopedStaffAllowed?: boolean;
 }) => (
   input.exactObjectScanClean
   && input.exactSourceScanClean
   && input.visibilityAllowed
-  && (input.objectKind === "thumbnail" || input.contentAccessAllowed)
-  && (input.objectKind !== "rendition" || input.renditionTierAllowed === true)
+  && (
+    input.objectKind === "thumbnail"
+    || input.contentAccessAllowed
+    || input.scopedStaffAllowed === true
+  )
+  && (
+    input.objectKind !== "rendition"
+    || input.renditionTierAllowed === true
+    || input.scopedStaffAllowed === true
+  )
 );
 
 export const canIssueSocialAttachmentDownload = (input: {
   exactAttachmentScanClean: boolean;
+  exactAttachmentNotQuarantined: boolean;
   surfaceAuthorityAllowed: boolean;
-}) => input.exactAttachmentScanClean && input.surfaceAuthorityAllowed;
+}) => input.exactAttachmentScanClean
+  && input.exactAttachmentNotQuarantined
+  && input.surfaceAuthorityAllowed;

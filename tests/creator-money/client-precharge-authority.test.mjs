@@ -264,6 +264,7 @@ test("malformed or wrong-product intent readbacks cannot reach RevenueCat across
         sourceType: "paid_content",
         sourceId: SOURCE_ID,
         amountMinor: 99,
+        extras: { alreadyPurchased: false },
       }),
     },
     {

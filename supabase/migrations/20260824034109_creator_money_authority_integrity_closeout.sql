@@ -2558,7 +2558,7 @@ begin
     raise exception 'ios_creator_money_source_price_mismatch';
   end if;
 
-  if v_concept='paid_video' and public."has_paid_content_access"(v_user,p_source_id) then
+  if v_concept='paid_video' and coalesce((public."has_paid_content_access"(v_user,p_source_id)->>'allowed')::boolean,false) then
     raise exception 'paid_video_already_purchased';
   elsif v_concept='event_pass' then
     v_access:=public."resolve_paid_creator_event_pass_access"(p_source_id);
@@ -5117,7 +5117,7 @@ begin
   v_allowed:=public."watch_party_room_self_access_allowed_internal"(
     v_room."party_id",v_user::text
   );
-  if v_room."host_user_id"=v_user::text and v_allowed then
+  if v_room."host_user_id"=v_user and v_allowed then
     return jsonb_build_object(
       'allowed',true,'viewerOnly',false,'canPublish',false,
       'reason','host_route_policy_still_applies'
@@ -5740,13 +5740,16 @@ begin
   -- Active provider events must still resolve the exact source offer. Production
   -- can never consume a sandbox source merely because its price matches.
   if v_ignore_reason is null and v_is_active then
+    -- The pending intent is the immutable quote accepted before Store checkout.
+    -- Mutable sale state, price edits, or payout readiness cannot erase a
+    -- provider-confirmed charge. Recheck only source identity and present
+    -- safety/admission constraints here; unsafe or unavailable sources remain
+    -- denied and are placed in durable provider reconciliation below.
     v_required_offer_status := case when v_environment = 'production' then 'active' else 'sandbox' end;
     if v_mapping."concept" = 'creator_tip' then
       if not exists (
-        select 1 from public."creator_tip_settings" settings
-        where settings."creator_id" = v_intent."creator_id"
-          and settings."tips_enabled"
-          and settings."status" not in ('paused','blocked')
+        select 1 from public."user_profiles" creator
+        where creator."user_id" = v_intent."creator_id"::text
       ) then v_ignore_reason := 'creator_tip_source_not_available'; end if;
     elsif v_mapping."concept" = 'seat_pass' then
       select offer.* into v_seat_offer
@@ -5754,9 +5757,7 @@ begin
       join public."watch_party_rooms" room on room."party_id"=offer."party_id"
       where offer."id" = v_intent."source_id"
         and offer."creator_id" = v_intent."creator_id"
-        and offer."status" = v_required_offer_status
-        and offer."price_cents" = v_mapping."reference_price_minor"
-        and lower(offer."currency") = v_mapping."reference_currency"
+        and offer."status" not in ('blocked','canceled')
         and coalesce(room."is_active",false)
         and room."room_type"='title'
       for update of offer;
@@ -5785,14 +5786,17 @@ begin
       end if;
     elsif v_mapping."concept" = 'paid_video' then
       if not exists (
-        select 1 from public."creator_content_prices" offer
-        where offer."content_id" = v_intent."source_id"
-          and offer."content_type" = 'creator_video'
-          and offer."creator_id" = v_intent."creator_id"
-          and offer."is_paid"
-          and offer."status" = v_required_offer_status
-          and offer."price_cents" = v_mapping."reference_price_minor"
-          and lower(offer."currency") = v_mapping."reference_currency"
+        select 1 from public."videos" video
+        where video."id" = v_intent."source_id"
+          and video."owner_id" = v_intent."creator_id"
+          and video."visibility" = 'public'
+          and video."moderation_status" in ('clean','reported')
+          and video."quarantined_at" is null
+          and public."media_scan_public_safe"(video."scan_status")
+          and public."is_creator_video_playable_source"(
+            video."storage_path",video."storage_object_key",video."playback_url"
+          )
+          and not coalesce(video."vip_access_required",false)
       ) then v_ignore_reason := 'paid_video_source_not_available'; end if;
     elsif v_mapping."concept" = 'event_pass' then
       select offer.* into v_event_offer
@@ -5800,12 +5804,8 @@ begin
       join public."creator_events" event on event."id"=offer."creator_event_id"
       where offer."creator_event_id"=v_intent."source_id"
         and offer."creator_id"=v_intent."creator_id"
-        and offer."status"=v_required_offer_status
-        and offer."price_cents"=v_mapping."reference_price_minor"
-        and lower(offer."currency")=v_mapping."reference_currency"
+        and offer."status" not in ('blocked','canceled')
         and event."status" not in ('ended','expired','canceled','removed','unsafe','blocked')
-        and (offer."starts_at" is null or offer."starts_at"<=v_now)
-        and (offer."ends_at" is null or offer."ends_at">v_now)
       for update of offer;
       if v_event_offer."id" is null then
         v_ignore_reason:='event_pass_source_not_available';
@@ -5833,18 +5833,14 @@ begin
         select 1 from public."creator_vip_pass_offers" offer
         where offer."id" = v_intent."source_id"
           and offer."creator_id" = v_intent."creator_id"
-          and offer."status" = v_required_offer_status
-          and offer."price_cents" = v_mapping."reference_price_minor"
-          and lower(offer."currency") = v_mapping."reference_currency"
+          and offer."status" <> 'blocked'
       ) then v_ignore_reason := 'vip_pass_source_not_available'; end if;
     elsif v_mapping."concept" = 'channel_subscription' then
       if not exists (
         select 1 from public."creator_channel_subscription_offers" offer
         where offer."id" = v_intent."source_id"
           and offer."creator_id" = v_intent."creator_id"
-          and offer."status" = v_required_offer_status
-          and offer."price_cents" = v_mapping."reference_price_minor"
-          and lower(offer."currency") = v_mapping."reference_currency"
+          and offer."status" <> 'blocked'
       ) then v_ignore_reason := 'channel_subscription_source_not_available'; end if;
     end if;
   end if;
@@ -5897,30 +5893,10 @@ begin
       v_ignore_reason := 'buyer_account_restricted';
     elsif v_intent."creator_id" is null
       or public."is_account_access_restricted"(v_intent."creator_id"::text)
-      or not public."wave1_user_has_active_legal_requirements_internal"(v_intent."creator_id", 'creator_money')
-      or not exists (
-        select 1
-        from public."wave1_creator_eligibility" eligibility
-        where eligibility."creator_user_id" = v_intent."creator_id"
-          and eligibility."state" = 'VERIFIED'
-          and eligibility."account_status" = 'ACTIVE'
-          and eligibility."age_18_plus"
-          and eligibility."legal_accepted"
-          and eligibility."creator_role"
-          and eligibility."moderation_state" = 'CLEAR'
-          and eligibility."market" = 'UNITED_STATES'
-          and eligibility."rollout_eligible"
-          and eligibility."platform_capability"
-          and eligibility."provider_eligible"
-          and eligibility."kyc_complete"
-          and eligibility."tax_complete"
-          and eligibility."sanctions_clear"
-          and eligibility."payout_eligible"
-      )
     then
       v_ignore_reason := case when v_mapping."concept" = 'seat_pass'
         then 'seat_pass_creator_authority_required'
-        else 'creator_no_longer_verified_for_production_money' end;
+        else 'creator_source_authority_restricted' end;
     end if;
   end if;
 
@@ -5956,15 +5932,14 @@ begin
           'authority_granted',false,
           'payout_ready',false,
           'live_money_action',false,
-          'provider_reconciliation_required',v_is_active and v_ignore_reason in (
-            'purchase_intent_session_authority_not_current',
-            'subscription_account_authority_not_current'
-          ),
+          'purchase_intent_id',v_intent."id",
+          -- Every authoritative active delivery can represent a completed
+          -- Store charge. No ignored active event may disappear without an
+          -- explicit refund-or-reconciliation obligation.
+          'provider_reconciliation_required',v_is_active,
           'provider_reconciliation_disposition',case
-            when v_is_active and v_ignore_reason in (
-              'purchase_intent_session_authority_not_current',
-              'subscription_account_authority_not_current'
-            ) then 'refund_or_authoritative_provider_reconciliation_required'
+            when v_is_active
+              then 'refund_or_authoritative_provider_reconciliation_required'
             else 'not_required'
           end
         )

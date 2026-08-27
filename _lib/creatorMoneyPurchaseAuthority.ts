@@ -26,6 +26,11 @@ export type CreatorMoneyPurchaseIntentExpectation = {
   currency: string;
 };
 
+export type HistoricalCreatorMoneyPurchaseIntentExpectation = Pick<
+  CreatorMoneyPurchaseIntentExpectation,
+  "userId" | "sourceType" | "sourceId" | "creatorId"
+>;
+
 const exactText = (value: unknown) => (
   typeof value === "string" && value === value.trim() ? value : ""
 );
@@ -102,4 +107,40 @@ export function validateCreatorMoneyPurchaseIntent(
     || exactText(row.currency) !== expected.currency
   ) return null;
   return { id, providerProductId: expected.providerProductId };
+}
+
+// An already-owned response is bound to the immutable provider transaction
+// that created the active grant, not to the creator's mutable current offer.
+// Keep exact buyer/source/creator binding while allowing a legitimate purchase
+// made on the other mobile store, at an older price, to suppress a duplicate
+// charge after restore or device migration.
+export function validateHistoricalCreatorMoneyPurchaseIntent(
+  value: unknown,
+  expected: HistoricalCreatorMoneyPurchaseIntentExpectation,
+): { id: string; providerProductId: string } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const id = exactText(row.id);
+  const provider = exactText(row.provider);
+  const providerProductId = exactText(row.providerProductId);
+  const environment = exactText(row.environment);
+  const amountMinor = row.amountMinor;
+  const currency = exactText(row.currency);
+  if (
+    !UUID_PATTERN.test(id)
+    || exactText(row.userId) !== expected.userId
+    || exactText(row.sourceType) !== expected.sourceType
+    || exactText(row.sourceId) !== expected.sourceId
+    || exactText(row.creatorId) !== expected.creatorId
+    || (provider !== "revenuecat_app_store" && provider !== "revenuecat_google_play")
+    || !providerProductId
+    || providerProductId.length > 255
+    || (environment !== "sandbox" && environment !== "production")
+    || exactText(row.status) !== "consumed"
+    || typeof amountMinor !== "number"
+    || !Number.isSafeInteger(amountMinor)
+    || amountMinor <= 0
+    || !/^[a-z]{3}$/.test(currency)
+  ) return null;
+  return { id, providerProductId };
 }

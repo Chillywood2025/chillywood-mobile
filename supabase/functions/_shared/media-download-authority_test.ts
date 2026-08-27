@@ -3,6 +3,8 @@ import {
   canIssueCreatorVideoDownload,
   canIssueSocialAttachmentDownload,
   creatorContentResolutionAllowed,
+  creatorVideoParentResolutionAllowed,
+  isCrossOwnerCreatorContentStaffAccess,
   visibilityResolutionAllowed,
 } from "./media-download-authority.ts";
 
@@ -24,6 +26,37 @@ Deno.test("creator source and renditions require exact scan, visibility, and pai
   assertEquals(canIssueCreatorVideoDownload({ ...base, objectKind: "source", exactSourceScanClean: false }), false, "source scan missing");
   assertEquals(canIssueCreatorVideoDownload({ ...base, objectKind: "rendition", renditionTierAllowed: true }), true, "rendition allowed");
   assertEquals(canIssueCreatorVideoDownload({ ...base, objectKind: "rendition", renditionTierAllowed: false }), false, "rendition tier denied");
+});
+
+Deno.test("creator rendition review requires an exact scoped staff alternative", () => {
+  const base = {
+    contentAccessAllowed: false,
+    exactObjectScanClean: true,
+    exactSourceScanClean: true,
+    objectKind: "rendition" as const,
+    renditionTierAllowed: false,
+    visibilityAllowed: true,
+  };
+  assertEquals(
+    canIssueCreatorVideoDownload({ ...base, scopedStaffAllowed: true }),
+    true,
+    "scoped moderator may inspect an exact safe rendition",
+  );
+  assertEquals(
+    canIssueCreatorVideoDownload({ ...base, scopedStaffAllowed: false }),
+    false,
+    "unscoped caller cannot replace commerce authority",
+  );
+  assertEquals(
+    canIssueCreatorVideoDownload({ ...base, scopedStaffAllowed: true, exactObjectScanClean: false }),
+    false,
+    "staff scope cannot replace rendition scan proof",
+  );
+  assertEquals(
+    canIssueCreatorVideoDownload({ ...base, scopedStaffAllowed: true, visibilityAllowed: false }),
+    false,
+    "staff scope cannot replace current visibility authority",
+  );
 });
 
 Deno.test("thumbnail scan is independent and does not inherit source authority", () => {
@@ -75,7 +108,7 @@ Deno.test("authority resolver responses fail closed", () => {
     viewerUserId: "viewer-1",
   }), false, "blocked visibility cannot allow");
 
-  for (const reason of ["owner", "free_content", "purchase_grant", "active_grant", "sandbox_grant"]) {
+  for (const reason of ["owner", "free_content", "purchase_grant", "active_grant", "sandbox_grant", "vip_active"]) {
     assertEquals(creatorContentResolutionAllowed({
       allowed: true,
       reason,
@@ -89,6 +122,21 @@ Deno.test("authority resolver responses fail closed", () => {
     requiresPurchase: false,
   }), false, "unrecognized reason");
   assertEquals(creatorContentResolutionAllowed({
+    allowed: false,
+    reason: "vip_required",
+    requiresPurchase: true,
+  }), false, "missing creator VIP authority");
+  assertEquals(creatorContentResolutionAllowed({
+    allowed: true,
+    reason: "vip_required",
+    requiresPurchase: false,
+  }), false, "VIP-required denial reason cannot be upgraded by an allow flag");
+  assertEquals(creatorContentResolutionAllowed({
+    allowed: true,
+    reason: "vip_active",
+    requiresPurchase: true,
+  }), false, "contradictory VIP purchase flag");
+  assertEquals(creatorContentResolutionAllowed({
     allowed: true,
     reason: "purchase_grant",
     requiresPurchase: true,
@@ -98,16 +146,83 @@ Deno.test("authority resolver responses fail closed", () => {
 Deno.test("social attachment signing rechecks current surface authority", () => {
   assertEquals(canIssueSocialAttachmentDownload({
     exactAttachmentScanClean: true,
+    exactAttachmentNotQuarantined: true,
     surfaceAuthorityAllowed: true,
   }), true, "current visible surface");
   assertEquals(canIssueSocialAttachmentDownload({
     exactAttachmentScanClean: true,
+    exactAttachmentNotQuarantined: true,
     surfaceAuthorityAllowed: false,
   }), false, "block or visibility change after cached key");
   assertEquals(canIssueSocialAttachmentDownload({
     exactAttachmentScanClean: false,
+    exactAttachmentNotQuarantined: true,
     surfaceAuthorityAllowed: true,
   }), false, "surface authority cannot replace exact scan proof");
+  assertEquals(canIssueSocialAttachmentDownload({
+    exactAttachmentScanClean: true,
+    exactAttachmentNotQuarantined: false,
+    surfaceAuthorityAllowed: true,
+  }), false, "an owner cannot bypass attachment quarantine with current parent authority");
+});
+
+Deno.test("Premium creator-video metadata requires a current safe exact parent", () => {
+  const sourceId = "8f921fcc-1d55-4b14-8fe4-cf929c9fd827";
+  const ownerId = "24d93cc2-408f-4a43-8dd0-267f2f08fa8e";
+  const parent = {
+    id: sourceId,
+    owner_id: ownerId,
+    moderation_status: "clean",
+    scan_status: "clean",
+    quarantined_at: null,
+  };
+  const ownerAccess = { allowed: true, reason: "owner", requiresPurchase: false };
+  const premiumViewerAccess = { allowed: true, reason: "free_content", requiresPurchase: false };
+  assertEquals(creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: ownerAccess,
+    requestedSourceId: sourceId,
+    parent,
+  }), true, "safe exact owner parent");
+  assertEquals(creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: premiumViewerAccess,
+    requestedSourceId: sourceId,
+    parent,
+  }), true, "safe exact Premium viewer parent");
+  assertEquals(creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: ownerAccess,
+    requestedSourceId: sourceId,
+    parent: { ...parent, quarantined_at: "2026-08-27T12:00:00Z" },
+  }), false, "owner cannot bypass parent quarantine");
+  assertEquals(creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: premiumViewerAccess,
+    requestedSourceId: sourceId,
+    parent: { ...parent, scan_status: "pending_scan" },
+  }), false, "Premium cannot bypass an unresolved parent scan");
+  assertEquals(creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: ownerAccess,
+    requestedSourceId: sourceId,
+    parent: { ...parent, moderation_status: "blocked" },
+  }), false, "owner cannot bypass parent moderation");
+  assertEquals(creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: premiumViewerAccess,
+    requestedSourceId: sourceId,
+    parent: { ...parent, id: "1317d4e8-52c2-4878-a60f-ff5895c89807" },
+  }), false, "neighboring parent cannot authorize a rendition");
+  assertEquals(creatorVideoParentResolutionAllowed({
+    sourceAccessResolution: { ...premiumViewerAccess, creatorId: "1317d4e8-52c2-4878-a60f-ff5895c89807" },
+    requestedSourceId: sourceId,
+    parent,
+  }), false, "creator-bound resolution cannot cross parent owners");
+  assertEquals(isCrossOwnerCreatorContentStaffAccess({
+    sourceAccessResolution: ownerAccess,
+    viewerUserId: "1317d4e8-52c2-4878-a60f-ff5895c89807",
+    parentOwnerId: ownerId,
+  }), true, "cross-owner privileged access is recognized for mandatory audit");
+  assertEquals(isCrossOwnerCreatorContentStaffAccess({
+    sourceAccessResolution: ownerAccess,
+    viewerUserId: ownerId,
+    parentOwnerId: ownerId,
+  }), false, "creator ownership is not mislabeled as staff access");
 });
 
 Deno.test("external delivery requires an attached verified reservation or exact migration receipt", () => {

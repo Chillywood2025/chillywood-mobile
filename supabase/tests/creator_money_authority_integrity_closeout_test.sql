@@ -1,5 +1,5 @@
 begin;
-select plan(131);
+select plan(136);
 
 -- Successor-owned authority surfaces exist and remain service/internal only.
 select has_table('public', 'creator_earnings_lifecycle_events', 'append-only creator earnings lifecycle exists');
@@ -456,11 +456,24 @@ select set_config(
   )::text,
   true
 );
-select lives_ok(
-  $$insert into public.watch_party_room_memberships (party_id,user_id)
-    select 'CLOSEOUT-ALIAS-ROOM',creator_id::text
-    from pg_temp.creator_money_closeout_fixture$$,
-  'nonpaid room host may establish an ordinary active host membership'
+do $canonical_host_join$
+begin
+  perform public.join_watch_party_room_session(
+    'CLOSEOUT-ALIAS-ROOM',null,null,null,false,false,false
+  );
+end;
+$canonical_host_join$;
+select ok(
+  exists (
+    select 1
+    from public.watch_party_room_memberships membership
+    join pg_temp.creator_money_closeout_fixture fixture
+      on fixture.creator_id::text=membership.user_id
+    where membership.party_id='CLOSEOUT-ALIAS-ROOM'
+      and membership.role='host'
+      and membership.membership_state='active'
+  ),
+  'canonical session join establishes one ordinary active host membership server-side'
 );
 reset role;
 select set_config('request.jwt.claims', '{}', true);
@@ -585,9 +598,11 @@ select ok(
   (public.resolve_creator_channel_subscription_access(
     (select creator_id from pg_temp.creator_money_closeout_fixture)
   )->>'reason') = 'creator_authority_not_current'
-  and pg_get_functiondef('public.has_paid_content_access(uuid,uuid)'::regprocedure)
+  and pg_get_functiondef(
+    'public.creator_video_paid_precharge_authority_internal(uuid,text,text,text,integer,text,text)'::regprocedure
+  )
     ilike '%wave1_creator_money_subject_authorized_internal%',
-  'creator restriction closes channel-subscription and paid-video access authority'
+  'creator restriction closes new channel-subscription and Paid Video precharge authority'
 );
 reset role;
 select set_config('request.jwt.claims', '{}', true);
@@ -877,7 +892,7 @@ select ok(
     'com.chillywood.seatpass.tier1', 'sandbox', now(),
     null, 99, 'usd', repeat('5', 64),
     'closeout-cross-domain-premium-original', null
-  )->>'reason') = 'revenuecat_original_transaction_cross_domain_reserved'
+  )->>'reason') = 'provider_source_lock_unresolved'
   and not exists (
     select 1
     from public.revenuecat_premium_transaction_authority premium
@@ -885,7 +900,7 @@ select ok(
       on creator_binding.provider = premium.provider
      and creator_binding.original_transaction_id = premium.original_transaction_id
   ),
-  'one store original transaction cannot bind both Premium and creator-money domains'
+  'an unresolved creator-money attempt cannot bind a Premium original transaction or bypass source locking'
 );
 
 update auth.users
@@ -943,9 +958,13 @@ select set_config(
   )::text,
   true
 );
-insert into public.watch_party_room_memberships (party_id,user_id)
-select 'CLOSEOUT-SEAT-ROOM',creator_id::text
-from pg_temp.creator_money_closeout_fixture;
+do $canonical_paid_host_join$
+begin
+  perform public.join_watch_party_room_session(
+    'CLOSEOUT-SEAT-ROOM',null,null,null,false,false,false
+  );
+end;
+$canonical_paid_host_join$;
 reset role;
 select set_config('request.jwt.claims', '{}', true);
 
@@ -1028,12 +1047,11 @@ select set_config(
   true
 );
 select throws_ok(
-  $$update public.watch_party_room_memberships
-    set membership_state = 'reconnecting'
-    where party_id = 'CLOSEOUT-SEAT-ROOM'
-      and user_id = (select creator_id::text from pg_temp.creator_money_closeout_fixture)$$,
-  'P0001', 'paid_room_host_creator_authority_required',
-  'paid-room host cannot retain an active or reconnecting membership after creator authority loss'
+  $$select public.heartbeat_watch_party_room_session(
+    'CLOSEOUT-SEAT-ROOM','reconnecting',false,false,false,null,null,null
+  )$$,
+  'P0001', 'watch_party_room_entitlement_required',
+  'canonical heartbeat cannot retain a paid-room host after creator authority loss'
 );
 reset role;
 select set_config('request.jwt.claims', '{}', true);
@@ -1147,6 +1165,34 @@ select ok(
   'Seat ticket is bound to the exact offer, party, buyer and access grant'
 );
 
+update public.paid_watch_party_offers
+set status='paused',price_cents=199
+where id='a2000000-0000-4000-8000-000000000001';
+update public.wave1_creator_eligibility
+set payout_eligible=false
+where creator_user_id=(select creator_id from pg_temp.creator_money_closeout_fixture);
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000004","session_id":"b4000000-0000-4000-8000-000000000004"}',
+  true
+);
+select ok(
+  coalesce((result->>'allowed')::boolean,false)
+  and result->>'reason'='ticket_confirmed',
+  'an exact Seat purchase survives future-sale pause, reprice, and seller payout-readiness loss'
+) from (
+  select public.resolve_paid_watch_party_ticket_access('CLOSEOUT-SEAT-ROOM') result
+) historical_seat;
+reset role;
+select set_config('request.jwt.claims','{}',true);
+update public.paid_watch_party_offers
+set status='sandbox',price_cents=99
+where id='a2000000-0000-4000-8000-000000000001';
+update public.wave1_creator_eligibility
+set payout_eligible=true
+where creator_user_id=(select creator_id from pg_temp.creator_money_closeout_fixture);
+
 set local role service_role;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
@@ -1186,7 +1232,7 @@ insert into public.account_deletion_requests (
 );
 select ok(
   not coalesce((authority.result->>'allowed')::boolean, false)
-  and authority.result->>'reason' = 'viewer_authority_invalid',
+  and authority.result->>'reason' = 'viewer_session_authority_invalid',
   'a restore-only scheduled-deletion session cannot retain connected paid Seat authority'
 )
 from (
@@ -1221,15 +1267,23 @@ select throws_ok(
     set role = 'speaker', stage_role = 'speaker', can_speak = true
     where party_id = 'CLOSEOUT-SEAT-ROOM'
       and user_id = 'a1000000-0000-4000-8000-000000000004'$$,
-  'P0001', 'paid_room_host_membership_escalation_forbidden',
-  'paid-room host cannot escalate an exact Seat viewer to speaker authority'
+  '42501', 'permission denied for table watch_party_room_memberships',
+  'paid-room host has no direct table authority to escalate an exact Seat viewer'
 );
-update public.watch_party_room_memberships
-set membership_state = 'reconnecting',
-    role = 'viewer', stage_role = 'listener', can_speak = false,
-    camera_enabled = false, mic_enabled = false
-where party_id = 'CLOSEOUT-SEAT-ROOM'
-  and user_id = 'a1000000-0000-4000-8000-000000000004';
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000004","session_id":"b4000000-0000-4000-8000-000000000004"}',
+  true
+);
+set local role authenticated;
+do $canonical_paid_viewer_reconnect$
+begin
+  perform public.heartbeat_watch_party_room_session(
+    'CLOSEOUT-SEAT-ROOM','reconnecting',false,false,false,null,null,null
+  );
+end;
+$canonical_paid_viewer_reconnect$;
 select ok(
   exists (
     select 1 from public.watch_party_room_memberships membership
@@ -1242,7 +1296,7 @@ select ok(
       and not membership.camera_enabled
       and not membership.mic_enabled
   ),
-  'paid-room host may retain only the exact authorized Seat subject as a viewer/listener'
+  'the exact Seat viewer can reconnect only through the canonical viewer/listener heartbeat'
 );
 reset role;
 select set_config('request.jwt.claims', '{}', true);
@@ -1268,7 +1322,7 @@ select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
 select ok(
   not coalesce((authority.result->>'allowed')::boolean, false)
-  and authority.result->>'reason' = 'viewer_authority_invalid',
+  and authority.result->>'reason' = 'viewer_session_authority_invalid',
   'deleting the exact token-bound session generation removes an already-connected Seat viewer authority'
 )
 from (
@@ -1360,8 +1414,8 @@ select is(
     'com.chillywood.seatpass.tier1', 'sandbox', now() - interval '3 minutes',
     null, 99, 'usd', repeat('f', 64), 'closeout-unbound-terminal-original', null
   ))->>'reason',
-  'terminal_original_transaction_cannot_open',
-  'later initial delivery cannot reopen a sticky unbound terminal transaction'
+  'provider_source_lock_unresolved',
+  'later source-unresolved initial delivery cannot reopen a sticky unbound terminal transaction'
 );
 select ok(
   not exists (
@@ -1382,8 +1436,8 @@ select is(
     'com.chillywood.seatpass.tier1', 'sandbox', now() - interval '4 minutes',
     null, 99, 'usd', repeat('1', 64), 'closeout-unbound-initial-original', null
   ))->>'reason',
-  'purchase_intent_missing_or_expired',
-  'unbound initial delivery records the exact missing-intent failure'
+  'provider_source_lock_unresolved',
+  'unbound initial delivery records the exact fail-closed source-lock failure'
 );
 select is(
   (select count(*)::integer from public.revenuecat_unbound_initial_authority
@@ -1399,8 +1453,8 @@ select is(
     'com.chillywood.seatpass.tier1', 'sandbox', now() - interval '3 minutes',
     null, 99, 'usd', repeat('2', 64), 'closeout-unbound-initial-original', null
   ))->>'reason',
-  'unbound_initial_original_transaction_reserved',
-  'a different event cannot later bind a previously unbound initial transaction'
+  'provider_source_lock_unresolved',
+  'a different source-unresolved event cannot later bind a previously unbound initial transaction'
 );
 select ok(
   coalesce((public.process_revenuecat_app_store_event_atomic(
@@ -1472,6 +1526,57 @@ select ok(
   ),
   'channel subscription initial purchase binds the exact initiating session and finite grant chain'
 );
+
+select public.process_revenuecat_app_store_event_atomic(
+  'closeout-channel-cancel-prepaid','CANCELLATION',
+  'a1000000-0000-4000-8000-000000000005',
+  'com.chillywood.channel.subscription.slot1','sandbox',now()-interval '7 minutes',
+  now()+interval '30 days',null,null,repeat('6',64),
+  'closeout-channel-renewal-original',null
+);
+
+update public.creator_channel_subscription_offers
+set status='archived',price_cents=799
+where id='a8000000-0000-4000-8000-000000000001';
+insert into public.creator_channel_subscription_offers (
+  id,creator_id,title,price_cents,currency,interval,status,
+  provider,provider_product_id,metadata
+)
+select
+  'a8000000-0000-4000-8000-000000000002',creator_id,
+  'Replacement channel subscription',499,'usd','monthly','sandbox',
+  'revenuecat','com.chillywood.channel.subscription.slot2',
+  jsonb_build_object('synthetic_closeout_fixture',true)
+from pg_temp.creator_money_closeout_fixture;
+update public.wave1_creator_eligibility
+set payout_eligible=false
+where creator_user_id=(select creator_id from pg_temp.creator_money_closeout_fixture);
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000005","session_id":"b5000000-0000-4000-8000-000000000005"}',
+  true
+);
+select ok(
+  coalesce((result->>'allowed')::boolean,false)
+  and result->>'reason'='subscription_cancel_pending'
+  and result->'offer'->>'id'='a8000000-0000-4000-8000-000000000001',
+  'prepaid cancellation survives until expiry across App Store slot replacement, reprice, archive, and seller payout-readiness loss'
+) from (
+  select public.resolve_creator_channel_subscription_access(
+    (select creator_id from pg_temp.creator_money_closeout_fixture)
+  ) result
+) historical_subscription;
+reset role;
+select set_config('request.jwt.claims','{}',true);
+delete from public.creator_channel_subscription_offers
+where id='a8000000-0000-4000-8000-000000000002';
+update public.creator_channel_subscription_offers
+set status='sandbox',price_cents=499
+where id='a8000000-0000-4000-8000-000000000001';
+update public.wave1_creator_eligibility
+set payout_eligible=true
+where creator_user_id=(select creator_id from pg_temp.creator_money_closeout_fixture);
 
 delete from auth.sessions
 where id = 'b5000000-0000-4000-8000-000000000005';
@@ -1630,32 +1735,39 @@ select ok(
 );
 
 select ok(
-  (select count(*) = 2
+  (select policy.qual ilike '%creator_video_storage_object_access_allowed%'
    from pg_catalog.pg_policies policy
    where policy.schemaname = 'storage'
      and policy.tablename = 'objects'
-     and policy.policyname in (
-       'creator_videos_storage_select_visibility_access',
-       'creator_videos_storage_select_premium_renditions'
-     )
-     and policy.qual ilike '%can_read_creator_video_row%')
-  and (select policy.qual ilike '%premium_subject_has_finite_authority_internal%'
-       and policy.qual ilike '%can_read_creator_video_row%'
+     and policy.policyname = 'creator_videos_storage_select_visibility_access')
+  and (select count(*) = 2
        from pg_catalog.pg_policies policy
        where policy.schemaname = 'storage'
          and policy.tablename = 'objects'
-         and policy.policyname = 'creator_videos_storage_select_premium_renditions'),
+         and policy.policyname in (
+           'creator_videos_storage_select_free_renditions',
+           'creator_videos_storage_select_premium_renditions'
+         )
+         and policy.qual ilike '%creator_video_storage_rendition_access_allowed%')
+  and pg_get_functiondef(
+    'public.creator_video_storage_object_access_allowed(text,text)'::regprocedure
+  ) ilike '%can_read_creator_video_row%'
+  and pg_get_functiondef(
+    'public.creator_video_storage_rendition_access_allowed(text,text,text)'::regprocedure
+  ) ilike '%can_read_creator_video_row%monetization_has_active_premium%',
   'both storage paths require the paid-aware helper and Premium quality never substitutes for item authority'
 );
 
 insert into public.videos (
-  id, owner_id, title, storage_path, visibility,
+  id, owner_id, title, storage_provider, storage_bucket,
+  storage_object_key, storage_path, visibility,
   moderation_status, scan_status, quarantined_at
 )
 select
   'a7000000-0000-4000-8000-000000000002', creator_id,
-  'Closeout paid creator video',
-  'creator-videos/' || creator_id::text || '/closeout-paid-video.mp4',
+  'Closeout paid creator video', 'supabase', 'creator-videos',
+  creator_id::text || '/a7000000-0000-4000-8000-000000000002/source.mp4',
+  creator_id::text || '/a7000000-0000-4000-8000-000000000002/source.mp4',
   'public', 'clean', 'clean', null
 from pg_temp.creator_money_closeout_fixture;
 
@@ -1710,7 +1822,11 @@ select ok(
     'public', 'clean', 'clean',
     (select storage_path from public.videos
      where id = 'a7000000-0000-4000-8000-000000000002'),
-    null, null, 'a1000000-0000-4000-8000-000000000002'
+    (select storage_object_key from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    (select playback_url from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    'a1000000-0000-4000-8000-000000000002'
   ),
   'unpaid paid-video row exposes neither playback sources nor video/storage RLS access'
 )
@@ -1881,6 +1997,85 @@ from (
     'creator_video', 'a7000000-0000-4000-8000-000000000002'
   ) as result
 ) access_result;
+
+reset role;
+select set_config('request.jwt.claims', '{}', true);
+update public.monetization_product_store_mappings
+set status='retired'
+where id=(
+  select provider_event.metadata->>'store_mapping_id'
+  from public.provider_events provider_event
+  where provider_event.provider_event_id='closeout-paid-video-initial'
+)::uuid;
+update public.monetization_products
+set status='retired'
+where id=(
+  select intent.product_id from public.money_purchase_intents intent
+  where intent.id='a3000000-0000-4000-8000-000000000003'
+);
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
+  true
+);
+select ok(
+  coalesce((result->>'allowed')::boolean,false)
+  and result->>'reason'='sandbox_grant',
+  'retiring the current product and App Store mapping cannot revoke or duplicate-charge an exact completed Paid Video purchase'
+) from (
+  select public.resolve_creator_content_access(
+    'creator_video','a7000000-0000-4000-8000-000000000002'
+  ) result
+) retired_catalog;
+reset role;
+select set_config('request.jwt.claims','{}',true);
+update public.monetization_products
+set status='sandbox'
+where id=(
+  select intent.product_id from public.money_purchase_intents intent
+  where intent.id='a3000000-0000-4000-8000-000000000003'
+);
+update public.monetization_product_store_mappings
+set status='sandbox'
+where id=(
+  select provider_event.metadata->>'store_mapping_id'
+  from public.provider_events provider_event
+  where provider_event.provider_event_id='closeout-paid-video-initial'
+)::uuid;
+
+reset role;
+select set_config('request.jwt.claims', '{}', true);
+update public.money_purchase_intents
+set amount_minor=amount_minor+1
+where id='a3000000-0000-4000-8000-000000000003';
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
+  true
+);
+select ok(
+  not coalesce((result->>'allowed')::boolean,false)
+  and result->>'reason'='purchase_required',
+  'wrong-price consumed intent cannot retain paid-video playback authority'
+)
+from (
+  select public.resolve_creator_content_access(
+    'creator_video','a7000000-0000-4000-8000-000000000002'
+  ) result
+) corrupt_price;
+reset role;
+select set_config('request.jwt.claims', '{}', true);
+update public.money_purchase_intents
+set amount_minor=amount_minor-1
+where id='a3000000-0000-4000-8000-000000000003';
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
+  true
+);
 select ok(
   playback.result->>'status' = 'ok'
   and coalesce((playback.result->>'legacy_single_file_available')::boolean, false)
@@ -1890,7 +2085,11 @@ select ok(
     'public', 'clean', 'clean',
     (select storage_path from public.videos
      where id = 'a7000000-0000-4000-8000-000000000002'),
-    null, null, 'a1000000-0000-4000-8000-000000000002'
+    (select storage_object_key from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    (select playback_url from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    'a1000000-0000-4000-8000-000000000002'
   ),
   'exact paid-video grant unlocks the mature resolver and matching video/storage RLS path'
 )
@@ -1900,6 +2099,8 @@ from (
   ) as result
 ) playback;
 
+reset role;
+select set_config('request.jwt.claims', '{}', true);
 insert into public.channel_audience_blocks (
   channel_user_id, blocked_user_id, blocked_by_user_id, reason
 )
@@ -1909,6 +2110,12 @@ select
   creator_id::text,
   'closeout paid-video viewer block'
 from pg_temp.creator_money_closeout_fixture;
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
+  true
+);
 select ok(
   playback.result->>'status' = 'not_allowed'
   and playback.result->'allowed_qualities' = '[]'::jsonb
@@ -1919,7 +2126,11 @@ select ok(
     'public', 'clean', 'clean',
     (select storage_path from public.videos
      where id = 'a7000000-0000-4000-8000-000000000002'),
-    null, null, 'a1000000-0000-4000-8000-000000000002'
+    (select storage_object_key from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    (select playback_url from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    'a1000000-0000-4000-8000-000000000002'
   ),
   'an exact active paid-video grant exposes no source after the creator blocks that viewer'
 )
@@ -1928,14 +2139,16 @@ from (
     'a7000000-0000-4000-8000-000000000002'
   ) as result
 ) playback;
+reset role;
+select set_config('request.jwt.claims', '{}', true);
 delete from public.channel_audience_blocks
 where channel_user_id = (select creator_id::text from pg_temp.creator_money_closeout_fixture)
   and blocked_user_id = 'a1000000-0000-4000-8000-000000000002';
-select set_config('request.jwt.claims', '{}', true);
 
 update public.wave1_creator_eligibility
-set age_18_plus = false
+set payout_eligible = false
 where creator_user_id = (select creator_id from pg_temp.creator_money_closeout_fixture);
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -1945,23 +2158,21 @@ select is(
   public.resolve_creator_content_access(
     'creator_video', 'a7000000-0000-4000-8000-000000000002'
   )->>'reason',
-  'content_unavailable',
-  'loss of creator authority closes an otherwise exact paid-video grant'
+  'sandbox_grant',
+  'seller payout-readiness loss cannot erase an exact completed paid-video purchase'
 );
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update public.wave1_creator_eligibility
-set age_18_plus = true
+set payout_eligible = true
 where creator_user_id = (select creator_id from pg_temp.creator_money_closeout_fixture);
 
 create temporary table unsafe_creator_content_results (reason text not null);
-select set_config(
-  'request.jwt.claims',
-  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001","session_id":"b1000000-0000-4000-8000-000000000001"}',
-  true
-);
+grant select, insert on pg_temp.unsafe_creator_content_results to authenticated;
 update public.videos
 set moderation_status = 'hidden'
 where id = 'a7000000-0000-4000-8000-000000000002';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -1971,14 +2182,12 @@ insert into pg_temp.unsafe_creator_content_results
 select public.resolve_creator_content_access(
   'creator_video', 'a7000000-0000-4000-8000-000000000002'
 )->>'reason';
-select set_config(
-  'request.jwt.claims',
-  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001","session_id":"b1000000-0000-4000-8000-000000000001"}',
-  true
-);
+reset role;
+select set_config('request.jwt.claims', '{}', true);
 update public.videos
 set moderation_status = 'clean', quarantined_at = now()
 where id = 'a7000000-0000-4000-8000-000000000002';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -1988,10 +2197,12 @@ insert into pg_temp.unsafe_creator_content_results
 select public.resolve_creator_content_access(
   'creator_video', 'a7000000-0000-4000-8000-000000000002'
 )->>'reason';
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update public.videos
 set quarantined_at = null, scan_status = 'malware_detected'
 where id = 'a7000000-0000-4000-8000-000000000002';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -2006,6 +2217,7 @@ select ok(
   'moderation, quarantine and unsafe scan each close paid-video playback'
 )
 from pg_temp.unsafe_creator_content_results;
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update public.videos
 set scan_status = 'clean'
@@ -2017,9 +2229,10 @@ where creator_user_id = (select creator_id from pg_temp.creator_money_closeout_f
 update public.creator_content_prices
 set is_paid = false, price_cents = 0, status = 'draft'
 where id = 'a9000000-0000-4000-8000-000000000001';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000006","session_id":"b6000000-0000-4000-8000-000000000006"}',
   true
 );
 select ok(
@@ -2032,11 +2245,13 @@ from (
     'creator_video', 'a7000000-0000-4000-8000-000000000002'
   ) as result
 ) access_result;
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 
 update public.videos
 set quarantined_at = now()
 where id = 'a7000000-0000-4000-8000-000000000002';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -2051,10 +2266,15 @@ select ok(
     'public', 'clean', 'clean',
     (select storage_path from public.videos
      where id = 'a7000000-0000-4000-8000-000000000002'),
-    null, null, 'a1000000-0000-4000-8000-000000000002'
+    (select storage_object_key from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    (select playback_url from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    'a1000000-0000-4000-8000-000000000002'
   ),
   'quarantine closes free-video resolver and storage authority'
 );
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update public.videos
 set quarantined_at = null
@@ -2063,6 +2283,7 @@ where id = 'a7000000-0000-4000-8000-000000000002';
 update auth.users
 set banned_until = now() + interval '1 day'
 where id = (select creator_id from pg_temp.creator_money_closeout_fixture);
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -2077,10 +2298,15 @@ select ok(
     'public', 'clean', 'clean',
     (select storage_path from public.videos
      where id = 'a7000000-0000-4000-8000-000000000002'),
-    null, null, 'a1000000-0000-4000-8000-000000000002'
+    (select storage_object_key from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    (select playback_url from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    'a1000000-0000-4000-8000-000000000002'
   ),
   'restricted creator closes free-video resolver and storage authority'
 );
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update auth.users
 set banned_until = null
@@ -2089,6 +2315,7 @@ where id = (select creator_id from pg_temp.creator_money_closeout_fixture);
 update auth.users
 set banned_until = now() + interval '1 day'
 where id = 'a1000000-0000-4000-8000-000000000002';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -2103,10 +2330,15 @@ select ok(
     'public', 'clean', 'clean',
     (select storage_path from public.videos
      where id = 'a7000000-0000-4000-8000-000000000002'),
-    null, null, 'a1000000-0000-4000-8000-000000000002'
+    (select storage_object_key from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    (select playback_url from public.videos
+     where id = 'a7000000-0000-4000-8000-000000000002'),
+    'a1000000-0000-4000-8000-000000000002'
   ),
   'restricted viewer closes free-video resolver and storage authority'
 );
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update auth.users
 set banned_until = null
@@ -2120,8 +2352,10 @@ set is_paid = true, price_cents = 99, status = 'sandbox'
 where id = 'a9000000-0000-4000-8000-000000000001';
 
 create temporary table inactive_paid_content_results (status text not null, reason text not null);
-update public.creator_content_prices set status = 'draft'
+grant select, insert on pg_temp.inactive_paid_content_results to authenticated;
+update public.creator_content_prices set status = 'draft',price_cents=499
 where id = 'a9000000-0000-4000-8000-000000000001';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -2131,9 +2365,11 @@ insert into pg_temp.inactive_paid_content_results
 select 'draft', public.resolve_creator_content_access(
   'creator_video', 'a7000000-0000-4000-8000-000000000002'
 )->>'reason';
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update public.creator_content_prices set status = 'paused'
 where id = 'a9000000-0000-4000-8000-000000000001';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -2143,9 +2379,11 @@ insert into pg_temp.inactive_paid_content_results
 select 'paused', public.resolve_creator_content_access(
   'creator_video', 'a7000000-0000-4000-8000-000000000002'
 )->>'reason';
+reset role;
 select set_config('request.jwt.claims', '{}', true);
 update public.creator_content_prices set status = 'archived'
 where id = 'a9000000-0000-4000-8000-000000000001';
+set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',
@@ -2156,12 +2394,13 @@ select 'archived', public.resolve_creator_content_access(
   'creator_video', 'a7000000-0000-4000-8000-000000000002'
 )->>'reason';
 select ok(
-  count(*) = 3 and bool_and(reason = 'content_unavailable'),
-  'draft, paused and archived paid offers never fall through as free content'
+  count(*) = 3 and bool_and(reason = 'sandbox_grant'),
+  'a repriced exact purchase survives draft, paused, and archived future-sale state without becoming free authority'
 )
 from pg_temp.inactive_paid_content_results;
+reset role;
 select set_config('request.jwt.claims', '{}', true);
-update public.creator_content_prices set status = 'sandbox'
+update public.creator_content_prices set status = 'sandbox',price_cents=99
 where id = 'a9000000-0000-4000-8000-000000000001';
 
 -- Payout and earnings are immutable, serialized, exact-currency projections.
@@ -2355,11 +2594,15 @@ where id = (select creator_id from pg_temp.creator_money_closeout_fixture);
 update auth.users
 set email = 'sandbox-subject@closeout.example'
 where id = 'a1000000-0000-4000-8000-000000000003';
-insert into public.sandbox_monetization_testers (
-  email,status,note,created_by
-) values (
-  'sandbox-subject@closeout.example','active',
-  'synthetic closeout fixture','a1000000-0000-4000-8000-000000000001'
+select throws_ok(
+  $$insert into public.sandbox_monetization_testers (
+      email,status,note,created_by
+    ) values (
+      'sandbox-subject@closeout.example','active',
+      'synthetic closeout fixture','a1000000-0000-4000-8000-000000000001'
+    )$$,
+  'P0001', 'sandbox_tester_exact_confirmed_subject_required',
+  'an email-only tester row is rejected before it can grant sandbox monetization authority'
 );
 set local role authenticated;
 select set_config(
@@ -2378,9 +2621,14 @@ select is(
 reset role;
 select set_config('request.jwt.claims', '{}', true);
 
-update public.sandbox_monetization_testers
-set user_id = 'a1000000-0000-4000-8000-000000000003'
-where email = 'sandbox-subject@closeout.example' and status = 'active';
+insert into public.sandbox_monetization_testers (
+  user_id,email,status,note,created_by
+) values (
+  'a1000000-0000-4000-8000-000000000003',
+  'sandbox-subject@closeout.example','active',
+  'synthetic exact-subject closeout fixture',
+  'a1000000-0000-4000-8000-000000000001'
+);
 set local role authenticated;
 select set_config(
   'request.jwt.claims',

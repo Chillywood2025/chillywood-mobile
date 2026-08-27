@@ -140,8 +140,8 @@ select is(
       and procedure.proname <> 'wave1_session_authority_readback'
       and pg_get_functiondef(procedure.oid) like '%wave1_session_authority_readback%'
   ),
-  10,
-  'all ten direct SQL consumers inherit the one shared root correction'
+  25,
+  'all twenty-five direct SQL consumers inherit the one shared root correction'
 );
 
 select is(
@@ -155,9 +155,24 @@ select is(
       and pg_get_functiondef(procedure.oid) like '%wave1_session_authority_readback%'
   ),
   array[
+    'create_channel_subscription_intent_pre_source_lock',
+    'create_creator_payout_request_safe',
+    'create_event_pass_intent_pre_source_lock',
+    'create_ios_app_store_intent_pre_source_lock',
+    'create_ios_creator_money_intent_pre_source_lock',
+    'create_ios_creator_money_purchase_intent_pre_protected_video_cl',
+    'create_ios_creator_money_purchase_intent_pre_specialized_routin',
+    'create_ios_paid_video_purchase_intent_guard_internal',
+    'create_money_purchase_intent_pre_protected_video_closeout',
+    'create_money_purchase_intent_pre_source_lock',
+    'create_vip_pass_intent_pre_source_lock',
+    'creator_video_paid_precharge_authority_internal',
     'platform_exact_current_session_authority_internal',
     'wave1_accept_legal_documents',
+    'wave1_accept_legal_documents_pre_integrity_closeout',
+    'wave1_assert_current_creator_money_authority_internal',
     'wave1_creator_eligibility_readback',
+    'wave1_current_caller_authority_internal',
     'wave1_entitlement_authority_readback',
     'wave1_legal_requirements_readback',
     'wave1_push_ownership_readback',

@@ -15,6 +15,8 @@ import {
   canIssueCreatorVideoDownload,
   canIssueSocialAttachmentDownload,
   creatorContentResolutionAllowed,
+  creatorVideoParentResolutionAllowed,
+  isCrossOwnerCreatorContentStaffAccess,
   visibilityResolutionAllowed,
 } from "../_shared/media-download-authority.ts";
 import {
@@ -531,31 +533,21 @@ const validateUpload = (input: {
 };
 
 const userHasActivePremiumEntitlement = async (
-  adminClient: SupabaseClient,
+  actorClient: SupabaseClient,
   userId: string,
 ) => {
-  const { data, error } = await adminClient
-    .from("user_entitlements")
-    .select("entitlement_key,status,expires_at,revoked_at")
-    .eq("user_id", userId)
-    .eq("entitlement_key", "premium")
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data) return false;
-  const status = toText(data.status);
-  const expiresAt = toText(data.expires_at);
-  const revokedAt = toText(data.revoked_at);
-  const isActiveStatus = status === "active" || status === "trialing" || status === "grace_period";
-  const isExpired = expiresAt ? Date.parse(expiresAt) <= Date.now() : false;
-  return isActiveStatus && !revokedAt && !isExpired;
+  const { data, error } = await actorClient.rpc("monetization_has_active_premium", {
+    p_user_id: userId,
+  });
+  return !error && data === true;
 };
 
 const userCanUsePremiumCreatorTools = async (
   adminClient: SupabaseClient,
+  actorClient: SupabaseClient,
   user: AuthenticatedMediaUser,
 ) => {
-  if (await userHasActivePremiumEntitlement(adminClient, user.id)) return true;
+  if (await userHasActivePremiumEntitlement(actorClient, user.id)) return true;
   return userHasPlatformRole(adminClient, user, ["owner", "operator"]);
 };
 
@@ -584,12 +576,12 @@ const hasExactCleanMediaScan = async (
 };
 
 const resolveCreatorVideoVisibilityAllowed = async (
-  adminClient: SupabaseClient,
+  actorClient: SupabaseClient,
   videoId: string,
   ownerUserId: string,
   viewerUserId: string,
 ) => {
-  const { data, error } = await adminClient.rpc(
+  const { data, error } = await actorClient.rpc(
     "resolve_creator_video_visibility_access",
     {
       p_video_id: videoId,
@@ -599,7 +591,7 @@ const resolveCreatorVideoVisibilityAllowed = async (
   return !error && visibilityResolutionAllowed(data, { ownerUserId, viewerUserId });
 };
 
-const resolveCreatorContentAccessAllowed = async (
+const resolveCreatorContentAccess = async (
   actorClient: SupabaseClient,
   videoId: string,
 ) => {
@@ -607,7 +599,26 @@ const resolveCreatorContentAccessAllowed = async (
     p_content_id: videoId,
     p_content_type: "creator_video",
   });
-  return !error && creatorContentResolutionAllowed(data);
+  return error ? null : data;
+};
+
+const resolveCreatorContentAccessAllowed = async (
+  actorClient: SupabaseClient,
+  videoId: string,
+) => creatorContentResolutionAllowed(
+  await resolveCreatorContentAccess(actorClient, videoId),
+);
+
+const readCreatorVideoParentAuthority = async (
+  adminClient: SupabaseClient,
+  videoId: string,
+) => {
+  const { data, error } = await adminClient
+    .from("videos")
+    .select("id,owner_id,moderation_status,scan_status,quarantined_at")
+    .eq("id", videoId)
+    .maybeSingle();
+  return error ? null : data;
 };
 
 const resolveProfileVisibilityAllowed = async (
@@ -636,7 +647,7 @@ const readCreatorVideoForObject = async (
   if (!recordId) return null;
   const { data } = await adminClient
     .from("videos")
-    .select("id,owner_id,visibility,moderation_status,scan_status,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path")
+    .select("id,owner_id,visibility,moderation_status,scan_status,quarantined_at,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path,thumb_scan_status,thumb_quarantined_at")
     .eq("id", recordId)
     .maybeSingle();
   if (!data || toText(data.storage_provider) !== provider) return null;
@@ -676,6 +687,20 @@ const readCreatorVideoForObject = async (
     });
   }
   if (!objectKind) return null;
+  if (requireActiveObjectProvenance) {
+    if (
+      data.quarantined_at != null
+      || !["clean", "reported"].includes(toText(data.moderation_status))
+      || !isPublicScanSafe(data.scan_status)
+      || (
+        objectKind === "thumbnail"
+        && (
+          data.thumb_quarantined_at != null
+          || !isPublicScanSafe(data.thumb_scan_status)
+        )
+      )
+    ) return null;
+  }
 
   return {
     ...data,
@@ -686,9 +711,12 @@ const readCreatorVideoForObject = async (
     visibility: string;
     moderation_status: string;
     scan_status: string;
+    quarantined_at: string | null;
     storage_bucket: string;
     storage_object_key: string | null;
     storage_path: string | null;
+    thumb_scan_status: string;
+    thumb_quarantined_at: string | null;
     object_kind: "source" | "thumbnail";
   };
 };
@@ -703,20 +731,26 @@ const readCreatorVideoRenditionForObject = async (
   if (!recordId) return null;
   const { data: storagePathRendition } = await adminClient
     .from("video_renditions")
-    .select("id,video_id,owner_id,quality_label,status,access_tier,scan_status,storage_bucket,storage_path,manifest_path")
+    .select("id,video_id,owner_id,quality_label,status,access_tier,scan_status,quarantined_at,storage_bucket,storage_path,manifest_path")
     .eq("video_id", recordId)
     .eq("storage_bucket", bucket)
     .eq("storage_path", objectKey)
+    .eq("status", "ready")
+    .eq("scan_status", "clean")
+    .is("quarantined_at", null)
     .limit(1)
     .maybeSingle();
   let rendition = storagePathRendition;
   if (!rendition) {
     const { data: manifestPathRendition } = await adminClient
       .from("video_renditions")
-      .select("id,video_id,owner_id,quality_label,status,access_tier,scan_status,storage_bucket,storage_path,manifest_path")
+      .select("id,video_id,owner_id,quality_label,status,access_tier,scan_status,quarantined_at,storage_bucket,storage_path,manifest_path")
       .eq("video_id", recordId)
       .eq("storage_bucket", bucket)
       .eq("manifest_path", objectKey)
+      .eq("status", "ready")
+      .eq("scan_status", "clean")
+      .is("quarantined_at", null)
       .limit(1)
       .maybeSingle();
     rendition = manifestPathRendition;
@@ -725,22 +759,35 @@ const readCreatorVideoRenditionForObject = async (
 
   const { data: video } = await adminClient
     .from("videos")
-    .select("id,owner_id,visibility,moderation_status,scan_status,storage_provider,storage_bucket,storage_object_key,storage_path")
+    .select("id,owner_id,visibility,moderation_status,scan_status,quarantined_at,storage_provider,storage_bucket,storage_object_key,storage_path")
     .eq("id", recordId)
+    .in("moderation_status", ["clean", "reported"])
+    .eq("scan_status", "clean")
+    .is("quarantined_at", null)
     .maybeSingle();
   if (!video || toText(video.storage_provider) !== provider) return null;
+  const videoId = toText(video.id);
+  const videoOwnerId = toText(video.owner_id);
+  if (
+    toText(rendition.video_id) !== videoId
+    || videoId !== recordId
+    || !videoOwnerId
+    || toText(rendition.owner_id) !== videoOwnerId
+  ) return null;
 
   return {
     id: toText(rendition.id),
     videoId: toText(rendition.video_id),
-    ownerId: toText(rendition.owner_id || video.owner_id),
+    ownerId: videoOwnerId,
     qualityLabel: toText(rendition.quality_label),
     status: toText(rendition.status),
     accessTier: toText(rendition.access_tier),
     scanStatus: toText(rendition.scan_status),
+    quarantinedAt: rendition.quarantined_at,
     visibility: toText(video.visibility),
     moderationStatus: toText(video.moderation_status),
     videoScanStatus: toText(video.scan_status),
+    videoQuarantinedAt: video.quarantined_at,
     sourceStorageBucket: toText(video.storage_bucket),
     sourceStorageObjectKey: toText(video.storage_object_key) || toText(video.storage_path),
   };
@@ -815,24 +862,6 @@ const hasExactAttachedUploadAuthorityForDelete = async (
     : data.status === "deleted" && !!data.deleted_at;
 };
 
-const userHasActiveEntitlement = async (
-  adminClient: SupabaseClient,
-  userId: string,
-  entitlementKeys: string[],
-) => {
-  const { data } = await adminClient
-    .from("user_entitlements")
-    .select("user_id")
-    .eq("user_id", userId)
-    .in("entitlement_key", entitlementKeys)
-    .in("status", ["active", "trialing", "grace_period"])
-    .is("revoked_at", null)
-    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-    .limit(1)
-    .maybeSingle();
-  return !!data?.user_id;
-};
-
 const canReadCreatorVideoRendition = async (
   adminClient: SupabaseClient,
   actorClient: SupabaseClient,
@@ -842,29 +871,16 @@ const canReadCreatorVideoRendition = async (
   bucket: string,
   objectKey: string,
   securityContext?: SecurityRequestContextResult | null,
+  contentAccessAllowed = false,
+  scopedStaffAllowed = false,
 ) => {
   const rendition = await readCreatorVideoRenditionForObject(adminClient, recordId, provider, bucket, objectKey);
   if (!rendition) return null;
   if (rendition.status !== "ready") return false;
-  if (rendition.ownerId === user.id) return true;
-  if (await ownerMediaBlockedForStaff(adminClient, user, rendition.ownerId)) return false;
-  if (rendition.qualityLabel === "original") {
-    if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
-      await writePrivateMediaAccessAudit(adminClient, user, {
-        action: "media_download_url",
-        objectKey,
-        ownerId: rendition.ownerId,
-        recordId,
-        securityContext,
-        surfaceType: "creator_video",
-      });
-      return true;
-    }
-    return false;
-  }
-  const [visibilityAllowed, contentAccessAllowed, exactSourceScanClean, exactRenditionScanClean] = await Promise.all([
-    resolveCreatorVideoVisibilityAllowed(adminClient, rendition.videoId, rendition.ownerId, user.id),
-    resolveCreatorContentAccessAllowed(actorClient, rendition.videoId),
+  const isOwner = rendition.ownerId === user.id;
+  if (!isOwner && await ownerMediaBlockedForStaff(adminClient, user, rendition.ownerId)) return false;
+  const [visibilityAllowed, exactSourceScanClean, exactRenditionScanClean] = await Promise.all([
+    resolveCreatorVideoVisibilityAllowed(actorClient, rendition.videoId, rendition.ownerId, user.id),
     hasExactCleanMediaScan(adminClient, {
       bucket: rendition.sourceStorageBucket,
       objectKey: rendition.sourceStorageObjectKey,
@@ -880,22 +896,58 @@ const canReadCreatorVideoRendition = async (
       targetTable: "video_renditions",
     }),
   ]);
+  const exactScansClean = exactSourceScanClean
+    && isPublicScanSafe(rendition.videoScanStatus)
+    && rendition.videoQuarantinedAt == null
+    && exactRenditionScanClean
+    && isPublicScanSafe(rendition.scanStatus)
+    && rendition.quarantinedAt == null;
+  const effectiveContentAccessAllowed = contentAccessAllowed || scopedStaffAllowed;
+  if (rendition.qualityLabel === "original") {
+    if (!exactScansClean || !visibilityAllowed || !effectiveContentAccessAllowed) return false;
+    if (isOwner) return true;
+    if (scopedStaffAllowed) {
+      await writePrivateMediaAccessAudit(adminClient, user, {
+        action: "media_download_url",
+        objectKey,
+        ownerId: rendition.ownerId,
+        recordId,
+        securityContext,
+        surfaceType: "creator_video",
+      });
+      return true;
+    }
+    return false;
+  }
   const renditionTierAllowed = rendition.accessTier === "free"
+    || isOwner
     || (
       rendition.accessTier === "premium"
       && (
         await userHasPlatformRole(adminClient, user, ["owner"])
-        || await userHasActiveEntitlement(adminClient, user.id, ["premium"])
+        || await userHasActivePremiumEntitlement(actorClient, user.id)
       )
     );
-  return canIssueCreatorVideoDownload({
+  const allowed = canIssueCreatorVideoDownload({
     contentAccessAllowed,
     exactObjectScanClean: exactRenditionScanClean && isPublicScanSafe(rendition.scanStatus),
     exactSourceScanClean: exactSourceScanClean && isPublicScanSafe(rendition.videoScanStatus),
     objectKind: "rendition",
     renditionTierAllowed,
+    scopedStaffAllowed,
     visibilityAllowed,
   });
+  if (allowed && scopedStaffAllowed) {
+    await writePrivateMediaAccessAudit(adminClient, user, {
+      action: "media_download_url",
+      objectKey,
+      ownerId: rendition.ownerId,
+      recordId,
+      securityContext,
+      surfaceType: "creator_video",
+    });
+  }
+  return allowed;
 };
 
 const canReadCreatorVideo = async (
@@ -908,16 +960,54 @@ const canReadCreatorVideo = async (
   objectKey: string,
   securityContext?: SecurityRequestContextResult | null,
 ) => {
-  const renditionAllowed = await canReadCreatorVideoRendition(adminClient, actorClient, user, recordId, provider, bucket, objectKey, securityContext);
+  // Resolve exact creator-video commerce authority before any service-role
+  // lookup can obtain a source row, object key, or rendition path. Public card
+  // thumbnails are issued by the separate non-source card endpoint.
+  const sourceAccessResolution = await resolveCreatorContentAccess(
+    actorClient,
+    recordId,
+  );
+  const parent = await readCreatorVideoParentAuthority(adminClient, recordId);
+  if (!creatorVideoParentResolutionAllowed({
+    sourceAccessResolution,
+    requestedSourceId: recordId,
+    parent,
+  })) return false;
+  const crossOwnerStaffAccess = isCrossOwnerCreatorContentStaffAccess({
+    sourceAccessResolution,
+    viewerUserId: user.id,
+    parentOwnerId: toText(parent?.owner_id),
+  });
+  const contentAccessAllowed = !crossOwnerStaffAccess;
+  const scopedStaffAllowed = crossOwnerStaffAccess
+    && await userHasScopedStaffPermission(
+      adminClient,
+      user,
+      ["content_moderation", "reports_review"],
+    );
+  if (!contentAccessAllowed && !scopedStaffAllowed) return false;
+
+  const renditionAllowed = await canReadCreatorVideoRendition(
+    adminClient,
+    actorClient,
+    user,
+    recordId,
+    provider,
+    bucket,
+    objectKey,
+    securityContext,
+    contentAccessAllowed,
+    scopedStaffAllowed,
+  );
   if (renditionAllowed !== null) return renditionAllowed;
 
   const video = await readCreatorVideoForObject(adminClient, recordId, provider, bucket, objectKey);
   if (!video) return false;
-  if (toText(video.owner_id) === user.id) return true;
-  if (await ownerMediaBlockedForStaff(adminClient, user, toText(video.owner_id))) return false;
+  const isOwner = toText(video.owner_id) === user.id;
+  if (!isOwner && await ownerMediaBlockedForStaff(adminClient, user, toText(video.owner_id))) return false;
   const sourceObjectKey = toText(video.storage_object_key) || toText(video.storage_path);
-  const [visibilityAllowed, exactSourceScanClean, exactObjectScanClean, contentAccessAllowed] = await Promise.all([
-    resolveCreatorVideoVisibilityAllowed(adminClient, recordId, toText(video.owner_id), user.id),
+  const [visibilityAllowed, exactSourceScanClean, exactObjectScanClean] = await Promise.all([
+    resolveCreatorVideoVisibilityAllowed(actorClient, recordId, toText(video.owner_id), user.id),
     hasExactCleanMediaScan(adminClient, {
       bucket: toText(video.storage_bucket),
       objectKey: sourceObjectKey,
@@ -940,20 +1030,17 @@ const canReadCreatorVideo = async (
         targetId: recordId,
         targetTable: "videos",
       }),
-    video.object_kind === "thumbnail"
-      ? Promise.resolve(false)
-      : resolveCreatorContentAccessAllowed(actorClient, recordId),
   ]);
-  if (canIssueCreatorVideoDownload({
+  const allowed = canIssueCreatorVideoDownload({
     contentAccessAllowed,
     exactObjectScanClean,
     exactSourceScanClean: exactSourceScanClean && isPublicScanSafe(video.scan_status),
     objectKind: video.object_kind,
+    scopedStaffAllowed,
     visibilityAllowed,
-  })) {
-    return true;
-  }
-  if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
+  });
+  if (!allowed) return false;
+  if (scopedStaffAllowed) {
     await writePrivateMediaAccessAudit(adminClient, user, {
       action: "media_download_url",
       objectKey,
@@ -962,9 +1049,8 @@ const canReadCreatorVideo = async (
       securityContext,
       surfaceType: "creator_video",
     });
-    return true;
   }
-  return false;
+  return true;
 };
 
 const canDeleteCreatorVideo = async (
@@ -1024,7 +1110,7 @@ const readSocialAttachmentForObject = async (
   if (!recordId) return null;
   const { data } = await adminClient
     .from("social_attachments")
-    .select("id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,moderation_status,scan_status,deleted_at")
+    .select("id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,moderation_status,scan_status,quarantined_at,deleted_at")
     .eq("id", recordId)
     .maybeSingle();
   if (!data) return null;
@@ -1044,6 +1130,7 @@ const readSocialAttachmentForObject = async (
     surface_type: string;
     surface_id: string;
     scan_status: string;
+    quarantined_at: string | null;
   };
 };
 
@@ -1107,14 +1194,18 @@ const canReadSocialAttachmentSurface = async (
     if (!videoId) return false;
     const video = await adminClient
       .from("videos")
-      .select("id,owner_id,scan_status")
+      .select("id,owner_id,scan_status,quarantined_at")
       .eq("id", videoId)
       .eq("visibility", "public")
       .in("moderation_status", ["clean", "reported"])
       .maybeSingle();
-    if (!video.data?.id || !isPublicScanSafe(video.data.scan_status)) return false;
+    if (
+      !video.data?.id
+      || !isPublicScanSafe(video.data.scan_status)
+      || video.data.quarantined_at != null
+    ) return false;
     const [visibilityAllowed, contentAccessAllowed] = await Promise.all([
-      resolveCreatorVideoVisibilityAllowed(adminClient, videoId, toText(video.data.owner_id), user.id),
+      resolveCreatorVideoVisibilityAllowed(actorClient, videoId, toText(video.data.owner_id), user.id),
       resolveCreatorContentAccessAllowed(actorClient, videoId),
     ]);
     return visibilityAllowed && contentAccessAllowed;
@@ -1164,19 +1255,16 @@ const canReadSocialAttachment = async (
 ) => {
   const attachment = await readSocialAttachmentForObject(adminClient, recordId, provider, bucket, objectKey);
   if (!attachment) return false;
-  if (toText(attachment.owner_user_id) === user.id) {
-    // Object ownership is not parent-surface authority. A commenter/sender can
-    // later be blocked, removed from a thread/room, or lose paid-video access;
-    // every attached object therefore rechecks the exact current parent gate.
-    return canReadSocialAttachmentSurface(adminClient, actorClient, user, attachment);
-  }
+  const ownerUserId = toText(attachment.owner_user_id);
   const exactAttachmentScanClean = isPublicScanSafe(attachment.scan_status);
-  if (!exactAttachmentScanClean) {
+  const exactAttachmentNotQuarantined = !toText(attachment.quarantined_at);
+  if (!exactAttachmentScanClean || !exactAttachmentNotQuarantined) {
+    if (await ownerMediaBlockedForStaff(adminClient, user, ownerUserId)) return false;
     if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
       await writePrivateMediaAccessAudit(adminClient, user, {
         action: "media_download_url",
         objectKey,
-        ownerId: toText(attachment.owner_user_id),
+        ownerId: ownerUserId,
         recordId,
         securityContext,
         surfaceType: "social_attachment",
@@ -1185,16 +1273,24 @@ const canReadSocialAttachment = async (
     }
     return false;
   }
+  if (ownerUserId === user.id) {
+    // Object ownership is not parent-surface authority. A commenter/sender can
+    // later be blocked, removed from a thread/room, or lose paid-video access;
+    // every safe, non-quarantined object therefore rechecks the exact current
+    // parent gate. Ownership never substitutes for malware or quarantine state.
+    return canReadSocialAttachmentSurface(adminClient, actorClient, user, attachment);
+  }
   if (canIssueSocialAttachmentDownload({
     exactAttachmentScanClean,
+    exactAttachmentNotQuarantined,
     surfaceAuthorityAllowed: await canReadSocialAttachmentSurface(adminClient, actorClient, user, attachment),
   })) return true;
-  if (await ownerMediaBlockedForStaff(adminClient, user, toText(attachment.owner_user_id))) return false;
+  if (await ownerMediaBlockedForStaff(adminClient, user, ownerUserId)) return false;
   if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
     await writePrivateMediaAccessAudit(adminClient, user, {
       action: "media_download_url",
       objectKey,
-      ownerId: toText(attachment.owner_user_id),
+      ownerId: ownerUserId,
       recordId,
       securityContext,
       surfaceType: "social_attachment",
@@ -1550,7 +1646,7 @@ Deno.serve(async (req): Promise<Response> => {
     if (action === "create_upload_url") {
       const mimeType = normalizeMediaContentType(payload.mimeType) || "application/octet-stream";
       const sizeBytes = parseSizeBytes(payload.sizeBytes);
-      if (surfaceType === "creator_video" && !(await userCanUsePremiumCreatorTools(adminClient, user))) {
+      if (surfaceType === "creator_video" && !(await userCanUsePremiumCreatorTools(adminClient, actorClient, user))) {
         return json(403, {
           error: "premium_required",
           message: "Premium required. Creator video uploads require active Premium entitlement or owner/operator setup access.",
@@ -1833,6 +1929,37 @@ Deno.serve(async (req): Promise<Response> => {
         return json(403, {
           error: "media_delivery_provenance_required",
           message: "This media object does not have current immutable delivery provenance.",
+        });
+      }
+
+      // Entitlements, visibility, moderation, restriction, and scan state may
+      // change while immutable object provenance is read. Re-resolve the exact
+      // authority immediately before signing; an earlier allow is not cached.
+      const stillAllowed = surfaceType === "creator_video"
+        ? await canReadCreatorVideo(
+          adminClient,
+          actorClient,
+          user,
+          recordId,
+          originStorage.provider,
+          originStorage.bucket,
+          objectKey,
+          securityContext,
+        )
+        : await canReadSocialAttachment(
+          adminClient,
+          actorClient,
+          user,
+          recordId,
+          originStorage.provider,
+          originStorage.bucket,
+          objectKey,
+          securityContext,
+        );
+      if (!stillAllowed) {
+        return json(403, {
+          error: "authority_changed_before_signing",
+          message: "Media authority changed before a download URL could be issued.",
         });
       }
 

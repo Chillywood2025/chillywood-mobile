@@ -175,7 +175,17 @@ try {
   requireProof(sdPublic.allowed === false && sdPublic.blockedReason === "free_rendition_does_not_need_token", "360p/480p public path should not require Premium token");
 
   assertSourceIncludes(issuerSource, "auth.getUser", "Premium HD token issuer");
+  assertSourceIncludes(issuerSource, "SUPABASE_ANON_KEY", "Premium HD token issuer caller client");
+  assertSourceIncludes(issuerSource, "const actorClient = createClient", "Premium HD token issuer caller client");
+  assertSourceIncludes(issuerSource, "await actorClient.auth.getUser()", "Premium HD token issuer caller authentication");
   assertSourceIncludes(issuerSource, "monetization_has_active_premium", "Premium HD token issuer");
+  assertSourceIncludes(issuerSource, "resolve_creator_content_access", "Premium HD exact source authority");
+  assertSourceIncludes(issuerSource, "creatorContentResolutionAllowed", "Premium HD source authority normalization");
+  assertSourceIncludes(issuerSource, "creatorVideoParentResolutionAllowed", "Premium HD parent safety authority");
+  assertSourceIncludes(issuerSource, "isCrossOwnerCreatorContentStaffAccess", "Premium HD privileged cross-owner audit classification");
+  assertSourceIncludes(issuerSource, "hasScopedCrossOwnerPlaybackAuthority", "Premium HD scoped cross-owner authority");
+  assertSourceIncludes(issuerSource, "has_platform_permission", "Premium HD exact scoped permission authority");
+  assertSourceIncludes(issuerSource, "scoped_staff_permission_required", "Premium HD unscoped staff fail-closed response");
   assertSourceIncludes(issuerSource, "media_renditions", "Premium HD token issuer");
   assertSourceIncludes(issuerSource, "cloudflare_r2_premium_token", "Premium HD token issuer");
   assertSourceIncludes(issuerSource, "protected_premium", "Premium HD token issuer");
@@ -193,7 +203,59 @@ try {
   assertSourceIncludes(workerSource, "rewritePremiumHlsManifestForProof", "Premium Worker HLS rewrite");
   assertSourceIncludes(workerSource, "URI=\"", "Premium Worker manifest attribute URI rewrite");
   assertSourceNotMatches(issuerSource, /console\.(log|info|warn|error)\s*\(/, "Premium HD token issuer");
+  assertSourceNotMatches(
+    issuerSource,
+    /adminClient\s*\n?\s*\.rpc\("monetization_has_active_premium"/u,
+    "Premium entitlement must resolve as the caller rather than service_role",
+  );
   assertSourceNotMatches(vodQualitySource, /console\.(log|info|warn|error)\s*\([^)]*(playbackUrl|token)/, "app resolver");
+
+  const handlerSource = issuerSource.slice(issuerSource.indexOf("Deno.serve(async (req) =>"));
+  const premiumAuthorityIndex = handlerSource.indexOf('rpc("monetization_has_active_premium"');
+  const sourceAuthorityIndex = handlerSource.indexOf('"resolve_creator_content_access"');
+  const adminClientIndex = handlerSource.indexOf("const adminClient = createClient");
+  const parentSafetyReadIndex = handlerSource.indexOf("await readCreatorVideoParent(adminClient, sourceId)");
+  const privilegedRenditionReadIndex = handlerSource.indexOf("await readPremiumRendition(adminClient, payload, parent)");
+  const parentSafetyRecheckIndex = handlerSource.indexOf(
+    "readCreatorVideoParent(adminClient, sourceId)",
+    privilegedRenditionReadIndex,
+  );
+  const exactRenditionRecheckIndex = handlerSource.indexOf(
+    "await rereadExactPremiumRendition(",
+    parentSafetyRecheckIndex,
+  );
+  const tokenSigningIndex = handlerSource.indexOf("await signPremiumCdnToken");
+  requireProof(premiumAuthorityIndex >= 0, "Premium authority must resolve as the authenticated caller");
+  requireProof(sourceAuthorityIndex >= 0, "exact source resolver must be called by the token handler");
+  requireProof(
+    /p_content_id: sourceId,\n\s+p_content_type: sourceType,/u.test(handlerSource),
+    "source authority must bind the exact normalized source type and id",
+  );
+  requireProof(
+    sourceAuthorityIndex > premiumAuthorityIndex,
+    "exact source authority must be additive to, not replace, caller Premium authority",
+  );
+  requireProof(
+    adminClientIndex > sourceAuthorityIndex,
+    "service-role client must not be created before exact source authority resolves",
+  );
+  requireProof(
+    privilegedRenditionReadIndex > sourceAuthorityIndex,
+    "exact source authority must resolve before privileged rendition lookup",
+  );
+  requireProof(
+    parentSafetyReadIndex > sourceAuthorityIndex && parentSafetyReadIndex < privilegedRenditionReadIndex,
+    "exact current parent safety must resolve before privileged rendition lookup",
+  );
+  requireProof(
+    parentSafetyRecheckIndex > privilegedRenditionReadIndex && parentSafetyRecheckIndex < tokenSigningIndex,
+    "exact current parent safety must be rechecked after rendition lookup and before token signing",
+  );
+  requireProof(
+    exactRenditionRecheckIndex > parentSafetyRecheckIndex && exactRenditionRecheckIndex < tokenSigningIndex,
+    "the exact rendition must be re-read after authority rechecks and before token signing",
+  );
+  requireProof(tokenSigningIndex > privilegedRenditionReadIndex, "token signing must follow authorized rendition lookup");
 
   const sanitized = {
     premium720: { allowed: premium720.allowed, renditionLabel: premium720.claims?.renditionLabel, tokenClaimsPresent: !!premium720.claims },
@@ -228,6 +290,10 @@ try {
       missingEnvFailsClosed: true,
       publicSdUnchanged: true,
       noTokenOrSecretPrinted: true,
+      parentSafetyBeforeProtectedMetadata: true,
+      parentSafetyRecheckedBeforeSigning: true,
+      exactRenditionRecheckedBeforeSigning: true,
+      crossOwnerStaffAccessAudited: true,
     },
     sanitized,
   }, null, 2));

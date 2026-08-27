@@ -181,6 +181,13 @@ export default function AdminMoneySandboxPurchasesScreen() {
       });
 
       if (intentError) throw intentError;
+      const intentRow = intent && typeof intent === "object" && !Array.isArray(intent)
+        ? intent as Record<string, unknown>
+        : null;
+      if (intentRow?.alreadyPurchased === true || intentRow?.alreadySubscribed === true) {
+        setStatus("This exact item is already owned. No new store purchase was opened.");
+        return;
+      }
 
       setStatus(`Intent created. Loading RevenueCat product ${selectedProduct.providerProductId}...`);
       const products = await readRevenueCatNonSubscriptionProducts([selectedProduct.providerProductId]);
@@ -191,7 +198,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
 
       setStatus(`Opening ${STORE_PROVIDER_PAIR} sandbox purchase...`);
       const result = await purchaseRevenueCatStoreProduct(storeProduct);
-      const intentId = normalizeText((intent as { id?: unknown } | null)?.id);
+      const intentId = normalizeText(intentRow?.id);
       const purchasedProductId = normalizeText(result.productIdentifier) || selectedProduct.providerProductId;
       setStatus(
         [

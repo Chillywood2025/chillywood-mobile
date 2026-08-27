@@ -4,6 +4,7 @@ import {
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
   validateCreatorMoneyPurchaseIntent,
+  validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
 } from "./creatorMoneyPurchaseAuthority";
 import {
@@ -11,7 +12,10 @@ import {
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
 import { Platform } from "react-native";
-import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import {
+  IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
+  resolveIosFiniteAppStoreTier,
+} from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
@@ -387,7 +391,22 @@ export async function resolveCreatorVipVideoAccess(videoId: string): Promise<Cre
   }
   const reason = accessText(row.reason);
   if (!reason) return { allowed: false, reason: "malformed_access_response", vipRequired: true, creatorId: null };
-  return { allowed: row.allowed, reason, vipRequired: row.vipRequired, creatorId: creatorId || null };
+  const exactAllowedTuple = row.allowed === true && (
+    (reason === "vip_not_required" && row.vipRequired === false)
+    || ((reason === "owner" || reason === "vip_active") && row.vipRequired === true)
+  );
+  if (!exactAllowedTuple) {
+    return {
+      allowed: false,
+      reason: row.allowed === false ? reason : "malformed_access_response",
+      vipRequired: true,
+      creatorId: creatorId || null,
+    };
+  }
+  if (!creatorId) {
+    return { allowed: false, reason: "malformed_access_response", vipRequired: true, creatorId: null };
+  }
+  return { allowed: true, reason, vipRequired: row.vipRequired, creatorId };
 }
 
 export async function setCreatorVideoVipAccess(videoId: string, required: boolean) {
@@ -420,10 +439,23 @@ export async function createCreatorVipPassPurchaseIntent(
   if (typeof row.alreadyPurchased !== "boolean") {
     throw new Error("VIP Pass checkout authority could not be verified.");
   }
-  const validated = validateCreatorMoneyPurchaseIntent(data, {
-    ...expected,
-    status: row.alreadyPurchased ? "consumed" : "pending",
-  });
+  const validated = row.alreadyPurchased
+    ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
+    : Platform.OS === "ios"
+      ? (() => {
+          const tier = expected.currency === "usd"
+            ? resolveIosFiniteAppStoreTier("vip_pass", expected.amountMinor)
+            : null;
+          return tier ? validateCreatorMoneyPurchaseIntent(data, {
+            ...expected,
+            provider: "revenuecat_app_store",
+            providerProductId: tier.productId,
+            status: "pending",
+          }) : null;
+        })()
+      : Platform.OS === "android" && expected.provider === "revenuecat_google_play"
+        ? validateCreatorMoneyPurchaseIntent(data, { ...expected, status: "pending" })
+        : null;
   if (!validated) throw new Error("VIP Pass checkout authority could not be verified.");
   return {
     ...validated,
@@ -460,6 +492,19 @@ export async function purchaseCreatorVipPass(input: {
     || typeof access.priceCents !== "number"
     || !access.currency
   ) return { ok: false, message: "VIP is not available for this creator right now.", access };
+
+  if (Platform.OS !== "ios" && Platform.OS !== "android") {
+    return { ok: false, message: "VIP is not available on this device.", access };
+  }
+  if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
+    return { ok: false, message: "VIP is not available for this creator right now.", access };
+  }
+  if (Platform.OS === "ios" && (
+    access.currency !== "usd"
+    || !resolveIosFiniteAppStoreTier("vip_pass", access.priceCents)
+  )) {
+    return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+  }
 
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
@@ -504,7 +549,7 @@ export async function purchaseCreatorVipPass(input: {
     };
   }
 
-  const productId = access.providerProductId;
+  const productId = intent.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
   const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
   if (!product) {

@@ -143,6 +143,6 @@ export const resolveIosFiniteAppStoreTier = (
   const amount = Number.isFinite(requestedAmountMinor) ? Math.max(0, Math.trunc(requestedAmountMinor)) : 0;
   if (!amount) return null;
   return listIosFiniteAppStoreTiers(concept).find((entry) =>
-    amount === entry.referencePriceMinor || amount === entry.referencePriceMinor + 1
+    amount === entry.referencePriceMinor
   ) ?? null;
 };

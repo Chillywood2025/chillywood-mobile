@@ -20,33 +20,42 @@ const FUNCTION_NAME = "stripe-tip-webhook";
 type StripeTipEvent = ReturnType<typeof parseStripeEvent>;
 type StripeObject = Record<string, unknown> & {
   amount?: number;
+  amount_refunded?: number;
   amount_total?: number;
   client_reference_id?: string;
   currency?: string;
   id?: string;
   metadata?: Record<string, unknown>;
   payment_intent?: string | null;
+  refunded?: boolean;
   status?: string;
 };
 
 type TipTransactionRow = {
-  buyer_account_id?: string | null;
-  buyer_session_generation?: string | null;
   creator_id?: string | null;
   currency?: string | null;
   id?: string | null;
-  metadata?: Record<string, unknown> | null;
-  payout_status?: string | null;
   provider_checkout_session_id?: string | null;
   provider_payment_intent_id?: string | null;
   sender_id?: string | null;
-  status?: string | null;
   tip_amount_cents?: number | null;
+  total_paid_cents?: number | null;
 };
 
-type TipBuyerSessionAuthority = {
-  authorized: boolean;
+type WebhookClaim = {
+  disposition: "claimed" | "duplicate" | "in_progress";
+  processingAttemptId: string | null;
+  retry: boolean;
+  rowId: string;
+};
+
+type TipProjectionResult = {
+  buyerAuthorityValid: boolean | null;
+  compensationRequired: boolean;
   reason: string;
+  tipId: string | null;
+  updated: boolean;
+  webhookFinalized: boolean;
 };
 
 const tipEventTypes = new Set([
@@ -66,11 +75,6 @@ const normalizeUuid = (value: unknown) => {
     ? text
     : null;
 };
-
-const normalizeMetadata = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
 
 const readStripeTipWebhookSecret = () => {
   const tipSecret = readOptionalEnv("STRIPE_TIP_WEBHOOK_SECRET");
@@ -110,51 +114,90 @@ const paymentIntentFromObject = (object: StripeObject | null) =>
 const checkoutSessionFromObject = (object: StripeObject | null, eventType: string) =>
   eventType.startsWith("checkout.session.") ? toText(object?.id) || null : null;
 
-const insertWebhookEvent = async (adminClient: SupabaseClientLike, event: StripeTipEvent, rawBody: string) => {
+const reserveWebhookEvent = async (
+  adminClient: SupabaseClientLike,
+  event: StripeTipEvent,
+  rawBody: string,
+): Promise<WebhookClaim> => {
   const eventId = toText(event.id);
   const eventType = toText(event.type);
-  const { data, error } = await adminClient
-    .from("monetization_webhook_events")
-    .insert({
-      event_id: eventId,
-      event_type: eventType,
-      idempotency_key: eventId,
-      provider: "stripe_tip",
-      raw_event_hash: await hashText(rawBody),
-      status: "received",
-    })
-    .select("id")
-    .single();
-
-  if (error && error.code === "23505") {
-    const { data: existing, error: readError } = await adminClient
-      .from("monetization_webhook_events")
-      .select("id,status")
-      .eq("provider", "stripe_tip")
-      .eq("idempotency_key", eventId)
-      .maybeSingle();
-    if (readError) throw new Error(`Tip webhook duplicate lookup failed: ${readError.message}`);
-    return { duplicate: true as const, rowId: toText((existing as { id?: unknown } | null)?.id) || null };
+  const processingAttemptId = crypto.randomUUID();
+  const { data, error } = await adminClient.rpc("reserve_stripe_tip_webhook_event", {
+    p_event_id: eventId,
+    p_event_type: eventType,
+    p_processing_attempt_id: processingAttemptId,
+    p_raw_event_hash: await hashText(rawBody),
+  });
+  if (error) throw new Error(`Tip webhook event claim failed: ${error.message}`);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Tip webhook event claim returned malformed authority.");
   }
 
-  if (error) throw new Error(`Tip webhook event insert failed: ${error.message}`);
-  return { duplicate: false as const, rowId: toText((data as { id?: unknown } | null)?.id) || null };
+  const claim = data as Record<string, unknown>;
+  const disposition = toText(claim.disposition);
+  const rowId = normalizeUuid(claim.rowId);
+  const claimAcquired = claim.claimAcquired;
+  const returnedAttemptId = normalizeUuid(claim.processingAttemptId);
+  const expectedClaimAcquired = disposition === "claimed";
+  if (
+    !rowId
+    || !["claimed", "duplicate", "in_progress"].includes(disposition)
+    || typeof claimAcquired !== "boolean"
+    || claimAcquired !== expectedClaimAcquired
+    || (expectedClaimAcquired && returnedAttemptId !== processingAttemptId)
+    || (!expectedClaimAcquired && returnedAttemptId !== null)
+  ) {
+    throw new Error("Tip webhook event claim returned malformed authority.");
+  }
+
+  return {
+    disposition: disposition as WebhookClaim["disposition"],
+    processingAttemptId: expectedClaimAcquired ? processingAttemptId : null,
+    retry: claim.retry === true,
+    rowId,
+  };
 };
 
-const updateWebhookEvent = async (
+const finalizeWebhookEvent = async (
   adminClient: SupabaseClientLike,
-  rowId: string | null,
+  eventId: string,
+  processingAttemptId: string,
   status: "processed" | "ignored" | "failed",
 ) => {
-  if (!rowId) return;
-  const { error } = await adminClient
-    .from("monetization_webhook_events")
-    .update({
-      processed_at: new Date().toISOString(),
-      status,
-    })
-    .eq("id", rowId);
-  if (error) throw new Error(`Tip webhook event update failed: ${error.message}`);
+  const { data, error } = await adminClient.rpc("finalize_stripe_tip_webhook_event", {
+    p_event_id: eventId,
+    p_processing_attempt_id: processingAttemptId,
+    p_status: status,
+  });
+  if (error) throw new Error(`Tip webhook event finalization failed: ${error.message}`);
+  if (
+    !data
+    || typeof data !== "object"
+    || Array.isArray(data)
+    || normalizeUuid((data as Record<string, unknown>).rowId) === null
+    || toText((data as Record<string, unknown>).status) !== status
+  ) {
+    throw new Error("Tip webhook event finalization returned malformed authority.");
+  }
+};
+
+const insertIdempotentTipAuditEvent = async (
+  adminClient: SupabaseClientLike,
+  eventType: "webhook_duplicate" | "webhook_ignored",
+  providerEventId: string,
+  metadata: Record<string, unknown>,
+) => {
+  const { error } = await adminClient.from("creator_tip_events").insert({
+    actor_id: null,
+    event_type: eventType,
+    provider: "stripe_connect",
+    provider_environment: "test",
+    provider_event_id: providerEventId,
+    metadata,
+  });
+  if (error && toText(error.code) !== "23505") {
+    throw new Error("Tip webhook audit event insert failed.");
+  }
 };
 
 const readTipIdByObject = async (adminClient: SupabaseClientLike, object: StripeObject | null, eventType: string) => {
@@ -167,6 +210,8 @@ const readTipIdByObject = async (adminClient: SupabaseClientLike, object: Stripe
       .from("creator_tip_transactions")
       .select("id")
       .eq("provider_checkout_session_id", checkoutSessionId)
+      .eq("provider", "stripe_connect")
+      .eq("provider_environment", "test")
       .maybeSingle();
     if (error) throw new Error(`Tip checkout session lookup failed: ${error.message}`);
     const found = toText((data as { id?: unknown } | null)?.id);
@@ -179,6 +224,8 @@ const readTipIdByObject = async (adminClient: SupabaseClientLike, object: Stripe
       .from("creator_tip_transactions")
       .select("id")
       .eq("provider_payment_intent_id", paymentIntentId)
+      .eq("provider", "stripe_connect")
+      .eq("provider_environment", "test")
       .maybeSingle();
     if (error) throw new Error(`Tip payment intent lookup failed: ${error.message}`);
     const found = toText((data as { id?: unknown } | null)?.id);
@@ -194,65 +241,13 @@ const readTipTransaction = async (
 ): Promise<TipTransactionRow | null> => {
   const { data, error } = await adminClient
     .from("creator_tip_transactions")
-    .select("id,creator_id,sender_id,buyer_account_id,buyer_session_generation,tip_amount_cents,currency,status,payout_status,provider_checkout_session_id,provider_payment_intent_id,metadata")
+    .select("id,creator_id,sender_id,tip_amount_cents,total_paid_cents,currency,provider_checkout_session_id,provider_payment_intent_id")
     .eq("id", tipId)
+    .eq("provider", "stripe_connect")
+    .eq("provider_environment", "test")
     .maybeSingle();
   if (error) throw new Error(`Tip transaction authority lookup failed: ${error.message}`);
   return data as TipTransactionRow | null;
-};
-
-const normalizeTipBuyerSessionAuthority = (
-  value: unknown,
-  tip: TipTransactionRow,
-): TipBuyerSessionAuthority | null => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  const expectedUserId = normalizeUuid(tip.sender_id);
-  const expectedAccountId = normalizeUuid(tip.buyer_account_id);
-  const expectedSessionGeneration = normalizeUuid(tip.buyer_session_generation);
-  const userId = normalizeUuid(row.userId);
-  const accountId = normalizeUuid(row.accountId);
-  const sessionGeneration = normalizeUuid(row.sessionGeneration);
-  const authorized = row.authorized;
-  const state = toText(row.state);
-  const reason = toText(row.reason);
-
-  if (
-    typeof authorized !== "boolean"
-    || !expectedUserId
-    || !expectedAccountId
-    || expectedAccountId !== expectedUserId
-    || !expectedSessionGeneration
-    || userId !== expectedUserId
-    || accountId !== expectedAccountId
-    || sessionGeneration !== expectedSessionGeneration
-    || (authorized && (state !== "ACTIVE" || reason !== "exact_buyer_session_current"))
-    || (!authorized && (state !== "BLOCKED" || reason !== "buyer_session_authority_not_current"))
-  ) return null;
-
-  return { authorized, reason };
-};
-
-const readTipBuyerSessionAuthority = async (
-  adminClient: SupabaseClientLike,
-  tip: TipTransactionRow,
-): Promise<TipBuyerSessionAuthority> => {
-  const userId = normalizeUuid(tip.sender_id);
-  const sessionGeneration = normalizeUuid(tip.buyer_session_generation);
-  if (!userId || !sessionGeneration || normalizeUuid(tip.buyer_account_id) !== userId) {
-    return { authorized: false, reason: "tip_buyer_session_binding_missing" };
-  }
-  try {
-    const { data, error } = await adminClient.rpc("creator_tip_buyer_session_authority", {
-      p_session_generation: sessionGeneration,
-      p_user_id: userId,
-    });
-    if (error) return { authorized: false, reason: "tip_buyer_session_authority_read_failed" };
-    return normalizeTipBuyerSessionAuthority(data, tip)
-      ?? { authorized: false, reason: "tip_buyer_session_authority_malformed" };
-  } catch {
-    return { authorized: false, reason: "tip_buyer_session_authority_read_failed" };
-  }
 };
 
 const providerCompletionMatchesTip = (
@@ -309,8 +304,29 @@ const providerRemovalOrFailureMatchesTip = (
       && toText(object.id) === toText(tip.provider_payment_intent_id);
   }
   if (eventType === "charge.refunded" || eventType === "charge.dispute.created") {
-    return paymentIntentFromObject(object) !== null
-      && paymentIntentFromObject(object) === toText(tip.provider_payment_intent_id);
+    const paymentIntentId = paymentIntentFromObject(object);
+    if (eventType === "charge.dispute.created") {
+      return paymentIntentId !== null
+        && paymentIntentId === toText(tip.provider_payment_intent_id);
+    }
+
+    const chargeAmount = object.amount;
+    const amountRefunded = object.amount_refunded;
+    const currency = toText(object.currency).toLowerCase();
+    return toText(object.id).startsWith("ch_")
+      && paymentIntentId !== null
+      && paymentIntentId === toText(tip.provider_payment_intent_id)
+      && typeof chargeAmount === "number"
+      && Number.isSafeInteger(chargeAmount)
+      && chargeAmount === tip.total_paid_cents
+      && currency !== ""
+      && currency === toText(tip.currency).toLowerCase()
+      && typeof amountRefunded === "number"
+      && Number.isSafeInteger(amountRefunded)
+      && amountRefunded > 0
+      && amountRefunded <= chargeAmount
+      && typeof object.refunded === "boolean"
+      && object.refunded === (amountRefunded === chargeAmount);
   }
   return false;
 };
@@ -338,7 +354,8 @@ const updateTipForEvent = async (
   adminClient: SupabaseClientLike,
   event: StripeTipEvent,
   object: StripeObject | null,
-) => {
+  processingAttemptId: string,
+): Promise<TipProjectionResult> => {
   const eventType = toText(event.type);
   const tipId = await readTipIdByObject(adminClient, object, eventType);
   if (!tipId) return {
@@ -347,6 +364,7 @@ const updateTipForEvent = async (
     reason: "tip_not_found",
     buyerAuthorityValid: null,
     compensationRequired: false,
+    webhookFinalized: false,
   };
 
   const tip = await readTipTransaction(adminClient, tipId);
@@ -357,191 +375,104 @@ const updateTipForEvent = async (
       reason: "tip_not_found",
       buyerAuthorityValid: null,
       compensationRequired: false,
+      webhookFinalized: false,
     };
   }
 
-  const now = new Date().toISOString();
-  const checkoutSessionId = checkoutSessionFromObject(object, eventType);
   const paymentIntentId = paymentIntentFromObject(object);
-  const currency = toText(object?.currency).toLowerCase() || undefined;
-  const amount = typeof object?.amount_total === "number"
-    ? object.amount_total
-    : typeof object?.amount === "number"
-      ? object.amount
-      : undefined;
+  const amount = eventType === "charge.refunded"
+    ? object?.amount
+    : typeof object?.amount_total === "number"
+      ? object.amount_total
+      : typeof object?.amount === "number"
+        ? object.amount
+        : undefined;
+  const amountRefunded = eventType === "charge.refunded"
+    ? object?.amount_refunded
+    : undefined;
+  const refunded = eventType === "charge.refunded"
+    ? object?.refunded
+    : undefined;
 
   const completionEvent = eventType === "checkout.session.completed"
     || eventType === "payment_intent.succeeded";
-  const existingMetadata = normalizeMetadata(tip.metadata);
-  const buyerAuthority = completionEvent
-    ? await readTipBuyerSessionAuthority(adminClient, tip)
-    : null;
-  const compensationAlreadyRequired = existingMetadata.compensation_required === true;
-  const terminalState = tip.status === "refunded" || tip.status === "disputed";
-  const buyerSessionCurrent = buyerAuthority?.authorized === true;
   const providerCompletionExact = completionEvent
     ? providerCompletionMatchesTip(eventType, object, tip)
     : false;
   const providerLifecycleExact = completionEvent
     ? providerCompletionExact
     : providerRemovalOrFailureMatchesTip(eventType, object, tip);
-  if (!providerLifecycleExact) {
-    await adminClient.from("creator_tip_events").insert({
-      actor_id: null,
-      event_type: "webhook_ignored",
-      provider_event_id: toText(event.id),
-      tip_transaction_id: tipId,
-      metadata: {
-        event_type: eventType,
-        ignored_reason: "tip_provider_lifecycle_identity_mismatch",
-        no_access_granted: true,
-        provider_checkout_identity_present: !!checkoutSessionId,
-        provider_payment_identity_present: !!paymentIntentId,
-        pure_contribution_only: true,
-      },
-    });
-    return {
-      tipId,
-      updated: false,
-      reason: "tip_provider_lifecycle_identity_mismatch",
-      buyerAuthorityValid: completionEvent ? buyerSessionCurrent : null,
-      compensationRequired: compensationAlreadyRequired,
-    };
-  }
-  const completionAuthorityValid = buyerSessionCurrent
-    && providerCompletionExact
-    && !compensationAlreadyRequired
-    && !terminalState;
-  const completionCompensationRequired = completionEvent && !terminalState
-    ? !completionAuthorityValid
-    : compensationAlreadyRequired;
-  const buyerAuthorityReason = terminalState
-    ? "tip_terminal_state_preserved"
-    : compensationAlreadyRequired
-    ? "tip_buyer_session_previously_invalid"
-    : !buyerSessionCurrent
-      ? buyerAuthority?.reason ?? "tip_buyer_session_authority_missing"
-      : !providerCompletionExact
-        ? "tip_provider_completion_identity_mismatch"
-        : buyerAuthority?.reason ?? null;
 
-  const baseUpdate: Record<string, unknown> = {
+  const transition = {
     metadata: {
-      ...existingMetadata,
       access_granted: false,
       authority_granted: false,
-      buyer_authority_valid_at_completion: completionEvent ? buyerSessionCurrent : undefined,
-      buyer_authority_reason: completionEvent ? buyerAuthorityReason : undefined,
       provider_completion_exact: completionEvent ? providerCompletionExact : undefined,
-      compensation_required: completionCompensationRequired,
       live_money_action: false,
       no_badge: true,
       no_digital_content: true,
       no_perk: true,
       no_room_access: true,
       no_vip: true,
-      provider_event_id: toText(event.id),
-      provider_event_type: eventType,
       provider_payload_stored: false,
       payout_eligible: false,
       pure_contribution_only: true,
       test_mode: true,
-      updated_by: FUNCTION_NAME,
     },
-    provider_payment_intent_id: completionEvent && providerCompletionExact && paymentIntentId
-      ? paymentIntentId
-      : undefined,
-    updated_at: now,
   };
-
-  const update = (() => {
-    switch (eventType) {
-      case "checkout.session.completed":
-      case "payment_intent.succeeded":
-        return terminalState ? {
-          ...baseUpdate,
-          payout_status: "reversed",
-        } : {
-          ...baseUpdate,
-          creator_net_cents: completionAuthorityValid ? amount : 0,
-          currency,
-          paid_at: now,
-          payment_status: "succeeded",
-          payout_status: "not_payable",
-          status: "paid",
-        };
-      case "payment_intent.payment_failed":
-        return {
-          ...baseUpdate,
-          failed_at: now,
-          payment_status: "failed",
-          status: "failed",
-        };
-      case "checkout.session.expired":
-        return {
-          ...baseUpdate,
-          failed_at: now,
-          payment_status: "canceled",
-          status: "canceled",
-        };
-      case "charge.refunded":
-        return {
-          ...baseUpdate,
-          payout_status: "reversed",
-          payment_status: "refunded",
-          refunded_at: now,
-          status: "refunded",
-        };
-      case "charge.dispute.created":
-        return {
-          ...baseUpdate,
-          disputed_at: now,
-          payout_status: "reversed",
-          payment_status: "charged_back",
-          status: "disputed",
-        };
-      default:
-        return baseUpdate;
-    }
-  })();
-
-  const cleanedUpdate = Object.fromEntries(Object.entries(update).filter(([, value]) => value !== undefined));
-  const { data, error } = await adminClient
-    .from("creator_tip_transactions")
-    .update(cleanedUpdate)
-    .eq("id", tipId)
-    .select("id,creator_id,sender_id,tip_amount_cents,currency,status")
-    .single();
-  if (error) throw new Error(`Tip transaction webhook update failed: ${error.message}`);
-
-  await adminClient.from("creator_tip_events").insert({
-    actor_id: null,
-    event_type: tipEventTypeForStripeEvent(eventType),
-    provider_event_id: toText(event.id),
-    tip_transaction_id: tipId,
-    metadata: {
-      amount_cents: amount ?? (data as { tip_amount_cents?: unknown } | null)?.tip_amount_cents ?? null,
-      event_type: eventType,
-      buyer_authority_valid_at_completion: completionEvent ? buyerSessionCurrent : null,
-      buyer_authority_reason: completionEvent ? buyerAuthorityReason : null,
-      provider_completion_exact: completionEvent ? providerCompletionExact : null,
-      compensation_required: completionCompensationRequired,
-      no_access_granted: true,
-      pure_contribution_only: true,
-      status: (data as { status?: unknown } | null)?.status ?? null,
+  const { data, error } = await adminClient.rpc("process_stripe_tip_webhook_lifecycle", {
+    p_processing_attempt_id: processingAttemptId,
+    p_provider_facts: {
+      amount_cents: amount,
+      amount_refunded_cents: amountRefunded,
+      currency: toText(object?.currency).toLowerCase() || null,
+      metadata_creator_id: normalizeUuid(object?.metadata?.creator_user_id),
+      metadata_sender_id: normalizeUuid(object?.metadata?.fan_user_id),
+      metadata_tip_id: normalizeUuid(object?.metadata?.chillywood_tip_id),
+      object_id: toText(object?.id) || null,
+      payment_intent_id: paymentIntentId,
+      refunded,
     },
+    p_tip_event_metadata: {
+      amount_cents: amount ?? tip.tip_amount_cents ?? null,
+      amount_refunded_cents: amountRefunded ?? null,
+      event_type: eventType,
+      normalized_tip_event_type: tipEventTypeForStripeEvent(eventType),
+      provider_completion_exact: completionEvent ? providerCompletionExact : null,
+      provider_lifecycle_exact_at_edge: providerLifecycleExact,
+      refunded: refunded ?? null,
+    },
+    p_tip_id: tipId,
+    p_transition: transition,
+    p_webhook_event_id: toText(event.id),
   });
+  if (error) throw new Error(`Tip transaction webhook projection failed: ${error.message}`);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Tip transaction webhook projection returned malformed authority.");
+  }
+
+  const projection = data as Record<string, unknown>;
+  const projectedTipId = normalizeUuid(projection.tipId);
+  const projectedBuyerAuthority = projection.buyerAuthorityValid;
+  const projectedReason = toText(projection.reason);
+  if (
+    projectedTipId !== normalizeUuid(tipId)
+    || typeof projection.updated !== "boolean"
+    || projection.webhookFinalized !== true
+    || typeof projection.compensationRequired !== "boolean"
+    || (projectedBuyerAuthority !== null && typeof projectedBuyerAuthority !== "boolean")
+    || !projectedReason
+  ) {
+    throw new Error("Tip transaction webhook projection returned malformed authority.");
+  }
 
   return {
-    tipId,
-    updated: true,
-    reason: completionEvent && terminalState
-      ? "tip_terminal_state_preserved"
-      : completionEvent && !completionAuthorityValid
-        ? "tip_payment_recorded_compensation_required"
-      : "tip_updated",
-    buyerAuthorityValid: completionEvent ? buyerSessionCurrent : null,
-    compensationRequired: completionCompensationRequired,
+    tipId: projectedTipId,
+    updated: projection.updated,
+    reason: projectedReason,
+    buyerAuthorityValid: projectedBuyerAuthority as boolean | null,
+    compensationRequired: projection.compensationRequired,
+    webhookFinalized: true,
   };
 };
 
@@ -552,7 +483,7 @@ Deno.serve(async (req) => {
   }
 
   let adminClient: SupabaseClientLike | null = null;
-  let webhookRowId: string | null = null;
+  let webhookProcessingAttemptId: string | null = null;
   let event: StripeTipEvent | null = null;
 
   try {
@@ -625,20 +556,20 @@ Deno.serve(async (req) => {
 
     const eventType = toText(event.type);
     const object = eventObject(event);
-    const webhookRecord = await insertWebhookEvent(adminClient, event, rawBody);
-    webhookRowId = webhookRecord.rowId;
+    const webhookClaim = await reserveWebhookEvent(adminClient, event, rawBody);
+    webhookProcessingAttemptId = webhookClaim.processingAttemptId;
 
-    if (webhookRecord.duplicate) {
-      await adminClient.from("creator_tip_events").insert({
-        actor_id: null,
-        event_type: "webhook_duplicate",
-        provider_event_id: toText(event.id),
-        metadata: {
+    if (webhookClaim.disposition === "duplicate") {
+      await insertIdempotentTipAuditEvent(
+        adminClient,
+        "webhook_duplicate",
+        toText(event.id),
+        {
           event_type: eventType,
           no_access_granted: true,
           pure_contribution_only: true,
         },
-      });
+      );
 
       return jsonResponse(200, {
         status: "duplicate",
@@ -653,19 +584,37 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (webhookClaim.disposition === "in_progress") {
+      return jsonResponse(409, {
+        status: "in_progress",
+        provider: "stripe",
+        providerKey: "stripe_connect",
+        mode: "test",
+        liveMoneyAction: false,
+        eventStored: true,
+        signatureVerified: true,
+        webhookProcessed: false,
+        message: "Stripe tip webhook event is already being processed; retry this delivery.",
+      });
+    }
+
+    if (!webhookProcessingAttemptId) {
+      throw new Error("Tip webhook claim did not return a processing attempt.");
+    }
+
     if (!tipEventTypes.has(eventType)) {
-      await updateWebhookEvent(adminClient, webhookRowId, "ignored");
-      await adminClient.from("creator_tip_events").insert({
-        actor_id: null,
-        event_type: "webhook_ignored",
-        provider_event_id: toText(event.id),
-        metadata: {
+      await insertIdempotentTipAuditEvent(
+        adminClient,
+        "webhook_ignored",
+        toText(event.id),
+        {
           event_type: eventType,
           ignored_reason: "unsupported_tip_event_type",
           no_access_granted: true,
           pure_contribution_only: true,
         },
-      });
+      );
+      await finalizeWebhookEvent(adminClient, toText(event.id), webhookProcessingAttemptId, "ignored");
       return jsonResponse(200, {
         status: "ignored",
         provider: "stripe",
@@ -679,8 +628,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const result = await updateTipForEvent(adminClient, event, object);
-    await updateWebhookEvent(adminClient, webhookRowId, result.updated ? "processed" : "ignored");
+    const result = await updateTipForEvent(adminClient, event, object, webhookProcessingAttemptId);
+    if (!result.webhookFinalized) {
+      await finalizeWebhookEvent(
+        adminClient,
+        toText(event.id),
+        webhookProcessingAttemptId,
+        result.updated ? "processed" : "ignored",
+      );
+    }
 
     await safeWriteAuditLog(adminClient, {
       action: "creator_tip_webhook_processed",
@@ -707,6 +663,7 @@ Deno.serve(async (req) => {
       mode: "test",
       liveMoneyAction: false,
       eventStored: true,
+      eventRetried: webhookClaim.retry,
       signatureVerified: true,
       webhookProcessed: true,
       linkedTipId: result.tipId,
@@ -721,7 +678,14 @@ Deno.serve(async (req) => {
         : "Stripe test-mode tip event was stored but no matching tip was found.",
     });
   } catch (error) {
-    await updateWebhookEvent(adminClient as SupabaseClientLike, webhookRowId, "failed").catch(() => undefined);
+    if (adminClient && webhookProcessingAttemptId && toText(event?.id)) {
+      await finalizeWebhookEvent(
+        adminClient,
+        toText(event?.id),
+        webhookProcessingAttemptId,
+        "failed",
+      ).catch(() => undefined);
+    }
     await safeWriteAuditLog(adminClient, {
       action: "creator_tip_webhook_failed",
       metadata: {

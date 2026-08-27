@@ -374,6 +374,16 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
     p_source_type: input.config.sourceType,
   });
   if (error) throw error;
+  const intentRow = intent && typeof intent === "object" && !Array.isArray(intent)
+    ? intent as Record<string, unknown>
+    : null;
+  if (intentRow?.alreadyPurchased === true || intentRow?.alreadySubscribed === true) {
+    return {
+      intentId: toText(intentRow.id),
+      productId: toText(intentRow.providerProductId) || input.config.providerProductId,
+      alreadyOwned: true,
+    };
+  }
   await currentAuthorityRequired(operationAuthority);
 
   const products = await readRevenueCatNonSubscriptionProducts([input.config.providerProductId]);
@@ -383,8 +393,9 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
   const purchase = await purchaseRevenueCatStoreProduct(storeProduct, { authority: operationAuthority });
   await currentAuthorityRequired(operationAuthority);
   return {
-    intentId: toText((intent as { id?: unknown } | null)?.id),
+    intentId: toText(intentRow?.id),
     productId: toText(purchase.productIdentifier) || input.config.providerProductId,
+    alreadyOwned: false,
   };
 }
 

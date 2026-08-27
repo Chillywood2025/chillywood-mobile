@@ -990,21 +990,25 @@ test("successor database path uniquely binds and reuses exact original transacti
   assert.match(closeout, /v_intent\."source_type" is distinct from v_expected_source_type/u);
 });
 
-test("current source offers are revalidated before any creator-money access grant", () => {
-  const sourceCheck = closeout.indexOf("Active provider events must still resolve the exact source offer");
+test("charged creator-money events preserve the immutable quote while revalidating current safety", () => {
+  const sourceCheck = closeout.indexOf("The pending intent is the immutable quote accepted before Store checkout");
   const grantWrite = closeout.indexOf('insert into public."access_grants"', sourceCheck);
   assert.ok(sourceCheck >= 0);
   assert.ok(grantWrite > sourceCheck);
   for (const table of [
-    "creator_tip_settings",
+    "user_profiles",
     "paid_watch_party_offers",
-    "creator_content_prices",
+    "videos",
     "paid_creator_events",
     "creator_vip_pass_offers",
     "creator_channel_subscription_offers",
   ]) assert.match(closeout.slice(sourceCheck, grantWrite), new RegExp(table, "u"), table);
   assert.match(closeout.slice(sourceCheck, grantWrite), /offer\."creator_id" = v_intent\."creator_id"/u);
-  assert.match(closeout.slice(sourceCheck, grantWrite), /offer\."price_cents" = v_mapping\."reference_price_minor"/u);
+  assert.match(closeout.slice(sourceCheck, grantWrite), /video\."owner_id" = v_intent\."creator_id"/u);
+  assert.match(closeout.slice(sourceCheck, grantWrite), /media_scan_public_safe/u);
+  assert.doesNotMatch(closeout.slice(sourceCheck, grantWrite), /offer\."price_cents" = v_mapping\."reference_price_minor"/u);
+  assert.match(closeout, /'provider_reconciliation_required',v_is_active/u);
+  assert.match(closeout, /refund_or_authoritative_provider_reconciliation_required/u);
 });
 
 test("Seat Pass capacity and exact-room admission remain bound to the projected active ticket", () => {

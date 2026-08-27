@@ -12,6 +12,10 @@ const successor = readFileSync(
   "supabase/migrations/20260824034109_creator_money_authority_integrity_closeout.sql",
   "utf8",
 );
+const stripeLifecycle = readFileSync(
+  "supabase/migrations/20260827220000_stripe_tip_webhook_atomic_lifecycle.sql",
+  "utf8",
+);
 
 const sliceBetween = (source, start, end) => {
   const startIndex = source.indexOf(start);
@@ -42,7 +46,7 @@ const loadSameBuyerAuthority = () => {
 };
 
 const loadStripeTipIdentityMatchers = () => {
-  const uuidSource = sliceBetween(webhook, "const normalizeUuid", "const normalizeMetadata")
+  const uuidSource = sliceBetween(webhook, "const normalizeUuid", "const readStripeTipWebhookSecret")
     .replace("value: unknown", "value");
   const paymentIntentSource = sliceBetween(
     webhook,
@@ -176,42 +180,71 @@ test("tip rows and service readback are durably bound to the exact initiating se
   assert.doesNotMatch(binding, /to authenticated/u);
 });
 
-test("provider completion rechecks the exact persisted buyer session and fails closed on malformed readback", () => {
-  const reader = sliceBetween(
-    webhook,
-    "const readTipBuyerSessionAuthority",
-    "const tipEventTypeForStripeEvent",
+test("provider completion derives exact buyer authority inside the locked SQL projection", () => {
+  const projector = sliceBetween(
+    stripeLifecycle,
+    'create or replace function public."process_stripe_tip_webhook_lifecycle"',
+    'revoke all on function public."reserve_stripe_tip_webhook_event"',
   );
-  assert.match(reader, /normalizeUuid\(tip\.sender_id\)/u);
-  assert.match(reader, /normalizeUuid\(tip\.buyer_session_generation\)/u);
-  assert.match(reader, /normalizeUuid\(tip\.buyer_account_id\) !== userId/u);
-  assert.match(reader, /adminClient\.rpc\("creator_tip_buyer_session_authority"/u);
-  assert.match(reader, /p_session_generation: sessionGeneration/u);
-  assert.match(reader, /p_user_id: userId/u);
-  assert.match(reader, /tip_buyer_session_authority_malformed/u);
-  assert.match(reader, /tip_buyer_session_authority_read_failed/u);
-
-  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
-  const authorityRead = projector.indexOf("await readTipBuyerSessionAuthority");
-  const providerUpdate = projector.indexOf('.from("creator_tip_transactions")\n    .update');
-  assert.ok(authorityRead >= 0);
+  const tipLock = projector.indexOf('from public."creator_tip_transactions" tip_row');
+  const globalLock = projector.indexOf("'stripe-tip-buyer-authority-global'");
+  const userLock = projector.indexOf("'stripe-tip-buyer-authority-user:'");
+  const authorityRead = projector.indexOf(
+    'public."creator_tip_buyer_session_authority_internal"',
+  );
+  const providerUpdate = projector.indexOf(
+    'update public."creator_tip_transactions" tip_row',
+  );
+  assert.ok(tipLock >= 0);
+  assert.ok(globalLock > tipLock);
+  assert.ok(userLock > globalLock);
+  assert.ok(authorityRead > userLock);
   assert.ok(providerUpdate > authorityRead);
+  assert.match(projector.slice(tipLock, authorityRead), /for update/u);
+  assert.equal(
+    projector.slice(tipLock, authorityRead).match(/pg_advisory_xact_lock_shared/gu)
+      ?.length,
+    2,
+  );
+  assert.match(projector, /v_tip\."buyer_account_id" is not distinct from v_tip\."sender_id"/u);
+  for (const table of [
+    'auth."users"',
+    'auth."sessions"',
+    'public."account_deletion_requests"',
+    'public."user_profiles"',
+    'public."wave1_legal_acceptances"',
+    'public."wave1_legal_document_versions"',
+  ]) assert.match(stripeLifecycle, new RegExp(table, "u"));
+
+  const edgeProjector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  assert.doesNotMatch(edgeProjector, /creator_tip_buyer_session_authority/u);
+  assert.doesNotMatch(edgeProjector, /buyer_authority_valid_at_completion:/u);
 });
 
 test("a captured payment with stale buyer authority remains a provider fact but cannot become payable", () => {
-  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
-  assert.match(projector, /buyerSessionCurrent = buyerAuthority\?\.authorized === true/u);
-  assert.match(projector, /completionAuthorityValid = buyerSessionCurrent[\s\S]+&& providerCompletionExact[\s\S]+&& !compensationAlreadyRequired/u);
-  assert.match(projector, /creator_net_cents: completionAuthorityValid \? amount : 0/u);
-  assert.match(projector, /payment_status: "succeeded"/u);
-  assert.match(projector, /payout_status: "not_payable"/u);
-  assert.match(projector, /status: "paid"/u);
-  assert.match(projector, /authority_granted: false/u);
-  assert.match(projector, /completionCompensationRequired = completionEvent && !terminalState[\s\S]+\? !completionAuthorityValid/u);
-  assert.match(projector, /compensation_required: completionCompensationRequired/u);
-  assert.match(projector, /payout_eligible: false/u);
-  assert.match(projector, /tip_payment_recorded_compensation_required/u);
-  assert.match(projector, /access_granted: false/u);
+  const projector = sliceBetween(
+    stripeLifecycle,
+    'create or replace function public."process_stripe_tip_webhook_lifecycle"',
+    'revoke all on function public."reserve_stripe_tip_webhook_event"',
+  );
+  assert.match(projector, /v_buyer_authority_valid := v_tip\."buyer_account_id" is not null/u);
+  assert.match(projector, /v_incoming_compensation_required := not v_buyer_authority_valid/u);
+  assert.match(projector, /v_old_compensation_required or v_incoming_compensation_required/u);
+  assert.match(
+    projector,
+    /when v_buyer_authority_valid and not v_effective_compensation_required[\s\S]+when v_tip\."refunded_amount_cents" > 0 then least\([\s\S]+else v_tip\."tip_amount_cents"[\s\S]+else 0/u,
+  );
+  assert.match(projector, /"payment_status" = 'succeeded'/u);
+  assert.match(projector, /"payout_status" = 'not_payable'/u);
+  assert.match(projector, /"status" = 'paid'/u);
+
+  const edgeProjector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  assert.doesNotMatch(edgeProjector, /creator_net_cents/u);
+  assert.doesNotMatch(edgeProjector, /compensation_required:/u);
+  assert.match(edgeProjector, /authority_granted: false/u);
+  assert.match(edgeProjector, /payout_eligible: false/u);
+  assert.match(edgeProjector, /compensationRequired: projection\.compensationRequired/u);
+  assert.match(edgeProjector, /access_granted: false/u);
 });
 
 test("provider completion is exact-bound to the Stripe object, buyer, creator, amount, and currency", () => {
@@ -242,6 +275,7 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
     provider_checkout_session_id: "cs_test_exact",
     provider_payment_intent_id: null,
     tip_amount_cents: 499,
+    total_paid_cents: 499,
     currency: "usd",
   };
   const metadata = {
@@ -279,19 +313,35 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
   ), false);
 
   const boundTip = { ...tip, provider_payment_intent_id: "pi_test_exact" };
+  const validRefund = {
+    id: "ch_test_exact",
+    payment_intent: "pi_test_exact",
+    amount: 499,
+    amount_refunded: 100,
+    currency: "usd",
+    refunded: false,
+  };
   assert.equal(providerRemovalOrFailureMatchesTip(
     "charge.refunded",
-    { id: "ch_test_exact", payment_intent: "pi_test_exact" },
+    validRefund,
     boundTip,
   ), true);
-  assert.equal(providerRemovalOrFailureMatchesTip(
-    "charge.refunded",
-    { id: "ch_test_other", payment_intent: "pi_test_other" },
-    boundTip,
-  ), false);
+  for (const malformedRefund of [
+    { ...validRefund, payment_intent: "pi_test_other" },
+    { ...validRefund, amount: 500 },
+    { ...validRefund, currency: "eur" },
+    { ...validRefund, amount_refunded: 0 },
+    { ...validRefund, amount_refunded: 500 },
+    { ...validRefund, refunded: true },
+  ]) {
+    assert.equal(
+      providerRemovalOrFailureMatchesTip("charge.refunded", malformedRefund, boundTip),
+      false,
+    );
+  }
 });
 
-test("mismatched provider lifecycle identity is recorded but cannot mutate a tip binding or terminal state", () => {
+test("mismatched provider lifecycle identity reaches the atomic fail-closed projector", () => {
   const lifecycleMatcher = sliceBetween(
     webhook,
     "const providerRemovalOrFailureMatchesTip",
@@ -299,26 +349,36 @@ test("mismatched provider lifecycle identity is recorded but cannot mutate a tip
   );
   assert.match(lifecycleMatcher, /object\.id\) === toText\(tip\.provider_checkout_session_id\)/u);
   assert.match(lifecycleMatcher, /object\.id\) === toText\(tip\.provider_payment_intent_id\)/u);
-  assert.match(lifecycleMatcher, /paymentIntentFromObject\(object\) === toText\(tip\.provider_payment_intent_id\)/u);
+  assert.match(lifecycleMatcher, /paymentIntentId === toText\(tip\.provider_payment_intent_id\)/u);
 
   const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
-  const mismatchGuard = projector.indexOf("if (!providerLifecycleExact)");
-  const transactionUpdate = projector.indexOf('.from("creator_tip_transactions")\n    .update');
-  assert.ok(mismatchGuard >= 0);
-  assert.ok(transactionUpdate > mismatchGuard);
-  assert.match(projector, /event_type: "webhook_ignored"/u);
-  assert.match(projector, /tip_provider_lifecycle_identity_mismatch/u);
-  assert.match(projector, /provider_payment_intent_id: completionEvent && providerCompletionExact && paymentIntentId/u);
+  const transactionUpdate = projector.indexOf('adminClient.rpc("process_stripe_tip_webhook_lifecycle"');
+  assert.ok(transactionUpdate >= 0);
+  assert.equal(projector.indexOf("if (!providerLifecycleExact)"), -1);
+  assert.doesNotMatch(projector, /from\("creator_tip_events"\)\.insert/u);
+  assert.match(projector, /provider_lifecycle_exact_at_edge: providerLifecycleExact/u);
+  assert.match(projector, /p_provider_facts:/u);
   assert.doesNotMatch(projector, /provider_checkout_session_id:/u);
+  assert.doesNotMatch(projector, /provider_payment_intent_id:/u);
+  assert.match(
+    stripeLifecycle,
+    /"provider_payment_intent_id" = coalesce\(v_payment_intent_id, tip_row\."provider_payment_intent_id"\)/u,
+  );
 });
 
 test("completion compensation is sticky and existing transaction metadata is preserved", () => {
-  const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
-  assert.match(projector, /const existingMetadata = normalizeMetadata\(tip\.metadata\)/u);
-  assert.match(projector, /compensationAlreadyRequired = existingMetadata\.compensation_required === true/u);
+  const projector = sliceBetween(
+    stripeLifecycle,
+    'create or replace function public."process_stripe_tip_webhook_lifecycle"',
+    'revoke all on function public."reserve_stripe_tip_webhook_event"',
+  );
+  assert.match(projector, /coalesce\(v_tip\."metadata", '\{\}'::jsonb\)/u);
+  assert.match(projector, /v_old_compensation_required or v_incoming_compensation_required/u);
   assert.match(projector, /tip_buyer_session_previously_invalid/u);
-  assert.match(projector, /metadata: \{\n      \.\.\.existingMetadata/u);
-  assert.match(projector, /terminalState = tip\.status === "refunded" \|\| tip\.status === "disputed"/u);
-  assert.match(projector, /return terminalState \? \{[\s\S]+payout_status: "reversed"/u);
   assert.match(projector, /tip_terminal_state_preserved/u);
+  assert.match(projector, /'compensation_required', v_effective_compensation_required/u);
+
+  const edgeProjector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
+  assert.doesNotMatch(edgeProjector, /\.\.\.existingMetadata/u);
+  assert.match(edgeProjector, /process_stripe_tip_webhook_lifecycle/u);
 });

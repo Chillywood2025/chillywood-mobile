@@ -184,7 +184,7 @@ begin
     select "creator_id","price_cents",lower("currency") into v_creator,v_price,v_currency
     from public."creator_content_prices" where "content_id"=p_source_id and "content_type"='video' and "is_paid" and "status" in ('sandbox','active') order by "updated_at" desc limit 1;
     v_source_type:='paid_content'; if v_creator is null then raise exception 'paid_video_offer_not_available'; end if;
-    if public."has_paid_content_access"(v_user,p_source_id) then return jsonb_build_object('alreadyPurchased',true,'providerProductId',null); end if;
+    if coalesce((public."has_paid_content_access"(v_user,p_source_id)->>'allowed')::boolean,false) then return jsonb_build_object('alreadyPurchased',true,'providerProductId',null); end if;
   elsif v_concept='event_pass' then
     select paid."creator_id",paid."price_cents",lower(paid."currency") into v_creator,v_price,v_currency
     from public."paid_creator_events" paid join public."creator_events" event on event."id"=paid."creator_event_id"

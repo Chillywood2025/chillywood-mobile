@@ -86,7 +86,9 @@ forbidMatch("money feature defaults", moneyFlags, /merch_enabled:\s*["']on["']/,
 
 [
   "paidVideoCheckoutAvailable",
-  "Paid creator video status is active",
+  "Paid Video purchases are temporarily unavailable while setup is being finalized. This video stays locked until access is verified.",
+  'access?.resolverStatus !== "resolved"',
+  'access.reason !== "purchase_required"',
 ].forEach((needle) => requireText("paid video route", player, needle));
 [
   "paidWatchPartyCheckoutAvailable",
@@ -94,7 +96,9 @@ forbidMatch("money feature defaults", moneyFlags, /merch_enabled:\s*["']on["']/,
 ].forEach((needle) => requireText("watch-party entry route", watchPartyEntry, needle));
 [
   "paidWatchPartyCheckoutAvailable",
-  "Seat Pass status is active",
+  "Seat Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.",
+  "Access to this Watch-Party room target only.",
+  "LiveKit publish authority, host controls, and other rooms stay separate.",
 ].forEach((needle) => requireText("watch-party room route", watchPartyRoom, needle));
 
 forbidMatch("public money card", publicMoneyCard, /ROUTE-BACKED MONETIZATION PROOF/, "proof copy");
