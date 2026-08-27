@@ -6,6 +6,7 @@ const studio = read("app/channel-settings.tsx");
 const home = read("app/(tabs)/index.tsx");
 const explore = read("app/(tabs)/explore.tsx");
 const platform = read("app/channel/[userId].tsx");
+const profile = read("app/profile/[userId].tsx");
 const library = read("app/(tabs)/my-list.tsx");
 
 const requireAll = (source, needles, label) => {
@@ -56,6 +57,12 @@ requireAll(platform, [
   '<AppSection title="Featured"',
   'contentContainerStyle={styles.shelfRow}',
 ], "public Platform content density");
+
+requireAll(profile, [
+  'contentContainerStyle={styles.creatorVideoGrid}',
+  'profileCreatorVideoTile: {\n    width: 150',
+  '<CreatorVideoCard',
+], "Profile creator content density");
 
 requireAll(library, [
   'titleCard: {\n    width: 132',
