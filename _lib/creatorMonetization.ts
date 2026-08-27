@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export const CREATOR_MONETIZATION_SETTINGS_TABLE = "monetization_system_settings";
 export const CREATOR_MONETIZATION_PROFILES_TABLE = "creator_monetization_profiles";

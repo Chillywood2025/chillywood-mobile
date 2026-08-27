@@ -148,7 +148,7 @@ const PLATFORM_BRAND_PROFILE_SELECT =
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const PLATFORM_BRAND_UPLOAD_TIMEOUT_MS = 120000;
-const PLATFORM_BRAND_PUBLIC_SCAN_STATUSES: PlatformBrandScanStatus[] = ["clean", "manual_review"];
+const PLATFORM_BRAND_PUBLIC_SCAN_STATUSES: PlatformBrandScanStatus[] = ["clean"];
 
 const toText = (value: unknown) => String(value ?? "").trim();
 

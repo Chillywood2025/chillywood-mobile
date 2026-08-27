@@ -53,6 +53,13 @@ export type CreatorVipPassAccess = {
   offer: CreatorVipPassOffer | null;
 };
 
+export type CreatorVipVideoAccess = {
+  allowed: boolean;
+  reason: string;
+  vipRequired: boolean;
+  creatorId: string | null;
+};
+
 export type CreatorVipTransaction = {
   id: string;
   offerId: string;
@@ -359,6 +366,43 @@ export async function resolveCreatorVipPassAccess(creatorId: string): Promise<Cr
     };
   }
   return normalizeAccess(data, creatorId);
+}
+
+export async function resolveCreatorVipVideoAccess(videoId: string): Promise<CreatorVipVideoAccess> {
+  const normalizedVideoId = accessText(videoId);
+  if (!ACCESS_UUID_PATTERN.test(normalizedVideoId)) {
+    return { allowed: false, reason: "invalid_video_id", vipRequired: true, creatorId: null };
+  }
+  const { data, error } = await rpcClient.rpc("resolve_creator_vip_video_access", { p_video_id: normalizedVideoId });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    return { allowed: false, reason: "access_check_failed", vipRequired: true, creatorId: null };
+  }
+  const row = data as Record<string, unknown>;
+  if (typeof row.allowed !== "boolean" || typeof row.vipRequired !== "boolean") {
+    return { allowed: false, reason: "malformed_access_response", vipRequired: true, creatorId: null };
+  }
+  const creatorId = accessText(row.creatorId);
+  if (creatorId && !ACCESS_UUID_PATTERN.test(creatorId)) {
+    return { allowed: false, reason: "malformed_access_response", vipRequired: true, creatorId: null };
+  }
+  const reason = accessText(row.reason);
+  if (!reason) return { allowed: false, reason: "malformed_access_response", vipRequired: true, creatorId: null };
+  return { allowed: row.allowed, reason, vipRequired: row.vipRequired, creatorId: creatorId || null };
+}
+
+export async function setCreatorVideoVipAccess(videoId: string, required: boolean) {
+  const normalizedVideoId = accessText(videoId);
+  if (!ACCESS_UUID_PATTERN.test(normalizedVideoId)) throw new Error("VIP video access could not be updated.");
+  const { data, error } = await rpcClient.rpc("set_creator_video_vip_access", { p_video_id: normalizedVideoId, p_required: required });
+  if (error) throw new Error("VIP video access could not be updated.");
+  const row = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : {};
+  if (accessText(row.status) !== "ok") {
+    if (accessText(row.reason) === "vip_video_must_be_public") throw new Error("Make this video Public before adding it to the VIP shelf.");
+    throw new Error("VIP video access could not be updated.");
+  }
+  const returnedVideoId = accessText(row.videoId);
+  if (returnedVideoId !== normalizedVideoId || typeof row.vipRequired !== "boolean") throw new Error("VIP video access could not be verified.");
+  return { videoId: returnedVideoId, vipRequired: row.vipRequired };
 }
 
 export async function createCreatorVipPassPurchaseIntent(

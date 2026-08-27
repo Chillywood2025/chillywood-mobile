@@ -4,10 +4,12 @@ import {
   type AutonomousApprovalRequest,
   type AutonomousApprovalRequesterType,
 } from "./autonomousApprovalRequests";
+import { platformRoleStatusAndExpiryAreActive } from "./platformRoleAuthority";
 
 export type PlatformOwnerAuthorityRole = AutonomousApprovalRequesterType;
 
 export type PlatformOwnerAuthorityMembership = {
+  expiresAt?: string | null;
   role?: string | null;
   status?: string | null;
 };
@@ -20,7 +22,12 @@ const normalizeRole = (value: unknown): PlatformOwnerAuthorityRole | null => {
 export const getAutonomousApprovalAuthorityRoles = (
   memberships: readonly PlatformOwnerAuthorityMembership[],
 ) => memberships
-  .filter((membership) => String(membership.status ?? "active").toLowerCase() === "active")
+  .filter((membership) =>
+    platformRoleStatusAndExpiryAreActive(
+      membership.status,
+      membership.expiresAt,
+    )
+  )
   .map((membership) => normalizeRole(membership.role))
   .filter((role): role is PlatformOwnerAuthorityRole => !!role);
 

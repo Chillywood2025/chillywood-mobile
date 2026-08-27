@@ -9,9 +9,11 @@ import {
   getMediaStorageProviderBucket,
   normalizeMediaStorageProvider,
   uploadFileToMediaStorage,
+  usesPrivateOriginMediaGateway,
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
+import { resolveCreatorVipVideoAccess, type CreatorVipVideoAccess } from "./creatorVipPasses";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 import {
   resolveCreatorContentAccess,
@@ -114,6 +116,8 @@ export type CreatorVideo = {
   playbackQualityLabel: string | null;
   playbackDelivery: VodPlaybackDeliveryMetadata | null;
   paidContentAccess: CreatorContentAccessResolution | null;
+  vipAccessRequired: boolean;
+  vipAccess: CreatorVipVideoAccess | null;
   visibilityAccess: CreatorVideoVisibilityAccess | null;
   renditionStatuses: VodRenditionStatusItem[];
   publicClipMetadata: CreatorVideoPublicClipMetadata | null;
@@ -140,6 +144,7 @@ type PublicCreatorVideoCardRow = {
   fileSizeBytes?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
+  vipAccessRequired?: unknown;
   clip_metadata_public?: unknown;
   clip_title_text?: unknown;
   clip_subtitle_text?: unknown;
@@ -149,7 +154,7 @@ type PublicCreatorVideoCardRow = {
 };
 
 const CREATOR_VIDEO_SELECT =
-  "id,owner_id,title,description,playback_url,thumb_url,created_at,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path,mime_type,file_size_bytes,updated_at";
+  "id,owner_id,title,description,playback_url,thumb_url,created_at,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path,mime_type,file_size_bytes,updated_at,vip_access_required";
 const PUBLIC_CREATOR_VIDEO_CARDS_URL = `${SUPABASE_FUNCTIONS_URL.replace(/\/+$/g, "")}/functions/v1/public-creator-video-cards`;
 
 const toText = (value: unknown) => String(value ?? "").trim();
@@ -326,7 +331,7 @@ async function createCreatorVideoPlaybackUrl(input: {
   storagePath: string;
   playbackUrl: string;
 }) {
-  if (input.storageProvider === "s3" && input.storageObjectKey) {
+  if (usesPrivateOriginMediaGateway(input.storageProvider) && input.storageObjectKey) {
     return createSignedMediaDownload({
       surfaceType: "creator_video",
       provider: input.storageProvider,
@@ -343,12 +348,12 @@ async function createCreatorVideoThumbnailUrl(input: {
   storageProvider: MediaStorageProvider;
   storageBucket: string;
   thumbStoragePath: string;
-  thumbUrl: string;
 }) {
   const thumbnailPath = toText(input.thumbStoragePath);
-  if (!thumbnailPath) return toText(input.thumbUrl);
+  // Legacy arbitrary URLs had no exact object-version malware-scan binding.
+  if (!thumbnailPath) return "";
 
-  if (input.storageProvider === "s3") {
+  if (usesPrivateOriginMediaGateway(input.storageProvider)) {
     const signedThumbnailUrl = await createSignedMediaDownload({
       surfaceType: "creator_video",
       provider: input.storageProvider,
@@ -390,7 +395,6 @@ async function parseCreatorVideo(
     storageProvider,
     storageBucket,
     thumbStoragePath: toText(row.thumb_storage_path),
-    thumbUrl: toText(row.thumb_url),
   });
 
   return {
@@ -416,6 +420,8 @@ async function parseCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: null,
+    vipAccessRequired: (row as CreatorVideoRow & { vip_access_required?: boolean }).vip_access_required === true,
+    vipAccess: null,
     visibilityAccess: null,
     renditionStatuses: [],
     publicClipMetadata: null,
@@ -464,6 +470,8 @@ const parsePublicCreatorVideoCard = (row: PublicCreatorVideoCardRow): CreatorVid
   playbackQualityLabel: null,
   playbackDelivery: null,
   paidContentAccess: null,
+  vipAccessRequired: row.vipAccessRequired === true,
+  vipAccess: null,
   visibilityAccess: null,
   renditionStatuses: [],
   publicClipMetadata: parsePublicClipMetadata(row),
@@ -656,6 +664,8 @@ function createLockedCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: null,
+    vipAccessRequired: false,
+    vipAccess: null,
     visibilityAccess: access,
     renditionStatuses: [],
     publicClipMetadata: null,
@@ -699,6 +709,8 @@ function createPaidContentLockedCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: access,
+    vipAccessRequired: false,
+    vipAccess: null,
     visibilityAccess: null,
     renditionStatuses: [],
     publicClipMetadata: null,
@@ -707,107 +719,41 @@ function createPaidContentLockedCreatorVideo(
   };
 }
 
+function createVipLockedCreatorVideo(videoId: string, access: CreatorVipVideoAccess): CreatorVideo {
+  const now = new Date().toISOString();
+  return { id: videoId, ownerId: access.creatorId ?? "", title: "VIP creator video", description: "Active VIP access for this creator is required before this video can play.", visibility: "public", moderationStatus: "clean", moderationReason: null, moderatedAt: null, moderatedBy: null, playbackUrl: "", thumbnailUrl: "", storageProvider: "supabase", storageBucket: "", storageObjectKey: "", storagePath: "", thumbStoragePath: "", mimeType: "", fileSizeBytes: null, playbackResolution: createUnavailableVodPlaybackResolution(videoId, access.reason), playbackQualityLabel: null, playbackDelivery: null, paidContentAccess: null, vipAccessRequired: true, vipAccess: access, visibilityAccess: null, renditionStatuses: [], publicClipMetadata: null, createdAt: now, updatedAt: now };
+}
+
 export async function readCreatorVideoForPlayer(videoId: string): Promise<CreatorVideo | null> {
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return null;
-
   const visibilityAccess = await resolveCreatorVideoVisibilityAccess(normalizedVideoId).catch(() => null);
-  if (visibilityAccess && !visibilityAccess.allowed) {
-    return createLockedCreatorVideo(normalizedVideoId, visibilityAccess);
-  }
+  if (visibilityAccess && !visibilityAccess.allowed) return createLockedCreatorVideo(normalizedVideoId, visibilityAccess);
 
-  // Resolve paid-content authority before selecting the full video row. The
-  // database independently enforces this same decision on video/storage and
-  // playback reads, while this ordering prevents a non-purchaser from using a
-  // visibility-only row read as a path to protected source metadata.
-  const paidContentAccess = await resolveCreatorContentAccess({
-    contentType: "creator_video",
-    contentId: normalizedVideoId,
-  });
-  if (paidContentAccess.resolverStatus !== "resolved" || paidContentAccess.allowed !== true) {
-    return createPaidContentLockedCreatorVideo(normalizedVideoId, paidContentAccess);
-  }
+  const vipAccess = await resolveCreatorVipVideoAccess(normalizedVideoId).catch(() => ({ allowed: false, reason: "access_check_failed", vipRequired: true, creatorId: null }));
+  if (vipAccess.vipRequired && vipAccess.allowed !== true) return createVipLockedCreatorVideo(normalizedVideoId, vipAccess);
 
-  const { data, error } = await supabase
-    .from("videos")
-    .select(CREATOR_VIDEO_SELECT)
-    .eq("id", normalizedVideoId)
-    .in("moderation_status", ["clean", "reported"])
-    .returns<CreatorVideoRow>()
-    .maybeSingle();
+  const paidContentAccess = vipAccess.vipRequired ? null : await resolveCreatorContentAccess({ contentType: "creator_video", contentId: normalizedVideoId });
+  if (paidContentAccess && (paidContentAccess.resolverStatus !== "resolved" || paidContentAccess.allowed !== true)) return createPaidContentLockedCreatorVideo(normalizedVideoId, paidContentAccess);
 
+  const { data, error } = await supabase.from("videos").select(CREATOR_VIDEO_SELECT).eq("id", normalizedVideoId).in("moderation_status", ["clean", "reported"]).returns<CreatorVideoRow>().maybeSingle();
   if (error || !data) return null;
   const row = data as CreatorVideoRow;
   const parsed = await parseCreatorVideo(row, { resolveLegacyPlaybackUrl: false });
-  const parsedWithAccess = {
-    ...parsed,
-    visibilityAccess: visibilityAccess ?? {
-      allowed: true,
-      visibility: parsed.visibility,
-      reason: parsed.visibility === "circle" ? "circle_member_allowed" as const : "public_allowed" as const,
-      isOwner: false,
-      isBlocked: false,
-      isCircleMember: parsed.visibility === "circle",
-      hasPlayableSource: !!(parsed.storagePath || parsed.storageObjectKey),
-      viewerUserId: null,
-      ownerUserId: parsed.ownerId,
-    },
-  };
-
+  if (parsed.vipAccessRequired !== vipAccess.vipRequired) return createVipLockedCreatorVideo(normalizedVideoId, { allowed: false, reason: "vip_classification_changed", vipRequired: true, creatorId: parsed.ownerId || vipAccess.creatorId });
+  const parsedWithAccess = { ...parsed, visibilityAccess: visibilityAccess ?? { allowed: true, visibility: parsed.visibility, reason: parsed.visibility === "circle" ? "circle_member_allowed" as const : "public_allowed" as const, isOwner: false, isBlocked: false, isCircleMember: parsed.visibility === "circle", hasPlayableSource: !!(parsed.storagePath || parsed.storageObjectKey), viewerUserId: null, ownerUserId: parsed.ownerId } };
   const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
   const viewerUserId = toText(authData.user?.id);
-  const viewerOwnsVideo = !!viewerUserId && viewerUserId === parsedWithAccess.ownerId;
-  if (parsedWithAccess.visibility === "draft" && !viewerOwnsVideo) {
-    return createLockedCreatorVideo(normalizedVideoId, {
-      allowed: false,
-      visibility: "draft",
-      reason: "draft_owner_only",
-      isOwner: false,
-      isBlocked: false,
-      isCircleMember: false,
-      hasPlayableSource: false,
-      viewerUserId: viewerUserId || null,
-      ownerUserId: parsedWithAccess.ownerId,
-    });
-  }
-
-  const playbackResolution = await resolveSignedVideoPlaybackSource({
-    videoId: parsedWithAccess.id,
-    storageProvider: parsedWithAccess.storageProvider,
-    fallbackBucket: parsedWithAccess.storageBucket,
-  });
-  const legacyPlaybackUrl = !playbackResolution.defaultPlaybackUrl && (
-    playbackResolution.legacyPlaybackAllowed
-    || playbackResolution.legacyQualityEnforcement === "resolver_unavailable"
-  )
-    ? await createCreatorVideoPlaybackUrl({
-      id: parsedWithAccess.id,
-      storageProvider: parsedWithAccess.storageProvider,
-      storageBucket: parsedWithAccess.storageBucket,
-      storageObjectKey: parsedWithAccess.storageObjectKey,
-      storagePath: parsedWithAccess.storagePath,
-      playbackUrl: toText(row.playback_url),
-    })
-    : "";
-
-  return {
-    ...parsedWithAccess,
-    playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl,
-    playbackResolution,
-    playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null),
-    playbackDelivery: playbackResolution.deliveryMetadata,
-    paidContentAccess,
-    renditionStatuses: playbackResolution.renditionStatuses.length
-      ? playbackResolution.renditionStatuses
-      : parsed.renditionStatuses,
-  };
+  if (parsedWithAccess.visibility === "draft" && (!viewerUserId || viewerUserId !== parsedWithAccess.ownerId)) return createLockedCreatorVideo(normalizedVideoId, { allowed: false, visibility: "draft", reason: "draft_owner_only", isOwner: false, isBlocked: false, isCircleMember: false, hasPlayableSource: false, viewerUserId: viewerUserId || null, ownerUserId: parsedWithAccess.ownerId });
+  const playbackResolution = await resolveSignedVideoPlaybackSource({ videoId: parsedWithAccess.id, storageProvider: parsedWithAccess.storageProvider, fallbackBucket: parsedWithAccess.storageBucket });
+  const legacyPlaybackUrl = !playbackResolution.defaultPlaybackUrl && (playbackResolution.legacyPlaybackAllowed || playbackResolution.legacyQualityEnforcement === "resolver_unavailable") ? await createCreatorVideoPlaybackUrl({ id: parsedWithAccess.id, storageProvider: parsedWithAccess.storageProvider, storageBucket: parsedWithAccess.storageBucket, storageObjectKey: parsedWithAccess.storageObjectKey, storagePath: parsedWithAccess.storagePath, playbackUrl: toText(row.playback_url) }) : "";
+  return { ...parsedWithAccess, vipAccess: vipAccess.vipRequired ? vipAccess : null, playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl, playbackResolution, playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null), playbackDelivery: playbackResolution.deliveryMetadata, paidContentAccess, renditionStatuses: playbackResolution.renditionStatuses.length ? playbackResolution.renditionStatuses : parsed.renditionStatuses };
 }
 
 export async function uploadCreatorVideo(input: {
   file: CreatorVideoFile;
   title: string;
   description?: string;
-  thumbUrl?: string;
   visibility: CreatorVideoVisibility;
   maxUploadSizeMb?: number | null;
 }): Promise<CreatorVideo> {
@@ -830,6 +776,7 @@ export async function uploadCreatorVideo(input: {
     provider: MediaStorageProvider;
     bucket: string;
     objectKey: string;
+    sizeBytes: number;
   } | null = null;
 
   try {
@@ -847,6 +794,8 @@ export async function uploadCreatorVideo(input: {
       mimeType,
       fileName: input.file.name,
       sizeBytes: input.file.size,
+      maximumSizeBytes: getCreatorVideoUploadLimitBytes(runtimeUploadLimitMb),
+      tooLargeMessage: getCreatorVideoTooLargeMessage(null, runtimeUploadLimitMb),
     });
   } catch (error) {
     logCreatorVideoUpload("storage_upload_failed", {
@@ -864,7 +813,7 @@ export async function uploadCreatorVideo(input: {
     title,
     description: toText(input.description) || null,
     playback_url: null,
-    thumb_url: toText(input.thumbUrl) || null,
+    thumb_url: null,
     visibility: normalizeVisibility(input.visibility),
     moderation_status: "clean",
     storage_provider: uploadedObject.provider,
@@ -873,7 +822,7 @@ export async function uploadCreatorVideo(input: {
     storage_path: uploadedObject.objectKey,
     thumb_storage_path: null,
     mime_type: mimeType,
-    file_size_bytes: typeof input.file.size === "number" ? input.file.size : null,
+    file_size_bytes: uploadedObject.sizeBytes,
     updated_at: new Date().toISOString(),
   };
 
@@ -925,7 +874,6 @@ export async function updateCreatorVideoMetadata(
   patch: {
     title?: string;
     description?: string;
-    thumbUrl?: string;
     visibility?: CreatorVideoVisibility;
   },
 ): Promise<CreatorVideo> {
@@ -937,7 +885,6 @@ export async function updateCreatorVideoMetadata(
   };
   if (patch.title !== undefined) update.title = toText(patch.title) || "Untitled Video";
   if (patch.description !== undefined) update.description = toText(patch.description) || null;
-  if (patch.thumbUrl !== undefined) update.thumb_url = toText(patch.thumbUrl) || null;
   if (patch.visibility !== undefined) update.visibility = normalizeVisibility(patch.visibility);
 
   const { data, error } = await supabase
@@ -1012,27 +959,34 @@ export async function deleteCreatorVideo(
   const videoId = toText(video.id);
   if (!videoId) return;
 
-  const { error } = await supabase.from("videos").delete().eq("id", videoId);
-  if (error) throw error;
-
   const provider = normalizeMediaStorageProvider(video.storageProvider);
   const objectKey = toText(video.storageObjectKey) || toText(video.storagePath);
   const thumbnailPath = toText(video.thumbStoragePath);
-  if (provider === "s3" && objectKey) {
+  if (usesPrivateOriginMediaGateway(provider) && objectKey) {
     await deleteStoredMediaObject({
       surfaceType: "creator_video",
       provider,
       bucket: toText(video.storageBucket),
       objectKey,
       recordId: videoId,
-    }).catch(() => undefined);
+    });
     if (thumbnailPath) {
-      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([thumbnailPath]).catch(() => undefined);
+      await deleteStoredMediaObject({
+        surfaceType: "creator_video",
+        provider,
+        bucket: toText(video.storageBucket),
+        objectKey: thumbnailPath,
+        recordId: videoId,
+      });
     }
   } else {
     const paths = [toText(video.storagePath), thumbnailPath].filter(Boolean);
     if (paths.length) {
-      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove(paths).catch(() => undefined);
+      const { error: storageError } = await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove(paths);
+      if (storageError) throw storageError;
     }
   }
+
+  const { error } = await supabase.from("videos").delete().eq("id", videoId);
+  if (error) throw error;
 }

@@ -12,6 +12,7 @@ import {
 
 import { radius } from "./tokens";
 import { Skeleton } from "./Skeleton";
+import { useProfileMediaImageBinding } from "./ProfileMediaImage";
 
 type StableImageProps = Omit<ImageProps, "source"> & {
   borderRadius?: number;
@@ -49,10 +50,14 @@ export const StableImage = ({
   style,
   ...props
 }: StableImageProps) => {
-  const sourceKey = useMemo(() => getSourceKey(source), [source]);
+  const imageBinding = useProfileMediaImageBinding(source ?? undefined);
+  const sourceKey = useMemo(
+    () => `${getSourceKey(imageBinding.source)}:${imageBinding.renderEpoch}`,
+    [imageBinding.renderEpoch, imageBinding.source],
+  );
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
-  const imageSource = source ?? undefined;
+  const imageSource = source ? imageBinding.source : undefined;
   const hasSource = Boolean(imageSource);
   const showPlaceholder = !hasSource || error || !loaded;
 
@@ -72,6 +77,7 @@ export const StableImage = ({
       {imageSource && !error ? (
         <Image
           {...props}
+          key={imageBinding.renderEpoch}
           onError={(event) => {
             setError(true);
             onError?.(event);

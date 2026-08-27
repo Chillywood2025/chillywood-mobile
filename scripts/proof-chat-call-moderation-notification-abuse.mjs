@@ -78,10 +78,17 @@ add("dispatch_membership_check", callDispatch.includes("thread_membership_requir
 add("dispatch_block_check", callDispatch.includes("hasAudienceBlock") && callDispatch.includes("audience_block"), "call dispatch denies blocked relationships");
 add("dispatch_restricted_check", callDispatch.includes("isAccountAccessRestricted") && callDispatch.includes("account_access_restricted"), "call dispatch denies restricted accounts");
 add("dispatch_dedupe", callDispatch.includes("notification_event_dedupes") && callDispatch.includes("duplicate_prevented"), "call/ring notifications dedupe dispatch");
-add("dispatch_delivery_attempts", callDispatch.includes("notification_delivery_attempts") && callDispatch.includes("reconcileRecentExpoReceipts"), "call dispatch records delivery attempts and reconciles receipts");
+add("dispatch_delivery_attempts", callDispatch.includes("notification_delivery_attempts") && callDispatch.includes("reconcileRecentExpoPushReceipts"), "call dispatch records delivery attempts and reconciles receipts");
 add("dispatch_payload_privacy", callDispatch.includes("callInviteId") && callDispatch.includes("notificationChannelId") && !callDispatch.includes("messageBody"), "call push payload contains call routing context and no message body marker");
 add("dispatch_sanitized_errors", callDispatch.includes("sanitizeErrorMessage") && callDispatch.includes("ExpoPushToken[redacted]"), "call dispatch sanitizes errors/tokens");
-add("device_token_fingerprint_only", deviceTokens.includes("token_fingerprint") && deviceTokens.includes("tokenFingerprint") && !deviceTokens.includes("return jsonResponse(200, { status: \"ok\", token:"), "device token status returns fingerprint not raw token");
+add(
+  "device_token_fingerprint_only",
+  deviceTokens.includes('userClient.rpc("wave1_push_ownership_readback"')
+    && deviceTokens.includes("p_install_id: installId")
+    && deviceTokens.includes("tokenFingerprint")
+    && !deviceTokens.includes("return jsonResponse(200, { status: \"ok\", token:"),
+  "device token status uses exact current-session readback and returns fingerprint not raw token",
+);
 
 add("attachment_scan_safe", attachmentPolicyMigration.includes("\"surface_type\" = 'chat_message'") && attachmentPolicyMigration.includes("media_scan_public_safe") && attachmentPolicyMigration.includes("can_access_chat_thread"), "chat-message attachments are scan-gated and thread-scoped");
 add("message_mutation_closed_truth", doc.includes("Chat-message hide/remove/restore: Closed") && doc.includes("Chat-message hide/remove/restore preserves evidence"), "doc marks direct chat-message mutation closed with evidence preservation");

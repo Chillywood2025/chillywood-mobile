@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { evaluatePhase1AdmissionRulesetCutoverState, mainBranchCondition, phase1AdmissionCheck, phase1AdmissionRulesetCutoverAggregateValid, phase1AdmissionRulesetCutoverStateValid, phase1PublisherAnchorStructurallyValid, phase1RulesetGenesis, readBootstrapMergeIdentity, requiredCheckBindings, validateBootstrapPhase1GithubReadback, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
+import { buildPhase1RulesetRecoveryReceipt, evaluatePhase1AdmissionRulesetCutoverState, formatPhase1RulesetRecoveryReceiptComment, mainBranchCondition, phase1AdmissionCheck, phase1AdmissionRulesetCutoverAggregateValid, phase1AdmissionRulesetCutoverStateValid, phase1PublisherAnchorStructurallyValid, phase1RulesetGenesis, phase1RulesetRecoveryPolicy, phase1RulesetRecoveryPolicyHash, phase1RulesetRecoveryReceiptMarker, readBootstrapMergeIdentity, requiredCheckBindings, validateBootstrapPhase1GithubReadback, validateGithubMainRulesetReadback } from "../../scripts/assurance/github-main-ruleset-readback.mjs";
 import { readJson, sha256, stableJson } from "../../scripts/assurance/lib.mjs";
 import { runReceipt } from "../../scripts/assurance/receipt.mjs";
 
@@ -48,7 +49,107 @@ const historyEntry = (stage, versionId, updatedAt) => ({ version_id: versionId, 
 const preEntry = historyEntry("PRE_CUTOVER_13_RAW", phase1RulesetGenesis.versionId, phase1RulesetGenesis.updatedAt);
 const stage1Entry = historyEntry("STAGE1_AGGREGATE_PLUS_13_RAW", 47545239, "2026-08-24T22:59:53.294-05:00");
 const finalEntry = historyEntry("FINAL_AGGREGATE_ONLY", 47545277, "2026-08-24T23:00:33.818-05:00");
-delete finalEntry.state.rules.find(({ type }) => type === "update").parameters;
+const normalizedFinalUpdateRule = finalEntry.state.rules.shift();
+delete normalizedFinalUpdateRule.parameters;
+finalEntry.state.rules.push(normalizedFinalUpdateRule);
+const recoveryCandidateState = () => {
+  const state = structuredClone(finalEntry.state);
+  state.bypass_actors.push({ actor_id: phase1RulesetRecoveryPolicy.owner.id, actor_type: phase1RulesetRecoveryPolicy.owner.type, bypass_mode: "pull_request" });
+  return state;
+};
+const recoveryEntry = (state, versionId, updatedAt) => ({ version_id: versionId, updated_at: updatedAt, actor: cutoverActor, state: structuredClone(state) });
+const bootstrapOpenedAt = "2026-08-25T23:40:01.000Z";
+const bootstrapCommittedAt = "2026-08-25T23:40:02.000Z";
+const bootstrapSuitePushedAt = "2026-08-25T23:40:03.000Z";
+const bootstrapMergedAt = "2026-08-25T23:40:03.000Z";
+const bootstrapRestoredAt = "2026-08-25T23:40:05.000Z";
+const bootstrapHeadSha = "f".repeat(40);
+const bootstrapMergeSha = "e".repeat(40);
+const historicalRecoveryWindows = phase1RulesetRecoveryPolicy.windows.filter(({ kind }) => kind === "HISTORICAL_EXACT");
+const recoveryHistory = [
+  ...historicalRecoveryWindows.flatMap((window) => [
+    recoveryEntry(recoveryCandidateState(), window.openedVersionId, window.openedAt),
+    recoveryEntry(finalEntry.state, window.restoredVersionId, window.restoredAt),
+  ]),
+  recoveryEntry(recoveryCandidateState(), 47660001, bootstrapOpenedAt),
+  recoveryEntry(finalEntry.state, 47660002, bootstrapRestoredAt),
+];
+const recoveryPullRequest = (window, { headSha = window.headSha, mergeSha = window.mergeSha, mergedAt = window.mergedAt, changedFiles = 0 } = {}) => ({
+  number: window.pr,
+  state: "closed",
+  merged: true,
+  merge_commit_sha: mergeSha,
+  merged_at: mergedAt,
+  merged_by: { login: phase1RulesetRecoveryPolicy.owner.login, type: phase1RulesetRecoveryPolicy.owner.type },
+  user: { id: phase1RulesetRecoveryPolicy.owner.id, login: phase1RulesetRecoveryPolicy.owner.login, type: phase1RulesetRecoveryPolicy.owner.type },
+  base: { ref: "main", sha: window.baseSha, repo: { full_name: phase1RulesetRecoveryPolicy.repository } },
+  head: { ref: window.headRef, sha: headSha, repo: { full_name: phase1RulesetRecoveryPolicy.repository } },
+  changed_files: changedFiles,
+});
+const recoveryRuleSuite = (window, { mergeSha = window.mergeSha, id = window.ruleSuiteId, pushedAt = window.ruleSuitePushedAt } = {}) => ({
+  id,
+  actor_id: phase1RulesetRecoveryPolicy.owner.id,
+  actor_name: phase1RulesetRecoveryPolicy.owner.login,
+  before_sha: window.baseSha,
+  after_sha: mergeSha,
+  ref: "refs/heads/main",
+  repository_id: phase1RulesetRecoveryPolicy.repositoryId,
+  repository_name: "chillywood-mobile",
+  pushed_at: pushedAt,
+  result: "bypass",
+  evaluation_result: null,
+});
+const recoveryRuleSuiteDetail = (ruleSuite) => ({
+  ...structuredClone(ruleSuite),
+  rule_evaluations: [
+    { rule_type: "required_status_checks", result: "fail", enforcement: "active", details: 'Required status check "Phase 1 / Admission Decision" is in progress.', rule_source: { id: 18940814, name: "main-pr-review-protection", type: "ruleset" } },
+    { rule_type: "update", result: "fail", enforcement: "active", details: "Cannot update this protected ref.", rule_source: { id: 18940814, name: "main-pr-review-protection", type: "ruleset" } },
+    { rule_type: "deletion", result: "pass", enforcement: "active", rule_source: { id: 18940814, name: "main-pr-review-protection", type: "ruleset" } },
+    { rule_type: "non_fast_forward", result: "pass", enforcement: "active", rule_source: { id: 18940814, name: "main-pr-review-protection", type: "ruleset" } },
+    { rule_type: "pull_request", result: "pass", enforcement: "active", rule_source: { id: 18940814, name: "main-pr-review-protection", type: "ruleset" } },
+  ],
+});
+const recoveryMergeIdentity = (window, { headSha = window.headSha, mergeSha = window.mergeSha, committedAt = window.mergeCommittedAt ?? window.ruleSuitePushedAt, changedPaths = [] } = {}) => ({
+  sha: mergeSha,
+  parents: [window.baseSha, headSha],
+  tree: `${window.ordinal}`.repeat(40),
+  headTree: `${window.ordinal}`.repeat(40),
+  committedAt,
+  subject: `Merge pull request #${window.pr} from Chillywood2025/${window.headRef}`,
+  changedPaths,
+  currentBaseContainsMerge: true,
+});
+const historicalRecoveryEvidence = historicalRecoveryWindows.map((window) => {
+  const ruleSuite = recoveryRuleSuite(window);
+  return {
+    pr: window.pr,
+    pullRequest: recoveryPullRequest(window),
+    files: [],
+    filesPaginationComplete: true,
+    matchingRuleSuiteCount: 1,
+    ruleSuite,
+    ruleSuiteDetail: recoveryRuleSuiteDetail(ruleSuite),
+    mergeIdentity: recoveryMergeIdentity(window),
+  };
+});
+const bootstrapWindow = phase1RulesetRecoveryPolicy.windows.at(-1);
+const bootstrapEvidenceIndex = phase1RulesetRecoveryPolicy.windows.length - 1;
+const pr266EvidenceIndex = phase1RulesetRecoveryPolicy.windows.findIndex(({ pr }) => pr === 266);
+const bootstrapOpenHistoryIndex = 3 + bootstrapEvidenceIndex * 2;
+const bootstrapRestoreHistoryIndex = bootstrapOpenHistoryIndex + 1;
+const bootstrapFiles = bootstrapWindow.allowedPaths.map((filename) => ({ filename, status: "modified" }));
+const bootstrapRecoveryEvidence = {
+  pr: bootstrapWindow.pr,
+  pullRequest: recoveryPullRequest(bootstrapWindow, { headSha: bootstrapHeadSha, mergeSha: bootstrapMergeSha, mergedAt: bootstrapMergedAt, changedFiles: bootstrapWindow.allowedPaths.length }),
+  files: bootstrapFiles,
+  filesPaginationComplete: true,
+  matchingRuleSuiteCount: 1,
+  ruleSuite: recoveryRuleSuite(bootstrapWindow, { mergeSha: bootstrapMergeSha, id: 3812000000, pushedAt: bootstrapSuitePushedAt }),
+  mergeIdentity: recoveryMergeIdentity(bootstrapWindow, { headSha: bootstrapHeadSha, mergeSha: bootstrapMergeSha, committedAt: bootstrapCommittedAt, changedPaths: bootstrapWindow.allowedPaths }),
+};
+bootstrapRecoveryEvidence.ruleSuiteDetail = recoveryRuleSuiteDetail(bootstrapRecoveryEvidence.ruleSuite);
+const exactRecoveryEvidence = [...historicalRecoveryEvidence, bootstrapRecoveryEvidence];
+const exactRecoveryRuleSuites = exactRecoveryEvidence.map(({ ruleSuite }) => structuredClone(ruleSuite));
 const finalProviderUpdatedAt = "2026-08-24T23:00:33.629-05:00";
 const liveProvisioning = (stage, providerUpdatedAt) => {
   const value = structuredClone(publisherAnchor.provisioningReadback);
@@ -61,18 +162,46 @@ const liveProvisioning = (stage, providerUpdatedAt) => {
   value.readbackHash = sha256(stableJson(value));
   return value;
 };
-const currentRuleset = (entry, providerUpdatedAt) => ({ ...structuredClone(entry.state), node_id: publisherAnchor.rulesetNodeId, updated_at: providerUpdatedAt, current_user_can_bypass: entry.state.bypass_actors.length ? "always" : "never" });
-const evaluateCutover = ({ stage = "PRE_CUTOVER_13_RAW", entries = [preEntry], currentEntry = entries.at(-1), paginationComplete = true, anchor = publisherAnchor, live = null, providerUpdatedAt = stage === "PRE_CUTOVER_13_RAW" ? publisherAnchor.rulesetProviderUpdatedAt : currentEntry.updated_at } = {}) => {
+const currentRuleset = (entry, providerUpdatedAt) => ({ ...structuredClone(entry.state), node_id: publisherAnchor.rulesetNodeId, updated_at: providerUpdatedAt, current_user_can_bypass: "never" });
+const receiptSourceHistory = [preEntry, stage1Entry, finalEntry, ...recoveryHistory];
+const exactRecoveryReceipt = buildPhase1RulesetRecoveryReceipt({
+  historySummaries: receiptSourceHistory,
+  historyDetails: receiptSourceHistory,
+  ruleSuiteSummaries: exactRecoveryRuleSuites,
+  ruleSuiteDetails: exactRecoveryEvidence.map(({ ruleSuiteDetail }) => ruleSuiteDetail),
+  currentRuleset: currentRuleset(finalEntry, bootstrapRestoredAt),
+});
+const exactRecoveredEntries = exactRecoveryReceipt.postGenesisHistory;
+const exactRecoveryReceiptComment = {
+  id: 5237000000,
+  user: { id: phase1RulesetRecoveryPolicy.owner.id, login: phase1RulesetRecoveryPolicy.owner.login, type: phase1RulesetRecoveryPolicy.owner.type },
+  author_association: "OWNER",
+  created_at: "2026-08-25T23:40:06Z",
+  updated_at: "2026-08-25T23:40:06Z",
+  body: formatPhase1RulesetRecoveryReceiptComment(exactRecoveryReceipt),
+};
+const evaluateCutover = ({ stage = "PRE_CUTOVER_13_RAW", entries = [preEntry], currentEntry = entries.at(-1), paginationComplete = true, recoveryEvidence = [], recoveryPaginationComplete = true, ruleSuites = [], recoveryReceipt = null, recoveryReceiptComment = null, recoveryReceiptMarkerCommentCount = 0, currentUserCanBypass = "never", currentOverrides = {}, anchor = publisherAnchor, live = null, providerUpdatedAt = stage === "PRE_CUTOVER_13_RAW" ? publisherAnchor.rulesetProviderUpdatedAt : currentEntry.updated_at } = {}) => {
   return evaluatePhase1AdmissionRulesetCutoverState({
     repository: contract.repository,
     identity: cutoverIdentity,
     anchor,
     liveProvisioningReadback: live ?? liveProvisioning(stage, providerUpdatedAt),
     contract: { ...contract, phase1AdmissionPublisherImmutableAnchor: anchor },
-    observation: { current: currentRuleset(currentEntry, providerUpdatedAt), history: entries, paginationComplete },
+    observation: { current: { ...currentRuleset(currentEntry, providerUpdatedAt), current_user_can_bypass: currentUserCanBypass, ...currentOverrides }, history: entries, paginationComplete, recoveryEvidence, recoveryPaginationComplete, ruleSuites, recoveryReceipt, recoveryReceiptComment, recoveryReceiptMarkerCommentCount },
     protectedSourceVerified: true,
   });
 };
+const evaluateRecoveredCutover = (overrides = {}) => evaluateCutover({
+  stage: "FINAL_AGGREGATE_ONLY",
+  entries: exactRecoveredEntries,
+  recoveryEvidence: exactRecoveryEvidence,
+  ruleSuites: exactRecoveryRuleSuites,
+  recoveryReceipt: exactRecoveryReceipt,
+  recoveryReceiptComment: exactRecoveryReceiptComment,
+  recoveryReceiptMarkerCommentCount: 1,
+  providerUpdatedAt: bootstrapRestoredAt,
+  ...overrides,
+});
 
 test("exact ruleset readback and bounded bootstrap window pass", () => {
   assert.deepEqual(validate(contract), []);
@@ -352,24 +481,221 @@ test("R2 immutable publisher anchor is exact, self-hashed, and schema-bound", ()
   }
 });
 
-test("R2 stage resolver accepts only contiguous PRE, STAGE1, and FINAL prefixes", () => {
+test("R2 stage resolver accepts strict PRE/STAGE1/initial-FINAL history and only the receipt-bound recovered FINAL", () => {
   const pre = evaluateCutover();
   const stage1 = evaluateCutover({ stage: "STAGE1_AGGREGATE_PLUS_13_RAW", entries: [preEntry, stage1Entry] });
-  const final = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry], providerUpdatedAt: finalProviderUpdatedAt });
-  const payloadFinalEntry = structuredClone(finalEntry);
-  payloadFinalEntry.state.rules.find(({ type }) => type === "update").parameters = { update_allows_fetch_and_merge: false };
-  const payloadFinal = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, payloadFinalEntry] });
-  for (const state of [pre, stage1, final, payloadFinal]) {
+  const initialFinal = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry], providerUpdatedAt: finalProviderUpdatedAt });
+  const recoveredFinal = evaluateRecoveredCutover();
+  for (const state of [pre, stage1, initialFinal, recoveredFinal]) {
     assert.equal(phase1AdmissionRulesetCutoverStateValid(state), true);
     assert.equal(state.cutoverLock, "OPEN");
     assert.equal(state.paginationComplete, true);
     assert.deepEqual(state.findings, []);
   }
+  const currentFinalWithoutReceipt = evaluateRecoveredCutover({ recoveryReceipt: null, recoveryReceiptComment: null, recoveryReceiptMarkerCommentCount: 0 });
+  assert.equal(phase1AdmissionRulesetCutoverStateValid(currentFinalWithoutReceipt), false);
+  assert.equal(currentFinalWithoutReceipt.cutoverLock, "CLOSED");
+  assert.ok(currentFinalWithoutReceipt.findings.includes("PHASE1_RULESET_RECOVERY_RECEIPT_INVALID"));
   assert.equal(pre.currentRulesetStage, "PRE_CUTOVER_13_RAW");
   assert.equal(stage1.currentRulesetStage, "STAGE1_AGGREGATE_PLUS_13_RAW");
-  assert.equal(final.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
-  assert.equal(payloadFinal.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
-  assert.equal(new Set([pre.stageReceiptChainHash, stage1.stageReceiptChainHash, final.stageReceiptChainHash]).size, 3);
+  assert.equal(initialFinal.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
+  assert.equal(recoveredFinal.currentRulesetStage, "FINAL_AGGREGATE_ONLY");
+  assert.equal(new Set([pre.stageReceiptChainHash, stage1.stageReceiptChainHash, recoveredFinal.stageReceiptChainHash]).size, 3);
+});
+
+test("ruleset recovery binds the exact jq-style writable-state hashes including its canonical newline", () => {
+  const writable = (state) => ({ name: state.name, target: state.target, enforcement: state.enforcement, bypass_actors: state.bypass_actors, conditions: state.conditions, rules: state.rules });
+  assert.equal(sha256(`${stableJson(writable(recoveryCandidateState()))}\n`), phase1RulesetRecoveryPolicy.candidateWritableStateHash);
+  assert.equal(sha256(`${stableJson(writable(finalEntry.state))}\n`), phase1RulesetRecoveryPolicy.restoredWritableStateHash);
+  assert.equal(phase1RulesetRecoveryPolicyHash, sha256(stableJson(phase1RulesetRecoveryPolicy)));
+});
+
+test("ruleset recovery receipt is canonical, policy-bound, immutable, and below the GitHub comment limit", () => {
+  const body = formatPhase1RulesetRecoveryReceiptComment(exactRecoveryReceipt);
+  assert.equal(body.split("\n").length, 2);
+  assert.equal(body.split("\n")[0], phase1RulesetRecoveryReceiptMarker);
+  assert.equal(body.split("\n")[1], stableJson(exactRecoveryReceipt));
+  assert.ok(Buffer.byteLength(body, "utf8") < 65_536);
+  assert.equal(exactRecoveryReceipt.policyHash, phase1RulesetRecoveryPolicyHash);
+  assert.equal(exactRecoveryReceipt.receiptHash, sha256(stableJson(Object.fromEntries(Object.entries(exactRecoveryReceipt).filter(([key]) => key !== "receiptHash")))));
+  assert.ok(Object.values(exactRecoveryReceipt.evidenceHashes).every((value) => /^[0-9a-f]{64}$/u.test(value)));
+  assert.deepEqual(phase1RulesetRecoveryPolicy.windows.map(({ pr }) => pr), [262, 263, 266, 267]);
+  assert.deepEqual(phase1RulesetRecoveryPolicy.windows.map(({ kind }) => kind), ["HISTORICAL_EXACT", "HISTORICAL_EXACT", "HISTORICAL_EXACT", "SELF_BOOTSTRAP_EXACT_PR"]);
+  assert.deepEqual(phase1RulesetRecoveryPolicy.windows[2], {
+    ordinal: 3,
+    kind: "HISTORICAL_EXACT",
+    pr: 266,
+    baseSha: "0f4354fce5097be478ed83d86f2e4dead6391bef",
+    headSha: "9661b13578475a4cc023d05395889f73be140639",
+    headRef: "codex/emergency-stale-supabase-fixture-repair-v1",
+    mergeSha: "c751c2689f440f50b6dce096252318c050e07046",
+    mergeCommittedAt: "2026-08-25T23:26:28.000Z",
+    mergedAt: "2026-08-25T23:26:29.000Z",
+    openedVersionId: 47658161,
+    openedAt: "2026-08-25T23:26:21.868Z",
+    restoredVersionId: 47658168,
+    restoredAt: "2026-08-25T23:26:31.601Z",
+    ruleSuiteId: 3820215667,
+    ruleSuitePushedAt: "2026-08-25T23:26:29.000Z",
+  });
+  assert.equal(bootstrapWindow.baseSha, "c751c2689f440f50b6dce096252318c050e07046");
+  assert.equal(bootstrapWindow.headRef, "codex/ruleset-recovery-provider-chronology-v1");
+  assert.deepEqual(bootstrapWindow.allowedPaths, [
+    "scripts/assurance/github-main-ruleset-readback.mjs",
+    "tests/assurance/github-main-ruleset-readback.test.mjs",
+  ]);
+  assert.equal(exactRecoveryReceipt.sourcePr, 267);
+  assert.equal(exactRecoveryReceipt.ruleSuiteDetails.length, 4);
+  assert.equal(evaluateRecoveredCutover().cutoverLock, "OPEN");
+});
+
+test("ruleset recovery accepts GitHub's exact PR266 commit-to-suite ordering without equating provider timestamps", () => {
+  const proof = exactRecoveryEvidence[pr266EvidenceIndex];
+  assert.equal(Date.parse(proof.ruleSuite.pushed_at) - Date.parse(proof.mergeIdentity.committedAt), 1_000);
+  assert.equal(proof.mergeIdentity.sha, "c751c2689f440f50b6dce096252318c050e07046");
+  assert.equal(evaluateRecoveredCutover().cutoverLock, "OPEN");
+});
+
+test("ruleset recovery canonicalizes equivalent provider timestamps and accepts receipt-bound hidden public bypass fields", () => {
+  const asChicagoOffset = (value) => {
+    const shifted = new Date(Date.parse(value) - 5 * 60 * 60 * 1_000).toISOString();
+    return `${shifted.slice(0, -1)}-05:00`;
+  };
+  const offsetHistory = receiptSourceHistory.map((entry) => ({ ...structuredClone(entry), updated_at: asChicagoOffset(entry.updated_at) }));
+  const offsetSuiteSummaries = exactRecoveryRuleSuites.map((entry) => ({ ...structuredClone(entry), pushed_at: asChicagoOffset(entry.pushed_at) }));
+  const offsetSuiteDetails = exactRecoveryEvidence.map(({ ruleSuiteDetail }) => ({ ...structuredClone(ruleSuiteDetail), pushed_at: asChicagoOffset(ruleSuiteDetail.pushed_at) }));
+  const offsetCurrent = currentRuleset(finalEntry, asChicagoOffset(bootstrapRestoredAt));
+  assert.deepEqual(buildPhase1RulesetRecoveryReceipt({
+    historySummaries: offsetHistory,
+    historyDetails: offsetHistory,
+    ruleSuiteSummaries: offsetSuiteSummaries,
+    ruleSuiteDetails: offsetSuiteDetails,
+    currentRuleset: offsetCurrent,
+  }), exactRecoveryReceipt);
+  const offsetPublicEvidence = structuredClone(exactRecoveryEvidence);
+  for (const proof of offsetPublicEvidence) {
+    proof.pullRequest.merged_at = asChicagoOffset(proof.pullRequest.merged_at);
+    proof.mergeIdentity.committedAt = asChicagoOffset(proof.mergeIdentity.committedAt);
+  }
+  assert.equal(evaluateRecoveredCutover({ recoveryEvidence: offsetPublicEvidence }).cutoverLock, "OPEN");
+  assert.equal(evaluateRecoveredCutover({ providerUpdatedAt: asChicagoOffset(bootstrapRestoredAt) }).cutoverLock, "OPEN");
+  assert.equal(evaluateRecoveredCutover({ currentOverrides: { bypass_actors: null, current_user_can_bypass: null } }).cutoverLock, "OPEN");
+});
+
+test("ruleset recovery rejects omission, truncation, replay, drift, extra writes, and malformed evidence", () => {
+  const evaluateMutation = (mutate) => {
+    const candidate = {
+      entries: structuredClone(exactRecoveredEntries),
+      recoveryEvidence: structuredClone(exactRecoveryEvidence),
+      recoveryPaginationComplete: true,
+      ruleSuites: structuredClone(exactRecoveryRuleSuites),
+      recoveryReceipt: structuredClone(exactRecoveryReceipt),
+      recoveryReceiptComment: structuredClone(exactRecoveryReceiptComment),
+      recoveryReceiptMarkerCommentCount: 1,
+      providerUpdatedAt: bootstrapRestoredAt,
+      currentUserCanBypass: "never",
+    };
+    mutate(candidate);
+    if (candidate.rebuildReceipt === true) {
+      candidate.ruleSuites.sort((left, right) => {
+        const leftTimestamp = Date.parse(left?.pushed_at ?? "");
+        const rightTimestamp = Date.parse(right?.pushed_at ?? "");
+        return (Number.isFinite(leftTimestamp) ? leftTimestamp : 0) - (Number.isFinite(rightTimestamp) ? rightTimestamp : 0)
+          || (left?.id ?? 0) - (right?.id ?? 0);
+      });
+      candidate.recoveryReceipt = buildPhase1RulesetRecoveryReceipt({
+        historySummaries: candidate.entries,
+        historyDetails: candidate.entries,
+        ruleSuiteSummaries: candidate.ruleSuites,
+        ruleSuiteDetails: candidate.recoveryEvidence.map(({ ruleSuiteDetail }) => ruleSuiteDetail),
+        currentRuleset: currentRuleset(candidate.entries.at(-1), candidate.providerUpdatedAt),
+      });
+      candidate.recoveryReceiptComment.body = formatPhase1RulesetRecoveryReceiptComment(candidate.recoveryReceipt);
+    }
+    return evaluateCutover({
+      stage: "FINAL_AGGREGATE_ONLY",
+      entries: candidate.entries,
+      recoveryEvidence: candidate.recoveryEvidence,
+      recoveryPaginationComplete: candidate.recoveryPaginationComplete,
+      ruleSuites: candidate.ruleSuites,
+      recoveryReceipt: candidate.recoveryReceipt,
+      recoveryReceiptComment: candidate.recoveryReceiptComment,
+      recoveryReceiptMarkerCommentCount: candidate.recoveryReceiptMarkerCommentCount,
+      currentUserCanBypass: candidate.currentUserCanBypass,
+      providerUpdatedAt: candidate.providerUpdatedAt,
+    });
+  };
+  const cases = [
+    ["omitted suffix", (value) => { value.entries = value.entries.slice(0, 3); }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
+    ["two historical pairs only", (value) => { value.entries = value.entries.slice(0, 7); }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
+    ["three historical pairs only", (value) => { value.entries = value.entries.slice(0, 9); }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
+    ["missing final restoration", (value) => { value.entries.pop(); }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
+    ["future fifth pair", (value) => {
+      value.entries.push(recoveryEntry(recoveryCandidateState(), 47660003, "2026-08-25T23:41:01.000Z"));
+      value.entries.push(recoveryEntry(finalEntry.state, 47660004, "2026-08-25T23:41:05.000Z"));
+    }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
+    ["candidate policy drift", (value) => { value.entries[3].state.enforcement = "evaluate"; }, "PHASE1_RULESET_RECOVERY_STATE_INVALID"],
+    ["restoration policy drift", (value) => { value.entries[4].state.bypass_actors.push({ actor_id: 1, actor_type: "User", bypass_mode: "pull_request" }); }, "PHASE1_RULESET_RECOVERY_STATE_INVALID"],
+    ["wrong transition actor", (value) => { value.entries[5].actor.id = 1; }, "PHASE1_RULESET_RECOVERY_STATE_INVALID"],
+    ["non-monotone unique version", (value) => { value.entries[7].version_id = 47585580; }, "PHASE1_RULESET_CUTOVER_HISTORY_MALFORMED"],
+    ["malformed null history entry", (value) => { value.entries[4] = null; }, "PHASE1_RULESET_CUTOVER_HISTORY_MALFORMED"],
+    ["null evidence entry", (value) => { value.recoveryEvidence[1] = null; }, "PHASE1_RULESET_RECOVERY_EVIDENCE_CARDINALITY_INVALID"],
+    ["duplicate evidence identity", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].pr = 266; }, "PHASE1_RULESET_RECOVERY_EVIDENCE_CARDINALITY_INVALID"],
+    ["recovery pagination incomplete", (value) => { value.recoveryPaginationComplete = false; }, "PHASE1_RULESET_RECOVERY_EVIDENCE_CARDINALITY_INVALID"],
+    ["live owner bypass remains", (value) => { value.currentUserCanBypass = "pull_requests_only"; }, "PHASE1_RULESET_CUTOVER_LIVE_STAGE_INVALID"],
+    ["wrong PR author", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].pullRequest.user.id = 1; }, "PHASE1_RULESET_RECOVERY_PULL_REQUEST_INVALID"],
+    ["wrong merge actor", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].pullRequest.merged_by.login = "attacker"; }, "PHASE1_RULESET_RECOVERY_PULL_REQUEST_INVALID"],
+    ["wrong protected base", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].pullRequest.base.sha = "b".repeat(40); }, "PHASE1_RULESET_RECOVERY_PULL_REQUEST_INVALID"],
+    ["wrong second parent", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].mergeIdentity.parents[1] = "b".repeat(40); }, "PHASE1_RULESET_RECOVERY_MERGE_IDENTITY_INVALID"],
+    ["merge not reachable", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].mergeIdentity.currentBaseContainsMerge = false; }, "PHASE1_RULESET_RECOVERY_MERGE_IDENTITY_INVALID"],
+    ["commit equals window-open boundary", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].mergeIdentity.committedAt = bootstrapOpenedAt; }, "PHASE1_RULESET_RECOVERY_CHRONOLOGY_INVALID"],
+    ["commit predates window open", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].mergeIdentity.committedAt = "2026-08-25T23:40:00.000Z"; }, "PHASE1_RULESET_RECOVERY_CHRONOLOGY_INVALID"],
+    ["commit follows rule-suite event", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].mergeIdentity.committedAt = "2026-08-25T23:40:04.000Z"; }, "PHASE1_RULESET_RECOVERY_CHRONOLOGY_INVALID"],
+    ["rule-suite event follows PR merge", (value) => {
+      value.recoveryEvidence[bootstrapEvidenceIndex].ruleSuite.pushed_at = "2026-08-25T23:40:04.000Z";
+    }, "PHASE1_RULESET_RECOVERY_CHRONOLOGY_INVALID"],
+    ["rule suite did not bypass", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].ruleSuite.result = "pass"; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_INVALID"],
+    ["wrong rule-suite actor", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].ruleSuite.actor_id = 1; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_INVALID"],
+    ["duplicate matching suite", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].matchingRuleSuiteCount = 2; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_INVALID"],
+    ["wrong detailed rule source", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].ruleSuiteDetail.rule_evaluations[0].rule_source.id = 1; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_DETAIL_INVALID"],
+    ["required status check did not fail", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].ruleSuiteDetail.rule_evaluations[0].result = "pass"; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_DETAIL_INVALID"],
+    ["second main write in open window", (value) => { value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000001, pushed_at: "2026-08-25T23:40:04.000Z" }); }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
+    ["second main write at open boundary", (value) => {
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000002, pushed_at: bootstrapOpenedAt });
+      value.rebuildReceipt = true;
+    }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
+    ["second main write at restore boundary", (value) => {
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000003, pushed_at: bootstrapRestoredAt });
+      value.rebuildReceipt = true;
+    }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
+    ["malformed main write timestamp", (value) => {
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000004, pushed_at: "not-a-date" });
+      value.rebuildReceipt = true;
+    }, "PHASE1_RULESET_RECOVERY_RECEIPT_EVIDENCE_INVALID"],
+    ["missing provider file", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].files.pop(); }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
+    ["non-modified provider file", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].files[0].status = "added"; }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
+    ["merge diff path omitted", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].mergeIdentity.changedPaths.pop(); }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
+    ["provider file pagination incomplete", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].filesPaginationComplete = false; }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
+    ["self-bootstrap window exceeds five minutes", (value) => { value.entries[bootstrapRestoreHistoryIndex].updated_at = "2026-08-25T23:46:02.000Z"; }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_DURATION_INVALID"],
+    ["historical version substitution", (value) => { value.entries[3].version_id += 1; }, "PHASE1_RULESET_RECOVERY_HISTORICAL_BINDING_INVALID"],
+    ["historical suite substitution", (value) => { value.recoveryEvidence[0].ruleSuite.id += 1; }, "PHASE1_RULESET_RECOVERY_HISTORICAL_BINDING_INVALID"],
+    ["historical PR266 commit-time substitution", (value) => { value.recoveryEvidence[pr266EvidenceIndex].mergeIdentity.committedAt = "2026-08-25T23:26:29.000Z"; }, "PHASE1_RULESET_RECOVERY_HISTORICAL_BINDING_INVALID"],
+    ["missing Owner receipt", (value) => { value.recoveryReceipt = null; value.recoveryReceiptComment = null; value.recoveryReceiptMarkerCommentCount = 0; }, "PHASE1_RULESET_RECOVERY_RECEIPT_INVALID"],
+    ["duplicate marker comment", (value) => { value.recoveryReceiptMarkerCommentCount = 2; }, "PHASE1_RULESET_RECOVERY_RECEIPT_COMMENT_INVALID"],
+    ["wrong receipt author", (value) => { value.recoveryReceiptComment.user.id = 1; }, "PHASE1_RULESET_RECOVERY_RECEIPT_COMMENT_INVALID"],
+    ["edited receipt comment", (value) => { value.recoveryReceiptComment.updated_at = "2026-08-25T23:40:07Z"; }, "PHASE1_RULESET_RECOVERY_RECEIPT_COMMENT_INVALID"],
+    ["noncanonical receipt body", (value) => { value.recoveryReceiptComment.body += "\n"; }, "PHASE1_RULESET_RECOVERY_RECEIPT_COMMENT_INVALID"],
+    ["wrong receipt policy hash", (value) => { value.recoveryReceipt.policyHash = "0".repeat(64); }, "PHASE1_RULESET_RECOVERY_RECEIPT_INVALID"],
+    ["tampered receipt evidence hash", (value) => { value.recoveryReceipt.evidenceHashes.ruleSuiteDetailsHash = "0".repeat(64); }, "PHASE1_RULESET_RECOVERY_RECEIPT_EVIDENCE_INVALID"],
+    ["future restored current timestamp", (value) => { value.providerUpdatedAt = "2026-08-25T23:41:05.000Z"; }, "PHASE1_RULESET_RECOVERY_RECEIPT_FINAL_RESTORATION_INVALID"],
+  ];
+  for (const [name, mutate, finding] of cases) {
+    const result = evaluateMutation(mutate);
+    assert.equal(phase1AdmissionRulesetCutoverStateValid(result), false, name);
+    assert.equal(result.cutoverLock, "CLOSED", name);
+    assert.equal(result.stageReceiptChainHash, null, name);
+    assert.ok(result.findings.includes(finding), `${name}: ${stableJson(result.findings)}`);
+  }
 });
 
 test("R2 stage resolver closes on incomplete, skipped, replayed, substituted, or drifting history", () => {
@@ -403,7 +729,7 @@ test("R2 stage resolver closes on incomplete, skipped, replayed, substituted, or
 });
 
 test("R2 current-truth aggregate is hash-bound, live-only, and never merge authority", () => {
-  const state = evaluateCutover({ stage: "FINAL_AGGREGATE_ONLY", entries: [preEntry, stage1Entry, finalEntry] });
+  const state = evaluateRecoveredCutover();
   const body = {
     ...state,
     contract: "PHASE1_ADMISSION_RULESET_CUTOVER_LIVE_AGGREGATE_V1",
@@ -431,11 +757,14 @@ test("R2 current-truth aggregate is hash-bound, live-only, and never merge autho
 test("R2 live aggregate plumbing remains protected-source, explicit-provider, and fail-closed", () => {
   const currentTruthSource = readFileSync("scripts/assurance/current-truth.mjs", "utf8");
   const activeTaskSource = readFileSync("scripts/assurance/active-task.mjs", "utf8");
+  const rulesetReadbackSource = readFileSync("scripts/assurance/github-main-ruleset-readback.mjs", "utf8");
   const schema = readJson("config/assurance/schemas-v1.json");
   assert.match(currentTruthSource, /resolvePhase1AdmissionRulesetCutoverState/u);
   assert.match(currentTruthSource, /CURRENT_TRUTH_PROTECTED_LIVE_AGGREGATE_V1/u);
   assert.match(activeTaskSource, /phase1AdmissionRulesetCutoverAggregateValid/u);
   assert.match(activeTaskSource, /--provider-snapshot/u);
+  assert.match(rulesetReadbackSource, /issues\/\$\{recoveryPr\}\/comments\?per_page=100/u);
+  assert.doesNotMatch(rulesetReadbackSource, /rulesets\/rule-suites|rulesets\/18940814\/history|\$\{endpoint\}\/history/u);
   assert.equal(schema.$defs.githubMainRulesetReadbackContract.required.includes("phase1AdmissionPublisherImmutableAnchor"), true);
   assert.equal(schema.$defs.githubMainRulesetReadbackContract.properties.phase1AdmissionPublisherImmutableAnchor.$ref, "#/$defs/phase1AdmissionPublisherImmutableAnchor");
 });

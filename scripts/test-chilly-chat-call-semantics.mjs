@@ -689,6 +689,10 @@ const actionScope = {
   notificationChannelId: "chilly_chat_calls_fullscreen_v1",
   notificationId: "notification-id",
   path: "/chat/22222222-2222-4222-8222-222222222222",
+  recipientAccountId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  recipientInstallId: "install-authority-1",
+  recipientSessionGeneration: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  recipientUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   threadId: "22222222-2222-4222-8222-222222222222",
 };
 
@@ -701,6 +705,10 @@ assert.equal(incomingVoipData.callInviteId, actionScope.callInviteId);
 assert.equal(incomingVoipData.threadId, actionScope.threadId);
 assert.equal(incomingVoipData.expiresAt, actionScope.expiresAt);
 assert.equal(incomingVoipData.callType, actionScope.callType);
+assert.equal(incomingVoipData.recipientAccountId, actionScope.recipientAccountId);
+assert.equal(incomingVoipData.recipientInstallId, actionScope.recipientInstallId);
+assert.equal(incomingVoipData.recipientSessionGeneration, actionScope.recipientSessionGeneration);
+assert.equal(incomingVoipData.recipientUserId, actionScope.recipientUserId);
 
 for (const action of ["cancel", "declined", "end", "timeout"]) {
   const androidData = buildChillyChatNativeActionData({ ...actionScope, action });
@@ -783,7 +791,9 @@ const terminalMembershipRaceGuardMigrationSource = await readFile(
 );
 assert.ok(dispatchSource.indexOf("const iosVoipPromise = invokeIosVoipDispatch") < dispatchSource.indexOf("const tokens = pushAllowed"));
 assert.doesNotMatch(dispatchSource, /if \(!tokens\.length\)[\s\S]{0,220}return/u);
-assert.match(voipSource, /\.eq\("enabled", true\)[\s\S]*\.is\("revoked_at", null\)/u);
+assert.match(voipSource, /whole_app_read_deliverable_ios_voip_tokens/u);
+assert.match(voipSource, /recipientSessionGeneration: tokenRow\.session_generation/u);
+assert.match(voipSource, /recipientInstallId: tokenRow\.install_id/u);
 assert.match(voipSource, /return data\?\.chilly_chat_calls_enabled !== false/u);
 assert.doesNotMatch(voipSource, /data\?\.push_enabled !== false/u);
 assert.match(voipSource, /ios_voip:\$\{invite\.id\}:\$\{tokenRow\.id\}:\$\{action\}/u);

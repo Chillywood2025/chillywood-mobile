@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -13,6 +12,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 
 import { readAccountAccessStatus, type AccountAccessStatusReadback } from "../../_lib/accountAccess";
 import { trackEvent } from "../../_lib/analytics";

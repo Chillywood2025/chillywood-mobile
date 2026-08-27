@@ -169,6 +169,37 @@ const createRuntime = (options = {}) => {
     getSession: async () => ({ data: { session: currentUserId ? { user: { id: currentUserId } } : null } }),
   };
 
+  const rpc = async (fn, args = {}) => {
+    if (fn !== "join_watch_party_room_session" && fn !== "heartbeat_watch_party_room_session") {
+      return { data: null, error: new Error("unexpected_rpc") };
+    }
+    const partyId = String(args.p_party_id ?? "").trim().toUpperCase();
+    if (partyId !== PARTY_ID) return { data: null, error: new Error("wrong_party") };
+
+    const isHost = currentUserId === HOST_ID;
+    const existingRemoved = storedMembership?.membership_state === "removed";
+    const isLeaving = fn === "heartbeat_watch_party_room_session" && args.p_membership_state === "left";
+    const state = existingRemoved ? "removed" : isLeaving ? "left" : "active";
+    const hostRole = isHost && !existingRemoved;
+    const next = membershipRow({
+      user_id: currentUserId,
+      role: hostRole ? "host" : "viewer",
+      stage_role: hostRole ? "host" : "listener",
+      can_speak: hostRole,
+      membership_state: state,
+      camera_enabled: hostRole ? args.p_camera_enabled === true : false,
+      mic_enabled: hostRole ? args.p_mic_enabled === true : false,
+      is_muted: hostRole ? args.p_self_muted === true : false,
+      display_name: args.p_display_name ?? null,
+      avatar_url: args.p_avatar_url ?? null,
+      camera_preview_url: args.p_camera_preview_url ?? null,
+      left_at: state === "active" ? null : storedMembership?.left_at ?? new Date().toISOString(),
+    });
+    storedMembership = next;
+    membershipWrites.push(next);
+    return { data: [next], error: null };
+  };
+
   const from = (table) => {
     let operation = "select";
     let writePayload = null;
@@ -243,7 +274,7 @@ const createRuntime = (options = {}) => {
       evaluateRoomAccess: async () => roomAccessDecision,
     },
     "./socialAttachments": { readSocialAttachmentsForSurfaces: inert },
-    "./supabase": { supabase: { auth, from } },
+    "./supabase": { supabase: { auth, from, rpc } },
     "./userData": { readUserProfile: inert },
   };
 
@@ -400,10 +431,10 @@ test("ordinary authoritative Premium admission remains unchanged only for an exa
   });
 
   assert.equal(joined?.role, "viewer");
-  assert.equal(joined?.stageRole, "speaker");
-  assert.equal(joined?.canSpeak, true);
-  assert.equal(joined?.cameraEnabled, true);
-  assert.equal(joined?.micEnabled, true);
+  assert.equal(joined?.stageRole, "listener");
+  assert.equal(joined?.canSpeak, false);
+  assert.equal(joined?.cameraEnabled, false);
+  assert.equal(joined?.micEnabled, false);
   assert.deepEqual(runtime.ticketPartyIds, [PARTY_ID]);
   assert.equal(runtime.getPremiumReads(), 1);
 });

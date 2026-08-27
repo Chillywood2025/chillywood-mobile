@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Application from "expo-application";
 import { Platform } from "react-native";
@@ -6,7 +5,17 @@ import { Platform } from "react-native";
 import NativeCallsModule, {
   type NativeCallEvent,
 } from "../modules/chillywood-native-calls";
+import {
+  isCurrentAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
+} from "./accountSessionAuthority";
 import { clearNativeCallTransitionClaims } from "./nativeCallTransitionProvenance.mjs";
+import {
+  createPushOwnershipOperationKey,
+  getNotificationInstallId,
+  getNotificationRevocationCredential,
+  type PushRevocationReason,
+} from "./notifications";
 import { supabase } from "./supabase";
 
 export type IosNativeCallsDisabledReason =
@@ -34,8 +43,13 @@ export type IosVoipRegistrationState = {
   tokenFingerprint: string | null;
 };
 
-const INSTALL_ID_STORAGE_KEY = "chillywood.notification.install_id.v1";
 const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
+
+type IosVoipAuthorityContext = {
+  authority: AccountSessionAuthorityBinding;
+  installId: string;
+  revocationCredential: string;
+};
 
 let nativeSubscription: { remove(): void } | null = null;
 let eventListener: IosNativeCallEventListener | null = null;
@@ -44,6 +58,7 @@ const nativePresentationSubscribers = new Set<() => void>();
 const nativePresentedInviteIds = new Set<string>();
 let voipLifecycleGeneration = 0;
 let voipRegistrationActive = false;
+let voipAuthorityContext: IosVoipAuthorityContext | null = null;
 let voipTokenLifecycleQueue: Promise<void> = Promise.resolve();
 let voipTransitionQueue: Promise<void> = Promise.resolve();
 
@@ -57,24 +72,6 @@ const readRuntimeExtra = () => {
   return runtime && typeof runtime === "object" && !Array.isArray(runtime)
     ? runtime as Record<string, unknown>
     : {};
-};
-
-const buildClientId = () => (
-  "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/gu, (character) => {
-    const random = Math.floor(Math.random() * 16);
-    const value = character === "x" ? random : (random & 0x3) | 0x8;
-    return value.toString(16);
-  })
-);
-
-const readInstallId = async () => {
-  const existing = toText(await AsyncStorage.getItem(INSTALL_ID_STORAGE_KEY));
-  if (existing) return existing;
-  const next = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : buildClientId();
-  await AsyncStorage.setItem(INSTALL_ID_STORAGE_KEY, next);
-  return next;
 };
 
 const readApnsEnvironment = (): "development" | "production" => {
@@ -161,58 +158,118 @@ const runVoipTransition = <T>(task: () => Promise<T>) => {
   return result;
 };
 
-const registerVoipToken = async (token: string): Promise<IosVoipRegistrationState> => {
-  const apnsEnvironment = readApnsEnvironment();
-  const installId = await readInstallId();
-  const { data, error } = await supabase.functions.invoke("ios-voip-push-tokens", {
-    body: {
-      action: "register",
-      apnsEnvironment,
-      appVersion: Application.nativeApplicationVersion,
-      buildVersion: Application.nativeBuildVersion,
-      installId,
-      token,
-    },
-  });
-  if (error) return { apnsEnvironment, status: "error", tokenFingerprint: null };
+const isExactVoipAuthorityCurrent = async (context: IosVoipAuthorityContext) => (
+  context.authority.state === "ACTIVE"
+  && !context.authority.restoreOnly
+  && context.authority.accountId === context.authority.userId
+  && await isCurrentAccountSessionAuthority(context.authority)
+);
 
-  const payload = data as { status?: unknown; tokenFingerprint?: unknown } | null;
-  return {
-    apnsEnvironment,
-    status: toText(payload?.status) === "registered" || toText(payload?.status) === "rotated"
-      ? "registered"
-      : "error",
-    tokenFingerprint: toText(payload?.tokenFingerprint) || null,
-  };
+const isExactVoipLifecycleResponse = (
+  context: IosVoipAuthorityContext,
+  operationKey: string,
+  data: unknown,
+  expectedStatus: "registered" | "revoked",
+) => {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  const response = data as Record<string, unknown>;
+  return response.requestAccepted === true
+    && toText(response.status) === expectedStatus
+    && toText(response.userId) === context.authority.userId
+    && toText(response.accountId) === context.authority.accountId
+    && toText(response.sessionGeneration) === context.authority.sessionGeneration
+    && toText(response.installId) === context.installId
+    && toText(response.platform) === "ios"
+    && toText(response.provider) === "apns_voip"
+    && toText(response.operationKey) === operationKey;
 };
 
-const revokeBackendVoipRegistration = async (): Promise<IosVoipRegistrationState> => {
+const revokeBackendVoipRegistration = async (
+  context: IosVoipAuthorityContext,
+  reason: PushRevocationReason | "provider_invalid",
+): Promise<IosVoipRegistrationState> => {
   const apnsEnvironment = readApnsEnvironment();
-  const installId = await readInstallId();
-  const { error } = await supabase.functions.invoke("ios-voip-push-tokens", {
-    body: { action: "revoke", apnsEnvironment, installId },
+  const operationKey = createPushOwnershipOperationKey("revoke");
+  const { data, error } = await supabase.functions.invoke("ios-voip-push-tokens", {
+    body: {
+      accountId: context.authority.accountId,
+      action: "revoke",
+      apnsEnvironment: "all",
+      installId: context.installId,
+      operationKey,
+      reason,
+      revocationCredential: context.revocationCredential,
+      sessionGeneration: context.authority.sessionGeneration,
+      userId: context.authority.userId,
+    },
   });
   return {
     apnsEnvironment,
-    status: error ? "error" : "revoked",
+    status: !error && isExactVoipLifecycleResponse(context, operationKey, data, "revoked")
+      ? "revoked"
+      : "error",
     tokenFingerprint: null,
   };
 };
 
-const enqueueVoipTokenRegistration = (token: string, generation: number) => {
+const registerVoipToken = async (
+  token: string,
+  context: IosVoipAuthorityContext,
+): Promise<IosVoipRegistrationState> => {
+  const apnsEnvironment = readApnsEnvironment();
+  if (!await isExactVoipAuthorityCurrent(context)) {
+    return { apnsEnvironment, status: "error", tokenFingerprint: null };
+  }
+  const operationKey = createPushOwnershipOperationKey("register");
+  const { data, error } = await supabase.functions.invoke("ios-voip-push-tokens", {
+    body: {
+      accountId: context.authority.accountId,
+      action: "register",
+      apnsEnvironment,
+      appVersion: Application.nativeApplicationVersion,
+      buildVersion: Application.nativeBuildVersion,
+      installId: context.installId,
+      operationKey,
+      revocationCredential: context.revocationCredential,
+      sessionGeneration: context.authority.sessionGeneration,
+      token,
+      userId: context.authority.userId,
+    },
+  });
+  const currentAfterRegistration = await isExactVoipAuthorityCurrent(context);
+  if (!currentAfterRegistration) {
+    await revokeBackendVoipRegistration(context, "account_switch").catch(() => null);
+  }
+  const exactResponse = !error
+    && currentAfterRegistration
+    && isExactVoipLifecycleResponse(context, operationKey, data, "registered");
+  return {
+    apnsEnvironment,
+    status: exactResponse ? "registered" : "error",
+    tokenFingerprint: exactResponse
+      ? toText((data as Record<string, unknown>).tokenFingerprint) || null
+      : null,
+  };
+};
+
+const enqueueVoipTokenRegistration = (
+  token: string,
+  generation: number,
+  context: IosVoipAuthorityContext,
+) => {
   const normalizedToken = toText(token);
   if (!normalizedToken) return;
 
   void enqueueVoipTokenLifecycle(async () => {
-    if (!voipRegistrationActive || generation !== voipLifecycleGeneration) return;
-    await registerVoipToken(normalizedToken);
+    if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
+    await registerVoipToken(normalizedToken, context);
   });
 };
 
-const enqueueVoipTokenInvalidation = (generation: number) => {
+const enqueueVoipTokenInvalidation = (generation: number, context: IosVoipAuthorityContext) => {
   void enqueueVoipTokenLifecycle(async () => {
-    if (!voipRegistrationActive || generation !== voipLifecycleGeneration) return;
-    await revokeBackendVoipRegistration();
+    if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
+    await revokeBackendVoipRegistration(context, "provider_invalid");
   });
 };
 
@@ -261,16 +318,20 @@ const updateNativePresentationOwnership = (event: SanitizedNativeCallEvent) => {
   }
 };
 
-const handleNativeEvent = (event: NativeCallEvent, generation: number) => {
-  if (!voipRegistrationActive || generation !== voipLifecycleGeneration) return;
+const handleNativeEvent = (
+  event: NativeCallEvent,
+  generation: number,
+  context: IosVoipAuthorityContext,
+) => {
+  if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
 
   if (event.type === "voipTokenUpdated") {
-    enqueueVoipTokenRegistration(event.token ?? "", generation);
+    enqueueVoipTokenRegistration(event.token ?? "", generation, context);
   } else if (event.type === "voipTokenInvalidated") {
     // Keep PKPushRegistry active so Apple can deliver a rotated token. Logout
     // and account transitions use revokeIosVoipRegistration(), which also
     // stops native registration.
-    enqueueVoipTokenInvalidation(generation);
+    enqueueVoipTokenInvalidation(generation, context);
   }
 
   const sanitizedEvent = sanitizeNativeEvent(event, generation);
@@ -305,6 +366,7 @@ export function subscribeToIosNativeCallPresentation(listener: () => void) {
 }
 
 export async function startIosNativeCallsReadiness(
+  authority: AccountSessionAuthorityBinding,
   listener?: IosNativeCallEventListener,
 ): Promise<IosVoipRegistrationState> {
   return runVoipTransition(async () => {
@@ -313,6 +375,7 @@ export async function startIosNativeCallsReadiness(
     const generation = ++voipLifecycleGeneration;
     clearNativeCallTransitionClaims("ios");
     voipRegistrationActive = false;
+    voipAuthorityContext = null;
     nativeSubscription?.remove();
     nativeSubscription = null;
     eventListener = null;
@@ -323,28 +386,49 @@ export async function startIosNativeCallsReadiness(
     await waitForVoipTokenLifecycle();
 
     if (!readiness.available || !NativeCallsModule) {
+      await NativeCallsModule?.stopVoipRegistrationAsync().catch(() => false);
       return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
     }
+    if (authority.restoreOnly || authority.accountId !== authority.userId
+      || !await isCurrentAccountSessionAuthority(authority)) {
+      await NativeCallsModule.stopVoipRegistrationAsync().catch(() => false);
+      return { apnsEnvironment, status: "error", tokenFingerprint: null };
+    }
+
+    const context: IosVoipAuthorityContext = {
+      authority: { ...authority },
+      installId: await getNotificationInstallId(),
+      revocationCredential: await getNotificationRevocationCredential(),
+    };
 
     voipRegistrationActive = true;
+    voipAuthorityContext = context;
     eventListener = listener ?? null;
     nativeSubscription = NativeCallsModule.addListener(
       "onNativeCallEvent",
-      (event) => handleNativeEvent(event, generation),
+      (event) => handleNativeEvent(event, generation, context),
     );
 
     const pending = await NativeCallsModule.getPendingEventsAsync().catch(() => []);
-    pending.forEach((event) => handleNativeEvent(event, generation));
-    const started = await NativeCallsModule.startVoipRegistrationAsync().catch(() => false);
-    if (!started && generation === voipLifecycleGeneration) {
+    pending.forEach((event) => handleNativeEvent(event, generation, context));
+    const started = await NativeCallsModule.startVoipRegistrationAsync(
+      context.authority.userId,
+      context.authority.accountId,
+      context.authority.sessionGeneration,
+      context.installId,
+    ).catch(() => false);
+    const authorityStillCurrent = started && await isExactVoipAuthorityCurrent(context);
+    if ((!started || !authorityStillCurrent) && generation === voipLifecycleGeneration) {
       voipRegistrationActive = false;
+      voipAuthorityContext = null;
       nativeSubscription?.remove();
       nativeSubscription = null;
       eventListener = null;
+      await NativeCallsModule.stopVoipRegistrationAsync().catch(() => false);
     }
     return {
       apnsEnvironment,
-      status: started ? "started" : "error",
+      status: started && authorityStillCurrent ? "started" : "error",
       tokenFingerprint: null,
     };
   });
@@ -355,9 +439,22 @@ export async function readIosVoipRegistrationStatus(): Promise<IosVoipRegistrati
   const readiness = await readIosNativeCallsReadiness();
   if (!readiness.available) return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
 
-  const installId = await readInstallId();
+  const authority = voipAuthorityContext?.authority;
+  if (!authority || authority.restoreOnly || !await isCurrentAccountSessionAuthority(authority)) {
+    return { apnsEnvironment, status: "not_registered", tokenFingerprint: null };
+  }
+  const installId = await getNotificationInstallId();
   const { data, error } = await supabase.functions.invoke("ios-voip-push-tokens", {
-    body: { action: "status", apnsEnvironment, installId },
+    body: {
+      accountId: authority.accountId,
+      action: "status",
+      apnsEnvironment,
+      installId,
+      operationKey: createPushOwnershipOperationKey("status"),
+      revocationCredential: await getNotificationRevocationCredential(),
+      sessionGeneration: authority.sessionGeneration,
+      userId: authority.userId,
+    },
   });
   if (error) return { apnsEnvironment, status: "error", tokenFingerprint: null };
   const payload = data as { registered?: unknown; tokenFingerprint?: unknown } | null;
@@ -374,8 +471,10 @@ export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationSt
     if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
 
     ++voipLifecycleGeneration;
+    const context = voipAuthorityContext;
     clearNativeCallTransitionClaims("ios");
     voipRegistrationActive = false;
+    voipAuthorityContext = null;
     nativeSubscription?.remove();
     nativeSubscription = null;
     eventListener = null;
@@ -385,7 +484,9 @@ export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationSt
     // An already-issued request cannot be aborted reliably. Waiting before the
     // final revoke guarantees that it cannot reactivate this install afterward.
     await waitForVoipTokenLifecycle();
-    return revokeBackendVoipRegistration();
+    return context
+      ? revokeBackendVoipRegistration(context, "auth_loss")
+      : { apnsEnvironment, status: "revoked", tokenFingerprint: null };
   });
 }
 

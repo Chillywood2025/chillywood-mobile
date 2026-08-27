@@ -1,6 +1,5 @@
 import React from "react";
 import {
-    Image,
     Text,
     View,
     type ImageStyle,
@@ -11,6 +10,7 @@ import {
 
 import { getInitials, getParticipantMediaUri } from "../../_lib/watch-party/room-shared";
 import type { WaitingRoomParticipantEntry } from "../../_lib/watch-party/waiting-room-shared";
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 type ParticipantTileStyles = {
   container: StyleProp<ViewStyle>;

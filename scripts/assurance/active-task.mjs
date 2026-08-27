@@ -106,7 +106,8 @@ const ownerBootstrapAuthor = "Chillywood2025";
 const ownerBootstrapMarker = "<!-- chillywood-assurance-owner-task-binding-v1 -->";
 export const PRE_ADMISSION_OWNER_MARKER = "<!-- chillywood-pre-release-plan-wave1-owner-approval-v1 -->";
 export const OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1 = "OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1";
-const preAdmissionForbiddenPath = (file) => file !== "docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json";
+const PRE_ADMISSION_TASK_ARTIFACT_PATH = /^docs\/assurance\/tasks\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/u;
+const preAdmissionForbiddenPath = (file, taskArtifactPath) => !PRE_ADMISSION_TASK_ARTIFACT_PATH.test(taskArtifactPath ?? "") || file !== taskArtifactPath;
 
 const parseOwnerPayload = (comment) => {
   if (!comment?.body?.startsWith(`${PRE_ADMISSION_OWNER_MARKER}\n`)) return null;
@@ -139,7 +140,7 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
   if (artifact?.implementation?.pullRequest !== facts.requestedPr || artifact?.implementation?.seedHead !== facts.seedHead || artifact?.implementation?.seedTree !== facts.seedTree) findings.push("PRE_ADMISSION_TASK_ARTIFACT_IDENTITY_STALE");
   if (stableJson(artifact?.rootDefects) !== stableJson(subject?.defectIds) || artifact?.provisionalPathBudget?.maximumFiles !== subject?.scopeBudget?.initial?.maximumFiles || artifact?.provisionalPathBudget?.maximumHandAuthoredNetLines !== subject?.scopeBudget?.initial?.maximumHandAuthoredNetLines) findings.push("PRE_ADMISSION_OWNER_SCOPE_MISMATCH");
   if (featureMatches.length !== 1) findings.push("PRE_ADMISSION_FEATURE_UNRESOLVED");
-  if (changedPaths.length !== 1 || changedPaths[0] !== facts.taskArtifactPath || changedPaths.some(preAdmissionForbiddenPath) || facts.productChangedFiles !== 0) findings.push("PRE_ADMISSION_PRODUCT_SOURCE_PRESENT");
+  if (changedPaths.length !== 1 || changedPaths[0] !== facts.taskArtifactPath || changedPaths.some((file) => preAdmissionForbiddenPath(file, facts.taskArtifactPath)) || facts.productChangedFiles !== 0) findings.push("PRE_ADMISSION_PRODUCT_SOURCE_PRESENT");
   if ((facts.openPreAdmissionSeeds ?? []).filter((number) => number !== facts.requestedPr).length) findings.push("PRE_ADMISSION_COMPETING_SEED");
   if (!sha40(facts.currentPlanningHead) || !sha40(facts.currentPlanningTree) || facts.currentPlanningHead !== pr?.headSha || facts.currentPlanningTree !== facts.observedPlanningTree) findings.push("PRE_ADMISSION_PLANNING_IDENTITY_MISMATCH");
   const unique = [...new Set(findings)].sort();
@@ -528,7 +529,7 @@ export function observePreAdmissionEngineeringSeed({ preAdmissionPr, taskArtifac
     currentPlanningTree,
     observedPlanningTree: currentPlanningTree,
     changedPaths,
-    productChangedFiles: changedPaths.filter(preAdmissionForbiddenPath).length,
+    productChangedFiles: changedPaths.filter((file) => preAdmissionForbiddenPath(file, taskArtifactPath)).length,
     openPreAdmissionSeeds,
     graph: generateDomainGraph()
   });
@@ -1016,7 +1017,7 @@ export function resolveFiniteTaskImplementation(truth, identity, facts, binding,
   const effectiveResolution = facts.finiteTaskEffectiveReservationResolution;
   const terminalOutcome = truth?.finiteTaskRuntime?.terminalOutcome;
   const amendedTerminalProjection = binding.phase === "TERMINAL"
-    && ["FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalOutcome?.classification)
+    && ["FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalOutcome?.classification)
     && finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, lease)
     && finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome, reservationResolution: effectiveResolution });
   const reservationProjection = effectiveResolution ? {

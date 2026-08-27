@@ -24,7 +24,7 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production",
+      "channel": "production-v2",
       "distribution": "store",
       "environment": "production",
       "android": {
@@ -65,7 +65,7 @@
     },
     "production-apk": {
       "autoIncrement": false,
-      "channel": "production",
+      "channel": "production-v2",
       "distribution": "internal",
       "environment": "production",
       "android": {

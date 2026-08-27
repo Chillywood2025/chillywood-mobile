@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { canonicalGitText, classifyGitHubExecutionIdentity, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
@@ -64,6 +64,7 @@ export {
   verifyTaskJurisdictionBindingV2,
 };
 export { evaluateDraftSourceReadinessScope };
+export { canonicalReceiptEvidenceWireProjection, compareReceiptEvidenceSemantics, normalizeReceiptEvidenceSemantics, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1 };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -2882,11 +2883,25 @@ export function verifyArchitectureRepositoryReview({ raw, identity, tree, scope,
   const finiteTaskImplementationReview = profile === FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1;
   const dependencyAmendmentBound = dependencyAmendmentResolution === null
     || dependencyAmendmentReadyForFinalEvidence(dependencyAmendmentResolution);
+  const baseOnlyReservationBound = effectiveReservationResolution?.status === "BASE_ONLY"
+    && effectiveReservationResolution?.amendmentsConsumed === 0
+    && effectiveReservationResolution?.amendmentReceipt === null
+    && effectiveReservationResolution?.baseLease?.amendmentMaximum?.maximumAmendments === 0
+    && effectiveReservationResolution.baseLease.amendmentMaximum.maximumFiles === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumFiles
+    && effectiveReservationResolution.baseLease.amendmentMaximum.maximumChangedLines === effectiveReservationResolution?.baseLease?.scopeBudget?.maximumChangedLines
+    && stableJson(effectiveReservationResolution?.baseLease) === stableJson(effectiveReservationResolution?.effectiveLease)
+    && stableJson(effectiveReservationResolution?.baseReservation) === stableJson(effectiveReservationResolution?.effectiveReservation)
+    && effectiveReservationResolution?.testAdaptationsConsumed == null
+    && effectiveReservationResolution?.testAdaptationReceipt == null
+    && effectiveReservationResolution?.testAdaptationReservation == null
+    && effectiveReservationResolution?.aggregateReservation == null
+    && effectiveReservationResolution?.scopePartitions == null;
+  const amendedReservationBound = ["AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
+    && effectiveReservationResolution?.amendmentsConsumed === 1
+    && effectiveReservationResolution?.amendmentReceipt;
   const effectiveReservationBound = !finiteTaskImplementationReview || Boolean(
     finiteTaskEffectiveReservationAuthorityValid(effectiveReservationResolution)
-    && ["AMENDED", "AMENDED_WITH_TEST_ADAPTATION"].includes(effectiveReservationResolution?.status)
-    && effectiveReservationResolution?.amendmentsConsumed === 1
-    && effectiveReservationResolution?.amendmentReceipt
+    && (baseOnlyReservationBound || amendedReservationBound)
     && effectiveReservationResolution?.baseLease?.implementationPr === identity?.pr
     && effectiveReservationResolution?.baseLease?.implementationBranch === identity?.branch
     && effectiveReservationResolution?.candidateHead === identity?.headSha
@@ -3249,8 +3264,12 @@ const PHASE1_ADMISSION_WORKFLOW_PATH = ".github/workflows/phase1-admission.yml";
 const PHASE1_READY_MODE = "READY_MERGE_AUTHORITY";
 const PHASE1_ACCEPTABLE_RESULT = "PHASE_1_ACCEPTABLE";
 const aggregatePhase1EvidenceValue = (value) => value?.evidence ?? value?.decision ?? value;
-const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
-const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
+const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "maintenanceStatus", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
+export const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
+
+export const canonicalPhase1FinalSourceWireProjection = ({ value } = {}) => canonicalReceiptEvidenceWireProjection({
+  rawRepresentation: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(value)),
+}).phase1;
 
 export function phase1AdmissionPolicyForBase({ identity, root = REPOSITORY_ROOT } = {}) {
   const base = identity?.baseSha;
@@ -3283,7 +3302,10 @@ const verifyPhase1AdmissionEvidence = ({ phase1Evidence, identity, tree, root = 
   } catch {
     verified = { ok: false, findings: ["PHASE1_AGGREGATE_VERIFICATION_EXCEPTION"] };
   }
-  const evidence = compactAggregatePhase1Evidence(aggregatePhase1EvidenceValue(verified?.evidence ?? phase1Evidence));
+  if (verified?.ok !== true) return { ok: false, policy, evidence: null, findings: [...new Set(verified?.findings ?? ["PHASE1_AGGREGATE_INVALID"])].sort() };
+  let evidence;
+  try { evidence = canonicalPhase1FinalSourceWireProjection({ value: aggregatePhase1EvidenceValue(verified.evidence) }); }
+  catch { return { ok: false, policy, evidence: null, findings: ["PHASE1_AGGREGATE_SEMANTIC_COMPATIBILITY_INVALID"] }; }
   const valid = Boolean(verified?.ok === true
     && evidence?.result === PHASE1_ACCEPTABLE_RESULT
     && evidence?.mode === PHASE1_READY_MODE
@@ -3304,7 +3326,10 @@ const storedPhase1MatchesLive = ({ stored, live, identity, tree, root = REPOSITO
   if (!verified.ok) return false;
   if (verified.policy === "LEGACY_EXACT_13_OF_13") return true;
   const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity: { ...identity, tree }, mode: PHASE1_READY_MODE, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
-  return inspected.ok && stableJson(compactAggregatePhase1Evidence(inspected.evidence)) === stableJson(compactAggregatePhase1Evidence(verified.evidence));
+  return inspected.ok && compareReceiptEvidenceSemantics({
+    left: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(inspected.evidence)),
+    right: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(verified.evidence)),
+  }).equal;
 };
 
 export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree, root = REPOSITORY_ROOT } = {}) {
@@ -3325,7 +3350,7 @@ export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, iden
     evidenceHash: phase1Evidence.evidenceHash,
     valid: true,
   };
-  return structuredClone(verified.evidence);
+  return canonicalPhase1FinalSourceWireProjection({ value: verified.evidence, identity });
 }
 
 export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1", objective = null, root = REPOSITORY_ROOT } = {}) {
@@ -3588,6 +3613,11 @@ const historicalArchitectureReviewProjection = (raws, identity) => (raws ?? []).
     ? { commentId: normalized.id, commentBodyHash: normalized.bodyHash, subjectHash: payload.subjectHash, reviewedHead: payload.subject.reviewedHead, reviewedTree: payload.subject.reviewedTree, disposition: payload.subject.disposition, status: "HISTORICAL_EXACT_HEAD_REVIEW" }
     : null;
 }).filter(Boolean).sort((left, right) => left.commentId - right.commentId);
+
+export function architectureFinalSourceSubjectsWireEquivalent(left, right) {
+  return compareReceiptEvidenceSemantics({ left, right }).equal;
+}
+
 export function architectureFinalSourceSubject({ identity, tree, scope, originalRaw, historicalRaw, historicalAttestationRaws = [], historicalRepositoryReviewRaws = [], repositoryReviewRaw, phase1Evidence, admissionPublisherProvisioningReadback = null, dependencyAmendmentRaw, dependencyAmendmentResolution = null, historicalRejectedRaw, historicalRejectedRaws = [], finalSourceCorrectionRaw, dependencyEvidence, root = REPOSITORY_ROOT } = {}) {
   const original = normalizeGitHubCommentIdentity(originalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: originalRaw?.id });
   const originalPayload = parseExactOwnerBody(original, ARCHITECTURE_MAINTENANCE_MARKER);
@@ -4529,7 +4559,15 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         if (!ownerJurisdictionProfile && normalized?.id === 5289720389) return { valid: true, key: { ...requiredFinalKey, historicalPreCiAttestationId: normalized.id }, value: { normalized, payload, phase1: null }, disposition: "HISTORICAL_PRE_CI_FINAL_SOURCE_ATTESTATION" };
         if (!structurallyValid) return { valid: false, key: null, value: { normalized, payload, phase1: null }, disposition: "MALFORMED_INVALID" };
         const key = { repository: subject.repository, pr: subject.pr, branch: subject.branch, finalHead: subject.finalHead ?? null, finalTree: subject.finalTree ?? null, objective: subject.objective ?? null, originalCommentId: subject.originalCommentId ?? null };
-        if (stableJson(key) !== stableJson(requiredFinalKey)) return { valid: true, key, value: { normalized, payload, phase1: null }, disposition: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION" };
+        if (stableJson(key) !== stableJson(requiredFinalKey)) {
+          const historicalSemantics = normalizeReceiptEvidenceSemantics({ rawRepresentation: subject, schemaVersion: payload?.schemaVersion, authorityClassification: "HISTORICAL" });
+          return {
+            valid: true,
+            key,
+            value: { normalized, payload, phase1: null, ...historicalSemantics },
+            disposition: "HISTORICAL_STALE_FINAL_SOURCE_ATTESTATION",
+          };
+        }
         const claimedHistoricalIds = (subject.historicalAttestations ?? []).map(({ commentId }) => commentId);
         const claimedHistoricalRaws = claimedHistoricalIds.map((commentId) => finalMatches.find((candidate) => candidate.id === commentId));
         const claimedHistoricalReviewIds = (subject.historicalRepositoryReviews ?? []).map(({ commentId }) => commentId);
@@ -4566,6 +4604,11 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           && subject.admissionPublisherProvisioningReadback?.ruleset?.stage === "PRE_CUTOVER_13_RAW"
           && verifyProtectedPhase1PublisherProvisioningReadback(publisherProvisioningReadback)
           && stableJson(subject.admissionPublisherProvisioningReadback) === stableJson(publisherProvisioningReadback));
+        const semanticComparison = compareReceiptEvidenceSemantics({
+          left: subject,
+          right: expected,
+          leftSchemaVersion: payload?.schemaVersion,
+        });
         const currentValid = historyBinding
           && reviewSelection.ok
           && reviewSelection.review?.valid === true
@@ -4573,9 +4616,21 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           && phase1Current
           && publisherProvisioningCurrent
           && subject.receiptLifecycleContract === ASSURANCE_RECEIPT_LIFECYCLE_V2
-          && stableJson(subject) === stableJson(expected)
-          && normalized.body === architectureFinalSourceOwnerCommentBody(expected);
-        return { valid: currentValid, key, value: { normalized, payload, phase1 }, disposition: "INVALID_CURRENT_FINAL_SOURCE_ATTESTATION" };
+          && semanticComparison.equal;
+        return {
+          valid: currentValid,
+          key,
+          value: {
+            normalized,
+            payload,
+            phase1,
+            rawRepresentation: semanticComparison.left.rawRepresentation,
+            schemaVersion: semanticComparison.left.schemaVersion,
+            normalizedSemantics: semanticComparison.left.normalizedSemantics,
+            compatibilityDisposition: semanticComparison.compatibilityDisposition,
+          },
+          disposition: "INVALID_CURRENT_FINAL_SOURCE_ATTESTATION",
+        };
       },
     });
     const currentFinal = finalSelection.selected?.value ?? null;
@@ -4659,12 +4714,28 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       originalBodyHash: normalizedOriginal?.bodyHash ?? null,
       originalSubjectHash: originalPayload?.subjectHash ?? null,
       currentFinalSourceReceiptId: currentFinal?.normalized?.id ?? null,
+      currentFinalSourceSemanticAudit: currentFinal ? {
+        rawRepresentation: currentFinal.rawRepresentation,
+        schemaVersion: currentFinal.schemaVersion,
+        normalizedSemantics: currentFinal.normalizedSemantics,
+        compatibilityDisposition: currentFinal.compatibilityDisposition,
+      } : null,
       dependencyAmendment: dependencyAmendmentProjection(architectureDependencyAmendment),
       taskAuthorization: authorizationOk ? "VALID" : "INVALID",
       finalSourceAttestationRequiredAtThisStage: false,
       receiptLifecycleContract: ASSURANCE_RECEIPT_LIFECYCLE_V2,
       repositoryReviewClassifications: reviewSelection.classifications,
-      finalSourceAttestationClassifications: finalSelection.classifications.map((classification) => ({ commentId: finalMatches[classification.index]?.id ?? null, status: classification.disposition, valid: classification.valid, current: classification.current, key: classification.key })).sort((left, right) => (left.commentId ?? 0) - (right.commentId ?? 0)),
+      finalSourceAttestationClassifications: finalSelection.classifications.map((classification) => ({
+        commentId: finalMatches[classification.index]?.id ?? null,
+        status: classification.disposition,
+        valid: classification.valid,
+        current: classification.current,
+        key: classification.key,
+        rawRepresentation: classification.value?.rawRepresentation ?? null,
+        schemaVersion: classification.value?.schemaVersion ?? null,
+        normalizedSemantics: classification.value?.normalizedSemantics ?? null,
+        compatibilityDisposition: classification.value?.compatibilityDisposition ?? null,
+      })).sort((left, right) => (left.commentId ?? 0) - (right.commentId ?? 0)),
       checks: { ...authorizationChecks, ...attestationChecks },
       findings: authorizationOk ? [] : Object.entries(authorizationChecks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_INVALID:${key}`),
       mergeFindings: mergeEligible ? [] : Object.entries(attestationChecks).filter(([, value]) => !value).map(([key]) => `OWNER_ASSURANCE_ARCHITECTURE_MERGE_INELIGIBLE:${key}`),
@@ -6756,10 +6827,15 @@ export function observeFiniteTaskPostMergeTransition({
     findings.push("FINITE_TASK_POST_MERGE_NOT_ON_PROTECTED_MAIN");
   }
   const unique = [...new Set(findings)].sort();
+  const baseOnly = resolution?.status === "BASE_ONLY";
   const adapted = resolution?.status === "AMENDED_WITH_TEST_ADAPTATION";
   const terminalEvidence = unique.length === 0 ? {
     schemaVersion: adapted ? 2 : 1,
-    classification: adapted ? "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2" : "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
+    classification: adapted
+      ? "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"
+      : baseOnly
+        ? "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1"
+        : "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1",
     repository: identity.repository,
     taskId: lease.leaseId,
     leaseId: lease.leaseId,

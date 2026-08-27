@@ -1,5 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { RoomServiceClient } from "npm:livekit-server-sdk@2";
+import {
+  readExactCurrentSessionAuthority,
+  readExactPermissionKeys,
+  readExactPlatformRole,
+} from "./exact-subject-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -115,7 +120,7 @@ export async function authenticateLiveCostGuardAdmin(req: Request) {
   });
   const { data, error } = await authClient.auth.getUser();
   const userId = toLiveCostGuardText(data.user?.id);
-  if (error || !userId) {
+  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
     return { error: liveCostGuardJson(401, { error: "unauthenticated" }) };
   }
 
@@ -135,37 +140,11 @@ export async function userHasLiveCostGuardRole(
   adminClient: SupabaseClientLike,
   user: { email: string | null; id: string },
 ) {
-  const normalizedEmail = toLiveCostGuardText(user.email).toLowerCase();
-  const { data, error } = await adminClient
-    .from("platform_role_memberships")
-    .select("role")
-    .eq("status", "active")
-    .in("role", ["owner", "operator"])
-    .or(normalizedEmail ? `user_id.eq.${user.id},email.ilike.${normalizedEmail}` : `user_id.eq.${user.id}`)
-    .limit(1);
-
-  if (error || !Array.isArray(data) || data.length === 0) return false;
-  if (data.some((row: any) => row.role === "owner")) return true;
-  if (!data.some((row: any) => row.role === "operator")) return false;
-
-  let permissionQuery = adminClient
-    .from("platform_staff_permission_grants")
-    .select("id,expires_at")
-    .eq("status", "active")
-    .eq("permission_key", "live_ops");
-  if (normalizedEmail) {
-    permissionQuery = permissionQuery.or(`target_user_id.eq.${user.id},target_email.ilike.${normalizedEmail}`);
-  } else {
-    permissionQuery = permissionQuery.eq("target_user_id", user.id);
-  }
-
-  const permissionResult = await permissionQuery.limit(10);
-  if (permissionResult.error) return false;
-  const now = Date.now();
-  return ((permissionResult.data ?? []) as JsonObject[]).some((row) => {
-    const expiresAt = toLiveCostGuardText(row.expires_at);
-    return !expiresAt || Date.parse(expiresAt) > now;
-  });
+  const role = await readExactPlatformRole(adminClient, user.id, ["owner", "operator"]);
+  if (role === "owner") return true;
+  if (role !== "operator") return false;
+  return (await readExactPermissionKeys(adminClient, user.id, ["live_ops"]))
+    .has("live_ops");
 }
 
 const normalizeMode = (value: unknown): LiveCostGuardMode => {

@@ -98,44 +98,48 @@ values
   ('46666666-6666-4666-8666-666666666666', false, false, transaction_timestamp())
 on conflict (id) do nothing;
 
-create temporary table room_host_block_auth_fixture (
-  user_id uuid primary key,
-  session_generation uuid not null unique
-);
-insert into pg_temp.room_host_block_auth_fixture (user_id, session_generation)
-values
-  ('46111111-1111-4111-8111-111111111111', '56111111-1111-4111-8111-111111111111'),
-  ('46222222-2222-4222-8222-222222222222', '56222222-2222-4222-8222-222222222222'),
-  ('46333333-3333-4333-8333-333333333333', '56333333-3333-4333-8333-333333333333'),
-  ('46444444-4444-4444-8444-444444444444', '56444444-4444-4444-8444-444444444444'),
-  ('46555555-5555-4555-8555-555555555555', '56555555-5555-4555-8555-555555555555'),
-  ('46666666-6666-4666-8666-666666666666', '56666666-6666-4666-8666-666666666666');
-
 insert into auth.sessions (id, user_id)
-select session_generation, user_id
-from pg_temp.room_host_block_auth_fixture
+values
+  (
+    '46111111-1111-4111-8111-111111111101',
+    '46111111-1111-4111-8111-111111111111'
+  ),
+  (
+    '46222222-2222-4222-8222-222222222201',
+    '46222222-2222-4222-8222-222222222222'
+  ),
+  (
+    '46555555-5555-4555-8555-555555555501',
+    '46555555-5555-4555-8555-555555555555'
+  ),
+  (
+    '46666666-6666-4666-8666-666666666601',
+    '46666666-6666-4666-8666-666666666666'
+  )
 on conflict (id) do nothing;
 
-insert into public.wave1_legal_acceptances (
-  user_id, subject_hash, document_key, document_version, market,
-  role_key, capability, session_generation, authority_source
+-- Migration 001 requires every source-less Live Stage host to have the
+-- complete current server-authoritative creator eligibility projection. These
+-- rows establish only the two exact hosts exercised by this block-check test.
+insert into public.wave1_creator_eligibility (
+  creator_user_id, state, account_status, age_18_plus, legal_accepted,
+  creator_role, moderation_state, market, rollout_eligible,
+  platform_capability, provider_eligible, kyc_complete, tax_complete,
+  sanctions_clear, payout_eligible, authority_source, last_operation_key
 )
-select
-  fixture.user_id,
-  public.wave1_sha256(fixture.user_id::text),
-  document.document_key,
-  document.version,
-  document.market,
-  'member',
-  document.capability,
-  fixture.session_generation::text,
-  'service_reconciliation'
-from pg_temp.room_host_block_auth_fixture fixture
-cross join public.wave1_legal_document_versions document
-where document.active
-  and document.market = 'UNITED_STATES'
-  and document.capability = 'account'
-on conflict do nothing;
+values
+  (
+    '46111111-1111-4111-8111-111111111111',
+    'VERIFIED', 'ACTIVE', true, true, true, 'CLEAR', 'UNITED_STATES',
+    true, true, true, true, true, true, true,
+    'room-host-block-check-test', 'room-host-block-check-host-a'
+  ),
+  (
+    '46333333-3333-4333-8333-333333333333',
+    'VERIFIED', 'ACTIVE', true, true, true, 'CLEAR', 'UNITED_STATES',
+    true, true, true, true, true, true, true,
+    'room-host-block-check-test', 'room-host-block-check-host-b'
+  );
 
 insert into public.watch_party_rooms (
   party_id,
@@ -299,10 +303,13 @@ select is(
   '10. an unblocked authenticated self-check returns false'
 );
 
-insert into public.watch_party_room_memberships (party_id, user_id)
-values (
-  'ROOM-HOST-BLOCK-CHECK',
-  '46222222-2222-4222-8222-222222222222'
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"46222222-2222-4222-8222-222222222201"}',
+  true
+);
+select public.join_watch_party_room_session(
+  'ROOM-HOST-BLOCK-CHECK', null, null, null, false, false, false
 );
 reset role;
 
@@ -649,16 +656,14 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555","session_id":"56555555-5555-4555-8555-555555555555"}',
+  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555","session_id":"46555555-5555-4555-8555-555555555501"}',
   true
 );
 select lives_ok(
-  $$insert into public.watch_party_room_memberships (party_id, user_id)
-    values (
-      'ROOM-HOST-BLOCK-CHECK',
-      '46555555-5555-4555-8555-555555555555'
+  $$select public.join_watch_party_room_session(
+      'ROOM-HOST-BLOCK-CHECK', null, null, null, false, false, false
     )$$,
-  '30. an unblocked participant membership insert succeeds'
+  '30. an unblocked participant joins through the canonical membership RPC'
 );
 
 select set_config(
@@ -668,17 +673,15 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46666666-6666-4666-8666-666666666666","session_id":"56666666-6666-4666-8666-666666666666"}',
+  '{"role":"authenticated","sub":"46666666-6666-4666-8666-666666666666","session_id":"46666666-6666-4666-8666-666666666601"}',
   true
 );
 select throws_ok(
-  $$insert into public.watch_party_room_memberships (party_id, user_id)
-    values (
-      'ROOM-HOST-BLOCK-CHECK',
-      '46666666-6666-4666-8666-666666666666'
+  $$select public.join_watch_party_room_session(
+      'ROOM-HOST-BLOCK-CHECK', null, null, null, false, false, false
     )$$,
   'P0001',
-  'room_membership_access_required',
+  'blocked_from_room',
   '31. a blocked participant membership insert is denied'
 );
 
@@ -689,17 +692,17 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"46222222-2222-4222-8222-222222222201"}',
   true
 );
 select throws_ok(
-  $$update public.watch_party_room_memberships
-    set membership_state = 'reconnecting'
-    where party_id = 'ROOM-HOST-BLOCK-CHECK'
-      and user_id = '46222222-2222-4222-8222-222222222222'$$,
+  $$select public.heartbeat_watch_party_room_session(
+      'ROOM-HOST-BLOCK-CHECK', 'reconnecting', false, false,
+      false, null, null, null
+    )$$,
   'P0001',
-  'room_membership_access_required',
-  '32. a blocked participant reconnect update is denied without leaking block state'
+  'watch_party_room_unavailable',
+  '32. a blocked participant canonical reconnect is denied'
 );
 
 select set_config(
@@ -709,7 +712,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555","session_id":"56555555-5555-4555-8555-555555555555"}',
+  '{"role":"authenticated","sub":"46555555-5555-4555-8555-555555555555","session_id":"46555555-5555-4555-8555-555555555501"}',
   true
 );
 select lives_ok(
@@ -734,7 +737,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"56222222-2222-4222-8222-222222222222"}',
+  '{"role":"authenticated","sub":"46222222-2222-4222-8222-222222222222","session_id":"46222222-2222-4222-8222-222222222201"}',
   true
 );
 select throws_ok(
@@ -778,22 +781,14 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"46111111-1111-4111-8111-111111111101"}',
   true
 );
 select lives_ok(
-  $$insert into public.watch_party_room_memberships (
-      party_id,
-      user_id,
-      role,
-      stage_role
-    ) values (
-      'ROOM-HOST-BLOCK-CHECK',
-      '46111111-1111-4111-8111-111111111111',
-      'host',
-      'host'
+  $$select public.join_watch_party_room_session(
+      'ROOM-HOST-BLOCK-CHECK', null, null, null, true, true, false
     )$$,
-  '36. exact-room host membership behavior remains valid'
+  '36. exact-room host joins through the canonical membership RPC'
 );
 reset role;
 
@@ -806,7 +801,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"56111111-1111-4111-8111-111111111111"}',
+  '{"role":"authenticated","sub":"46111111-1111-4111-8111-111111111111","session_id":"46111111-1111-4111-8111-111111111101"}',
   true
 );
 select throws_ok(
@@ -816,8 +811,8 @@ select throws_ok(
       '46444444-4444-4444-8444-444444444444'
   )$$,
   '42501',
-  'new row violates row-level security policy for table "watch_party_room_memberships"',
-  '37. a host-authorized function check cannot bypass cross-user membership RLS'
+  'permission denied for table watch_party_room_memberships',
+  '37. host authority cannot bypass RPC-only cross-user membership creation'
 );
 reset role;
 
@@ -832,16 +827,20 @@ select ok(
 reset role;
 
 select ok(
-  (
-    select pg_get_expr(policy.polwithcheck, policy.polrelid) like
-      '%watch_party_room_current_user_access_allowed%'
-    from pg_policy policy
-    where policy.polrelid = 'public.watch_party_room_memberships'::regclass
-      and policy.polname = 'watch_party_room_memberships_self_insert_policy'
-  ) and pg_get_functiondef(
-    'public.watch_party_room_current_user_access_allowed(text)'::regprocedure
+  has_function_privilege(
+    'authenticated',
+    'public.join_watch_party_room_session(text,text,text,text,boolean,boolean,boolean)',
+    'EXECUTE'
+  )
+  and not has_table_privilege(
+    'authenticated',
+    'public.watch_party_room_memberships',
+    'INSERT'
+  )
+  and pg_get_functiondef(
+    'public.join_watch_party_room_session(text,text,text,text,boolean,boolean,boolean)'::regprocedure
   ) like '%watch_party_room_self_access_allowed_internal%',
-  '39. exact Premium, paid-room, and content-access checks remain centralized'
+  '39. Premium/content access is enforced inside the RPC-only membership boundary'
 );
 
 select ok(

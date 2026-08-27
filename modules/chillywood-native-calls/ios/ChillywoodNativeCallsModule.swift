@@ -20,8 +20,14 @@ public final class ChillywoodNativeCallsModule: Module {
       ChillywoodNativeCallCoordinator.shared.isBuildEnabled
     }
 
-    AsyncFunction("startVoipRegistrationAsync") { () -> Bool in
-      try ChillywoodNativeCallCoordinator.shared.startVoipRegistration()
+    AsyncFunction("startVoipRegistrationAsync") {
+      (userId: String, accountId: String, sessionGeneration: String, installId: String) -> Bool in
+      try ChillywoodNativeCallCoordinator.shared.startVoipRegistration(
+        userId: userId,
+        accountId: accountId,
+        sessionGeneration: sessionGeneration,
+        installId: installId
+      )
       return true
     }
 

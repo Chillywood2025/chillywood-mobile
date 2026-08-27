@@ -21,7 +21,6 @@ import { getWritablePartyUserId } from "../../_lib/watchParty";
 import {
     ActivityIndicator,
     FlatList,
-    Image,
     ImageBackground,
     type ImageSourcePropType,
     Pressable,
@@ -63,6 +62,7 @@ import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
 import { StableImage } from "../../components/ui/StableImage";
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import { AppText } from "../../components/ui/typography";
 import { setMainTabHeaderProfileSnapshot } from "../../components/navigation/main-tab-profile-cache";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
@@ -646,8 +646,6 @@ export default function HomeScreen() {
 
   function renderFeedItemCard(item: DiscoveryFeedItem) {
     const title = String(item.title ?? "").trim() || "Public activity";
-    const subtitle = String(item.subtitle ?? "").trim();
-    const ownerId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
     const accessLabel = getDiscoveryAccessLabel(item);
     const liveLabel = getDiscoveryLiveLabel(item);
     const isCircleSpectatorItem = item.visibility === "circle" || item.visibility === "chilly_circle" || item.access_type === "circle";
@@ -655,14 +653,13 @@ export default function HomeScreen() {
       ? scoreCircleSpectatorFeedItem(item, circleSpectatorSignals).reason
       : scoreDiscoveryFeedItem(item, homeDiscoverySignals).reason;
     const rankingLabel = getDiscoveryRankingReasonLabel(rankingReason);
-    const scheduleLabel = formatFeedDate(item.starts_at ?? item.published_at ?? item.created_at);
 
     return (
       <TouchableOpacity
         key={`feed-item-${item.id}`}
         testID={`home-discovery-card-${rankingReason}-${item.id}`}
         style={styles.feedActivityCard}
-        activeOpacity={0.88}
+        activeOpacity={0.9}
         onPress={() => openDiscoveryFeedItem(item)}
         accessibilityRole="button"
         accessibilityLabel={`Open ${title}`}
@@ -676,36 +673,13 @@ export default function HomeScreen() {
             resizeMode="cover"
           />
           <View style={styles.feedActivityScrim} />
-          <View style={styles.feedActivityBadgeRow}>
-            <AppText scale="caption" style={[styles.feedActivityBadge, item.live_state === "live" ? styles.feedActivityLiveBadge : null]}>
-              {liveLabel}
-            </AppText>
-            <AppText scale="caption" style={styles.feedActivityBadge}>{accessLabel}</AppText>
-            <AppText scale="caption" style={styles.feedActivityBadge}>{rankingLabel}</AppText>
+          <View style={styles.feedCompactBadgeRow}>
+            <AppText scale="caption" style={[styles.feedCompactBadge, item.live_state === "live" ? styles.feedActivityLiveBadge : null]}>{liveLabel}</AppText>
+            <AppText scale="caption" style={styles.feedCompactBadge}>{accessLabel}</AppText>
           </View>
-        </View>
-        <View style={styles.feedActivityCopy}>
-          <AppText scale="subhead" style={styles.feedActivityTitle} numberOfLines={2}>{title}</AppText>
-          {subtitle ? <AppText scale="footnote" style={styles.feedActivitySubtitle} numberOfLines={2}>{subtitle}</AppText> : null}
-          <AppText scale="caption" style={styles.feedActivityMeta} numberOfLines={1}>{scheduleLabel}</AppText>
-          <View style={styles.feedActivityActionRow}>
-            <AppText scale="footnote" style={styles.feedActivityActionText}>
-              {item.item_type === "creator_upload" ? "Open" : "View Details"}
-            </AppText>
-            {ownerId ? (
-              <TouchableOpacity
-                style={styles.feedActivityGhostButton}
-                activeOpacity={0.82}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  openChannel(ownerId);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${title} Platform`}
-              >
-                <AppText scale="caption" style={styles.feedActivityGhostText}>Platform</AppText>
-              </TouchableOpacity>
-            ) : null}
+          <View style={styles.feedCompactCopy}>
+            <AppText scale="subhead" style={styles.feedCompactTitle} numberOfLines={2}>{title}</AppText>
+            <AppText scale="caption" style={styles.feedCompactMeta} numberOfLines={1}>{rankingLabel}</AppText>
           </View>
         </View>
       </TouchableOpacity>
@@ -717,23 +691,19 @@ export default function HomeScreen() {
       <TouchableOpacity
         key={`event-${event.id}`}
         style={styles.feedEventCard}
-        activeOpacity={0.88}
+        activeOpacity={0.9}
         onPress={() => openChannel(event.hostUserId)}
         accessibilityRole="button"
         accessibilityLabel={`Open ${event.eventTitle}`}
       >
         <View style={styles.feedEventBadgeRow}>
-          <AppText scale="caption" style={[styles.feedEventBadge, event.isLiveNow ? styles.feedActivityLiveBadge : null]}>
-            {event.isLiveNow ? "Live" : "Upcoming"}
-          </AppText>
+          <AppText scale="caption" style={[styles.feedEventBadge, event.isLiveNow ? styles.feedActivityLiveBadge : null]}>{event.isLiveNow ? "Live" : "Upcoming"}</AppText>
           <AppText scale="caption" style={styles.feedEventBadge}>{formatCreatorEventMode(event)}</AppText>
-          <AppText scale="caption" style={styles.feedEventBadge}>Public</AppText>
         </View>
-        <AppText scale="subhead" style={styles.feedEventTitle} numberOfLines={2}>{event.eventTitle}</AppText>
-        <AppText scale="footnote" style={styles.feedEventMeta}>{formatFeedDate(event.startsAt)}</AppText>
-        <AppText scale="footnote" style={styles.feedEventCopy} numberOfLines={2}>
-          Public event metadata only. Full room entry remains gated by the room route.
-        </AppText>
+        <View style={styles.feedEventCompactCopy}>
+          <AppText scale="subhead" style={styles.feedEventTitle} numberOfLines={3}>{event.eventTitle}</AppText>
+          <AppText scale="caption" style={styles.feedEventMeta} numberOfLines={1}>{formatFeedDate(event.startsAt)}</AppText>
+        </View>
       </TouchableOpacity>
     );
   }
@@ -1353,8 +1323,8 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   followingVideoCardWrap: {
-    width: 284,
-    marginRight: 12,
+    width: 150,
+    marginRight: 8,
   },
   followingEmptyCard: {
     borderRadius: 20,
@@ -1472,8 +1442,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   feedActivityCard: {
-    width: 282,
-    borderRadius: 20,
+    width: 150,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(10,12,18,0.76)",
@@ -1485,7 +1455,7 @@ const styles = StyleSheet.create({
   },
   feedActivityThumb: {
     width: "100%",
-    aspectRatio: 16 / 9,
+    aspectRatio: 9 / 16,
     backgroundColor: "#151A25",
   },
   feedActivityImage: {
@@ -1530,10 +1500,55 @@ const styles = StyleSheet.create({
     backgroundColor: "#E50914",
     color: "#fff",
   },
+  feedCompactBadgeRow: {
+    position: "absolute",
+    top: 7,
+    left: 7,
+    right: 7,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  feedCompactBadge: {
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "rgba(5,7,12,0.72)",
+    color: "#F4F7FC",
+    fontSize: 9,
+    fontWeight: "900",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  feedCompactCopy: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 9,
+    paddingTop: 26,
+    paddingBottom: 9,
+    gap: 2,
+    backgroundColor: "rgba(4,6,10,0.72)",
+  },
+  feedCompactTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  feedCompactMeta: {
+    color: "#C3CDDE",
+    fontSize: 9.5,
+    fontWeight: "700",
+  },
+  feedEventCompactCopy: {
+    marginTop: "auto",
+    gap: 6,
+  },
   feedActivityCopy: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 9,
+    gap: 4,
   },
   feedActivityTitle: {
     color: "#F7FAFF",
@@ -1580,7 +1595,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   feedEventCard: {
-    width: 282,
+    width: 150,
+    aspectRatio: 9 / 16,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(126,215,255,0.18)",

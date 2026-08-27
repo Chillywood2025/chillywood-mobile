@@ -40,11 +40,17 @@ yarn-error.*
 .DS_Store
 
 # local env files
+.env
+.env.*
+!.env.example
+!.env.*.example
 .env*.local
 app-store-connect.env
 app-store-connect.*.env
 !app-store-connect.example.env
 !app-store-connect.env.example
+*service-account*.json
+firebase-adminsdk-*.json
 
 # local proof and generated artifacts
 /artifacts/

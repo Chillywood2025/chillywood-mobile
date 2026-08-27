@@ -54,7 +54,12 @@ const creatorVideoRow = {
   updated_at: "2026-08-24T00:00:00.000Z",
 };
 
-const loadCreatorVideoRuntime = (paidContentAccess) => {
+const loadCreatorVideoRuntime = (paidContentAccess, vipAccess = {
+  allowed: true,
+  reason: "not_vip",
+  vipRequired: false,
+  creatorId: CREATOR_ID,
+}) => {
   let fullVideoRowReads = 0;
   let signedResolutionReads = 0;
   let legacySignedReads = 0;
@@ -120,6 +125,9 @@ const loadCreatorVideoRuntime = (paidContentAccess) => {
     },
     "./creatorMonetization": {
       resolveCreatorContentAccess: async () => paidContentAccess,
+    },
+    "./creatorVipPasses": {
+      resolveCreatorVipVideoAccess: async () => vipAccess,
     },
     "./vodQuality": {
       createUnavailableVodPlaybackResolution: (videoId, reason) => ({ videoId, reason, renditionStatuses: [] }),

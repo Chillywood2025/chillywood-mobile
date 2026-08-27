@@ -1,9 +1,28 @@
 begin;
 select no_plan();
 
+create function pg_temp.set_service_role_test_context()
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claim.sub','',true);
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  if auth.uid() is not null or auth.jwt() ? 'session_id' then
+    raise exception 'service_role_fixture_retained_user_session';
+  end if;
+  return current_setting('request.jwt.claims',true);
+end;
+$$;
+
 -- MODEL_ROUTER_FIXTURE_BEGIN
 insert into auth.users(id, is_sso_user, is_anonymous, email_confirmed_at)
 values ('d2000000-0000-4000-8000-000000000001', false, false, now());
+
+insert into auth.sessions(id, user_id)
+values (
+  'd2100000-0000-4000-8000-000000000001',
+  'd2000000-0000-4000-8000-000000000001'
+);
 
 insert into public.platform_role_memberships(user_id, email, role, status)
 values (
@@ -210,7 +229,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"d2000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"d2000000-0000-4000-8000-000000000001","session_id":"d2100000-0000-4000-8000-000000000001"}',
   true
 );
 select public.governance_register_two_party_service_principal(
@@ -276,7 +295,7 @@ from (
 reset role;
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 update model_owner_chain_fixture
 set execution_id = (
   public.governance_claim_approved_action(
@@ -454,7 +473,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"d2000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"d2000000-0000-4000-8000-000000000001","session_id":"d2100000-0000-4000-8000-000000000001"}',
   true
 );
 
@@ -512,7 +531,7 @@ returns jsonb
 language plpgsql
 as $$
 begin
-  perform set_config('request.jwt.claim.role','service_role',true);
+  perform pg_temp.set_service_role_test_context();
   insert into public.cognitive_level01_credential_attestations(
     id,task_id,project_id,platform,environment,credential_kind,state,
     public_fingerprint_hash,scope_manifest_hash,private_material_stored,
@@ -549,7 +568,7 @@ select throws_ok(
   'superseding accepted credential fingerprint blocks an old capability'
 );
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 
 select throws_ok(
   $$select public.cognitive_model_router_reserve(
@@ -832,7 +851,7 @@ select throws_ok(
   'provider overrun replay is denied'
 );
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_model_router_settle(
     (select preflight_id from model_router_fixture),
@@ -1073,7 +1092,7 @@ insert into public.cognitive_budget_events(
 );
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select is(
   public.cognitive_model_router_sweep_expired(
     10,repeat('3',64),'model-router-service-token-test-only-0001'
@@ -1167,7 +1186,7 @@ where task_id = 'd3000000-0000-4000-8000-000000000001'
   and switch_key = 'cognitive_research_enabled';
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_model_router_reserve(
     (select capability_id from model_router_fixture),
@@ -1203,7 +1222,7 @@ set issued_at = transaction_timestamp() - interval '2 seconds',
 where id = (select capability_id from model_router_fixture);
 
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_model_router_reserve(
     (select capability_id from model_router_fixture),
@@ -1239,7 +1258,7 @@ select set_config(
 );
 select set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","sub":"d2000000-0000-4000-8000-000000000001"}',
+  '{"role":"authenticated","sub":"d2000000-0000-4000-8000-000000000001","session_id":"d2100000-0000-4000-8000-000000000001"}',
   true
 );
 select is(
@@ -1253,7 +1272,7 @@ select is(
 
 reset role;
 set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_service_role_test_context();
 select throws_ok(
   $$select public.cognitive_model_router_reserve(
     (select capability_id from model_router_fixture),

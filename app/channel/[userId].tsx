@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
   Share,
   StyleSheet,
@@ -69,8 +68,10 @@ import { ReportSheet } from "../../components/safety/report-sheet";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monetization/MoneyScopeInfoButton";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
+import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
+import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 
 type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked";
 
@@ -323,10 +324,12 @@ export default function PublicChannelScreen() {
     ?? videos[0]
     ?? null
   ), [spotlightVideoId, videos]);
+  const vipVideos = useMemo(() => videos.filter((video) => video.vipAccessRequired), [videos]);
   const latestUploadVideos = useMemo(() => {
-    if (!featuredVideo) return videos;
-    const withoutFeatured = videos.filter((video) => video.id !== featuredVideo.id);
-    return withoutFeatured.length ? withoutFeatured : videos;
+    const standardVideos = videos.filter((video) => !video.vipAccessRequired);
+    if (!featuredVideo || featuredVideo.vipAccessRequired) return standardVideos;
+    const withoutFeatured = standardVideos.filter((video) => video.id !== featuredVideo.id);
+    return withoutFeatured.length ? withoutFeatured : standardVideos;
   }, [featuredVideo, videos]);
   const platformVideoVisibilityLabel = (video: CreatorVideo) => (
     video.visibility === "public" ? "Public" : video.visibility === "circle" ? "Chi'lly Circle" : "Draft"
@@ -979,102 +982,45 @@ export default function PublicChannelScreen() {
   );
 
   const renderFeaturedVideoCard = (video: CreatorVideo) => (
-    <TouchableOpacity
-      key={video.id}
-      style={styles.featuredSpotlightCard}
-      activeOpacity={0.92}
-      onPress={() => openPlayer(video)}
-      onLongPress={showOwnerControls ? () => setSelectedVideoAction(video) : undefined}
-      testID="platform-content-card"
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${video.title}`}
-    >
-      <View style={styles.featuredSpotlightMedia}>
-        {video.thumbnailUrl ? (
-          <Image source={{ uri: video.thumbnailUrl }} resizeMode="cover" style={styles.videoThumbImage} />
-        ) : (
-          <View style={styles.featuredSpotlightFallback}>
-            <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
-          </View>
-        )}
-        <View style={styles.mediaScrim} />
-        {renderOwnerVideoActionButton(video)}
-        {renderPublicClipTemplateBadge(video)}
-        {renderPublicClipMetadataOverlay(video, "featured") ?? (
-          <View style={styles.featuredMediaFooter}>
-            <Text style={styles.cardKicker}>Latest from this Platform</Text>
-            <Text style={styles.featuredCardTitle} numberOfLines={2}>{getPublicClipCardTitle(video)}</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.featuredSpotlightCopy}>
-        {getPublicClipCardSubtitle(video) ? (
-          <Text style={styles.cardBody} numberOfLines={3}>{getPublicClipCardSubtitle(video)}</Text>
-        ) : null}
-        <View style={styles.metaRow}>
-          {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
-          <Text style={styles.publicChip}>{platformVideoVisibilityLabel(video)}</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.playButton}
-          activeOpacity={0.86}
-          onPress={() => openPlayer(video)}
-          testID="platform-content-open-button"
-        >
-          <Text style={styles.playButtonText}>Play</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+    <View key={video.id} style={styles.platformContentTile} testID="platform-content-card">
+      <CreatorVideoCard
+        video={video}
+        mode={showOwnerControls ? "owner" : "public"}
+        accessLabel={video.vipAccessRequired ? (vipAccess?.allowed ? "VIP" : "VIP · Locked") : undefined}
+        testID="platform-content-open-button"
+        featured
+        onOpen={() => openPlayer(video)}
+        onShare={() => { void shareSelectedVideo(video); }}
+        onOpenActions={showOwnerControls ? () => setSelectedVideoAction(video) : undefined}
+      />
+    </View>
   );
 
   const renderLatestUploadCard = (video: CreatorVideo) => (
-    <TouchableOpacity
-      key={video.id}
-      style={styles.shelfCard}
-      activeOpacity={0.92}
-      onPress={() => openPlayer(video)}
-      onLongPress={showOwnerControls ? () => setSelectedVideoAction(video) : undefined}
-      testID="platform-content-card"
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${video.title}`}
-    >
-      <View style={styles.shelfThumb}>
-        {video.thumbnailUrl ? (
-          <Image source={{ uri: video.thumbnailUrl }} resizeMode="cover" style={styles.videoThumbImage} />
-        ) : (
-          <View style={styles.videoThumbFallback}>
-            <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
-          </View>
-        )}
-        {renderOwnerVideoActionButton(video)}
-        {renderPublicClipTemplateBadge(video)}
-        {renderPublicClipMetadataOverlay(video, "shelf")}
-      </View>
-      <View style={styles.shelfCopy}>
-        <Text style={styles.shelfTitle} numberOfLines={2}>{getPublicClipCardTitle(video)}</Text>
-        {getPublicClipCardSubtitle(video) ? (
-          <Text style={styles.shelfBody} numberOfLines={2}>{getPublicClipCardSubtitle(video)}</Text>
-        ) : null}
-        <View style={styles.metaRow}>
-          {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
-          <Text style={styles.publicChip}>{platformVideoVisibilityLabel(video)}</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.shelfPlayButton}
-          activeOpacity={0.86}
-          onPress={() => openPlayer(video)}
-          testID="platform-content-open-button"
-        >
-          <Text style={styles.playButtonText}>Play</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+    <View key={video.id} style={styles.platformContentTile} testID="platform-content-card">
+      <CreatorVideoCard
+        video={video}
+        mode={showOwnerControls ? "owner" : "public"}
+        accessLabel={video.vipAccessRequired ? (vipAccess?.allowed ? "VIP" : "VIP · Locked") : undefined}
+        testID="platform-content-open-button"
+        onOpen={() => openPlayer(video)}
+        onShare={() => { void shareSelectedVideo(video); }}
+        onOpenActions={showOwnerControls ? () => setSelectedVideoAction(video) : undefined}
+      />
+    </View>
   );
 
   const renderFeatured = () => (
     <AppSection title="Featured" statusLabel={featuredVideo ? platformVideoVisibilityLabel(featuredVideo) : "Empty"} statusTone={featuredVideo ? "success" : "muted"}>
       {featuredVideo ? (
-        renderFeaturedVideoCard(featuredVideo)
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.shelfScroll}
+          contentContainerStyle={styles.shelfRow}
+        >
+          {renderFeaturedVideoCard(featuredVideo)}
+        </ScrollView>
       ) : (
         <AppEmptyState
           actionLabel={showOwnerControls ? "Open Platform Studio" : undefined}
@@ -1112,6 +1058,16 @@ export default function PublicChannelScreen() {
         <Text style={styles.metaText}>Reminder ready</Text>
       ) : null}
     </View>
+  );
+
+  const renderVipVideos = () => (
+    vipVideos.length ? (
+      <AppSection title="VIP" statusLabel={vipAccess?.allowed ? "Unlocked" : "VIP"} statusTone={vipAccess?.allowed ? "success" : "warning"}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.shelfScroll} contentContainerStyle={styles.shelfRow}>
+          {vipVideos.map((video) => renderLatestUploadCard(video))}
+        </ScrollView>
+      </AppSection>
+    ) : null
   );
 
   const renderLiveNow = () => (
@@ -1771,6 +1727,7 @@ export default function PublicChannelScreen() {
         {renderChannelPulse()}
         {renderFeatured()}
         {renderLatestUploads()}
+        {renderVipVideos()}
         {renderLiveNow()}
         {renderUpcomingEvents()}
         {renderPlatformMonetization()}
@@ -2419,7 +2376,10 @@ const styles = StyleSheet.create({
   },
   shelfRow: {
     paddingHorizontal: 18,
-    gap: 12,
+    gap: 9,
+  },
+  platformContentTile: {
+    width: 150,
   },
   shelfCard: {
     width: 248,

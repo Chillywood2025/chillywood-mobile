@@ -84,7 +84,7 @@ export type MediaPlaybackDeliveryResolution = MediaDeliveryEligibility & {
 
 type MediaDeliveryConfigInput = Partial<MediaDeliveryConfig>;
 
-const PUBLIC_SCAN_STATUSES = new Set(["clean", "manual_review"]);
+const PUBLIC_SCAN_STATUSES = new Set(["clean"]);
 const MODERATION_BLOCKED_STATUSES = new Set([
   "pending_review",
   "hidden",

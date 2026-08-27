@@ -1,6 +1,7 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
+import { resolveMediaUploadSizeBytes } from "./mediaUploadSize";
 import { SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 
 export type MediaStorageProvider = "supabase" | "s3" | "cloudflare_r2";
@@ -12,9 +13,26 @@ export type MediaStorageObject = {
   objectKey: string;
 };
 
+export type UploadedMediaStorageObject = MediaStorageObject & {
+  sizeBytes: number;
+};
+
 type SignedUploadResponse = MediaStorageObject & {
   uploadUrl: string;
+  uploadHeaders: {
+    "Content-Length": string;
+    "Content-Type": string;
+    "If-None-Match": "*";
+  };
   expiresAt: string;
+  reservationExpiresAt: string;
+};
+
+type VerifiedUploadResponse = MediaStorageObject & {
+  verified: true;
+  observedMimeType: string;
+  observedSizeBytes: number;
+  verifiedAt: string;
 };
 
 type SignedDownloadResponse = {
@@ -72,6 +90,11 @@ export const normalizeMediaStorageProvider = (value: unknown): MediaStorageProvi
   if (normalized === "s3" || normalized === "hetzner_s3") return "s3";
   if (normalized === "cloudflare_r2" || normalized === "r2") return "cloudflare_r2";
   return "supabase";
+};
+
+export const usesPrivateOriginMediaGateway = (value: unknown) => {
+  const provider = normalizeMediaStorageProvider(value);
+  return provider === "s3" || provider === "cloudflare_r2";
 };
 
 export const getMediaStorageProviderBucket = (input: {
@@ -173,8 +196,27 @@ export async function createSignedMediaUpload(input: {
   const objectKey = toText(payload.objectKey);
   const uploadUrl = toText(payload.uploadUrl);
   const expiresAt = toText(payload.expiresAt);
+  const reservationExpiresAt = toText(payload.reservationExpiresAt);
+  const rawUploadHeaders = payload.uploadHeaders as Record<string, unknown> | undefined;
+  const contentLength = toText(rawUploadHeaders?.["Content-Length"]);
+  const contentType = toText(rawUploadHeaders?.["Content-Type"]).toLowerCase();
+  const ifNoneMatch = toText(rawUploadHeaders?.["If-None-Match"]);
+  const expectedContentType = toText(input.mimeType).toLowerCase().split(";", 1)[0]?.trim();
+  const expectedContentLength = Number(input.sizeBytes);
 
-  if ((provider !== "s3" && provider !== "cloudflare_r2") || !bucket || !objectKey || !uploadUrl) {
+  if (
+    (provider !== "s3" && provider !== "cloudflare_r2")
+    || !bucket
+    || objectKey !== input.objectKey
+    || !uploadUrl
+    || !expiresAt
+    || !reservationExpiresAt
+    || !Number.isSafeInteger(expectedContentLength)
+    || expectedContentLength <= 0
+    || contentLength !== String(expectedContentLength)
+    || contentType !== expectedContentType
+    || ifNoneMatch !== "*"
+  ) {
     throw new Error("Media upload is not available right now.");
   }
 
@@ -183,7 +225,51 @@ export async function createSignedMediaUpload(input: {
     bucket,
     objectKey,
     uploadUrl,
+    uploadHeaders: {
+      "Content-Length": contentLength,
+      "Content-Type": contentType,
+      "If-None-Match": "*",
+    },
     expiresAt,
+    reservationExpiresAt,
+  };
+}
+
+async function verifySignedMediaUpload(input: MediaStorageObject & {
+  surfaceType: MediaStorageSurfaceType;
+}): Promise<VerifiedUploadResponse> {
+  const payload = await callMediaStorageFunction<VerifiedUploadResponse>({
+    action: "verify_upload",
+    surfaceType: input.surfaceType,
+    bucket: input.bucket,
+    objectKey: input.objectKey,
+  });
+  const provider = normalizeMediaStorageProvider(payload.provider);
+  const bucket = toText(payload.bucket);
+  const objectKey = toText(payload.objectKey);
+  const observedMimeType = toText(payload.observedMimeType).toLowerCase();
+  const observedSizeBytes = Number(payload.observedSizeBytes);
+  const verifiedAt = toText(payload.verifiedAt);
+  if (
+    payload.verified !== true
+    || provider !== input.provider
+    || bucket !== input.bucket
+    || objectKey !== input.objectKey
+    || !observedMimeType
+    || !Number.isSafeInteger(observedSizeBytes)
+    || observedSizeBytes <= 0
+    || !verifiedAt
+  ) {
+    throw new Error("Media upload could not be verified by storage.");
+  }
+  return {
+    verified: true,
+    provider,
+    bucket,
+    objectKey,
+    observedMimeType,
+    observedSizeBytes,
+    verifiedAt,
   };
 }
 
@@ -255,24 +341,6 @@ const assertUploadResponseOk = async (response: Response, attemptIndex = SLOW_DO
   throw new Error(toText(body) || "Unable to upload this media file.");
 };
 
-async function uploadFileToSignedUrl(input: {
-  uploadUrl: string;
-  uri: string;
-  mimeType: string;
-  fileName?: string | null;
-  sizeBytes?: number | null;
-}) {
-  const preparedUpload = await prepareUploadUri(input);
-  try {
-    await uploadPreparedFileToSignedUrl({
-      ...input,
-      uri: preparedUpload.uri,
-    });
-  } finally {
-    await preparedUpload.cleanup();
-  }
-}
-
 async function prepareUploadUri(input: {
   uri: string;
   mimeType: string;
@@ -300,6 +368,7 @@ async function prepareUploadUri(input: {
 
 async function uploadPreparedFileToSignedUrl(input: {
   uploadUrl: string;
+  uploadHeaders: SignedUploadResponse["uploadHeaders"];
   uri: string;
   mimeType: string;
   fileName?: string | null;
@@ -313,9 +382,7 @@ async function uploadPreparedFileToSignedUrl(input: {
         FileSystem.uploadAsync(input.uploadUrl, input.uri, {
           httpMethod: "PUT",
           uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-          headers: {
-            "Content-Type": input.mimeType,
-          },
+          headers: input.uploadHeaders,
         }),
         uploadTimeoutMs,
         "Media upload took too long. Try again.",
@@ -339,11 +406,9 @@ async function uploadPreparedFileToSignedUrl(input: {
           input.uploadUrl,
           {
             method: "PUT",
-            headers: {
-              "Content-Type": input.mimeType,
+            headers: input.uploadHeaders,
+            body: localFile as unknown as Blob,
           },
-          body: localFile as unknown as Blob,
-        },
           uploadTimeoutMs,
           "Media upload took too long. Try again.",
         );
@@ -366,9 +431,7 @@ async function uploadPreparedFileToSignedUrl(input: {
         input.uploadUrl,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": input.mimeType,
-          },
+          headers: input.uploadHeaders,
           body: {
             uri: input.uri,
             name: toText(input.fileName) || "media-upload.bin",
@@ -387,36 +450,6 @@ async function uploadPreparedFileToSignedUrl(input: {
   }
 }
 
-const objectHasReadableBytes = async (signedUrl: string, expectedSize?: number | null) => {
-  if (!signedUrl) return true;
-  const parsed = Number(expectedSize);
-  if (!Number.isFinite(parsed) || parsed <= 0) return true;
-
-  for (let attemptIndex = 0; attemptIndex <= SLOW_DOWN_RETRY_DELAYS_MS.length; attemptIndex += 1) {
-    try {
-      const rangeProbe = await fetchWithTimeout(
-        signedUrl,
-        { headers: { Range: "bytes=0-0" } },
-        MEDIA_STORAGE_REQUEST_TIMEOUT_MS,
-        "Media upload verification took too long. Try again.",
-      );
-      if (rangeProbe.status === 416) return false;
-      if (rangeProbe.ok) {
-        const body = await rangeProbe.arrayBuffer();
-        return body.byteLength > 0;
-      }
-
-      const responseBody = await rangeProbe.text().catch(() => "");
-      if (await waitForSlowDownRetry(attemptIndex, rangeProbe.status, responseBody)) continue;
-      return false;
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-};
-
 export async function uploadFileToMediaStorage(input: {
   surfaceType: MediaStorageSurfaceType;
   objectKey: string;
@@ -424,53 +457,75 @@ export async function uploadFileToMediaStorage(input: {
   mimeType: string;
   fileName?: string | null;
   sizeBytes?: number | null;
-}): Promise<MediaStorageObject> {
-  const upload = await createSignedMediaUpload({
-    surfaceType: input.surfaceType,
-    objectKey: input.objectKey,
-    mimeType: input.mimeType,
-    sizeBytes: input.sizeBytes,
-  });
+  maximumSizeBytes?: number | null;
+  tooLargeMessage?: string;
+}): Promise<UploadedMediaStorageObject> {
+  const preparedUpload = await prepareUploadUri(input);
+  let upload: SignedUploadResponse | null = null;
+  let verifiedSizeBytes: number | null = null;
+  let putCompleted = false;
 
   try {
-    await uploadFileToSignedUrl({
+    const sizeBytes = await resolveMediaUploadSizeBytes({
+      providedSizeBytes: input.sizeBytes,
+      readSizeBytes: async () => {
+        const info = await FileSystem.getInfoAsync(preparedUpload.uri);
+        return info.exists && "size" in info ? info.size : null;
+      },
+      maximumSizeBytes: input.maximumSizeBytes,
+      tooLargeMessage: input.tooLargeMessage,
+    });
+    upload = await createSignedMediaUpload({
+      surfaceType: input.surfaceType,
+      objectKey: input.objectKey,
+      mimeType: input.mimeType,
+      sizeBytes,
+    });
+    await uploadPreparedFileToSignedUrl({
       uploadUrl: upload.uploadUrl,
-      uri: input.uri,
+      uploadHeaders: upload.uploadHeaders,
+      uri: preparedUpload.uri,
       mimeType: input.mimeType,
       fileName: input.fileName,
-      sizeBytes: input.sizeBytes,
+      sizeBytes,
     });
+    putCompleted = true;
 
-    const signedUrl = await createSignedMediaDownload({
+    const verified = await verifySignedMediaUpload({
       surfaceType: input.surfaceType,
       provider: upload.provider,
       bucket: upload.bucket,
       objectKey: upload.objectKey,
     });
-    const hasBytes = await objectHasReadableBytes(signedUrl, input.sizeBytes);
+    const expectedMimeType = toText(input.mimeType).toLowerCase().split(";", 1)[0]?.trim();
+    if (
+      verified.observedMimeType !== expectedMimeType
+      || verified.observedSizeBytes !== sizeBytes
+    ) {
+      throw new Error("Uploaded media did not match its verified reservation.");
+    }
+    verifiedSizeBytes = verified.observedSizeBytes;
 
-    if (!hasBytes) {
+  } catch (error) {
+    if (putCompleted && upload) {
       await deleteStoredMediaObject({
         surfaceType: input.surfaceType,
         provider: upload.provider,
         bucket: upload.bucket,
         objectKey: upload.objectKey,
       }).catch(() => undefined);
-      throw new Error("Uploaded media object was empty after upload.");
     }
-  } catch (error) {
-    await deleteStoredMediaObject({
-      surfaceType: input.surfaceType,
-      provider: upload.provider,
-      bucket: upload.bucket,
-      objectKey: upload.objectKey,
-    }).catch(() => undefined);
     throw error;
+  } finally {
+    await preparedUpload.cleanup();
   }
+
+  if (!upload || verifiedSizeBytes === null) throw new Error("Media upload is not available right now.");
 
   return {
     provider: upload.provider,
     bucket: upload.bucket,
     objectKey: upload.objectKey,
+    sizeBytes: verifiedSizeBytes,
   };
 }

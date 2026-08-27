@@ -122,6 +122,12 @@ assertIncludes(channelSettings, `thumbnailAsset: platformBranding?.heroImage`, "
 assertIncludes(channelSettings, `These appear on your public Platform, separate from your Profile photo.`, "Profile/Platform media separation copy");
 assertIncludes(channelSettings, `formatPlatformBrandScanStatus`, "Brand Studio scan status readout");
 assertIncludes(channelSettings, `Preview Brand Draft`, "owner-only Brand Studio draft preview action");
+assertIncludes(channelSettings, `source={{ uri: platformBranding.avatar.signedUrl }}`, "Brand Studio identity uses Platform avatar preview");
+assertIncludes(channelSettings, `Owner-only saved draft view`, "Brand Studio tab exposes owner draft preview directly");
+assertIncludes(channelSettings, `brand-home-preview-draft-platform-button`, "Brand Studio Home draft preview keeps a distinct selector");
+assertNotIncludes(channelSettings, `brand-hero-reel-disabled-button`, "Brand Studio must not expose dead Hero Reel status button");
+assertNotIncludes(channelSettings, `title: "Watermark"`, "Brand Studio must not expose dead Watermark status row");
+assertIncludes(channelSettings, `<Text style={styles.homeSnapshotLabel}>Next step</Text>`, "Brand Studio publishing status has one canonical next-step summary");
 assertIncludes(channelSettings, `preview: "brand-draft"`, "Brand Studio draft preview route");
 assertIncludes(channelSettings, `Preview Platform is the reviewed visitor view`, "Brand Studio public preview copy");
 assertIncludes(channelSettings, `Save Draft keeps media owner-only`, "Brand Studio draft/public separation copy");

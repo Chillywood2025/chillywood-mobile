@@ -154,6 +154,18 @@ const buildProfileMediaFileFromImageAsset = (
 
 const extractProfileMediaObjectKey = (url?: string | null) => {
   const normalizedUrl = toText(url);
+  const proxyMarker = "/functions/v1/profile-media-public?";
+  const proxyIndex = normalizedUrl.indexOf(proxyMarker);
+  if (proxyIndex >= 0) {
+    const query = normalizedUrl.slice(proxyIndex + proxyMarker.length);
+    const rawKey = query.split("&").find((part) => part.startsWith("objectKey="))?.slice("objectKey=".length) ?? "";
+    if (!rawKey) return null;
+    try {
+      return decodeURIComponent(rawKey);
+    } catch {
+      return null;
+    }
+  }
   const marker = `/storage/v1/object/public/${PROFILE_MEDIA_BUCKET}/`;
   const index = normalizedUrl.indexOf(marker);
   if (index < 0) return null;
@@ -169,8 +181,13 @@ const extractProfileMediaObjectKey = (url?: string | null) => {
 const deleteOwnedProfileMediaObject = async (userId: string, url?: string | null) => {
   const objectKey = extractProfileMediaObjectKey(url);
   if (!objectKey || !objectKey.startsWith(`${userId}/`)) return;
-  await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
+  const { error } = await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]);
+  if (error) throw new Error(error.message || "Unable to remove this Profile image right now.");
 };
+
+const buildProfileMediaReadUrl = (objectKey: string) => (
+  `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/profile-media-public?ownerUserId=${objectKey.split("/", 1)[0]}&objectKey=${objectKey}`
+);
 
 const shouldCleanupProfileMediaObject = (status?: ProfileMediaStatus | null) => {
   const normalized = normalizeProfileMediaStatus(status);
@@ -364,7 +381,7 @@ export async function uploadProfileMedia(
     }
   })();
 
-  const publicUrl = toText(supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectKey).data.publicUrl);
+  const publicUrl = buildProfileMediaReadUrl(objectKey);
   if (!publicUrl) {
     await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
     throw new Error("Unable to prepare this Profile image for display.");
@@ -428,16 +445,17 @@ export async function uploadProfileMedia(
         profileBackgroundOverlayStrength: 0.58,
       });
 
+  let saved: UserProfile;
   try {
-    const saved = await updateProfileAppearance(userId, existingProfile, patch, nextProfile);
-    if (shouldCleanupProfileMediaObject(oldStatus)) {
-      await deleteOwnedProfileMediaObject(userId, oldUrl);
-    }
-    return saved;
+    saved = await updateProfileAppearance(userId, existingProfile, patch, nextProfile);
   } catch (error) {
     await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
     throw error;
   }
+  if (shouldCleanupProfileMediaObject(oldStatus)) {
+    await deleteOwnedProfileMediaObject(userId, oldUrl);
+  }
+  return saved;
 }
 
 export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserProfile> {
@@ -501,11 +519,10 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
         profileBackgroundOverlayStrength: 0.58,
       });
 
-  const saved = await updateProfileAppearance(userId, existingProfile, patch, nextProfile);
   if (shouldCleanupProfileMediaObject(removedStatus)) {
     await deleteOwnedProfileMediaObject(userId, removedUrl);
   }
-  return saved;
+  return updateProfileAppearance(userId, existingProfile, patch, nextProfile);
 }
 
 export async function updateProfileMediaFitMode(

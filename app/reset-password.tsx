@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import { clearExactLocalAuthSession, isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority, sameAccountSessionAuthority, type AccountSessionAuthorityBinding, type LockedLocalAuthClient } from "../_lib/accountSessionAuthority";
-import { consumeApplicationAuthInput, parseApplicationLink } from "../_lib/appLinks";
+import { consumeApplicationAuthInput, parseApplicationLink, registerVerifiedApplicationAuthInput } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
 import { beginPasswordRecoverySessionQuarantine, cancelPasswordRecoverySessionQuarantine, clearQuarantinedPasswordRecoverySession, persistVerifiedPasswordRecoveryBinding } from "../_lib/session";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../_lib/supabase";
@@ -110,7 +110,7 @@ const parseRecoveryUrl = (url: string | null): RecoveryParams | null => {
   if (!url) return null;
 
   try {
-    const link = parseApplicationLink(url);
+    const link = registerVerifiedApplicationAuthInput(url) ?? parseApplicationLink(url);
     if (link?.kind !== "password_reset") return null;
     const parsedUrl = new URL(link.route, "https://chillywoodstream.com");
     const params = new URLSearchParams(parsedUrl.search);
@@ -423,10 +423,11 @@ export default function ResetPasswordScreen() {
 
     const bootstrapRecovery = async () => {
       try {
+        const initialUrl = await Linking.getInitialURL();
+        registerVerifiedApplicationAuthInput(initialUrl);
         const consumedRouteParams = await consumeRecoveryParams(routeRecoveryParams);
         if (!active || consumedRouteParams) return;
 
-        const initialUrl = await Linking.getInitialURL();
         const consumed = await consumeRecoveryUrl(initialUrl);
         if (!active || consumed) return;
         markMissingRecoveryLink();

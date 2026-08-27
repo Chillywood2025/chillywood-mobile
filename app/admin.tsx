@@ -3,7 +3,6 @@ import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Alert,
   ImageBackground,
   Keyboard,
@@ -141,6 +140,7 @@ import {
   canUserReviewAutonomousApproval,
 } from "../_lib/platformOwnerAuthority";
 import { useSession } from "../_lib/session";
+import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
 import {
   readAdminAuditLog,
   applyAdminReportTargetAction,

@@ -776,6 +776,11 @@ values (
   'governance-owner@example.invalid',
   false,false,now()
 );
+insert into auth.sessions(id,user_id)
+values (
+  'a5100000-0000-4000-8000-000000000001',
+  'a5000000-0000-0000-0000-000000000001'
+);
 insert into public.platform_role_memberships(role,user_id,email,status)
 values (
   'owner',
@@ -787,6 +792,7 @@ select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','a5000000-0000-0000-0000-000000000001',
+    'session_id','a5100000-0000-4000-8000-000000000001',
     'role','authenticated',
     'email','governance-owner@example.invalid',
     'app_metadata','{}'::jsonb
@@ -1239,6 +1245,7 @@ select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','a5000000-0000-0000-0000-000000000001',
+    'session_id','a5100000-0000-4000-8000-000000000001',
     'role','authenticated',
     'email','governance-owner@example.invalid',
     'app_metadata','{}'::jsonb
@@ -1363,10 +1370,16 @@ values (
   'governance-recycled@example.invalid',
   false,false,now()
 );
+insert into auth.sessions(id,user_id)
+values (
+  'a5100000-0000-4000-8000-000000000002',
+  'a5000000-0000-0000-0000-000000000002'
+);
 select set_config(
   'request.jwt.claims',
   jsonb_build_object(
     'sub','a5000000-0000-0000-0000-000000000002',
+    'session_id','a5100000-0000-4000-8000-000000000002',
     'role','authenticated',
     'email','governance-recycled@example.invalid',
     'app_metadata','{}'::jsonb

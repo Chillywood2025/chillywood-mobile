@@ -29,6 +29,7 @@ type PublicCreatorVideoRow = {
   mime_type: string | null;
   file_size_bytes: number | null;
   updated_at: string | null;
+  vip_access_required: boolean | null;
 };
 
 type OfficialRachiOriginalVideoLinkRow = {
@@ -66,7 +67,7 @@ const SIGNED_URL_SECONDS = 60 * 60;
 const CLIP_TITLE_MAX_LENGTH = 80;
 const CLIP_SUBTITLE_MAX_LENGTH = 140;
 const PUBLIC_MODERATION_STATUSES = ["clean", "reported"];
-const PUBLIC_SCAN_STATUSES = ["clean", "manual_review"];
+const PUBLIC_SCAN_STATUSES = ["clean"];
 const PUBLIC_CREATOR_VIDEO_SELECT = [
   "id",
   "owner_id",
@@ -86,6 +87,7 @@ const PUBLIC_CREATOR_VIDEO_SELECT = [
   "mime_type",
   "file_size_bytes",
   "updated_at",
+  "vip_access_required",
 ].join(",");
 const PUBLIC_CLIP_EDIT_SELECT = [
   "video_id",

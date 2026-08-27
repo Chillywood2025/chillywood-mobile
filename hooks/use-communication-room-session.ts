@@ -8,6 +8,7 @@ import type { MediaStream } from "@livekit/react-native-webrtc";
 import { resolveRoomAccess } from "../_lib/accessEntitlements";
 import { trackEvent } from "../_lib/analytics";
 import {
+  broadcastCommunicationRoomSignal,
   buildCommunicationChannelName,
   buildCommunicationPresencePayload,
   COMMUNICATION_DEFAULT_ICE_SERVERS,
@@ -301,9 +302,11 @@ const mapPresenceState = (state: Record<string, PresenceStatePayload[] | undefin
   const mapped: Record<string, PresenceStatePayload> = {};
   Object.entries(state).forEach(([presenceKey, presences]) => {
     const presence = Array.isArray(presences) ? presences[0] : undefined;
-    const userId = String(presence?.userId ?? presenceKey).trim();
+    // Presence payloads are client-authored. Treat the subscribed presence key
+    // as the routing hint and never let a claimed userId replace it.
+    const userId = String(presenceKey).trim();
     if (!userId) return;
-    mapped[userId] = presence ?? {};
+    mapped[userId] = { ...(presence ?? {}), userId };
   });
   return mapped;
 };
@@ -755,8 +758,21 @@ export function useCommunicationRoomSession({
 
   const sendBroadcast = useCallback(async (event: string, payload: Record<string, unknown>) => {
     const channel = channelRef.current;
-    if (!channel) return;
-    await waitForRealtimeOperation(channel.send({ type: "broadcast", event, payload })).catch(() => {});
+    const identity = identityRef.current;
+    const activeRoom = roomRef.current;
+    if (!channel || !identity?.userId || !activeRoom?.roomId) return false;
+    if (
+      event !== "webrtc:offer"
+      && event !== "webrtc:answer"
+      && event !== "webrtc:ice"
+      && event !== "media:update"
+      && event !== "room:end"
+    ) return false;
+    return broadcastCommunicationRoomSignal({
+      roomId: activeRoom.roomId,
+      event,
+      payload,
+    }).catch(() => false);
   }, []);
 
   const applyParticipantsFromSources = useCallback(async (presenceByUserId?: Record<string, PresenceStatePayload>) => {
@@ -776,7 +792,7 @@ export function useCommunicationRoomSession({
     const nextParticipants = [...participantIds].map((participantId) => {
       const membership = allowedMemberships.find((entry) => entry.userId === participantId);
       const presence = presenceMap[participantId];
-      if (!membership && !presence && participantId !== resolvedIdentity.userId) return null;
+      if (!membership && participantId !== resolvedIdentity.userId) return null;
 
       return {
         userId: participantId,
@@ -793,7 +809,7 @@ export function useCommunicationRoomSession({
           ? presence.micOn
           : (membership?.micEnabled ?? (participantId === resolvedIdentity.userId ? micEnabledRef.current : false)),
         joinedAt: String(presence?.joinedAt ?? membership?.joinedAt ?? new Date().toISOString()),
-        isHost: (membership?.role === "host") || resolvedRoom.hostUserId === participantId || !!presence?.isHost,
+        isHost: resolvedRoom.hostUserId === participantId,
       } as CommunicationParticipantPresence;
     }).filter(Boolean) as CommunicationParticipantPresence[];
 
@@ -1244,7 +1260,7 @@ export function useCommunicationRoomSession({
     const descriptionType = String(description.type ?? "").trim();
     if (descriptionType !== "offer") return false;
 
-    await sendBroadcast("webrtc:offer", {
+    const sent = await sendBroadcast("webrtc:offer", {
       targetUserId: remoteUserId,
       fromUserId: resolvedIdentity.userId,
       description: {
@@ -1252,7 +1268,9 @@ export function useCommunicationRoomSession({
         sdp: typeof description.sdp === "string" ? description.sdp : null,
       },
     });
-    const current = generation === legacySessionGenerationRef.current && identityRef.current === resolvedIdentity;
+    const current = sent
+      && generation === legacySessionGenerationRef.current
+      && identityRef.current === resolvedIdentity;
     if (current) lastOfferSentAtRef.current[remoteUserId] = Date.now();
     return current;
   }, [sendBroadcast]);
@@ -1487,15 +1505,13 @@ export function useCommunicationRoomSession({
     if (resolvedRoom && resolvedIdentity) {
       if (options?.endRoomIfHost && resolvedRoom.hostUserId === resolvedIdentity.userId) {
         if (capturedChannel) {
-          await waitForRealtimeOperation(capturedChannel.send({
-            type: "broadcast",
+          await broadcastCommunicationRoomSignal({
+            roomId: resolvedRoom.roomId,
             event: "room:end",
             payload: {
-              fromUserId: resolvedIdentity.userId,
-              roomId: resolvedRoom.roomId,
               reason: "host-left",
             },
-          })).catch(() => null);
+          }).catch(() => false);
         }
         await endCommunicationRoom(resolvedRoom.roomId).catch(() => {});
       }
@@ -1648,6 +1664,15 @@ export function useCommunicationRoomSession({
         return;
       }
 
+      const { data: realtimeSessionData } = await supabase.auth.getSession();
+      const realtimeAccessToken = String(realtimeSessionData.session?.access_token ?? "").trim();
+      const realtimeUserId = String(realtimeSessionData.session?.user?.id ?? "").trim();
+      if (!realtimeAccessToken || realtimeUserId !== resolvedIdentity.userId) {
+        throw new Error("communication_realtime_auth_required");
+      }
+      await supabase.realtime.setAuth(realtimeAccessToken);
+      if (!isActiveGeneration()) return;
+
       await ensureInitialLocalStream();
       if (!isActiveGeneration()) return;
 
@@ -1699,9 +1724,25 @@ export function useCommunicationRoomSession({
 
       const channel = supabase.channel(presenceChannelName, {
         config: {
+          private: true,
           presence: { key: resolvedIdentity.userId },
         },
       });
+
+      const isAuthorizedInboundParticipant = (candidateUserId: unknown) => {
+        const candidate = String(candidateUserId ?? "").trim();
+        if (!candidate || candidate === resolvedIdentity.userId) return false;
+        return getActiveCommunicationMemberships(membershipsRef.current).some((membership) => (
+          membership.userId === candidate
+          && (
+            (candidate === snapshot.room.hostUserId && membership.role === "host")
+            || (candidate !== snapshot.room.hostUserId && membership.role === "participant")
+          )
+        ));
+      };
+      const isExactInboundRoom = (payload: Record<string, unknown>) => (
+        formatRoomId(String(payload?.roomId ?? "")) === snapshot.room.roomId
+      );
 
       channel.on("presence", { event: "sync" }, () => {
         if (!isActiveGeneration()) return;
@@ -1730,7 +1771,13 @@ export function useCommunicationRoomSession({
         const targetUserId = String(payload?.targetUserId ?? "").trim();
         const fromUserId = String(payload?.fromUserId ?? "").trim();
         const negotiationId = String(payload?.negotiationId ?? "").trim();
-        if (!targetUserId || targetUserId !== currentIdentity.userId || !fromUserId) return;
+        if (
+          !isExactInboundRoom(payload)
+          ||
+          !targetUserId
+          || targetUserId !== currentIdentity.userId
+          || !isAuthorizedInboundParticipant(fromUserId)
+        ) return;
         logChatRtc("offer_received", {
           roomId: snapshot.room.roomId,
           fromUserId,
@@ -1781,7 +1828,13 @@ export function useCommunicationRoomSession({
         const targetUserId = String(payload?.targetUserId ?? "").trim();
         const fromUserId = String(payload?.fromUserId ?? "").trim();
         const negotiationId = String(payload?.negotiationId ?? "").trim();
-        if (!targetUserId || targetUserId !== currentIdentity.userId || !fromUserId) return;
+        if (
+          !isExactInboundRoom(payload)
+          ||
+          !targetUserId
+          || targetUserId !== currentIdentity.userId
+          || !isAuthorizedInboundParticipant(fromUserId)
+        ) return;
         const correlatedWaiter = negotiationId ? legacyMicAnswerWaitersRef.current[negotiationId] : null;
         if (negotiationId && !correlatedWaiter) return;
         if (
@@ -1835,7 +1888,14 @@ export function useCommunicationRoomSession({
 
         const targetUserId = String(payload?.targetUserId ?? "").trim();
         const fromUserId = String(payload?.fromUserId ?? "").trim();
-        if (!targetUserId || targetUserId !== currentIdentity.userId || !fromUserId || !payload?.candidate) return;
+        if (
+          !isExactInboundRoom(payload)
+          ||
+          !targetUserId
+          || targetUserId !== currentIdentity.userId
+          || !isAuthorizedInboundParticipant(fromUserId)
+          || !payload?.candidate
+        ) return;
         logChatRtc("ice_received", {
           roomId: snapshot.room.roomId,
           fromUserId,
@@ -1850,7 +1910,7 @@ export function useCommunicationRoomSession({
       channel.on("broadcast", { event: "media:update" }, ({ payload }: { payload: Record<string, unknown> }) => {
         if (!isActiveGeneration()) return;
         const fromUserId = String(payload?.fromUserId ?? "").trim();
-        if (!fromUserId) return;
+        if (!isExactInboundRoom(payload) || !isAuthorizedInboundParticipant(fromUserId)) return;
         const current = presenceStateRef.current[fromUserId] ?? {};
         presenceStateRef.current[fromUserId] = {
           ...current,
@@ -1862,6 +1922,12 @@ export function useCommunicationRoomSession({
       });
 
       channel.on("broadcast", { event: "room:end" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        const fromUserId = String(payload?.fromUserId ?? "").trim();
+        if (
+          !isExactInboundRoom(payload)
+          || fromUserId !== snapshot.room.hostUserId
+          || !isAuthorizedInboundParticipant(fromUserId)
+        ) return;
         const reason = String(payload?.reason ?? "ended").trim() === "host-left" ? "host-left" : "ended";
         if (!isActiveGeneration()) return;
         logChatRtc("room_end_received", {
@@ -2444,12 +2510,11 @@ export function useCommunicationRoomSession({
       await peerConnection.setLocalDescription(normalizedOffer);
       if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
       const sendResult = await waitForRealtimeOperation(
-        authority.channel.send({
-          type: "broadcast",
+        broadcastCommunicationRoomSignal({
+          roomId: authority.roomId,
           event: "webrtc:offer",
           payload: {
             targetUserId: remoteUserId,
-            fromUserId: authority.userId,
             negotiationId,
             description: {
               type: normalizedOffer.type,
@@ -2458,8 +2523,8 @@ export function useCommunicationRoomSession({
           },
         }),
         LEGACY_MIC_RENEGOTIATION_TIMEOUT_MILLIS,
-      ).catch(() => null);
-      if (sendResult !== "ok") throw new Error("LEGACY_MIC_OFFER_SEND_FAILED");
+      ).catch(() => false);
+      if (sendResult !== true) throw new Error("LEGACY_MIC_OFFER_SEND_FAILED");
       const answered = await waitForRealtimeOperation(
         answerPromise,
         LEGACY_MIC_RENEGOTIATION_TIMEOUT_MILLIS,
@@ -2532,18 +2597,17 @@ export function useCommunicationRoomSession({
     nextCameraEnabled: boolean = cameraEnabledRef.current,
   ) => {
     if (!isLegacyMicSessionAuthorityCurrent(authority)) return { ok: false, sent: false };
-    const result = await waitForRealtimeOperation(authority.channel.send({
-      type: "broadcast",
+    const result = await waitForRealtimeOperation(broadcastCommunicationRoomSignal({
+      roomId: authority.roomId,
       event: "media:update",
       payload: {
-        fromUserId: authority.userId,
         cameraOn: nextCameraEnabled,
         micOn: nextMicEnabled,
       },
-    })).catch(() => null);
+    })).catch(() => false);
     return {
-      ok: result === "ok" && isLegacyMicSessionAuthorityCurrent(authority),
-      sent: result === "ok",
+      ok: result === true && isLegacyMicSessionAuthorityCurrent(authority),
+      sent: result === true,
     };
   }, [isLegacyMicSessionAuthorityCurrent]);
 

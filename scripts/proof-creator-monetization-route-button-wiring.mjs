@@ -77,15 +77,12 @@ for (const [name, source, needle] of requiredRoutes) {
   ["Event Pass actual tappable CTA testID", "money-feature-event_pass-cta"],
   ["Money Center open Ways to Earn CTA", "money-center-open-ways-to-earn-button"],
   ["Money Center open Ways to Earn human tap handler", "onPress={openWaysToEarn}"],
-  ["Money Center deterministic focus state", "activeMoneyCenterFocusSection"],
-  ["Money Center deterministic focus handler", "focusMoneyCenterSection"],
-  ["Money Center focused content renderer", "renderActiveMoneyCenterFocusContent"],
-  ["Money Center focus tabs", "money-center-focus-tabs"],
-  ["Money Center focused Ways to Earn panel", "money-center-ways-to-earn-focused-panel"],
-  ["Money Center accordion Ways to Earn uses suffixed testIDs", 'renderWaysToEarnContent("money-center-ways-to-earn-accordion-panel", "-accordion", false)'],
+  ["Money Center route/deep-link focus state", "activeMoneyCenterFocusSection"],
+  ["Money Center route/deep-link focus handler", "focusMoneyCenterSection"],
+  ["Money Center canonical overview renderer", "{renderMoneyCenterOverviewContent()}"],
+  ["Money Center canonical Ways to Earn panel", 'renderWaysToEarnContent("money-center-ways-to-earn-panel")'],
   ["Money Center manager renders inline after selected feature card", "activeMoneyManageTarget === feature.key ?"],
   ["Money Center inline manager occupies full feature grid width", "moneyFeatureManagerInline"],
-  ["Money Center duplicate accordion manager is suppressed", "includeManagerPanel = true"],
   ["Money Center manager close action", "money-manager-close-button"],
   ["Money Center monetization stack anchor", "money-center-monetization-section-stack"],
   ["Money Center section focus anchors", "money-section-${id}"],
@@ -117,6 +114,13 @@ for (const [name, source, needle] of requiredRoutes) {
   ["Money Center no hardcoded Ways to Earn offset", "id === \"ways_to_earn\" ? 3600 : 2600"],
   ["Money Center no imperative focus scrollTo", "studioScrollRef.current?.scrollTo"],
   ["Money Center no timed manager focus retries", "focusActiveMoneyManagerPanel"],
+  ["Money Center no duplicate rendered focus tabs", "{renderMoneyCenterFocusTabs()}"],
+  ["Money Center no duplicate rendered focused content", "{renderActiveMoneyCenterFocusContent()}"],
+  ["Money Center no duplicate focus-tab surface", "money-center-focus-tabs"],
+  ["Money Center no duplicate focused Ways to Earn panel", "money-center-ways-to-earn-focused-panel"],
+  ["Money Center no duplicate Overview accordion", 'id: "overview",\n            title: "Overview"'],
+  ["Money Center no duplicate creator setup CTA", "money-center-creator-setup-button"],
+  ["Money Center no duplicate cashout readiness CTA", "money-center-cashout-readiness-button"],
 ].forEach(([name, needle]) => add(name, excludes(channelSettings, needle), needle));
 
 const addCreatorSetupChecks = (flow) => {
@@ -305,7 +309,6 @@ for (const flow of flowChecks) {
 }
 
 [
-  ["Cashout readiness Money Center button", "money-center-cashout-readiness-button"],
   ["Cashout readiness payout section button", "money-payout-review-readiness-button"],
   ["Cashout readiness is reachable", "handleReviewCashoutReadiness"],
   ["Cashout readiness uses payout summary", "readCreatorPayoutDashboardSummary"],

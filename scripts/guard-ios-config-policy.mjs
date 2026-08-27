@@ -30,6 +30,7 @@ const assertEqual = (actual, expected, message) => {
 
 const appJson = readJson("app.json");
 const easJson = readJson("eas.json");
+const productionOtaGeneration = readJson("config/release/production-ota-generation.json");
 const packageJson = readJson("package.json");
 const appConfigSource = read("app.config.ts");
 const liveKitIosCompatibilityPlugin = read("plugins/withLiveKitIosStaticFrameworkCompatibility.js");
@@ -45,47 +46,44 @@ assert(expo.newArchEnabled === true, "Expo newArchEnabled must remain true");
 assert(/^\d+$/u.test(String(ios.buildNumber ?? "")), "iOS buildNumber must be a numeric string");
 
 const associatedDomains = Array.isArray(ios.associatedDomains) ? ios.associatedDomains : [];
-assert(
-  associatedDomains.includes(requiredAssociatedDomain),
-  `iOS associatedDomains must include ${requiredAssociatedDomain}`,
-);
+assert(associatedDomains.includes(requiredAssociatedDomain), `iOS associatedDomains must include ${requiredAssociatedDomain}`);
 const entitlementDomains = Array.isArray(ios.entitlements?.["com.apple.developer.associated-domains"])
   ? ios.entitlements["com.apple.developer.associated-domains"]
   : [];
-assert(
-  entitlementDomains.includes(requiredAssociatedDomain),
-  `iOS associated-domain entitlement must include ${requiredAssociatedDomain}`,
-);
+assert(entitlementDomains.includes(requiredAssociatedDomain), `iOS associated-domain entitlement must include ${requiredAssociatedDomain}`);
 
 assert(
-  ios.infoPlist?.NSCameraUsageDescription
-    === "Chi'llywood uses your camera so you can make video calls and join live rooms.",
+  ios.infoPlist?.NSCameraUsageDescription === "Chi'llywood uses your camera so you can make video calls and join live rooms.",
   "iOS camera purpose string changed unexpectedly",
 );
 assert(
-  ios.infoPlist?.NSMicrophoneUsageDescription
-    === "Chi'llywood uses your microphone so you can speak in calls and live rooms.",
+  ios.infoPlist?.NSMicrophoneUsageDescription === "Chi'llywood uses your microphone so you can speak in calls and live rooms.",
   "iOS microphone purpose string changed unexpectedly",
 );
 assert(
-  typeof ios.infoPlist?.NSPhotoLibraryUsageDescription === "string"
-    && ios.infoPlist.NSPhotoLibraryUsageDescription.trim().length > 0,
+  typeof ios.infoPlist?.NSPhotoLibraryUsageDescription === "string" && ios.infoPlist.NSPhotoLibraryUsageDescription.trim().length > 0,
   "iOS photo-library purpose string is required",
 );
-assert(
-  !("NSPhotoLibraryAddUsageDescription" in (ios.infoPlist ?? {})),
-  "NSPhotoLibraryAddUsageDescription must not be added unless the app writes to Photos",
-);
-assert(
-  ios.infoPlist?.ITSAppUsesNonExemptEncryption === false,
-  "iOS export compliance must declare standard/exempt encryption only",
-);
+assert(!("NSPhotoLibraryAddUsageDescription" in (ios.infoPlist ?? {})), "NSPhotoLibraryAddUsageDescription must not be added unless the app writes to Photos");
+assert(ios.infoPlist?.ITSAppUsesNonExemptEncryption === false, "iOS export compliance must declare standard/exempt encryption only");
+
+assert(productionOtaGeneration.schemaVersion === 1, "production OTA generation schema must remain v1");
+assert(productionOtaGeneration.generation === "production-v2", "replacement store binaries must use production-v2 generation");
+assert(productionOtaGeneration.channel === "production-v2", "replacement store binaries must use the fresh production-v2 channel");
+assert(productionOtaGeneration.supersedes?.channel === "production", "production-v2 must explicitly supersede the legacy production channel");
+assert(productionOtaGeneration.policy?.requireFreshChannelForNewProductionGeneration === true, "production generation must require a fresh channel");
+assert(productionOtaGeneration.policy?.requireFreshRuntimeForNewProductionGeneration === true, "production generation must require fresh platform runtimes");
+assert(productionOtaGeneration.policy?.nativeAutomaticActivationDisabled === true, "production generation must disable native automatic OTA activation");
+assert(productionOtaGeneration.policy?.appOwnedUpdateGateRequired === true, "production generation must retain the app-owned update gate");
+assert(productionOtaGeneration.iosRuntimeVersion !== expo.runtimeVersion, "replacement iOS runtime must quarantine the legacy production runtime");
 
 assert(appConfigSource.includes("process.env.IOS_GOOGLE_SERVICES_FILE"), "app.config.ts must support IOS_GOOGLE_SERVICES_FILE");
 assert(appConfigSource.includes('"./GoogleService-Info.plist"'), "app.config.ts must support the ignored local Firebase plist fallback");
 assert(appConfigSource.includes("existingIosInfoPlist"), "app.config.ts must merge existing ios.infoPlist values");
 assert(appConfigSource.includes("existingIosEntitlements"), "app.config.ts must merge existing iOS entitlements");
 assert(appConfigSource.includes("IOS_QA_RUNTIME_VERSION"), "app.config.ts must support an iOS-only QA runtime override");
+assert(appConfigSource.includes('checkAutomatically: "NEVER"'), "Expo native automatic update activation must stay disabled");
+assert(appConfigSource.includes("productionIosRuntimeVersion"), "production iOS runtime must come from the generation contract");
 assert(appConfigSource.includes('useFrameworks: "static"'), "iOS static-framework configuration must remain unchanged");
 assert(
   appConfigSource.includes("./plugins/withLiveKitIosStaticFrameworkCompatibility"),
@@ -108,11 +106,14 @@ assert(easJson.build?.production?.distribution === "store", "EAS production dist
 assert(easJson.build?.development?.environment === "development", "EAS development must use the development environment");
 assert(easJson.build?.preview?.environment === "preview", "EAS preview must use the preview environment");
 assert(easJson.build?.production?.environment === "production", "EAS production must use the production environment");
+assert(easJson.build?.production?.channel === productionOtaGeneration.channel, "EAS production must use the canonical fresh OTA channel");
+assert(easJson.build?.["production-apk"]?.channel === productionOtaGeneration.channel, "EAS production APK must use the canonical fresh OTA channel");
 assert(easJson.build?.["development-simulator"]?.extends === "development", "EAS iOS simulator profile must extend development");
 assert(easJson.build?.["development-simulator"]?.ios?.simulator === true, "EAS iOS simulator profile must set ios.simulator=true");
 const iosQaProfile = easJson.build?.["ios-qa"];
 assert(iosQaProfile?.extends === "production", "ios-qa must extend the production App Store profile");
 assert(iosQaProfile?.channel === "ios-qa", "ios-qa must use its isolated update channel");
+assert(iosQaProfile?.channel !== productionOtaGeneration.channel, "ios-qa must remain isolated from the store production generation");
 assert(iosQaProfile?.distribution === "store", "ios-qa must remain an App Store distribution build");
 assert(iosQaProfile?.environment === "production", "ios-qa must use production backend/provider configuration");
 assert(iosQaProfile?.env?.IOS_QA_RUNTIME_VERSION === "1.0.0-iosqa1", "ios-qa must use an isolated iOS runtime");
@@ -141,13 +142,7 @@ for (const ascAppId of ascAppIds) {
 const expectedAndroidAppConfig = {
   package: "com.chillywood.mobile",
   versionCode: 55,
-  permissions: [
-    "CAMERA",
-    "POST_NOTIFICATIONS",
-    "RECORD_AUDIO",
-    "MODIFY_AUDIO_SETTINGS",
-    "USE_FULL_SCREEN_INTENT",
-  ],
+  permissions: ["CAMERA", "POST_NOTIFICATIONS", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "USE_FULL_SCREEN_INTENT"],
   adaptiveIcon: {
     backgroundColor: "#03030F",
     foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -178,24 +173,20 @@ assertEqual(withoutIos(easJson.build?.preview), {
 }, "EAS preview Android behavior changed from the protected baseline");
 assertEqual(withoutIos(easJson.build?.production), {
   autoIncrement: true,
-  channel: "production",
+  channel: productionOtaGeneration.channel,
   distribution: "store",
   environment: "production",
   android: { buildType: "app-bundle" },
-}, "EAS production Android behavior changed from the protected baseline");
+}, "EAS production Android behavior must differ from the protected baseline only by the reviewed OTA generation channel");
 assertEqual(withoutIos(easJson.build?.["production-apk"]), {
   autoIncrement: false,
-  channel: "production",
+  channel: productionOtaGeneration.channel,
   distribution: "internal",
   environment: "production",
   android: { buildType: "apk" },
-}, "EAS production-apk Android behavior changed from the protected baseline");
+}, "EAS production-apk Android behavior must differ from the protected baseline only by the reviewed OTA generation channel");
 assertEqual(easJson.submit?.production?.android, { track: "internal" }, "EAS production Android submit behavior changed");
-assertEqual(
-  easJson.submit?.closed?.android,
-  { track: "alpha", releaseStatus: "draft" },
-  "EAS closed Android submit behavior changed",
-);
+assertEqual(easJson.submit?.closed?.android, { track: "alpha", releaseStatus: "draft" }, "EAS closed Android submit behavior changed");
 
 assert(packageJson.scripts?.["guard:ios-config-policy"] === "node ./scripts/guard-ios-config-policy.mjs", "package.json must expose guard:ios-config-policy");
 assert(packageJson.scripts?.["proof:ios-config"] === "node ./scripts/proof-ios-config.mjs", "package.json must expose proof:ios-config");
@@ -222,24 +213,19 @@ try {
 }
 
 if (resolvedConfig) {
-  const buildPropertiesPlugin = resolvedConfig.plugins?.find(
-    (plugin) => Array.isArray(plugin) && plugin[0] === "expo-build-properties",
-  );
+  const buildPropertiesPlugin = resolvedConfig.plugins?.find((plugin) => Array.isArray(plugin) && plugin[0] === "expo-build-properties");
   assert(resolvedConfig.ios?.bundleIdentifier === expectedBundleIdentifier, "resolved iOS bundle identifier is incorrect");
   assert(resolvedConfig.ios?.appleTeamId === expectedAppleTeamId, "resolved Apple Team ID is incorrect");
   assert(resolvedConfig.ios?.googleServicesFile === firebasePathProbe, "IOS_GOOGLE_SERVICES_FILE must take priority in resolved Expo config");
+  assert(resolvedConfig.ios?.runtimeVersion === productionOtaGeneration.iosRuntimeVersion, "resolved non-QA iOS runtime must use the fresh production generation");
   assert(
-    Array.isArray(resolvedConfig.ios?.associatedDomains)
-      && resolvedConfig.ios.associatedDomains.includes(requiredAssociatedDomain),
+    Array.isArray(resolvedConfig.ios?.associatedDomains) && resolvedConfig.ios.associatedDomains.includes(requiredAssociatedDomain),
     "resolved iOS Associated Domains configuration is incomplete",
   );
   assert(resolvedConfig.android?.package === expectedBundleIdentifier, "resolved Android package changed unexpectedly");
+  assert(resolvedConfig.android?.runtimeVersion === productionOtaGeneration.androidRuntimeVersion, "resolved non-QA Android runtime must use the fresh production generation");
   assert(resolvedConfig.android?.googleServicesFile === "./google-services.json", "resolved Android Firebase configuration changed unexpectedly");
-  assertEqual(
-    buildPropertiesPlugin?.[1]?.ios?.forceStaticLinking,
-    expectedRnFirebaseStaticPods,
-    "every installed React Native Firebase iOS pod must remain force-statically linked",
-  );
+  assertEqual(buildPropertiesPlugin?.[1]?.ios?.forceStaticLinking, expectedRnFirebaseStaticPods, "every installed React Native Firebase iOS pod must remain force-statically linked");
 }
 
 if (failures.length) {

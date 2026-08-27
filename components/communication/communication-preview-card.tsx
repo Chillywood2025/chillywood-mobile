@@ -1,8 +1,9 @@
 import React, { useEffect } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule } from "../../_lib/communication";
 import type { MediaPermissionState } from "../../_lib/mediaPermissions";
+import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 
 const logCallDebug = (..._args: unknown[]) => {};
 
