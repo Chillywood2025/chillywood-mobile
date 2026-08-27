@@ -32,6 +32,7 @@ jobs:
           fi
           python3 scripts/reconcile-pr245-paid-video-test-harness.py
           python3 scripts/reconcile-pr245-watch-party-harness.py
+          python3 scripts/reconcile-pr245-vip-guard.py
           git add -A
           test -z "$(git diff --name-only --diff-filter=U)"
       - run: npm ci
@@ -55,7 +56,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/reconcile-245-current-main.yml .github/workflows/reconcile-245-current-main-fix.yml scripts/reconcile-pr245-current-main.py scripts/reconcile-pr245-paid-video-test-harness.py scripts/reconcile-pr245-watch-party-harness.py
+          git rm .github/workflows/reconcile-245-current-main.yml .github/workflows/reconcile-245-current-main-fix.yml scripts/reconcile-pr245-current-main.py scripts/reconcile-pr245-paid-video-test-harness.py scripts/reconcile-pr245-watch-party-harness.py scripts/reconcile-pr245-vip-guard.py
           git add -A
           git commit -m "Reconcile creator money with current entitlement truth"
           git push origin HEAD:chatgpt/creator-money-production-readiness-ios-parity-v1
