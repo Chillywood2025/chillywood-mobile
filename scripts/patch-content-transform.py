@@ -7,16 +7,13 @@ selector_new = "home = replace_once(home, '  feedActivityCard: {\\n    width: 15
 if s.count(selector_old) != 1:
     raise SystemExit(f"selector patch expected 1 match, found {s.count(selector_old)}")
 s = s.replace(selector_old, selector_new, 1)
-lines = s.splitlines()
-guard_start = next((i for i, line in enumerate(lines) if line.startswith("guard_add =")), -1)
-if guard_start < 0:
-    raise SystemExit("guard_add marker missing")
-quote_matches = [i for i, line in enumerate(lines) if i > guard_start and "title:" in line and "Chi" in line and "Circle" in line]
-if len(quote_matches) != 1:
-    raise SystemExit(f"quote patch expected 1 guard candidate, found {len(quote_matches)}")
-i = quote_matches[0]
-lines[i] = "  'key: \\\"circle\\\"',"
-s = "\n".join(lines) + ("\n" if s.endswith("\n") else "")
+
+# The repository's legacy Clip Studio policy guard contains stale UI-copy assertions.
+# Keep it unchanged and enforce this layout through the dedicated density guard instead.
+guard_mutation = 'guard = replace_once(guard, guard_anchor, guard_add + guard_anchor, "content density guard")'
+if s.count(guard_mutation) != 1:
+    raise SystemExit(f"guard mutation patch expected 1 match, found {s.count(guard_mutation)}")
+s = s.replace(guard_mutation, '# Content density checks live in scripts/guard-content-card-density-v1.mjs.', 1)
 
 channel_patch_marker = "# Public Platform content uses the same compact native media-card contract."
 if channel_patch_marker not in s:
@@ -108,4 +105,4 @@ print("Applied compact native content cards to the public Platform surface.")
 """
 
 p.write_text(s)
-print("Patched content transform selectors, shelf guards, and public Platform card coverage")
+print("Patched content transform selectors and public Platform card coverage")
