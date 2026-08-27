@@ -26,6 +26,7 @@ export type CreatorContentActionSheetProps = {
   onEditDetails: (video: CreatorVideo) => void;
   onSetVisibility: (video: CreatorVideo, visibility: CreatorContentActionSheetVisibilityAction) => void;
   onSetPrice: (video: CreatorVideo) => void;
+  onSetVipAccess?: (video: CreatorVideo, required: boolean) => void;
   onCreateEvent: (video: CreatorVideo) => void;
   onFeature: (video: CreatorVideo) => void;
   onShare: (video: CreatorVideo) => void;
@@ -51,6 +52,7 @@ export function CreatorContentActionSheet({
   onEditDetails,
   onSetVisibility,
   onSetPrice,
+  onSetVipAccess,
   onCreateEvent,
   onFeature,
   onShare,
@@ -107,7 +109,15 @@ export function CreatorContentActionSheet({
               onPress={() => run((selected) => onSetVisibility(selected, "circle"))}
             />
             <SheetAction label="Make Public" disabled={!video || busy || video.visibility === "public" || blocked} onPress={() => run((selected) => onSetVisibility(selected, "public"))} />
-            <SheetAction label="Set price / manage paid unlock" disabled={!video || busy} onPress={() => run(onSetPrice)} />
+            {onSetVipAccess ? (
+              <SheetAction
+                label={video?.vipAccessRequired ? "Remove from VIP shelf" : "Add to VIP shelf"}
+                disabled={!video || busy || (!video.vipAccessRequired && video.visibility !== "public")}
+                detail={!video?.vipAccessRequired && video?.visibility !== "public" ? "Make this video Public first" : "VIP replaces per-video paid unlock for this item"}
+                onPress={() => run((selected) => onSetVipAccess(selected, !selected.vipAccessRequired))}
+              />
+            ) : null}
+            <SheetAction label="Set price / manage paid unlock" disabled={!video || busy || video.vipAccessRequired} detail={video?.vipAccessRequired ? "Remove VIP access first; VIP and per-video purchase are separate tiers" : undefined} onPress={() => run(onSetPrice)} />
             <SheetAction label="Create Event from this content" disabled={!video || busy} onPress={() => run(onCreateEvent)} />
             <SheetAction
               label={isFeatured ? "Featured on Platform" : "Feature on Platform"}

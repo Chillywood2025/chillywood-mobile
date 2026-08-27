@@ -13,6 +13,7 @@ import {
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
+import { resolveCreatorVipVideoAccess, type CreatorVipVideoAccess } from "./creatorVipPasses";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 import {
   resolveCreatorContentAccess,
@@ -115,6 +116,8 @@ export type CreatorVideo = {
   playbackQualityLabel: string | null;
   playbackDelivery: VodPlaybackDeliveryMetadata | null;
   paidContentAccess: CreatorContentAccessResolution | null;
+  vipAccessRequired: boolean;
+  vipAccess: CreatorVipVideoAccess | null;
   visibilityAccess: CreatorVideoVisibilityAccess | null;
   renditionStatuses: VodRenditionStatusItem[];
   publicClipMetadata: CreatorVideoPublicClipMetadata | null;
@@ -141,6 +144,7 @@ type PublicCreatorVideoCardRow = {
   fileSizeBytes?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
+  vipAccessRequired?: unknown;
   clip_metadata_public?: unknown;
   clip_title_text?: unknown;
   clip_subtitle_text?: unknown;
@@ -150,7 +154,7 @@ type PublicCreatorVideoCardRow = {
 };
 
 const CREATOR_VIDEO_SELECT =
-  "id,owner_id,title,description,playback_url,thumb_url,created_at,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path,mime_type,file_size_bytes,updated_at";
+  "id,owner_id,title,description,playback_url,thumb_url,created_at,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path,mime_type,file_size_bytes,updated_at,vip_access_required";
 const PUBLIC_CREATOR_VIDEO_CARDS_URL = `${SUPABASE_FUNCTIONS_URL.replace(/\/+$/g, "")}/functions/v1/public-creator-video-cards`;
 
 const toText = (value: unknown) => String(value ?? "").trim();
@@ -416,6 +420,8 @@ async function parseCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: null,
+    vipAccessRequired: (row as CreatorVideoRow & { vip_access_required?: boolean }).vip_access_required === true,
+    vipAccess: null,
     visibilityAccess: null,
     renditionStatuses: [],
     publicClipMetadata: null,
@@ -464,6 +470,8 @@ const parsePublicCreatorVideoCard = (row: PublicCreatorVideoCardRow): CreatorVid
   playbackQualityLabel: null,
   playbackDelivery: null,
   paidContentAccess: null,
+  vipAccessRequired: row.vipAccessRequired === true,
+  vipAccess: null,
   visibilityAccess: null,
   renditionStatuses: [],
   publicClipMetadata: parsePublicClipMetadata(row),
@@ -656,6 +664,8 @@ function createLockedCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: null,
+    vipAccessRequired: false,
+    vipAccess: null,
     visibilityAccess: access,
     renditionStatuses: [],
     publicClipMetadata: null,
@@ -716,11 +726,27 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
     });
   }
 
-  const paidContentAccess = await resolveCreatorContentAccess({
-    contentType: "creator_video",
-    contentId: parsedWithAccess.id,
-  });
-  if (paidContentAccess.resolverStatus !== "resolved" || paidContentAccess.allowed !== true) {
+  const vipAccess = parsedWithAccess.vipAccessRequired
+    ? await resolveCreatorVipVideoAccess(parsedWithAccess.id).catch(() => ({
+      allowed: false, reason: "access_check_failed", vipRequired: true, creatorId: parsedWithAccess.ownerId || null,
+    }))
+    : null;
+  if (parsedWithAccess.vipAccessRequired && vipAccess?.allowed !== true) {
+    return {
+      ...parsedWithAccess,
+      playbackUrl: "",
+      playbackResolution: createUnavailableVodPlaybackResolution(parsedWithAccess.id, vipAccess?.reason ?? "vip_required"),
+      playbackQualityLabel: null,
+      playbackDelivery: null,
+      paidContentAccess: null,
+      vipAccess,
+    };
+  }
+
+  const paidContentAccess = parsedWithAccess.vipAccessRequired
+    ? null
+    : await resolveCreatorContentAccess({ contentType: "creator_video", contentId: parsedWithAccess.id });
+  if (paidContentAccess && (paidContentAccess.resolverStatus !== "resolved" || paidContentAccess.allowed !== true)) {
     return {
       ...parsedWithAccess,
       playbackUrl: "",
@@ -728,6 +754,7 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
       playbackQualityLabel: null,
       playbackDelivery: null,
       paidContentAccess,
+      vipAccess,
     };
   }
 
@@ -752,6 +779,7 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
 
   return {
     ...parsedWithAccess,
+    vipAccess,
     playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl,
     playbackResolution,
     playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null),

@@ -91,6 +91,7 @@ import {
   listMyCreatorVipPassOffers,
   listMyCreatorVipTransactions,
   saveCreatorVipPassOffer,
+  setCreatorVideoVipAccess,
   type CreatorVipPassOffer,
   type CreatorVipTransaction,
 } from "../_lib/creatorVipPasses";
@@ -4372,6 +4373,21 @@ export function ChannelStudioScreen() {
     void runVideoVisibilityUpdate(video, visibility);
   };
 
+  const onSetContentActionVipAccess = async (video: CreatorVideo, required: boolean) => {
+    setSelectedContentActionVideo(null);
+    setVideoSaving(true);
+    setVideoNotice(null);
+    try {
+      await setCreatorVideoVipAccess(video.id, required);
+      await loadCreatorVideos();
+      setVideoNotice(required ? "Added to the VIP shelf. Per-video paid unlock was disabled for this video." : "Removed from the VIP shelf.");
+    } catch (error) {
+      setVideoNotice(error instanceof Error ? error.message : "VIP video access could not be updated.");
+    } finally {
+      setVideoSaving(false);
+    }
+  };
+
   const onSetContentActionPrice = (video: CreatorVideo) => {
     setSelectedContentActionVideo(null);
     router.push({
@@ -5345,6 +5361,7 @@ export function ChannelStudioScreen() {
     const publishedVideos = sortedVideos.filter((video) => video.visibility === "public");
     const draftVideos = sortedVideos.filter((video) => video.visibility === "draft");
     const circleVideos = sortedVideos.filter((video) => video.visibility === "circle");
+    const vipVideos = sortedVideos.filter((video) => video.vipAccessRequired);
     const paidVideos = sortedVideos.filter((video) => {
       const offer = paidVideoOfferByVideoId.get(video.id);
       return !!offer?.isPaid && (offer.status === "sandbox" || offer.status === "active");
@@ -5371,6 +5388,7 @@ export function ChannelStudioScreen() {
       { key: "published", title: "Published", items: publishedVideos },
       { key: "drafts", title: "Drafts", items: draftVideos },
       { key: "paid", title: "Paid Videos", items: paidVideos },
+      { key: "vip", title: "VIP", items: vipVideos },
       { key: "circle", title: "Chi'lly Circle", items: circleVideos },
       { key: "attention", title: "Needs Attention", items: needsAttentionVideos },
     ].filter((shelf) => shelf.items.length > 0);
@@ -10277,6 +10295,7 @@ export function ChannelStudioScreen() {
       }}
       onSetVisibility={onSetContentActionVisibility}
       onSetPrice={onSetContentActionPrice}
+      onSetVipAccess={onSetContentActionVipAccess}
       onCreateEvent={onCreateEventFromVideo}
       onFeature={onFeatureContentActionVideo}
       onShare={(video) => {

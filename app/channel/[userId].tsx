@@ -324,10 +324,12 @@ export default function PublicChannelScreen() {
     ?? videos[0]
     ?? null
   ), [spotlightVideoId, videos]);
+  const vipVideos = useMemo(() => videos.filter((video) => video.vipAccessRequired), [videos]);
   const latestUploadVideos = useMemo(() => {
-    if (!featuredVideo) return videos;
-    const withoutFeatured = videos.filter((video) => video.id !== featuredVideo.id);
-    return withoutFeatured.length ? withoutFeatured : videos;
+    const standardVideos = videos.filter((video) => !video.vipAccessRequired);
+    if (!featuredVideo || featuredVideo.vipAccessRequired) return standardVideos;
+    const withoutFeatured = standardVideos.filter((video) => video.id !== featuredVideo.id);
+    return withoutFeatured.length ? withoutFeatured : standardVideos;
   }, [featuredVideo, videos]);
   const platformVideoVisibilityLabel = (video: CreatorVideo) => (
     video.visibility === "public" ? "Public" : video.visibility === "circle" ? "Chi'lly Circle" : "Draft"
@@ -984,6 +986,7 @@ export default function PublicChannelScreen() {
       <CreatorVideoCard
         video={video}
         mode={showOwnerControls ? "owner" : "public"}
+        accessLabel={video.vipAccessRequired ? (vipAccess?.allowed ? "VIP" : "VIP · Locked") : undefined}
         testID="platform-content-open-button"
         featured
         onOpen={() => openPlayer(video)}
@@ -998,6 +1001,7 @@ export default function PublicChannelScreen() {
       <CreatorVideoCard
         video={video}
         mode={showOwnerControls ? "owner" : "public"}
+        accessLabel={video.vipAccessRequired ? (vipAccess?.allowed ? "VIP" : "VIP · Locked") : undefined}
         testID="platform-content-open-button"
         onOpen={() => openPlayer(video)}
         onShare={() => { void shareSelectedVideo(video); }}
@@ -1054,6 +1058,16 @@ export default function PublicChannelScreen() {
         <Text style={styles.metaText}>Reminder ready</Text>
       ) : null}
     </View>
+  );
+
+  const renderVipVideos = () => (
+    vipVideos.length ? (
+      <AppSection title="VIP" statusLabel={vipAccess?.allowed ? "Unlocked" : "VIP"} statusTone={vipAccess?.allowed ? "success" : "warning"}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.shelfScroll} contentContainerStyle={styles.shelfRow}>
+          {vipVideos.map((video) => renderLatestUploadCard(video))}
+        </ScrollView>
+      </AppSection>
+    ) : null
   );
 
   const renderLiveNow = () => (
@@ -1713,6 +1727,7 @@ export default function PublicChannelScreen() {
         {renderChannelPulse()}
         {renderFeatured()}
         {renderLatestUploads()}
+        {renderVipVideos()}
         {renderLiveNow()}
         {renderUpcomingEvents()}
         {renderPlatformMonetization()}
