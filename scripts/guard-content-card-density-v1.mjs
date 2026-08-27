@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(path, "utf8");
 const card = read("components/creator-media/creator-video-card.tsx");
+const socialCard = read("components/ProfileSocialFeedCard.tsx");
 const studio = read("app/channel-settings.tsx");
 const home = read("app/(tabs)/index.tsx");
 const explore = read("app/(tabs)/explore.tsx");
@@ -24,6 +25,12 @@ requireAll(card, [
   'aspectRatio: 9 / 16',
   'creator-video-card-overflow-button',
 ], "shared creator content card");
+
+requireAll(socialCard, [
+  'import { CreatorVideoCard } from "./creator-media/creator-video-card";',
+  'compactMediaTile: {\n    width: 150',
+  'compactDiscoveryTile: {\n    width: 150,\n    aspectRatio: 9 / 16',
+], "Profile social media cards");
 
 requireAll(studio, [
   'title: "Recent Uploads"',
