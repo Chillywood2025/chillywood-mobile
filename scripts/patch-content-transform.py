@@ -15,7 +15,7 @@ quote_matches = [i for i, line in enumerate(lines) if i > guard_start and "title
 if len(quote_matches) != 1:
     raise SystemExit(f"quote patch expected 1 guard candidate, found {len(quote_matches)}")
 i = quote_matches[0]
-lines[i] = '  "title: \\"Chi' + "'" + 'lly Circle\\"",'
+lines[i] = "  'key: \\\"circle\\\"',"
 s = "\n".join(lines) + ("\n" if s.endswith("\n") else "")
 p.write_text(s)
-print("Patched content transform selectors and guard quoting")
+print("Patched content transform selectors and safe Circle shelf guard needle")
