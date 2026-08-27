@@ -1408,7 +1408,7 @@ select ok(
 );
 update public.paid_watch_party_tickets
 set buyer_id = 'b2222222-2222-4222-8222-222222222222'
-where id = 'ab22222222-2222-4222-8222-222222222222';
+where id = 'ab222222-2222-4222-8222-222222222222';
 
 update public.paid_watch_party_tickets
 set creator_id = 'c3333333-3333-4333-8333-333333333333'
