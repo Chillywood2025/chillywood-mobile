@@ -1,0 +1,41 @@
+name: post274-assurance-repair
+on:
+  push:
+    branches:
+      - chatgpt/post-274-assurance-closure
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply exact pgTAP plan correction
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const p = 'supabase/tests/chilly_chat_room_authority_closure_test.sql';
+          const source = fs.readFileSync(p, 'utf8');
+          const before = 'select plan(144);';
+          if ((source.match(/select plan\(144\);/g) || []).length !== 1) throw new Error('expected exactly one pgTAP plan(144)');
+          fs.writeFileSync(p, source.replace(before, 'select plan(145);'));
+          const truth = JSON.parse(fs.readFileSync('config/assurance/current-truth-v1.json', 'utf8'));
+          console.log('PROTECTED_MAIN_AUTHORITY=' + JSON.stringify(truth.protectedMainAuthority ?? null));
+          NODE
+      - name: Show current truth failure
+        continue-on-error: true
+        run: node scripts/assurance/current-truth.mjs
+      - name: Commit exact repair and remove helper
+        run: |
+          rm .github/workflows/post274-assurance-repair.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/tests/chilly_chat_room_authority_closure_test.sql .github/workflows/post274-assurance-repair.yml
+          git diff --cached --check
+          git commit -m 'Fix post-274 pgTAP plan accounting'
+          git push origin HEAD:chatgpt/post-274-assurance-closure
