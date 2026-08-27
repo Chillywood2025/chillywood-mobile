@@ -30,6 +30,7 @@ import {
 } from "react-native";
 import { titles as localTitles } from "../../_data/titles";
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
+import { ROOM_HEARTBEAT_MS } from "../../_lib/performancePolicy";
 import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
@@ -56,6 +57,7 @@ import {
   createPartyRoom,
   getPartyRoom,
   getSafePartyUserId,
+  touchOwnedPartyRoomActivity,
   type WatchPartyContentSourceType,
   type WatchPartyRoomType,
   type WatchPartyState,
@@ -439,6 +441,28 @@ export default function WatchPartyIndexScreen() {
     setHostLabel("You are hosting");
     return nextPreparedRoom;
   }, [buildRoomPreview, canUseBetaRooms, requirePremiumRoomEntry]);
+
+  useEffect(() => {
+    const liveRoom = preparedRoom?.room;
+    if (
+      !canUseBetaRooms
+      || embeddedLiveStageEntry
+      || !liveRoom
+      || liveRoom.roomType !== "live"
+    ) return undefined;
+
+    let active = true;
+    const heartbeat = () => {
+      if (!active) return;
+      void touchOwnedPartyRoomActivity(liveRoom.partyId);
+    };
+    heartbeat();
+    const interval = setInterval(heartbeat, ROOM_HEARTBEAT_MS * 2);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [canUseBetaRooms, embeddedLiveStageEntry, preparedRoom?.room]);
 
   useEffect(() => {
     if (!canUseBetaRooms) return;

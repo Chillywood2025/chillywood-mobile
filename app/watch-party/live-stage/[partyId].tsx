@@ -4681,11 +4681,14 @@ export default function WatchPartyLiveStageScreen({
     ? LIVE_FIRST_PREMIUM_UPSELL_COPY
     : LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY;
   const activeLiveAccessPresentation = liveWatchPartyGatePresentation ?? blockedRoomAccessGatePresentation;
-  const blockedRoomAccessPrimaryLabel = blockedRoomAccessSheetReason
-    ? blockedRoomAccessSheetReason === "premium_required"
-      ? "View Premium"
-      : activeLiveAccessPresentation?.actionLabel ?? "View Room Access"
-    : "Open Party Room";
+  const shouldRouteAccessFailureHome = !!roomEntryError || blockedRoomAccess?.reason === "removed";
+  const blockedRoomAccessPrimaryLabel = shouldRouteAccessFailureHome
+    ? "Home"
+    : blockedRoomAccessSheetReason
+      ? blockedRoomAccessSheetReason === "premium_required"
+        ? "View Premium"
+        : activeLiveAccessPresentation?.actionLabel ?? "View Room Access"
+      : "Open Party Room";
 
   if (authLoading || betaLoading) {
     return (
@@ -4731,7 +4734,7 @@ export default function WatchPartyLiveStageScreen({
         <View style={styles.routeGateCard}>
           <Text style={styles.routeGateTitle}>Live room unavailable</Text>
           <Text style={styles.routeGateBody}>
-            This live room could not be found anymore. Open Party Room if you want to re-check the canonical room route.
+            This live room could not be found anymore. Return Home and reopen Live when you are ready.
           </Text>
           <RouteBackedMonetizationProofCard
             config={routeProofConfig}
@@ -4755,21 +4758,12 @@ export default function WatchPartyLiveStageScreen({
             <TouchableOpacity
               style={styles.routeGatePrimaryButton}
               activeOpacity={0.86}
-              onPress={() => {
-                if (blockedRoomAccessSheetReason) {
-                  setLiveWatchPartyAccessSheetVisible(true);
-                  return;
-                }
-                router.replace({
-                  pathname: "/watch-party/[partyId]",
-                  params: { partyId },
-                });
-              }}
+              onPress={() => router.replace("/(tabs)")}
               accessibilityRole="button"
-              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
+              accessibilityLabel="Home"
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
-              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessPrimaryLabel}</Text>
+              <Text style={styles.routeGatePrimaryText}>Home</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -4814,16 +4808,20 @@ export default function WatchPartyLiveStageScreen({
                   setLiveWatchPartyAccessSheetVisible(true);
                   return;
                 }
+                if (shouldRouteAccessFailureHome) {
+                  router.replace("/(tabs)");
+                  return;
+                }
                 router.replace({
                   pathname: "/watch-party/[partyId]",
                   params: { partyId },
                 });
               }}
               accessibilityRole="button"
-              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
+              accessibilityLabel={blockedRoomAccessPrimaryLabel}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
-              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}</Text>
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessPrimaryLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -21,6 +21,8 @@ export type RouteBackedMonetizationProofConfig = {
 };
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuidSourceId = (value: string) => UUID_PATTERN.test(value);
 
 const mapProofConfig = (row: Record<string, unknown>): RouteBackedMonetizationProofConfig => ({
   id: normalizeText(row.id),
@@ -48,7 +50,7 @@ export async function readRouteBackedMonetizationProofConfig(options: {
 }): Promise<RouteBackedMonetizationProofConfig | null> {
   const sourceId = normalizeText(options.sourceId);
   const sourceTypes = options.sourceTypes.map(normalizeText).filter(Boolean);
-  if (!sourceId || !sourceTypes.length) return null;
+  if (!sourceId || !sourceTypes.length || !isUuidSourceId(sourceId)) return null;
 
   const { data, error } = await (supabase as any)
     .from("creator_monetization_configs")

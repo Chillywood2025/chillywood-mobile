@@ -653,7 +653,7 @@ select ok(
   '56. rolled-back migration evidence grants no object authority'
 );
 
--- RPC-only Watch-Party membership and source-less live authority (57-67).
+-- RPC-only Watch-Party membership and ordinary Live authority (57-67).
 select has_function(
   'public',
   'join_watch_party_room_session',
@@ -767,10 +767,10 @@ select ok(
   ),
   '66. fail-closed membership identity trigger is installed'
 );
-select throws_ok(
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"c3333333-3333-4333-8333-333333333333","session_id":"c3333333-3333-4333-8333-333333333301"}', true);
+select lives_ok(
   $$insert into public.watch_party_rooms (party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,playback_state,playback_position_millis,started_at,last_activity_at) values ('UNVERIFIEDLIVE','c3333333-3333-4333-8333-333333333333','live','open','open',true,'paused',0,now(),now())$$,
-  'creator_eligibility_required',
-  '67. source-less live room creation requires verified creator eligibility'
+  '67. exact-current-session ordinary Live creation does not require creator-money eligibility'
 );
 reset role;
 update public.wave1_creator_eligibility
@@ -778,7 +778,7 @@ set state = 'SUSPENDED'
 where creator_user_id = 'a7777777-7777-4777-8777-777777777777';
 set local role authenticated;
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"b8888888-8888-4888-8888-888888888888","session_id":"b8888888-8888-4888-8888-888888888801"}', true);
-select ok(not public.can_read_watch_party_room_authority('CLOSUREWATCH'), '67a. existing Live Stage fails closed when host eligibility is no longer VERIFIED');
+select ok(public.can_read_watch_party_room_authority('CLOSUREWATCH'), '67a. ordinary Live room authority is independent of host creator-money eligibility');
 reset role;
 update public.wave1_creator_eligibility
 set state = 'VERIFIED'

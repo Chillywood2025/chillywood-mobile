@@ -797,7 +797,15 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
       p_camera_preview_url: String(options.cameraPreviewUrl ?? "").trim() || null,
     });
   const row = Array.isArray(result.data) ? result.data[0] ?? null : result.data;
-  if (result.error || !row || String(row.user_id ?? "").trim() !== writableUserId) return null;
+  if (result.error) {
+    reportRuntimeError("watch-party-membership-rpc", result.error, {
+      partyId,
+      operation: isJoining ? "join" : "heartbeat",
+      writableUserId,
+    });
+    return null;
+  }
+  if (!row || String(row.user_id ?? "").trim() !== writableUserId) return null;
   return rowToMembership(row);
 }
 
@@ -1127,6 +1135,28 @@ export async function getPartyRoom(partyId: string): Promise<WatchPartyState | n
   return isWatchPartyRoomActive(room) ? room : null;
 }
 
+export async function touchOwnedPartyRoomActivity(partyId: string): Promise<boolean> {
+  const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
+  const writableUserId = await getWritablePartyUserId();
+  if (!normalizedPartyId || !writableUserId) return false;
+
+  const { error } = await supabase
+    .from(PARTY_ROOMS_TABLE)
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq("party_id", normalizedPartyId)
+    .eq("host_user_id", writableUserId)
+    .eq("is_active", true);
+
+  if (error) {
+    reportRuntimeError("watch-party-room-owner-heartbeat", error, {
+      partyId: normalizedPartyId,
+      writableUserId,
+    });
+    return false;
+  }
+  return true;
+}
+
 export async function listPartyRoomMemberships(partyId: string): Promise<WatchPartyRoomMembership[]> {
   const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
   if (!normalizedPartyId) return [];
@@ -1139,7 +1169,11 @@ export async function listPartyRoomMemberships(partyId: string): Promise<WatchPa
       .order("joined_at", { ascending: true })
       .returns<PartyMembershipRow[]>();
 
-    if (error || !data) return [];
+    if (error) {
+      reportRuntimeError("watch-party-membership-read", error, { partyId: normalizedPartyId });
+      return [];
+    }
+    if (!data) return [];
     return data.map(rowToMembership).filter(isDefined);
   } catch {
     return [];
