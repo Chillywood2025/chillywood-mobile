@@ -30,6 +30,7 @@ jobs:
           if [ "$merge_status" -ne 0 ]; then
             python3 scripts/reconcile-pr245-current-main.py
           fi
+          python3 scripts/reconcile-pr245-paid-video-test-harness.py
           git add -A
           test -z "$(git diff --name-only --diff-filter=U)"
       - run: npm ci
@@ -53,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/reconcile-245-current-main.yml .github/workflows/reconcile-245-current-main-fix.yml scripts/reconcile-pr245-current-main.py
+          git rm .github/workflows/reconcile-245-current-main.yml .github/workflows/reconcile-245-current-main-fix.yml scripts/reconcile-pr245-current-main.py scripts/reconcile-pr245-paid-video-test-harness.py
           git add -A
           git commit -m "Reconcile creator money with current entitlement truth"
           git push origin HEAD:chatgpt/creator-money-production-readiness-ios-parity-v1
