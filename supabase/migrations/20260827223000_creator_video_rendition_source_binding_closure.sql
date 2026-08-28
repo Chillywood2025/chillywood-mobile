@@ -3,6 +3,14 @@
 -- trigger covers future writes; the deployment assertions refuse to preserve a
 -- historical confused-deputy row.
 
+begin;
+
+-- Keep the historical assertion, claim backfill, and trigger installation on
+-- one stable source snapshot. New rendition writes resume after both claim
+-- registries are authoritative.
+lock table public."media_renditions", public."video_renditions"
+  in share row exclusive mode;
+
 create or replace function public."creator_video_rendition_binding_valid"(
   p_video_id uuid,
   p_source_id text,
@@ -50,7 +58,7 @@ alter table public."media_rendition_output_path_claims" enable row level securit
 revoke all on table public."media_rendition_output_path_claims"
   from public,anon,authenticated,service_role;
 comment on table public."media_rendition_output_path_claims" is
-  'Internal transactional registry preventing one playback artifact from being claimed by multiple rendition rows.';
+  'Internal transactional registry preventing one playback artifact from crossing rendition authority. A legacy same-authority shared manifest has one canonical claim; non-canonical rows remain fail-closed.';
 
 create or replace function public."media_rendition_output_paths_valid"(
   p_rendition_id uuid,
@@ -158,7 +166,16 @@ begin
   if tg_op='DELETE' then
     delete from public."media_rendition_output_path_claims" claim
     where claim."rendition_kind"='media_rendition'
-      and claim."rendition_id"=old."id";
+      and claim."rendition_id"=old."id"
+      and not exists (
+        select 1
+        from public."media_renditions" remaining
+        where remaining."id"<>old."id"
+          and claim."output_path"=any(array[
+            remaining."public_playback_path",remaining."manifest_path",
+            remaining."variant_playlist_path"
+          ])
+      );
     return old;
   end if;
   delete from public."media_rendition_output_path_claims" claim
@@ -166,7 +183,16 @@ begin
     and claim."rendition_id"=new."id"
     and claim."output_path"<>all(array[
       coalesce(new."public_playback_path",''),coalesce(new."manifest_path",''),
-      coalesce(new."variant_playlist_path",'')]);
+      coalesce(new."variant_playlist_path",'')])
+    and not exists (
+      select 1
+      from public."media_renditions" remaining
+      where remaining."id"<>new."id"
+        and claim."output_path"=any(array[
+          remaining."public_playback_path",remaining."manifest_path",
+          remaining."variant_playlist_path"
+        ])
+    );
   return new;
 end;
 $$;
@@ -196,7 +222,32 @@ begin
 
   if exists (
     with expanded_paths as (
-      select 'media_rendition'::text as kind,rendition."id",output_path."path"
+      select
+        'media_rendition'::text as kind,
+        rendition."id",
+        output_path."path",
+        pg_catalog.jsonb_build_object(
+          'kind','media_rendition',
+          'video_id',rendition."video_id",
+          'owner_id',rendition."creator_id",
+          'source_type',rendition."source_type",
+          'source_id',rendition."source_id",
+          'job_id',rendition."job_id",
+          'source_hash',rendition."source_hash",
+          'visibility',rendition."visibility",
+          'bucket_role',rendition."bucket_role",
+          'storage_provider',rendition."storage_provider",
+          'delivery_provider',rendition."delivery_provider",
+          'storage_bucket',rendition."storage_bucket",
+          'delivery_format',rendition."delivery_format",
+          'cache_policy',rendition."cache_policy",
+          'is_original',rendition."is_original",
+          'is_ready',rendition."is_ready",
+          'scan_status',rendition."scan_status",
+          'moderation_status',rendition."moderation_status",
+          'public_safe',rendition."is_public_playback_safe",
+          'protected_safe',rendition."is_protected_playback_safe"
+        ) as authority_scope
       from public."media_renditions" rendition
       cross join lateral pg_catalog.unnest(array[
         rendition."public_playback_path",
@@ -205,7 +256,22 @@ begin
       ]) output_path("path")
       where nullif(pg_catalog.btrim(coalesce(output_path."path",'')),'') is not null
       union all
-      select 'video_rendition',rendition."id",output_path."path"
+      select
+        'video_rendition',
+        rendition."id",
+        output_path."path",
+        pg_catalog.jsonb_build_object(
+          'kind','video_rendition',
+          'rendition_id',rendition."id",
+          'video_id',rendition."video_id",
+          'owner_id',rendition."owner_id",
+          'storage_bucket',rendition."storage_bucket",
+          'status',rendition."status",
+          'access_tier',rendition."access_tier",
+          'is_original',rendition."quality_label"='original',
+          'scan_status',rendition."scan_status",
+          'quarantined',rendition."quarantined_at" is not null
+        )
       from public."video_renditions" rendition
       cross join lateral pg_catalog.unnest(array[
         rendition."storage_path",rendition."manifest_path"
@@ -215,7 +281,7 @@ begin
     select 1
     from expanded_paths
     group by expanded_paths."path"
-    having count(distinct expanded_paths."kind"||':'||expanded_paths."id"::text)>1
+    having count(distinct expanded_paths.authority_scope)>1
   ) then
     raise exception 'historical_media_rendition_output_path_reused';
   end if;
@@ -225,21 +291,47 @@ $$;
 insert into public."media_rendition_output_path_claims"(
   "output_path","rendition_kind","rendition_id"
 )
-select distinct output_path."path",'media_rendition',rendition."id"
-from public."media_renditions" rendition
-cross join lateral pg_catalog.unnest(array[
-  rendition."public_playback_path",
-  rendition."manifest_path",
-  rendition."variant_playlist_path"
-]) output_path("path")
-where nullif(pg_catalog.btrim(coalesce(output_path."path",'')),'') is not null
-union all
-select distinct output_path."path",'video_rendition',rendition."id"
-from public."video_renditions" rendition
-cross join lateral pg_catalog.unnest(array[
-  rendition."storage_path",rendition."manifest_path"
-]) output_path("path")
-where nullif(pg_catalog.btrim(coalesce(output_path."path",'')),'') is not null
+with expanded_paths as (
+  select distinct
+    output_path."path",
+    'media_rendition'::text as kind,
+    rendition."id",
+    coalesce(rendition."height",0) as priority
+  from public."media_renditions" rendition
+  cross join lateral pg_catalog.unnest(array[
+    rendition."public_playback_path",
+    rendition."manifest_path",
+    rendition."variant_playlist_path"
+  ]) output_path("path")
+  where nullif(pg_catalog.btrim(coalesce(output_path."path",'')),'') is not null
+  union all
+  select distinct
+    output_path."path",
+    'video_rendition'::text,
+    rendition."id",
+    coalesce(rendition."height",0)
+  from public."video_renditions" rendition
+  cross join lateral pg_catalog.unnest(array[
+    rendition."storage_path",rendition."manifest_path"
+  ]) output_path("path")
+  where nullif(pg_catalog.btrim(coalesce(output_path."path",'')),'') is not null
+), canonical_claims as (
+  select distinct on (expanded_paths."path")
+    expanded_paths."path",
+    expanded_paths.kind,
+    expanded_paths."id"
+  from expanded_paths
+  order by
+    expanded_paths."path",
+    expanded_paths.priority desc,
+    expanded_paths.kind,
+    expanded_paths."id"
+)
+select
+  canonical_claims."path",
+  canonical_claims.kind,
+  canonical_claims."id"
+from canonical_claims
 on conflict ("output_path") do update
   set "rendition_id"=excluded."rendition_id"
   where public."media_rendition_output_path_claims"."rendition_kind"
@@ -566,3 +658,5 @@ create policy "creator_videos_storage_select_premium_renditions"
           video."storage_path",video."storage_object_key",video."playback_url",auth.uid()::text)
     )
   );
+
+commit;
