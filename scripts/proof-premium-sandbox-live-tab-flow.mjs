@@ -11,14 +11,6 @@ const fail = (message) => {
   process.exitCode = 1;
 };
 
-const assertIncludes = (source, needle, label) => {
-  if (!source.includes(needle)) fail(`${label} is missing ${needle}`);
-};
-
-const assertNotIncludes = (source, needle, label) => {
-  if (source.includes(needle)) fail(`${label} must not include ${needle}`);
-};
-
 const monetization = read("_lib/monetization.ts");
 const accessSheet = read("components/monetization/access-sheet.tsx");
 const subscribe = read("app/subscribe.tsx");
@@ -72,6 +64,31 @@ const checks = [
     detail: "Premium gate sheet can launch sandbox purchase directly instead of always routing to Subscribe.",
   },
   {
+    id: "fresh_premium_rechecks_original_gate",
+    ok: accessSheet.includes("freshGateEntitledTargetId")
+      && accessSheet.includes("if (isPremiumGateSheet && freshGateEntitled && sheetState)")
+      && accessSheet.includes("message: \"Premium is already active for this account.\"")
+      && accessSheet.includes("const nextFeedback = await onPurchaseResult")
+      && liveTab.includes("return recheckLiveAccessAfterPremiumAction();"),
+    detail: "A stale Premium denial that refreshes to active rechecks the original strict Live gate instead of detouring through Subscribe.",
+  },
+  {
+    id: "current_store_management_is_separate_from_account_entitlement",
+    ok: subscribe.includes("hasCurrentStorePremiumSubscription")
+      && subscribe.includes("currentStorePremiumActive")
+      && subscribe.includes("premiumActiveOutsideCurrentStore")
+      && subscribe.includes("canManage = isSignedIn && snapshot.configuration.shouldConfigure && currentStorePremiumActive")
+      && subscribe.includes("There is no active ${STORE_PROVIDER_NAME} Premium subscription to manage on this device."),
+    detail: "Account-wide Premium does not imply the current device store has a subscription to manage.",
+  },
+  {
+    id: "ios_premium_management_requires_ios_product",
+    ok: subscribe.includes('"com.chillywood.premium.monthly"')
+      && subscribe.includes('"com.chillywood.premium.yearly"')
+      && subscribe.includes("Platform.OS === \"ios\" ? IOS_PREMIUM_PRODUCT_IDS : ANDROID_PREMIUM_PRODUCT_IDS"),
+    detail: "iOS subscription management is exposed only when RevenueCat reports an active Chi'llywood App Store Premium product.",
+  },
+  {
     id: "live_tab_actionable_denial_path",
     ok: liveTab.includes("setPremiumGate(access)")
       && liveTab.includes("setPremiumGateVisible(true)")
@@ -115,15 +132,9 @@ for (const check of checks) {
   if (!check.ok) fail(`${check.id}: ${check.detail}`);
 }
 
-if (process.exitCode) {
-  process.exit();
-}
+if (process.exitCode) process.exit();
 
 console.log("Premium sandbox Live tab flow proof passed.");
 console.log(JSON.stringify({
-  checks: checks.map((check) => ({
-    id: check.id,
-    status: "pass",
-    detail: check.detail,
-  })),
+  checks: checks.map((check) => ({ id: check.id, status: "pass", detail: check.detail })),
 }, null, 2));
