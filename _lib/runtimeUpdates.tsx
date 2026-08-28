@@ -207,7 +207,8 @@ export function RuntimeUpdateGate() {
   const router = useRouter();
   const { isLoading, isSignedIn, user } = useSession();
   const authenticatedUserId = String(user?.id ?? "").trim();
-  const restoredUserRef = useRef<string | null>(null);
+  const restoreAttemptedUserRef = useRef<string | null>(null);
+  const restoreSettledUserRef = useRef<string | null>(null);
   const checkInFlightRef = useRef(false);
   const reloadRequestedRef = useRef<string | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -219,27 +220,14 @@ export function RuntimeUpdateGate() {
   );
 
   useEffect(() => {
-    if (!isSignedIn || !authenticatedUserId) return;
-    const normalizedPath = normalizeNavigationResumePath(pathname);
-    const storageKey = getNavigationResumeKey(authenticatedUserId);
-
-    if (!normalizedPath) {
-      void AsyncStorage.removeItem(storageKey).catch(() => null);
-      return;
-    }
-
-    const record: NavigationResumeRecord = {
-      pathname: normalizedPath,
-      savedAt: Date.now(),
-    };
-    void AsyncStorage.setItem(storageKey, JSON.stringify(record)).catch(() => null);
-  }, [authenticatedUserId, isSignedIn, pathname]);
-
-  useEffect(() => {
     if (isLoading || !isSignedIn || !authenticatedUserId) return undefined;
-    if (restoredUserRef.current === authenticatedUserId) return undefined;
-    restoredUserRef.current = authenticatedUserId;
-    if (pathname !== "/") return undefined;
+    if (restoreAttemptedUserRef.current === authenticatedUserId) return undefined;
+    restoreAttemptedUserRef.current = authenticatedUserId;
+
+    if (pathname !== "/") {
+      restoreSettledUserRef.current = authenticatedUserId;
+      return undefined;
+    }
 
     let active = true;
     const storageKey = getNavigationResumeKey(authenticatedUserId);
@@ -258,12 +246,33 @@ export function RuntimeUpdateGate() {
       reportRuntimeError("navigation-resume-restore", error, {
         source: "runtime-update-gate",
       });
+    }).finally(() => {
+      if (active) restoreSettledUserRef.current = authenticatedUserId;
     });
 
     return () => {
       active = false;
     };
   }, [authenticatedUserId, isLoading, isSignedIn, pathname, router]);
+
+  useEffect(() => {
+    if (!isSignedIn || !authenticatedUserId) return;
+    if (pathname === "/" && restoreSettledUserRef.current !== authenticatedUserId) return;
+
+    const normalizedPath = normalizeNavigationResumePath(pathname);
+    const storageKey = getNavigationResumeKey(authenticatedUserId);
+
+    if (!normalizedPath) {
+      void AsyncStorage.removeItem(storageKey).catch(() => null);
+      return;
+    }
+
+    const record: NavigationResumeRecord = {
+      pathname: normalizedPath,
+      savedAt: Date.now(),
+    };
+    void AsyncStorage.setItem(storageKey, JSON.stringify(record)).catch(() => null);
+  }, [authenticatedUserId, isSignedIn, pathname]);
 
   useEffect(() => {
     if (!shouldUseRuntimeUpdates()) return;
