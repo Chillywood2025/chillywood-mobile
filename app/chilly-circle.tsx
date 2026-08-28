@@ -532,8 +532,12 @@ export default function ChillyCircleScreen() {
         activeOpacity={0.86}
         onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
       >
-        <View style={[styles.avatar, styles.officialAvatar, styles.officialAvatarCompact]}>
-          <Text style={[styles.avatarInitial, styles.officialAvatarInitial]}>R</Text>
+        <View style={[styles.avatar, styles.officialAvatar]}>
+          {RACHI_OFFICIAL_ACCOUNT.avatarUrl ? (
+            <Image source={{ uri: RACHI_OFFICIAL_ACCOUNT.avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={[styles.avatarInitial, styles.officialAvatarInitial]}>R</Text>
+          )}
         </View>
         <View style={styles.personCopy}>
           <View style={styles.officialTitleRow}>
@@ -842,7 +846,7 @@ const styles = StyleSheet.create({
   officialRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 9,
   },
   officialTitleRow: {
     flexDirection: "row",
@@ -870,13 +874,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 1.5,
   },
-  officialAvatarCompact: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
   officialAvatarInitial: {
-    fontSize: 10,
+    fontSize: 15,
   },
   loadingInline: {
     minHeight: 44,

@@ -135,6 +135,7 @@ import {
   isProfileMediaActive,
   readUserProfile,
   readUserProfileByUserId,
+  saveUserProfile,
   type ProfileAppearanceFitMode,
   type UserProfile,
 } from "../../_lib/userData";
@@ -609,6 +610,9 @@ export default function ProfileScreen() {
   const [profileSocialFeedNotice, setProfileSocialFeedNotice] = useState<string | null>(null);
   const [reminderActionLoading, setReminderActionLoading] = useState<string | null>(null);
   const [reminderActionNotice, setReminderActionNotice] = useState<string | null>(null);
+  const [aboutDraft, setAboutDraft] = useState("");
+  const [aboutBusy, setAboutBusy] = useState(false);
+  const [aboutNotice, setAboutNotice] = useState<string | null>(null);
   const params = useLocalSearchParams<{
     userId?: string;
     displayName?: string;
@@ -744,6 +748,11 @@ export default function ProfileScreen() {
     ? undefined
     : profile.profileBackgroundUrl;
   const visibleProfileBackgroundOverlay = profile.profileBackgroundOverlayStrength;
+
+  useEffect(() => {
+    setAboutDraft(profile.tagline ?? "");
+    setAboutNotice(null);
+  }, [profile.tagline, userId]);
 
   useEffect(() => {
     let active = true;
@@ -2571,7 +2580,10 @@ export default function ProfileScreen() {
 
     return null;
   };
-  const publicEventCount = publicEvents.length;
+  const currentPublicEvents = publicEvents.filter((event) => (
+    event.isLiveNow || event.isUpcoming || event.replay.isReplayAvailableNow
+  ));
+  const publicEventCount = currentPublicEvents.length;
   const liveEventCount = publicEvents.filter((event) => event.isLiveNow).length;
   const channelSignals = [
     {
@@ -2658,8 +2670,8 @@ export default function ProfileScreen() {
     ? "Official programming stays public-safe and managed by Chi'llywood."
     : publicEventsReady
       ? publicEventCount
-        ? `${publicEventCount} public creator event${publicEventCount === 1 ? "" : "s"} can appear here when scheduled or live.`
-        : "No public creator live or watch-party events are scheduled yet."
+        ? `${publicEventCount} current public event${publicEventCount === 1 ? "" : "s"} ${publicEventCount === 1 ? "is" : "are"} live, upcoming, or replay-ready.`
+        : "No public creator live or watch-party events are scheduled right now."
       : "Loading this Platform's creator events.";
   const communityActions = isSelfProfile
     ? [
@@ -2781,35 +2793,26 @@ export default function ProfileScreen() {
   );
   const liveTabSections: readonly ProfileSurfaceCard[] = [
     {
-      title: profile.isLive ? "Live Presence" : "Live Status",
+      title: liveNowEvent ? "Live Now" : "Live",
       kicker: "LIVE",
       body: liveNowEvent
-        ? `${liveNowEvent.eventTitle} is live here now as ${formatEventTypeLabel(liveNowEvent.eventType)}.`
-        : profile.isLive
-          ? "This Platform is showing live presence. Room re-entry appears only when real room context is attached."
-          : "No live room is active right now. This tab keeps live status clear without pretending the profile is the room.",
-      accent: profile.isLive ? "live" : "default",
+        ? `${liveNowEvent.eventTitle} is live now. Tap the live entry to watch.`
+        : "Nothing is live right now.",
+      accent: liveNowEvent ? "live" : "default",
     },
     {
-      title: nextUpcomingEvent ? formatEventTypeLabel(nextUpcomingEvent.eventType) : "Live Watch-Party",
-      kicker: "LIVE FLOW",
+      title: "Upcoming",
+      kicker: "SCHEDULE",
       body: nextUpcomingEvent
-        ? `${nextUpcomingEvent.eventTitle} is the next public event at ${formatEventDate(nextUpcomingEvent.startsAt)}.`
-        : "This tab can point people toward Live Watch-Party without absorbing the live-room flow.",
+        ? `${nextUpcomingEvent.eventTitle} starts ${formatEventDate(nextUpcomingEvent.startsAt)}.`
+        : "No upcoming public events are scheduled.",
     },
     {
-      title: scheduledWatchPartyEvent ? "Watch-Party Live Scheduled" : "Watch-Party Live",
-      kicker: "WATCH TOGETHER",
-      body: scheduledWatchPartyEvent
-        ? `${scheduledWatchPartyEvent.eventTitle} is scheduled for ${formatEventDate(scheduledWatchPartyEvent.startsAt)} and links out to the canonical Watch-Party Live entry.`
-        : "Watch-Party Live stays on the canonical watch-together path.",
-    },
-    {
-      title: hasLiveRouteContext ? "Linked Room Context" : "Room Continuity",
-      kicker: hasLiveRouteContext ? "ACTIVE CONTEXT" : "WHEN AVAILABLE",
-      body: hasLiveRouteContext
-        ? "Real room context is attached, so live and watch-party entry can hand off to the correct canonical route."
-        : "When a profile is opened from a room or live session, this tab should become the clean re-entry point instead of a fake room shell.",
+      title: "Replays",
+      kicker: "WATCH LATER",
+      body: replayReadyEvents.length
+        ? `${replayReadyEvents.length} replay${replayReadyEvents.length === 1 ? " is" : "s are"} available now.`
+        : "No event replays are available right now.",
     },
   ];
   const publicAudienceVisibilitySections: readonly ProfileSurfaceCard[] = useMemo(() => {
@@ -2878,28 +2881,14 @@ export default function ProfileScreen() {
     isOfficialProfile,
   ]);
   const communityTabSections: readonly ProfileSurfaceCard[] = [
-    ...(!isOfficialProfile ? [{
-      title: "Audience Posture",
-      kicker: "AUDIENCE",
-      body: audiencePostureBody,
-    }] : []),
     {
-      title: "Conversation",
-      kicker: isOfficialProfile ? "OFFICIAL CONNECTION" : "CHI'LLY CHAT",
+      title: "Connections",
+      kicker: "COMMUNITY",
       body: isSelfProfile
-        ? "Keep direct follow-up in Chi'lly Chat so this route can stay public-facing."
+        ? "Your public community stays here while direct conversations live in Chi'lly Chat and closer connections live in Chi'lly Circle."
         : isOfficialProfile
-          ? "Rachi appears first in your Chi'lly Circle as an official connection, not a private chat thread."
-          : "Direct follow-up from this Platform should move into Chi'lly Chat, not hide inside the profile.",
-    },
-    {
-      title: isOfficialProfile ? "Trust And Safety" : "Public Trust",
-      kicker: isOfficialProfile ? "SAFETY" : "COMMUNITY",
-      body: isOfficialProfile
-        ? "Official accounts need protected trust markers, bounded reporting, and auditable follow-up."
-        : canReportProfile
-          ? "Reporting is already available here, so audience posture and community trust can grow from a real safety floor."
-          : "Keep this Profile identity-first, socially readable, and ready for real public activity when it exists.",
+          ? "Official updates stay public while direct private conversations remain separate."
+          : "Follow public activity here, use Chi'lly Chat for direct conversation, and Chi'lly Circle for approved closer connections.",
     },
     ...publicAudienceVisibilitySections,
   ];
@@ -2910,34 +2899,44 @@ export default function ProfileScreen() {
           kicker: profile.platformOwnershipLabel ?? "PLATFORM OWNED",
           body: officialAccount?.conciergeHeadline
             ? `${officialAccount.conciergeHeadline} ${profile.displayName} is Chi'llywood's verified public account.`
-            : `${profile.displayName} is Chi'llywood's verified public account, not a claimable owner page.`,
+            : `${profile.displayName} is Chi'llywood's verified public account.`,
           accent: "official",
-        },
-        {
-          title: "Platform Read",
-          kicker: "ABOUT",
-          body: "Verified access, official updates, and public Platform posture stay clear on this canonical route.",
-        },
-        {
-          title: "Chi'lly Circle",
-          kicker: "OFFICIAL CONNECTION",
-          body: "Rachi stays pinned first in Chi'lly Circle. Direct Chi'lly Chat threads stay for people you message.",
         },
       ]
     : [
         {
-          title: "Platform Identity",
+          title: `About ${profile.displayName}`,
           kicker: "ABOUT",
-          body: `${profile.displayName} keeps live presence, access posture, and direct follow-up inside one Chi'llywood identity.`,
+          body: profile.tagline?.trim()
+            || (isSelfProfile ? "Add a short bio so people know who you are and what you share." : "No bio has been added yet."),
         },
         {
-          title: "Platform Read",
-          kicker: "PLATFORM",
-          body: isSelfProfile
-            ? "Keep this surface public-facing first. Platform Studio stays the deeper editing handoff while access and audience posture stay easy to read here."
-            : "This route stays a public Platform destination where access posture, audience cues, and follow-up stay easy to read.",
+          title: "At a glance",
+          kicker: "PROFILE",
+          body: [profile.handle ? `@${profile.handle.replace(/^@/, "")}` : null, roleLabel].filter(Boolean).join(" · "),
         },
       ];
+
+  const onSaveAbout = async () => {
+    if (!isSelfProfile || !channelAccessProfile || aboutBusy) return;
+    const normalizedAbout = aboutDraft.trim().slice(0, 160);
+    const nextProfile: UserProfile = {
+      ...channelAccessProfile,
+      tagline: normalizedAbout || undefined,
+    };
+    setAboutBusy(true);
+    setAboutNotice(null);
+    try {
+      await saveUserProfile(nextProfile);
+      setChannelAccessProfile(nextProfile);
+      setAboutDraft(normalizedAbout);
+      setAboutNotice(normalizedAbout ? "About updated." : "About cleared.");
+    } catch {
+      setAboutNotice("Unable to update About right now.");
+    } finally {
+      setAboutBusy(false);
+    }
+  };
   const activeTabSections = activeTab === "home"
     ? homeSections
     : activeTab === "content"
@@ -4277,7 +4276,6 @@ export default function ProfileScreen() {
             </ScrollView>
           </View>
           {activeTab === "home" ? renderProfileSocialFeed() : null}
-          {activeTab === "about" ? renderOwnerHandoffCard() : null}
           {activeTab !== "home" ? activeTabSections.map((section) => (
             <View
               key={section.title}
@@ -4294,36 +4292,65 @@ export default function ProfileScreen() {
           )) : null}
           {activeTab === "about" ? (
             <>
-              <View style={styles.channelGuideCard}>
-                <AppText scale="caption" style={styles.channelGuideKicker}>{channelHelper.kicker}</AppText>
-                <AppText scale="subhead" style={styles.channelGuideTitle}>{channelHelper.title}</AppText>
-                <AppText scale="footnote" style={styles.channelGuideBody}>{channelHelper.body}</AppText>
-                {isOfficialProfile && officialGuidanceTopics.length ? (
-                  <View style={styles.officialTopicRow}>
-                    {officialGuidanceTopics.map((topic) => (
-                      <View key={topic} style={styles.officialTopicChip}>
-                        <AppText scale="caption" style={styles.officialTopicChipText}>{topic}</AppText>
-                      </View>
-                    ))}
+              {isSelfProfile && !isOfficialProfile ? (
+                <View style={styles.sectionCard}>
+                  <AppText scale="caption" style={styles.sectionKicker}>EDIT ABOUT</AppText>
+                  <AppText scale="title3" style={styles.sectionTitle}>Tell people a little about you</AppText>
+                  <TextInput
+                    style={styles.profilePostCommentInput}
+                    value={aboutDraft}
+                    onChangeText={(value) => {
+                      setAboutDraft(value.slice(0, 160));
+                      setAboutNotice(null);
+                    }}
+                    placeholder="What should people know about you?"
+                    placeholderTextColor="#8A93A8"
+                    multiline
+                    maxLength={160}
+                    editable={!aboutBusy}
+                  />
+                  <View style={styles.secondaryActionRow}>
+                    <AppText scale="caption" style={styles.actionFootnote}>{aboutDraft.length}/160</AppText>
+                    <TouchableOpacity
+                      style={[styles.actionChip, styles.actionChipConnected, aboutBusy && styles.actionChipPlaceholder]}
+                      activeOpacity={0.86}
+                      disabled={aboutBusy}
+                      onPress={() => { void onSaveAbout(); }}
+                    >
+                      <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>
+                        {aboutBusy ? "Saving…" : "Save About"}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
-                ) : null}
-              </View>
-              <View style={styles.accessCard}>
-                <AppText scale="caption" style={styles.accessKicker}>PLATFORM ACCESS</AppText>
-                <AppText scale="subhead" style={styles.accessTitle}>{accessPosture.title}</AppText>
-                <AppText scale="footnote" style={styles.accessBody}>{accessPosture.body}</AppText>
-                <View style={styles.accessDetailRow}>
-                  {accessDetails.map((detail) => (
-                    <View key={detail.label} style={styles.accessDetailCard}>
-                      <AppText scale="caption" style={styles.accessDetailLabel}>{detail.label}</AppText>
-                      <AppText scale="subhead" style={styles.accessDetailValue}>{detail.value}</AppText>
-                      <AppText scale="caption" style={styles.accessDetailBody}>{detail.body}</AppText>
-                    </View>
-                  ))}
+                  {aboutNotice ? <AppText scale="footnote" style={styles.sectionBody}>{aboutNotice}</AppText> : null}
                 </View>
-              </View>
+              ) : null}
+              {isOfficialProfile ? (
+                <>
+                  <View style={styles.channelGuideCard}>
+                    <AppText scale="caption" style={styles.channelGuideKicker}>{channelHelper.kicker}</AppText>
+                    <AppText scale="subhead" style={styles.channelGuideTitle}>{channelHelper.title}</AppText>
+                    <AppText scale="footnote" style={styles.channelGuideBody}>{channelHelper.body}</AppText>
+                    {officialGuidanceTopics.length ? (
+                      <View style={styles.officialTopicRow}>
+                        {officialGuidanceTopics.map((topic) => (
+                          <View key={topic} style={styles.officialTopicChip}>
+                            <AppText scale="caption" style={styles.officialTopicChipText}>{topic}</AppText>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.accessCard}>
+                    <AppText scale="caption" style={styles.accessKicker}>PLATFORM ACCESS</AppText>
+                    <AppText scale="subhead" style={styles.accessTitle}>{accessPosture.title}</AppText>
+                    <AppText scale="footnote" style={styles.accessBody}>{accessPosture.body}</AppText>
+                  </View>
+                </>
+              ) : null}
             </>
           ) : null}
+          {activeTab === "content" ? (          ) : null}
           {activeTab === "content" ? (
             <View style={styles.quickActionsCard}>
               <AppText scale="subhead" style={styles.quickActionsTitle}>
@@ -4421,8 +4448,8 @@ export default function ProfileScreen() {
                   <AppText scale="body" style={styles.sectionBody}>{reminderActionNotice}</AppText>
                 </View>
               ) : null}
-              {publicEventsReady && publicEvents.length ? (
-                publicEvents.map((event) => {
+              {publicEventsReady && currentPublicEvents.length ? (
+                currentPublicEvents.map((event) => {
                   const reminderSummary = publicReminderSummaryByEventId.get(event.id) ?? null;
                   const enrollment: EventReminderEnrollment = reminderSummary?.enrollment ?? {
                     eventId: event.id,
